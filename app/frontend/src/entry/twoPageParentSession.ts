@@ -111,14 +111,14 @@ function stage(original: SIVIParentOriginal, drafts: TwoPageParentDrafts, column
   else if (input.kind === 'text') {
     if (typeof input.raw !== 'string') throw new Error('Two-page input requires literal text.');
     if (!(expected.storage !== 'null' && input.raw === metadataCellText(expected))) {
-      const policy = { ...field.policy, label: field.label };
+      const policy = { ...field.policy, column: field.column, label: field.label };
       if (policy.kind === 'text') {
         error = ordinaryTextError(policy, input.raw, expected.storage === 'text' ? expected.text : null);
         value = { ...nullCell(), storage: 'text', text: input.raw };
       } else {
         const previous = expected.storage === 'real' ? expected.real :
           expected.storage === 'integer' && Number.isSafeInteger(Number(expected.integer)) ? Number(expected.integer) : null;
-        const parsed = ordinaryNumberValue(policy, input.raw, null);
+        const parsed = ordinaryNumberValue(policy, input.raw, previous);
         error = parsed.error;
         value = parsed.value !== null && parsed.value === previous && !error ? structuredClone(expected)
           : parsed.value === null ? nullCell() : policy.kind === 'integer'

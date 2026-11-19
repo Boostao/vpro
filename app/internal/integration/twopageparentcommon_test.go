@@ -99,6 +99,12 @@ func TestTwoPageParentCommonTypedThresholdsAndHistoricalOmission(t *testing.T) {
 			if column == "SV_FloodPlain" {
 				valid = append(valid, vprotest.MetadataInteger("0"), vprotest.MetadataInteger("-1"))
 				invalid = append(invalid, vprotest.MetadataInteger("1"), vprotest.SiviReal(-1), vprotest.MetadataText("-1"))
+			} else if column == "SV_PercentCoarseFrags" {
+				valid = append(valid, vprotest.SiviReal(0), vprotest.SiviReal(100))
+				invalid = append(invalid, vprotest.SiviReal(-0.25), vprotest.SiviReal(100.25), vprotest.SiviReal(math.Nextafter(float64(math.MaxFloat32), math.Inf(1))), vprotest.SiviReal(math.NaN()), vprotest.MetadataInteger("1"))
+			} else if _, nonNeg := vprocore.NonNegativeParentSingleColumns[column]; nonNeg {
+				valid = append(valid, vprotest.SiviReal(0), vprotest.SiviReal(math.MaxFloat32))
+				invalid = append(invalid, vprotest.SiviReal(-0.25), vprotest.SiviReal(math.Nextafter(float64(math.MaxFloat32), math.Inf(1))), vprotest.SiviReal(math.NaN()), vprotest.MetadataInteger("1"))
 			} else {
 				valid = append(valid, vprotest.SiviReal(-math.MaxFloat32), vprotest.SiviReal(math.MaxFloat32))
 				invalid = append(invalid, vprotest.SiviReal(math.Nextafter(float64(math.MaxFloat32), math.Inf(1))), vprotest.SiviReal(math.NaN()), vprotest.MetadataInteger("1"))

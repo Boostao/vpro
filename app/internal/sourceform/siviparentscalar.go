@@ -55,7 +55,7 @@ func ValidateSIVIParentScalar(column string, value vprocore.ProjectMetadataCell)
 	if value.Storage != "null" && (value.Storage != "real" || value.Real == nil) {
 		return fmt.Errorf("SIVI %s requires nullable real storage", column)
 	}
-	return vprocore.ValidateSingleRangeChange(column, nil, value.Real)
+	return vprocore.ValidateParentSoilSingle(column, nil, value.Real)
 }
 
 func planSIVIParentCells(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable, edits []SiviParentScalarEdit, owners map[string]string, validate func(string, vprocore.ProjectMetadataCell) error) ([]SiviParentScalarAssignment, error) {

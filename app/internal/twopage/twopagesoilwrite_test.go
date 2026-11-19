@@ -159,8 +159,10 @@ func TestTwoPageSoilWriteAllSourceBindings(t *testing.T) {
 			request.Edits = nil
 			for _, column := range fields {
 				value := vprotest.MetadataText("X")
-				if integers[column] {
-					value = soilPlanInteger("12")
+				if column == "PercentCoarseFragsTotal" {
+					value = soilPlanInteger("60")
+				} else if integers[column] {
+					value = soilPlanInteger("5")
 				} else if column == "UpperDepth" {
 					// LMH25: mineral rows measure downward (UpperDepth < LowerDepth).
 					value = vprotest.SiviReal(1.25)

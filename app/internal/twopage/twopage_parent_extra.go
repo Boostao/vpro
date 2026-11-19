@@ -122,7 +122,7 @@ func validateTwoPageParentExtraField(column string, value vprocore.ProjectMetada
 		if value.Storage != "real" || value.Real == nil {
 			return fmt.Errorf("two-page %s requires nullable SINGLE real storage", column)
 		}
-		return vprocore.ValidateSingleRangeChange(column, nil, value.Real)
+		return vprocore.ValidateParentSoilSingle(column, nil, value.Real)
 	case "integer":
 		return sourceform.ValidateSIVIParentSharedNumber(column, "integer", value)
 	case "text":

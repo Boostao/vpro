@@ -229,7 +229,7 @@ func twoPageWriteFixture(t *testing.T, form string, external bool) (*vprocore.Co
 		column string
 		value  vprocore.ProjectMetadataCell
 	}{
-		{"SV_WaterTableCM", vprotest.SiviReal(-3.25)}, {"ActiveLayerDepth", vprotest.SiviReal(0.1)},
+		{"SV_WaterTableCM", vprotest.SiviReal(3.25)}, {"ActiveLayerDepth", vprotest.SiviReal(0.1)},
 		{"SV_FullCruiseCard", vprotest.MetadataText("  cArD  ")}, {"PlotSize", vprotest.SiviReal(12.5)},
 		{"ProvinceStateTerritory", vprotest.MetadataText("  État  ")}, {"SiteUnitLongName", vprotest.MetadataText("e\u0301 Long Name")},
 		{"GIS_BGC", vprotest.MetadataText("  MiXeD  ")}, {"GIS_BGC_VER", vprotest.MetadataInteger("-32768")},

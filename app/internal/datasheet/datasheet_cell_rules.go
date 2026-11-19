@@ -217,6 +217,17 @@ func validateAndNormalizeDatasheetCell(
 		if tableKey == "Hierarchy" && colMeta.Name == "Level" && (num < 1 || num > 11) {
 			return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("Hierarchy.Level must be between 1 and 11, got %d", num)
 		}
+		if vprocore.SoilChildIntegerColumns[tableKey][colMeta.Name] {
+			if err := vprocore.ValidateSoilChildField(tableKey, colMeta.Name, int(num)); err != nil {
+				return nil, nil, vprocore.ProjectMetadataCell{}, err
+			}
+		}
+		if tableKey == "Env" && vprocore.NonNegativeParentIntegerColumns[colMeta.Name] {
+			intVal := int(num)
+			if err := vprocore.ValidateParentSoilInteger(colMeta.Name, &intVal); err != nil {
+				return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("Env.%s", err.Error())
+			}
+		}
 		s := strconv.FormatInt(num, 10)
 		auditCopy := s
 		return num, &auditCopy, vprocore.ProjectMetadataCell{Storage: "integer", Integer: &s}, nil
@@ -256,6 +267,16 @@ func validateAndNormalizeDatasheetCell(
 		stored := float64(narrowed32)
 		if stored == 0 {
 			stored = 0 // normalize -0 to +0
+		}
+		if vprocore.SoilChildSingleColumns[tableKey][colMeta.Name] {
+			if err := vprocore.ValidateSoilChildField(tableKey, colMeta.Name, stored); err != nil {
+				return nil, nil, vprocore.ProjectMetadataCell{}, err
+			}
+		}
+		if tableKey == "Env" || tableKey == "Admin" {
+			if err := vprocore.ValidateParentSoilSingle(colMeta.Name, nil, &stored); err != nil {
+				return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("%s.%s", tableKey, err.Error())
+			}
 		}
 		auditCopy := vprocore.SourceDoubleDecimalString(stored)
 		cellVal := stored
@@ -372,4 +393,29 @@ func cellFloat64Ptr(cell vprocore.ProjectMetadataCell) *float64 {
 		}
 	}
 	return nil
+}
+
+func cellIntPtr(cell vprocore.ProjectMetadataCell) *int {
+	if cell.Storage == "null" {
+		return nil
+	}
+	if cell.Integer != nil {
+		if n, err := strconv.Atoi(strings.TrimSpace(*cell.Integer)); err == nil {
+			return &n
+		}
+	}
+	if cell.Real != nil && math.Trunc(*cell.Real) == *cell.Real && math.Abs(*cell.Real) <= 32767 {
+		v := int(*cell.Real)
+		return &v
+	}
+	return nil
+}
+
+func validateMineralCoarseFragsCells(gravel, cobbles, stones, total vprocore.ProjectMetadataCell) error {
+	return vprocore.ValidateMineralCoarseFragments(
+		cellIntPtr(gravel),
+		cellIntPtr(cobbles),
+		cellIntPtr(stones),
+		cellIntPtr(total),
+	)
 }

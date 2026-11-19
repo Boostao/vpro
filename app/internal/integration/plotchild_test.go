@@ -50,9 +50,28 @@ func childRecord(kind, plot string, id int64, full bool) reflect.Value {
 			data := reflect.New(member.Type().Elem())
 			switch data.Elem().Kind() {
 			case reflect.Float64:
-				data.Elem().SetFloat(float64(i) + 0.25)
+				fv := float64(i) + 0.25
+				if field.Column == "HumusFormpH" || field.Column == "MineralFormpH" {
+					fv = float64(i%12) + 0.25
+				}
+				data.Elem().SetFloat(fv)
 			case reflect.Int:
-				data.Elem().SetInt(int64(i + 1))
+				iv := int64(i + 1)
+				switch field.Column {
+				case "vonPost":
+					iv = int64((i % 9) + 1)
+				case "ASP":
+					iv = int64((i % 7) + 1)
+				case "PercentCoarseFragsGravel":
+					iv = 5
+				case "PercentCoarseFragsCobbles":
+					iv = 6
+				case "PercentCoarseFragsStones":
+					iv = 7
+				case "PercentCoarseFragsTotal":
+					iv = 25
+				}
+				data.Elem().SetInt(iv)
 			case reflect.Bool:
 				data.Elem().SetBool(i%2 == 0)
 			default:

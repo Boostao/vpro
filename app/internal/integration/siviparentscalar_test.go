@@ -20,7 +20,17 @@ func TestSIVIParentScalarPlanAllSourceFieldsAndBounds(t *testing.T) {
 	for _, column := range columns {
 		t.Run(column, func(t *testing.T) {
 			env, admin, edit := sftest.SiviScalarFixture(t, column, vprotest.SiviReal(2))
-			for _, number := range []float64{-math.MaxFloat32, math.MaxFloat32, -3, 0, 125, 0.1} {
+			validNumbers := []float64{-math.MaxFloat32, math.MaxFloat32, -3, 0, 125, 0.1}
+			extraInvalid := []vprocore.ProjectMetadataCell{}
+			switch column {
+			case "SV_PercentCoarseFrags":
+				validNumbers = []float64{0, 0.1, 50, 100}
+				extraInvalid = []vprocore.ProjectMetadataCell{vprotest.SiviReal(-0.1), vprotest.SiviReal(100.1), vprotest.SiviReal(150)}
+			case "SV_SoilDepth", "SV_AhorizonDepth", "SV_GleyingMottlingCM":
+				validNumbers = []float64{0, 0.1, 125, math.MaxFloat32}
+				extraInvalid = []vprocore.ProjectMetadataCell{vprotest.SiviReal(-0.1), vprotest.SiviReal(-5), vprotest.SiviReal(-math.MaxFloat32)}
+			}
+			for _, number := range validNumbers {
 				edit.Value = vprotest.SiviReal(number)
 				got, err := sourceform.PlanSIVIParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit})
 				if err != nil || len(got) != 1 || got[0].Value != number || got[0].Column != column ||
@@ -33,11 +43,11 @@ func TestSIVIParentScalarPlanAllSourceFieldsAndBounds(t *testing.T) {
 			if err != nil || len(got) != 1 || got[0].Value != nil {
 				t.Fatal("explicit nullable numeric change lost", got, err)
 			}
-			for _, invalid := range []vprocore.ProjectMetadataCell{
+			for _, invalid := range append([]vprocore.ProjectMetadataCell{
 				vprotest.SiviReal(math.Nextafter(float64(math.MaxFloat32), math.Inf(1))),
 				vprotest.SiviReal(math.Nextafter(-float64(math.MaxFloat32), math.Inf(-1))),
 				vprotest.SiviReal(math.NaN()), vprotest.SiviReal(math.Inf(1)), vprotest.MetadataText("3"), vprotest.MetadataInteger("3"),
-			} {
+			}, extraInvalid...) {
 				edit.Value = invalid
 				if got, err := sourceform.PlanSIVIParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit}); err == nil || got != nil {
 					t.Fatal("invalid new numeric value returned a plan", got, err)

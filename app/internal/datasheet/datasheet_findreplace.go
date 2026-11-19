@@ -200,6 +200,14 @@ func PreviewDatasheetFindReplace(ctx context.Context, contexts *vprocore.Context
 			soilUpperIdx = ensureScanCol("UpperDepth")
 			soilLowerIdx = ensureScanCol("LowerDepth")
 		}
+		cfGravelIdx, cfCobblesIdx, cfStonesIdx, cfTotalIdx := -1, -1, -1, -1
+		checkMineralCF := target.key == "Mineral" && vprocore.MineralCoarseFragColumns[colMeta.Name]
+		if checkMineralCF {
+			cfGravelIdx = ensureScanCol("PercentCoarseFragsGravel")
+			cfCobblesIdx = ensureScanCol("PercentCoarseFragsCobbles")
+			cfStonesIdx = ensureScanCol("PercentCoarseFragsStones")
+			cfTotalIdx = ensureScanCol("PercentCoarseFragsTotal")
+		}
 
 		hierIDIdx := -1
 		var hierParents map[int64]*int64
@@ -320,6 +328,28 @@ func PreviewDatasheetFindReplace(ctx context.Context, contexts *vprocore.Context
 				}
 				if sErr := validateSoilHorizonDepthSign(target.key, cellTextPtr(effHorizon), cellFloat64Ptr(effUpper), cellFloat64Ptr(effLower)); sErr != nil {
 					valErr = sErr.Error()
+				}
+			}
+			if valErr == "" && checkMineralCF {
+				cellOrNull := func(idx int) vprocore.ProjectMetadataCell {
+					if idx >= 0 && idx < len(row.Cells) {
+						return row.Cells[idx]
+					}
+					return vprocore.ProjectMetadataCell{Storage: "null"}
+				}
+				effG, effC, effS, effT := cellOrNull(cfGravelIdx), cellOrNull(cfCobblesIdx), cellOrNull(cfStonesIdx), cellOrNull(cfTotalIdx)
+				switch colMeta.Name {
+				case "PercentCoarseFragsGravel":
+					effG = normalizedCell
+				case "PercentCoarseFragsCobbles":
+					effC = normalizedCell
+				case "PercentCoarseFragsStones":
+					effS = normalizedCell
+				case "PercentCoarseFragsTotal":
+					effT = normalizedCell
+				}
+				if cfErr := validateMineralCoarseFragsCells(effG, effC, effS, effT); cfErr != nil {
+					valErr = cfErr.Error()
 				}
 			}
 			if valErr == "" && checkHierarchyCycle && hierIDIdx >= 0 && hierIDIdx < len(row.Cells) && row.Cells[hierIDIdx].Integer != nil {

@@ -112,17 +112,20 @@ test('two-page raw originals reject tampered schemas, bindings, row identities a
   }
 });
 test('two-page draft boundaries cover every extra field, UTF-16 limits and signed Integer storage', async () => {
+  const nonNegativeExtra = new Set(['ActiveLayerDepth', 'SV_WaterTableCM']);
   for (const field of api.twoPageParentFields('FS882-8x6XL')) {
     const f = fixture(); await f.session.load();
     const valid = field.policy.kind === 'text' ? 'x'.repeat(field.policy.maximum)
-      : field.policy.kind === 'integer' ? '-32768' : '-3.25';
+      : field.policy.kind === 'integer' ? '-32768'
+      : nonNegativeExtra.has(field.column) ? '12.5' : '-3.25';
     f.session.stage(field.column, { kind: 'text', raw: valid });
     assert.equal(f.session.closeState().canSave, true, field.column);
     const draft = f.session.view().drafts[field.column];
     assert.equal(draft.table, `Project_${field.policy.owner}`);
     assert.equal(draft.rowId, field.policy.owner === 'Admin' ? '901' : '1');
     const invalid = field.policy.kind === 'text' ? 'x'.repeat(field.policy.maximum + 1)
-      : field.policy.kind === 'integer' ? '32768' : '3.402823466385289e38';
+      : field.policy.kind === 'integer' ? '32768'
+      : nonNegativeExtra.has(field.column) ? '-3.25' : '3.402823466385289e38';
     f.session.stage(field.column, { kind: 'text', raw: invalid });
     assert.equal(f.session.closeState().blocked, true, field.column);
     await assert.rejects(f.session.save());

@@ -323,3 +323,172 @@ func TestDatasheetSoilLMH25NullHorizonNegativeWetlandAndDiscontinuityRules(t *te
 		t.Fatalf("expected PreviewDatasheetFindReplace to flag NULL-horizon Humus negative depth, got %+v", frHum.Items)
 	}
 }
+
+func TestDatasheetUXSoil005QuantitativeBoundsAndLegacyTolerance(t *testing.T) {
+	ctx := context.Background()
+	service, state := vprotest.ContextServiceFixture(t)
+
+	intCell := func(v string) vprocore.ProjectMetadataCell {
+		return vprocore.ProjectMetadataCell{Storage: "integer", Integer: &v}
+	}
+	realCell := func(v float64) vprocore.ProjectMetadataCell {
+		return vprocore.ProjectMetadataCell{Storage: "real", Real: &v}
+	}
+	textCell := func(v string) vprocore.ProjectMetadataCell {
+		return vprocore.ProjectMetadataCell{Storage: "text", Text: &v}
+	}
+
+	vprotest.MutateContextFixture(t, state.ProjectPath, `
+		INSERT INTO Sample_Env (PlotNumber, Zone, SeepageDepth, RootingDepth, Flag) VALUES ('DSQ01', 'CWH', -60, 35, 0);
+		INSERT INTO Sample_Admin (Plot, HumusThickness) VALUES ('DSQ01', 8.0);
+		INSERT INTO Sample_Mineral (ID, PlotNumber, Horizon, UpperDepth, LowerDepth, PercentCoarseFragsGravel, PercentCoarseFragsCobbles, PercentCoarseFragsTotal, Comments, Flag)
+			VALUES (951, 'DSQ01', 'Ah', 0.0, 15.0, 40, 20, 70, 'seed', 0),
+			       (952, 'DSQ01', 'Bm', 15.0, 40.0, NULL, NULL, 100, 'legacy100', 0);
+	`)
+	var err error
+	state, err = service.SwitchContext(state.ContextID, vprotest.ContextSelection(state))
+	if err != nil {
+		t.Fatalf("SwitchContext: %v", err)
+	}
+
+	// 1. InsertDatasheetChildRow rejects vonPost=15, HumusFormpH=20, ASP=99, Total=150, 60+60+60, MineralFormpH=20.
+	for _, tc := range []struct {
+		name  string
+		table string
+		cells map[string]vprocore.ProjectMetadataCell
+	}{
+		{"vonPost_15", "Humus", map[string]vprocore.ProjectMetadataCell{"Horizon": textCell("Of"), "UpperDepth": realCell(0), "LowerDepth": realCell(10), "vonPost": intCell("15")}},
+		{"humus_pH_20", "Humus", map[string]vprocore.ProjectMetadataCell{"Horizon": textCell("L"), "UpperDepth": realCell(5), "LowerDepth": realCell(0), "HumusFormpH": realCell(20)}},
+		{"mineral_asp_99", "Mineral", map[string]vprocore.ProjectMetadataCell{"Horizon": textCell("Ah"), "UpperDepth": realCell(0), "LowerDepth": realCell(10), "ASP": intCell("99")}},
+		{"mineral_total_150", "Mineral", map[string]vprocore.ProjectMetadataCell{"Horizon": textCell("Ah"), "UpperDepth": realCell(0), "LowerDepth": realCell(10), "PercentCoarseFragsTotal": intCell("150")}},
+		{"mineral_sum_180", "Mineral", map[string]vprocore.ProjectMetadataCell{
+			"Horizon": textCell("Ah"), "UpperDepth": realCell(0), "LowerDepth": realCell(10),
+			"PercentCoarseFragsGravel": intCell("60"), "PercentCoarseFragsCobbles": intCell("60"), "PercentCoarseFragsStones": intCell("60"),
+		}},
+		{"mineral_sum_gt_total", "Mineral", map[string]vprocore.ProjectMetadataCell{
+			"Horizon": textCell("Ah"), "UpperDepth": realCell(0), "LowerDepth": realCell(10),
+			"PercentCoarseFragsGravel": intCell("30"), "PercentCoarseFragsCobbles": intCell("30"), "PercentCoarseFragsTotal": intCell("50"),
+		}},
+		{"mineral_pH_20", "Mineral", map[string]vprocore.ProjectMetadataCell{"Horizon": textCell("Ah"), "UpperDepth": realCell(0), "LowerDepth": realCell(10), "MineralFormpH": realCell(20)}},
+	} {
+		if _, err := InsertDatasheetChildRow(ctx, service, state.ContextID, DatasheetInsertChildRowRequest{
+			TableKey:   tc.table,
+			PlotNumber: "DSQ01",
+			Cells:      tc.cells,
+		}); err == nil {
+			t.Fatalf("expected InsertDatasheetChildRow(%s) to fail", tc.name)
+		}
+	}
+
+	// 2. ApplyDatasheetEdits on Mineral rejects cross-column overflow against stored Gravel=40, Total=70,
+	// while allowing unrelated Comments edit on PercentCoarseFragsTotal=100 row (952).
+	minPage, err := GetDatasheetPage(ctx, service, state.ContextID, DatasheetPageRequest{
+		TableKey: "Mineral",
+		Filters:  []DatasheetFilterSpec{{Column: "PlotNumber", Op: "eq", Value: "DSQ01"}},
+	})
+	if err != nil {
+		t.Fatalf("LoadDatasheetPage(Mineral): %v", err)
+	}
+	colIdx := func(cols []DatasheetColumnMeta, name string) int {
+		for i, c := range cols {
+			if c.Name == name {
+				return i
+			}
+		}
+		t.Fatalf("column %s not found", name)
+		return -1
+	}
+	cobIdx := colIdx(minPage.Columns, "PercentCoarseFragsCobbles")
+	totIdx := colIdx(minPage.Columns, "PercentCoarseFragsTotal")
+	cmtIdx := colIdx(minPage.Columns, "Comments")
+	var row951, row952 DatasheetRow
+	for _, r := range minPage.Rows {
+		if r.Cells[cmtIdx].Text != nil && *r.Cells[cmtIdx].Text == "seed" {
+			row951 = r
+		}
+		if r.Cells[cmtIdx].Text != nil && *r.Cells[cmtIdx].Text == "legacy100" {
+			row952 = r
+		}
+	}
+
+	// Stored Gravel=40 + edited Cobbles=40 = 80 > stored Total=70 -> rejected.
+	if _, err := ApplyDatasheetEdits(ctx, service, state.ContextID, DatasheetEditRequest{
+		TableKey: "Mineral",
+		Edits: []DatasheetCellEdit{
+			{RowID: row951.RowID, Column: "PercentCoarseFragsCobbles", Before: row951.Cells[cobIdx], After: intCell("40")},
+		},
+	}); err == nil {
+		t.Fatal("expected ApplyDatasheetEdits to reject Gravel(40)+Cobbles(40) > Total(70)")
+	}
+	// Total=200 -> rejected.
+	if _, err := ApplyDatasheetEdits(ctx, service, state.ContextID, DatasheetEditRequest{
+		TableKey: "Mineral",
+		Edits: []DatasheetCellEdit{
+			{RowID: row951.RowID, Column: "PercentCoarseFragsTotal", Before: row951.Cells[totIdx], After: intCell("200")},
+		},
+	}); err == nil {
+		t.Fatal("expected ApplyDatasheetEdits to reject PercentCoarseFragsTotal=200")
+	}
+	// Unrelated Comments edit on Total=100 row succeeds.
+	if _, err := ApplyDatasheetEdits(ctx, service, state.ContextID, DatasheetEditRequest{
+		TableKey: "Mineral",
+		Edits: []DatasheetCellEdit{
+			{RowID: row952.RowID, Column: "Comments", Before: row952.Cells[cmtIdx], After: textCell("updated")},
+		},
+	}); err != nil {
+		t.Fatalf("expected unrelated Comments edit on Total=100 row to succeed, got %v", err)
+	}
+
+	// 3. Env & Admin parent pit depths / SV_PercentCoarseFrags bounds + untouched legacy SeepageDepth=-60 tolerance.
+	envPage, err := GetDatasheetPage(ctx, service, state.ContextID, DatasheetPageRequest{
+		TableKey: "Env",
+		Filters:  []DatasheetFilterSpec{{Column: "PlotNumber", Op: "eq", Value: "DSQ01"}},
+	})
+	if err != nil || len(envPage.Rows) != 1 {
+		t.Fatalf("GetDatasheetPage(Env): %v (rows=%d)", err, len(envPage.Rows))
+	}
+	envRow := envPage.Rows[0]
+	seepIdx := colIdx(envPage.Columns, "SeepageDepth")
+	rootIdx := colIdx(envPage.Columns, "RootingDepth")
+	svCFIdx := colIdx(envPage.Columns, "SV_PercentCoarseFrags")
+	svDepthIdx := colIdx(envPage.Columns, "SV_SoilDepth")
+
+	// Reject negative RootingDepth=-5, SV_PercentCoarseFrags=150, SV_SoilDepth=-5.
+	for _, badEdit := range []DatasheetCellEdit{
+		{RowID: envRow.RowID, Column: "RootingDepth", Before: envRow.Cells[rootIdx], After: intCell("-5")},
+		{RowID: envRow.RowID, Column: "SeepageDepth", Before: envRow.Cells[seepIdx], After: intCell("-3")},
+		{RowID: envRow.RowID, Column: "SV_PercentCoarseFrags", Before: envRow.Cells[svCFIdx], After: realCell(150)},
+		{RowID: envRow.RowID, Column: "SV_SoilDepth", Before: envRow.Cells[svDepthIdx], After: realCell(-5)},
+	} {
+		if _, err := ApplyDatasheetEdits(ctx, service, state.ContextID, DatasheetEditRequest{
+			TableKey: "Env",
+			Edits:    []DatasheetCellEdit{badEdit},
+		}); err == nil {
+			t.Fatalf("expected ApplyDatasheetEdits(Env.%s) to reject out-of-domain edit", badEdit.Column)
+		}
+	}
+
+	// Editing RootingDepth=50 on DSQ01 while SeepageDepth=-60 remains untouched (or passed unchanged) succeeds!
+	if _, err := ApplyDatasheetEdits(ctx, service, state.ContextID, DatasheetEditRequest{
+		TableKey: "Env",
+		Edits: []DatasheetCellEdit{
+			{RowID: envRow.RowID, Column: "SeepageDepth", Before: envRow.Cells[seepIdx], After: envRow.Cells[seepIdx]},
+			{RowID: envRow.RowID, Column: "RootingDepth", Before: envRow.Cells[rootIdx], After: intCell("50")},
+		},
+	}); err != nil {
+		t.Fatalf("expected unrelated RootingDepth edit on legacy SeepageDepth=-60 row to succeed, got %v", err)
+	}
+
+	// 4. PreviewDatasheetFindReplace flags Cobbles 20 -> 70 (40+70=110 > 100%).
+	fr, err := PreviewDatasheetFindReplace(ctx, service, state.ContextID, DatasheetFindReplaceRequest{
+		TableKey:    "Mineral",
+		Column:      "PercentCoarseFragsCobbles",
+		FindText:    "20",
+		ReplaceText: "70",
+		ExactCell:   true,
+		Filters:     []DatasheetFilterSpec{{Column: "PlotNumber", Op: "eq", Value: "DSQ01"}},
+	})
+	if err != nil || len(fr.Items) != 1 || !strings.Contains(fr.Items[0].ValidationError, "cannot exceed 100%") {
+		t.Fatalf("expected PreviewDatasheetFindReplace to flag coarse-frag sum > 100%%, got %+v (err=%v)", fr, err)
+	}
+}

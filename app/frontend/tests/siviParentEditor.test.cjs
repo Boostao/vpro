@@ -7,7 +7,7 @@ const inputs = {
   SV_StandHeight: { kind: 'text', raw: '-1.5' },
   SV_AhorizonDepth: { kind: 'text', raw: '1e2' },
   SV_GleyingMottlingCM: { kind: 'text', raw: '.25' },
-  SV_PercentCoarseFrags: { kind: 'text', raw: '110' },
+  SV_PercentCoarseFrags: { kind: 'text', raw: '85' },
   SV_SoilDepth: { kind: 'text', raw: '3.4028234663852886e38' },
   StrataCoverTotal: { kind: 'text', raw: '120' },
   SV_FloodPlain: { kind: 'boolean', value: true },
@@ -28,7 +28,7 @@ test('parent model preserves complete originals and all sixteen literal five-dom
   const r = original(), drafts = stageAll(r), proposal = editor.siviParentProposal(r, drafts);
   const values = {
     SV_StandHeight: cell('real', -1.5), SV_AhorizonDepth: cell('real', 100), SV_GleyingMottlingCM: cell('real', 0.25),
-    SV_PercentCoarseFrags: cell('real', 110), SV_SoilDepth: cell('real', 3.4028234663852886e38),
+    SV_PercentCoarseFrags: cell('real', 85), SV_SoilDepth: cell('real', 3.4028234663852886e38),
     StrataCoverTotal: cell('real', 120), SV_FloodPlain: cell('integer', '-1'),
     SV_StandAgeEstMeas: cell('text', '1'), SV_StandHeightEstMeas: cell('text', '2'),
     SV_PolygonNumber: cell('text', '  literal  '), SV_CanopyComposition: cell('text', 'Mixed Case'),

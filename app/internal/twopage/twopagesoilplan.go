@@ -178,7 +178,60 @@ func planTwoPageSoilEdits(ctx context.Context, original *twoPageSoilOriginal, ed
 	if err := validateTwoPageSoilLMH25DepthSigns(kind, original.Records, columns, rows, assignments); err != nil {
 		return nil, err
 	}
+	if kind == "Mineral" {
+		if err := validateTwoPageMineralCoarseFragments(columns, rows, assignments); err != nil {
+			return nil, err
+		}
+	}
 	return assignments, ctx.Err()
+}
+
+func validateTwoPageMineralCoarseFragments(
+	columns map[string]int,
+	rows map[string]vprocore.ProjectMetadataRow,
+	assignments []twoPageSoilAssignment,
+) error {
+	if len(assignments) == 0 {
+		return nil
+	}
+	touchedRows := map[string]bool{}
+	var rowOrder []string
+	afterCell := map[[2]string]vprocore.ProjectMetadataCell{}
+	for _, a := range assignments {
+		afterCell[[2]string{a.RowID, a.Column}] = a.After
+		if vprocore.MineralCoarseFragColumns[a.Column] && !touchedRows[a.RowID] {
+			touchedRows[a.RowID] = true
+			rowOrder = append(rowOrder, a.RowID)
+		}
+	}
+	effectiveInt := func(rowID, col string, row vprocore.ProjectMetadataRow) *int {
+		var cell vprocore.ProjectMetadataCell
+		if c, ok := afterCell[[2]string{rowID, col}]; ok {
+			cell = c
+		} else if idx, has := columns[col]; has {
+			cell = row.Cells[idx]
+		} else {
+			return nil
+		}
+		if cell.Storage == "integer" && cell.Integer != nil {
+			if n, err := strconv.Atoi(*cell.Integer); err == nil {
+				return &n
+			}
+		}
+		return nil
+	}
+	for _, rowID := range rowOrder {
+		row := rows[rowID]
+		if err := vprocore.ValidateMineralCoarseFragments(
+			effectiveInt(rowID, "PercentCoarseFragsGravel", row),
+			effectiveInt(rowID, "PercentCoarseFragsCobbles", row),
+			effectiveInt(rowID, "PercentCoarseFragsStones", row),
+			effectiveInt(rowID, "PercentCoarseFragsTotal", row),
+		); err != nil {
+			return fmt.Errorf("LMH25: %w", err)
+		}
+	}
+	return nil
 }
 
 func validateTwoPageSoilLMH25DepthSigns(

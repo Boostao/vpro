@@ -231,9 +231,21 @@ export function parseSIVIParentInput(column: SIVIParentColumn, expected: Project
     } else if (input.raw !== '' && expected.storage !== 'null' && input.raw === metadataCellText(expected)) {
       value = structuredClone(expected);
     } else if (policy.kind === 'number') {
-      const parsed = finiteSingleValue(column, input.raw);
+      const unchanged = expected.storage === 'real' ? expected.real : null;
+      const parsed = finiteSingleValue(column, input.raw, unchanged);
       error = parsed.error;
-      if (parsed.value !== null) value = { ...value, storage: 'real', real: parsed.value };
+      if (!error && parsed.value !== null && parsed.value !== unchanged) {
+        if (column === 'SV_PercentCoarseFrags' && (parsed.value < 0 || parsed.value > 100)) {
+          error = `${column} must be between 0% and 100%, or NULL.`;
+        } else if ((column === 'SV_SoilDepth' || column === 'SV_AhorizonDepth' || column === 'SV_GleyingMottlingCM') && parsed.value < 0) {
+          error = `${column} must be >= 0 cm, or NULL.`;
+        }
+      }
+      if (!error && parsed.value !== null) {
+        value = parsed.value === unchanged && expected.storage === 'real'
+          ? structuredClone(expected)
+          : { ...value, storage: 'real', real: parsed.value };
+      }
     } else if (input.raw !== '') {
       value = { ...value, storage: 'text', text: input.raw };
       if (input.raw.length > policy.maximum) error = `${column} exceeds${policy.maximum} UTF-16 units; literal input was not truncated.`;

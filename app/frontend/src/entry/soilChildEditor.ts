@@ -51,6 +51,50 @@ export function soilField(kind: SoilKind, column: string): SoilField | undefined
 export function soilCell(drafts: SoilDrafts, kind: SoilKind, id: number, key: string): SoilCell | undefined {
   return drafts[`${kind}/${id}`]?.cells[key];
 }
+export function soilChildNumericDomainError(column: string, value: number): string | null {
+  switch (column) {
+    case 'vonPost':
+      return value < 1 || value > 10 ? 'vonPost must be a whole number from 1 to 10 (LMH25 decomposition scale), or NULL.' : null;
+    case 'ASP':
+      return value < 1 || value > 8 ? 'ASP must be a whole number from 1 to 8 (LMH25 mineral colour aspect), or NULL.' : null;
+    case 'PercentCoarseFragsGravel':
+    case 'PercentCoarseFragsCobbles':
+    case 'PercentCoarseFragsStones':
+    case 'PercentCoarseFragsTotal':
+      return value < 0 || value > 100 ? `${column} must be between 0% and 100%, or NULL.` : null;
+    case 'HumusFormpH':
+    case 'MineralFormpH':
+      return value < 0 || value > 14 ? `${column} must be between 0 and 14 on the pH scale, or NULL.` : null;
+    case 'UpperDepth':
+    case 'LowerDepth':
+      return value < 0 ? `${column} must be >= 0 cm, or NULL.` : null;
+    default:
+      return null;
+  }
+}
+export function soilCoarseFragmentsRowError(
+  gravel: number | null,
+  cobbles: number | null,
+  stones: number | null,
+  total: number | null,
+): string | null {
+  let sum = 0;
+  let hasComponent = false;
+  for (const comp of [gravel, cobbles, stones]) {
+    if (comp !== null) {
+      if (comp < 0 || comp > 100) return null;
+      sum += comp;
+      hasComponent = true;
+    }
+  }
+  if (hasComponent && sum > 100) {
+    return `Coarse fragment Gravel + Cobbles + Stones (${sum}%) cannot exceed 100%.`;
+  }
+  if (hasComponent && total !== null && total >= 0 && sum > total) {
+    return `Coarse fragment Gravel + Cobbles + Stones (${sum}%) cannot exceed PercentCoarseFragsTotal (${total}%).`;
+  }
+  return null;
+}
 export function stageSoil(drafts: SoilDrafts, kind: SoilKind, id: number, field: SoilField, raw: string, stored: SoilValue): SoilDrafts {
   if (!Number.isInteger(id) || id < -2147483648 || id > 2147483647) throw new Error('Soil row needs an exact signed32 identity.');
   const previous = soilCell(drafts, kind, id, field.key);
@@ -72,18 +116,53 @@ export function stageSoil(drafts: SoilDrafts, kind: SoilKind, id: number, field:
         (!Number.isSafeInteger(value) || (value !== expected && (value < -32768 || value > 32767)))) {
       error = `${field.column} requires an exact Access Integer (-32768 to 32767) or NULL.`;
     }
+    if (!error && value !== null && value !== expected) {
+      error = soilChildNumericDomainError(field.column, value);
+    }
   }
   const identity = `${kind}/${id}`;
   return { ...drafts, [identity]: { kind, id, cells: { ...drafts[identity]?.cells, [field.key]: { raw, expected, value, error } } } };
 }
-export function soilErrors(drafts: SoilDrafts): string[] {
-  return Object.values(drafts).flatMap(row => Object.values(row.cells).flatMap(cell => cell.error ? [`${row.kind} row ${row.id}: ${cell.error}`] : []));
+export interface StoredMineralCoarseFrags {
+  id: number;
+  percentCoarseFragsGravel?: number | null;
+  percentCoarseFragsCobbles?: number | null;
+  percentCoarseFragsStones?: number | null;
+  percentCoarseFragsTotal?: number | null;
+}
+export function soilErrors(drafts: SoilDrafts, mineralRows?: readonly StoredMineralCoarseFrags[]): string[] {
+  const storedById = new Map((mineralRows ?? []).map(r => [r.id, r]));
+  return Object.values(drafts).flatMap(row => {
+    const cellErrors = Object.values(row.cells).flatMap(cell => cell.error ? [`${row.kind} row ${row.id}: ${cell.error}`] : []);
+    if (row.kind === 'Mineral') {
+      const cfKeys = ['percentCoarseFragsGravel', 'percentCoarseFragsCobbles', 'percentCoarseFragsStones', 'percentCoarseFragsTotal'] as const;
+      const cfChanged = cfKeys.some(k => row.cells[k] && row.cells[k].value !== row.cells[k].expected);
+      const cfHasCellErr = cfKeys.some(k => row.cells[k]?.error);
+      if (cfChanged && !cfHasCellErr) {
+        const storedRow = storedById.get(row.id);
+        const numAt = (k: typeof cfKeys[number]): number | null => {
+          const c = row.cells[k];
+          if (c) return typeof c.value === 'number' ? c.value : null;
+          const fallback = storedRow?.[k];
+          return typeof fallback === 'number' ? fallback : null;
+        };
+        const cfErr = soilCoarseFragmentsRowError(
+          numAt('percentCoarseFragsGravel'),
+          numAt('percentCoarseFragsCobbles'),
+          numAt('percentCoarseFragsStones'),
+          numAt('percentCoarseFragsTotal'),
+        );
+        if (cfErr) cellErrors.push(`${row.kind} row ${row.id}: ${cfErr}`);
+      }
+    }
+    return cellErrors;
+  });
 }
 export function soilDirty(drafts: SoilDrafts): boolean {
   return Object.values(drafts).some(row => Object.values(row.cells).some(cell => cell.error !== null || cell.value !== cell.expected));
 }
-export function soilUpdates(drafts: SoilDrafts): SoilRecordUpdate[] {
-  const errors = soilErrors(drafts);
+export function soilUpdates(drafts: SoilDrafts, mineralRows?: readonly StoredMineralCoarseFrags[]): SoilRecordUpdate[] {
+  const errors = soilErrors(drafts, mineralRows);
   if (errors.length) throw new Error(errors[0]);
   return Object.values(drafts).flatMap(row => {
     const text: SoilRecordUpdate['text'] = {}, numbers: SoilRecordUpdate['numbers'] = {};

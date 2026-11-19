@@ -70,7 +70,20 @@ func ValidateSoilChildField(kind, column string, value any) error {
 		if !ok {
 			return fmt.Errorf("%s.%s requires a nullable number", kind, column)
 		}
-		return ValidateSingleRangeChange(kind+"."+column, nil, &number)
+		if err := ValidateSingleRangeChange(kind+"."+column, nil, &number); err != nil {
+			return err
+		}
+		switch column {
+		case "UpperDepth", "LowerDepth":
+			if number < 0 {
+				return fmt.Errorf("%s.%s must be >= 0 cm (got %v)", kind, column, number)
+			}
+		case "HumusFormpH", "MineralFormpH":
+			if number < 0 || number > 14 {
+				return fmt.Errorf("%s.%s must be between 0 and 14 on the pH scale (got %v)", kind, column, number)
+			}
+		}
+		return nil
 	}
 	if SoilChildIntegerColumns[kind][column] {
 		if value == nil {
@@ -80,9 +93,106 @@ func ValidateSoilChildField(kind, column string, value any) error {
 		if !ok {
 			return fmt.Errorf("%s.%s requires a nullable integer", kind, column)
 		}
-		return ValidateOrdinaryInteger(kind+"."+column, &number)
+		if err := ValidateOrdinaryInteger(kind+"."+column, &number); err != nil {
+			return err
+		}
+		switch {
+		case kind == "Humus" && column == "vonPost":
+			if number < 1 || number > 10 {
+				return fmt.Errorf("Humus.vonPost must be an integer from 1 to 10 (got %d)", number)
+			}
+		case kind == "Mineral" && column == "ASP":
+			if number < 1 || number > 8 {
+				return fmt.Errorf("Mineral.ASP must be an integer from 1 to 8 (got %d)", number)
+			}
+		case kind == "Mineral" && MineralCoarseFragColumns[column]:
+			if number < 0 || number > 100 {
+				return fmt.Errorf("Mineral.%s must be between 0%% and 100%% (got %d%%)", column, number)
+			}
+		}
+		return nil
 	}
 	return fmt.Errorf("unsupported %s value for %q", kind, column)
+}
+
+var MineralCoarseFragColumns = map[string]bool{
+	"PercentCoarseFragsGravel":  true,
+	"PercentCoarseFragsCobbles": true,
+	"PercentCoarseFragsStones":  true,
+	"PercentCoarseFragsTotal":   true,
+}
+
+// ValidateMineralCoarseFragments enforces LMH25 coarse-fragment component consistency
+// when any coarse-fragment field on a Mineral row is created or edited (UX-SOIL-005):
+// Gravel + Cobbles + Stones must not exceed 100%, and when Total is also recorded (>= 0),
+// Gravel + Cobbles + Stones must not exceed Total.
+func ValidateMineralCoarseFragments(gravel, cobbles, stones, total *int) error {
+	sum := 0
+	hasComponent := false
+	for _, item := range []struct {
+		name string
+		val  *int
+	}{
+		{"PercentCoarseFragsGravel", gravel},
+		{"PercentCoarseFragsCobbles", cobbles},
+		{"PercentCoarseFragsStones", stones},
+	} {
+		if item.val != nil {
+			if *item.val < 0 || *item.val > 100 {
+				return fmt.Errorf("Mineral.%s must be between 0%% and 100%% (got %d%%)", item.name, *item.val)
+			}
+			sum += *item.val
+			hasComponent = true
+		}
+	}
+	if hasComponent && sum > 100 {
+		return fmt.Errorf("Mineral coarse fragments Gravel + Cobbles + Stones (%d%%) cannot exceed 100%%", sum)
+	}
+	if hasComponent && total != nil && *total >= 0 && sum > *total {
+		return fmt.Errorf("Mineral coarse fragments Gravel + Cobbles + Stones (%d%%) cannot exceed PercentCoarseFragsTotal (%d%%)", sum, *total)
+	}
+	return nil
+}
+
+var NonNegativeParentIntegerColumns = map[string]bool{
+	"RootingDepth":         true,
+	"RootRestrictingDepth": true,
+	"SeepageDepth":         true,
+}
+
+var NonNegativeParentSingleColumns = map[string]bool{
+	"HumusThickness":       true,
+	"SV_SoilDepth":         true,
+	"SV_WaterTableCM":      true,
+	"SV_GleyingMottlingCM": true,
+	"SV_AhorizonDepth":     true,
+	"ActiveLayerDepth":     true,
+}
+
+func ValidateParentSoilInteger(column string, value *int) error {
+	if err := ValidateOrdinaryInteger(column, value); err != nil {
+		return err
+	}
+	if value != nil && NonNegativeParentIntegerColumns[column] && *value < 0 {
+		return fmt.Errorf("%s must be >= 0 cm (got %d)", column, *value)
+	}
+	return nil
+}
+
+func ValidateParentSoilSingle(column string, before, after *float64) error {
+	if err := ValidateSingleRangeChange(column, before, after); err != nil {
+		return err
+	}
+	if after == nil || SameHeightValue(before, after) {
+		return nil
+	}
+	if column == "SV_PercentCoarseFrags" && (*after < 0 || *after > 100) {
+		return fmt.Errorf("%s must be between 0%% and 100%% (got %v)", column, *after)
+	}
+	if NonNegativeParentSingleColumns[column] && *after < 0 {
+		return fmt.Errorf("%s must be >= 0 cm (got %v)", column, *after)
+	}
+	return nil
 }
 
 func validateChildField(kind, column string, value any) error {

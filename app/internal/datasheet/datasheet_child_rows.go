@@ -184,6 +184,8 @@ func InsertDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextServ
 			var effHorizon vprocore.ProjectMetadataCell
 			var effUpper vprocore.ProjectMetadataCell
 			var effLower vprocore.ProjectMetadataCell
+			var effGravel, effCobbles, effStones, effTotal vprocore.ProjectMetadataCell
+			effGravel.Storage, effCobbles.Storage, effStones.Storage, effTotal.Storage = "null", "null", "null", "null"
 			hasSpecies := false
 
 			for _, key := range cellKeys {
@@ -211,6 +213,14 @@ func InsertDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextServ
 					effUpper = normalized
 				case "LowerDepth":
 					effLower = normalized
+				case "PercentCoarseFragsGravel":
+					effGravel = normalized
+				case "PercentCoarseFragsCobbles":
+					effCobbles = normalized
+				case "PercentCoarseFragsStones":
+					effStones = normalized
+				case "PercentCoarseFragsTotal":
+					effTotal = normalized
 				}
 				insertCols = append(insertCols, vprocore.QuoteHeaderIdentifier(colMeta.Name))
 				insertVals = append(insertVals, driverVal)
@@ -225,6 +235,11 @@ func InsertDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextServ
 			if target.key == "Humus" || target.key == "Mineral" {
 				if sErr := validateSoilHorizonDepthSign(target.key, cellTextPtr(effHorizon), cellFloat64Ptr(effUpper), cellFloat64Ptr(effLower)); sErr != nil {
 					return sErr
+				}
+			}
+			if target.key == "Mineral" {
+				if cfErr := validateMineralCoarseFragsCells(effGravel, effCobbles, effStones, effTotal); cfErr != nil {
+					return cfErr
 				}
 			}
 			if !hasFlag {

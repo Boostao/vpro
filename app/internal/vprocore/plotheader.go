@@ -289,6 +289,46 @@ func AuditHeaderChange(before, after any, strength int) bool {
 	return strength >= 1
 }
 
+func validateParentSoilQuantitativeHeaderValues(h FS882Header, old *FS882Header) error {
+	var prev FS882Header
+	if old != nil {
+		prev = *old
+	}
+	for _, intField := range []struct {
+		column string
+		before *int
+		after  *int
+	}{
+		{"RootRestrictingDepth", prev.RootRestrictingDepth, h.RootRestrictingDepth},
+		{"RootingDepth", prev.RootingDepth, h.RootingDepth},
+		{"SeepageDepth", prev.SeepageDepth, h.SeepageDepth},
+	} {
+		if old != nil && reflect.DeepEqual(intField.before, intField.after) {
+			continue
+		}
+		if err := ValidateParentSoilInteger(intField.column, intField.after); err != nil {
+			return err
+		}
+	}
+	for _, singleField := range []struct {
+		column string
+		before *float64
+		after  *float64
+	}{
+		{"HumusThickness", prev.HumusThickness, h.HumusThickness},
+		{"ActiveLayerDepth", prev.ActiveLayerDepth, h.ActiveLayerDepth},
+	} {
+		var beforePtr *float64
+		if old != nil {
+			beforePtr = singleField.before
+		}
+		if err := ValidateParentSoilSingle(singleField.column, beforePtr, singleField.after); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // SavePlot is a full replacement of supported header values (nil clears SQL
 // NULL), not a patch. Env, Admin and audits commit or roll back together.
 func (s *PlotService) SavePlot(h FS882Header) error {
@@ -356,6 +396,11 @@ func (s *PlotService) saveHeader(h FS882Header, mode headerSaveMode) error {
 	}
 	if err := s.validateOrdinaryHeaderBeforeTransaction(db, project, h, mode); err != nil {
 		return err
+	}
+	if s.ContextScoped {
+		if err := validateCodeHeaderBeforeTransaction(db, project, h, mode, validateParentSoilQuantitativeHeaderValues); err != nil {
+			return err
+		}
 	}
 	if err := s.validateSoilDrainageBeforeTransaction(db, project, h, mode); err != nil {
 		return err
@@ -446,6 +491,11 @@ func (s *PlotService) saveHeader(h FS882Header, mode headerSaveMode) error {
 	}
 	if err := s.validateOrdinaryHeaderValues(h, qualityOld); err != nil {
 		return err
+	}
+	if s.ContextScoped {
+		if err := validateParentSoilQuantitativeHeaderValues(h, qualityOld); err != nil {
+			return err
+		}
 	}
 	if err := s.validateSoilDrainageHeaderValues(h, qualityOld); err != nil {
 		return err

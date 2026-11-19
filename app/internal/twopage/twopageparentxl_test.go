@@ -112,11 +112,21 @@ func TestTwoPageXLPhysicalThresholdsAndRawStorage(t *testing.T) {
 						vprotest.MetadataText(strings.Repeat("\U0001f600", field.maximum/2+1)))
 				}
 			case "integer":
-				valid = append(valid, vprotest.MetadataInteger("-32768"), vprotest.MetadataInteger("32767"))
-				invalid = append(invalid, vprotest.MetadataInteger("-32769"), vprotest.MetadataInteger("32768"), vprotest.MetadataInteger("01"), vprotest.SiviReal(1), vprotest.MetadataText("1"))
+				if vprocore.NonNegativeParentIntegerColumns[column] {
+					valid = append(valid, vprotest.MetadataInteger("0"), vprotest.MetadataInteger("32767"))
+					invalid = append(invalid, vprotest.MetadataInteger("-1"), vprotest.MetadataInteger("-32768"), vprotest.MetadataInteger("-32769"), vprotest.MetadataInteger("32768"), vprotest.MetadataInteger("01"), vprotest.SiviReal(1), vprotest.MetadataText("1"))
+				} else {
+					valid = append(valid, vprotest.MetadataInteger("-32768"), vprotest.MetadataInteger("32767"))
+					invalid = append(invalid, vprotest.MetadataInteger("-32769"), vprotest.MetadataInteger("32768"), vprotest.MetadataInteger("01"), vprotest.SiviReal(1), vprotest.MetadataText("1"))
+				}
 			case "single":
-				valid = append(valid, vprotest.SiviReal(-math.MaxFloat32), vprotest.SiviReal(math.MaxFloat32), vprotest.SiviReal(0.1))
-				invalid = append(invalid, vprotest.SiviReal(math.Nextafter(float64(math.MaxFloat32), math.Inf(1))), vprotest.SiviReal(math.Inf(1)), vprotest.SiviReal(math.NaN()), vprotest.MetadataInteger("1"))
+				if vprocore.NonNegativeParentSingleColumns[column] {
+					valid = append(valid, vprotest.SiviReal(0), vprotest.SiviReal(math.MaxFloat32), vprotest.SiviReal(0.1))
+					invalid = append(invalid, vprotest.SiviReal(-0.1), vprotest.SiviReal(-math.MaxFloat32), vprotest.SiviReal(math.Nextafter(float64(math.MaxFloat32), math.Inf(1))), vprotest.SiviReal(math.Inf(1)), vprotest.SiviReal(math.NaN()), vprotest.MetadataInteger("1"))
+				} else {
+					valid = append(valid, vprotest.SiviReal(-math.MaxFloat32), vprotest.SiviReal(math.MaxFloat32), vprotest.SiviReal(0.1))
+					invalid = append(invalid, vprotest.SiviReal(math.Nextafter(float64(math.MaxFloat32), math.Inf(1))), vprotest.SiviReal(math.Inf(1)), vprotest.SiviReal(math.NaN()), vprotest.MetadataInteger("1"))
+				}
 			case "latitude", "longitude":
 				bound := float64(90)
 				if field.kind == "longitude" {

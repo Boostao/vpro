@@ -79,8 +79,10 @@ func TestTwoPageSoilPlanSourceBindingsAndDetachedAssignments(t *testing.T) {
 			for _, column := range fields {
 				cell, scalar := vprotest.MetadataText("X"), any("X")
 				switch {
+				case column == "PercentCoarseFragsTotal":
+					cell, scalar = soilPlanInteger("60"), int(60)
 				case integerFields[column]:
-					cell, scalar = soilPlanInteger("-32768"), int(-32768)
+					cell, scalar = soilPlanInteger("5"), int(5)
 				case column == "LowerDepth":
 					// LMH25: depths are non-negative and mineral rows measure downward.
 					cell, scalar = vprotest.SiviReal(2.5), float64(2.5)
@@ -150,14 +152,18 @@ func TestTwoPageSoilPlanPhysicalDomainsAndNull(t *testing.T) {
 		form, column string
 		valid, bad   []vprocore.ProjectMetadataCell
 	}{
-		{"SoilHumusXL", "vonPost", []vprocore.ProjectMetadataCell{soilPlanInteger("-32768"), soilPlanInteger("32767"), soilPlanInteger("0")},
-			[]vprocore.ProjectMetadataCell{soilPlanInteger("-32769"), soilPlanInteger("32768"), soilPlanInteger("01"), vprotest.SiviReal(1), vprotest.MetadataText("1")}},
-		{"SoilMineralXL", "ASP", []vprocore.ProjectMetadataCell{soilPlanInteger("-32768"), soilPlanInteger("32767")},
-			[]vprocore.ProjectMetadataCell{soilPlanInteger("9223372036854775807"), vprotest.SiviReal(1.5)}},
+		{"SoilHumusXL", "vonPost", []vprocore.ProjectMetadataCell{soilPlanInteger("1"), soilPlanInteger("10"), soilPlanInteger("5")},
+			[]vprocore.ProjectMetadataCell{soilPlanInteger("0"), soilPlanInteger("11"), soilPlanInteger("15"), soilPlanInteger("-1"), soilPlanInteger("-32768"), soilPlanInteger("-32769"), soilPlanInteger("32768"), soilPlanInteger("01"), vprotest.SiviReal(1), vprotest.MetadataText("1")}},
+		{"SoilMineralXL", "ASP", []vprocore.ProjectMetadataCell{soilPlanInteger("1"), soilPlanInteger("8")},
+			[]vprocore.ProjectMetadataCell{soilPlanInteger("0"), soilPlanInteger("9"), soilPlanInteger("99"), soilPlanInteger("-32768"), soilPlanInteger("9223372036854775807"), vprotest.SiviReal(1.5)}},
+		{"SoilMineralXL", "PercentCoarseFragsTotal", []vprocore.ProjectMetadataCell{soilPlanInteger("0"), soilPlanInteger("100")},
+			[]vprocore.ProjectMetadataCell{soilPlanInteger("-1"), soilPlanInteger("101"), soilPlanInteger("150"), vprotest.SiviReal(50)}},
 		{"SoilHumusXL", "UpperDepth", []vprocore.ProjectMetadataCell{vprotest.SiviReal(math.MaxFloat32), vprotest.SiviReal(0)},
 			[]vprocore.ProjectMetadataCell{vprotest.SiviReal(-math.MaxFloat32), vprotest.SiviReal(-0.5), vprotest.SiviReal(math.Nextafter(math.MaxFloat32, math.Inf(1))), vprotest.SiviReal(math.NaN()), vprotest.SiviReal(math.Inf(1)), soilPlanInteger("1")}},
-		{"SoilMineralXL", "MineralFormpH", []vprocore.ProjectMetadataCell{vprotest.SiviReal(1.234567890123456)},
-			[]vprocore.ProjectMetadataCell{vprotest.MetadataText("1"), vprotest.SiviReal(-math.MaxFloat64)}},
+		{"SoilHumusXL", "HumusFormpH", []vprocore.ProjectMetadataCell{vprotest.SiviReal(0), vprotest.SiviReal(14), vprotest.SiviReal(5.5)},
+			[]vprocore.ProjectMetadataCell{vprotest.SiviReal(-0.1), vprotest.SiviReal(14.1), vprotest.SiviReal(20), vprotest.MetadataText("5")}},
+		{"SoilMineralXL", "MineralFormpH", []vprocore.ProjectMetadataCell{vprotest.SiviReal(0), vprotest.SiviReal(14), vprotest.SiviReal(1.234567890123456)},
+			[]vprocore.ProjectMetadataCell{vprotest.MetadataText("1"), vprotest.SiviReal(-0.1), vprotest.SiviReal(14.1), vprotest.SiviReal(20), vprotest.SiviReal(-math.MaxFloat64)}},
 	} {
 		t.Run(test.form+"/"+test.column, func(t *testing.T) {
 			original := soilPlanFixture(test.form)
@@ -324,5 +330,40 @@ func TestTwoPageSoilPlanActualReadBoundaryAndNoMutation(t *testing.T) {
 				t.Fatal("plan changed physical source/audit/history")
 			}
 		}
+	}
+}
+
+func TestTwoPageSoilPlanMineralCoarseFragmentsCrossColumnBounds(t *testing.T) {
+	original := soilPlanFixture("SoilMineralXL")
+	colIdx := func(name string) int {
+		for i, c := range original.Records.Columns {
+			if c.Name == name {
+				return i
+			}
+		}
+		t.Fatalf("missing column %s", name)
+		return -1
+	}
+	original.Records.Rows[0].Cells[colIdx("PercentCoarseFragsGravel")] = soilPlanInteger("60")
+	original.Records.Rows[0].Cells[colIdx("PercentCoarseFragsTotal")] = soilPlanInteger("70")
+
+	if got, err := planTwoPageSoilEdits(context.Background(), original, []twoPageSoilEdit{
+		soilPlanEdit(original, "PercentCoarseFragsCobbles", soilPlanInteger("60")),
+	}); err == nil || got != nil || !strings.Contains(err.Error(), "cannot exceed 100%") {
+		t.Fatalf("expected coarse-frag sum > 100%% rejection, got %v, %v", got, err)
+	}
+
+	if got, err := planTwoPageSoilEdits(context.Background(), original, []twoPageSoilEdit{
+		soilPlanEdit(original, "PercentCoarseFragsCobbles", soilPlanInteger("20")),
+	}); err == nil || got != nil || !strings.Contains(err.Error(), "PercentCoarseFragsTotal") {
+		t.Fatalf("expected coarse-frag sum > Total rejection, got %v, %v", got, err)
+	}
+
+	original.Records.Rows[0].Cells[colIdx("PercentCoarseFragsCobbles")] = soilPlanInteger("60")
+	original.Records.Rows[0].Cells[colIdx("PercentCoarseFragsTotal")] = soilPlanInteger("150")
+	if got, err := planTwoPageSoilEdits(context.Background(), original, []twoPageSoilEdit{
+		soilPlanEdit(original, "Texture", vprotest.MetadataText("SL")),
+	}); err != nil || len(got) != 1 || got[0].Column != "Texture" {
+		t.Fatalf("expected unrelated Texture edit on legacy Mineral row to succeed, got %v, %v", got, err)
 	}
 }

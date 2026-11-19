@@ -50,14 +50,14 @@ func ValidateSIVIParentSharedNumber(column, kind string, cell vprocore.ProjectMe
 		if err != nil {
 			return fmt.Errorf("SIVI %s integer: %w", column, err)
 		}
-		return vprocore.ValidateOrdinaryInteger(column, &integer)
+		return vprocore.ValidateParentSoilInteger(column, &integer)
 	}
 	if cell.Storage != "real" || cell.Real == nil {
 		return fmt.Errorf("SIVI %s requires nullable REAL storage", column)
 	}
 	switch kind {
 	case "single":
-		return vprocore.ValidateSingleRangeChange(column, nil, cell.Real)
+		return vprocore.ValidateParentSoilSingle(column, nil, cell.Real)
 	case "latitude", "longitude":
 		_, err := vprocore.ConvertCoordinate(kind, vprocore.CoordinateModeDD, vprocore.CoordinateParts{Degrees: cell.Real})
 		return err
@@ -203,7 +203,13 @@ func PlanSIVIParentSharedScope(ctx context.Context, original *SiviParentProjecti
 			if kind, number := SiviParentSharedNumberKinds[column]; number {
 				return ValidateSIVIParentSharedNumber(column, kind, cell)
 			}
-			return vprocore.ValidateOrdinaryRestoreValue(SiviParentSharedOwners[column], column, value)
+			if err := vprocore.ValidateOrdinaryRestoreValue(SiviParentSharedOwners[column], column, value); err != nil {
+				return err
+			}
+			if realVal, ok := value.(float64); ok {
+				return vprocore.ValidateParentSoilSingle(column, nil, &realVal)
+			}
+			return nil
 		})
 	if err != nil {
 		return nil, err

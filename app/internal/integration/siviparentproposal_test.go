@@ -29,7 +29,7 @@ func assertSIVIProposalAssignments(t *testing.T, parent *sourceform.SiviParentPr
 		{"SV_StandHeight", "Env", vprotest.SiviReal(123.25), float64(123.25)},
 		{"SV_AhorizonDepth", "Env", vprotest.SiviReal(123.25), float64(123.25)},
 		{"SV_GleyingMottlingCM", "Env", vprotest.SiviReal(123.25), float64(123.25)},
-		{"SV_PercentCoarseFrags", "Env", vprotest.SiviReal(123.25), float64(123.25)},
+		{"SV_PercentCoarseFrags", "Env", vprotest.SiviReal(83.25), float64(83.25)},
 		{"SV_SoilDepth", "Env", vprotest.SiviReal(123.25), float64(123.25)},
 		{"StrataCoverTotal", "Admin", vprotest.SiviReal(123.25), float64(123.25)},
 		{"SV_FloodPlain", "Env", vprotest.MetadataInteger("-1"), int64(-1)},

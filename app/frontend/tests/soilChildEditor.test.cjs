@@ -36,17 +36,27 @@ test('Soil descriptors cover all30 source controls and preserve intentional sugg
 test('All physical text and numeric bounds retain malformed raw input and omit unchanged historical values', () => {
   for (const kind of ['Humus', 'Mineral']) {
     for (const field of editor.soilFields[kind]) {
-      const stored = field.kind === 'text' || field.kind === 'memo' ? null : null;
-      const valid = field.kind === 'text' ? 'x'.repeat(field.maximum) : field.kind === 'memo' ? " raw'\n🌲 " : '-1';
+      const stored = null;
+      const valid = field.kind === 'text' ? 'x'.repeat(field.maximum)
+        : field.kind === 'memo' ? " raw'\n🌲 "
+        : field.column === 'vonPost' || field.column === 'ASP' ? '5'
+        : field.column.endsWith('FormpH') ? '5.5'
+        : '10';
       let drafts = editor.stageSoil({}, kind, 0, field, valid, stored);
-      assert.equal(editor.soilErrors(drafts).length, 0);
+      assert.equal(editor.soilErrors(drafts).length, 0, `${kind}.${field.column}`);
+      const domainInvalid = field.column === 'vonPost' ? ['0', '11', '15', '-1']
+        : field.column === 'ASP' ? ['0', '9', '99', '-1']
+        : field.column.startsWith('PercentCoarseFrags') && field.kind === 'integer' ? ['-1', '101', '150']
+        : field.column.endsWith('FormpH') ? ['-0.1', '14.1', '20']
+        : field.column.endsWith('Depth') ? ['-0.1', '-5']
+        : [];
       for (const raw of field.kind === 'text' || field.kind === 'memo'
         ? [...(field.maximum ? ['x'.repeat(field.maximum + 1), 'x'.repeat(field.maximum - 1) + '🌲'] : []), '\ud800', '\udfff']
-        : ['1bad', '1e999', ...(field.kind === 'integer' ? ['32768', '-32769', '1.5'] : ['4e38', '-4e38'])]) {
+        : ['1bad', '1e999', ...(field.kind === 'integer' ? ['32768', '-32769', '1.5'] : ['4e38', '-4e38']), ...domainInvalid]) {
         drafts = editor.stageSoil({}, kind, 0, field, raw, stored);
         assert.equal(editor.soilCell(drafts, kind, 0, field.key).raw, raw);
         assert.equal(editor.soilDirty(drafts), true);
-        assert.throws(() => editor.soilUpdates(drafts));
+        assert.throws(() => editor.soilUpdates(drafts), undefined, `${kind}.${field.column}=${raw}`);
       }
       const historical = field.kind === 'text' ? 'h'.repeat(field.maximum + 1)
         : field.kind === 'memo' ? "historical\nmemo" : field.kind === 'integer' ? 32768 : 4e38;
@@ -64,10 +74,10 @@ test('Cross-table identical IDs, original NULL expectations, independent errors 
   drafts = editor.stageSoil(json(drafts), 'Humus', -9, h, " Raw' ", 'not original');
   assert.equal(editor.soilErrors(drafts).length, 1);
   assert.throws(() => editor.soilUpdates(drafts));
-  drafts = editor.stageSoil(drafts, 'Mineral', -9, m, '-32768', 1);
+  drafts = editor.stageSoil(drafts, 'Mineral', -9, m, '8', 1);
   assert.deepEqual(json(editor.soilUpdates(drafts)), [
     { kind: 'Humus', id: -9, text: { horizon: { expected: null, value: " Raw' " } }, numbers: {} },
-    { kind: 'Mineral', id: -9, text: {}, numbers: { asp: { expected: null, value: -32768 } } },
+    { kind: 'Mineral', id: -9, text: {}, numbers: { asp: { expected: null, value: 8 } } },
   ]);
   drafts = editor.stageSoil(drafts, 'Mineral', -9, m, '', 1);
   assert.equal(editor.soilCell(drafts, 'Mineral', -9, m.key).expected, null);

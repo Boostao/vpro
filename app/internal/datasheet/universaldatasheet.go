@@ -216,6 +216,12 @@ func ApplyDatasheetEdits(ctx context.Context, contexts *vprocore.ContextService,
 							target.tableName, rid, colMeta.Name)
 					}
 
+					if !isProtectedDatasheetColumn(target.key, colMeta, canEditMaster) {
+						if _, cellErr := vprocore.MetadataCellValue(edit.After); cellErr == nil && datasheetCellsSemanticallyEqual(storedCell, edit.After, colMeta) {
+							continue
+						}
+					}
+
 					driverVal, afterAudit, normalizedCell, err := validateAndNormalizeDatasheetCell(target.key, colMeta, edit.After, canEditMaster)
 					if err != nil {
 						return err
@@ -317,6 +323,31 @@ func ApplyDatasheetEdits(ctx context.Context, contexts *vprocore.ContextService,
 						}
 						if err := validateSoilHorizonDepthSign(target.key, effHz, effUp, effLo); err != nil {
 							return err
+						}
+					}
+					if target.key == "Mineral" {
+						cfTouched := false
+						for _, m := range mutations {
+							if vprocore.MineralCoarseFragColumns[m.colMeta.Name] {
+								cfTouched = true
+								break
+							}
+						}
+						if cfTouched {
+							cellAt := func(low string) vprocore.ProjectMetadataCell {
+								if idx, ok := colIndexByLower[low]; ok {
+									return projectedCells[idx]
+								}
+								return vprocore.ProjectMetadataCell{Storage: "null"}
+							}
+							if err := validateMineralCoarseFragsCells(
+								cellAt("percentcoarsefragsgravel"),
+								cellAt("percentcoarsefragscobbles"),
+								cellAt("percentcoarsefragsstones"),
+								cellAt("percentcoarsefragstotal"),
+							); err != nil {
+								return err
+							}
 						}
 					}
 				}

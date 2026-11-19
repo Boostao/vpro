@@ -80,10 +80,16 @@ test('shared typed numeric policies preserve ordinary domains/messages without a
   assert.equal(ordinaryNumberValue(slope, '1.1234567890123', null).value, 1.1234567890123);
 });
 
-test('Integer depths and Single summaries retain raw errors and physical domains, not guessed clinical limits', () => {
+test('Integer depths and Single summaries retain raw errors and domain bounds while tolerating unchanged legacy values', () => {
+  const nonNegativeColumns = new Set(['RootingDepth', 'RootRestrictingDepth', 'SeepageDepth', 'HumusThickness']);
   for (const field of ordinaryFields.filter(field => ['integer', 'single'].includes(field.kind))) {
-    for (const raw of ['', '-1', '0', '100', '101', '2e1']) {
-      assert.equal(ordinaryNumberValue(field, raw, null).error, null);
+    const nonNegative = nonNegativeColumns.has(field.column);
+    for (const raw of nonNegative ? ['', '0', '100', '101', '2e1'] : ['', '-1', '0', '100', '101', '2e1']) {
+      assert.equal(ordinaryNumberValue(field, raw, null).error, null, `${field.column}:${raw}`);
+    }
+    if (nonNegative) {
+      assert.match(ordinaryNumberValue(field, '-1', null).error, />= 0 cm/);
+      assert.equal(ordinaryNumberValue(field, '-60', -60).error, null);
     }
     for (const raw of ['1e', '-', 'NaN', 'Infinity', '0x10', '1e309']) {
       const cell = ordinaryNumberValue(field, raw, null);

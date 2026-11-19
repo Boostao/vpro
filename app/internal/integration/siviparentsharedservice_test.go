@@ -447,7 +447,7 @@ func sharedSoilEdits(t *testing.T, original *sourceform.SIVIParentProjection) []
 	edits := []sourceform.SIVIParentCellEdit{sftest.SiviParentEdit(t, original, "HumusThickness",
 		vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(2.5)})}
 	for i, column := range []string{"SeepageDepth", "RootingDepth", "RootRestrictingDepth"} {
-		value := []string{"-32768", "32767", "0"}[i]
+		value := []string{"999", "32767", "0"}[i]
 		edits = append(edits, sftest.SiviParentEdit(t, original, column,
 			vprocore.ProjectMetadataCell{Storage: "integer", Integer: &value}))
 	}
@@ -519,6 +519,8 @@ func TestSIVIParentSharedSoilCanonicalDomainsAndCrossTableCollisions(t *testing.
 	service, state, original, _ := sftest.SharedServiceFixture(t)
 	ctx := context.Background()
 	for _, value := range []vprocore.ProjectMetadataCell{
+		{Storage: "real", Real: vprotest.SiviSharedTestPointer(-0.1)},
+		{Storage: "real", Real: vprotest.SiviSharedTestPointer(-12.0)},
 		{Storage: "real", Real: vprotest.SiviSharedTestPointer(1e39)},
 		{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("3")},
 		{Storage: "text", Text: vprotest.SiviSharedTestPointer("3")},
@@ -531,7 +533,7 @@ func TestSIVIParentSharedSoilCanonicalDomainsAndCrossTableCollisions(t *testing.
 	for _, column := range []string{"SeepageDepth", "RootingDepth", "RootRestrictingDepth"} {
 		for _, value := range []vprocore.ProjectMetadataCell{
 			{Storage: "null"},
-			{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("-32768")},
+			{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("999")},
 			{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("32767")},
 			{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("0")},
 		} {
@@ -540,6 +542,8 @@ func TestSIVIParentSharedSoilCanonicalDomainsAndCrossTableCollisions(t *testing.
 			}
 		}
 		for _, value := range []vprocore.ProjectMetadataCell{
+			{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("-1")},
+			{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("-32768")},
 			{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("-32769")},
 			{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("32768")},
 			{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("9007199254740993")},

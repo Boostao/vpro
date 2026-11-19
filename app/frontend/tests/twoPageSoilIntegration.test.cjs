@@ -272,20 +272,28 @@ test('actual source chooser preserves numeric TEXT parsing, NULL versus empty an
     try {
       await mounted.actions().loadReferences(); client.flush();
       const field = mounted.actions().referenceView.data.fields[fieldIndex];
-      const ten = field.definitions.rows.find(row => row.cells[3].text === '10');
+      const validCode = kind === 'Humus' ? '10' : '8';
+      const chosen = field.definitions.rows.find(row => row.cells[3].text === validCode);
       await mounted.actions().selectRow('-7'); client.flush();
       class ObservedPanel {
         dataset = { soilCurrentRow: '-7', twoPageSoilPanel: kind === 'Humus' ? 'SoilMineralXL' : 'SoilHumusXL' };
       }
       const observedPanel = new ObservedPanel();
       mounted.actions().bindTestPanel(observedPanel);
-      mounted.actions().chooseReference(column, '-7', ten.rowId, ten.cells[3]); client.flush();
+      mounted.actions().chooseReference(column, '-7', chosen.rowId, chosen.cells[3]); client.flush();
       assert.equal(Object.keys(session.view().drafts).length, 0);
       observedPanel.dataset.twoPageSoilPanel = source.form;
-      mounted.actions().chooseReference(column, '-7', ten.rowId, ten.cells[3]); client.flush();
+      mounted.actions().chooseReference(column, '-7', chosen.rowId, chosen.cells[3]); client.flush();
       const numeric = session.view().drafts[JSON.stringify(['-7', column])];
       assert.ok(numeric, mounted.actions().error);
-      assert.equal(numeric.raw, '10'); assert.equal(numeric.value.storage, 'integer'); assert.equal(numeric.value.integer, '10');
+      assert.equal(numeric.error, null);
+      assert.equal(numeric.raw, validCode); assert.equal(numeric.value.storage, 'integer'); assert.equal(numeric.value.integer, validCode);
+      if (kind === 'Mineral') {
+        const outOfRange = field.definitions.rows.find(row => row.cells[3].text === '10');
+        mounted.actions().chooseReference(column, '-7', outOfRange.rowId, outOfRange.cells[3]); client.flush();
+        assert.match(session.view().drafts[JSON.stringify(['-7', column])].error, /1 to 8/);
+        assert.equal(session.closeState().canSave, false);
+      }
       const nullable = field.definitions.rows.find(row => row.cells[3].storage === 'null');
       mounted.actions().chooseReference(column, '-7', nullable.rowId, nullable.cells[3]); client.flush();
       assert.equal(session.view().drafts[JSON.stringify(['-7', column])].nullValue, true);

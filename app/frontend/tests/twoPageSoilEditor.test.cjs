@@ -114,14 +114,20 @@ for (const [form, fields] of Object.entries(sourceFields)) {
   test(`${form} all exact source fields preserve nullable domains, UTF16 bounds and unchanged historical omissions`, () => {
     for (const [column, [storage, maximum]] of Object.entries(fields)) {
       const source = oneField(form, column);
-      const raw = storage === 'text' ? 'X' : storage === 'integer' ? '-32768' : '-1.25';
+      const raw = storage === 'text' ? 'X' : storage === 'integer' ? '5' : '5.25';
       const draft = editor.stageTwoPageSoil(source, '-7', column, raw, false);
       assert.equal(draft.error, null, column);
-      assert.deepEqual(plain(draft.value), cell(storage, storage === 'real' ? -1.25 : raw));
+      assert.deepEqual(plain(draft.value), cell(storage, storage === 'real' ? 5.25 : raw));
+      const domainInvalid = column === 'vonPost' ? ['0', '11', '15', '-1']
+        : column === 'ASP' ? ['0', '9', '99', '-1']
+        : column.startsWith('PercentCoarseFrags') && storage === 'integer' ? ['-1', '101', '150']
+        : column.endsWith('FormpH') ? ['-0.1', '14.1', '20']
+        : column.endsWith('Depth') ? ['-1.25']
+        : [];
       for (const invalid of storage === 'text'
         ? ['\ud800', ...(maximum ? ['x'.repeat(maximum + 1), '😀'.repeat(Math.floor(maximum / 2) + 1)] : [])]
-        : storage === 'integer' ? ['32768', '-32769', '01', '-0', '1.5', ' 1 ', '9'.repeat(1000)]
-        : ['NaN', 'Infinity', '3.402823466385289e38', '-1e100', ' 1 ', '']) {
+        : storage === 'integer' ? ['32768', '-32769', '01', '-0', '1.5', ' 1 ', '9'.repeat(1000), ...domainInvalid]
+        : ['NaN', 'Infinity', '3.402823466385289e38', '-1e100', ' 1 ', '', ...domainInvalid]) {
         const bad = editor.stageTwoPageSoil(source, '-7', column, invalid, false);
         assert.notEqual(bad.error, null, `${column}=${invalid}`);
         assert.equal(bad.raw, invalid);

@@ -1031,14 +1031,14 @@ test('soil integer boundaries stage canonical exact INTEGER and explicit NULL wi
   for (const column of ['SeepageDepth', 'RootingDepth', 'RootRestrictingDepth']) {
     const { session, calls } = fixture();
     await session.load();
-    for (const raw of ['-32768', '32767', '0', '-0', '1e2']) {
+    for (const raw of ['32767', '0', '-0', '1e2']) {
       session.stage(column, { kind: 'text', raw });
       const edit = shared.siviParentSharedRequest(session.view().original, session.view().drafts).edits[0];
       assert.equal(edit.value.storage, 'integer');
       assert.equal(edit.value.integer, String(Number(raw)));
       assert.equal(edit.value.real, null);
     }
-    for (const raw of ['-32769', '32768', '3.25', '9007199254740993', 'bad']) {
+    for (const raw of ['-1', '-32768', '-32769', '32768', '3.25', '9007199254740993', 'bad']) {
       session.stage(column, { kind: 'text', raw });
       assert.equal(session.view().drafts[column].input.raw, raw);
       assert.equal(session.closeState().blocked, true);
@@ -1092,7 +1092,7 @@ test('soil historical raw integer/real/text values survive unchanged mixed Save 
   const mixed = fixture();
   await mixed.session.load();
   mixed.session.stage('HumusThickness', { kind: 'text', raw: '2.5' });
-  mixed.session.stage('RootingDepth', { kind: 'text', raw: '-32768' });
+  mixed.session.stage('RootingDepth', { kind: 'text', raw: '150' });
   assert.equal(await mixed.session.save(), true);
   assert.equal(mixed.last().edits.length, 2);
   assert.equal(await mixed.session.restore('prune'), true);

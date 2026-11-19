@@ -692,7 +692,7 @@ func (ctx *TableCSVLeaseContext) Done() <-chan struct{} {
 func TwoPageCommonValues() map[string]vprocore.ProjectMetadataCell {
 	return map[string]vprocore.ProjectMetadataCell{
 		"SV_StandHeight": SiviReal(-3.25), "SV_AhorizonDepth": SiviReal(0.1),
-		"SV_GleyingMottlingCM": SiviReal(25), "SV_PercentCoarseFrags": SiviReal(101),
+		"SV_GleyingMottlingCM": SiviReal(25), "SV_PercentCoarseFrags": SiviReal(85),
 		"SV_SoilDepth": SiviReal(0), "StrataCoverTotal": SiviReal(125),
 		"SV_FloodPlain": MetadataInteger("-1"), "SV_StandAgeEstMeas": MetadataText("2"),
 		"SV_StandHeightEstMeas": MetadataText("2"), "SV_PolygonNumber": MetadataText("  MiXeD  "),

@@ -46,11 +46,19 @@ func TestTwoPageParentExtraFieldTypedBoundsAndExactValues(t *testing.T) {
 			var valid, invalid []vprocore.ProjectMetadataCell
 			switch field.Domain {
 			case "single":
-				valid = []vprocore.ProjectMetadataCell{vprotest.SiviReal(-math.MaxFloat32), vprotest.SiviReal(math.MaxFloat32), vprotest.SiviReal(-3), vprotest.SiviReal(0.1)}
-				invalid = []vprocore.ProjectMetadataCell{vprotest.SiviReal(math.NaN()), vprotest.SiviReal(math.Inf(1)),
-					vprotest.SiviReal(math.Nextafter(float64(math.MaxFloat32), math.Inf(1))),
-					vprotest.SiviReal(math.Nextafter(-float64(math.MaxFloat32), math.Inf(-1))),
-					vprotest.MetadataInteger("3"), vprotest.MetadataText("3"), {Storage: "real"}}
+				if column == "SV_WaterTableCM" || column == "ActiveLayerDepth" {
+					valid = []vprocore.ProjectMetadataCell{vprotest.SiviReal(0), vprotest.SiviReal(math.MaxFloat32), vprotest.SiviReal(0.1)}
+					invalid = []vprocore.ProjectMetadataCell{vprotest.SiviReal(-0.1), vprotest.SiviReal(-3), vprotest.SiviReal(-math.MaxFloat32),
+						vprotest.SiviReal(math.NaN()), vprotest.SiviReal(math.Inf(1)),
+						vprotest.SiviReal(math.Nextafter(float64(math.MaxFloat32), math.Inf(1))),
+						vprotest.MetadataInteger("3"), vprotest.MetadataText("3"), {Storage: "real"}}
+				} else {
+					valid = []vprocore.ProjectMetadataCell{vprotest.SiviReal(-math.MaxFloat32), vprotest.SiviReal(math.MaxFloat32), vprotest.SiviReal(-3), vprotest.SiviReal(0.1)}
+					invalid = []vprocore.ProjectMetadataCell{vprotest.SiviReal(math.NaN()), vprotest.SiviReal(math.Inf(1)),
+						vprotest.SiviReal(math.Nextafter(float64(math.MaxFloat32), math.Inf(1))),
+						vprotest.SiviReal(math.Nextafter(-float64(math.MaxFloat32), math.Inf(-1))),
+						vprotest.MetadataInteger("3"), vprotest.MetadataText("3"), {Storage: "real"}}
+				}
 			case "integer":
 				valid = []vprocore.ProjectMetadataCell{vprotest.MetadataInteger("-32768"), vprotest.MetadataInteger("32767"), vprotest.MetadataInteger("0")}
 				invalid = []vprocore.ProjectMetadataCell{vprotest.MetadataInteger("-32769"), vprotest.MetadataInteger("32768"),

@@ -81,17 +81,36 @@ func TestSoilChildPhysicalDomainsAndRawJSON(t *testing.T) {
 							}
 						}
 					case member.Type().Elem().Kind() == reflect.Float64:
-						invalid = []any{math.MaxFloat32 * 2.0, -math.MaxFloat32 * 2.0, math.Inf(1), math.Inf(-1), math.NaN()}
-						for _, number := range []float64{-math.MaxFloat32, math.MaxFloat32, -1.1234567890123, 0, 101} {
+						var validNums []float64
+						switch field.Column {
+						case "HumusFormpH", "MineralFormpH":
+							invalid = []any{-0.1, 14.1, 20.0, math.MaxFloat32, -math.MaxFloat32, math.MaxFloat32 * 2.0, -math.MaxFloat32 * 2.0, math.Inf(1), math.Inf(-1), math.NaN()}
+							validNums = []float64{0, 5.1234567890123, 14}
+						default:
+							invalid = []any{-0.1, -math.MaxFloat32, math.MaxFloat32 * 2.0, -math.MaxFloat32 * 2.0, math.Inf(1), math.Inf(-1), math.NaN()}
+							validNums = []float64{0, 1.1234567890123, 101, math.MaxFloat32}
+						}
+						for _, number := range validNums {
 							if err := vprocore.ValidateSoilChildField(kind, field.Column, number); err != nil {
-								t.Fatal("invented numeric domain or rounding:", err)
+								t.Fatal("rejected valid numeric domain or rounded:", err)
 							}
 						}
 					case member.Type().Elem().Kind() == reflect.Int:
-						invalid = []any{-32769, 32768}
-						for _, number := range []int{-32768, 32767, -1, 0, 101} {
+						var validInts []int
+						switch field.Column {
+						case "vonPost":
+							invalid = []any{-32769, -32768, -1, 0, 11, 15, 32767, 32768}
+							validInts = []int{1, 5, 10}
+						case "ASP":
+							invalid = []any{-32769, -32768, -1, 0, 9, 99, 32767, 32768}
+							validInts = []int{1, 4, 8}
+						default:
+							invalid = []any{-32769, -32768, -1, 101, 150, 32767, 32768}
+							validInts = []int{0, 50, 100}
+						}
+						for _, number := range validInts {
 							if err := vprocore.ValidateSoilChildField(kind, field.Column, number); err != nil {
-								t.Fatal("invented integer domain:", err)
+								t.Fatal("rejected valid integer domain:", err)
 							}
 						}
 					default:

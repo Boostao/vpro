@@ -5,7 +5,7 @@ import { exactSigned64 } from '../admin/projectMetadataRestore';
 import { equalCell, metadataCellText } from '../admin/projectMetadataEditor';
 import { wellFormedUTF16 } from './qualityEditor';
 import { finiteSingleValue } from './numericEditor';
-import { soilFields, type SoilKind } from './soilChildEditor';
+import { soilChildNumericDomainError, soilCoarseFragmentsRowError, soilFields, type SoilKind } from './soilChildEditor';
 import { validSIVIRequestId } from './siviRequestId';
 
 export type TwoPageSoilForm = 'SoilHumusXL' | 'SoilMineralXL';
@@ -190,17 +190,32 @@ export function stageTwoPageSoil(original: TwoPageSoilOriginal, rowId: string, c
     } else if (field.kind === 'integer') {
       if (raw.length > 6 || !/^-?(0|[1-9]\d*)$/.test(raw) || raw === '-0' || BigInt(raw) < -32768n || BigInt(raw) > 32767n) {
         error = `${column} requires an exact Access Integer (-32768 to 32767); raw input was not rounded or completed.`;
-      } else value = { ...value, storage: 'integer', integer: raw };
+      } else {
+        const domainErr = soilChildNumericDomainError(column, Number(raw));
+        if (domainErr) error = domainErr;
+        else value = { ...value, storage: 'integer', integer: raw };
+      }
     } else {
       const parsed = finiteSingleValue(column, raw);
       if (raw !== raw.trim() || raw === '' || parsed.error || parsed.value === null) {
         error = parsed.error ?? `${column} requires a finite number without added whitespace, or explicit NULL.`;
-      } else value = { ...value, storage: 'real', real: parsed.value };
+      } else if (expected.storage === 'real' && expected.real === parsed.value) {
+        value = { ...expected };
+      } else {
+        const domainErr = soilChildNumericDomainError(column, parsed.value);
+        if (domainErr) error = domainErr;
+        else value = { ...value, storage: 'real', real: parsed.value };
+      }
     }
   }
   return { contextId: original.contextId, form: original.form, rowId, column,
     expected: { ...expected }, value, raw, nullValue, error };
 }
+
+const mineralCoarseFragColumns = new Set([
+  'PercentCoarseFragsGravel', 'PercentCoarseFragsCobbles',
+  'PercentCoarseFragsStones', 'PercentCoarseFragsTotal',
+]);
 
 export function twoPageSoilRequest(original: TwoPageSoilOriginal, owner: TwoPageSoilOwner,
   drafts: TwoPageSoilDrafts, requestId: string): TwoPageSoilRequest {
@@ -218,6 +233,28 @@ export function twoPageSoilRequest(original: TwoPageSoilOriginal, owner: TwoPage
     if (equalCell(staged.expected, staged.value)) continue;
     edits.push({ contextId: owner.contextId, form: owner.form, rowId: staged.rowId, column: staged.column,
       expected: { ...staged.expected }, value: { ...staged.value } });
+  }
+  if (owner.form === 'SoilMineralXL') {
+    const cfRowIds = Array.from(new Set(edits.filter(e => mineralCoarseFragColumns.has(e.column)).map(e => e.rowId)));
+    const colIndex = new Map(reviewed.records.columns.map((c, idx) => [c.name, idx]));
+    for (const rowId of cfRowIds) {
+      const row = reviewed.records.rows.find(r => r.rowId === rowId);
+      if (!row) continue;
+      const effectiveInt = (colName: string): number | null => {
+        const edited = edits.find(e => e.rowId === rowId && e.column === colName);
+        const cell = edited ? edited.value : (colIndex.has(colName) ? row.cells[colIndex.get(colName)!] : null);
+        if (!cell || cell.storage !== 'integer' || cell.integer === null) return null;
+        const n = Number(cell.integer);
+        return Number.isSafeInteger(n) ? n : null;
+      };
+      const cfErr = soilCoarseFragmentsRowError(
+        effectiveInt('PercentCoarseFragsGravel'),
+        effectiveInt('PercentCoarseFragsCobbles'),
+        effectiveInt('PercentCoarseFragsStones'),
+        effectiveInt('PercentCoarseFragsTotal'),
+      );
+      if (cfErr) throw new Error(cfErr);
+    }
   }
   if (!edits.length) throw new Error('Soil Save requires at least one explicit changed data cell.');
   return { requestId, original: reviewed, edits };

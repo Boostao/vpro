@@ -35,10 +35,12 @@ func TestSoilAtomicExpectedPatchesDomainsAndNull(t *testing.T) {
 				}
 				update.Text[property] = vprocore.SoilTextUpdate{Value: &value}
 			} else {
-				value := -1.1234567890123
+				value := 5.1234567890123
 				switch {
+				case field.Column == "PercentCoarseFragsTotal":
+					value = 60
 				case vprocore.SoilChildIntegerColumns[kind][field.Column]:
-					value = -32768
+					value = 5
 				case field.Column == "UpperDepth":
 					// LMH25: depths are finite, >= 0, and mineral rows measure downward.
 					value = 1.1234567890123

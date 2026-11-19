@@ -311,3 +311,92 @@ func TestDiscontinuityHorizonsAndTolerancesParity(t *testing.T) {
 		t.Fatalf("expected IXAh+XAh (10 cm) on fine-textured soil to yield KeyedSNR=\"E\", got %q", romanMin.KeyedSNR)
 	}
 }
+
+func TestUXSoil005QuantitativeDiagnosticsAndKeySanitization(t *testing.T) {
+	diag := lmh25rules.EvaluatePlotDiagnostics(
+		vprocore.FS882Header{
+			PlotNumber:           "00337",
+			MesoSlopePos:         strPtr("MD"),
+			Slope:                fltPtr(15.0),
+			HumusThickness:       fltPtr(-12.0),
+			RootingDepth:         intPtr(-5),
+			SeepageDepth:         intPtr(-3),
+			RootRestrictingDepth: intPtr(-2),
+			ActiveLayerDepth:     fltPtr(-1.0),
+		},
+		[]vprocore.HumusRecord{
+			{ID: 1, PlotNumber: "00337", Horizon: strPtr("L"), UpperDepth: fltPtr(5.0), LowerDepth: fltPtr(0.0), VonPost: intPtr(15), PH: fltPtr(20.0)},
+		},
+		[]vprocore.MineralRecord{
+			{
+				ID: 1, PlotNumber: "00337", Horizon: strPtr("Ah"),
+				UpperDepth: fltPtr(0.0), LowerDepth: fltPtr(15.0),
+				ASP: intPtr(99), Texture: strPtr("SL"), Colour: strPtr("10YR 4/3"),
+				PercentCoarseFragsGravel:  intPtr(60),
+				PercentCoarseFragsCobbles: intPtr(60),
+				PercentCoarseFragsStones:  intPtr(60),
+				PercentCoarseFragsTotal:   intPtr(150),
+				MineralFormpH:             fltPtr(20.0),
+			},
+		},
+	)
+
+	for _, wantCode := range []string{
+		"VONPOST_INVALID_SCALE",
+		"SOIL_PH_OUT_OF_BOUNDS",
+		"MINERAL_ASP_OUT_OF_BOUNDS",
+		"COARSE_FRAGS_OUT_OF_BOUNDS",
+		"COARSE_FRAGS_SUM_EXCEEDS_100",
+		"SOIL_DEPTH_NEGATIVE",
+	} {
+		if !hasIssue(diag.Issues, wantCode) {
+			t.Fatalf("expected diagnostic issue %s, got %+v", wantCode, diag.Issues)
+		}
+	}
+
+	// Out-of-domain MineralFormpH=20 (>14) must NOT trigger Key 9.6 saline rSNR="F".
+	if diag.KeyedSNR == "F" {
+		t.Fatalf("expected out-of-domain MineralFormpH=20 not to infer saline KeyedSNR=\"F\", trace=%+v", diag.SNRTrace)
+	}
+	// Out-of-domain RootRestrictingDepth=-2 and PercentCoarseFragsTotal=150 must NOT enter Key 9.3 SMR trace.
+	for _, step := range diag.SMRTrace {
+		if containsAny(step.Condition+" "+step.Outcome, "SoilDepth=-2", "150%") {
+			t.Fatalf("expected Key 9.3 SMR trace to sanitize negative depth and CF=150, got trace=%+v", diag.SMRTrace)
+		}
+	}
+
+	// Component sum > PercentCoarseFragsTotal (30 + 30 = 60 > 50) and negative horizon depths are flagged.
+	compVsTotal := lmh25rules.EvaluatePlotDiagnostics(
+		vprocore.FS882Header{PlotNumber: "CF01"},
+		[]vprocore.HumusRecord{
+			{ID: 1, PlotNumber: "CF01", Horizon: strPtr("L"), UpperDepth: fltPtr(-2.0), LowerDepth: nil},
+		},
+		[]vprocore.MineralRecord{
+			{
+				ID: 2, PlotNumber: "CF01", Horizon: strPtr("Bm"),
+				UpperDepth: fltPtr(-4.0), LowerDepth: fltPtr(20.0),
+				PercentCoarseFragsGravel:  intPtr(30),
+				PercentCoarseFragsCobbles: intPtr(30),
+				PercentCoarseFragsTotal:   intPtr(50),
+			},
+		},
+	)
+	for _, wantCode := range []string{"COARSE_FRAGS_COMPONENTS_EXCEED_TOTAL", "HORIZON_SIGN_MINERAL", "HORIZON_DEPTH_NEGATIVE"} {
+		if !hasIssue(compVsTotal.Issues, wantCode) {
+			t.Fatalf("expected diagnostic issue %s, got %+v", wantCode, compVsTotal.Issues)
+		}
+	}
+}
+
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if len(sub) > 0 && len(s) >= len(sub) {
+			for i := 0; i+len(sub) <= len(s); i++ {
+				if s[i:i+len(sub)] == sub {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}

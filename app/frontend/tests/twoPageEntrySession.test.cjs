@@ -339,7 +339,7 @@ test('one atomic Save spans XL/common/extra; preserves unchanged historical inva
   f.session.stage('FieldNumber', text('x'.repeat(200)));
   f.session.stage('Location', text('literal'));
   f.session.stage('SV_StandHeight', text('3.25'));
-  f.session.stage('ActiveLayerDepth', text('-2.5'));
+  f.session.stage('ActiveLayerDepth', text('25.5'));
   assert.equal(await f.session.save(), true);
   assert.equal(f.calls.save, 1);
   assert.deepEqual(f.last().edits.map(edit => edit.column), ['Location', 'SV_StandHeight', 'ActiveLayerDepth']);

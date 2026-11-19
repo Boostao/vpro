@@ -249,6 +249,54 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 		}
 	}
 
+	// 1b. Quantitative Pit & Soil Header Depth Bounds (UX-SOIL-005; LMH25 Sec. 2)
+	effectiveHeader := header
+	if header.HumusThickness != nil && (math.IsNaN(*header.HumusThickness) || math.IsInf(*header.HumusThickness, 0) || *header.HumusThickness < 0) {
+		res.Issues = append(res.Issues, DiagnosticIssue{
+			Code:     "SOIL_DEPTH_NEGATIVE",
+			Severity: SeverityError,
+			Category: "soil_depth",
+			Field:    "HumusThickness",
+			Message:  fmt.Sprintf("HumusThickness (%.1f cm) must be 0 cm or greater.", *header.HumusThickness),
+			LMH25Ref: "LMH25 (2023) Sec. 2 Item 17 p. 71",
+		})
+		effectiveHeader.HumusThickness = nil
+	}
+	for _, intDepth := range []struct {
+		name string
+		val  *int
+		ref  string
+	}{
+		{"RootingDepth", header.RootingDepth, "LMH25 (2023) Sec. 2 Item 7 p. 65"},
+		{"RootRestrictingDepth", header.RootRestrictingDepth, "LMH25 (2023) Sec. 2 Item 9 p. 66"},
+		{"SeepageDepth", header.SeepageDepth, "LMH25 (2023) Sec. 2 Item 5 p. 64"},
+	} {
+		if intDepth.val != nil && *intDepth.val < 0 {
+			res.Issues = append(res.Issues, DiagnosticIssue{
+				Code:     "SOIL_DEPTH_NEGATIVE",
+				Severity: SeverityError,
+				Category: "soil_depth",
+				Field:    intDepth.name,
+				Message:  fmt.Sprintf("%s (%d cm) must be 0 cm or greater.", intDepth.name, *intDepth.val),
+				LMH25Ref: intDepth.ref,
+			})
+		}
+	}
+	if header.RootRestrictingDepth != nil && *header.RootRestrictingDepth < 0 {
+		effectiveHeader.RootRestrictingDepth = nil
+	}
+	if header.ActiveLayerDepth != nil && (math.IsNaN(*header.ActiveLayerDepth) || math.IsInf(*header.ActiveLayerDepth, 0) || *header.ActiveLayerDepth < 0) {
+		res.Issues = append(res.Issues, DiagnosticIssue{
+			Code:     "SOIL_DEPTH_NEGATIVE",
+			Severity: SeverityError,
+			Category: "soil_depth",
+			Field:    "ActiveLayerDepth",
+			Message:  fmt.Sprintf("ActiveLayerDepth (%.1f cm) must be 0 cm or greater.", *header.ActiveLayerDepth),
+			LMH25Ref: "LMH25 (2023) Sec. 1 Item 36 p. 58",
+		})
+		effectiveHeader.ActiveLayerDepth = nil
+	}
+
 	// 2. Humus Horizons: DerivedHumusThickness, Directional Sign, Contiguity, and Table 2.23 von Post
 	var uplandHorizons []vprocore.HumusRecord
 	var wetlandHorizons []vprocore.HumusRecord
@@ -318,7 +366,37 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 			}
 		}
 
+		if hr.PH != nil && (math.IsNaN(*hr.PH) || math.IsInf(*hr.PH, 0) || *hr.PH < 0 || *hr.PH > 14) {
+			res.Issues = append(res.Issues, DiagnosticIssue{
+				Code:      "SOIL_PH_OUT_OF_BOUNDS",
+				Severity:  SeverityError,
+				Category:  "soil_ph",
+				Field:     "HumusFormpH",
+				HorizonID: &idCopy,
+				Horizon:   hCode,
+				Message:   fmt.Sprintf("Humus horizon %s has pH = %.2f; valid soil pH range is 0..14.", hCode, *hr.PH),
+				LMH25Ref:  "LMH25 (2023) Sec. 2 Item 21 p. 76",
+			})
+		}
+
 		if hr.UpperDepth == nil || hr.LowerDepth == nil {
+			for _, d := range []struct {
+				field string
+				val   *float64
+			}{{"UpperDepth", hr.UpperDepth}, {"LowerDepth", hr.LowerDepth}} {
+				if d.val != nil && (math.IsNaN(*d.val) || math.IsInf(*d.val, 0) || *d.val < 0) {
+					res.Issues = append(res.Issues, DiagnosticIssue{
+						Code:      "HORIZON_DEPTH_NEGATIVE",
+						Severity:  SeverityError,
+						Category:  "soil_horizon",
+						Field:     d.field,
+						HorizonID: &idCopy,
+						Horizon:   hCode,
+						Message:   fmt.Sprintf("Humus horizon %s %s (%.1f cm) must be finite and >= 0 cm.", hCode, d.field, *d.val),
+						LMH25Ref:  "LMH25 (2023) Sec. 2 Item 17 p. 71",
+					})
+				}
+			}
 			continue
 		}
 		up, lo := *hr.UpperDepth, *hr.LowerDepth
@@ -390,18 +468,20 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 	if hasUplandDepths {
 		derived := roundACE2(maxUplandUpper - minUplandLower)
 		res.DerivedHumusThickness = &derived
-		if header.HumusThickness == nil {
-			res.Issues = append(res.Issues, DiagnosticIssue{
-				Code:      "HUMUS_THICKNESS_SUGGESTED",
-				Severity:  SeverityInfo,
-				Category:  "humus_thickness",
-				Field:     "HumusThickness",
-				Message:   fmt.Sprintf("Derived upland L/F/H HumusThickness is %.1f cm (%.1f to %.1f cm); header HumusThickness is currently empty.", derived, maxUplandUpper, minUplandLower),
-				Suggested: strconv.FormatFloat(derived, 'f', -1, 64),
-				LMH25Ref:  "LMH25 (2023) Sec. 2 Item 17 p. 71",
-			})
+		if effectiveHeader.HumusThickness == nil {
+			if header.HumusThickness == nil {
+				res.Issues = append(res.Issues, DiagnosticIssue{
+					Code:      "HUMUS_THICKNESS_SUGGESTED",
+					Severity:  SeverityInfo,
+					Category:  "humus_thickness",
+					Field:     "HumusThickness",
+					Message:   fmt.Sprintf("Derived upland L/F/H HumusThickness is %.1f cm (%.1f to %.1f cm); header HumusThickness is currently empty.", derived, maxUplandUpper, minUplandLower),
+					Suggested: strconv.FormatFloat(derived, 'f', -1, 64),
+					LMH25Ref:  "LMH25 (2023) Sec. 2 Item 17 p. 71",
+				})
+			}
 		} else {
-			diff := roundACE2(*header.HumusThickness - derived)
+			diff := roundACE2(*effectiveHeader.HumusThickness - derived)
 			res.HumusThicknessDiff = &diff
 			if math.Abs(diff) > 2.0 {
 				res.Issues = append(res.Issues, DiagnosticIssue{
@@ -409,7 +489,7 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 					Severity:  SeverityWarning,
 					Category:  "humus_thickness",
 					Field:     "HumusThickness",
-					Message:   fmt.Sprintf("Header HumusThickness (%.1f cm) differs from upland L/F/H horizon span (%.1f cm) by %+.1f cm.", *header.HumusThickness, derived, diff),
+					Message:   fmt.Sprintf("Header HumusThickness (%.1f cm) differs from upland L/F/H horizon span (%.1f cm) by %+.1f cm.", *effectiveHeader.HumusThickness, derived, diff),
 					Suggested: strconv.FormatFloat(derived, 'f', -1, 64),
 					LMH25Ref:  "LMH25 (2023) Sec. 2 Item 17 p. 71",
 				})
@@ -533,10 +613,95 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 		if strings.Contains(mLower, "sa") || (strings.HasPrefix(mBase, "B") && strings.Contains(mLower, "n")) {
 			hasSalineHorizon = true
 		}
-		if mr.MineralFormpH != nil && *mr.MineralFormpH > 8.2 {
-			hasSalineHorizon = true
+		if mr.ASP != nil && (*mr.ASP < 1 || *mr.ASP > 8) {
+			res.Issues = append(res.Issues, DiagnosticIssue{
+				Code:      "MINERAL_ASP_OUT_OF_BOUNDS",
+				Severity:  SeverityError,
+				Category:  "soil_colour",
+				Field:     "ASP",
+				HorizonID: &idCopy,
+				Horizon:   mCode,
+				Message:   fmt.Sprintf("Mineral horizon %s has ASP = %d; LMH25 Table 2.30 colour aspect codes are 1..8.", mCode, *mr.ASP),
+				LMH25Ref:  "LMH25 (2023) Table 2.30 p. 80",
+			})
 		}
-		if strings.HasPrefix(mBase, "R") && mr.UpperDepth != nil {
+		if mr.MineralFormpH != nil {
+			if math.IsNaN(*mr.MineralFormpH) || math.IsInf(*mr.MineralFormpH, 0) || *mr.MineralFormpH < 0 || *mr.MineralFormpH > 14 {
+				res.Issues = append(res.Issues, DiagnosticIssue{
+					Code:      "SOIL_PH_OUT_OF_BOUNDS",
+					Severity:  SeverityError,
+					Category:  "soil_ph",
+					Field:     "MineralFormpH",
+					HorizonID: &idCopy,
+					Horizon:   mCode,
+					Message:   fmt.Sprintf("Mineral horizon %s has pH = %.2f; valid soil pH range is 0..14.", mCode, *mr.MineralFormpH),
+					LMH25Ref:  "LMH25 (2023) Sec. 2 Item 34 p. 91",
+				})
+			} else if *mr.MineralFormpH > 8.2 {
+				hasSalineHorizon = true
+			}
+		}
+		cfCompSum := 0
+		hasValidCFComp := false
+		allCFCompInBounds := true
+		for _, cf := range []struct {
+			field string
+			val   *int
+			isComp bool
+		}{
+			{"PercentCoarseFragsGravel", mr.PercentCoarseFragsGravel, true},
+			{"PercentCoarseFragsCobbles", mr.PercentCoarseFragsCobbles, true},
+			{"PercentCoarseFragsStones", mr.PercentCoarseFragsStones, true},
+			{"PercentCoarseFragsTotal", mr.PercentCoarseFragsTotal, false},
+		} {
+			if cf.val == nil {
+				continue
+			}
+			if *cf.val < 0 || *cf.val > 100 {
+				if cf.isComp {
+					allCFCompInBounds = false
+				}
+				res.Issues = append(res.Issues, DiagnosticIssue{
+					Code:      "COARSE_FRAGS_OUT_OF_BOUNDS",
+					Severity:  SeverityError,
+					Category:  "soil_coarse_frags",
+					Field:     cf.field,
+					HorizonID: &idCopy,
+					Horizon:   mCode,
+					Message:   fmt.Sprintf("Mineral horizon %s has %s = %d%%; coarse fragments must be between 0%% and 100%%.", mCode, cf.field, *cf.val),
+					LMH25Ref:  "LMH25 (2023) Sec. 2 Item 28 p. 83",
+				})
+			} else if cf.isComp {
+				cfCompSum += *cf.val
+				hasValidCFComp = true
+			}
+		}
+		if hasValidCFComp && allCFCompInBounds {
+			if cfCompSum > 100 {
+				res.Issues = append(res.Issues, DiagnosticIssue{
+					Code:      "COARSE_FRAGS_SUM_EXCEEDS_100",
+					Severity:  SeverityError,
+					Category:  "soil_coarse_frags",
+					Field:     "PercentCoarseFragsTotal",
+					HorizonID: &idCopy,
+					Horizon:   mCode,
+					Message:   fmt.Sprintf("Mineral horizon %s coarse fragment components Gravel + Cobbles + Stones sum to %d%% (cannot exceed 100%%).", mCode, cfCompSum),
+					LMH25Ref:  "LMH25 (2023) Sec. 2 Item 28 p. 83",
+				})
+			} else if mr.PercentCoarseFragsTotal != nil && *mr.PercentCoarseFragsTotal >= 0 && *mr.PercentCoarseFragsTotal <= 100 && cfCompSum > *mr.PercentCoarseFragsTotal {
+				res.Issues = append(res.Issues, DiagnosticIssue{
+					Code:      "COARSE_FRAGS_COMPONENTS_EXCEED_TOTAL",
+					Severity:  SeverityError,
+					Category:  "soil_coarse_frags",
+					Field:     "PercentCoarseFragsTotal",
+					HorizonID: &idCopy,
+					Horizon:   mCode,
+					Message:   fmt.Sprintf("Mineral horizon %s coarse fragment components Gravel + Cobbles + Stones (%d%%) exceed PercentCoarseFragsTotal (%d%%).", mCode, cfCompSum, *mr.PercentCoarseFragsTotal),
+					LMH25Ref:  "LMH25 (2023) Sec. 2 Item 28 p. 83",
+				})
+			}
+		}
+		if strings.HasPrefix(mBase, "R") && mr.UpperDepth != nil && *mr.UpperDepth >= 0 {
 			if lithicDepth < 0 || *mr.UpperDepth < lithicDepth {
 				lithicDepth = *mr.UpperDepth
 			}
@@ -553,6 +718,23 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 		}
 
 		if mr.UpperDepth == nil || mr.LowerDepth == nil {
+			for _, d := range []struct {
+				field string
+				val   *float64
+			}{{"UpperDepth", mr.UpperDepth}, {"LowerDepth", mr.LowerDepth}} {
+				if d.val != nil && (math.IsNaN(*d.val) || math.IsInf(*d.val, 0) || *d.val < 0) {
+					res.Issues = append(res.Issues, DiagnosticIssue{
+						Code:      "HORIZON_DEPTH_NEGATIVE",
+						Severity:  SeverityError,
+						Category:  "soil_horizon",
+						Field:     d.field,
+						HorizonID: &idCopy,
+						Horizon:   mCode,
+						Message:   fmt.Sprintf("Mineral horizon %s %s (%.1f cm) must be finite and >= 0 cm.", mCode, d.field, *d.val),
+						LMH25Ref:  "LMH25 (2023) Sec. 2 Item 25 p. 79",
+					})
+				}
+			}
 			continue
 		}
 		up, lo := *mr.UpperDepth, *mr.LowerDepth
@@ -580,7 +762,7 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 		if strings.HasPrefix(mBase, "AE") {
 			aeDepth += thick
 		}
-		if mr.PercentCoarseFragsTotal != nil && up < 100 {
+		if mr.PercentCoarseFragsTotal != nil && *mr.PercentCoarseFragsTotal >= 0 && *mr.PercentCoarseFragsTotal <= 100 && up < 100 {
 			weightedCF += float64(*mr.PercentCoarseFragsTotal) * thick
 			cfWeight += thick
 		}
@@ -624,7 +806,7 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 	}
 
 	// 4. LMH25 (2023) Keys 9.3, 9.4 (rSMR 0..8) & 9.6 / 9.7 (rSNR A..F) Inference
-	inferSMRAndSNR(&res, header, soilGroup, hasPeatyHorizons, peatTotalThickness, peatUpper40Total, peatOfUpper40, peatOmUpper40,
+	inferSMRAndSNR(&res, effectiveHeader, soilGroup, hasPeatyHorizons, peatTotalThickness, peatUpper40Total, peatOfUpper40, peatOmUpper40,
 		uplandTotalThickness, uplandHThickness, ahDepth, aeDepth, bDark, bLight, hasGleying, minGleyDepth, lithicDepth,
 		maxMineralLower, weightedCF, cfWeight, dominantTexture, hasTurbation, hasSalineHorizon)
 

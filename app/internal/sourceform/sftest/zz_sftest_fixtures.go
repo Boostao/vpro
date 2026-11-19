@@ -157,6 +157,9 @@ func SiviProposalEdits(parent *sourceform.SiviParentProjection) ([]sourceform.Si
 			row = parent.Rows[0].Admin
 		}
 		value := vprotest.SiviReal(123.25)
+		if binding.Binding == "SV_PercentCoarseFrags" {
+			value = vprotest.SiviReal(83.25)
+		}
 		if binding.Binding == "SV_FloodPlain" {
 			value = vprotest.MetadataInteger("-1")
 		}

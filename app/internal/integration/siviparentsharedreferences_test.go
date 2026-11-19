@@ -287,7 +287,7 @@ func TestSIVIParentSharedAllSixtyMixedAtomicAndRestoration(t *testing.T) {
 		edits = append(edits, sftest.SiviParentEdit(t, original, column, value))
 	}
 	for _, column := range []string{"HumusThickness", "SeepageDepth", "RootingDepth", "RootRestrictingDepth"} {
-		value := vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("-32768")}
+		value := vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("32767")}
 		if column == "HumusThickness" {
 			value = vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(12.5)}
 		}

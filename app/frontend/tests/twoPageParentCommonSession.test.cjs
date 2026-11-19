@@ -258,14 +258,19 @@ test('standalone header still owns the XL identity and existing family controls 
   assert.match(html, /Coordinate safety controls/);
 });
 test('every common domain blocks invalid assignments and clears errors only on valid correction', async () => {
+  const nonNegativeSingles = new Set(['SV_SoilDepth', 'SV_AhorizonDepth', 'SV_GleyingMottlingCM']);
   for (const field of api.twoPageParentCommonFields('FS882-8x6XL-CHARS')) {
     const f = fixture('FS882-8x6XL-CHARS'); await f.session.load();
+    const validRaw = field.column === 'SV_PercentCoarseFrags' ? '42.5'
+      : nonNegativeSingles.has(field.column) ? '12.5' : '-3.25';
     const valid = field.policy.kind === 'boolean' ? { kind: 'boolean', value: true }
       : field.policy.kind === 'option' ? { kind: 'option', option: 2 }
-      : { kind: 'text', raw: field.policy.kind === 'single' ? '-3.25' : 'x'.repeat(field.policy.maximum) };
+      : { kind: 'text', raw: field.policy.kind === 'single' ? validRaw : 'x'.repeat(field.policy.maximum) };
+    const invalidRaw = field.column === 'SV_PercentCoarseFrags' ? '150'
+      : nonNegativeSingles.has(field.column) ? '-3.25' : '3.402823466385289e38';
     const invalid = field.policy.kind === 'boolean' ? { kind: 'text', raw: '-1' }
       : field.policy.kind === 'option' ? { kind: 'option', option: 3 }
-      : { kind: 'text', raw: field.policy.kind === 'single' ? '3.402823466385289e38' : 'x'.repeat(field.policy.maximum + 1) };
+      : { kind: 'text', raw: field.policy.kind === 'single' ? invalidRaw : 'x'.repeat(field.policy.maximum + 1) };
     f.session.stage(field.column, invalid);
     assert.equal(f.session.closeState().blocked, true, field.column);
     await assert.rejects(f.session.save()); assert.equal(f.calls.save, 0);

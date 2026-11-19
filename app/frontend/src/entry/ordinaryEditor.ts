@@ -41,11 +41,20 @@ export type OrdinaryKey = OrdinaryField['key'];
 export type OrdinaryTextField = Extract<OrdinaryField, { kind: 'text' | 'memo' }>;
 export type OrdinaryTextPolicy = { label: string; kind: 'text'; maximum: number } | { label: string; kind: 'memo' };
 export type OrdinaryNumberField = Extract<OrdinaryField, { kind: 'integer' | 'single' }>;
-export type OrdinaryNumberPolicy = { label: string; kind: 'integer' | 'single' };
+export type OrdinaryNumberPolicy = { label: string; kind: 'integer' | 'single'; column?: string };
 export type OrdinaryValues = Pick<FS882Header, OrdinaryKey> &
   Partial<Pick<FS882Header, typeof nullableParentFlags[number]['key']>>;
 export interface OrdinaryCell { raw: string; value: number | null; error: string | null }
 export type OrdinaryDrafts = Partial<Record<OrdinaryNumberField['key'], OrdinaryCell>>;
+
+const nonNegativeOrdinaryColumns = new Set([
+  'HumusThickness', 'RootingDepth', 'RootRestrictingDepth', 'SeepageDepth',
+  'ActiveLayerDepth', 'SV_WaterTableCM',
+]);
+const nonNegativeOrdinaryLabels = new Set([
+  'Humus thickness', 'Rooting depth', 'Root-restricting depth', 'Seepage depth',
+  'Active layer depth',
+]);
 
 export function ordinaryField(column: string | undefined): OrdinaryField | undefined {
   return allOrdinaryFields.find(field => field.column === column);
@@ -64,6 +73,12 @@ export function ordinaryNumberValue(field: OrdinaryNumberPolicy, raw: string, or
   if (field.kind === 'integer' && parsed.error === null && parsed.value !== null &&
     (!Number.isInteger(parsed.value) || (parsed.value !== original && (parsed.value < -32768 || parsed.value > 32767)))) {
     return { raw, value: null, error: `${field.label} requires an integer from -32768 to 32767 or NULL.` };
+  }
+  const targetName = field.column ?? field.label;
+  if (parsed.error === null && parsed.value !== null && parsed.value !== original &&
+    (nonNegativeOrdinaryColumns.has(targetName) || nonNegativeOrdinaryLabels.has(field.label)) &&
+    parsed.value < 0) {
+    return { raw, value: null, error: `${field.label} must be >= 0 cm or NULL.` };
   }
   return { raw, ...parsed };
 }
