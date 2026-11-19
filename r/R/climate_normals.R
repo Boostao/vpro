@@ -96,22 +96,22 @@ vpro_downscale_climr_points <- function(pts_df, ref_period) {
   tibble::tibble(
     CoordElevHash = as.character(pts_df$CoordElevHash),
     Source = rep("climr_downscale", nrow(pts_df)),
-    MAT = round(mat_v, 2L),
-    MWMT = round(pick_col(dl_dt, c("MWMT")), 2L),
-    MCMT = round(pick_col(dl_dt, c("MCMT")), 2L),
-    MAP = round(pick_col(dl_dt, c("MAP")), 1L),
-    MSP = round(pick_col(dl_dt, c("MSP")), 1L),
-    PAS = round(pick_col(dl_dt, c("PAS_an", "PAS")), 1L),
-    CMD = round(pick_col(dl_dt, c("CMD_an", "CMD")), 1L),
-    PPT_05 = round(pick_col(dl_dt, c("PPT_05", "PPT05")), 1L),
-    PPT_06 = round(pick_col(dl_dt, c("PPT_06", "PPT06")), 1L),
-    PPT_07 = round(pick_col(dl_dt, c("PPT_07", "PPT07")), 1L),
-    PPT_08 = round(pick_col(dl_dt, c("PPT_08", "PPT08")), 1L),
-    PPT_09 = round(pick_col(dl_dt, c("PPT_09", "PPT09")), 1L),
-    PPT_at = round(pick_col(dl_dt, c("PPT_at")), 1L),
-    PPT_wt = round(pick_col(dl_dt, c("PPT_wt")), 1L),
-    DD5 = round(pick_col(dl_dt, c("DD5_an", "DD5")), 1L),
-    NFFD = round(pick_col(dl_dt, c("NFFD_an", "NFFD")), 1L)
+    MAT = vpro_round_ace(mat_v, 2L),
+    MWMT = vpro_round_ace(pick_col(dl_dt, c("MWMT")), 2L),
+    MCMT = vpro_round_ace(pick_col(dl_dt, c("MCMT")), 2L),
+    MAP = vpro_round_ace(pick_col(dl_dt, c("MAP")), 1L),
+    MSP = vpro_round_ace(pick_col(dl_dt, c("MSP")), 1L),
+    PAS = vpro_round_ace(pick_col(dl_dt, c("PAS_an", "PAS")), 1L),
+    CMD = vpro_round_ace(pick_col(dl_dt, c("CMD_an", "CMD")), 1L),
+    PPT_05 = vpro_round_ace(pick_col(dl_dt, c("PPT_05", "PPT05")), 1L),
+    PPT_06 = vpro_round_ace(pick_col(dl_dt, c("PPT_06", "PPT06")), 1L),
+    PPT_07 = vpro_round_ace(pick_col(dl_dt, c("PPT_07", "PPT07")), 1L),
+    PPT_08 = vpro_round_ace(pick_col(dl_dt, c("PPT_08", "PPT08")), 1L),
+    PPT_09 = vpro_round_ace(pick_col(dl_dt, c("PPT_09", "PPT09")), 1L),
+    PPT_at = vpro_round_ace(pick_col(dl_dt, c("PPT_at")), 1L),
+    PPT_wt = vpro_round_ace(pick_col(dl_dt, c("PPT_wt")), 1L),
+    DD5 = vpro_round_ace(pick_col(dl_dt, c("DD5_an", "DD5")), 1L),
+    NFFD = vpro_round_ace(pick_col(dl_dt, c("NFFD_an", "NFFD")), 1L)
   )
 }
 
@@ -206,24 +206,24 @@ vpro_compute_bgc_lapse_normals <- function(pts_df, ref_period) {
     temp_shift <- (-5.8 * d_elev_km) + (-0.55 * d_lat) + delta_t
     elev_precip_factor <- max(0.55, min(1.65, 1.0 + 0.18 * d_elev_km)) * precip_mult
 
-    mat_i <- round(as.double(ref[["MAT"]]) + temp_shift, 2L)
-    mwmt_i <- round(as.double(ref[["MWMT"]]) + (0.85 * temp_shift), 2L)
-    mcmt_i <- round(as.double(ref[["MCMT"]]) + (1.10 * temp_shift), 2L)
+    mat_i <- vpro_round_ace(as.double(ref[["MAT"]]) + temp_shift, 2L)
+    mwmt_i <- vpro_round_ace(as.double(ref[["MWMT"]]) + (0.85 * temp_shift), 2L)
+    mcmt_i <- vpro_round_ace(as.double(ref[["MCMT"]]) + (1.10 * temp_shift), 2L)
 
-    p05_i <- round(max(5.0, as.double(ref[["PPT_05"]]) * elev_precip_factor), 1L)
-    p06_i <- round(max(5.0, as.double(ref[["PPT_06"]]) * elev_precip_factor), 1L)
-    p07_i <- round(max(5.0, as.double(ref[["PPT_07"]]) * elev_precip_factor), 1L)
-    p08_i <- round(max(5.0, as.double(ref[["PPT_08"]]) * elev_precip_factor), 1L)
-    p09_i <- round(max(5.0, as.double(ref[["PPT_09"]]) * elev_precip_factor), 1L)
-    pat_i <- round(max(10.0, as.double(ref[["PPT_at"]]) * elev_precip_factor), 1L)
-    pwt_i <- round(max(10.0, as.double(ref[["PPT_wt"]]) * elev_precip_factor), 1L)
-    msp_i <- round(p05_i + p06_i + p07_i + p08_i + p09_i, 1L)
-    map_i <- round(max(msp_i + pat_i + pwt_i, as.double(ref[["MAP"]]) * elev_precip_factor), 1L)
+    p05_i <- vpro_round_ace(max(5.0, as.double(ref[["PPT_05"]]) * elev_precip_factor), 1L)
+    p06_i <- vpro_round_ace(max(5.0, as.double(ref[["PPT_06"]]) * elev_precip_factor), 1L)
+    p07_i <- vpro_round_ace(max(5.0, as.double(ref[["PPT_07"]]) * elev_precip_factor), 1L)
+    p08_i <- vpro_round_ace(max(5.0, as.double(ref[["PPT_08"]]) * elev_precip_factor), 1L)
+    p09_i <- vpro_round_ace(max(5.0, as.double(ref[["PPT_09"]]) * elev_precip_factor), 1L)
+    pat_i <- vpro_round_ace(max(10.0, as.double(ref[["PPT_at"]]) * elev_precip_factor), 1L)
+    pwt_i <- vpro_round_ace(max(10.0, as.double(ref[["PPT_wt"]]) * elev_precip_factor), 1L)
+    msp_i <- vpro_round_ace(p05_i + p06_i + p07_i + p08_i + p09_i, 1L)
+    map_i <- vpro_round_ace(max(msp_i + pat_i + pwt_i, as.double(ref[["MAP"]]) * elev_precip_factor), 1L)
 
-    dd5_i <- round(max(25.0, as.double(ref[["DD5"]]) + (temp_shift * 145.0)), 1L)
-    nffd_i <- round(max(10.0, min(365.0, as.double(ref[["NFFD"]]) + (temp_shift * 14.0))), 1L)
+    dd5_i <- vpro_round_ace(max(25.0, as.double(ref[["DD5"]]) + (temp_shift * 145.0)), 1L)
+    nffd_i <- vpro_round_ace(max(10.0, min(365.0, as.double(ref[["NFFD"]]) + (temp_shift * 14.0))), 1L)
     snow_frac <- max(0.02, min(0.85, 1.0 / (1.0 + exp((mat_i - 1.5) / 2.2))))
-    pas_i <- round(max(0.0, (pwt_i + 0.45 * pat_i) * snow_frac), 1L)
+    pas_i <- vpro_round_ace(max(0.0, (pwt_i + 0.45 * pat_i) * snow_frac), 1L)
 
     bgc_adj <- 0.0
     if (nzchar(bgc_clean)) {
@@ -232,7 +232,7 @@ vpro_compute_bgc_lapse_normals <- function(pts_df, ref_period) {
         bgc_adj <- adj_vals[[a_ix]]
       }
     }
-    cmd_i <- round(
+    cmd_i <- vpro_round_ace(
       max(0.0, as.double(ref[["CMD"]]) + bgc_adj + (temp_shift * 32.0) - ((msp_i - as.double(ref[["MSP"]])) * 0.65)),
       1L
     )

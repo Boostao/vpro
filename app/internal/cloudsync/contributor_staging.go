@@ -182,13 +182,16 @@ func extractActiveProjectSubmissionArtifacts(
 		var hasLump bool
 		_ = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM "project".sqlite_master WHERE type='table' AND name=?)`, projName+"_Lump").Scan(&hasLump)
 		if hasLump {
-			lRows, lErr := tx.QueryContext(ctx, fmt.Sprintf(`SELECT COALESCE(CAST("LumpCode" AS TEXT),''), COALESCE(CAST("SppCode" AS TEXT),''), COALESCE("Use", 0) FROM "project".%s ORDER BY "LumpCode", "SppCode"`, quotePGIdent(projName+"_Lump")))
+			lRows, lErr := tx.QueryContext(ctx, fmt.Sprintf(`SELECT COALESCE(CAST("LumpCode" AS TEXT),''), COALESCE(CAST("SppCode" AS TEXT),''), CASE WHEN typeof("Use") = 'text' THEN CAST("Use" AS BLOB) ELSE "Use" END FROM "project".%s ORDER BY "LumpCode", "SppCode"`, quotePGIdent(projName+"_Lump")))
 			if lErr == nil {
+				useCol := bCol("Use")
 				for lRows.Next() {
 					var lc, sc string
-					var useInt int64
-					if lRows.Scan(&lc, &sc, &useInt) == nil && lc != "" && sc != "" {
-						lumpRows = append(lumpRows, StagingLumpRow{LumpCode: lc, SppCode: sc, Use: useInt != 0})
+					var rawUse any
+					if lRows.Scan(&lc, &sc, &rawUse) == nil && lc != "" && sc != "" {
+						convUse, uErr := CanonicalizeSQLiteToPG(useCol, rawUse)
+						useBool := uErr == nil && convUse == int16(-1)
+						lumpRows = append(lumpRows, StagingLumpRow{LumpCode: lc, SppCode: sc, Use: useBool})
 					}
 				}
 				lRows.Close()

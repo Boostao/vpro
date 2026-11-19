@@ -193,20 +193,17 @@ vpro_pg_canonicalize_to_pg <- function(df, spec) {
       if (is.null(raw_col)) {
         out_cols[[i]] <- rep(NA_integer_, n_rows)
       } else if (is.character(raw_col)) {
-        trimmed <- tolower(trimws(raw_col))
-        known_tok <- c("-1", "1", "true", "yes", "t", "y", "0", "false", "no", "f", "n")
-        unrec <- !is.na(trimmed) & nzchar(trimmed) & !(trimmed %in% known_tok)
-        if (any(unrec)) {
-          parsed_int <- suppressWarnings(as.integer(trimmed[unrec]))
-          if (anyNA(parsed_int)) {
-            cli::cli_abort("Column {.field {col_name}} contains invalid Access boolean text.")
-          }
-          res_bool <- vpro_logical_to_access(raw_col)
-          res_bool[unrec] <- ifelse(parsed_int != 0L, -1L, 0L)
-          out_cols[[i]] <- res_bool
-        } else {
-          out_cols[[i]] <- vpro_logical_to_access(raw_col)
+        trimmed <- trimws(raw_col)
+        res_bool <- vpro_logical_to_access(raw_col)
+        if (any(!is.na(trimmed) & nzchar(trimmed) & is.na(res_bool))) {
+          cli::cli_abort("Column {.field {col_name}} contains invalid Access boolean text.")
         }
+        out_cols[[i]] <- res_bool
+      } else if (is.numeric(raw_col)) {
+        if (any(!is.na(raw_col) & !is.finite(raw_col))) {
+          cli::cli_abort("Column {.field {col_name}} contains non-finite numeric boolean value.")
+        }
+        out_cols[[i]] <- vpro_logical_to_access(raw_col)
       } else {
         out_cols[[i]] <- vpro_logical_to_access(raw_col)
       }
@@ -253,7 +250,7 @@ vpro_pg_canonicalize_to_pg <- function(df, spec) {
           suppressWarnings(as.double(raw_col))
         }
         num[!is.finite(num)] <- NA_real_
-        rounded <- round(num)
+        rounded <- vpro_go_round(num)
         ok <- !is.na(rounded)
         if (identical(pg_type, "SMALLINT") && any(ok & (rounded < -32768 | rounded > 32767))) {
           cli::cli_abort("Column {.field {col_name}} overflows PostgreSQL SMALLINT (-32768..32767).")
@@ -289,7 +286,7 @@ vpro_pg_canonicalize_to_pg <- function(df, spec) {
               cli::cli_abort("Cover column {.field {col_name}} must be finite and >= 0.")
             }
             narrowed <- vpro_narrow_float32(num)
-            if (any(narrowed[non_na] < 0 | narrowed[non_na] >= 100)) {
+            if (any(is.na(narrowed[non_na]) | narrowed[non_na] < 0 | narrowed[non_na] >= 100)) {
               cli::cli_abort(
                 "Cover column {.field {col_name}} must be >= 0 and strictly under 100%."
               )
@@ -338,7 +335,7 @@ vpro_pg_canonicalize_to_sqlite <- function(df, spec) {
         res_int <- rep(NA_integer_, n_rows)
         ok <- !is.na(num)
         if (any(ok)) {
-          res_int[ok] <- as.integer(round(num[ok]))
+          res_int[ok] <- as.integer(vpro_go_round(num[ok]))
         }
         out_cols[[i]] <- res_int
       }
@@ -385,7 +382,7 @@ vpro_pg_canonicalize_to_tidy <- function(df, spec) {
         res_int <- rep(NA_integer_, n_rows)
         ok <- !is.na(num)
         if (any(ok)) {
-          res_int[ok] <- as.integer(round(num[ok]))
+          res_int[ok] <- as.integer(vpro_go_round(num[ok]))
         }
         out_cols[[i]] <- res_int
       }
@@ -469,7 +466,7 @@ vpro_compute_audit_row_hash <- function(prev_hash, merge_tx_id, vp08_audit_value
         if (!is.finite(v1)) {
           parts[[2L + k]] <- frame_part("<NULL>")
         } else {
-          parts[[2L + k]] <- frame_part(sprintf("I:%.0f", round(v1)))
+          parts[[2L + k]] <- frame_part(sprintf("I:%.0f", vpro_go_round(v1)))
         }
       } else {
         s1 <- trimws(as.character(v1))

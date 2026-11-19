@@ -336,33 +336,45 @@ vpro_validate_lmh25_merge_horizon <- function(suffix, horizon, upper_depth, lowe
   if (!(suffix %in% c("Humus", "Mineral"))) {
     return(invisible(NULL))
   }
-  if (is.null(upper_depth) || is.null(lower_depth) || length(upper_depth) == 0L || length(lower_depth) == 0L || is.na(upper_depth[[1L]]) || is.na(lower_depth[[1L]])) {
+  has_u <- !is.null(upper_depth) && length(upper_depth) > 0L && !is.na(upper_depth[[1L]])
+  has_l <- !is.null(lower_depth) && length(lower_depth) > 0L && !is.na(lower_depth[[1L]])
+  hz_raw <- if (is.null(horizon) || length(horizon) == 0L || is.na(horizon[[1L]])) "" else as.character(horizon[[1L]])
+  u <- NA_real_
+  l <- NA_real_
+  if (has_u) {
+    u <- suppressWarnings(as.double(upper_depth[[1L]]))
+    if (is.na(u) || !is.finite(u) || u < 0) {
+      cli::cli_abort("Plot {.val {plot}} {suffix} horizon {.val {hz_raw}} depths must be finite and >= 0 cm.")
+    }
+  }
+  if (has_l) {
+    l <- suppressWarnings(as.double(lower_depth[[1L]]))
+    if (is.na(l) || !is.finite(l) || l < 0) {
+      cli::cli_abort("Plot {.val {plot}} {suffix} horizon {.val {hz_raw}} depths must be finite and >= 0 cm.")
+    }
+  }
+  if (!has_u || !has_l) {
     return(invisible(NULL))
   }
-  u <- suppressWarnings(as.double(upper_depth[[1L]]))
-  l <- suppressWarnings(as.double(lower_depth[[1L]]))
-  if (!is.finite(u) || !is.finite(l)) {
-    cli::cli_abort("Plot {.val {plot}} {suffix} depth contains non-finite values.")
-  }
-  hz <- toupper(trimws(ifelse(is.na(horizon), "", as.character(horizon))))
+  hz <- trimws(sub("^[0-9IVX]+", "", toupper(trimws(hz_raw))))
   if (identical(suffix, "Humus")) {
-    if (grepl("^[0-9]*(OF|OM|OH)", hz)) {
-      if (u < 0 || l < 0 || u >= l) {
+    if (nzchar(hz) && (startsWith(hz, "HYDRIC") || startsWith(hz, "LIMNO") || startsWith(hz, "CUMULO") || startsWith(hz, "O"))) {
+      if (u >= l) {
         cli::cli_abort(
-          "Plot {.val {plot}} LMH25 wetland Humus horizon {.val {horizon}} requires 0 <= UpperDepth < LowerDepth (got {u}..{l})."
+          "Plot {.val {plot}} LMH25 wetland Humus horizon {.val {hz_raw}} requires 0 <= UpperDepth < LowerDepth (got {u}..{l})."
         )
       }
-    } else if (grepl("^[0-9]*(L|F|H)", hz)) {
-      if (u < 0 || l < 0 || u <= l) {
+    } else if (nzchar(hz) && (startsWith(hz, "L") || startsWith(hz, "F") || startsWith(hz, "H"))) {
+      if (u <= l) {
         cli::cli_abort(
-          "Plot {.val {plot}} LMH25 upland Humus horizon {.val {horizon}} requires UpperDepth > LowerDepth >= 0 (got {u}..{l})."
+          "Plot {.val {plot}} LMH25 upland Humus horizon {.val {hz_raw}} requires UpperDepth > LowerDepth >= 0 (got {u}..{l})."
         )
       }
     }
   } else if (identical(suffix, "Mineral")) {
-    if (u < 0 || l < 0 || u >= l) {
+    if (u >= l) {
       cli::cli_abort(
-        "Plot {.val {plot}} LMH25 Mineral horizon {.val {horizon}} requires 0 <= UpperDepth < LowerDepth (got {u}..{l})."
+        "Plot {.val {plot}} LMH25 Mineral horizon {.val {hz_raw}} requires 0 <= UpperDepth < LowerDepth (got {u}..{l})."
       )
     }
   }
@@ -390,10 +402,10 @@ vpro_pg_param_for_spec <- function(col_spec_row, raw_val) {
     return(enc2utf8(as.character(raw_val[[1L]])))
   }
   if (identical(pg_t, "SMALLINT")) {
-    return(as.integer(round(as.double(raw_val[[1L]]))))
+    return(as.integer(vpro_go_round(as.double(raw_val[[1L]]))))
   }
   if (identical(pg_t, "BIGINT")) {
-    v_num <- round(as.double(raw_val[[1L]]))
+    v_num <- vpro_go_round(as.double(raw_val[[1L]]))
     if (abs(v_num) <= .Machine$integer.max) {
       return(as.integer(v_num))
     }
@@ -457,7 +469,7 @@ vpro_allocate_master_child_id <- function(conn, child_table) {
 }
 
 vpro_reserve_master_child_id <- function(conn, child_table, id_val) {
-  id_num <- round(as.double(id_val))
+  id_num <- vpro_go_round(as.double(id_val))
   id_str <- sprintf("%.0f", id_num)
   DBI::dbExecute(
     conn,

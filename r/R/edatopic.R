@@ -92,7 +92,7 @@ vpro_build_edatopic_tables <- function(plot_grid_df, veg_df, min_constancy_pct) 
   cells_dt <- pg_dt[,
     list(
       n_plots = .N,
-      aSMR_mean = if (all(is.na(get("SMR_exact")))) NA_real_ else round(mean(get("SMR_exact"), na.rm = TRUE), 2L)
+      aSMR_mean = if (all(is.na(get("SMR_exact")))) NA_real_ else vpro_round_ace(mean(get("SMR_exact"), na.rm = TRUE), 2L)
     ),
     by = c("grid_type", "SiteUnit", "SMR", "SNR")
   ]
@@ -103,7 +103,7 @@ vpro_build_edatopic_tables <- function(plot_grid_df, veg_df, min_constancy_pct) 
 
   data.table::set(cells_dt, j = "SNR_num", value = as.integer(match(cells_dt[["SNR"]], .vpro_snr_levels)))
   data.table::set(cells_dt, j = "Edatope", value = paste0(cells_dt[["SMR"]], cells_dt[["SNR"]]))
-  data.table::set(cells_dt, j = "unit_prop", value = round(cells_dt[["n_plots"]] / cells_dt[["unit_total_plots"]], 4L))
+  data.table::set(cells_dt, j = "unit_prop", value = vpro_round_ace(cells_dt[["n_plots"]] / cells_dt[["unit_total_plots"]], 4L))
 
   # Order deterministically so modal ties break consistently toward central/mesic order
   data.table::setorderv(cells_dt, c("grid_type", "SiteUnit", "SMR", "SNR_num"))
@@ -231,7 +231,7 @@ vpro_build_edatopic_tables <- function(plot_grid_df, veg_df, min_constancy_pct) 
 
   spp_agg <- merge(spp_agg, cell_totals, by = c("grid_type", "SMR", "SNR"), all.x = TRUE, sort = FALSE)
   data.table::set(spp_agg, j = "cell_plots", value = as.integer(spp_agg[["cell_total_plots"]]))
-  data.table::set(spp_agg, j = "constancy", value = round((spp_agg[["n_plots"]] / spp_agg[["cell_plots"]]) * 100.0, 2L))
+  data.table::set(spp_agg, j = "constancy", value = vpro_round_ace((spp_agg[["n_plots"]] / spp_agg[["cell_plots"]]) * 100.0, 2L))
   spp_agg <- spp_agg[spp_agg[["constancy"]] >= min_constancy_pct]
 
   if (nrow(spp_agg) == 0L) {
@@ -252,10 +252,10 @@ vpro_build_edatopic_tables <- function(plot_grid_df, veg_df, min_constancy_pct) 
   )
   data.table::set(spp_agg, j = "SNR_num", value = as.integer(match(spp_agg[["SNR"]], .vpro_snr_levels)))
   data.table::set(spp_agg, j = "Edatope", value = paste0(spp_agg[["SMR"]], spp_agg[["SNR"]]))
-  data.table::set(spp_agg, j = "mean_cover", value = round(mc_v, 2L))
-  data.table::set(spp_agg, j = "mean_cover_all", value = round(spp_agg[["sum_cover"]] / spp_agg[["cell_plots"]], 2L))
+  data.table::set(spp_agg, j = "mean_cover", value = vpro_round_ace(mc_v, 2L))
+  data.table::set(spp_agg, j = "mean_cover_all", value = vpro_round_ace(spp_agg[["sum_cover"]] / spp_agg[["cell_plots"]], 2L))
   data.table::set(spp_agg, j = "prominence_tier", value = as.integer(tier_v))
-  data.table::set(spp_agg, j = "order_score", value = round(mc_v * co_v, 2L))
+  data.table::set(spp_agg, j = "order_score", value = vpro_round_ace(mc_v * co_v, 2L))
 
   data.table::setorderv(
     spp_agg,

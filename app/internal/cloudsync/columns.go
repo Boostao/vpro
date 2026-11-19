@@ -53,12 +53,14 @@ func quotedColumnCSV(cols []ColumnSpec) string {
 }
 
 // sqliteSelectColumnsCSV wraps PGType=="TEXT" columns in CAST(... AS BLOB) when typeof='text'
-// so mattn/go-sqlite3 never parses TIMESTAMP-declared text cells into Go time.Time (+0000 UTC / 0001-01-01).
+// so mattn/go-sqlite3 never parses TIMESTAMP-declared text cells into Go time.Time (+0000 UTC / 0001-01-01),
+// and wraps BOOLEAN-declared / IsAccessBool columns in an expression so mattn/go-sqlite3 never evaluates
+// sqlite3_column_decltype == "BOOLEAN" via `val == 1` (which turns Access -1 true and text 'true' into bool(false)).
 func sqliteSelectColumnsCSV(cols []ColumnSpec) string {
 	parts := make([]string, len(cols))
 	for i, c := range cols {
 		q := quotePGIdent(c.Name)
-		if c.PGType == "TEXT" {
+		if c.PGType == "TEXT" || c.IsAccessBool || strings.EqualFold(c.SQLiteType, "BOOLEAN") {
 			parts[i] = fmt.Sprintf("CASE WHEN typeof(%s) = 'text' THEN CAST(%s AS BLOB) ELSE %s END", q, q, q)
 		} else {
 			parts[i] = q
@@ -113,13 +115,35 @@ func CanonicalizeSQLiteToPG(col ColumnSpec, raw any) (any, error) {
 				return int16(-1), nil
 			}
 			return int16(0), nil
+		case int32:
+			if v != 0 {
+				return int16(-1), nil
+			}
+			return int16(0), nil
+		case int16:
+			if v != 0 {
+				return int16(-1), nil
+			}
+			return int16(0), nil
 		case int:
 			if v != 0 {
 				return int16(-1), nil
 			}
 			return int16(0), nil
 		case float64:
+			if math.IsNaN(v) || math.IsInf(v, 0) {
+				return nil, fmt.Errorf("non-finite boolean float %v for %s", v, col.Name)
+			}
 			if v != 0 {
+				return int16(-1), nil
+			}
+			return int16(0), nil
+		case float32:
+			f := float64(v)
+			if math.IsNaN(f) || math.IsInf(f, 0) {
+				return nil, fmt.Errorf("non-finite boolean float %v for %s", v, col.Name)
+			}
+			if f != 0 {
 				return int16(-1), nil
 			}
 			return int16(0), nil
@@ -320,11 +344,30 @@ func CanonicalizePGToSQLite(col ColumnSpec, raw any) any {
 				return int64(-1)
 			}
 			return int64(0)
+		case int:
+			if v != 0 {
+				return int64(-1)
+			}
+			return int64(0)
 		case bool:
 			if v {
 				return int64(-1)
 			}
 			return int64(0)
+		case string:
+			if parsed, err := parseBoolBytes(v); err == nil {
+				if parsed == nil {
+					return nil
+				}
+				return int64(parsed.(int16))
+			}
+		case []byte:
+			if parsed, err := parseBoolBytes(string(v)); err == nil {
+				if parsed == nil {
+					return nil
+				}
+				return int64(parsed.(int16))
+			}
 		}
 	}
 	switch v := raw.(type) {

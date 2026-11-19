@@ -572,10 +572,15 @@ func streamMasterAuditToPG(ctx context.Context, tx pgx.Tx, sqliteDB *sql.DB, sql
 				conv, cErr := CanonicalizeSQLiteToPG(col, rawVals[i])
 				if cErr != nil {
 					// Tolerate historical malformed text in legacy 2008 Audit memos by sanitizing invalid UTF-8 only on baseline audit import
-					if s, ok := rawVals[i].(string); ok {
-						conv = strings.ToValidUTF8(strings.ReplaceAll(s, "\x00", ""), "\uFFFD")
-					} else if b, ok := rawVals[i].([]byte); ok {
-						conv = strings.ToValidUTF8(strings.ReplaceAll(string(b), "\x00", ""), "\uFFFD")
+					if col.PGType == "TEXT" && !col.IsAccessBool {
+						if s, ok := rawVals[i].(string); ok {
+							conv = strings.ToValidUTF8(strings.ReplaceAll(s, "\x00", ""), "\uFFFD")
+						} else if b, ok := rawVals[i].([]byte); ok {
+							conv = strings.ToValidUTF8(strings.ReplaceAll(string(b), "\x00", ""), "\uFFFD")
+						} else {
+							streamErr = cErr
+							return nil, streamErr
+						}
 					} else {
 						streamErr = cErr
 						return nil, streamErr

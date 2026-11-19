@@ -75,14 +75,26 @@ vpro_access_to_logical <- function(x) {
   }
   if (is.numeric(x)) {
     out <- rep(NA, length(x))
-    ok <- !is.na(x)
+    ok <- !is.na(x) & is.finite(x)
     out[ok] <- x[ok] != 0
     return(as.logical(out))
   }
   chr <- tolower(trimws(as.character(x)))
   out <- rep(NA, length(chr))
-  out[chr %in% c("-1", "1", "true", "yes", "t", "y")] <- TRUE
-  out[chr %in% c("0", "false", "no", "f", "n")] <- FALSE
+  out[!is.na(chr) & chr == "true"] <- TRUE
+  out[!is.na(chr) & chr == "false"] <- FALSE
+  int_idx <- which(!is.na(chr) & grepl("^[+-]?[0-9]+$", chr))
+  if (length(int_idx) > 0L) {
+    sub_s <- chr[int_idx]
+    neg <- startsWith(sub_s, "-")
+    digs <- sub("^0+", "", sub("^[+-]", "", sub_s))
+    is_zero <- !nzchar(digs)
+    nd <- nchar(digs, type = "bytes")
+    lim <- ifelse(neg, "9223372036854775808", "9223372036854775807")
+    in_range <- is_zero | (nd < 19L) | (nd == 19L & digs <= lim)
+    out[int_idx[in_range & is_zero]] <- FALSE
+    out[int_idx[in_range & !is_zero]] <- TRUE
+  }
   as.logical(out)
 }
 
@@ -115,16 +127,75 @@ vpro_narrow_float32 <- function(x) {
     rlang::abort("`x` must be a numeric vector.")
   }
   out <- rep(NA_real_, length(x))
-  ok <- !is.na(x) & is.finite(x)
+  max_f32 <- 3.4028234663852886e+38
+  ok <- !is.na(x) & is.finite(x) & abs(x) <= max_f32
   if (any(ok)) {
     raw_buf <- writeBin(as.double(x[ok]), raw(), size = 4L)
-    out[ok] <- readBin(raw_buf, what = "numeric", n = sum(ok), size = 4L)
-  }
-  inf_idx <- !is.na(x) & is.infinite(x)
-  if (any(inf_idx)) {
-    out[inf_idx] <- x[inf_idx]
+    vals <- readBin(raw_buf, what = "numeric", n = sum(ok), size = 4L)
+    vals[vals == 0.0] <- 0.0
+    out[ok] <- vals
   }
   out
+}
+
+.vpro_round_ace_scalar <- function(v, d) {
+  if (v == 0.0) {
+    return(0.0)
+  }
+  neg <- v < 0.0
+  s <- sprintf("%.14e", abs(v))
+  e_pos <- regexpr("[eE]", s)
+  mant <- substr(s, 1L, e_pos - 1L)
+  exp10 <- as.integer(substring(s, e_pos + 1L))
+  dig_str <- paste0(substr(mant, 1L, 1L), substring(mant, 3L))
+  digs <- utf8ToInt(dig_str) - 48L
+
+  m <- as.double(exp10) + as.double(d) + 1.0
+  if (m < 0.0) {
+    return(0.0)
+  }
+  if (m == 0.0) {
+    if (digs[[1L]] >= 5L) {
+      res <- as.numeric(paste0(if (neg) "-" else "", "1e", -d))
+      return(if (res == 0.0) 0.0 else res)
+    }
+    return(0.0)
+  }
+  if (m >= 15.0) {
+    res <- as.numeric(paste0(if (neg) "-" else "", s))
+    return(if (res == 0.0) 0.0 else res)
+  }
+
+  m_int <- as.integer(m)
+  keep <- digs[seq_len(m_int)]
+  if (digs[[m_int + 1L]] >= 5L) {
+    carry <- 1L
+    for (j in seq.int(m_int, 1L, by = -1L)) {
+      sum_j <- keep[[j]] + carry
+      if (sum_j >= 10L) {
+        keep[[j]] <- sum_j - 10L
+        carry <- 1L
+      } else {
+        keep[[j]] <- sum_j
+        carry <- 0L
+        break
+      }
+    }
+    if (carry > 0L) {
+      keep <- c(1L, keep)
+      exp10 <- exp10 + 1L
+    }
+  }
+  if (all(keep == 0L)) {
+    return(0.0)
+  }
+  mant_out <- if (length(keep) == 1L) {
+    as.character(keep[[1L]])
+  } else {
+    paste0(keep[[1L]], ".", paste0(keep[-1L], collapse = ""))
+  }
+  res <- as.numeric(paste0(if (neg) "-" else "", mant_out, "e", exp10))
+  if (res == 0.0) 0.0 else res
 }
 
 #' Round numeric values using ACE 15-significant-digit half-away rounding
@@ -141,17 +212,15 @@ vpro_round_ace <- function(x, digits = 2L) {
   if (!is.numeric(x)) {
     rlang::abort("`x` must be a numeric vector.")
   }
-  if (!is.numeric(digits) || length(digits) != 1L || is.na(digits) || digits < 0 || digits != trunc(digits)) {
+  if (!is.numeric(digits) || length(digits) != 1L || is.na(digits) || !is.finite(digits) || digits < 0 || digits != trunc(digits)) {
     rlang::abort("`digits` must be a single non-negative integer.")
   }
-  d <- as.integer(digits)
+  d <- min(as.double(digits), 350.0)
+  d_int <- as.integer(d)
   out <- rep(NA_real_, length(x))
   ok <- !is.na(x) & is.finite(x)
   if (any(ok)) {
-    sig15 <- as.numeric(sprintf("%.15g", as.double(x[ok])))
-    scale <- 10^d
-    scaled <- as.numeric(sprintf("%.15g", sig15 * scale))
-    out[ok] <- sign(scaled) * trunc(abs(scaled) + 0.5) / scale
+    out[ok] <- vapply(as.double(x[ok]), .vpro_round_ace_scalar, numeric(1L), d = d_int)
   }
   out
 }

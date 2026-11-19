@@ -46,11 +46,38 @@ func pgValueToCloudCell(col ColumnSpec, raw any) cloudCell {
 				return cloudCell{kind: "int", intVal: -1}
 			}
 			return cloudCell{kind: "int", intVal: 0}
+		case int:
+			if v != 0 {
+				return cloudCell{kind: "int", intVal: -1}
+			}
+			return cloudCell{kind: "int", intVal: 0}
+		case float64:
+			if math.IsNaN(v) || math.IsInf(v, 0) {
+				return cloudCell{kind: "null"}
+			}
+			if v != 0 {
+				return cloudCell{kind: "int", intVal: -1}
+			}
+			return cloudCell{kind: "int", intVal: 0}
 		case bool:
 			if v {
 				return cloudCell{kind: "int", intVal: -1}
 			}
 			return cloudCell{kind: "int", intVal: 0}
+		case string:
+			if parsed, err := parseBoolBytes(v); err == nil {
+				if parsed == nil {
+					return cloudCell{kind: "null"}
+				}
+				return cloudCell{kind: "int", intVal: int64(parsed.(int16))}
+			}
+		case []byte:
+			if parsed, err := parseBoolBytes(string(v)); err == nil {
+				if parsed == nil {
+					return cloudCell{kind: "null"}
+				}
+				return cloudCell{kind: "int", intVal: int64(parsed.(int16))}
+			}
 		}
 	}
 	switch v := raw.(type) {
