@@ -69,10 +69,7 @@ test('actual mode dispatch shares cancellation/owner checks and cannot change wo
     assert.equal(context.mode,'lifeform'); assert.equal(layerCalls,1); assert.equal(lifeformCalls,1);
     context[flag]=false;
   }
-  context.lifeformsEnabled=false; context.mode='layer';
-  context.actions.editMode('lifeform');
-  assert.equal(context.mode,'layer');
-  assert.ok(cancellations>=3);
+  assert.ok(cancellations>=2);
   const panel=readFileSync(srcPath('SiteUnitSummary.svelte'),'utf8');
   assert.match(panel,/\{#if mode === 'layer' && !speciesView\?\.enabled\}/);
 });
@@ -87,7 +84,7 @@ test('summary component is cancellable and enters shared draft-safe navigation',
   assert.match(panel,/onDestroy\(\(\) => \{ unsubscribe\?\.\(\); unsubscribeFull\?\.\(\); unsubscribeSpecies\?\.\(\); cancel\(\); \}\)/);assert.match(panel,/request !== generation/);
   assert.match(panel,/onBusyChange\(busy \|\| preferenceBarrier \|\| workbookBusy \|\| speciesBarrier\)/);
   assert.match(panel,/checked=\{method === 1\}/);assert.match(panel,/validateSiteUnitSummary/);
-  assert.match(panel,/if \(!preferencesEnabled\) void options\(\)/);
+  assert.match(panel,/if \(!preferences\) void options\(\)/);
   assert.match(panel,/GetSiteUnitSummaryOptions/);
   assert.match(panel,/disabled=\{busy \|\| workbookBusy \|\| preferenceBarrier \|\| speciesBarrier \|\| !ready \|\| !scopeAllowed\}/);
   assert.match(panel,/data-source-control="optSiteUnitType"/);

@@ -183,9 +183,7 @@ test('once-only publication sends strict-Go full scope request and retains immut
     return value.outcome;
   });
   assert.equal(calls,1);assert.equal(session.view().outcome.status,'published');
-  assert.equal(session.view().blocked,true);
-  assert.throws(()=>session.prepare(ready,ready.scope),/Acknowledge/);
-  session.acknowledge();
+  assert.equal(session.view().blocked,false);
   assert.equal(session.view().outcome.status,'published');
   await assert.rejects(session.publish(ready,ready.scope,value.exportRequest.destination,()=>{calls++;}),/fresh explicit/);
   assert.equal(calls,1);

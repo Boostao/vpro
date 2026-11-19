@@ -198,16 +198,11 @@ test('PDF component routes owned reviews/export through production-shaped bindin
   assert.equal(context.labelDate, 'Monday, October 12, 2026');
   assert.equal(changes.at(-1), false);
   await context.actions.publishPDF();
-  assert.equal(changes.at(-1), true);
+  assert.ok(changes.includes(true));
+  assert.equal(changes.at(-1), false);
   const exported = calls.find(call => call[0] === 'export');
   const request = JSON.parse(exported[2]);
   assert.deepEqual({ ...request, requestId: wire.request.requestId }, wire.request);
-  context.actions.cancel();
-  assert.equal(changes.at(-1), true);
-  await context.actions.load();
-  assert.equal(calls.filter(call => call[0] === 'review').length, 1);
-  context.actions.acknowledgePDF();
-  assert.equal(changes.at(-1), false);
   assert.deepEqual(plain(context.publication.outcome), wire.outcome);
 });
 

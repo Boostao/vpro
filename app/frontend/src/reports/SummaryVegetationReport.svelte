@@ -1,68 +1,71 @@
-<script module lang="ts">
-  import { notifications } from '../shell/notificationService.svelte';
-</script>
-
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import { ImportExportService, VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
   import { projectState } from '../shared/state';
+  import { notifications } from '../shell/notificationService.svelte';
   import SiteUnitExclusionFilter from '../classification/SiteUnitExclusionFilter.svelte';
   import { summaryVegetationSession, type SummaryVegetationPort } from './summaryVegetation';
+  import type { SummaryWorkbookCalculation } from './summaryVegetationWorkbook';
   import { summaryVegetationPreferenceSession } from './summaryVegetationPreferences';
   import { summaryVegetationQualityPreferenceSession } from './summaryVegetationQualityPreferences';
-  import SummaryVegetationQualityPreferences from './SummaryVegetationQualityPreferences.svelte';
   import { summaryVegetationPresentationPreferenceSession } from './summaryVegetationPresentationPreferences';
-  import SummaryVegetationPresentationPreferences from './SummaryVegetationPresentationPreferences.svelte';
-  import SummaryVegetationFieldList from './SummaryVegetationFieldList.svelte';
+  import SummaryVegetationPeerPanels from './SummaryVegetationPeerPanels.svelte';
+  import SummaryVegetationResultPanel from './SummaryVegetationResultPanel.svelte';
   import { summaryVegetationFieldListDesktop } from './summaryVegetationFieldListDesktop';
-  import SummaryVegetationEnvironmental from './SummaryVegetationEnvironmental.svelte';
-  import SummaryVegetationWorkbookPanel from './SummaryVegetationWorkbookPanel.svelte';
-  import { summaryEnvironmentalDesktop, summaryEnvironmentalEnabled, summaryEnvironmentalNumericEnabled, summaryEnvironmentalLifeformEnabled, summaryEnvironmentalPort } from './summaryVegetationEnvironmentalDesktop';
-  import type { SummaryEnvironmentalSession, SummaryEnvironmentalNumericSession, SummaryEnvironmentalLifeformSession } from './summaryVegetationEnvironmental';
+  import {
+    summaryEnvironmentalDesktop, summaryEnvironmentalEnabled,
+    summaryEnvironmentalNumericEnabled, summaryEnvironmentalLifeformEnabled, summaryEnvironmentalPort,
+  } from './summaryVegetationEnvironmentalDesktop';
+  import type {
+    SummaryEnvironmentalSession, SummaryEnvironmentalNumericSession, SummaryEnvironmentalLifeformSession,
+  } from './summaryVegetationEnvironmental';
 
-  let { contextId, project, projectPath, su, suPath, hierarchy = '', operationHeld: operationHeldProp = false, onBusyChange, onExclusionBusyChange }: {
+  let {
+    contextId, project, projectPath, su, suPath,
+    hierarchy = '', operationHeld: operationHeldProp = false,
+    onBusyChange, onExclusionBusyChange,
+  }: {
     contextId: string; project: string; projectPath: string; su: string; suPath: string;
-    hierarchy?: string; operationHeld?: boolean; onBusyChange: (busy: boolean) => void;
+    hierarchy?: string; operationHeld?: boolean;
+    onBusyChange: (busy: boolean) => void;
     onExclusionBusyChange?: (value: boolean) => void;
   } = $props();
 
   const effectiveHierarchy = $derived(
     (hierarchy && hierarchy !== 'None' ? hierarchy : '') ||
-    ($projectState?.activeHierarchy && $projectState.activeHierarchy !== 'None' ? $projectState.activeHierarchy : '') ||
-    'None'
+      ($projectState?.activeHierarchy && $projectState.activeHierarchy !== 'None' ? $projectState.activeHierarchy : '') ||
+      'None',
   );
   const enabled = true;
-  const groupedWorkbookEnabled = true;
   const reads = new ReadRequests();
   function ownedContext() { return { contextId, project, projectPath, su, suPath }; }
   const session = summaryVegetationSession(ownedContext());
   let environmentalHeld = $state(false);
   let workbookHeld = $state(false);
   const operationHeld = $derived(operationHeldProp || environmentalHeld || workbookHeld);
-  let environmentalSession = $state.raw<SummaryEnvironmentalSession | SummaryEnvironmentalNumericSession | SummaryEnvironmentalLifeformSession | null>(null);
+  let environmentalSession = $state.raw<
+    SummaryEnvironmentalSession | SummaryEnvironmentalNumericSession | SummaryEnvironmentalLifeformSession | null
+  >(null);
   let environmentalError = $state('');
   const canInspectEnvironmental = untrack(() => {
-    const owner = ownedContext();
-    return summaryEnvironmentalEnabled &&
-      typeof owner.contextId === 'string' && owner.contextId !== '' &&
-      typeof owner.project === 'string' && owner.project !== '' &&
-      typeof owner.projectPath === 'string' && owner.projectPath !== '' &&
-      typeof owner.su === 'string' && owner.su !== '' && owner.su !== 'None' && owner.su !== 'USysSuTableDynamic' &&
-      typeof owner.suPath === 'string' && owner.suPath !== '';
+    const o = ownedContext();
+    return Boolean(
+      summaryEnvironmentalEnabled && o.contextId && o.project && o.projectPath &&
+        o.su && o.su !== 'None' && o.su !== 'USysSuTableDynamic' && o.suPath,
+    );
   });
   if (canInspectEnvironmental) {
-    try { environmentalSession = summaryEnvironmentalDesktop.session(ownedContext()); }
-    catch (cause) {
+    try {
+      environmentalSession = summaryEnvironmentalDesktop.session(ownedContext());
+    } catch (cause) {
       const envErr = `Combined environmental inspection unavailable: ${String(cause)}`;
       environmentalError = envErr;
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation environmental inspection unavailable', envErr, {
-          category: 'reports',
-          source: 'Summary Vegetation',
-          contextTag: untrack(() => (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined)),
-        });
-      }
+      notifications.error('Summary Vegetation environmental inspection unavailable', envErr, {
+        category: 'reports',
+        source: 'Summary Vegetation',
+        contextTag: untrack(() => (typeof project === 'string' && project) || (effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined)),
+      });
     }
   }
   const preferences = summaryVegetationPreferenceSession?.(ownedContext()) ?? null;
@@ -84,11 +87,11 @@
   let preferenceGeneration = 0;
   const preferenceReads = new ReadRequests();
   const port: SummaryVegetationPort = {
-    preview: (average, display) => reads.track(VegetationReportService.PreviewSummaryVegetation(contextId, average, display)),
-    previewClass: (average, display, showClass) => reads.track(VegetationReportService.PreviewSummaryVegetationClass(contextId, average, display, showClass)),
-    previewGrouped: (average, groupAndOrder) => reads.track(VegetationReportService.PreviewSummaryVegetationGrouped(contextId, average, groupAndOrder)),
-    previewGroupedDisplay: (average, groupAndOrder, display, showClass) => reads.track(VegetationReportService.PreviewSummaryVegetationGroupedDisplay(contextId, average, groupAndOrder, display, showClass)),
-    previewConfigured: requestJSON => reads.track(VegetationReportService.PreviewSummaryVegetationConfigured(contextId, requestJSON)),
+    preview: (avg, disp) => reads.track(VegetationReportService.PreviewSummaryVegetation(contextId, avg, disp)),
+    previewClass: (avg, disp, cls) => reads.track(VegetationReportService.PreviewSummaryVegetationClass(contextId, avg, disp, cls)),
+    previewGrouped: (avg, grp) => reads.track(VegetationReportService.PreviewSummaryVegetationGrouped(contextId, avg, grp)),
+    previewGroupedDisplay: (avg, grp, disp, cls) => reads.track(VegetationReportService.PreviewSummaryVegetationGroupedDisplay(contextId, avg, grp, disp, cls)),
+    previewConfigured: reqJSON => reads.track(VegetationReportService.PreviewSummaryVegetationConfigured(contextId, reqJSON)),
     previewWithPreferences: () => reads.track(VegetationReportService.PreviewSummaryVegetationWithPreferences(contextId)),
     cancel: () => reads.cancelAll(),
     validationYield: () => new Promise(resolve => setTimeout(resolve, 0)),
@@ -108,76 +111,55 @@
   let lastPrefError = '';
   let notifiedPrefReceipts = 0;
   let lastFieldListReadError = '';
+
   function reportContextTag() {
     return (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined);
   }
+
   function syncReportNotifications() {
-    if (typeof notifications === 'undefined') return;
-    const ctxTag = reportContextTag();
+    const opts = { category: 'reports' as const, source: 'Summary Vegetation', contextTag: reportContextTag() };
     const vsErr = viewState?.error ?? '';
-    if (vsErr && vsErr !== lastViewError) {
-      notifications.error('Summary Vegetation preview failed', vsErr, {
-        category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
-      });
-    }
+    if (vsErr && vsErr !== lastViewError) notifications.error('Summary Vegetation preview failed', vsErr, opts);
     lastViewError = vsErr;
     const pv = preferences?.view();
     if (pv) {
       const receipts = pv.receipts ?? [];
       if (receipts.length < notifiedPrefReceipts) notifiedPrefReceipts = 0;
       for (let i = notifiedPrefReceipts; i < receipts.length; i++) {
-        const receipt = receipts[i];
-        if (receipt.kind === 'known') {
-          if (receipt.outcome.committed && !receipt.outcome.errorMessage) {
-            notifications.success('Summary Vegetation options saved', receipt.outcome.changed ? 'Saved summary options.' : 'No option changes.', {
-              category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
-            });
-          } else if (receipt.outcome.committed) {
-            notifications.warning('Summary Vegetation options saved with warning', receipt.outcome.errorMessage, {
-              category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
-            });
-            lastPrefError = receipt.outcome.errorMessage;
-          } else if (receipt.outcome.errorMessage) {
-            notifications.error('Summary Vegetation options save failed', receipt.outcome.errorMessage, {
-              category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
-            });
-            lastPrefError = receipt.outcome.errorMessage;
+        const r = receipts[i];
+        if (r.kind === 'known') {
+          if (r.outcome.committed && !r.outcome.errorMessage) {
+            notifications.success('Summary Vegetation options saved', r.outcome.changed ? 'Saved summary options.' : 'No option changes.', opts);
+          } else if (r.outcome.committed) {
+            notifications.warning('Summary Vegetation options saved with warning', r.outcome.errorMessage, opts);
+            lastPrefError = r.outcome.errorMessage;
+          } else if (r.outcome.errorMessage) {
+            notifications.error('Summary Vegetation options save failed', r.outcome.errorMessage, opts);
+            lastPrefError = r.outcome.errorMessage;
           } else {
-            notifications.info('Summary Vegetation options unchanged', 'No option changes were needed.', {
-              category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
-            });
+            notifications.info('Summary Vegetation options unchanged', 'No option changes were needed.', opts);
           }
         }
       }
       notifiedPrefReceipts = receipts.length;
       const pvReadErr = pv.readError ?? '';
-      if (pvReadErr && pvReadErr !== lastPrefReadError) {
-        notifications.error('Summary Vegetation options load failed', pvReadErr, {
-          category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
-        });
-      }
+      if (pvReadErr && pvReadErr !== lastPrefReadError) notifications.error('Summary Vegetation options load failed', pvReadErr, opts);
       lastPrefReadError = pvReadErr;
       const pvErr = pv.error ?? '';
-      if (pvErr && pvErr !== lastPrefError) {
-        notifications.error('Summary Vegetation options failed', pvErr, {
-          category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
-        });
-      }
+      if (pvErr && pvErr !== lastPrefError) notifications.error('Summary Vegetation options failed', pvErr, opts);
       lastPrefError = pvErr;
     }
     const flErr = fieldListState?.readError ?? '';
-    if (flErr && flErr !== lastFieldListReadError) {
-      notifications.error('Summary Vegetation field list failed', flErr, {
-        category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
-      });
-    }
+    if (flErr && flErr !== lastFieldListReadError) notifications.error('Summary Vegetation field list failed', flErr, opts);
     lastFieldListReadError = flErr;
   }
+
   function reportBusy() {
     onBusyChange(viewState.busy || (!preferences && !!viewState.draftError) || preferenceReadBusy ||
-      !!preferenceView && (preferenceView.busy || preferenceView.blocked || !!preferenceView.draftError) ||
-      qualityReadBusy || !!qualityView && (qualityView.busy || qualityView.blocked || !!qualityView.draftError) ||
-      presentationReadBusy || !!presentationView && (presentationView.busy || presentationView.blocked || !!presentationView.draftError) || fieldListHeld || environmentalHeld || workbookHeld);
+      (!!preferenceView && (preferenceView.busy || preferenceView.blocked || !!preferenceView.draftError)) ||
+      qualityReadBusy || (!!qualityView && (qualityView.busy || qualityView.blocked || !!qualityView.draftError)) ||
+      presentationReadBusy || (!!presentationView && (presentationView.busy || presentationView.blocked || !!presentationView.draftError)) ||
+      fieldListHeld || environmentalHeld || workbookHeld);
   }
   const unsubscribe = session.subscribe(() => { viewState = session.view(); syncReportNotifications(); reportBusy(); });
   const unsubscribeEnvironment = canInspectEnvironmental ? summaryEnvironmentalDesktop.subscribe(() => {
@@ -186,11 +168,14 @@
   }) : undefined;
   function syncPreferenceDraft() {
     if (!preferenceView?.initialized || viewState.busy) return;
-    const draft = preferenceView.draft;
-    const group = Number(draft.groupBy) + 10, average = Number(draft.average),
-      display = Number(draft.display), show = Number(draft.showClass);
-    if (viewState.groupAndOrder !== group || viewState.average !== average || viewState.display !== display || viewState.showClass !== show)
+    const d = preferenceView.draft;
+    const group = Number(d.groupBy) + 10;
+    const average = Number(d.average);
+    const display = Number(d.display);
+    const show = Number(d.showClass);
+    if (viewState.groupAndOrder !== group || viewState.average !== average || viewState.display !== display || viewState.showClass !== show) {
       session.edit(average, display, show, group);
+    }
   }
   const unsubscribePreferences = preferences?.subscribe(() => {
     preferenceView = preferences.view(); syncPreferenceDraft(); syncReportNotifications(); reportBusy();
@@ -206,19 +191,13 @@
     reportBusy();
   }) : undefined;
   syncReportNotifications();
+
   async function loadFieldList() {
     if (!fieldListScopeAvailable || fieldListPeerDisabled || fieldListPeerValidation || fieldListState?.readBusy) return;
     fieldListError = '';
-    try { await fieldList.load(ownedContext()); }
-    catch (cause) {
+    try { await fieldList.load(ownedContext()); } catch (cause) {
       fieldListError = String(cause);
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation field list failed', fieldListError, {
-          category: 'reports',
-          source: 'Summary Vegetation',
-          contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
-        });
-      }
+      notifications.error('Summary Vegetation field list failed', fieldListError, { category: 'reports', source: 'Summary Vegetation', contextTag: reportContextTag() });
     }
   }
   function dismissInitialFieldListReadError() {
@@ -226,45 +205,37 @@
     fieldListError = '';
     try { fieldList.dismissInitialReadError(ownedContext()); } catch (cause) {
       fieldListError = String(cause);
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation field list acknowledgement failed', fieldListError, {
-          category: 'reports',
-          source: 'Summary Vegetation',
-          contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
-        });
-      }
+      notifications.error('Summary Vegetation field list acknowledgement failed', fieldListError, { category: 'reports', source: 'Summary Vegetation', contextTag: reportContextTag() });
     }
   }
-  const presentationMutationHeld = $derived(presentationReadBusy || !!presentationView && (presentationView.busy || presentationView.blocked));
+  const presentationMutationHeld = $derived(presentationReadBusy || (!!presentationView && (presentationView.busy || presentationView.blocked)));
   const presentationInvalid = $derived(!!presentationView?.draftError || !!presentationView?.authorityUnknown || !!presentationView?.readError);
   const workbookConstancy = $derived(!!presentationView?.initialized && presentationView.draft?.constancy === true);
-  const qualityMutationHeld = $derived(qualityReadBusy || !!qualityView && (qualityView.busy || qualityView.blocked));
+  const qualityMutationHeld = $derived(qualityReadBusy || (!!qualityView && (qualityView.busy || qualityView.blocked)));
   const qualityInvalid = $derived(!!qualityView?.draftError || !!qualityView?.authorityUnknown || !!qualityView?.readError);
   const qualityUnavailable = $derived(!!quality && (!qualityView?.saved || qualityInvalid));
   const unavailableScope = $derived(!contextId || (unitScope === 'su' && (su === 'None' || su === 'USysSuTableDynamic')) || (unitScope === 'field' && !unitField.trim()));
   const hierarchyHeaderEnabled = $derived(!!presentationView?.draft?.hierarchyHeader);
   const effectiveCombineVariants = $derived(combineVariants || !!presentationView?.draft?.combineVariants);
   const savedPresentation = $derived.by(() => {
-    const draft = presentationView?.initialized ? presentationView.draft : null;
-    return draft ? {
-      title: draft.title,
-      includeEnv: draft.includeEnv,
-      createSummary: draft.createSummary,
-      showCommon: draft.showCommon,
-      showGuide: draft.showGuide,
-      constancy: draft.constancy,
-    } : null;
+    const d = presentationView?.initialized ? presentationView.draft : null;
+    return d ? { title: d.title, includeEnv: d.includeEnv, createSummary: d.createSummary, showCommon: d.showCommon, showGuide: d.showGuide, constancy: d.constancy } : null;
   });
-  const preferenceHeld = $derived(preferenceReadBusy || !!preferenceView && (preferenceView.busy || preferenceView.blocked));
+  const preferenceHeld = $derived(preferenceReadBusy || (!!preferenceView && (preferenceView.busy || preferenceView.blocked)));
   const preferenceInvalid = $derived(!!preferenceView?.draftError || !!preferenceView?.authorityUnknown || !!preferenceView?.readError);
   const fieldListPeerDisabled = $derived(operationHeld || viewState.busy || preferenceHeld || qualityMutationHeld || presentationMutationHeld);
-  const fieldListPeerValidation = $derived(preferenceInvalid ? 'Resolve Summary options validation.'
-    : qualityInvalid ? 'Resolve Summary quality validation.'
-    : presentationInvalid ? 'Resolve Summary presentation validation.' : '');
-  const fieldListEnabledFromPresentation = $derived(!!presentationView?.saved && !presentationInvalid &&
-    presentationView.draft?.includeEnv === true);
-  const editHeld = $derived(!enabled || viewState.busy || operationHeld || fieldListBusy || preferenceHeld || qualityMutationHeld || presentationMutationHeld ||
-    !!preferences && !preferenceView?.saved);
+  const fieldListPeerValidation = $derived(preferenceInvalid ? 'Resolve Summary options validation.' : qualityInvalid ? 'Resolve Summary quality validation.' : presentationInvalid ? 'Resolve Summary presentation validation.' : '');
+  const fieldListEnabledFromPresentation = $derived(!!presentationView?.saved && !presentationInvalid && presentationView.draft?.includeEnv === true);
+  const editHeld = $derived(!enabled || viewState.busy || operationHeld || fieldListBusy || preferenceHeld || qualityMutationHeld || presentationMutationHeld || (!!preferences && !preferenceView?.saved));
+  const workbookCalculation = $derived<SummaryWorkbookCalculation>({
+    average: viewState.average, display: workbookConstancy ? 1 : viewState.display, showClass: viewState.showClass,
+    ...(workbookConstancy ? { groupAndOrder: 13, constancy: true as const } : viewState.groupAndOrder !== 11 ? { groupAndOrder: viewState.groupAndOrder } : {}),
+    ...(unitScope !== 'su' ? { unitScope } : {}), ...(unitScope === 'field' && unitField.trim() ? { unitField: unitField.trim() } : {}),
+    ...(unitScope === 'hierarchy' ? { breakpointPolicy } : {}), ...(hierarchyHeaderEnabled ? { hierarchyHeader: true } : {}),
+    ...(effectiveCombineVariants ? { combineVariants: true } : {}), ...(lumpTable ? { lumpTable } : {}),
+    ...(includeGoldstreamMetadata ? { includeGoldstreamMetadata: true } : {}),
+  });
+
   function cancelPreferenceRead() {
     preferenceGeneration++; preferenceReads.cancelAll(); preferences?.cancelLoad();
     preferenceReadBusy = false; reportBusy();
@@ -272,7 +243,8 @@
   async function loadPreferences() {
     if (!preferences || viewState.busy || operationHeld || fieldListHeld || preferenceHeld || qualityMutationHeld || qualityInvalid || presentationMutationHeld || presentationInvalid) return;
     cancelPreferenceRead();
-    const request = preferenceGeneration, token = preferences.beginLoad();
+    const request = preferenceGeneration;
+    const token = preferences.beginLoad();
     preferenceReadError = ''; preferenceReadBusy = true; reportBusy();
     try {
       const value = await preferenceReads.track(VegetationReportService.GetSummaryVegetationPreferences(contextId));
@@ -281,15 +253,7 @@
     } catch (cause) {
       if (request === preferenceGeneration) {
         preferences.rejectRead(cause);
-        if (typeof syncReportNotifications === 'function') {
-          syncReportNotifications();
-        } else if (typeof notifications !== 'undefined') {
-          notifications.error('Summary Vegetation preferences load failed', String(cause), {
-            category: 'reports',
-            source: 'Summary Vegetation',
-            contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
-          });
-        }
+        if (typeof syncReportNotifications === 'function') syncReportNotifications();
       }
     } finally {
       if (request === preferenceGeneration) { preferenceReadBusy = false; reportBusy(); }
@@ -300,45 +264,13 @@
     cancelPreferenceRead(); preferenceReadError = '';
     try {
       await preferences.save(value => VegetationReportService.SaveSummaryVegetationPreferences(contextId, JSON.stringify(value)));
-      if (typeof syncReportNotifications === 'function') {
-        syncReportNotifications();
-      } else if (typeof notifications !== 'undefined') {
-        const pv = preferences.view();
-        const latest = pv.receipts?.at(-1);
-        const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined);
-        if (latest?.kind === 'known') {
-          if (latest.outcome.committed && !latest.outcome.errorMessage) {
-            notifications.success('Summary Vegetation options saved', latest.outcome.changed ? 'Saved summary options.' : 'No option changes.', {
-              category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
-            });
-          } else if (latest.outcome.committed) {
-            notifications.warning('Summary Vegetation options saved with warning', latest.outcome.errorMessage, {
-              category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
-            });
-          } else if (latest.outcome.errorMessage) {
-            notifications.error('Summary Vegetation options save failed', latest.outcome.errorMessage, {
-              category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
-            });
-          } else {
-            notifications.info('Summary Vegetation options unchanged', 'No option changes were needed.', {
-              category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
-            });
-          }
-        } else if (pv.error) {
-          notifications.error('Summary Vegetation options failed', pv.error, {
-            category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
-          });
-        }
-      }
+      if (typeof syncReportNotifications === 'function') syncReportNotifications();
     } catch (cause) {
       preferenceReadError = String(cause);
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation preferences save failed', preferenceReadError, {
-          category: 'reports',
-          source: 'Summary Vegetation',
-          contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
-        });
-      }
+      notifications.error('Summary Vegetation preferences save failed', preferenceReadError, {
+        category: 'reports', source: 'Summary Vegetation',
+        contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
+      });
     }
   }
   function editPreference(field: 'groupBy' | 'average' | 'display' | 'showClass', raw: string) {
@@ -374,39 +306,26 @@
     lumpDiscoveryError = '';
     try {
       const discovered = await reads.track(ImportExportService.DiscoverLumpTables(contextId, []));
-      const names = (discovered ?? [])
-        .map(item => (item?.name ?? '').trim())
-        .filter((name): name is string => !!name);
-      lumpTables = Array.from(new Set(names));
+      lumpTables = Array.from(new Set((discovered ?? []).map(item => (item?.name ?? '').trim()).filter((n): n is string => !!n)));
     } catch (cause) {
       lumpDiscoveryError = String(cause);
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation lump table discovery failed', lumpDiscoveryError, {
-          category: 'reports',
-          source: 'Summary Vegetation',
-          contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
-        });
-      }
+      notifications.error('Summary Vegetation lump table discovery failed', lumpDiscoveryError, { category: 'reports', source: 'Summary Vegetation', contextTag: reportContextTag() });
     }
   }
   function buildConfiguredRequestJSON(): string {
     const groupAndOrder = viewState.groupAndOrder;
-    const isClassDisplay = viewState.display === 4 || viewState.display === 5;
-    const showClass = isClassDisplay ? (viewState.showClass || 1) : 0;
+    const showClass = viewState.display === 4 || viewState.display === 5 ? (viewState.showClass || 1) : 0;
     const showCommon = !!presentationView?.draft?.showCommon;
     const showGuide = !!presentationView?.draft?.showGuide;
     const references = showCommon || showGuide ? { showCommon, useGuideNames: showGuide } : undefined;
     return JSON.stringify({
-      useSavedPreferences: false,
-      unitScope,
+      useSavedPreferences: false, unitScope,
       ...(unitScope === 'field' ? { unitField: unitField.trim() } : {}),
       hierarchyHeader: hierarchyHeaderEnabled,
       ...(unitScope === 'hierarchy' ? { breakpointPolicy } : {}),
       combineVariants: effectiveCombineVariants,
       ...(lumpTable ? { lumpTable } : {}),
-      average: viewState.average,
-      display: viewState.display,
-      showClass,
+      average: viewState.average, display: viewState.display, showClass,
       ...(groupAndOrder !== 11 ? { groupAndOrder } : {}),
       ...(references ? { references } : {}),
       ...(workbookConstancy ? { constancy: true } : {}),
@@ -415,30 +334,15 @@
   }
   async function previewReport() {
     exclusionSummaryText = '';
-    const useConfigured = unitScope !== 'su' || hierarchyHeaderEnabled || effectiveCombineVariants || lumpTable !== '' ||
-      includeGoldstreamMetadata || !!qualityView?.saved?.enforce;
+    const useConfigured = unitScope !== 'su' || hierarchyHeaderEnabled || effectiveCombineVariants || lumpTable !== '' || includeGoldstreamMetadata || !!qualityView?.saved?.enforce;
+    const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined);
     try {
-      if (!useConfigured) {
-        await session.show(port);
-      } else {
-        await session.showConfigured(port, buildConfiguredRequestJSON());
-      }
+      if (!useConfigured) await session.show(port);
+      else await session.showConfigured(port, buildConfiguredRequestJSON());
       const next = session.view();
-      if (next.error && typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation preview failed', next.error, {
-          category: 'reports',
-          source: 'Summary Vegetation',
-          contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
-        });
-      }
+      if (next.error) notifications.error('Summary Vegetation preview failed', next.error, { category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag });
     } catch (cause) {
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation preview failed', String(cause), {
-          category: 'reports',
-          source: 'Summary Vegetation',
-          contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
-        });
-      }
+      notifications.error('Summary Vegetation preview failed', String(cause), { category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag });
     }
   }
   function normalizeExclusionSummaryPreview(raw: unknown): unknown {
@@ -449,11 +353,7 @@
     const grouped = typeof candidate.groupAndOrder === 'number' && candidate.groupAndOrder !== 11;
     if (hasRefs) {
       candidate.source = 'literal-normal-su-effective-references';
-      candidate.ordering = refShowCommon
-        ? 'literal-null-first-layer-species-common'
-        : grouped
-          ? 'literal-null-first-group-species'
-          : 'literal-null-first-layer-species';
+      candidate.ordering = refShowCommon ? 'literal-null-first-layer-species-common' : grouped ? 'literal-null-first-group-species' : 'literal-null-first-layer-species';
     } else {
       candidate.source = grouped ? 'literal-normal-su-grouped' : 'literal-normal-su-layer';
       candidate.ordering = grouped ? 'literal-null-first-group-species' : 'literal-null-first-layer-species';
@@ -462,24 +362,13 @@
   }
   async function previewWithPreferences() {
     exclusionSummaryText = '';
+    const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined);
     try {
       await session.showWithPreferences(port);
       const next = session.view();
-      if (next.error && typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation preview failed', next.error, {
-          category: 'reports',
-          source: 'Summary Vegetation',
-          contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
-        });
-      }
+      if (next.error) notifications.error('Summary Vegetation preview failed', next.error, { category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag });
     } catch (cause) {
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation preview failed', String(cause), {
-          category: 'reports',
-          source: 'Summary Vegetation',
-          contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
-        });
-      }
+      notifications.error('Summary Vegetation preview failed', String(cause), { category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag });
     }
   }
   onDestroy(() => {
@@ -493,22 +382,31 @@
   <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border report-sticky-bar" data-report-sticky-bar>
     <h1>Summary Vegetation</h1>
     <div class="actions">
-      <button onclick={previewReport} disabled={!enabled || unavailableScope || viewState.busy || operationHeld || fieldListHeld || preferenceHeld || preferenceInvalid ||
-        qualityMutationHeld || qualityUnavailable || presentationMutationHeld || presentationInvalid || !!viewState.draftError || !!preferences && !preferenceView?.initialized} data-summary-preview>
-        Preview Summary Vegetation
-      </button>
-      <button type="button" onclick={previewWithPreferences} disabled={!enabled || !contextId || !su || su === 'None' || !suPath || viewState.busy || operationHeld || fieldListHeld || preferenceHeld || qualityMutationHeld || presentationMutationHeld} data-summary-preview-preferences>
-        Preview with Saved Preferences
-      </button>
+      <button
+        onclick={previewReport}
+        disabled={!enabled || unavailableScope || viewState.busy || operationHeld || fieldListHeld ||
+          preferenceHeld || preferenceInvalid || qualityMutationHeld || qualityUnavailable ||
+          presentationMutationHeld || presentationInvalid || !!viewState.draftError ||
+          (!!preferences && !preferenceView?.initialized)}
+        data-summary-preview>Preview Summary Vegetation</button>
+      <button
+        type="button"
+        onclick={previewWithPreferences}
+        disabled={!enabled || !contextId || !su || su === 'None' || !suPath || viewState.busy ||
+          operationHeld || fieldListHeld || preferenceHeld || qualityMutationHeld || presentationMutationHeld}
+        data-summary-preview-preferences>Preview with Saved Preferences</button>
       {#if viewState.busy}<button onclick={() => session.cancel(port)} data-summary-cancel>Cancel preview</button>{/if}
     </div>
   </header>
   {#if viewState.draftError}<p role="alert" class="error">{viewState.draftError}</p>{/if}
   {#if preferenceView?.draftError}<p role="alert" class="error">{preferenceView.draftError}</p>{/if}
   <p class="owner">Project: {project}<br />{projectPath}<br />Current Site Unit Table: {su}<br />{suPath}</p>
-  {#if !enabled}<p>Summary Vegetation report preview is currently unavailable.</p>{/if}
   {#if unavailableScope}
-    <p class="scope-guidance" role="status">{unitScope === 'field' ? 'Specify a non-empty environment field name for Field-Derived Summary units.' : 'A selected normal Site Unit Table is required for Current Site Unit Table scope.'}</p>
+    <p class="scope-guidance" role="status">
+      {unitScope === 'field'
+        ? 'Enter an environment field name (such as SiteUnit or SubZone) to group plots.'
+        : 'Select a Site Unit table in the sidebar, or choose Whole Project or Hierarchy Breakpoints (~).'}
+    </p>
   {/if}
   <div class="options">
     <label>Summary Report Units
@@ -523,26 +421,20 @@
     </label>
     {#if unitScope === 'hierarchy'}
       <label>Hierarchy Breakpoint Policy
-        <select value={breakpointPolicy} onchange={event => { breakpointPolicy = (event.currentTarget as HTMLSelectElement).value as 'lowest' | 'highest'; }}
-          disabled={editHeld} data-summary-breakpoint-policy>
-          <option value="lowest">Lowest (~) Breakpoint</option>
-          <option value="highest">Highest (~) Breakpoint</option>
+        <select value={breakpointPolicy} onchange={event => { breakpointPolicy = (event.currentTarget as HTMLSelectElement).value as 'lowest' | 'highest'; }} disabled={editHeld} data-summary-breakpoint-policy>
+          <option value="lowest">Lowest (~) Breakpoint</option><option value="highest">Highest (~) Breakpoint</option>
         </select>
       </label>
     {:else if unitScope === 'field'}
       <label>Environment Unit Field
-        <input type="text" value={unitField} oninput={event => { unitField = event.currentTarget.value; }}
-          placeholder="e.g. SiteUnit or SubZone" disabled={editHeld} data-summary-unit-field />
+        <input type="text" value={unitField} oninput={event => { unitField = event.currentTarget.value; }} placeholder="e.g. SiteUnit or SubZone" disabled={editHeld} data-summary-unit-field />
       </label>
     {/if}
-    <label>Lump Table (*_Lump)
+    <label>Species Lumping Table
       <div class="lump-picker">
-        <select value={lumpTable} onchange={event => { lumpTable = (event.currentTarget as HTMLSelectElement).value; }}
-          disabled={editHeld} data-summary-lump-table>
-          <option value="">None (Unlumped raw species)</option>
-          {#each lumpTables as tableName}
-            <option value={tableName}>{tableName}</option>
-          {/each}
+        <select value={lumpTable} onchange={event => { lumpTable = (event.currentTarget as HTMLSelectElement).value; }} disabled={editHeld} data-summary-lump-table>
+          <option value="">None (unlumped species)</option>
+          {#each lumpTables as tableName}<option value={tableName}>{tableName}</option>{/each}
         </select>
         <button type="button" onclick={refreshLumpTables} disabled={editHeld || !contextId} data-summary-lump-refresh>Discover</button>
       </div>
@@ -558,16 +450,12 @@
         <option value={1}>% Presence and % Cover</option>
         <option value={2} disabled={viewState.groupAndOrder === 12 || viewState.groupAndOrder === 13}>Presence Class and Significance Class</option>
         <option value={3}>Presence Class and % Cover</option>
-        <option value={6}>% Cover</option>
-        <option value={4}>Prominence Class</option>
-        <option value={5}>Goldstream Class</option>
+        <option value={6}>% Cover</option><option value={4}>Prominence Class</option><option value={5}>Goldstream Class</option>
       </select>
     </label>
     <label>Show
-      <select value={viewState.showClass} onchange={changeShowClass}
-        disabled={editHeld || viewState.display <= 3} data-summary-show data-source-control="OptShowClassValue">
-        <option value={1}>Class (historical default 1)</option>
-        <option value={10}>Class</option><option value={20}>Value</option>
+      <select value={viewState.showClass} onchange={changeShowClass} disabled={editHeld || viewState.display <= 3} data-summary-show data-source-control="OptShowClassValue">
+        <option value={1}>Class (historical default 1)</option><option value={10}>Class</option><option value={20}>Value</option>
       </select>
     </label>
     <label>Calculate
@@ -578,114 +466,41 @@
   </div>
   <div class="scope-toggles">
     <label class="checkbox-inline">
-      <input type="checkbox" checked={combineVariants} onchange={event => { combineVariants = event.currentTarget.checked; }}
-        disabled={editHeld} data-summary-combine-variants data-source-control="SVSubSppAsSpp" />
-      Roll up subspecies/variants into parent species (SVSubSppAsSpp)
+      <input type="checkbox" checked={combineVariants} onchange={event => { combineVariants = event.currentTarget.checked; }} disabled={editHeld} data-summary-combine-variants data-source-control="SVSubSppAsSpp" />
+      Roll up subspecies and varieties into parent species
     </label>
     <label class="checkbox-inline">
-      <input type="checkbox" checked={includeGoldstreamMetadata} onchange={event => { includeGoldstreamMetadata = event.currentTarget.checked; }}
-        disabled={editHeld} data-summary-goldstream-metadata />
+      <input type="checkbox" checked={includeGoldstreamMetadata} onchange={event => { includeGoldstreamMetadata = event.currentTarget.checked; }} disabled={editHeld} data-summary-goldstream-metadata />
       Include Goldstream cover-class metadata
     </label>
   </div>
-  {#if preferences && preferenceView}
-    <section data-summary-preferences aria-label="Saved Summary options">
-      {#each preferenceView.receipts as receipt}
-        {#if receipt.kind !== 'known'}
-          <p data-summary-preference-receipt role="alert">
-            Preference outcome unknown; do not replay. {receipt.errorMessage}
-          </p>
-        {/if}
-      {/each}
-      <div class="actions">
-        <button data-summary-preferences-load disabled={viewState.busy || operationHeld || fieldListHeld || preferenceHeld || qualityMutationHeld || qualityInvalid || presentationMutationHeld || presentationInvalid} onclick={loadPreferences}>Load saved Summary options</button>
-        <button data-summary-preferences-save disabled={viewState.busy || operationHeld || fieldListHeld || preferenceHeld || preferenceInvalid || qualityMutationHeld || qualityInvalid || presentationMutationHeld || presentationInvalid || !preferenceView.saved} onclick={savePreferences}>Save Summary options</button>
-        <button data-summary-preferences-undo disabled={viewState.busy || operationHeld || fieldListBusy || preferenceHeld || qualityMutationHeld || presentationMutationHeld || !preferenceView.saved}
-          onclick={() => { cancelPreferenceRead(); preferences.undo(); }}>Undo Summary option draft</button>
-        {#if preferenceView.blocked && !preferenceView.busy}
-          <button data-summary-preferences-acknowledge disabled={operationHeld || fieldListBusy} onclick={() => preferences.acknowledge()}>Acknowledge Summary preference outcome</button>
-        {/if}
-        {#if preferenceReadBusy}<button data-summary-preferences-cancel onclick={cancelPreferenceRead}>Cancel saved options read</button>{/if}
-      </div>
-      <p>Explicit Load uses saved options in the controls above. Save changes only the five reviewed YAML preferences, never project data or source audits.
-        Display changes outside modes 1/3 clear the historical paired limit; other edits retain it.
-        Acknowledge retains receipts. Unknown outcomes require explicit Load, not replay.</p>
-    </section>
-  {/if}
-  {#if quality}
-    <SummaryVegetationQualityPreferences contextId={contextId} preferences={quality}
-      port={{ read: id => VegetationReportService.GetSummaryVegetationQualityPreferences(id),
-        save: (id, request) => VegetationReportService.SaveSummaryVegetationQualityPreferences(id, request) }}
-      operationHeld={operationHeld || fieldListHeld || viewState.busy || preferenceHeld || preferenceInvalid || presentationMutationHeld || presentationInvalid}
-      mutationHeld={operationHeld || fieldListBusy || viewState.busy || preferenceHeld || presentationMutationHeld}
-      onReadBusyChange={value => { qualityReadBusy = value; reportBusy(); }} />
-    {#if !qualityView?.saved}<p>Explicitly Load saved quality options before preview; no quality defaults are assumed.</p>{/if}
-    {#if qualityView?.saved?.enforce}<p data-summary-quality-active role="status">Saved QC enforcement is active; plots failing BEC_Use / quality thresholds will be excluded with provenance.</p>{/if}
-  {/if}
-  {#if presentation}
-    <SummaryVegetationPresentationPreferences contextId={contextId} preferences={presentation}
-      port={{ read: id => VegetationReportService.GetSummaryVegetationPresentationPreferences(id),
-        save: (id, request) => VegetationReportService.SaveSummaryVegetationPresentationPreferences(id, request) }}
-      operationHeld={operationHeld || fieldListHeld || viewState.busy || preferenceHeld || preferenceInvalid || qualityMutationHeld || qualityInvalid}
-      mutationHeld={operationHeld || fieldListBusy || viewState.busy || preferenceHeld || qualityMutationHeld}
-      onReadBusyChange={value => { presentationReadBusy = value; reportBusy(); }} />
-  {/if}
-  {#if fieldList.enabled && !fieldListScopeAvailable}
-    <p role="status">Environmental field-list unavailable: a complete literal owned project/current table context and retained session capacity are required. None may have an empty table path; no retained state is evicted.</p>
-  {/if}
-  {#if fieldList.enabled && fieldListState}
-    <section class="linked-field-list" data-summary-field-list-desktop aria-label="Linked Summary environmental field list">
-      {#if fieldListState.readError && !fieldListState.session}
-        <p>No field-list authority has been loaded. After all initial read dispatches and validation settle,
-          explicitly acknowledge this failed read to release its close/navigation hold. This does not enable
-          field editing or assume defaults; a fresh successful Load is mandatory. Established drafts and Save receipts cannot be dismissed here.</p>
-        <button data-summary-field-list-bootstrap-dismiss onclick={dismissInitialFieldListReadError}
-          disabled={!fieldListState.canDismissInitialReadError}>Acknowledge failed initial environmental field read</button>
-      {/if}
-      {#if fieldListState.bootstrapPending && !fieldListState.readBusy}
-        <p role="status">Initial environmental field read dispatch/validation is still settling.
-          Acknowledgement and fresh Load must wait; no stale response will become authority.</p>
-      {/if}
-      {#if !presentationView?.saved || presentationInvalid}
-        <p role="status">Environmental field mutation unavailable: explicitly Load valid reviewed presentation authority. Load and recovery remain available when peers are not held.</p>
-      {/if}
-      {#if fieldListState.session && fieldListState.scope}
-        {#key fieldListState.session}
-          <SummaryVegetationFieldList scope={fieldListState.scope} session={fieldListState.session}
-            enabledFromPresentationDraft={fieldListEnabledFromPresentation}
-            peerDisabled={fieldListPeerDisabled} peerValidation={fieldListPeerValidation}
-            onStateChange={() => { reportBusy(); }} />
-        {/key}
-      {:else}
-        <p>Explicit Load learns the exact owned VPro64 source path; no default path or physical selection is assumed.</p>
-        <button data-summary-field-list-bootstrap-load onclick={loadFieldList}
-          disabled={fieldListPeerDisabled || !!fieldListPeerValidation || fieldListState.readBusy || fieldListState.bootstrapPending}>Load environmental fields</button>
-      {/if}
-      {#if fieldListState.readBusy}
-        <button data-summary-field-list-bootstrap-cancel onclick={() => fieldList.cancel(ownedContext())}>Cancel environmental field read</button>
-      {/if}
-    </section>
-  {/if}
-  {#if environmentalSession}
-    <SummaryVegetationEnvironmental session={environmentalSession} port={summaryEnvironmentalPort} numeric={summaryEnvironmentalNumericEnabled} lifeform={summaryEnvironmentalLifeformEnabled}
-      operationHeld={operationHeldProp || workbookHeld || unavailableScope || viewState.busy || fieldListHeld ||
-        preferenceHeld || preferenceInvalid || !!viewState.draftError || qualityMutationHeld || qualityUnavailable ||
-        presentationMutationHeld || presentationInvalid}
-      onBusyChange={() => { environmentalHeld = summaryEnvironmentalDesktop.activity().busy; reportBusy(); }} />
-  {/if}
-  <SummaryVegetationWorkbookPanel owner={{ contextId, project, projectPath, su, suPath }}
-    calculation={{ average: viewState.average, display: workbookConstancy ? 1 : viewState.display, showClass: viewState.showClass,
-      ...(workbookConstancy ? { groupAndOrder: 13, constancy: true } :
-        groupedWorkbookEnabled && viewState.groupAndOrder !== 11 ? { groupAndOrder: viewState.groupAndOrder } : {}),
-      ...(unitScope !== 'su' ? { unitScope } : {}),
-      ...(unitScope === 'field' && unitField.trim() ? { unitField: unitField.trim() } : {}),
-      ...(unitScope === 'hierarchy' ? { breakpointPolicy } : {}),
-      ...(hierarchyHeaderEnabled ? { hierarchyHeader: true } : {}),
-      ...(effectiveCombineVariants ? { combineVariants: true } : {}),
-      ...(lumpTable ? { lumpTable } : {}),
-      ...(includeGoldstreamMetadata ? { includeGoldstreamMetadata: true } : {}) }}
-    savedPresentation={savedPresentation}
-    onPreferencesLoaded={opts => {
+  <SummaryVegetationPeerPanels
+    owner={{ contextId, project, projectPath, su, suPath }}
+    {preferences} {preferenceView} {preferenceReadBusy} {preferenceHeld} {preferenceInvalid}
+    {quality} {qualityView} {qualityMutationHeld} {qualityInvalid} {qualityUnavailable}
+    {presentation} {presentationView} {presentationMutationHeld} {presentationInvalid}
+    fieldListEnabled={fieldList.enabled} {fieldListScopeAvailable} {fieldListState} {fieldListHeld} {fieldListBusy}
+    {fieldListPeerDisabled} {fieldListPeerValidation} {fieldListEnabledFromPresentation}
+    {environmentalSession}
+    environmentalPort={summaryEnvironmentalPort}
+    environmentalNumericEnabled={summaryEnvironmentalNumericEnabled}
+    environmentalLifeformEnabled={summaryEnvironmentalLifeformEnabled}
+    {environmentalHeld} {operationHeldProp} {operationHeld} {workbookHeld} {unavailableScope}
+    viewBusy={viewState.busy} viewDraftError={viewState.draftError}
+    calculation={workbookCalculation} {savedPresentation}
+    onLoadPreferences={loadPreferences}
+    onSavePreferences={savePreferences}
+    onUndoPreferences={() => { cancelPreferenceRead(); preferences?.undo(); }}
+    onAcknowledgePreferences={() => preferences?.acknowledge()}
+    onCancelPreferenceRead={cancelPreferenceRead}
+    onQualityReadBusyChange={value => { qualityReadBusy = value; reportBusy(); }}
+    onPresentationReadBusyChange={value => { presentationReadBusy = value; reportBusy(); }}
+    onDismissInitialFieldListReadError={dismissInitialFieldListReadError}
+    onLoadFieldList={loadFieldList}
+    onCancelFieldListRead={() => fieldList.cancel(ownedContext())}
+    onFieldListStateChange={() => reportBusy()}
+    onEnvironmentalBusyChange={() => { environmentalHeld = summaryEnvironmentalDesktop.activity().busy; reportBusy(); }}
+    onWorkbookPreferencesLoaded={opts => {
       if (opts.unitScope) unitScope = opts.unitScope;
       if (opts.unitField !== undefined) unitField = opts.unitField;
       if (opts.breakpointPolicy) breakpointPolicy = opts.breakpointPolicy;
@@ -693,12 +508,10 @@
       if (opts.lumpTable !== undefined) lumpTable = opts.lumpTable;
       if (opts.includeGoldstreamMetadata !== undefined) includeGoldstreamMetadata = opts.includeGoldstreamMetadata;
     }}
-    disabled={operationHeldProp || environmentalHeld || unavailableScope || viewState.groupAndOrder !== 11 && !groupedWorkbookEnabled ||
-      viewState.busy || fieldListHeld || preferenceHeld || preferenceInvalid || !!viewState.draftError ||
-      qualityMutationHeld || qualityUnavailable || presentationMutationHeld || presentationInvalid}
-    onBusyChange={(held) => { workbookHeld = held; reportBusy(); }} />
-  <div class="exclusion-section">
-    <SiteUnitExclusionFilter contextId={contextId} su={su} hierarchy={effectiveHierarchy} reportMode="summary"
+    onWorkbookBusyChange={held => { workbookHeld = held; reportBusy(); }}
+  />
+  <div class="exclusion-section table-scroll">
+    <SiteUnitExclusionFilter {contextId} {su} hierarchy={effectiveHierarchy} reportMode="summary"
       average={viewState.average} display={viewState.display}
       showClass={viewState.display === 4 || viewState.display === 5 ? (viewState.showClass || 1) : 0}
       groupAndOrder={viewState.groupAndOrder}
@@ -709,76 +522,21 @@
       }} />
     {#if exclusionSummaryText}<p role="status" data-summary-exclusion-status>{exclusionSummaryText}</p>{/if}
   </div>
-  <p>Preview uses retained drafts{preferences ? '; preferences change only through explicit Save' : ', not saved preferences'}. Original Access Load/View Report setters are not run.
-    Stored presentation drafts are separate and are not consumed by this raw crosstab preview.
-    Strata and Lifeform Presence Class and Significance Class remain unavailable because the original grouped query has a criteria type mismatch.
-    Use “Preview with Saved Preferences” to preview with saved presentation, QC, and scope defaults synchronized with workbook review.
-    Unlumped raw mode runs directly unless a *_Lump table, QC filter, hierarchy header, variant rollup, or Goldstream metadata option is enabled.</p>
-  <p>The source “% Presence” display uses Count/nPlots ratios (0.75), not ratio × 100. Cover cells preserve source formatted text and NULL blanks.
-    Profile navigation does not filter the current physical Site Unit Table.</p>
+  <p class="guidance">
+    Preview reflects the options selected above, and your saved defaults only change when you click Save.
+    Title and layout settings in Presentation Options apply to exported workbooks and “Preview with Saved Preferences” rather than the standard crosstab preview.
+    Presence Class and Significance Class are available when grouped by Layer or None (not Strata or Lifeform).
+  </p>
+  <p class="guidance">Presence values are shown as proportions from 0 to 1 (for example, 0.75 for 75% of plots in a unit).</p>
   {#if viewState.preview && !qualityInvalid}
-    <article data-summary-result>
-      <h2>{viewState.preview.unitScope && viewState.preview.unitScope !== 'su' ? `Summary Units (${viewState.preview.unitScope})` : 'Current Site Unit Table'} — {viewState.preview.groupAndOrder === 12 ? 'Strata' : viewState.preview.groupAndOrder === 13 ? 'Lifeform' : viewState.preview.groupAndOrder === 14 ? 'None' : 'Layer'}</h2>
-      <p>Calculate: {viewState.preview.average === 1 ? 'By n Plots' : 'Characteristic'}.
-        Display Values: {viewState.preview.display === 1 ? '% Presence and % Cover' : viewState.preview.display === 2 ? 'Presence Class and Significance Class' : viewState.preview.display === 3 ? 'Presence Class and % Cover' : viewState.preview.display === 4 ? 'Prominence Class' : viewState.preview.display === 5 ? 'Goldstream Class' : '% Cover'}.
-        {#if viewState.preview.showClass}Show: {viewState.preview.showClass === 20 ? 'Value' : viewState.preview.showClass === 1 ? 'Class (historical default 1)' : 'Class'}.
-          Calculate is retained but ignored by these original class formulas.
-        {/if}
-        {#if viewState.preview.lumpTable}Lump table: {viewState.preview.lumpTable}. {/if}
-        {#if viewState.preview.combineVariants}Variants combined. {/if}
-        {#if viewState.preview.hierarchyHeaderEnabled}Hierarchy headers included. {/if}</p>
-      {#if viewState.preview.quality}
-        <p class="qc-summary" data-summary-qc-summary role="status">
-          QC filter: {viewState.preview.quality.enforced ? 'Enforced' : 'Inactive'} — retained {viewState.preview.quality.retained} of {viewState.preview.quality.totalBefore} plots ({viewState.preview.quality.removedCount} removed).
-        </p>
-      {/if}
-      {#if viewState.preview.goldstream}
-        <p class="qc-summary" data-summary-goldstream-summary>
-          Goldstream metadata: {viewState.preview.goldstream.formula} (ShowClass {viewState.preview.goldstream.showClass}, labels: {(viewState.preview.goldstream.classLabels ?? []).join(', ') || 'none'}).
-        </p>
-      {/if}
-      {#if viewState.preview.appliedPreferences}
-        <p class="scope-meta" data-summary-applied-preferences>
-          Synced saved preferences: “{viewState.preview.appliedPreferences.title || '(untitled)'}”, scope={viewState.preview.appliedPreferences.unitScope || 'su'}{#if viewState.preview.appliedPreferences.lumpTable}, lump={viewState.preview.appliedPreferences.lumpTable}{/if}.
-        </p>
-      {/if}
-      <div class="table-scroll">
-        <table>
-          <caption>Summary Vegetation — {project}, {su}</caption>
-          <thead>
-            <tr><th scope="col">{viewState.preview.groupField?.name ?? 'Layer'}</th><th scope="col">Spp</th><th scope="col">Order</th>{#each viewState.preview.columns as unit}<th scope="col">{unit || '(empty unit)'}</th>{/each}</tr>
-            {#if viewState.preview.units.some(u => !!u.hierarchyHeader)}
-              <tr><th scope="row" colspan="3">Hierarchy</th>{#each viewState.preview.columns as code}<td>{viewState.preview.units.find(u => u.code === code)?.hierarchyHeader ?? ''}</td>{/each}</tr>
-            {/if}
-            <tr><th scope="row" colspan="3">n Plots</th>{#each viewState.preview.columns as code}<td>{viewState.preview.units.find(unit => unit.code === code)?.numPlots}</td>{/each}</tr>
-          </thead>
-          <tbody>{#each viewState.preview.rows as row}<tr>
-            <td>{row.layer.text ?? `(NULL ${viewState.preview.groupField?.name ?? 'Layer'})`}</td><th scope="row">{row.species.text ?? '(NULL Spp)'}</th><td>{row.order.storage === 'real' ? row.order.real : row.order.text ?? ''}</td>
-            {#each row.covers as cover, i}<td aria-label={`${row.species.text ?? 'NULL Spp'} — ${viewState.preview.columns[i] || 'empty unit'}`}>{cover.text ?? ''}</td>{/each}
-          </tr>{/each}</tbody>
-        </table>
-      </div>
-      {#if viewState.preview.rows.length === 0}<p>No final species rows. Admitted units, NULL cells and absent pivot columns are not interchangeable; no workbook was created.</p>{/if}
-      <details>
-        <summary>Physical admission and calculation provenance</summary>
-        {#each viewState.preview.units as unit}
-          <p>Unit {unit.code || '(empty)'}: {unit.numPlots} non-NULL PlotNumber memberships.
-            {unit.membershipIds.length} physical memberships; {unit.rawVegRowIds.length} raw vegetation admission witnesses.
-            {viewState.preview.columns.includes(unit.code) ? 'Present in pivot columns.' : 'No staged pivot column.'}</p>
-        {/each}
-        {#each viewState.preview.rows as row}
-          <p>{row.layer.text ?? 'NULL Layer'} — {row.species.text ?? 'NULL Spp'}:
-            {row.witnesses.length} weighted stage/membership/reference observations.</p>
-        {/each}
-      </details>
-    </article>
+    <SummaryVegetationResultPanel {project} {su} preview={viewState.preview} />
   {/if}
 </section>
 
 <style>
   .summary-vegetation { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; padding: 1rem; background: var(--vpro-canvas); color: var(--vpro-ink); min-width: 0; }
   .report-sticky-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding-inline: .75rem; border-radius: .35rem; }
-  .summary-vegetation h1, .summary-vegetation h2 { margin: 0; color: var(--vpro-navy); }
+  .summary-vegetation h1 { margin: 0; color: var(--vpro-navy); }
   .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; background: var(--vpro-surface); padding: .9rem; border: 1px solid var(--vpro-border); border-radius: .5rem; }
   .scope-toggles { display: flex; flex-wrap: wrap; gap: 1rem; padding: .65rem .9rem; background: var(--vpro-surface); border: 1px solid var(--vpro-border); border-radius: .5rem; }
   .checkbox-inline { display: flex; flex-direction: row; align-items: center; gap: .5rem; font-weight: 500; }
@@ -786,19 +544,15 @@
   .lump-picker select { flex: 1; min-width: 0; }
   label { display: flex; flex-direction: column; gap: .35rem; min-width: 0; color: var(--vpro-ink); font-weight: 500; }
   select, input:not([type="checkbox"]) { box-sizing: border-box; width: 100%; min-width: 0; padding: .5rem; border: 1px solid var(--vpro-border); border-radius: .25rem; background: var(--vpro-surface); color: var(--vpro-ink); }
-  .owner, .scope-meta { overflow-wrap: anywhere; color: var(--vpro-ink-secondary); }
+  .owner { overflow-wrap: anywhere; color: var(--vpro-ink-secondary); }
   .scope-guidance { margin: 0; padding: .6rem .85rem; border-left: 4px solid var(--vpro-navy); background: var(--vpro-surface); color: var(--vpro-ink); border-radius: .25rem; }
-  .qc-summary { padding: .5rem .75rem; border-left: 4px solid var(--vpro-gold); background: var(--vpro-surface); color: var(--vpro-navy); font-weight: 600; }
-  .linked-field-list, .exclusion-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; }
+  .exclusion-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; }
   .actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
-  button, summary { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid var(--vpro-navy); border-radius: .25rem; background: var(--vpro-navy); color: var(--vpro-surface); font-weight: 600; cursor: pointer; }
-  button:hover:not(:disabled), summary:hover { background: var(--vpro-navy-dark); border-color: var(--vpro-navy-dark); }
+  button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid var(--vpro-navy); border-radius: .25rem; background: var(--vpro-navy); color: var(--vpro-surface); font-weight: 600; cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--vpro-navy-dark); border-color: var(--vpro-navy-dark); }
   button:disabled { opacity: .6; cursor: not-allowed; }
   .error { color: var(--vpro-error); font-weight: 600; }
+  .guidance { margin: 0; font-size: .9rem; color: var(--vpro-ink-secondary); }
   .table-scroll { overflow-x: auto; max-width: 100%; }
-  table { border-collapse: collapse; width: 100%; background: var(--vpro-surface); }
-  th, td { padding: .5rem; border: 1px solid var(--vpro-border); text-align: left; vertical-align: top; }
-  thead th { background: var(--vpro-canvas); color: var(--vpro-navy); }
-  article, details { min-width: 0; }
   @media (max-width: 960px) { .summary-vegetation { padding: .75rem; } .lump-picker { flex-direction: column; } }
 </style>

@@ -81,7 +81,7 @@ test('shared publication barrier is noncancellable, freezes requests and survive
   assert.throws(() => workbook.environmentWorkbookPublicationSession({ ...owner, projectPath: 'different' }), /owned paths/);
   resolve(receipt()); await pending;
   assert.equal(calls, 1); assert.equal(captured.title, ' Title '); assert.equal(captured.approvalHash, 'a'.repeat(64));
-  assert.equal(session.view().blocked, true); session.acknowledge();
+  assert.equal(session.view().blocked, false);
   assert.equal(session.view().outcome.status, 'published');
 });
 

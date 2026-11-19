@@ -78,7 +78,7 @@ test('attribute transport rejects incoherent source identities and counts withou
 test('attribute read uses the shared cancellable busy boundary', () => {
   const source = readFileSync(srcPath('LifeformSummary.svelte'), 'utf8');
   assert.equal(compile(source, { filename: 'LifeformSummary.svelte', generate: 'client' }).warnings.length, 0);
-  assert.match(source, /!attributesEnabled \|\| busy/);
+  assert.match(source, /busy \|\| workbookBusy \|\| scopeBlocked/);
   assert.match(source, /VegetationReportService\.PreviewSpeciesAttributeSummary\(contextId\)/);
   assert.match(source, /validateSpeciesAttributeSummary\(value, owner\)/);
   assert.match(source, /reads\.track<unknown>\(kind === 'attributes'/);

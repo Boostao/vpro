@@ -99,6 +99,6 @@ test('compiled class and None grouped panels retain source controls without enab
     assert.match(body, /Show: Value/);
     assert.equal(/\bdisabled\b/.test(body.match(/<option value="2"[^>]*>/)[0]), group !== 14);
     assert.doesNotMatch(body.match(/<option value="4"[^>]*>/)[0], /\bdisabled\b/);
-    assert.match(body, /original grouped query has a criteria type mismatch/);
+    assert.match(body, /Presence Class and Significance Class are available when grouped by Layer or None/);
   }
 });

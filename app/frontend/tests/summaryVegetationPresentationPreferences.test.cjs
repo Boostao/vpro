@@ -484,7 +484,7 @@ test('production report wires one presentation pane, peer mutation holds and exp
   const html = render(Panel, { props: { ...owner, onBusyChange() {} } }).body;
   assert.equal(html.split('data-summary-presentation-preferences').length - 1, 1);
   assert.equal(html.split('data-source-control="rptSvTitle"').length - 1, 1);
-  assert.match(html, /Stored presentation drafts are separate and are not consumed by this raw crosstab preview/);
+  assert.match(html, /Title and layout settings in Presentation Options apply to exported workbooks/);
   const actions = componentFunctions('SummaryVegetationReport.svelte', ['loadPreferences', 'savePreferences'], {
     preferences: new shared.ReportTitlePreferencesSession(owner, 'test sibling'), presentationMutationHeld: true,
     viewState: { busy: false }, preferenceHeld: false, preferenceInvalid: false, operationHeld: false,

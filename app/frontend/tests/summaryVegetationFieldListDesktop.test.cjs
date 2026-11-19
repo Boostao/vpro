@@ -1,5 +1,5 @@
 const { readJsonFixture } = require('./fixtureLoader.cjs');
-const { srcPath, resolveDependency } = require('./svelteTestHelpers.cjs');
+const { srcPath, resolveDependency, noopNotificationsStub } = require('./svelteTestHelpers.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const fs = require('node:fs');
@@ -91,6 +91,7 @@ function report(value, { presentation = null, preferences = null, quality = null
   const changes = [];
   const dependencies = {
     '../bindings/github.com/boostao/vpro/app': {},
+    '../shell/notificationService.svelte': noopNotificationsStub,
     './readRequests': { ReadRequests: class { track(promise) { return promise; } cancelAll() {} } },
     './summaryVegetation': { summaryVegetationSession: () => preview },
     './summaryVegetationPreferences': { summaryVegetationPreferenceSession: preferences ? () => preferences : null },
@@ -228,11 +229,11 @@ test('established authority/read errors/draft/Save receipt and dispatch can neve
 });
 
 test('visible acknowledgement control is explicit, settlement guarded and does not alter App/controller contracts', () => {
-  const reportSource = fs.readFileSync(srcPath('SummaryVegetationReport.svelte'), 'utf8');
-  assert.match(reportSource, /data-summary-field-list-bootstrap-dismiss onclick=\{dismissInitialFieldListReadError\}/);
-  assert.match(reportSource, /disabled=\{!fieldListState.canDismissInitialReadError\}/);
-  assert.match(reportSource, /fresh successful Load is mandatory/);
-  assert.match(reportSource, /Established drafts and Save receipts cannot be dismissed here/);
+  const sectionSource = fs.readFileSync(srcPath('SummaryVegetationFieldListSection.svelte'), 'utf8');
+  assert.match(sectionSource, /data-summary-field-list-bootstrap-dismiss[\s\S]*?onclick=\{onDismissInitialReadError\}/);
+  assert.match(sectionSource, /disabled=\{!fieldListState\.canDismissInitialReadError\}/);
+  assert.match(sectionSource, /click Load environmental fields to try again/);
+  assert.match(sectionSource, /Existing drafts and\s+saved changes are preserved/);
 });
 
 test('bootstrap validates actual Go DTO/proxy once, retains exact Unicode paths and remount does not GET', async () => {

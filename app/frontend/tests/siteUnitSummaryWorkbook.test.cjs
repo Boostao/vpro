@@ -223,7 +223,7 @@ test('lost, incomplete and contradictory receipts stay unknown with replay barri
   for (const status of ['published', 'not-published']) {
     const session = new workbook.SiteUnitSummaryWorkbookPublicationSession(owner);
     await session.publish(fixture(), destination, async () => receipt(status), 1);
-    assert.equal(session.view().outcome.status, status); assert.equal(session.view().blocked, true);
+    assert.equal(session.view().outcome.status, status); assert.equal(session.view().blocked, status !== 'published');
   }
   const owned = { ...owner, contextId: 'unknown-remount' };
   const session = workbook.siteUnitSummaryWorkbookPublicationSession(owned);

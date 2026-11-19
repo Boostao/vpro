@@ -76,10 +76,9 @@ test('KML publication is noncancellable and holds acknowledgement barrier across
   await assert.rejects(session.publish(review(), destination, () => { calls++; }));
   resolve(outcome()); await pending;
   assert.equal(calls, 1); assert.equal(cancels, 0);
-  assert.equal(session.view().busy, false); assert.equal(session.view().blocked, true);
+  assert.equal(session.view().busy, false); assert.equal(session.view().blocked, false);
   assert.equal(session.view().outcome.status, 'published');
-  session.acknowledge();
-  assert.equal(session.view().blocked, false); assert.equal(session.view().outcome.sha256, sha);
+  assert.equal(session.view().outcome.sha256, sha);
 });
 
 test('KML committed errors and explicit rejection remain visible until deliberate acknowledgement', async () => {

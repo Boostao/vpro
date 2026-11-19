@@ -144,11 +144,13 @@ test('persistent extension owns exact request, irreversible known/unknown receip
     await assert.rejects(session.publish(fixture(), destination, async () => { calls++; }, options()), /Acknowledge/);
     assert.deepEqual(session.requestedOptions(), request);
     resolve(); await publishing;
-    assert.equal(calls, 1); assert.equal(session.view().blocked, true);
+    const isCleanPublished = outcome && !(outcome instanceof Error) && outcome.status === 'published' && outcome.sha256 === 'b'.repeat(64);
+    assert.equal(calls, 1); assert.equal(session.view().blocked, !isCleanPublished);
     if (outcome && !(outcome instanceof Error) && outcome.sha256 !== 'c'.repeat(64)) {
       assert.equal(session.view().outcome.status, outcome.status);
     } else { assert.equal(session.view().outcome, null); assert.match(session.view().error, /outcome unknown/); }
-    session.acknowledge(); assert.equal(session.view().blocked, false);
+    if (!isCleanPublished) session.acknowledge();
+    assert.equal(session.view().blocked, false);
   }
   const owned = { ...owner, contextId: 'extended-remount' }, request = options();
   const session = extended.extendedSummaryWorkbookPublicationSession(owned);
@@ -207,9 +209,8 @@ test('actual extended panel handlers reject late canceled and changed-criteria r
   context.extendedOptions = request;
   const current = context.actions.getReview(); requests[2].resolve(fixture(request)); await current;
   assert.equal(context.review.options.orderBy, 2);
-  await context.actions.publish(); assert.equal(session.view().blocked, true);
-  context.actions.cancel(); assert.equal(session.view().blocked, true);
-  context.actions.acknowledge(); assert.equal(session.view().blocked, false);
+  await context.actions.publish(); assert.equal(session.view().blocked, false);
+  assert.equal(session.view().outcome.status, 'published');
 });
 test('actual top-level effect aggregates independent old/extended authority even with both panels unmounted', () => {
   const source = readFileSync(srcPath('App.svelte'), 'utf8').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];

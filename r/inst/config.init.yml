@@ -19,9 +19,6 @@ Current:
   User: "Admin"
 Diagnostic:
   Name: "Diagnostic10"
-Export:
-  rExportUnits: 1
-  rVegBy: 1
 Hierarchy:
   HierarchyBreaksOnRoots: 0
 Message:
@@ -55,7 +52,7 @@ ReportOptions:
   HDReportTitle: "Report Title"
   HDShowQuestionableUnits: 0
   HDShowTentativeUnits: 0
-  LEReportTitle: "Long Evironment Report"
+  LEReportTitle: "Long Environment Report"
   LVAvgType: 10
   LVConstantSppList: -1
   LVCoverGreaterThan: 0
