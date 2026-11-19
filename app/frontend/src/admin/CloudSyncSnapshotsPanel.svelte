@@ -41,12 +41,16 @@
         <input
           id="snapshot-tag-input"
           type="text"
+          aria-describedby="snapshot-tag-hint"
           class="w-full rounded border border-slate-300 p-2 font-mono text-xs"
           bind:value={snapshotTag}
           disabled={busy || operationHeld}
           aria-invalid={!!snapshotTagValidationError}
           placeholder="e.g. BECMaster_2026_11"
         />
+        <p id="snapshot-tag-hint" class="text-[11px] text-slate-500">
+          1 to 80 letters, digits, dots, underscores, or hyphens.
+        </p>
       </div>
       <div class="space-y-1">
         <label class="block text-xs font-semibold text-slate-700" for="snapshot-export-format">Optional Archive Export</label>

@@ -45,7 +45,7 @@
 <fieldset class="space-y-3 rounded border border-slate-300 border-t-[3px] border-t-[#FCBA19] bg-white p-4 shadow-sm">
   <legend class="px-1 text-sm font-semibold text-[#003366]">Checkout Regional Subset from BECMaster</legend>
   <p class="text-xs text-slate-600">
-    Query canonical <span class="font-mono">becmaster</span> plots by BGC Zone/Subzone, ProjectID, literal PlotNumbers (preserving leading zeros such as <span class="font-mono">'00337'</span>), or WGS84 bounding box into a local VPro project (<span class="font-mono">.db</span>).
+    Filter BECMaster plots by BGC Zone, Subzone, Project ID, literal PlotNumber (preserving leading zeros such as <span class="font-mono">'00337'</span>), or WGS84 bounding box into a local VPro project (<span class="font-mono">.db</span>).
   </p>
 
   <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -113,11 +113,15 @@
         id="subset-limit"
         type="number"
         min="1"
+        aria-describedby="subset-limit-hint"
         class="w-full rounded border border-slate-300 p-2 font-mono text-xs"
         bind:value={subsetLimitRaw}
         disabled={busy || operationHeld}
         placeholder="5000"
       />
+      <p id="subset-limit-hint" class="text-[11px] text-slate-500">
+        Caps returned plots; requires a regional filter or full checkout.
+      </p>
     </div>
   </div>
 

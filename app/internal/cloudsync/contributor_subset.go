@@ -87,7 +87,7 @@ func buildSubsetWhereClause(filter SubsetFilter, hasPostGISGeom bool) (whereSQL 
 	}
 
 	if len(clauses) == 0 && !filter.AllowFullCheckout {
-		return "", nil, errors.New("at least one subset filter (Zone, SubZone, ProjectID, PlotNumber, or BBox) is required")
+		return "", nil, errors.New("specify at least one regional filter (Zone, Subzone, Project ID, Plot Number, or Bounding Box), or enable full checkout")
 	}
 	if filter.Limit < 0 {
 		return "", nil, errors.New("subset limit must be >= 0")
@@ -227,7 +227,7 @@ func (m *Manager) PullBECMasterSubset(ctx context.Context, s *vprocore.ContextSe
 	if err != nil {
 		return PullSubsetResult{}, err
 	}
-	ddlPlan, err := vprocore.PlanNewProjectDDL(ctx, targetProject, review)
+	ddlStmts, err := collectSubsetDDLStatements(ctx, targetProject, review)
 	if err != nil {
 		return PullSubsetResult{}, err
 	}
@@ -253,25 +253,9 @@ func (m *Manager) PullBECMasterSubset(ctx context.Context, s *vprocore.ContextSe
 	}
 	defer func() { _ = pgTx.Rollback(ctx) }()
 
-	pRows, err := pgTx.Query(ctx, fmt.Sprintf(`SELECT "PlotNumber" FROM becmaster.env %s ORDER BY "PlotNumber"%s`, whereSQL, limitClause), args...)
+	plotList, err := querySubsetMatchingPlots(ctx, pgTx, whereSQL, limitClause, args, creds)
 	if err != nil {
-		return PullSubsetResult{}, wrapRedactedError("query matching BECMaster plots", err, creds)
-	}
-	var plotList []string
-	for pRows.Next() {
-		var p string
-		if err := pRows.Scan(&p); err != nil {
-			pRows.Close()
-			return PullSubsetResult{}, wrapRedactedError("scan matching BECMaster plot", err, creds)
-		}
-		plotList = append(plotList, p)
-	}
-	pRows.Close()
-	if err := pRows.Err(); err != nil {
-		return PullSubsetResult{}, wrapRedactedError("read matching BECMaster plots", err, creds)
-	}
-	if len(plotList) == 0 {
-		return PullSubsetResult{}, errors.New("subset filter matched 0 plots in BECMaster")
+		return PullSubsetResult{}, err
 	}
 
 	maskSensitive := creds.ActiveRoleMode != RoleModeCustodian || req.MaskSensitiveCoordinates
@@ -313,226 +297,8 @@ func (m *Manager) PullBECMasterSubset(ctx context.Context, s *vprocore.ContextSe
 		return PullSubsetResult{}, err
 	}
 
-	var vegN, humusN, mineralN, otherN, metaN int
-	populate := func() error {
-		for _, tblPlan := range ddlPlan.Tables {
-			for _, mapping := range tblPlan.Schema {
-				if mapping.SQL != nil {
-					if _, err := sqTx.ExecContext(ctx, *mapping.SQL); err != nil {
-						return fmt.Errorf("create SQLite DDL for %s: %w", tblPlan.TargetTable, err)
-					}
-				}
-			}
-		}
-		if _, err := sqTx.ExecContext(ctx, `CREATE TABLE "_table_metadata" ("table_name" TEXT PRIMARY KEY, "description" TEXT)`); err != nil {
-			return err
-		}
-		for _, suffix := range vprocore.CoreTables {
-			if _, err := sqTx.ExecContext(ctx, `INSERT INTO "_table_metadata" ("table_name", "description") VALUES (?, 'VP08')`, targetProject+"_"+suffix); err != nil {
-				return err
-			}
-		}
-		if _, err := sqTx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" ("ChildTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("ChildTable", "ID"))`); err != nil {
-			return err
-		}
-
-		streamPGToSQLite := func(pgTbl, plotCol, sqliteSuffix string, cols []ColumnSpec) (int, error) {
-			sqlQuery := fmt.Sprintf(`SELECT %s FROM becmaster.%s WHERE %s = ANY($1)`, quotedColumnCSV(cols), quotePGIdent(pgTbl), quotePGIdent(plotCol))
-			rows, qErr := pgTx.Query(ctx, sqlQuery, plotList)
-			if qErr != nil {
-				return 0, qErr
-			}
-			defer rows.Close()
-
-			marks := make([]string, len(cols))
-			idColIdx, sppColIdx, plotColIdx := -1, -1, -1
-			for i, col := range cols {
-				marks[i] = "?"
-				if col.Name == "ID" {
-					idColIdx = i
-				} else if sqliteSuffix == "Veg" && col.Name == "Species" {
-					sppColIdx = i
-				} else if sqliteSuffix == "Env" && col.Name == "PlotNumber" {
-					plotColIdx = i
-				}
-			}
-			enforceUniqueID := sqliteSuffix == "Humus" || sqliteSuffix == "Mineral" || sqliteSuffix == "Other" || sqliteSuffix == "Veg"
-			usedIDs := map[int64]bool{}
-			nextSyntheticID := int64(100000000)
-
-			stmt, sErr := sqTx.PrepareContext(ctx, fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
-				quotePGIdent(targetProject+"_"+sqliteSuffix), quotedColumnCSV(cols), strings.Join(marks, ", ")))
-			if sErr != nil {
-				return 0, sErr
-			}
-			defer stmt.Close()
-
-			count := 0
-			for rows.Next() {
-				vals, vErr := rows.Values()
-				if vErr != nil {
-					return 0, vErr
-				}
-				rowArgs := make([]any, len(cols))
-				for i, col := range cols {
-					rowArgs[i] = CanonicalizePGToSQLite(col, vals[i])
-				}
-				if sppColIdx >= 0 && rowArgs[sppColIdx] == nil {
-					rowArgs[sppColIdx] = ""
-				}
-				if sqliteSuffix == "Env" && len(sensitivePlots) > 0 && plotColIdx >= 0 {
-					if plotNum, ok := rowArgs[plotColIdx].(string); ok {
-						if _, isSens := sensitivePlots[plotNum]; isSens {
-							MaskSensitiveEnvRow(cols, rowArgs)
-						}
-					}
-				}
-				if enforceUniqueID && idColIdx >= 0 {
-					var idVal int64
-					hasID := false
-					if iv, ok := rowArgs[idColIdx].(int64); ok {
-						idVal = iv
-						hasID = true
-					}
-					if !hasID || usedIDs[idVal] {
-						for usedIDs[nextSyntheticID] {
-							nextSyntheticID++
-						}
-						idVal = nextSyntheticID
-						nextSyntheticID++
-						rowArgs[idColIdx] = idVal
-					}
-					usedIDs[idVal] = true
-				}
-				if _, eErr := stmt.ExecContext(ctx, rowArgs...); eErr != nil {
-					return 0, eErr
-				}
-				count++
-			}
-			return count, rows.Err()
-		}
-
-		if _, err := streamPGToSQLite("env", "PlotNumber", "Env", VP08EnvColumns); err != nil {
-			return fmt.Errorf("stream env: %w", err)
-		}
-		if _, err := streamPGToSQLite("admin", "Plot", "Admin", VP08AdminColumns); err != nil {
-			return fmt.Errorf("stream admin: %w", err)
-		}
-		if vegN, err = streamPGToSQLite("veg", "PlotNumber", "Veg", VP08VegColumns); err != nil {
-			return fmt.Errorf("stream veg: %w", err)
-		}
-		if humusN, err = streamPGToSQLite("humus", "PlotNumber", "Humus", VP08HumusColumns); err != nil {
-			return fmt.Errorf("stream humus: %w", err)
-		}
-		if mineralN, err = streamPGToSQLite("mineral", "PlotNumber", "Mineral", VP08MineralColumns); err != nil {
-			return fmt.Errorf("stream mineral: %w", err)
-		}
-		if otherN, err = streamPGToSQLite("other", "PlotNumber", "Other", VP08OtherColumns); err != nil {
-			return fmt.Errorf("stream other: %w", err)
-		}
-		if _, err := streamPGToSQLite("audit", "PlotNumber", "Audit", VP08AuditColumns); err != nil {
-			return fmt.Errorf("stream audit: %w", err)
-		}
-
-		// Normalize imported Audit Project column to targetProject so PlotEntryService audit ownership checks pass cleanly!
-		if _, err := sqTx.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET "Project" = ?`, quotePGIdent(targetProject+"_Audit")), targetProject); err != nil {
-			return err
-		}
-
-		// Stream matching Metadata rows by ProjectIDs referenced in <Target>_Env
-		projIDRows, pErr := sqTx.QueryContext(ctx, fmt.Sprintf(`SELECT DISTINCT "ProjectID" FROM %s WHERE typeof("ProjectID") = 'text' AND "ProjectID" <> ''`, quotePGIdent(targetProject+"_Env")))
-		if pErr != nil {
-			return pErr
-		}
-		var refProjIDs []string
-		for projIDRows.Next() {
-			var pid string
-			if projIDRows.Scan(&pid) == nil {
-				refProjIDs = append(refProjIDs, pid)
-			}
-		}
-		projIDRows.Close()
-
-		if len(refProjIDs) > 0 {
-			mRows, mErr := pgTx.Query(ctx, fmt.Sprintf(`SELECT %s FROM becmaster.metadata WHERE "ProjectID" = ANY($1)`, quotedColumnCSV(VP08MetadataColumns)), refProjIDs)
-			if mErr != nil {
-				return mErr
-			}
-			defer mRows.Close()
-			marks := make([]string, len(VP08MetadataColumns))
-			metaIDIdx := -1
-			for i, col := range VP08MetadataColumns {
-				marks[i] = "?"
-				if col.Name == "ID" {
-					metaIDIdx = i
-				}
-			}
-			usedMetaIDs := map[int64]bool{}
-			nextMetaID := int64(1)
-			mStmt, sErr := sqTx.PrepareContext(ctx, fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
-				quotePGIdent(targetProject+"_Metadata"), quotedColumnCSV(VP08MetadataColumns), strings.Join(marks, ", ")))
-			if sErr != nil {
-				return sErr
-			}
-			defer mStmt.Close()
-			for mRows.Next() {
-				vals, vErr := mRows.Values()
-				if vErr != nil {
-					return vErr
-				}
-				rowArgs := make([]any, len(VP08MetadataColumns))
-				for i, col := range VP08MetadataColumns {
-					rowArgs[i] = CanonicalizePGToSQLite(col, vals[i])
-				}
-				if metaIDIdx >= 0 {
-					var mid int64
-					hasMID := false
-					if iv, ok := rowArgs[metaIDIdx].(int64); ok && iv > 0 {
-						mid = iv
-						hasMID = true
-					}
-					if !hasMID || usedMetaIDs[mid] {
-						for usedMetaIDs[nextMetaID] {
-							nextMetaID++
-						}
-						mid = nextMetaID
-						nextMetaID++
-						rowArgs[metaIDIdx] = mid
-					}
-					usedMetaIDs[mid] = true
-				}
-				if _, eErr := mStmt.ExecContext(ctx, rowArgs...); eErr != nil {
-					return eErr
-				}
-				metaN++
-			}
-			if err := mRows.Err(); err != nil {
-				return err
-			}
-		}
-		if metaN == 0 {
-			// Seed default metadata row so VP08 project metadata panels always have >=1 row
-			if _, err := sqTx.ExecContext(ctx, fmt.Sprintf(`INSERT INTO %s ("ProjectID", "ProjectTitle", "ID") VALUES (?, ?, 1)`, quotePGIdent(targetProject+"_Metadata")), targetProject, targetProject+" BECMaster Subset"); err != nil {
-				return err
-			}
-			metaN = 1
-		}
-
-		// Seed __VPRO_ChildIdentity for all child tables in local splinter .db
-		for _, suffix := range []string{"Veg", "Humus", "Mineral", "Other", "Metadata", "Audit"} {
-			fullTbl := targetProject + "_" + suffix
-			qFull := quotePGIdent(fullTbl)
-			if _, err := sqTx.ExecContext(ctx, fmt.Sprintf(
-				`INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") SELECT ?, "ID" FROM %s WHERE typeof("ID") = 'integer' AND "ID" >= 0`,
-				qFull,
-			), qFull); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	if err := populate(); err != nil {
+	counts, err := populateSubsetSQLiteTx(ctx, pgTx, sqTx, ddlStmts, targetProject, plotList, sensitivePlots)
+	if err != nil {
 		_ = sqTx.Rollback()
 		_ = sqlDB.Close()
 		return PullSubsetResult{}, wrapRedactedError("populate local subset SQLite database", err, creds)
@@ -546,19 +312,8 @@ func (m *Manager) PullBECMasterSubset(ctx context.Context, s *vprocore.ContextSe
 	}
 	_ = pgTx.Rollback(ctx) // Close read-only snapshot cleanly
 
-	inspected, err := vprocore.InspectFileContext(ctx, tmpPath)
-	if err != nil {
-		return PullSubsetResult{}, fmt.Errorf("inspect staged subset SQLite file: %w", err)
-	}
-	compatible := false
-	for _, p := range inspected {
-		if p.Name == targetProject && p.Compatible {
-			compatible = true
-			break
-		}
-	}
-	if !compatible {
-		return PullSubsetResult{}, errors.New("staged subset SQLite file did not pass VP08 compatibility verification")
+	if err := verifyStagedSubsetCompatibility(ctx, tmpPath, targetProject); err != nil {
+		return PullSubsetResult{}, err
 	}
 
 	curParent, err := os.Stat(filepath.Dir(resolvedDest))
@@ -617,14 +372,337 @@ func (m *Manager) PullBECMasterSubset(ctx context.Context, s *vprocore.ContextSe
 		DestinationPath:      resolvedDest,
 		DestinationSHA:       destSHA,
 		PlotCount:            len(plotList),
-		VegCount:             vegN,
-		HumusCount:           humusN,
-		MineralCount:         mineralN,
-		OtherCount:           otherN,
-		MetadataCount:        metaN,
+		VegCount:             counts.vegN,
+		HumusCount:           counts.humusN,
+		MineralCount:         counts.mineralN,
+		OtherCount:           counts.otherN,
+		MetadataCount:        counts.metaN,
 		MaskedSensitivePlots: len(sensitivePlots),
 		DownloadLogID:        logID,
 		Activated:            activated,
 		State:                newState,
 	}, nil
+}
+
+type subsetTableRowCounts struct {
+	vegN     int
+	humusN   int
+	mineralN int
+	otherN   int
+	metaN    int
+}
+
+func querySubsetMatchingPlots(
+	ctx context.Context,
+	pgTx pgx.Tx,
+	whereSQL string,
+	limitClause string,
+	args []any,
+	creds *ResolvedCredentials,
+) ([]string, error) {
+	pRows, err := pgTx.Query(ctx, fmt.Sprintf(`SELECT "PlotNumber" FROM becmaster.env %s ORDER BY "PlotNumber"%s`, whereSQL, limitClause), args...)
+	if err != nil {
+		return nil, wrapRedactedError("query matching BECMaster plots", err, creds)
+	}
+	var plotList []string
+	for pRows.Next() {
+		var p string
+		if err := pRows.Scan(&p); err != nil {
+			pRows.Close()
+			return nil, wrapRedactedError("scan matching BECMaster plot", err, creds)
+		}
+		plotList = append(plotList, p)
+	}
+	pRows.Close()
+	if err := pRows.Err(); err != nil {
+		return nil, wrapRedactedError("read matching BECMaster plots", err, creds)
+	}
+	if len(plotList) == 0 {
+		return nil, errors.New("subset filter matched 0 plots in BECMaster")
+	}
+	return plotList, nil
+}
+
+func verifyStagedSubsetCompatibility(ctx context.Context, tmpPath, targetProject string) error {
+	inspected, err := vprocore.InspectFileContext(ctx, tmpPath)
+	if err != nil {
+		return fmt.Errorf("inspect staged subset SQLite file: %w", err)
+	}
+	for _, p := range inspected {
+		if p.Name == targetProject && p.Compatible {
+			return nil
+		}
+	}
+	return errors.New("staged subset SQLite file did not pass VP08 compatibility verification")
+}
+
+type subsetDDLStatement struct {
+	targetTable string
+	sql         string
+}
+
+func collectSubsetDDLStatements(ctx context.Context, targetProject string, review *vprocore.NewProjectTemplateReview) ([]subsetDDLStatement, error) {
+	ddlPlan, err := vprocore.PlanNewProjectDDL(ctx, targetProject, review)
+	if err != nil {
+		return nil, err
+	}
+	var stmts []subsetDDLStatement
+	for _, tblPlan := range ddlPlan.Tables {
+		for _, mapping := range tblPlan.Schema {
+			if mapping.SQL != nil {
+				stmts = append(stmts, subsetDDLStatement{
+					targetTable: tblPlan.TargetTable,
+					sql:         *mapping.SQL,
+				})
+			}
+		}
+	}
+	return stmts, nil
+}
+
+func populateSubsetSQLiteTx(
+	ctx context.Context,
+	pgTx pgx.Tx,
+	sqTx *sql.Tx,
+	ddlStmts []subsetDDLStatement,
+	targetProject string,
+	plotList []string,
+	sensitivePlots map[string]struct{},
+) (subsetTableRowCounts, error) {
+	var counts subsetTableRowCounts
+	for _, stmt := range ddlStmts {
+		if _, err := sqTx.ExecContext(ctx, stmt.sql); err != nil {
+			return counts, fmt.Errorf("create SQLite DDL for %s: %w", stmt.targetTable, err)
+		}
+	}
+	if _, err := sqTx.ExecContext(ctx, `CREATE TABLE "_table_metadata" ("table_name" TEXT PRIMARY KEY, "description" TEXT)`); err != nil {
+		return counts, err
+	}
+	for _, suffix := range vprocore.CoreTables {
+		if _, err := sqTx.ExecContext(ctx, `INSERT INTO "_table_metadata" ("table_name", "description") VALUES (?, 'VP08')`, targetProject+"_"+suffix); err != nil {
+			return counts, err
+		}
+	}
+	if _, err := sqTx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" ("ChildTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("ChildTable", "ID"))`); err != nil {
+		return counts, err
+	}
+
+	if _, err := streamSubsetTablePGToSQLite(ctx, pgTx, sqTx, targetProject, "env", "PlotNumber", "Env", VP08EnvColumns, plotList, sensitivePlots); err != nil {
+		return counts, fmt.Errorf("stream env: %w", err)
+	}
+	if _, err := streamSubsetTablePGToSQLite(ctx, pgTx, sqTx, targetProject, "admin", "Plot", "Admin", VP08AdminColumns, plotList, sensitivePlots); err != nil {
+		return counts, fmt.Errorf("stream admin: %w", err)
+	}
+	var err error
+	if counts.vegN, err = streamSubsetTablePGToSQLite(ctx, pgTx, sqTx, targetProject, "veg", "PlotNumber", "Veg", VP08VegColumns, plotList, sensitivePlots); err != nil {
+		return counts, fmt.Errorf("stream veg: %w", err)
+	}
+	if counts.humusN, err = streamSubsetTablePGToSQLite(ctx, pgTx, sqTx, targetProject, "humus", "PlotNumber", "Humus", VP08HumusColumns, plotList, sensitivePlots); err != nil {
+		return counts, fmt.Errorf("stream humus: %w", err)
+	}
+	if counts.mineralN, err = streamSubsetTablePGToSQLite(ctx, pgTx, sqTx, targetProject, "mineral", "PlotNumber", "Mineral", VP08MineralColumns, plotList, sensitivePlots); err != nil {
+		return counts, fmt.Errorf("stream mineral: %w", err)
+	}
+	if counts.otherN, err = streamSubsetTablePGToSQLite(ctx, pgTx, sqTx, targetProject, "other", "PlotNumber", "Other", VP08OtherColumns, plotList, sensitivePlots); err != nil {
+		return counts, fmt.Errorf("stream other: %w", err)
+	}
+	if _, err := streamSubsetTablePGToSQLite(ctx, pgTx, sqTx, targetProject, "audit", "PlotNumber", "Audit", VP08AuditColumns, plotList, sensitivePlots); err != nil {
+		return counts, fmt.Errorf("stream audit: %w", err)
+	}
+
+	// Normalize imported Audit Project column to targetProject so PlotEntryService audit ownership checks pass cleanly!
+	if _, err := sqTx.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET "Project" = ?`, quotePGIdent(targetProject+"_Audit")), targetProject); err != nil {
+		return counts, err
+	}
+
+	if counts.metaN, err = streamSubsetMetadataPGToSQLite(ctx, pgTx, sqTx, targetProject); err != nil {
+		return counts, err
+	}
+
+	// Seed __VPRO_ChildIdentity for all child tables in local splinter .db
+	for _, suffix := range []string{"Veg", "Humus", "Mineral", "Other", "Metadata", "Audit"} {
+		fullTbl := targetProject + "_" + suffix
+		qFull := quotePGIdent(fullTbl)
+		if _, err := sqTx.ExecContext(ctx, fmt.Sprintf(
+			`INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") SELECT ?, "ID" FROM %s WHERE typeof("ID") = 'integer' AND "ID" >= 0`,
+			qFull,
+		), qFull); err != nil {
+			return counts, err
+		}
+	}
+	return counts, nil
+}
+
+func streamSubsetTablePGToSQLite(
+	ctx context.Context,
+	pgTx pgx.Tx,
+	sqTx *sql.Tx,
+	targetProject string,
+	pgTbl string,
+	plotCol string,
+	sqliteSuffix string,
+	cols []ColumnSpec,
+	plotList []string,
+	sensitivePlots map[string]struct{},
+) (int, error) {
+	sqlQuery := fmt.Sprintf(`SELECT %s FROM becmaster.%s WHERE %s = ANY($1)`, quotedColumnCSV(cols), quotePGIdent(pgTbl), quotePGIdent(plotCol))
+	rows, qErr := pgTx.Query(ctx, sqlQuery, plotList)
+	if qErr != nil {
+		return 0, qErr
+	}
+	defer rows.Close()
+
+	marks := make([]string, len(cols))
+	idColIdx, sppColIdx, plotColIdx := -1, -1, -1
+	for i, col := range cols {
+		marks[i] = "?"
+		if col.Name == "ID" {
+			idColIdx = i
+		} else if sqliteSuffix == "Veg" && col.Name == "Species" {
+			sppColIdx = i
+		} else if sqliteSuffix == "Env" && col.Name == "PlotNumber" {
+			plotColIdx = i
+		}
+	}
+	enforceUniqueID := sqliteSuffix == "Humus" || sqliteSuffix == "Mineral" || sqliteSuffix == "Other" || sqliteSuffix == "Veg"
+	usedIDs := map[int64]bool{}
+	nextSyntheticID := int64(100000000)
+
+	stmt, sErr := sqTx.PrepareContext(ctx, fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+		quotePGIdent(targetProject+"_"+sqliteSuffix), quotedColumnCSV(cols), strings.Join(marks, ", ")))
+	if sErr != nil {
+		return 0, sErr
+	}
+	defer stmt.Close()
+
+	count := 0
+	for rows.Next() {
+		vals, vErr := rows.Values()
+		if vErr != nil {
+			return 0, vErr
+		}
+		rowArgs := make([]any, len(cols))
+		for i, col := range cols {
+			rowArgs[i] = CanonicalizePGToSQLite(col, vals[i])
+		}
+		if sppColIdx >= 0 && rowArgs[sppColIdx] == nil {
+			rowArgs[sppColIdx] = ""
+		}
+		if sqliteSuffix == "Env" && len(sensitivePlots) > 0 && plotColIdx >= 0 {
+			if plotNum, ok := rowArgs[plotColIdx].(string); ok {
+				if _, isSens := sensitivePlots[plotNum]; isSens {
+					MaskSensitiveEnvRow(cols, rowArgs)
+				}
+			}
+		}
+		if enforceUniqueID && idColIdx >= 0 {
+			var idVal int64
+			hasID := false
+			if iv, ok := rowArgs[idColIdx].(int64); ok {
+				idVal = iv
+				hasID = true
+			}
+			if !hasID || usedIDs[idVal] {
+				for usedIDs[nextSyntheticID] {
+					nextSyntheticID++
+				}
+				idVal = nextSyntheticID
+				nextSyntheticID++
+				rowArgs[idColIdx] = idVal
+			}
+			usedIDs[idVal] = true
+		}
+		if _, eErr := stmt.ExecContext(ctx, rowArgs...); eErr != nil {
+			return 0, eErr
+		}
+		count++
+	}
+	return count, rows.Err()
+}
+
+func streamSubsetMetadataPGToSQLite(
+	ctx context.Context,
+	pgTx pgx.Tx,
+	sqTx *sql.Tx,
+	targetProject string,
+) (int, error) {
+	projIDRows, pErr := sqTx.QueryContext(ctx, fmt.Sprintf(`SELECT DISTINCT "ProjectID" FROM %s WHERE typeof("ProjectID") = 'text' AND "ProjectID" <> ''`, quotePGIdent(targetProject+"_Env")))
+	if pErr != nil {
+		return 0, pErr
+	}
+	var refProjIDs []string
+	for projIDRows.Next() {
+		var pid string
+		if projIDRows.Scan(&pid) == nil {
+			refProjIDs = append(refProjIDs, pid)
+		}
+	}
+	projIDRows.Close()
+
+	metaN := 0
+	if len(refProjIDs) > 0 {
+		mRows, mErr := pgTx.Query(ctx, fmt.Sprintf(`SELECT %s FROM becmaster.metadata WHERE "ProjectID" = ANY($1)`, quotedColumnCSV(VP08MetadataColumns)), refProjIDs)
+		if mErr != nil {
+			return 0, mErr
+		}
+		defer mRows.Close()
+		marks := make([]string, len(VP08MetadataColumns))
+		metaIDIdx := -1
+		for i, col := range VP08MetadataColumns {
+			marks[i] = "?"
+			if col.Name == "ID" {
+				metaIDIdx = i
+			}
+		}
+		usedMetaIDs := map[int64]bool{}
+		nextMetaID := int64(1)
+		mStmt, sErr := sqTx.PrepareContext(ctx, fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+			quotePGIdent(targetProject+"_Metadata"), quotedColumnCSV(VP08MetadataColumns), strings.Join(marks, ", ")))
+		if sErr != nil {
+			return 0, sErr
+		}
+		defer mStmt.Close()
+		for mRows.Next() {
+			vals, vErr := mRows.Values()
+			if vErr != nil {
+				return 0, vErr
+			}
+			rowArgs := make([]any, len(VP08MetadataColumns))
+			for i, col := range VP08MetadataColumns {
+				rowArgs[i] = CanonicalizePGToSQLite(col, vals[i])
+			}
+			if metaIDIdx >= 0 {
+				var mid int64
+				hasMID := false
+				if iv, ok := rowArgs[metaIDIdx].(int64); ok && iv > 0 {
+					mid = iv
+					hasMID = true
+				}
+				if !hasMID || usedMetaIDs[mid] {
+					for usedMetaIDs[nextMetaID] {
+						nextMetaID++
+					}
+					mid = nextMetaID
+					nextMetaID++
+					rowArgs[metaIDIdx] = mid
+				}
+				usedMetaIDs[mid] = true
+			}
+			if _, eErr := mStmt.ExecContext(ctx, rowArgs...); eErr != nil {
+				return 0, eErr
+			}
+			metaN++
+		}
+		if err := mRows.Err(); err != nil {
+			return 0, err
+		}
+	}
+	if metaN == 0 {
+		// Seed default metadata row so VP08 project metadata panels always have >=1 row
+		if _, err := sqTx.ExecContext(ctx, fmt.Sprintf(`INSERT INTO %s ("ProjectID", "ProjectTitle", "ID") VALUES (?, ?, 1)`, quotePGIdent(targetProject+"_Metadata")), targetProject, targetProject+" BECMaster Subset"); err != nil {
+			return 0, err
+		}
+		metaN = 1
+	}
+	return metaN, nil
 }

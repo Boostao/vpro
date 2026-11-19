@@ -23,6 +23,7 @@
     buildInitialCloudMergeFieldResolutions,
     validateSnapshotTagInput,
     redactCloudSecrets,
+    formatCloudSyncError,
     notifications,
     type CloudSyncPort,
     type CloudRoleMode,
@@ -217,7 +218,8 @@
       })
       .catch(cause => {
         if (mountGen === generation) {
-          error = sanitizeCloudText(`Could not read local cloud sync configuration status: ${String(cause)}`);
+          const detail = formatCloudSyncError(cause, [overridePassword, overrideAdminPassword]);
+          error = sanitizeCloudText(`Could not read local cloud sync configuration status: ${detail}`);
           notifyCloud('error', 'Cloud config status unavailable', error);
         }
       });
@@ -243,7 +245,8 @@
       await work(() => gen === generation, capturedSecrets);
     } catch (cause) {
       if (gen === generation) {
-        error = sanitizeCloudText(`${label} failed: ${String(cause)}`, capturedSecrets);
+        const detail = formatCloudSyncError(cause, capturedSecrets);
+        error = sanitizeCloudText(`${label} failed: ${detail}`, capturedSecrets);
         notifyCloud('error', `${label} failed`, error, capturedSecrets);
       }
     } finally {

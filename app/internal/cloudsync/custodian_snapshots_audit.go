@@ -64,6 +64,24 @@ func (m *Manager) RejectStagingSubmission(ctx context.Context, req RejectSubmiss
 	}, nil
 }
 
+const maxSnapshotTagLength = 80
+
+func validateSnapshotTag(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || trimmed != raw {
+		return "", errors.New("Snapshot tag is required and cannot contain leading or trailing spaces.")
+	}
+	if len(trimmed) > maxSnapshotTagLength {
+		return "", errors.New("Snapshot tag may use only ASCII letters, digits, dots, underscores, or hyphens (max 80 characters).")
+	}
+	for _, r := range trimmed {
+		if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.') {
+			return "", errors.New("Snapshot tag may use only ASCII letters, digits, dots, underscores, or hyphens (max 80 characters).")
+		}
+	}
+	return trimmed, nil
+}
+
 // CreateBECMasterSnapshot cuts a named read-only snapshot record in becmaster.snapshots (Schedule A 1.iii)
 // and optionally exports a local .db / .rds / .gpkg snapshot bundle.
 func (m *Manager) CreateBECMasterSnapshot(
@@ -73,14 +91,9 @@ func (m *Manager) CreateBECMasterSnapshot(
 	req CreateSnapshotRequest,
 	bundleExporter SnapshotBundleExporterFunc,
 ) (SnapshotRecord, error) {
-	tag := strings.TrimSpace(req.SnapshotTag)
-	if tag == "" || len(tag) > 80 {
-		return SnapshotRecord{}, errors.New("snapshotTag must be 1..80 characters")
-	}
-	for _, r := range tag {
-		if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.') {
-			return SnapshotRecord{}, errors.New("snapshotTag may contain only ASCII letters, digits, '_', '-', or '.'")
-		}
+	tag, err := validateSnapshotTag(req.SnapshotTag)
+	if err != nil {
+		return SnapshotRecord{}, err
 	}
 	format := strings.ToLower(strings.TrimSpace(req.ExportFormat))
 	if format != "" && format != "sqlite" && format != "rds" && format != "gpkg" {

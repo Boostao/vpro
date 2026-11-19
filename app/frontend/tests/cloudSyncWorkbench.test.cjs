@@ -1183,7 +1183,7 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
     client.flush();
     assert.equal(api.getState().submissions[0].status, 'rejected');
 
-    // Snapshots & Download Activity Log
+    // Snapshots & Download Activity Log (including UX-CLOUD-006 65..80 char tag acceptance & 81-char rejection)
     api.setSnapshotTag('BECMaster_2026_11', 'gpkg');
     client.flush();
     await api.runCreateSnapshot();
@@ -1191,6 +1191,45 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
     client.flush();
     assert.equal(api.getState().snapshots.length, 1);
     assert.equal(api.getState().downloadLog.length, 1);
+
+    const valid65Tag = 'S'.repeat(65);
+    api.setSnapshotTag(valid65Tag, '');
+    client.flush();
+    await api.runCreateSnapshot();
+    client.flush();
+    assert.equal(api.getState().error, null);
+    assert.equal(dispatches.at(-1)[0], 'createBECMasterSnapshot');
+    assert.equal(dispatches.at(-1)[2].snapshotTag, valid65Tag);
+
+    const countBeforeOverlongSnap = dispatches.length;
+    api.setSnapshotTag('S'.repeat(81), '');
+    client.flush();
+    await api.runCreateSnapshot();
+    client.flush();
+    assert.equal(dispatches.length, countBeforeOverlongSnap, '81-char snapshot tag must not invoke createBECMasterSnapshot');
+    assert.match(api.getState().error, /max 80 characters/);
+
+    // UX-CLOUD-006: Limit-only subset preview blocked in component before invoking Wails
+    const countBeforeLimitOnly = dispatches.length;
+    api.setSubsetInputs({ zones: '', plots: '', limit: 250 });
+    client.flush();
+    await api.runPreviewSubset();
+    client.flush();
+    assert.equal(dispatches.length, countBeforeLimitOnly, 'Limit-only subset filter must not invoke previewBECMasterSubset');
+    assert.match(api.getState().error, /Specify at least one regional filter/);
+    assert.doesNotMatch(api.getState().error, /\bor Limit\b/i);
+
+    // UX-CLOUD-006: Wrong-password RuntimeError (SQLSTATE 28P01) surfaces plain-language sign-in message without SQLSTATE/RuntimeError
+    nextConnectionError = new Error(
+      'RuntimeError: connect to PostgreSQL: failed to connect to `user=bec_contributor database=becmaster`: <pg-host>:5432 (<pg-host>): server error: FATAL: password authentication failed for user "bec_contributor" (SQLSTATE 28P01)'
+    );
+    await api.switchRoleAndConnect();
+    client.flush();
+    assert.match(api.getState().error, /Cloud connection probe failed: Could not sign in as "bec_contributor"/);
+    assert.doesNotMatch(api.getState().error, /RuntimeError|SQLSTATE|28P01|<pg-host>/);
+    await api.switchRoleAndConnect();
+    client.flush();
+    assert.equal(api.getState().connectionReport.connected, true);
 
     // 7. onDestroy cancels in-flight async work and releases onBusyChange(false)
     heldConnectionResolver = true;
@@ -1389,4 +1428,218 @@ test('UX-CLOUD-004 & UX-CLOUD-005: Custodian audit banner distinguishes full-cha
   assert.match(authOfflineHtml, /Offline \/ Unprobed/);
   assert.doesNotMatch(authOfflineHtml, /data-cloud-status-badge="connected"/);
   assert.match(authOfflineHtml, /nonexistent-qa1117\.invalid/);
+});
+
+test('UX-CLOUD-006: formatCloudSyncError maps pgx/SQLSTATE, DNS/TLS, and local file errors to plain language while preserving secret redaction', () => {
+  const secretA = 'SuperSecretPass#2026!';
+  const secretB = 'CustodianVaultKey$99';
+
+  // 1. Exact wrong-password reproduction (SQLSTATE 28P01) + DSN/password secret scrubbing
+  const wrongPwMsg = cloudSync.formatCloudSyncError(
+    `RuntimeError: connect to PostgreSQL: failed to connect to \`user=bec_contributor password=${secretA} database=becmaster\`: <pg-host>:5432 (<pg-host>): server error: FATAL: password authentication failed for user "bec_contributor" (SQLSTATE 28P01)`,
+    [secretA, secretB]
+  );
+  assert.equal(wrongPwMsg, 'Could not sign in as "bec_contributor" — check your username and password.');
+  assert.doesNotMatch(wrongPwMsg, /RuntimeError|SQLSTATE|28P01|<pg-host>|failed to connect/i);
+  assert.equal(wrongPwMsg.includes(secretA), false);
+
+  // If user accidentally typed password into username field, safeUser check drops <redacted> identifier
+  const leakedInUserField = cloudSync.formatCloudSyncError(
+    `RuntimeError: FATAL: password authentication failed for user "${secretA}" (SQLSTATE 28P01)`,
+    [secretA]
+  );
+  assert.equal(leakedInUserField, 'Could not sign in to the cloud database — check your username and password.');
+  assert.equal(leakedInUserField.includes(secretA), false);
+  assert.doesNotMatch(leakedInUserField, /<redacted>|RuntimeError|SQLSTATE/);
+
+  // 2. SQLSTATE 28000 / pg_hba / missing database 3D000 / insufficient privilege 42501 / missing schema 42P01
+  const authSpecMsg = cloudSync.formatCloudSyncError(
+    'RuntimeError: connect to PostgreSQL: FATAL: role "unknown_role" does not exist (SQLSTATE 28000)'
+  );
+  assert.match(authSpecMsg, /Could not sign in to the cloud database/);
+  assert.doesNotMatch(authSpecMsg, /RuntimeError|SQLSTATE|28000/);
+
+  const hbaMsg = cloudSync.formatCloudSyncError(
+    'RuntimeError: FATAL: no pg_hba.conf entry for host "<redacted-ip>", user "bec_contributor", database "becmaster", no encryption (SQLSTATE 28000)'
+  );
+  assert.match(hbaMsg, /Could not sign in/);
+  assert.doesNotMatch(hbaMsg, /RuntimeError|SQLSTATE|pg_hba\.conf/);
+
+  const missingDbMsg = cloudSync.formatCloudSyncError(
+    'RuntimeError: connect to PostgreSQL: server error: FATAL: database "wrong_bec" does not exist (SQLSTATE 3D000)'
+  );
+  assert.equal(
+    missingDbMsg,
+    'Cloud database "wrong_bec" was not found on the server. Check the Database name in Session Credential Override.'
+  );
+  assert.doesNotMatch(missingDbMsg, /RuntimeError|SQLSTATE|3D000/);
+
+  const privMsg = cloudSync.formatCloudSyncError(
+    'RuntimeError: truncate standards tables: ERROR: permission denied for table usys_all_specs (SQLSTATE 42501)'
+  );
+  assert.match(privMsg, /does not have permission for this action/);
+  assert.doesNotMatch(privMsg, /RuntimeError|SQLSTATE|42501/);
+
+  const unbootstrappedMsg = cloudSync.formatCloudSyncError(
+    'RuntimeError: ERROR: relation "becmaster.snapshots" does not exist (SQLSTATE 42P01)'
+  );
+  assert.match(unbootstrappedMsg, /Bootstrap \/ Verify Schemas/);
+  assert.doesNotMatch(unbootstrappedMsg, /RuntimeError|SQLSTATE|42P01/);
+
+  // 3. DNS lookup, connection refused, timeout, and TLS / x509 certificate errors
+  for (const dnsErr of [
+    'RuntimeError: connect to PostgreSQL: lookup <pg-host>: no such host',
+    'RuntimeError: connect to PostgreSQL: lookup <pg-host> on 127.0.0.53:53: server misbehaving',
+    'Error: dial tcp: lookup bad.example.invalid: Temporary failure in name resolution',
+  ]) {
+    const formatted = cloudSync.formatCloudSyncError(dnsErr);
+    assert.equal(formatted, 'Server address could not be found. Check the Server Host setting and your network connection.');
+    assert.doesNotMatch(formatted, /RuntimeError|lookup|server misbehaving/);
+  }
+
+  const refusedMsg = cloudSync.formatCloudSyncError(
+    'RuntimeError: connect to PostgreSQL: dial tcp <pg-host>:5432: connect: connection refused'
+  );
+  assert.match(refusedMsg, /refused the connection/);
+  assert.doesNotMatch(refusedMsg, /RuntimeError|dial tcp/);
+
+  const timeoutMsg = cloudSync.formatCloudSyncError(
+    'RuntimeError: connect to PostgreSQL: dial tcp <pg-host>:5432: i/o timeout'
+  );
+  assert.match(timeoutMsg, /timed out/);
+  assert.doesNotMatch(timeoutMsg, /RuntimeError|dial tcp|i\/o timeout/);
+
+  const x509Msg = cloudSync.formatCloudSyncError(
+    'RuntimeError: connect to PostgreSQL: tls error: x509: certificate signed by unknown authority'
+  );
+  assert.match(x509Msg, /security certificate could not be verified/);
+  assert.doesNotMatch(x509Msg, /RuntimeError|x509:/);
+
+  const remoteTlsMsg = cloudSync.formatCloudSyncError(
+    'RuntimeError: TLS is required for remote PostgreSQL hosts: set sslmode to require, verify-ca or verify-full'
+  );
+  assert.match(remoteTlsMsg, /Encrypted connections are required for remote cloud servers/);
+  assert.doesNotMatch(remoteTlsMsg, /RuntimeError/);
+
+  // 4. Missing local database file reproduction (lstat / no such file or directory)
+  const missingLocalDb = cloudSync.formatCloudSyncError(
+    'RuntimeError: VLists database: resolve database "/nonexistent/QA1117_VLists.db": lstat /nonexistent: no such file or directory'
+  );
+  assert.equal(
+    missingLocalDb,
+    'Local database file "/nonexistent/QA1117_VLists.db" was not found. Check the file path and try again.'
+  );
+  assert.doesNotMatch(missingLocalDb, /RuntimeError|lstat|no such file or directory/);
+
+  // 5. Fallback error still strips RuntimeError/SQLSTATE and redacts postgres:// URLs + session secrets
+  const fallbackMsg = cloudSync.formatCloudSyncError(
+    new Error(`RuntimeError: custom check failed on postgres://custodian:${encodeURIComponent(secretB)}@example.org:5432/becmaster with token=${secretA} (SQLSTATE XX000)`),
+    [secretA, secretB]
+  );
+  assert.doesNotMatch(fallbackMsg, /RuntimeError|SQLSTATE|XX000/);
+  assert.equal(fallbackMsg.includes(secretA), false);
+  assert.equal(fallbackMsg.includes(secretB), false);
+  assert.equal(fallbackMsg.includes(encodeURIComponent(secretB)), false);
+  assert.match(fallbackMsg, /postgres:\/\/<redacted>/);
+});
+
+test('UX-CLOUD-006: subset Limit requires a regional filter or full checkout, and Snapshot Tag accepts 1..80 characters consistently', () => {
+  // 1. Subset Limit alone is rejected when allowFullCheckout is false
+  for (const limitOnly of [250, '250', 1, '5000']) {
+    const res = cloudSync.buildSubsetFilterDraft({
+      zonesRaw: '',
+      subzonesRaw: '',
+      projectIdsRaw: '',
+      plotNumbersRaw: '',
+      bboxRaw: '',
+      limitRaw: limitOnly,
+      allowFullCheckout: false,
+    });
+    assert.equal(res.filter, null);
+    assert.equal(
+      res.error,
+      'Specify at least one regional filter (Zone, Subzone, Project ID, Plot Number, or Bounding Box), or enable full checkout.'
+    );
+    assert.doesNotMatch(res.error, /\bor Limit\b/i);
+  }
+
+  // Subset Limit with allowFullCheckout: true succeeds
+  const fullWithLimit = cloudSync.buildSubsetFilterDraft({
+    zonesRaw: '',
+    subzonesRaw: '',
+    projectIdsRaw: '',
+    plotNumbersRaw: '',
+    bboxRaw: '',
+    limitRaw: 250,
+    allowFullCheckout: true,
+  });
+  assert.equal(fullWithLimit.error, null);
+  assert.deepEqual(structuredClone(fullWithLimit.filter), { limit: 250, allowFullCheckout: true });
+
+  // 2. Snapshot Tag accepts 1..80 characters (including 65..80 chars) and rejects 81+ chars
+  assert.equal(cloudSync.MAX_SNAPSHOT_TAG_LENGTH, 80);
+  for (const len of [1, 64, 65, 72, 80]) {
+    const tag = 'B'.repeat(len);
+    assert.equal(cloudSync.validateSnapshotTagInput(tag), null, `expected ${len}-char tag to be valid`);
+  }
+  const tag81Err = cloudSync.validateSnapshotTagInput('B'.repeat(81));
+  assert.equal(
+    tag81Err,
+    'Snapshot tag may use only ASCII letters, digits, dots, underscores, or hyphens (max 80 characters).'
+  );
+
+  // 3. PullPanel & SnapshotsPanel SSR hints match aligned validation contracts
+  const PullPanel = serverComponent(read('CloudSyncPullPanel.svelte'), 'CloudSyncPullPanel.svelte', {
+    './cloudSyncWorkbench': cloudSync,
+  });
+  const pullHtml = render(PullPanel, {
+    props: {
+      busy: false,
+      operationHeld: false,
+      subsetZonesRaw: '',
+      subsetSubzonesRaw: '',
+      subsetProjectIdsRaw: '',
+      subsetPlotNumbersRaw: '',
+      subsetBboxRaw: '',
+      subsetLimitRaw: '',
+      subsetAllowFull: false,
+      subsetPreview: null,
+      subsetTargetProject: '',
+      subsetDestinationPath: '',
+      subsetActivateOnSuccess: true,
+      subsetTargetValidationError: null,
+      pullSubsetResult: null,
+      onPreviewSubset: () => {},
+      onPullSubset: () => {},
+    },
+  }).body;
+  assert.match(pullHtml, /id="subset-limit-hint"/);
+  assert.match(pullHtml, /requires a regional filter or full checkout/);
+
+  const SnapshotsPanel = serverComponent(read('CloudSyncSnapshotsPanel.svelte'), 'CloudSyncSnapshotsPanel.svelte', {
+    './cloudSyncWorkbench': cloudSync,
+  });
+  const tag65 = 'BECMaster_2026_11_Provincial_Release_Candidate_Tag_Length_Sixty5_';
+  assert.equal(tag65.length, 65);
+  assert.equal(cloudSync.validateSnapshotTagInput(tag65), null);
+  const snapHtml = render(SnapshotsPanel, {
+    props: {
+      busy: false,
+      operationHeld: false,
+      snapshotTag: tag65,
+      snapshotExportFormat: '',
+      snapshotTagValidationError: cloudSync.validateSnapshotTagInput(tag65),
+      latestSnapshotCreated: null,
+      snapshots: [],
+      downloadLog: [],
+      onCreateSnapshot: () => {},
+      onRefreshSnapshots: () => {},
+    },
+  }).body;
+  assert.match(snapHtml, /id="snapshot-tag-hint"/);
+  assert.match(snapHtml, /1 to 80 letters, digits, dots, underscores, or hyphens/);
+  assert.doesNotMatch(snapHtml, /role="alert"/);
+  const cutBtnMatch = snapHtml.match(/<button\b([^>]*)>\s*Cut Dated Snapshot\s*<\/button>/);
+  assert.ok(cutBtnMatch, 'Cut Dated Snapshot button must render');
+  assert.equal(/\bdisabled(?:\s|=|$)/.test(cutBtnMatch[1]), false, '65-char snapshot tag must keep Cut Dated Snapshot button enabled');
 });

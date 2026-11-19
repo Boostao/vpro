@@ -14,7 +14,7 @@ export function redactCloudSecrets(message: string, secrets: readonly string[] =
   if (!out) return '';
   out = out.replace(/postgres(?:ql)?:\/\/[^\s'"`<>]+/gi, 'postgres://<redacted>');
   out = out.replace(
-    /\b(PGPASSWORD|password|passwd|pwd|secret|token|api[_-]?key)\s*([:=])\s*(?:'[^']*'|"[^"]*"|[^\s;,&'"]+)/gi,
+    /\b(PGPASSWORD|password|passwd|pwd|secret|token|api[_-]?key)\s*([:=])\s*(?:'[^']*'|"[^"]*"|[^\s;,&'"`]+)/gi,
     '$1$2<redacted>'
   );
   out = out.replace(/\bBearer\s+\S+/gi, 'Bearer <redacted>');
@@ -34,6 +34,183 @@ export function redactCloudSecrets(message: string, secrets: readonly string[] =
     }
   }
   return out;
+}
+
+function isSafeCloudIdentifier(token: string | undefined): token is string {
+  if (!token) return false;
+  if (token.includes('<redacted>') || token.includes('<pg-host>') || token.includes('<redacted-ip>')) {
+    return false;
+  }
+  return /^[A-Za-z0-9_.-]{1,80}$/.test(token);
+}
+
+/**
+ * Formats cloud sync, PostgreSQL/pgx, TLS, and local file errors into CBC-level
+ * plain language while strictly preserving secret/DSN redaction and stripping
+ * raw RuntimeError/SQLSTATE/syscall noise.
+ */
+export function formatCloudSyncError(cause: unknown, secrets: readonly string[] = []): string {
+  let rawText = '';
+  if (typeof cause === 'string') {
+    rawText = cause;
+  } else if (
+    cause &&
+    typeof cause === 'object' &&
+    'message' in cause &&
+    typeof (cause as { message: unknown }).message === 'string'
+  ) {
+    rawText = (cause as { message: string }).message;
+  } else {
+    rawText = String(cause ?? '');
+  }
+
+  let msg = redactCloudSecrets(rawText, secrets).trim();
+  if (!msg) {
+    return 'An unexpected cloud sync error occurred.';
+  }
+
+  const prefixRe = /^(?:RuntimeError|Error|CallError):\s*/i;
+  while (prefixRe.test(msg)) {
+    msg = msg.replace(prefixRe, '').trim();
+  }
+  if (!msg) {
+    return 'An unexpected cloud sync error occurred.';
+  }
+
+  // 1. Unconfigured credentials / empty host
+  if (/contributor credentials are not configured/i.test(msg)) {
+    return 'Contributor cloud credentials are not configured. Enter your server and account details under Session Credential Override, or add them to becmaster.env.';
+  }
+  if (/custodian admin credentials are not configured/i.test(msg)) {
+    return 'Custodian Admin cloud credentials are not configured. Enter custodian credentials under Session Credential Override, or add them to becmaster.env.';
+  }
+  if (/PostgreSQL credentials are not configured|PostgreSQL host is empty/i.test(msg)) {
+    return 'Cloud server settings are incomplete. Enter the Server Host and account credentials under Session Credential Override.';
+  }
+
+  // 2. Remote plaintext TLS guard & SSL / X.509 handshake failures
+  if (/TLS is required for remote PostgreSQL hosts/i.test(msg)) {
+    return 'Encrypted connections are required for remote cloud servers. Set SSL Mode to require, verify-ca, or verify-full.';
+  }
+  if (/server does not support SSL/i.test(msg)) {
+    return 'The cloud server does not accept encrypted SSL connections on this port. Check the Port and SSL Mode settings.';
+  }
+  if (
+    /\bx509:|tls:|TLS handshake|certificate signed by unknown authority|certificate is valid for|certificate has expired|unable to verify the first certificate/i.test(
+      msg
+    )
+  ) {
+    return 'Secure connection failed because the server security certificate could not be verified. Check the Server Host and SSL Mode settings.';
+  }
+
+  // 3. PostgreSQL authentication / sign-in failures (SQLSTATE 28P01, 28000, pg_hba, SASL, password auth)
+  if (/\bSQLSTATE\s+28P01\b|password authentication failed|SASL authentication failed/i.test(msg)) {
+    const userMatch = /authentication failed for user\s+"([^"]+)"/i.exec(msg);
+    const safeUser = isSafeCloudIdentifier(userMatch?.[1]) ? userMatch[1] : null;
+    return safeUser
+      ? redactCloudSecrets(`Could not sign in as "${safeUser}" — check your username and password.`, secrets)
+      : 'Could not sign in to the cloud database — check your username and password.';
+  }
+  if (/no pg_hba\.conf entry/i.test(msg)) {
+    return 'Could not sign in — the cloud server rejected connections for this account or network address. Check your username, SSL Mode, and server access rules.';
+  }
+  if (/\bSQLSTATE\s+28000\b|is not permitted to log in|role\s+"[^"]+"\s+does not exist|authentication failed/i.test(msg)) {
+    return 'Could not sign in to the cloud database — check your username, role selection, and password.';
+  }
+
+  // 4. Missing cloud database (SQLSTATE 3D000)
+  if (/\bSQLSTATE\s+3D000\b|database\s+"[^"]+"\s+does not exist/i.test(msg)) {
+    const dbMatch = /database\s+"([^"]+)"\s+does not exist/i.exec(msg);
+    const safeDb = isSafeCloudIdentifier(dbMatch?.[1]) ? dbMatch[1] : null;
+    return safeDb
+      ? redactCloudSecrets(
+          `Cloud database "${safeDb}" was not found on the server. Check the Database name in Session Credential Override.`,
+          secrets
+        )
+      : 'The configured cloud database was not found on the server. Check the Database name and try again.';
+  }
+
+  // 5. Insufficient database privileges (SQLSTATE 42501)
+  if (/\bSQLSTATE\s+42501\b|permission denied for (?:schema|table|relation|sequence|database|function)|must be owner of/i.test(msg)) {
+    return 'Your current cloud role does not have permission for this action. Switch to Custodian Admin if you are bootstrapping schemas, publishing standards, merging submissions, or cutting snapshots.';
+  }
+
+  // 6. Unbootstrapped BECMaster schemas/tables (SQLSTATE 42P01 / 3F000)
+  if (
+    /\bSQLSTATE\s+(?:42P01|3F000)\b|(?:relation|schema)\s+"(?:becmaster|staging|standards)(?:\.[^"]+)?"\s+does not exist/i.test(
+      msg
+    )
+  ) {
+    return 'Required BECMaster cloud tables are not set up on this server yet. Ask a Custodian Admin to run Bootstrap / Verify Schemas first.';
+  }
+
+  // 7. Concurrent custodian merge conflict (SQLSTATE 40001)
+  if (/\bSQLSTATE\s+40001\b|could not serialize access/i.test(msg)) {
+    return 'Another custodian updated BECMaster at the same time. Re-run Review & 3-Way Diff vs BECMaster and try again.';
+  }
+
+  // 8. DNS lookup / network reachability / connection refused / timeouts
+  if (
+    /\bno such host\b|Temporary failure in name resolution|Name or service not known|nodename nor servname provided|\bserver misbehaving\b|\bgetaddrinfo\b/i.test(
+      msg
+    )
+  ) {
+    return 'Server address could not be found. Check the Server Host setting and your network connection.';
+  }
+  if (/\bconnection refused\b|actively refused it/i.test(msg)) {
+    return 'Could not connect to the cloud server — the server refused the connection. Check the Server Host, Port, and that the server is running.';
+  }
+  if (/\bi\/o timeout\b|context deadline exceeded|\bconnection timed out\b|\bdial\s+tcp\b.*\btimed out\b|\btimeout\b.*connect/i.test(msg)) {
+    return 'Connection to the cloud server timed out. Check the Server Host, Port, and your network or VPN connection.';
+  }
+  if (/\bnetwork is unreachable\b|\bno route to host\b|\bconnection reset by peer\b/i.test(msg)) {
+    return 'Could not reach the cloud server. Check your network or VPN connection and server settings.';
+  }
+
+  // 9. Local file system & SQLite file errors (Publish Standards, Seed Baseline, Subset / Snapshot export)
+  if (/picture selection|file dialogs not available in server mode|requires an active desktop window/i.test(msg)) {
+    return 'File selection requires an active desktop window; enter a file path directly when running in a browser.';
+  }
+  if (/database disk image is malformed|file is not a database/i.test(msg)) {
+    return 'The selected local file is damaged, incomplete, or is not a valid VPro database file (.db).';
+  }
+  if (
+    /\b(?:lstat|stat|open|CreateFile|GetFileAttributesEx)\b[^:]*:\s*(?:no such file or directory|cannot find the file|cannot find the path)|resolve database\s+"[^"]+":.*(?:no such file or directory|cannot find)/i.test(
+      msg
+    )
+  ) {
+    const pathMatch =
+      /resolve database\s+"([^"]+)"/i.exec(msg) ?? /"([^"]+\.(?:db|sqlite|sqlite3|rds|gpkg))"/i.exec(msg);
+    const safePath = pathMatch?.[1] && !pathMatch[1].includes('<redacted>') ? pathMatch[1] : null;
+    return safePath
+      ? redactCloudSecrets(`Local database file "${safePath}" was not found. Check the file path and try again.`, secrets)
+      : 'The specified local database file or folder was not found. Check the file path and try again.';
+  }
+  if (/\b(?:lstat|stat|open|CreateFile|GetFileAttributesEx|mkdir)\b[^:]*:\s*(?:permission denied|access is denied)/i.test(msg)) {
+    return 'VPro does not have permission to read or write the specified local file path.';
+  }
+  if (/\bis a directory\b|must be a regular file/i.test(msg)) {
+    return 'The specified path points to a folder instead of a database file (.db).';
+  }
+
+  // 10. Context cancellation
+  if (/^context canceled$/i.test(msg)) {
+    return 'The cloud operation was cancelled.';
+  }
+
+  // 11. General fallback: strip pgx dial prefixes, FATAL/ERROR headers, SQLSTATE codes, and OS syscall prefixes
+  msg = msg.replace(
+    /^(?:connect to PostgreSQL|configure PostgreSQL pool|initialize PostgreSQL pool|parse PostgreSQL connection config|parse PostgreSQL host):\s*/i,
+    ''
+  );
+  msg = msg.replace(/failed to connect to `[^`]*`:\s*(?:[^\s:]+(?:\s+\([^)]*\))?:\s*)*/gi, '');
+  msg = msg.replace(/\b(?:server error:\s*)?(?:FATAL|ERROR|PANIC):\s*/gi, '');
+  msg = msg.replace(/\s*\(SQLSTATE\s+[0-9A-Z]{5}\)/gi, '');
+  msg = msg.replace(/\bSQLSTATE\s+[0-9A-Z]{5}\b:?\s*/gi, '');
+  msg = msg.replace(/\b(?:lstat|stat|open|CreateFile|GetFileAttributesEx)\s+[^:]+:\s*/gi, '');
+  msg = msg.replace(/\s{2,}/g, ' ').trim();
+
+  return redactCloudSecrets(msg || 'An unexpected cloud sync error occurred.', secrets);
 }
 
 export type CloudRoleMode = 'contributor' | 'custodian';
@@ -635,18 +812,18 @@ export function buildSubsetFilterDraft(input: SubsetFilterDraftInput): { filter:
   }
 
   const allowFullCheckout = !!input.allowFullCheckout;
-  const hasFilter =
+  const hasRegionalFilter =
     zones.length > 0 ||
     subzones.length > 0 ||
     projectIds.length > 0 ||
     plotNumbers.length > 0 ||
-    !!bboxParsed.bbox ||
-    limit !== undefined;
+    !!bboxParsed.bbox;
 
-  if (!hasFilter && !allowFullCheckout) {
+  if (!hasRegionalFilter && !allowFullCheckout) {
     return {
       filter: null,
-      error: 'Specify at least one regional filter (Zone, Subzone, ProjectID, PlotNumber, BBox, or Limit), or enable full checkout.',
+      error:
+        'Specify at least one regional filter (Zone, Subzone, Project ID, Plot Number, or Bounding Box), or enable full checkout.',
     };
   }
 
@@ -686,6 +863,8 @@ export function buildInitialCloudMergeFieldResolutions(preview: StagingMergePrev
   return map;
 }
 
+export const MAX_SNAPSHOT_TAG_LENGTH = 80;
+
 export function validateSnapshotTagInput(raw: string): string | null {
   if (typeof raw !== 'string' || !wellFormedUTF16(raw) || raw.includes('\0')) {
     return 'Snapshot tag must be well-formed Unicode without NUL characters.';
@@ -694,8 +873,8 @@ export function validateSnapshotTagInput(raw: string): string | null {
   if (trimmed === '' || trimmed !== raw) {
     return 'Snapshot tag is required and cannot contain leading or trailing spaces.';
   }
-  if (!/^[A-Za-z0-9._-]{1,64}$/.test(trimmed)) {
-    return 'Snapshot tag may use only ASCII letters, digits, dots, underscores, or hyphens (max 64 characters).';
+  if (!/^[A-Za-z0-9._-]{1,80}$/.test(trimmed)) {
+    return 'Snapshot tag may use only ASCII letters, digits, dots, underscores, or hyphens (max 80 characters).';
   }
   return null;
 }
