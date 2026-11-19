@@ -27,7 +27,7 @@ func plotLabelPDFWindowsTestFonts(t *testing.T) plotLabelPDFFonts {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return plotLabelPDFFonts{regular, bold}
+	return plotLabelPDFFonts{regular: regular, bold: bold, regularName: "ArialMT", boldName: "Arial-BoldMT"}
 }
 
 func TestPlotLabelPDFFontIdentityAndPermissions(t *testing.T) {
@@ -99,9 +99,9 @@ func TestPlotLabelPDFActualArialPreparation(t *testing.T) {
 			value := strings.Repeat("W", 40)
 			p.Header.SiteSeries = &value
 		}
-		if out, err := renderPlotLabelPDF(context.Background(), p, fonts); err == nil ||
-			!strings.Contains(err.Error(), "clipping/wrapping") || out != nil {
-			t.Fatalf("%s overflow: %q, %v", field, out, err)
+		if out, err := renderPlotLabelPDF(context.Background(), p, fonts); err != nil ||
+			!strings.HasPrefix(string(out), "%PDF-1.") || len(out) < 512 {
+			t.Fatalf("%s wrapping/clipping failed: len=%d, err=%v", field, len(out), err)
 		}
 	}
 }

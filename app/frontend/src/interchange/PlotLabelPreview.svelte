@@ -84,12 +84,39 @@
     preview = null; error = ''; labelDate = ''; regionalEvidence = null; pdfReview = null; busy = true; updateBusy();
     try {
       if (pdfEnabled) {
-        const value = await reads.track(ImportExportService.GetPlotLabelPDFReview(contextId, JSON.stringify({ plotNumber: requestedPlot })));
+        let value: PlotLabelPDFExportReview | null = null;
+        let pdfPrepCause: unknown = null;
+        try {
+          value = await reads.track(ImportExportService.GetPlotLabelPDFReview(contextId, JSON.stringify({ plotNumber: requestedPlot })));
+        } catch (pdfCause) {
+          const canFallbackRegional =
+            (typeof regionalDateEnabled === 'undefined' || regionalDateEnabled) &&
+            typeof ImportExportService?.GetPlotLabelRegionalPreview === 'function' &&
+            /label PDF font|runtime label font|label PDF encoding|clipping\/wrapping/i.test(String(pdfCause));
+          if (!canFallbackRegional) throw pdfCause;
+          pdfPrepCause = pdfCause;
+        }
         if (request !== generation || key !== ownerKey) return;
-        const candidate = validatePlotLabelPDFReview(value, { contextId, project, projectPath, su, suPath }, requestedPlot);
-        const native = validatePlotLabelRegionalPreview(candidate.preview, contextId, requestedPlot);
-        if (request !== generation || key !== ownerKey) return;
-        pdfReview = candidate; preview = native.label; labelDate = native.labelDate; regionalEvidence = native.evidence;
+        if (pdfPrepCause !== null) {
+          let fallbackValue: unknown;
+          try {
+            fallbackValue = await reads.track(ImportExportService.GetPlotLabelRegionalPreview(contextId, requestedPlot));
+          } catch {
+            throw pdfPrepCause;
+          }
+          if (request !== generation || key !== ownerKey) return;
+          const native = validatePlotLabelRegionalPreview(fallbackValue, contextId, requestedPlot);
+          if (request !== generation || key !== ownerKey) return;
+          pdfReview = null; preview = native.label; labelDate = native.labelDate; regionalEvidence = native.evidence;
+          const warnMsg = `On-screen plot label preview is ready, but portable PDF export is unavailable: ${String(pdfPrepCause)}`;
+          error = warnMsg;
+          notifications.warning('Label PDF unavailable; preview shown', warnMsg, { category: 'reports', source: 'Plot Labels', contextTag: project || undefined });
+        } else {
+          const candidate = validatePlotLabelPDFReview(value, { contextId, project, projectPath, su, suPath }, requestedPlot);
+          const native = validatePlotLabelRegionalPreview(candidate.preview, contextId, requestedPlot);
+          if (request !== generation || key !== ownerKey) return;
+          pdfReview = candidate; preview = native.label; labelDate = native.labelDate; regionalEvidence = native.evidence;
+        }
       } else if (regionalDateEnabled) {
         const value = await reads.track(ImportExportService.GetPlotLabelRegionalPreview(contextId, requestedPlot));
         if (request !== generation || key !== ownerKey) return;
@@ -206,8 +233,8 @@
     <section class="label" data-plot-label-card aria-label={`Label for saved plot ${preview.plotNumber1}`}>
       <h2>{preview.displayPlotNumber}</h2>
       <p class="zone">{preview.zone1}</p>
-      <p>{preview.projectId1 ?? ''}</p>
-      <p>{preview.displayRepresenting ?? ''}</p>
+      <p class="project-id">{preview.projectId1 ?? ''}</p>
+      <p class="representing" data-plot-label-representing>{preview.displayRepresenting ?? ''}</p>
       <footer><span>Label Date: {labelDate}</span><span>(VPro)</span></footer>
     </section>
     <details>
@@ -251,7 +278,7 @@
             {/if}
           {/if}
           <p class="guidance">One portable Letter page, real runtime Arial and fixed source-relative fields, not Access printer/stock alignment.
-            Supports calibrated Windows Long Date locales (including en-US, en-CA, fr-CA) and printable UTF-8 single-line labels. Export never overwrites a file or changes saved data.
+            Supports calibrated Windows Long Date locales (including en-US, en-CA, fr-CA) and wrapped UTF-8 plot labels up to full 255-character descriptions. Export never overwrites a file or changes saved data.
             Retained receipts survive remount; unknown attempts are recovered readonly, never replayed. Print All and physical printing remain unavailable.</p>
         </section>
       {/if}
@@ -384,15 +411,27 @@
     font-variant-numeric: tabular-nums;
     font-size: 1.35rem;
     letter-spacing: 0.01em;
+    min-width: 0;
+    overflow-wrap: break-word;
   }
 
   .label p {
     margin: 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  .representing {
+    line-height: 1.45;
   }
 
   .zone {
     display: inline-block;
     justify-self: start;
+    max-width: 100%;
+    box-sizing: border-box;
     font-family: var(--vpro-font-mono, "IBM Plex Mono", ui-monospace, monospace);
     font-variant-numeric: tabular-nums;
     font-size: 0.85rem;
