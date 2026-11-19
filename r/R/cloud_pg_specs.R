@@ -528,22 +528,34 @@ vpro_pg_build_spec_df <- function(rows) {
 
 vpro_pg_vp08_specs <- function(suffix) {
   if (!is.character(suffix) || length(suffix) != 1L || is.na(suffix) || !nzchar(trimws(suffix))) {
-    cli::cli_abort("{.arg suffix} must be one of {.or {.val {names(.vpro_pg_vp08_spec_map)}}}.")
+    cli::cli_abort(
+      "{.arg suffix} must be one of {.or {.val {names(.vpro_pg_vp08_spec_map)}}}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   key <- names(.vpro_pg_vp08_spec_map)[tolower(names(.vpro_pg_vp08_spec_map)) == tolower(trimws(suffix))]
   if (length(key) != 1L) {
-    cli::cli_abort("Unknown VP08 table suffix {.val {suffix}} (expected one of {.or {.val {names(.vpro_pg_vp08_spec_map)}}}).")
+    cli::cli_abort(
+      "Unknown VP08 table suffix {.val {suffix}} (expected one of {.or {.val {names(.vpro_pg_vp08_spec_map)}}}).",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   .vpro_pg_vp08_spec_map[[key]]
 }
 
 vpro_pg_standards_specs <- function(table) {
   if (!is.character(table) || length(table) != 1L || is.na(table) || !nzchar(trimws(table))) {
-    cli::cli_abort("{.arg table} must be one of {.or {.val {names(.vpro_pg_standards_spec_map)}}}.")
+    cli::cli_abort(
+      "{.arg table} must be one of {.or {.val {names(.vpro_pg_standards_spec_map)}}}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   key <- names(.vpro_pg_standards_spec_map)[tolower(names(.vpro_pg_standards_spec_map)) == tolower(trimws(table))]
   if (length(key) != 1L) {
-    cli::cli_abort("Unknown standards table {.val {table}} (expected one of {.or {.val {names(.vpro_pg_standards_spec_map)}}}).")
+    cli::cli_abort(
+      "Unknown standards table {.val {table}} (expected one of {.or {.val {names(.vpro_pg_standards_spec_map)}}}).",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   .vpro_pg_standards_spec_map[[key]]
 }

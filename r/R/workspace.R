@@ -89,12 +89,18 @@ vpro_abs_path <- function(
   if (isTRUE(expand_tilde)) {
     if (identical(p, "~")) {
       if (!nzchar(home)) {
-        rlang::abort("$HOME is not defined; cannot expand `~` in VPro directory path.")
+        cli::cli_abort(
+          "$HOME is not defined; cannot expand `~` in VPro directory path.",
+          class = c("vpro_error_workspace", "vpro_error")
+        )
       }
       p <- home
     } else if (startsWith(p, "~/") || (isTRUE(is_windows) && startsWith(p, "~\\"))) {
       if (!nzchar(home)) {
-        rlang::abort("$HOME is not defined; cannot expand `~` in VPro directory path.")
+        cli::cli_abort(
+          "$HOME is not defined; cannot expand `~` in VPro directory path.",
+          class = c("vpro_error_workspace", "vpro_error")
+        )
       }
       rest <- substring(p, 3L)
       base_home <- sub("[/\\\\]+$", "", home)
@@ -136,13 +142,19 @@ vpro_resolve_data_dir <- function(
       p <- paste0(sub("[/\\\\]+$", "", localappdata), "/vpro")
     } else {
       if (!nzchar(eff_home)) {
-        rlang::abort("%USERPROFILE% is not defined; cannot resolve Windows VPro data directory.")
+        cli::cli_abort(
+          "%USERPROFILE% is not defined; cannot resolve Windows VPro data directory.",
+          class = c("vpro_error_workspace", "vpro_error")
+        )
       }
       p <- paste0(sub("[/\\\\]+$", "", eff_home), "/AppData/Local/vpro")
     }
   } else if (identical(os_low, "darwin")) {
     if (!nzchar(home)) {
-      rlang::abort("$HOME is not defined; cannot resolve macOS VPro data directory.")
+      cli::cli_abort(
+        "$HOME is not defined; cannot resolve macOS VPro data directory.",
+        class = c("vpro_error_workspace", "vpro_error")
+      )
     }
     base_home <- sub("/+$", "", home)
     p <- if (nzchar(base_home)) {
@@ -156,7 +168,10 @@ vpro_resolve_data_dir <- function(
       p <- if (nzchar(base_xdg)) paste0(base_xdg, "/vpro") else "/vpro"
     } else {
       if (!nzchar(home)) {
-        rlang::abort("$HOME is not defined; cannot resolve VPro data directory.")
+        cli::cli_abort(
+          "$HOME is not defined; cannot resolve VPro data directory.",
+          class = c("vpro_error_workspace", "vpro_error")
+        )
       }
       base_home <- sub("/+$", "", home)
       p <- if (nzchar(base_home)) paste0(base_home, "/.local/share/vpro") else "/.local/share/vpro"
@@ -183,12 +198,18 @@ vpro_resolve_config_dir <- function(
   }
   if (is_win) {
     if (!nzchar(appdata)) {
-      rlang::abort("%APPDATA% is not defined; cannot resolve Windows VPro configuration directory.")
+      cli::cli_abort(
+        "%APPDATA% is not defined; cannot resolve Windows VPro configuration directory.",
+        class = c("vpro_error_workspace", "vpro_error")
+      )
     }
     p <- paste0(sub("[/\\\\]+$", "", appdata), "/vpro")
   } else if (identical(os_low, "darwin")) {
     if (!nzchar(home)) {
-      rlang::abort("$HOME is not defined; cannot resolve macOS VPro configuration directory.")
+      cli::cli_abort(
+        "$HOME is not defined; cannot resolve macOS VPro configuration directory.",
+        class = c("vpro_error_workspace", "vpro_error")
+      )
     }
     base_home <- sub("/+$", "", home)
     p <- if (nzchar(base_home)) {
@@ -202,7 +223,10 @@ vpro_resolve_config_dir <- function(
       p <- if (nzchar(base_xdg)) paste0(base_xdg, "/vpro") else "/vpro"
     } else {
       if (!nzchar(home)) {
-        rlang::abort("$HOME is not defined; cannot resolve VPro configuration directory.")
+        cli::cli_abort(
+          "$HOME is not defined; cannot resolve VPro configuration directory.",
+          class = c("vpro_error_workspace", "vpro_error")
+        )
       }
       base_home <- sub("/+$", "", home)
       p <- if (nzchar(base_home)) paste0(base_home, "/.config/vpro") else "/.config/vpro"
@@ -239,8 +263,9 @@ vpro_config_dir <- function() {
 
 vpro_project_name <- function(project) {
   if (!is.character(project) || length(project) != 1L || is.na(project) || !grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", project)) {
-    rlang::abort(
-      "VPro project names must start with a letter, contain only letters, digits, or underscores, and be at most 31 characters."
+    cli::cli_abort(
+      "VPro project names must start with a letter, contain only letters, digits, or underscores, and be at most 31 characters.",
+      class = c("vpro_error_workspace", "vpro_error")
     )
   }
   project
@@ -325,12 +350,18 @@ vpro_sqlite_physical_tables <- function(path) {
 vpro_project_inspect <- function(path, project = NULL) {
   path <- normalizePath(path, winslash = "/", mustWork = FALSE)
   if (!file.exists(path)) {
-    rlang::abort(paste0("VPro project database does not exist: ", path))
+    cli::cli_abort(
+      .vpro_cli_escape(paste0("VPro project database does not exist: ", path)),
+      class = c("vpro_error_workspace", "vpro_error")
+    )
   }
   if (is.null(project)) {
     disc <- .vpro_project_discover(path)
     if (nrow(disc) == 0L) {
-      rlang::abort(paste0("Database contains no `<Project>_Env` table: ", path))
+      cli::cli_abort(
+        .vpro_cli_escape(paste0("Database contains no `<Project>_Env` table: ", path)),
+        class = c("vpro_error_workspace", "vpro_error")
+      )
     }
     stem <- tools::file_path_sans_ext(basename(path))
     project <- if (stem %in% disc$project) stem else disc$project[[1L]]
@@ -381,15 +412,18 @@ vpro_resolve_table_suffix <- function(tables, requested, suffix, default_prefix 
   req_full <- if (grepl(pattern, req, ignore.case = TRUE)) req else paste0(req, "_", suffix)
   hit <- candidates[tolower(candidates) == tolower(req_full)]
   if (length(hit) == 0L) {
-    rlang::abort(paste0(
-      "Table `",
-      req_full,
-      "` was not found. Available `*",
-      "_",
-      suffix,
-      "` tables: ",
-      if (length(candidates)) paste(candidates, collapse = ", ") else "<none>"
-    ))
+    cli::cli_abort(
+      .vpro_cli_escape(paste0(
+        "Table `",
+        req_full,
+        "` was not found. Available `*",
+        "_",
+        suffix,
+        "` tables: ",
+        if (length(candidates)) paste(candidates, collapse = ", ") else "<none>"
+      )),
+      class = c("vpro_error_workspace", "vpro_error")
+    )
   }
   hit[[1L]]
 }
@@ -526,6 +560,203 @@ vpro_find_support_db <- function(name, data_dir, project_dir = NULL) {
   character()
 }
 
+.vpro_nonempty_cfg_str <- function(val) {
+  if (is.null(val)) {
+    return(NULL)
+  }
+  s <- trimws(as.character(val))
+  if (nzchar(s)) s else NULL
+}
+
+.vpro_existing_cfg_file <- function(val) {
+  s <- .vpro_nonempty_cfg_str(val)
+  if (!is.null(s) && file.exists(s) && !dir.exists(s)) {
+    normalizePath(s, winslash = "/", mustWork = TRUE)
+  } else {
+    NULL
+  }
+}
+
+.vpro_apply_cfg_selections <- function(cfg_cur, su, hierarchy, lump) {
+  list(
+    su = if (is.null(su)) .vpro_nonempty_cfg_str(cfg_cur$CurrPlotlist) else su,
+    su_db_override = .vpro_existing_cfg_file(cfg_cur$SUPath),
+    hierarchy = if (is.null(hierarchy)) .vpro_nonempty_cfg_str(cfg_cur$CurrHierarchy) else hierarchy,
+    hier_db_override = .vpro_existing_cfg_file(cfg_cur$HierarchyPath),
+    lump = if (is.null(lump)) .vpro_nonempty_cfg_str(cfg_cur$CurrLump) else lump
+  )
+}
+
+.vpro_connect_auto_discover <- function(data_dir, config_dir, cfg_cur, su, hierarchy, lump) {
+  cfg_prj <- .vpro_nonempty_cfg_str(cfg_cur$CurrProject)
+  cfg_prj_path <- .vpro_nonempty_cfg_str(cfg_cur$ProjectPath)
+  candidates <- character()
+  if (!is.null(cfg_prj_path)) {
+    candidates <- c(candidates, cfg_prj_path)
+    if (!is.null(cfg_prj)) {
+      candidates <- c(candidates, file.path(cfg_prj_path, paste0(cfg_prj, ".db")))
+    }
+  }
+  if (!is.null(cfg_prj)) {
+    candidates <- c(
+      candidates,
+      file.path(data_dir, "projects", paste0(cfg_prj, ".db")),
+      file.path(data_dir, paste0(cfg_prj, ".db"))
+    )
+  }
+  existing <- candidates[file.exists(candidates) & !dir.exists(candidates)]
+  if (length(existing) > 0L) {
+    project_path <- normalizePath(existing[[1L]], winslash = "/", mustWork = TRUE)
+    project_name <- cfg_prj
+  } else {
+    listed <- vpro_list_projects(path = data_dir)
+    if (nrow(listed) == 0L) {
+      cli::cli_abort(
+        .vpro_cli_escape(c(
+          "No VPro project database was found in the workspace.",
+          "i" = paste0("Checked data_dir: ", data_dir),
+          "i" = "Pass an explicit `.db` path or call `vpro_connect(\"Sample\")` for the bundled Sample workspace."
+        )),
+        class = c("vpro_error_workspace", "vpro_error")
+      )
+    }
+    project_path <- listed$path[[1L]]
+    project_name <- listed$project[[1L]]
+  }
+  sel <- .vpro_apply_cfg_selections(cfg_cur, su, hierarchy, lump)
+  list(
+    early_return = NULL,
+    project_path = project_path,
+    project_name = project_name,
+    data_dir = data_dir,
+    config_dir = config_dir,
+    source_kind = "workspace",
+    su = sel$su,
+    su_db_override = sel$su_db_override,
+    hierarchy = sel$hierarchy,
+    hier_db_override = sel$hier_db_override,
+    lump = sel$lump
+  )
+}
+
+.vpro_connect_explicit_target <- function(project, data_dir, config_dir, cfg_cur, su, hierarchy, lump) {
+  if (!is.character(project) || length(project) != 1L || is.na(project) || !nzchar(trimws(project))) {
+    cli::cli_abort(
+      "`project` must be NULL or a single non-empty character string.",
+      class = c("vpro_error_workspace", "vpro_error")
+    )
+  }
+  req <- trimws(project)
+  if (dir.exists(req)) {
+    listed <- vpro_list_projects(path = req)
+    if (nrow(listed) == 0L) {
+      cli::cli_abort(
+        .vpro_cli_escape(paste0("No VPro `.db` projects were found in directory: ", req)),
+        class = c("vpro_error_workspace", "vpro_error")
+      )
+    }
+    return(list(
+      early_return = NULL,
+      project_path = listed$path[[1L]],
+      project_name = listed$project[[1L]],
+      data_dir = normalizePath(req, winslash = "/", mustWork = TRUE),
+      config_dir = config_dir,
+      source_kind = "directory",
+      su = su,
+      su_db_override = NULL,
+      hierarchy = hierarchy,
+      hier_db_override = NULL,
+      lump = lump
+    ))
+  }
+  if (file.exists(req)) {
+    ext <- tolower(tools::file_ext(req))
+    if (ext %in% c("accdb", "mdb")) {
+      tmp_db <- tempfile(pattern = "vpro-access-ws-", fileext = ".db")
+      imp <- vpro_import_access(req, dest_db = tmp_db)
+      return(list(
+        early_return = NULL,
+        project_path = imp$target_db,
+        project_name = imp$target_project,
+        data_dir = data_dir,
+        config_dir = config_dir,
+        source_kind = "access_import",
+        su = su,
+        su_db_override = NULL,
+        hierarchy = hierarchy,
+        hier_db_override = NULL,
+        lump = lump
+      ))
+    }
+    if (identical(ext, "rds")) {
+      return(list(early_return = vpro_import_rds(req, su = su, lump = lump)))
+    }
+    project_path <- normalizePath(req, winslash = "/", mustWork = TRUE)
+    bundled_sample <- normalizePath(vpro_bundled_db("Sample.db"), winslash = "/", mustWork = FALSE)
+    return(list(
+      early_return = NULL,
+      project_path = project_path,
+      project_name = NULL,
+      data_dir = data_dir,
+      config_dir = config_dir,
+      source_kind = if (identical(project_path, bundled_sample)) "sample" else "file",
+      su = su,
+      su_db_override = NULL,
+      hierarchy = hierarchy,
+      hier_db_override = NULL,
+      lump = lump
+    ))
+  }
+  base <- sub("\\.(db|sqlite|sqlite3)$", "", req, ignore.case = TRUE)
+  ws_hit <- .vpro_find_workspace_project_db(data_dir, base)
+  if (length(ws_hit) > 0L) {
+    project_path <- normalizePath(ws_hit, winslash = "/", mustWork = TRUE)
+    project_name <- tools::file_path_sans_ext(basename(ws_hit))
+    cfg_prj <- .vpro_nonempty_cfg_str(cfg_cur$CurrProject)
+    sel <- if (!is.null(cfg_prj) && identical(tolower(cfg_prj), tolower(project_name))) {
+      .vpro_apply_cfg_selections(cfg_cur, su, hierarchy, lump)
+    } else {
+      list(su = su, su_db_override = NULL, hierarchy = hierarchy, hier_db_override = NULL, lump = lump)
+    }
+    if (is.null(sel$su)) {
+      sel$su <- "None"
+    }
+    return(list(
+      early_return = NULL,
+      project_path = project_path,
+      project_name = project_name,
+      data_dir = data_dir,
+      config_dir = config_dir,
+      source_kind = "workspace",
+      su = sel$su,
+      su_db_override = sel$su_db_override,
+      hierarchy = sel$hierarchy,
+      hier_db_override = sel$hier_db_override,
+      lump = sel$lump
+    ))
+  }
+  if (identical(tolower(base), "sample")) {
+    project_path <- normalizePath(vpro_bundled_db("Sample.db"), winslash = "/", mustWork = TRUE)
+    return(list(
+      early_return = NULL,
+      project_path = project_path,
+      project_name = "Sample",
+      data_dir = dirname(project_path),
+      config_dir = tempdir(),
+      source_kind = "sample",
+      su = if (is.null(su)) "Sample_SU" else su,
+      su_db_override = NULL,
+      hierarchy = if (is.null(hierarchy)) "Sample_Hierarchy" else hierarchy,
+      hier_db_override = NULL,
+      lump = if (is.null(lump)) "Sample_Lump" else lump
+    ))
+  }
+  cli::cli_abort(
+    .vpro_cli_escape(paste0("Could not find VPro project `", req, "` as a file or inside `", data_dir, "`.")),
+    class = c("vpro_error_workspace", "vpro_error")
+  )
+}
+
 #' Connect to a live `VPro` workspace, bundled `Sample`, SQLite `.db`, or Access archive
 #'
 #' Creates a lightweight, read-only-by-default S3 `vpro_workspace` handle.
@@ -567,11 +798,11 @@ vpro_connect <- function(
     (file.exists(trimws(project)) || identical(tolower(trimws(project)), "sample"))
   data_dir <- tryCatch(
     vpro_abs_path(data_dir),
-    error = function(e) if (missing(data_dir) && can_fallback_dirs) tempdir() else stop(e)
+    error = function(e) if (missing(data_dir) && can_fallback_dirs) tempdir() else rlang::cnd_signal(e)
   )
   config_dir <- tryCatch(
     vpro_abs_path(config_dir),
-    error = function(e) if (missing(config_dir) && can_fallback_dirs) tempdir() else stop(e)
+    error = function(e) if (missing(config_dir) && can_fallback_dirs) tempdir() else rlang::cnd_signal(e)
   )
   cfg_path <- file.path(config_dir, "config.yml")
   cfg_cur <- list()
@@ -582,204 +813,56 @@ vpro_connect <- function(
     }
   }
 
-  source_kind <- "workspace"
-  project_path <- NULL
-  project_name <- NULL
-  su_db_override <- NULL
-  hier_db_override <- NULL
-
-  if (is.null(project)) {
-    # Auto-discover from config.yml + data_dir
-    cfg_prj <- if (!is.null(cfg_cur$CurrProject) && nzchar(trimws(as.character(cfg_cur$CurrProject)))) {
-      trimws(as.character(cfg_cur$CurrProject))
-    } else {
-      NULL
-    }
-    cfg_prj_path <- if (!is.null(cfg_cur$ProjectPath) && nzchar(trimws(as.character(cfg_cur$ProjectPath)))) {
-      trimws(as.character(cfg_cur$ProjectPath))
-    } else {
-      NULL
-    }
-    candidates <- character()
-    if (!is.null(cfg_prj_path)) {
-      candidates <- c(candidates, cfg_prj_path)
-      if (!is.null(cfg_prj)) {
-        candidates <- c(candidates, file.path(cfg_prj_path, paste0(cfg_prj, ".db")))
-      }
-    }
-    if (!is.null(cfg_prj)) {
-      candidates <- c(
-        candidates,
-        file.path(data_dir, "projects", paste0(cfg_prj, ".db")),
-        file.path(data_dir, paste0(cfg_prj, ".db"))
-      )
-    }
-    existing <- candidates[file.exists(candidates) & !dir.exists(candidates)]
-    if (length(existing) > 0L) {
-      project_path <- normalizePath(existing[[1L]], winslash = "/", mustWork = TRUE)
-      project_name <- cfg_prj
-    } else {
-      listed <- vpro_list_projects(path = data_dir)
-      if (nrow(listed) > 0L) {
-        project_path <- listed$path[[1L]]
-        project_name <- listed$project[[1L]]
-      } else {
-        rlang::abort(c(
-          "No VPro project database was found in the workspace.",
-          "i" = paste0("Checked data_dir: ", data_dir),
-          "i" = "Pass an explicit `.db` path or call `vpro_connect(\"Sample\")` for the bundled Sample workspace."
-        ))
-      }
-    }
-    if (is.null(su) && !is.null(cfg_cur$CurrPlotlist) && nzchar(trimws(as.character(cfg_cur$CurrPlotlist)))) {
-      su <- trimws(as.character(cfg_cur$CurrPlotlist))
-    }
-    if (
-      !is.null(cfg_cur$SUPath) &&
-        nzchar(trimws(as.character(cfg_cur$SUPath))) &&
-        file.exists(trimws(as.character(cfg_cur$SUPath))) &&
-        !dir.exists(trimws(as.character(cfg_cur$SUPath)))
-    ) {
-      su_db_override <- normalizePath(trimws(as.character(cfg_cur$SUPath)), winslash = "/", mustWork = TRUE)
-    }
-    if (is.null(hierarchy) && !is.null(cfg_cur$CurrHierarchy) && nzchar(trimws(as.character(cfg_cur$CurrHierarchy)))) {
-      hierarchy <- trimws(as.character(cfg_cur$CurrHierarchy))
-    }
-    if (
-      !is.null(cfg_cur$HierarchyPath) &&
-        nzchar(trimws(as.character(cfg_cur$HierarchyPath))) &&
-        file.exists(trimws(as.character(cfg_cur$HierarchyPath))) &&
-        !dir.exists(trimws(as.character(cfg_cur$HierarchyPath)))
-    ) {
-      hier_db_override <- normalizePath(trimws(as.character(cfg_cur$HierarchyPath)), winslash = "/", mustWork = TRUE)
-    }
-    if (is.null(lump) && !is.null(cfg_cur$CurrLump) && nzchar(trimws(as.character(cfg_cur$CurrLump)))) {
-      lump <- trimws(as.character(cfg_cur$CurrLump))
-    }
+  target <- if (is.null(project)) {
+    .vpro_connect_auto_discover(data_dir, config_dir, cfg_cur, su, hierarchy, lump)
   } else {
-    if (!is.character(project) || length(project) != 1L || is.na(project) || !nzchar(trimws(project))) {
-      rlang::abort("`project` must be NULL or a single non-empty character string.")
-    }
-    req <- trimws(project)
-    if (dir.exists(req)) {
-      listed <- vpro_list_projects(path = req)
-      if (nrow(listed) == 0L) {
-        rlang::abort(paste0("No VPro `.db` projects were found in directory: ", req))
-      }
-      project_path <- listed$path[[1L]]
-      project_name <- listed$project[[1L]]
-      data_dir <- normalizePath(req, winslash = "/", mustWork = TRUE)
-      source_kind <- "directory"
-    } else if (file.exists(req)) {
-      ext <- tolower(tools::file_ext(req))
-      if (ext %in% c("accdb", "mdb")) {
-        tmp_db <- tempfile(pattern = "vpro-access-ws-", fileext = ".db")
-        imp <- vpro_import_access(req, dest_db = tmp_db)
-        project_path <- imp$target_db
-        project_name <- imp$target_project
-        source_kind <- "access_import"
-      } else if (identical(ext, "rds")) {
-        return(vpro_import_rds(req, su = su, lump = lump))
-      } else {
-        project_path <- normalizePath(req, winslash = "/", mustWork = TRUE)
-        bundled_sample <- normalizePath(vpro_bundled_db("Sample.db"), winslash = "/", mustWork = FALSE)
-        source_kind <- if (identical(project_path, bundled_sample)) "sample" else "file"
-      }
-    } else {
-      # Look up project name inside data_dir before falling back to bundled Sample.db
-      base <- sub("\\.(db|sqlite|sqlite3)$", "", req, ignore.case = TRUE)
-      ws_hit <- .vpro_find_workspace_project_db(data_dir, base)
-      if (length(ws_hit) > 0L) {
-        project_path <- normalizePath(ws_hit, winslash = "/", mustWork = TRUE)
-        project_name <- tools::file_path_sans_ext(basename(ws_hit))
-        cfg_prj_match <- !is.null(cfg_cur$CurrProject) &&
-          identical(tolower(trimws(as.character(cfg_cur$CurrProject))), tolower(project_name))
-        if (cfg_prj_match) {
-          if (is.null(su) && !is.null(cfg_cur$CurrPlotlist) && nzchar(trimws(as.character(cfg_cur$CurrPlotlist)))) {
-            su <- trimws(as.character(cfg_cur$CurrPlotlist))
-          }
-          if (
-            !is.null(cfg_cur$SUPath) &&
-              nzchar(trimws(as.character(cfg_cur$SUPath))) &&
-              file.exists(trimws(as.character(cfg_cur$SUPath))) &&
-              !dir.exists(trimws(as.character(cfg_cur$SUPath)))
-          ) {
-            su_db_override <- normalizePath(trimws(as.character(cfg_cur$SUPath)), winslash = "/", mustWork = TRUE)
-          }
-          if (is.null(hierarchy) && !is.null(cfg_cur$CurrHierarchy) && nzchar(trimws(as.character(cfg_cur$CurrHierarchy)))) {
-            hierarchy <- trimws(as.character(cfg_cur$CurrHierarchy))
-          }
-          if (
-            !is.null(cfg_cur$HierarchyPath) &&
-              nzchar(trimws(as.character(cfg_cur$HierarchyPath))) &&
-              file.exists(trimws(as.character(cfg_cur$HierarchyPath))) &&
-              !dir.exists(trimws(as.character(cfg_cur$HierarchyPath)))
-          ) {
-            hier_db_override <- normalizePath(trimws(as.character(cfg_cur$HierarchyPath)), winslash = "/", mustWork = TRUE)
-          }
-          if (is.null(lump) && !is.null(cfg_cur$CurrLump) && nzchar(trimws(as.character(cfg_cur$CurrLump)))) {
-            lump <- trimws(as.character(cfg_cur$CurrLump))
-          }
-        }
-        if (is.null(su)) {
-          su <- "None"
-        }
-      } else if (identical(tolower(base), "sample")) {
-        sample_path <- vpro_bundled_db("Sample.db")
-        project_path <- normalizePath(sample_path, winslash = "/", mustWork = TRUE)
-        project_name <- "Sample"
-        data_dir <- dirname(project_path)
-        config_dir <- tempdir()
-        source_kind <- "sample"
-        if (is.null(su)) {
-          su <- "Sample_SU"
-        }
-        if (is.null(hierarchy)) {
-          hierarchy <- "Sample_Hierarchy"
-        }
-        if (is.null(lump)) lump <- "Sample_Lump"
-      } else {
-        rlang::abort(paste0("Could not find VPro project `", req, "` as a file or inside `", data_dir, "`."))
-      }
-    }
+    .vpro_connect_explicit_target(project, data_dir, config_dir, cfg_cur, su, hierarchy, lump)
   }
+  if (!is.null(target$early_return)) {
+    return(target$early_return)
+  }
+
+  project_path <- target$project_path
+  project_name <- target$project_name
+  data_dir <- target$data_dir
+  config_dir <- target$config_dir
+  source_kind <- target$source_kind
 
   fams <- .vpro_project_discover(project_path)
   if (nrow(fams) == 0L) {
-    rlang::abort(paste0("Database contains no `<Project>_Env` table: ", project_path))
+    cli::cli_abort(
+      .vpro_cli_escape(paste0("Database contains no `<Project>_Env` table: ", project_path)),
+      class = c("vpro_error_workspace", "vpro_error")
+    )
   }
   if (is.null(project_name) || !(project_name %in% fams$project)) {
     stem <- tools::file_path_sans_ext(basename(project_path))
-    if (stem %in% fams$project) {
-      project_name <- stem
-    } else {
-      project_name <- fams$project[[1L]]
-    }
+    project_name <- if (stem %in% fams$project) stem else fams$project[[1L]]
   }
 
   tables <- vpro_sqlite_physical_tables(project_path)
-  su_path <- if (!is.null(su_db_override)) su_db_override else project_path
+  su_path <- if (!is.null(target$su_db_override)) target$su_db_override else project_path
   su_tables <- if (identical(su_path, project_path)) tables else vpro_sqlite_physical_tables(su_path)
   resolved_su <- tryCatch(
-    vpro_resolve_table_suffix(su_tables, su, "SU", default_prefix = project_name),
+    vpro_resolve_table_suffix(su_tables, target$su, "SU", default_prefix = project_name),
     error = function(e) {
-      if (identical(source_kind, "workspace") && is.null(su)) NULL else stop(e)
+      if (identical(source_kind, "workspace") && is.null(target$su)) NULL else rlang::cnd_signal(e)
     }
   )
 
-  hier_path <- if (!is.null(hier_db_override)) hier_db_override else project_path
+  hier_path <- if (!is.null(target$hier_db_override)) target$hier_db_override else project_path
   hier_tables <- if (identical(hier_path, project_path)) tables else vpro_sqlite_physical_tables(hier_path)
   resolved_hier <- tryCatch(
-    vpro_resolve_table_suffix(hier_tables, hierarchy, "Hierarchy", default_prefix = project_name),
+    vpro_resolve_table_suffix(hier_tables, target$hierarchy, "Hierarchy", default_prefix = project_name),
     error = function(e) {
-      if (identical(source_kind, "workspace") && is.null(hierarchy)) NULL else stop(e)
+      if (identical(source_kind, "workspace") && is.null(target$hierarchy)) NULL else rlang::cnd_signal(e)
     }
   )
 
-  resolved_lump <- vpro_resolve_table_suffix(tables, lump, "Lump", default_prefix = project_name)
+  resolved_lump <- vpro_resolve_table_suffix(tables, target$lump, "Lump", default_prefix = project_name)
 
   proj_dir <- dirname(project_path)
-  ws_obj <- structure(
+  structure(
     list(
       project = project_name,
       project_path = project_path,
@@ -799,18 +882,23 @@ vpro_connect <- function(
     ),
     class = "vpro_workspace"
   )
-  ws_obj
 }
 
 vpro_assert_workspace <- function(ws) {
   if (inherits(ws, "vpro_pg_conn")) {
-    rlang::abort(c(
-      "`ws` is a PostgreSQL `vpro_pg_conn` handle, not a local `vpro_workspace`.",
-      "i" = "Use `vpro_master_env(pg, ...)` / `vpro_master_veg(pg, ...)` for direct cloud tibbles, or wrap a filtered cloud subset with `vpro_master_workspace(pg, ...)` / `vpro_master_pull(pg, ...)`."
-    ))
+    cli::cli_abort(
+      c(
+        "`ws` is a PostgreSQL `vpro_pg_conn` handle, not a local `vpro_workspace`.",
+        "i" = "Use `vpro_master_env(pg, ...)` / `vpro_master_veg(pg, ...)` for direct cloud tibbles, or wrap a filtered cloud subset with `vpro_master_workspace(pg, ...)` / `vpro_master_pull(pg, ...)`."
+      ),
+      class = c("vpro_error_workspace", "vpro_error")
+    )
   }
   if (!inherits(ws, "vpro_workspace") || !is.list(ws) || is.null(ws$project_path) || !file.exists(ws$project_path)) {
-    rlang::abort("`ws` must be a valid `vpro_workspace` created by `vpro_connect()`.")
+    cli::cli_abort(
+      "`ws` must be a valid `vpro_workspace` created by `vpro_connect()`.",
+      class = c("vpro_error_workspace", "vpro_error")
+    )
   }
   invisible(ws)
 }
@@ -833,20 +921,23 @@ vpro_use <- function(ws, project = NULL, su = NULL, hierarchy = NULL, lump = NUL
   if (!is.null(project)) {
     fams <- .vpro_project_discover(out$project_path)
     if (!(project %in% fams$project)) {
-      rlang::abort(paste0("Project `", project, "` not found in ", out$project_path))
+      cli::cli_abort(
+        .vpro_cli_escape(paste0("Project `", project, "` not found in ", out$project_path)),
+        class = c("vpro_error_workspace", "vpro_error")
+      )
     }
     out$project <- project
   }
   if (!is.null(su)) {
     su_tables <- if (identical(out$su_path, out$project_path)) tables else vpro_sqlite_physical_tables(out$su_path)
-    out$su <- vpro_resolve_table_suffix(su_tables, su, "SU", default_prefix = out$project)
+    out["su"] <- list(vpro_resolve_table_suffix(su_tables, su, "SU", default_prefix = out$project))
   }
   if (!is.null(hierarchy)) {
     h_tables <- if (identical(out$hierarchy_path, out$project_path)) tables else vpro_sqlite_physical_tables(out$hierarchy_path)
-    out$hierarchy <- vpro_resolve_table_suffix(h_tables, hierarchy, "Hierarchy", default_prefix = out$project)
+    out["hierarchy"] <- list(vpro_resolve_table_suffix(h_tables, hierarchy, "Hierarchy", default_prefix = out$project))
   }
   if (!is.null(lump)) {
-    out$lump <- vpro_resolve_table_suffix(tables, lump, "Lump", default_prefix = out$project)
+    out["lump"] <- list(vpro_resolve_table_suffix(tables, lump, "Lump", default_prefix = out$project))
   }
   out
 }
@@ -1062,8 +1153,11 @@ print.vpro_workspace <- function(x, ...) {
   }
   cli::cli_h3("vpro_workspace: {.val {x$project}} ({x$source})")
   cli::cli_bullets(c(
-    "*" = "Database: {.path {x$project_path}} ({n_env} plots)",
-    "*" = "Active SU: {.val {if (is.null(x$su)) '<none>' else x$su}}{if (!is.na(n_su)) paste0(' (', n_su, ' assignments)') else ''}",
+    "*" = paste0("Database: {.path {x$project_path}} (", n_env, " plots)"),
+    "*" = paste0(
+      "Active SU: {.val {if (is.null(x$su)) '<none>' else x$su}}",
+      if (!is.na(n_su)) paste0(" (", n_su, " assignments)") else ""
+    ),
     "*" = "Hierarchy: {.val {if (is.null(x$hierarchy)) '<none>' else x$hierarchy}} | Lump: {.val {if (is.null(x$lump)) '<none>' else x$lump}}"
   ))
   invisible(x)

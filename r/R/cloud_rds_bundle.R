@@ -43,16 +43,25 @@ vpro_export_rds <- function(
   redact_sensitive <- vpro_pg_validate_flag(redact_sensitive, "redact_sensitive")
 
   if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(trimws(path))) {
-    cli::cli_abort("{.arg path} must be a single non-empty {.file .rds} file path.")
+    cli::cli_abort(
+      "{.arg path} must be a single non-empty {.file .rds} file path.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   if (is.null(provenance)) {
     provenance <- list()
   }
   if (!is.list(provenance)) {
-    cli::cli_abort("{.arg provenance} must be a named {.cls list}.")
+    cli::cli_abort(
+      "{.arg provenance} must be a named {.cls list}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   if (!is.null(snapshot_tag) && (!is.character(snapshot_tag) || length(snapshot_tag) != 1L || is.na(snapshot_tag) || !nzchar(trimws(snapshot_tag)))) {
-    cli::cli_abort("{.arg snapshot_tag} must be {.code NULL} or a single non-empty character string.")
+    cli::cli_abort(
+      "{.arg snapshot_tag} must be {.code NULL} or a single non-empty character string.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
 
   dest_clean <- trimws(path)
@@ -62,11 +71,15 @@ vpro_export_rds <- function(
   dest_resolved <- vpro_abs_path(dest_clean)
 
   if (file.exists(dest_resolved) && dir.exists(dest_resolved)) {
-    cli::cli_abort("{.arg path} points to an existing directory: {.path {dest_resolved}}.")
+    cli::cli_abort(
+      "{.arg path} points to an existing directory: {.path {dest_resolved}}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   if (vpro_is_protected_support_db(dest_resolved, con = ws) || vpro_is_bundled_package_path(dest_resolved)) {
     cli::cli_abort(
-      "Refusing to write RDS snapshot onto protected or bundled package path: {.path {dest_resolved}}."
+      "Refusing to write RDS snapshot onto protected or bundled package path: {.path {dest_resolved}}.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
 
@@ -170,7 +183,10 @@ vpro_export_rds <- function(
     }
     if (!file.rename(tmp_rds, dest_resolved)) {
       if (!file.copy(tmp_rds, dest_resolved, overwrite = TRUE)) {
-        cli::cli_abort("Failed to atomically write RDS snapshot to {.path {dest_resolved}}.")
+        cli::cli_abort(
+          "Failed to atomically write RDS snapshot to {.path {dest_resolved}}.",
+          class = c("vpro_error_cloud", "vpro_error")
+        )
       }
       unlink(tmp_rds, force = TRUE)
     }
@@ -187,41 +203,7 @@ vpro_export_rds <- function(
   )
 }
 
-#' Open a portable `.rds` project snapshot as a live `vpro_workspace`
-#'
-#' Reads either a `"vpro_rds_bundle"` written by [vpro_export_rds()] /
-#' [vpro_master_publish_snapshot()] or a named-list `.rds` bundle exported by
-#' `VPro` desktop (`ExportProjectRDS` with `env`, `admin`, `veg_long`, `humus`,
-#' `mineral`, `su`, `metadata`), automatically pivoting `veg_long` into the
-#' canonical 44-column `VP08` `veg` schema when `veg` is absent. Enforces all
-#' `VP08` domain invariants, stages a self-cleaning ephemeral SQLite `VP08`
-#' database in [base::tempdir()], and returns an S3 object inheriting from
-#' `"vpro_workspace"` so [vpro_env()], [vpro_veg()], [vpro_soil()],
-#' [vpro_matrix()], [vpro_cluster()], [vpro_diagnostics()], [vpro_climate()],
-#' [vpro_asmr()], [vpro_sf()], and [vpro_render_guide()] work out-of-the-box
-#' without requiring an external database setup.
-#'
-#' @param path Path to an `.rds` project snapshot file.
-#' @param su Optional site-unit override: `NULL` (default uses bundle `su`
-#'   table), `"None"` / `FALSE` to disable active SU scoping, a custom
-#'   `data.frame(PlotNumber, SiteUnit)`, or a target `*_SU` table name.
-#' @param lump Optional species lump override: `NULL` (default uses bundle
-#'   `lump` table), `"None"` / `FALSE` to disable active lumping, a custom
-#'   `data.frame(SppCode, LumpCode, Use)`, or a target `*_Lump` table name.
-#' @return An S3 object of class `c("vpro_rds_project", "vpro_workspace")`.
-#' @seealso [vpro_export_rds()], [vpro_master_publish_snapshot()], [vpro_env()],
-#'   [vpro_diagnostics()]
-#' @export
-vpro_import_rds <- function(path, su = NULL, lump = NULL) {
-  .vpro_register_snap_s3()
-
-  if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(trimws(path))) {
-    cli::cli_abort("{.arg path} must be a single non-empty {.file .rds} file path.")
-  }
-  if (!file.exists(path) || dir.exists(path)) {
-    cli::cli_abort("RDS snapshot file does not exist: {.path {path}}.")
-  }
-  rds_norm <- normalizePath(path, winslash = "/", mustWork = TRUE)
+.vpro_rds_unpack_raw_object <- function(rds_norm) {
   raw_obj <- readRDS(rds_norm)
 
   is_bundle <- inherits(raw_obj, "vpro_rds_bundle") ||
@@ -236,10 +218,13 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
     ("env" %in% tolower(names(raw_obj)))
 
   if (!is_bundle && !is_desktop_list) {
-    cli::cli_abort(c(
-      "Unsupported RDS object in {.path {rds_norm}}.",
-      "i" = "Expected a {.cls vpro_rds_bundle} from {.fn vpro_export_rds} or a named list of data frames ({.field env}, {.field admin}, {.field veg}/{.field veg_long}, ...) from {.code VPro}."
-    ))
+    cli::cli_abort(
+      c(
+        "Unsupported RDS object in {.path {rds_norm}}.",
+        "i" = "Expected a {.cls vpro_rds_bundle} from {.fn vpro_export_rds} or a named list of data frames ({.field env}, {.field admin}, {.field veg}/{.field veg_long}, ...) from {.code VPro}."
+      ),
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
 
   raw_tables <- if (is_bundle) raw_obj$tables else raw_obj
@@ -260,25 +245,41 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
     error = function(e) vpro_snapshot_project_prefix(raw_proj, fallback = "RDSProject", guard_reserved = FALSE)
   )
 
-  raw_env <- fetch_tbl("env")
-  raw_admin <- fetch_tbl("admin")
-  raw_veg <- fetch_tbl("veg")
-  raw_veg_long <- fetch_tbl("veg_long")
-  raw_humus <- fetch_tbl("humus")
-  raw_mineral <- fetch_tbl("mineral")
-  raw_other <- fetch_tbl("other")
-  raw_metadata <- fetch_tbl("metadata")
-  raw_audit <- fetch_tbl("audit")
-  raw_su <- fetch_tbl("su")
-  raw_lump <- fetch_tbl("lump")
+  raw_list <- list(
+    env = fetch_tbl("env"),
+    admin = fetch_tbl("admin"),
+    veg = fetch_tbl("veg"),
+    veg_long = fetch_tbl("veg_long"),
+    humus = fetch_tbl("humus"),
+    mineral = fetch_tbl("mineral"),
+    other = fetch_tbl("other"),
+    metadata = fetch_tbl("metadata"),
+    audit = fetch_tbl("audit"),
+    su = fetch_tbl("su"),
+    lump = fetch_tbl("lump")
+  )
 
-  vpro_assert_char_plot_key(raw_env, "PlotNumber", "env")
-  vpro_assert_char_plot_key(raw_admin, "Plot", "admin")
-  vpro_assert_char_plot_key(raw_veg, "PlotNumber", "veg")
-  vpro_assert_char_plot_key(raw_humus, "PlotNumber", "humus")
-  vpro_assert_char_plot_key(raw_mineral, "PlotNumber", "mineral")
-  vpro_assert_char_plot_key(raw_other, "PlotNumber", "other")
-  vpro_assert_char_plot_key(raw_audit, "PlotNumber", "audit")
+  vpro_assert_char_plot_key(raw_list$env, "PlotNumber", "env")
+  vpro_assert_char_plot_key(raw_list$admin, "Plot", "admin")
+  vpro_assert_char_plot_key(raw_list$veg, "PlotNumber", "veg")
+  vpro_assert_char_plot_key(raw_list$humus, "PlotNumber", "humus")
+  vpro_assert_char_plot_key(raw_list$mineral, "PlotNumber", "mineral")
+  vpro_assert_char_plot_key(raw_list$other, "PlotNumber", "other")
+  vpro_assert_char_plot_key(raw_list$audit, "PlotNumber", "audit")
+
+  list(
+    raw_obj = raw_obj,
+    is_bundle = is_bundle,
+    is_desktop_list = is_desktop_list,
+    file_stem = file_stem,
+    project_name = project_name,
+    raw = raw_list
+  )
+}
+
+.vpro_rds_canonicalize_tables <- function(unpacked, su, lump) {
+  raw <- unpacked$raw
+  project_name <- unpacked$project_name
 
   canon_one <- function(df_in, suffix) {
     spec <- vpro_pg_vp08_specs(suffix)
@@ -293,7 +294,7 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
     out
   }
 
-  env_tbl <- canon_one(raw_env, "Env")
+  env_tbl <- canon_one(raw$env, "Env")
   if (nrow(env_tbl) > 0L) {
     keep_e <- !is.na(env_tbl$PlotNumber) & nzchar(trimws(env_tbl$PlotNumber))
     env_tbl <- env_tbl[keep_e, , drop = FALSE]
@@ -301,7 +302,7 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
     env_tbl <- env_tbl[order(env_tbl$PlotNumber, method = "radix"), , drop = FALSE]
   }
 
-  admin_tbl <- canon_one(raw_admin, "Admin")
+  admin_tbl <- canon_one(raw$admin, "Admin")
   if (nrow(admin_tbl) > 0L) {
     keep_a <- !is.na(admin_tbl$Plot) & nzchar(trimws(admin_tbl$Plot))
     admin_tbl <- admin_tbl[keep_a, , drop = FALSE]
@@ -309,10 +310,10 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
     admin_tbl <- admin_tbl[order(admin_tbl$Plot, method = "radix"), , drop = FALSE]
   }
 
-  veg_tbl <- if (!is.null(raw_veg)) {
-    canon_one(raw_veg, "Veg")
-  } else if (!is.null(raw_veg_long)) {
-    vpro_pivot_veg_long_to_vp08(raw_veg_long)
+  veg_tbl <- if (!is.null(raw$veg)) {
+    canon_one(raw$veg, "Veg")
+  } else if (!is.null(raw$veg_long)) {
+    vpro_pivot_veg_long_to_vp08(raw$veg_long)
   } else {
     canon_one(NULL, "Veg")
   }
@@ -326,35 +327,32 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
       bad_cv <- !is.na(cv) & (!is.finite(cv) | cv < 0 | cv >= 100)
       if (any(bad_cv)) {
         cli::cli_abort(
-          "RDS vegetation cover column {.field {cc}} contains value(s) outside [0, 100)."
+          "RDS vegetation cover column {.field {cc}} contains value(s) outside [0, 100).",
+          class = c("vpro_error_cloud", "vpro_error")
         )
       }
     }
   }
 
-  humus_tbl <- canon_one(raw_humus, "Humus")
-  if (nrow(humus_tbl) > 0L) {
-    humus_tbl <- humus_tbl[!is.na(humus_tbl$PlotNumber) & nzchar(trimws(humus_tbl$PlotNumber)), , drop = FALSE]
+  filter_plot <- function(tbl) {
+    if (nrow(tbl) > 0L) {
+      tbl[!is.na(tbl$PlotNumber) & nzchar(trimws(tbl$PlotNumber)), , drop = FALSE]
+    } else {
+      tbl
+    }
   }
 
-  mineral_tbl <- canon_one(raw_mineral, "Mineral")
-  if (nrow(mineral_tbl) > 0L) {
-    mineral_tbl <- mineral_tbl[!is.na(mineral_tbl$PlotNumber) & nzchar(trimws(mineral_tbl$PlotNumber)), , drop = FALSE]
-  }
-
-  other_tbl <- canon_one(raw_other, "Other")
-  if (nrow(other_tbl) > 0L) {
-    other_tbl <- other_tbl[!is.na(other_tbl$PlotNumber) & nzchar(trimws(other_tbl$PlotNumber)), , drop = FALSE]
-  }
-
-  metadata_tbl <- canon_one(raw_metadata, "Metadata")
-  audit_tbl <- canon_one(raw_audit, "Audit")
+  humus_tbl <- filter_plot(canon_one(raw$humus, "Humus"))
+  mineral_tbl <- filter_plot(canon_one(raw$mineral, "Mineral"))
+  other_tbl <- filter_plot(canon_one(raw$other, "Other"))
+  metadata_tbl <- canon_one(raw$metadata, "Metadata")
+  audit_tbl <- canon_one(raw$audit, "Audit")
 
   su_disabled <- vpro_is_none_selector(su)
   su_tbl <- if (is.data.frame(su)) {
     vpro_normalize_su_tibble(su)
-  } else if (!is.null(raw_su)) {
-    vpro_normalize_su_tibble(raw_su)
+  } else if (!is.null(raw$su)) {
+    vpro_normalize_su_tibble(raw$su)
   } else {
     vpro_derive_su_from_env_admin(env_tbl, admin_tbl)
   }
@@ -362,8 +360,8 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
   lump_disabled <- vpro_is_none_selector(lump)
   lump_tbl <- if (is.data.frame(lump)) {
     vpro_normalize_lump_tibble(lump)
-  } else if (!is.null(raw_lump)) {
-    vpro_normalize_lump_tibble(raw_lump)
+  } else if (!is.null(raw$lump)) {
+    vpro_normalize_lump_tibble(raw$lump)
   } else {
     vpro_normalize_lump_tibble(NULL)
   }
@@ -390,34 +388,46 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
     NULL
   }
 
-  # Materialize ephemeral self-cleaning VP08 SQLite workspace in tempdir()
-  tmp_db <- tempfile(pattern = "vpro-rds-proj-", fileext = ".db")
-  staged_ok <- FALSE
-  on.exit(
-    {
-      if (!staged_ok) {
-        unlink(c(tmp_db, paste0(tmp_db, "-wal"), paste0(tmp_db, "-shm")), force = TRUE)
-      }
-    },
-    add = TRUE
+  list(
+    tables_map = list(
+      Env = env_tbl,
+      Admin = admin_tbl,
+      Veg = veg_tbl,
+      Humus = humus_tbl,
+      Mineral = mineral_tbl,
+      Other = other_tbl,
+      Metadata = metadata_tbl,
+      Audit = audit_tbl
+    ),
+    tables_out = list(
+      env = env_tbl,
+      admin = admin_tbl,
+      veg = veg_tbl,
+      humus = humus_tbl,
+      mineral = mineral_tbl,
+      other = other_tbl,
+      metadata = metadata_tbl,
+      audit = audit_tbl,
+      su = su_tbl,
+      lump = lump_tbl
+    ),
+    su_table_name = su_table_name,
+    lump_table_name = lump_table_name
   )
+}
 
+.vpro_rds_stage_sqlite_db <- function(tmp_db, project_name, canon) {
   sq_con <- DBI::dbConnect(RSQLite::SQLite(), tmp_db)
   on.exit(if (DBI::dbIsValid(sq_con)) DBI::dbDisconnect(sq_con), add = TRUE)
   DBI::dbExecute(sq_con, "PRAGMA foreign_keys = OFF")
   DBI::dbExecute(sq_con, "PRAGMA journal_mode = DELETE")
   DBI::dbExecute(sq_con, "PRAGMA synchronous = NORMAL")
 
-  tables_map <- list(
-    Env = env_tbl,
-    Admin = admin_tbl,
-    Veg = veg_tbl,
-    Humus = humus_tbl,
-    Mineral = mineral_tbl,
-    Other = other_tbl,
-    Metadata = metadata_tbl,
-    Audit = audit_tbl
-  )
+  tables_map <- canon$tables_map
+  su_table_name <- canon$su_table_name
+  su_tbl <- canon$tables_out$su
+  lump_table_name <- canon$lump_table_name
+  lump_tbl <- canon$tables_out$lump
 
   DBI::dbWithTransaction(sq_con, {
     deferred_idx <- vpro_clone_sample_schema(sq_con, project_name)
@@ -554,11 +564,13 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
 
   insp <- vpro_project_inspect(tmp_db, project_name)
   if (!isTRUE(insp$compatible)) {
-    cli::cli_abort("Staged RDS SQLite workspace failed {.code VP08} compatibility verification.")
+    cli::cli_abort(
+      "Staged RDS SQLite workspace failed {.code VP08} compatibility verification.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
 
   tmp_db_norm <- normalizePath(tmp_db, winslash = "/", mustWork = TRUE)
-  # Close a brief RW handle after SQLITE_RO inspection so idle -wal/-shm sidecars are cleaned
   clean_con <- DBI::dbConnect(RSQLite::SQLite(), tmp_db_norm, flags = RSQLite::SQLITE_RW)
   tryCatch(
     {
@@ -569,6 +581,105 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
       if (DBI::dbIsValid(clean_con)) DBI::dbDisconnect(clean_con)
     }
   )
+  tmp_db_norm
+}
+
+.vpro_rds_build_provenance <- function(unpacked, rds_norm, canon) {
+  raw_prov <- if (unpacked$is_bundle && is.list(unpacked$raw_obj$provenance)) {
+    unpacked$raw_obj$provenance
+  } else {
+    list()
+  }
+  pick_prov <- function(val, def) {
+    if (!is.null(val) && length(val) >= 1L && !is.na(val[[1L]]) && nzchar(trimws(as.character(val[[1L]])))) {
+      trimws(as.character(val[[1L]]))
+    } else {
+      def
+    }
+  }
+  env_tbl <- canon$tables_out$env
+  veg_tbl <- canon$tables_out$veg
+  audit_tbl <- canon$tables_out$audit
+  file_stem <- unpacked$file_stem
+  project_name <- unpacked$project_name
+
+  list(
+    snapshot_tag = pick_prov(raw_prov$snapshot_tag, if (nzchar(file_stem)) file_stem else project_name),
+    created_at = pick_prov(
+      raw_prov$created_at,
+      format(file.info(rds_norm)$mtime, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+    ),
+    created_by = pick_prov(raw_prov$created_by, if (unpacked$is_desktop_list) "VProDesktop" else "VProUser"),
+    plot_count = as.integer(nrow(env_tbl)),
+    veg_count = as.integer(nrow(veg_tbl)),
+    bec_version = pick_prov(raw_prov$bec_version, .vpro_default_bec_version),
+    taxonomy_version = pick_prov(raw_prov$taxonomy_version, .vpro_default_taxonomy_version),
+    tail_audit_hash = pick_prov(raw_prov$tail_audit_hash, vpro_compute_local_audit_tail_hash(audit_tbl)),
+    notes = if (!is.null(raw_prov$notes) && length(raw_prov$notes) >= 1L && !is.na(raw_prov$notes[[1L]])) {
+      as.character(raw_prov$notes[[1L]])
+    } else {
+      NA_character_
+    }
+  )
+}
+
+#' Open a portable `.rds` project snapshot as a live `vpro_workspace`
+#'
+#' Reads either a `"vpro_rds_bundle"` written by [vpro_export_rds()] /
+#' [vpro_master_publish_snapshot()] or a named-list `.rds` bundle exported by
+#' `VPro` desktop (`ExportProjectRDS` with `env`, `admin`, `veg_long`, `humus`,
+#' `mineral`, `su`, `metadata`), automatically pivoting `veg_long` into the
+#' canonical 44-column `VP08` `veg` schema when `veg` is absent. Enforces all
+#' `VP08` domain invariants, stages a self-cleaning ephemeral SQLite `VP08`
+#' database in [base::tempdir()], and returns an S3 object inheriting from
+#' `"vpro_workspace"` so [vpro_env()], [vpro_veg()], [vpro_soil()],
+#' [vpro_matrix()], [vpro_cluster()], [vpro_diagnostics()], [vpro_climate()],
+#' [vpro_asmr()], [vpro_sf()], and [vpro_render_guide()] work out-of-the-box
+#' without requiring an external database setup.
+#'
+#' @param path Path to an `.rds` project snapshot file.
+#' @param su Optional site-unit override: `NULL` (default uses bundle `su`
+#'   table), `"None"` / `FALSE` to disable active SU scoping, a custom
+#'   `data.frame(PlotNumber, SiteUnit)`, or a target `*_SU` table name.
+#' @param lump Optional species lump override: `NULL` (default uses bundle
+#'   `lump` table), `"None"` / `FALSE` to disable active lumping, a custom
+#'   `data.frame(SppCode, LumpCode, Use)`, or a target `*_Lump` table name.
+#' @return An S3 object of class `c("vpro_rds_project", "vpro_workspace")`.
+#' @seealso [vpro_export_rds()], [vpro_master_publish_snapshot()], [vpro_env()],
+#'   [vpro_diagnostics()]
+#' @export
+vpro_import_rds <- function(path, su = NULL, lump = NULL) {
+  .vpro_register_snap_s3()
+
+  if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(trimws(path))) {
+    cli::cli_abort(
+      "{.arg path} must be a single non-empty {.file .rds} file path.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
+  }
+  if (!file.exists(path) || dir.exists(path)) {
+    cli::cli_abort(
+      "RDS snapshot file does not exist: {.path {path}}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
+  }
+  rds_norm <- normalizePath(path, winslash = "/", mustWork = TRUE)
+  unpacked <- .vpro_rds_unpack_raw_object(rds_norm)
+  project_name <- unpacked$project_name
+  canon <- .vpro_rds_canonicalize_tables(unpacked, su = su, lump = lump)
+
+  tmp_db <- tempfile(pattern = "vpro-rds-proj-", fileext = ".db")
+  staged_ok <- FALSE
+  on.exit(
+    {
+      if (!staged_ok) {
+        unlink(c(tmp_db, paste0(tmp_db, "-wal"), paste0(tmp_db, "-shm")), force = TRUE)
+      }
+    },
+    add = TRUE
+  )
+
+  tmp_db_norm <- .vpro_rds_stage_sqlite_db(tmp_db, project_name, canon)
   staged_ok <- TRUE
 
   cleanup_env <- new.env(parent = emptyenv())
@@ -584,56 +695,18 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
     onexit = TRUE
   )
 
-  raw_prov <- if (is_bundle && is.list(raw_obj$provenance)) raw_obj$provenance else list()
-  pick_prov <- function(val, def) {
-    if (!is.null(val) && length(val) >= 1L && !is.na(val[[1L]]) && nzchar(trimws(as.character(val[[1L]])))) {
-      trimws(as.character(val[[1L]]))
-    } else {
-      def
-    }
-  }
-  prov_out <- list(
-    snapshot_tag = pick_prov(raw_prov$snapshot_tag, if (nzchar(file_stem)) file_stem else project_name),
-    created_at = pick_prov(
-      raw_prov$created_at,
-      format(file.info(rds_norm)$mtime, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
-    ),
-    created_by = pick_prov(raw_prov$created_by, if (is_desktop_list) "VProDesktop" else "VProUser"),
-    plot_count = as.integer(nrow(env_tbl)),
-    veg_count = as.integer(nrow(veg_tbl)),
-    bec_version = pick_prov(raw_prov$bec_version, .vpro_default_bec_version),
-    taxonomy_version = pick_prov(raw_prov$taxonomy_version, .vpro_default_taxonomy_version),
-    tail_audit_hash = pick_prov(raw_prov$tail_audit_hash, vpro_compute_local_audit_tail_hash(audit_tbl)),
-    notes = if (!is.null(raw_prov$notes) && length(raw_prov$notes) >= 1L && !is.na(raw_prov$notes[[1L]])) {
-      as.character(raw_prov$notes[[1L]])
-    } else {
-      NA_character_
-    }
-  )
-
-  tables_out <- list(
-    env = env_tbl,
-    admin = admin_tbl,
-    veg = veg_tbl,
-    humus = humus_tbl,
-    mineral = mineral_tbl,
-    other = other_tbl,
-    metadata = metadata_tbl,
-    audit = audit_tbl,
-    su = su_tbl,
-    lump = lump_tbl
-  )
+  prov_out <- .vpro_rds_build_provenance(unpacked, rds_norm, canon)
 
   tmp_dir_norm <- normalizePath(tempdir(), winslash = "/", mustWork = FALSE)
   res_obj <- structure(
     list(
       project = project_name,
       project_path = tmp_db_norm,
-      su = su_table_name,
+      su = canon$su_table_name,
       su_path = tmp_db_norm,
       hierarchy = NULL,
       hierarchy_path = tmp_db_norm,
-      lump = lump_table_name,
+      lump = canon$lump_table_name,
       lump_path = tmp_db_norm,
       vlists_path = vpro_bundled_db("VLists.db"),
       vuser_path = vpro_bundled_db("VUser.db"),
@@ -644,7 +717,7 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
       source = "rds_snapshot",
       rds_path = rds_norm,
       provenance = prov_out,
-      tables = tables_out,
+      tables = canon$tables_out,
       .rds_cleanup = cleanup_env
     ),
     class = c("vpro_rds_project", "vpro_workspace")
@@ -701,12 +774,18 @@ print.vpro_rds_project <- function(x, ...) {
     "<none>"
   }
 
-  cli::cli_h3("vpro_rds_project: {.val {tag_lbl}} (project {.val {x$project}})")
+  cli::cli_h3(paste0(
+    "vpro_rds_project: {.val ",
+    .vpro_cli_escape(tag_lbl),
+    "} (project {.val ",
+    .vpro_cli_escape(x$project),
+    "})"
+  ))
   cli::cli_bullets(c(
     "*" = "RDS snapshot: {.path {x$rds_path}}",
-    "*" = "Records: {n_plots} plots, {n_veg} veg rows",
-    "*" = "Standards: BEC {bec_lbl} | Taxonomy {tax_lbl}",
-    "*" = "Active SU: {su_lbl} | Active Lump: {lump_lbl}"
+    "*" = .vpro_cli_escape(paste0("Records: ", n_plots, " plots, ", n_veg, " veg rows")),
+    "*" = .vpro_cli_escape(paste0("Standards: BEC ", bec_lbl, " | Taxonomy ", tax_lbl)),
+    "*" = .vpro_cli_escape(paste0("Active SU: ", su_lbl, " | Active Lump: ", lump_lbl))
   ))
   invisible(x)
 }

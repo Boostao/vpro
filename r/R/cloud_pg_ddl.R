@@ -104,7 +104,7 @@ vpro_pg_trigger_if_missing_ddl <- function(schema_name, table_name, trigger_name
   )
 }
 
-vpro_pg_build_v1_migration_stmts <- function(has_postgis = FALSE, postgis_schema = "public") {
+.vpro_pg_becmaster_v1_ddl <- function(has_postgis = FALSE, postgis_schema = "public") {
   stmts <- c(
     vpro_pg_master_table_ddl("env", .vpro_pg_vp08_spec_map$Env, "PlotNumber"),
     'CREATE INDEX IF NOT EXISTS idx_becmaster_env_zone ON becmaster.env ("Zone");',
@@ -146,7 +146,7 @@ vpro_pg_build_v1_migration_stmts <- function(has_postgis = FALSE, postgis_schema
     "  row_hash TEXT NOT NULL"
   )
 
-  stmts <- c(
+  c(
     stmts,
     vpro_pg_master_table_ddl(
       "admin",
@@ -256,7 +256,9 @@ vpro_pg_build_v1_migration_stmts <- function(has_postgis = FALSE, postgis_schema
       "becmaster.enforce_download_log_insert"
     )
   )
+}
 
+.vpro_pg_staging_v1_ddl <- function() {
   stg_audit_defs <- c(
     "  audit_seq BIGSERIAL PRIMARY KEY",
     "  submission_id UUID NOT NULL REFERENCES staging.submissions(submission_id) ON DELETE CASCADE",
@@ -264,7 +266,6 @@ vpro_pg_build_v1_migration_stmts <- function(has_postgis = FALSE, postgis_schema
   )
 
   stmts <- c(
-    stmts,
     paste(
       "CREATE TABLE IF NOT EXISTS staging.submissions (",
       "  submission_id UUID PRIMARY KEY,",
@@ -372,20 +373,25 @@ vpro_pg_build_v1_migration_stmts <- function(has_postgis = FALSE, postgis_schema
     )
   )
 
-  for (child_tbl in c("env", "admin", "veg", "humus", "mineral", "other", "metadata", "audit")) {
-    stmts <- c(
-      stmts,
+  child_triggers <- vapply(
+    c("env", "admin", "veg", "humus", "mineral", "other", "metadata", "audit"),
+    function(child_tbl) {
       vpro_pg_trigger_if_missing_ddl(
         "staging",
         child_tbl,
         paste0("trg_staging_", child_tbl, "_insert"),
         "staging.enforce_staging_child_insert"
       )
-    )
-  }
+    },
+    character(1L),
+    USE.NAMES = FALSE
+  )
 
-  stmts <- c(
-    stmts,
+  c(stmts, child_triggers)
+}
+
+.vpro_pg_standards_v1_ddl <- function() {
+  c(
     paste(
       "CREATE TABLE IF NOT EXISTS standards.library_releases (",
       "  release_id TEXT PRIMARY KEY,",
@@ -415,8 +421,14 @@ vpro_pg_build_v1_migration_stmts <- function(has_postgis = FALSE, postgis_schema
     'CREATE INDEX IF NOT EXISTS idx_standards_spp_attr_code ON standards.usys_spp_attributes ("Code");',
     vpro_pg_standards_table_ddl("project_metadata", .vpro_pg_standards_spec_map$project_metadata)
   )
+}
 
-  stmts
+vpro_pg_build_v1_migration_stmts <- function(has_postgis = FALSE, postgis_schema = "public") {
+  c(
+    .vpro_pg_becmaster_v1_ddl(has_postgis = has_postgis, postgis_schema = postgis_schema),
+    .vpro_pg_staging_v1_ddl(),
+    .vpro_pg_standards_v1_ddl()
+  )
 }
 
 # Public Exported API ----------------------------------------------------------

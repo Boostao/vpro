@@ -150,13 +150,13 @@ vpro_matrix <- function(
   cover_precedence <- match.arg(cover_precedence)
 
   if (!is.numeric(drop_rare) || length(drop_rare) != 1L || is.na(drop_rare) || !is.finite(drop_rare) || drop_rare < 0) {
-    rlang::abort("`drop_rare` must be a single finite non-negative number.")
+    cli::cli_abort("`drop_rare` must be a single finite non-negative number.", class = c("vpro_error_analysis", "vpro_error"))
   }
   if (!is.logical(sparse) || length(sparse) != 1L || is.na(sparse)) {
-    rlang::abort("`sparse` must be TRUE or FALSE.")
+    cli::cli_abort("`sparse` must be TRUE or FALSE.", class = c("vpro_error_analysis", "vpro_error"))
   }
   if (!is.logical(exclude_modifiers) || length(exclude_modifiers) != 1L || is.na(exclude_modifiers)) {
-    rlang::abort("`exclude_modifiers` must be TRUE or FALSE.")
+    cli::cli_abort("`exclude_modifiers` must be TRUE or FALSE.", class = c("vpro_error_analysis", "vpro_error"))
   }
 
   if (isTRUE(sparse)) {

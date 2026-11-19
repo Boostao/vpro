@@ -40,10 +40,11 @@ vpro_master_audit <- function(
   merge_tx_clean <- vpro_pg_clean_tokens(merge_tx_id, "merge_tx_id")
 
   clauses <- character()
-  params <- list()
+  param_state <- new.env(parent = emptyenv())
+  param_state$params <- list()
   next_param <- function(val) {
-    params[[length(params) + 1L]] <<- val
-    paste0("$", length(params))
+    param_state$params[[length(param_state$params) + 1L]] <- val
+    paste0("$", length(param_state$params))
   }
 
   if (length(plots_clean) > 0L) {
@@ -112,7 +113,7 @@ vpro_master_audit <- function(
   df <- vpro_pg_query(
     pg,
     sql,
-    params = if (length(params) > 0L) params else NULL,
+    params = if (length(param_state$params) > 0L) param_state$params else NULL,
     action = "query becmaster.audit"
   )
 
@@ -312,7 +313,10 @@ vpro_master_workspace <- function(
 
 vpro_rebuild_vlists_from_standards <- function(pg, base_vlists_path, out_path, bec_version, taxonomy_version) {
   if (!file.copy(base_vlists_path, out_path, overwrite = TRUE)) {
-    cli::cli_abort("Failed to stage baseline {.file VLists.db} for relational standards rebuild.")
+    cli::cli_abort(
+      "Failed to stage baseline {.file VLists.db} for relational standards rebuild.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
 
   sq_con <- DBI::dbConnect(RSQLite::SQLite(), out_path)
@@ -408,11 +412,17 @@ vpro_rebuild_vlists_from_standards <- function(pg, base_vlists_path, out_path, b
 vpro_master_standards_sync <- function(pg, data_dir = vpro_data_dir()) {
   vpro_assert_pg_conn(pg, require_custodian = FALSE)
   if (!is.character(data_dir) || length(data_dir) != 1L || is.na(data_dir) || !nzchar(trimws(data_dir))) {
-    cli::cli_abort("{.arg data_dir} must be a single non-empty directory path.")
+    cli::cli_abort(
+      "{.arg data_dir} must be a single non-empty directory path.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   data_dir <- vpro_abs_path(trimws(data_dir))
   if (vpro_is_bundled_package_path(data_dir)) {
-    cli::cli_abort("Refusing to write {.file VLists.db} inside the installed {.pkg vpro} package directory.")
+    cli::cli_abort(
+      "Refusing to write {.file VLists.db} inside the installed {.pkg vpro} package directory.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
 
   rel_df <- vpro_pg_query(
@@ -429,7 +439,8 @@ vpro_master_standards_sync <- function(pg, data_dir = vpro_data_dir()) {
   )
   if (nrow(rel_df) == 0L) {
     cli::cli_abort(
-      "No active provincial standards release ({.code is_current = TRUE}) has been published in {.code standards.library_releases}."
+      "No active provincial standards release ({.code is_current = TRUE}) has been published in {.code standards.library_releases}.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
 
@@ -488,7 +499,8 @@ vpro_master_standards_sync <- function(pg, data_dir = vpro_data_dir()) {
     (file.exists(shm_path) && !is.na(file.info(shm_path)$size))
   if (has_wal_activity) {
     cli::cli_abort(
-      "Refusing to overwrite {.path {target_path}} while it is open in another VPro or database session."
+      "Refusing to overwrite {.path {target_path}} while it is open in another VPro or database session.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
 
@@ -519,7 +531,8 @@ vpro_master_standards_sync <- function(pg, data_dir = vpro_data_dir()) {
       memDecompress(raw_vec, type = "gzip"),
       error = function(e) {
         cli::cli_abort(
-          paste0("Failed to decompress cloud {.file VLists.db} gzip snapshot: ", conditionMessage(e)),
+          paste0("Failed to decompress cloud {.file VLists.db} gzip snapshot: ", .vpro_cli_escape(conditionMessage(e))),
+          class = c("vpro_error_cloud", "vpro_error"),
           parent = e
         )
       }
@@ -528,7 +541,8 @@ vpro_master_standards_sync <- function(pg, data_dir = vpro_data_dir()) {
     staged_sha <- tolower(trimws(unname(as.character(vpro_sha256_file(tmp_vlists)))))
     if (!is.na(cloud_sha256) && nzchar(cloud_sha256) && !vpro_same_hash(staged_sha, cloud_sha256)) {
       cli::cli_abort(
-        "Cloud {.file VLists.db} SHA-256 mismatch (expected {.val {cloud_sha256}}, got {.val {staged_sha}})."
+        "Cloud {.file VLists.db} SHA-256 mismatch (expected {.val {cloud_sha256}}, got {.val {staged_sha}}).",
+        class = c("vpro_error_cloud", "vpro_error")
       )
     }
   } else {
@@ -553,19 +567,24 @@ vpro_master_standards_sync <- function(pg, data_dir = vpro_data_dir()) {
   )
   ic_df <- staged_check$ic
   if (nrow(ic_df) == 0L || !identical(tolower(trimws(as.character(ic_df[[1L]][[1L]]))), "ok")) {
-    cli::cli_abort("Staged {.file VLists.db} failed database integrity verification.")
+    cli::cli_abort(
+      "Staged {.file VLists.db} failed database integrity verification.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   req_vlists_tbls <- c("USysAllSpecs", "USysTableOfLists", "MasterSiteUnitList", "USysZoneList")
   missing_vlists_tbls <- req_vlists_tbls[!(tolower(req_vlists_tbls) %in% tolower(staged_check$tables))]
   if (length(missing_vlists_tbls) > 0L) {
     cli::cli_abort(
-      "Staged {.file VLists.db} is missing required catalogue table{?s}: {.val {missing_vlists_tbls}}."
+      "Staged {.file VLists.db} is missing required catalogue table{?s}: {.val {missing_vlists_tbls}}.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
 
   if (file.exists(wal_path) || file.exists(shm_path)) {
     cli::cli_abort(
-      "Refusing to overwrite {.path {target_path}} while it is open in another VPro or database session."
+      "Refusing to overwrite {.path {target_path}} while it is open in another VPro or database session.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
 
@@ -575,7 +594,10 @@ vpro_master_standards_sync <- function(pg, data_dir = vpro_data_dir()) {
     }
     if (!file.rename(tmp_vlists, target_path)) {
       if (!file.copy(tmp_vlists, target_path, overwrite = TRUE)) {
-        cli::cli_abort("Failed to atomically install updated {.file VLists.db} at {.path {target_path}}.")
+        cli::cli_abort(
+          "Failed to atomically install updated {.file VLists.db} at {.path {target_path}}.",
+          class = c("vpro_error_cloud", "vpro_error")
+        )
       }
       unlink(tmp_vlists, force = TRUE)
     }

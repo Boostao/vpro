@@ -10,14 +10,16 @@ vpro_resolve_sqlite_base_db <- function(base_db, base_project = NULL) {
     insp <- vpro_project_inspect(base_db$project_path, proj)
     if (!isTRUE(insp$compatible)) {
       cli::cli_abort(
-        "Base workspace project {.val {proj}} in {.path {base_db$project_path}} is not a compatible {.code VP08} project."
+        "Base workspace project {.val {proj}} in {.path {base_db$project_path}} is not a compatible {.code VP08} project.",
+        class = c("vpro_error_cloud", "vpro_error")
       )
     }
     return(list(path = insp$path, project = proj))
   }
   if (!is.character(base_db) || length(base_db) != 1L || is.na(base_db)) {
     cli::cli_abort(
-      "{.arg base_db} must be {.code NULL}, a {.cls vpro_workspace}, or a SQLite {.file .db} file path."
+      "{.arg base_db} must be {.code NULL}, a {.cls vpro_workspace}, or a SQLite {.file .db} file path.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   trimmed <- trimws(base_db)
@@ -26,7 +28,10 @@ vpro_resolve_sqlite_base_db <- function(base_db, base_project = NULL) {
   }
   resolved <- vpro_abs_path(trimmed)
   if (!file.exists(resolved) || dir.exists(resolved)) {
-    cli::cli_abort("Base SQLite database does not exist: {.path {resolved}}.")
+    cli::cli_abort(
+      "Base SQLite database does not exist: {.path {resolved}}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
 
   disc <- .vpro_project_discover(resolved)
@@ -36,17 +41,22 @@ vpro_resolve_sqlite_base_db <- function(base_db, base_project = NULL) {
     hit <- compat$project[compat$project == req_p]
     if (length(hit) != 1L) {
       cli::cli_abort(
-        "Compatible {.code VP08} project {.val {req_p}} was not found in {.path {resolved}}."
+        "Compatible {.code VP08} project {.val {req_p}} was not found in {.path {resolved}}.",
+        class = c("vpro_error_cloud", "vpro_error")
       )
     }
     return(list(path = normalizePath(resolved, winslash = "/", mustWork = TRUE), project = hit[[1L]]))
   }
   if (nrow(compat) == 0L) {
-    cli::cli_abort("No compatible {.code VP08} project found in base SQLite file {.path {resolved}}.")
+    cli::cli_abort(
+      "No compatible {.code VP08} project found in base SQLite file {.path {resolved}}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   if (nrow(compat) > 1L) {
     cli::cli_abort(
-      "Multiple compatible {.code VP08} projects ({.val {compat$project}}) found in {.path {resolved}}; specify {.arg base_project}."
+      "Multiple compatible {.code VP08} projects ({.val {compat$project}}) found in {.path {resolved}}; specify {.arg base_project}.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   list(path = normalizePath(resolved, winslash = "/", mustWork = TRUE), project = compat$project[[1L]])
@@ -85,7 +95,10 @@ vpro_build_pg_merge_preview_on_conn <- function(conn, sub_id, base_info = NULL, 
     params = list(sub_id)
   )
   if (nrow(hdr) == 0L) {
-    cli::cli_abort("Staging submission {.val {sub_id}} was not found.")
+    cli::cli_abort(
+      "Staging submission {.val {sub_id}} was not found.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   proj_name <- as.character(hdr$project_name[[1L]])
   src_sha <- as.character(hdr$source_db_sha256[[1L]])
@@ -267,12 +280,39 @@ print.vpro_merge_preview <- function(x, ...) {
     "2-way (no base snapshot)"
   }
   n_prot <- nrow(x$custodian_protected_diffs)
-  cli::cli_h3("vpro_merge_preview ({x$source_project} -> {x$target_project}, {base_lbl})")
+  cli::cli_h3(.vpro_cli_escape(paste0(
+    "vpro_merge_preview (",
+    x$source_project,
+    " -> ",
+    x$target_project,
+    ", ",
+    base_lbl,
+    ")"
+  )))
   cli::cli_bullets(c(
-    "*" = "Submission: {x$submission_id}",
-    "*" = "Plots: Added={x$added_count}, Identical={x$identical_count}, FastForward={x$fast_forward_count}, Conflict={x$conflict_count}, TargetOnly={x$target_only_count}",
-    "*" = "Diff items: {nrow(x$items)} total ({nrow(x$conflicts)} conflicts, {n_prot} custodian-protected)",
-    "*" = "Preview digest: {x$preview_digest}"
+    "*" = .vpro_cli_escape(paste0("Submission: ", x$submission_id)),
+    "*" = .vpro_cli_escape(paste0(
+      "Plots: Added=",
+      x$added_count,
+      ", Identical=",
+      x$identical_count,
+      ", FastForward=",
+      x$fast_forward_count,
+      ", Conflict=",
+      x$conflict_count,
+      ", TargetOnly=",
+      x$target_only_count
+    )),
+    "*" = .vpro_cli_escape(paste0(
+      "Diff items: ",
+      nrow(x$items),
+      " total (",
+      nrow(x$conflicts),
+      " conflicts, ",
+      n_prot,
+      " custodian-protected)"
+    )),
+    "*" = .vpro_cli_escape(paste0("Preview digest: ", x$preview_digest))
   ))
   invisible(x)
 }
@@ -304,7 +344,6 @@ vpro_validate_merge_cell_value <- function(suffix, col_spec_row, raw_val, plot =
   if (is.null(raw_val) || length(raw_val) == 0L || is.na(raw_val[[1L]])) {
     return(invisible(NULL))
   }
-  cn <- col_spec_row$name[[1L]]
   pg_t <- col_spec_row$pg_type[[1L]]
   is_cov <- isTRUE(col_spec_row$is_cover[[1L]])
   u16_max <- col_spec_row$utf16_max[[1L]]
@@ -313,11 +352,15 @@ vpro_validate_merge_cell_value <- function(suffix, col_spec_row, raw_val, plot =
     s <- as.character(raw_val[[1L]])
     u16 <- vpro_utf16_len(s)
     if (is.na(u16)) {
-      cli::cli_abort("Plot {.val {plot}} {suffix}.{cn} contains invalid or unsupported text characters.")
+      cli::cli_abort(
+        "Plot {.val {plot}} {suffix}.{col_spec_row$name[[1L]]} contains invalid or unsupported text characters.",
+        class = c("vpro_error_cloud", "vpro_error")
+      )
     }
     if (u16_max > 0L && u16 > u16_max) {
       cli::cli_abort(
-        "Plot {.val {plot}} {suffix}.{cn} exceeds {u16_max} characters (got {u16})."
+        "Plot {.val {plot}} {suffix}.{col_spec_row$name[[1L]]} exceeds {u16_max} characters (got {u16}).",
+        class = c("vpro_error_cloud", "vpro_error")
       )
     }
   } else if (is_cov) {
@@ -325,7 +368,8 @@ vpro_validate_merge_cell_value <- function(suffix, col_spec_row, raw_val, plot =
     narrowed <- suppressWarnings(vpro_narrow_float32(v))
     if (is.na(v) || !is.finite(v) || v < 0 || is.na(narrowed) || narrowed < 0 || narrowed >= 100) {
       cli::cli_abort(
-        "Plot {.val {plot}} {suffix}.{cn} cover={raw_val[[1L]]} must be >= 0 and strictly under 100%."
+        "Plot {.val {plot}} {suffix}.{col_spec_row$name[[1L]]} cover={raw_val[[1L]]} must be >= 0 and strictly under 100%.",
+        class = c("vpro_error_cloud", "vpro_error")
       )
     }
   }
@@ -344,13 +388,19 @@ vpro_validate_lmh25_merge_horizon <- function(suffix, horizon, upper_depth, lowe
   if (has_u) {
     u <- suppressWarnings(as.double(upper_depth[[1L]]))
     if (is.na(u) || !is.finite(u) || u < 0) {
-      cli::cli_abort("Plot {.val {plot}} {suffix} horizon {.val {hz_raw}} depths must be finite and >= 0 cm.")
+      cli::cli_abort(
+        "Plot {.val {plot}} {suffix} horizon {.val {hz_raw}} depths must be finite and >= 0 cm.",
+        class = c("vpro_error_cloud", "vpro_error")
+      )
     }
   }
   if (has_l) {
     l <- suppressWarnings(as.double(lower_depth[[1L]]))
     if (is.na(l) || !is.finite(l) || l < 0) {
-      cli::cli_abort("Plot {.val {plot}} {suffix} horizon {.val {hz_raw}} depths must be finite and >= 0 cm.")
+      cli::cli_abort(
+        "Plot {.val {plot}} {suffix} horizon {.val {hz_raw}} depths must be finite and >= 0 cm.",
+        class = c("vpro_error_cloud", "vpro_error")
+      )
     }
   }
   if (!has_u || !has_l) {
@@ -360,19 +410,22 @@ vpro_validate_lmh25_merge_horizon <- function(suffix, horizon, upper_depth, lowe
   if (identical(reg, "wetland")) {
     if (u >= l) {
       cli::cli_abort(
-        "Plot {.val {plot}} LMH25 wetland Humus horizon {.val {hz_raw}} requires 0 <= UpperDepth < LowerDepth (got {u}..{l})."
+        "Plot {.val {plot}} LMH25 wetland Humus horizon {.val {hz_raw}} requires 0 <= UpperDepth < LowerDepth (got {u}..{l}).",
+        class = c("vpro_error_cloud", "vpro_error")
       )
     }
   } else if (identical(reg, "upland")) {
     if (u <= l) {
       cli::cli_abort(
-        "Plot {.val {plot}} LMH25 upland Humus horizon {.val {hz_raw}} requires UpperDepth > LowerDepth >= 0 (got {u}..{l})."
+        "Plot {.val {plot}} LMH25 upland Humus horizon {.val {hz_raw}} requires UpperDepth > LowerDepth >= 0 (got {u}..{l}).",
+        class = c("vpro_error_cloud", "vpro_error")
       )
     }
   } else if (identical(reg, "mineral")) {
     if (u >= l) {
       cli::cli_abort(
-        "Plot {.val {plot}} LMH25 Mineral horizon {.val {hz_raw}} requires 0 <= UpperDepth < LowerDepth (got {u}..{l})."
+        "Plot {.val {plot}} LMH25 Mineral horizon {.val {hz_raw}} requires 0 <= UpperDepth < LowerDepth (got {u}..{l}).",
+        class = c("vpro_error_cloud", "vpro_error")
       )
     }
   }
@@ -419,7 +472,10 @@ vpro_pg_param_for_spec <- function(col_spec_row, raw_val) {
 vpro_allocate_master_child_id <- function(conn, child_table) {
   allowed_child <- c("veg", "humus", "mineral", "other", "metadata")
   if (!(child_table %in% allowed_child)) {
-    cli::cli_abort("Unsupported child identity table {.val {child_table}}.")
+    cli::cli_abort(
+      "Unsupported child identity table {.val {child_table}}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   q_child <- vpro_quote_ident(child_table)
   wm_df <- DBI::dbGetQuery(

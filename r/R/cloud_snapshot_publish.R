@@ -8,7 +8,8 @@ vpro_write_snapshot_csv_bundle <- function(ws, snapshot_tag, out_dir_abs, proven
 
   if ((dir.exists(csv_dir) || file.exists(csv_dir) || file.exists(tar_path)) && !isTRUE(overwrite)) {
     cli::cli_abort(
-      "Snapshot CSV output already exists (pass {.code overwrite = TRUE} to replace): {.path {tar_path}}."
+      "Snapshot CSV output already exists (pass {.code overwrite = TRUE} to replace): {.path {tar_path}}.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
 
@@ -125,12 +126,18 @@ vpro_write_snapshot_csv_bundle <- function(ws, snapshot_tag, out_dir_abs, proven
     }
   )
   if (!identical(as.integer(tar_status), 0L) || !file.exists(tmp_tar)) {
-    cli::cli_abort("Failed to create gzipped CSV snapshot archive {.path {tar_path}}.")
+    cli::cli_abort(
+      "Failed to create gzipped CSV snapshot archive {.path {tar_path}}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
 
   if (!file.rename(tmp_tar, tar_path)) {
     if (!file.copy(tmp_tar, tar_path, overwrite = TRUE)) {
-      cli::cli_abort("Failed to publish CSV snapshot archive {.path {tar_path}}.")
+      cli::cli_abort(
+        "Failed to publish CSV snapshot archive {.path {tar_path}}.",
+        class = c("vpro_error_cloud", "vpro_error")
+      )
     }
     unlink(tmp_tar, force = TRUE)
   }
@@ -143,6 +150,195 @@ vpro_write_snapshot_csv_bundle <- function(ws, snapshot_tag, out_dir_abs, proven
     sha256 = tolower(trimws(unname(as.character(vpro_sha256_file(tar_final))))),
     bytes = file.info(tar_final)$size
   )
+}
+
+.vpro_snap_validate_publish_args <- function(
+  pg,
+  snapshot_tag,
+  out_dir,
+  formats,
+  notes,
+  overwrite,
+  redact_sensitive
+) {
+  tag <- vpro_validate_snapshot_tag(snapshot_tag, "snapshot_tag")
+
+  if (!is.null(notes) && (!is.character(notes) || length(notes) != 1L)) {
+    cli::cli_abort(
+      "{.arg notes} must be {.code NULL} or a single character string.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
+  }
+  notes_clean <- if (is.null(notes) || is.na(notes[[1L]]) || !nzchar(trimws(notes[[1L]]))) {
+    NA_character_
+  } else {
+    trimws(notes[[1L]])
+  }
+
+  if (!is.character(formats) || length(formats) == 0L || anyNA(formats)) {
+    cli::cli_abort(
+      "{.arg formats} must be a non-empty subset of {.or {.val {.vpro_valid_snapshot_formats}}}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
+  }
+  req_formats <- unique(tolower(trimws(formats)))
+  bad_fmt <- setdiff(req_formats, .vpro_valid_snapshot_formats)
+  if (length(bad_fmt) > 0L || length(req_formats) == 0L) {
+    cli::cli_abort(
+      "Unsupported snapshot format(s) {.val {bad_fmt}} (expected subset of {.or {.val {.vpro_valid_snapshot_formats}}}).",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
+  }
+  if ("gpkg" %in% req_formats) {
+    rlang::check_installed("sf", reason = "to export EPSG:3005 GeoPackage snapshots.")
+  }
+
+  if (!is.character(out_dir) || length(out_dir) != 1L || is.na(out_dir) || !nzchar(trimws(out_dir))) {
+    cli::cli_abort(
+      "{.arg out_dir} must be a single non-empty directory path.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
+  }
+  out_dir_abs <- vpro_abs_path(trimws(out_dir))
+  if (file.exists(out_dir_abs) && !dir.exists(out_dir_abs)) {
+    cli::cli_abort(
+      "{.arg out_dir} points to an existing file rather than a directory: {.path {out_dir_abs}}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
+  }
+  if (vpro_is_bundled_package_path(out_dir_abs)) {
+    cli::cli_abort(
+      "Refusing to publish snapshots inside installed package path: {.path {out_dir_abs}}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
+  }
+  if (isTRUE(redact_sensitive)) {
+    .vpro_sensitive_species_codes(pg = pg, require_populated = TRUE)
+  }
+  if (!dir.exists(out_dir_abs)) {
+    dir.create(out_dir_abs, recursive = TRUE, showWarnings = FALSE)
+  }
+  out_dir_abs <- normalizePath(out_dir_abs, winslash = "/", mustWork = TRUE)
+
+  rds_dest <- file.path(out_dir_abs, paste0(tag, ".rds"))
+  sqlite_dest <- file.path(out_dir_abs, paste0(tag, ".db"))
+  gpkg_dest <- file.path(out_dir_abs, paste0(tag, ".gpkg"))
+  csv_dir_dest <- file.path(out_dir_abs, paste0(tag, "_csv"))
+  csv_tar_dest <- file.path(out_dir_abs, paste0(tag, "_csv.tar.gz"))
+
+  if ("sqlite" %in% req_formats && (file.exists(paste0(sqlite_dest, "-wal")) || file.exists(paste0(sqlite_dest, "-shm")))) {
+    cli::cli_abort(
+      "Refusing to write {.path {sqlite_dest}} while it is open in another VPro or database session.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
+  }
+
+  if (!isTRUE(overwrite)) {
+    planned <- character()
+    if ("rds" %in% req_formats) {
+      planned <- c(planned, rds_dest)
+    }
+    if ("sqlite" %in% req_formats) {
+      planned <- c(planned, sqlite_dest)
+    }
+    if ("gpkg" %in% req_formats) {
+      planned <- c(planned, gpkg_dest)
+    }
+    if ("csv" %in% req_formats) {
+      planned <- c(planned, csv_tar_dest, csv_dir_dest)
+    }
+    existing <- planned[file.exists(planned) | dir.exists(planned)]
+    if (length(existing) > 0L) {
+      cli::cli_abort(
+        "Destination snapshot artifact(s) already exist (pass {.code overwrite = TRUE} to replace): {.path {existing}}.",
+        class = c("vpro_error_cloud", "vpro_error")
+      )
+    }
+  }
+
+  list(
+    tag = tag,
+    notes_clean = notes_clean,
+    req_formats = req_formats,
+    out_dir_abs = out_dir_abs,
+    rds_dest = rds_dest,
+    sqlite_dest = sqlite_dest,
+    gpkg_dest = gpkg_dest
+  )
+}
+
+.vpro_snap_write_format_artifacts <- function(
+  req_formats,
+  ws_snap,
+  pull_res,
+  tag,
+  out_dir_abs,
+  rds_dest,
+  gpkg_dest,
+  prov_meta,
+  compress,
+  overwrite,
+  redact_sensitive
+) {
+  art_rows <- vector("list", length(req_formats))
+  for (i in seq_along(req_formats)) {
+    fmt <- req_formats[[i]]
+    if (identical(fmt, "sqlite")) {
+      art_rows[[i]] <- tibble::tibble(
+        format = "sqlite",
+        path = pull_res$dest_path,
+        sha256 = tolower(trimws(as.character(pull_res$sha256))),
+        bytes = as.double(file.info(pull_res$dest_path)$size)
+      )
+    } else if (identical(fmt, "rds")) {
+      rds_res <- vpro_export_rds(
+        ws = ws_snap,
+        path = rds_dest,
+        snapshot_tag = tag,
+        provenance = prov_meta,
+        compress = compress,
+        redact_sensitive = isTRUE(redact_sensitive)
+      )
+      art_rows[[i]] <- tibble::tibble(
+        format = "rds",
+        path = rds_res$path,
+        sha256 = rds_res$sha256,
+        bytes = as.double(rds_res$bytes)
+      )
+    } else if (identical(fmt, "gpkg")) {
+      gpkg_written <- vpro_export_gpkg(
+        ws_snap,
+        path = gpkg_dest,
+        crs = 3005,
+        scope = "project",
+        overwrite = overwrite
+      )
+      unlink(c(paste0(gpkg_written, "-wal"), paste0(gpkg_written, "-shm")), force = TRUE)
+      gpkg_norm <- normalizePath(gpkg_written, winslash = "/", mustWork = TRUE)
+      art_rows[[i]] <- tibble::tibble(
+        format = "gpkg",
+        path = gpkg_norm,
+        sha256 = tolower(trimws(unname(as.character(vpro_sha256_file(gpkg_norm))))),
+        bytes = as.double(file.info(gpkg_norm)$size)
+      )
+    } else if (identical(fmt, "csv")) {
+      csv_res <- vpro_write_snapshot_csv_bundle(
+        ws = ws_snap,
+        snapshot_tag = tag,
+        out_dir_abs = out_dir_abs,
+        provenance = prov_meta,
+        overwrite = overwrite,
+        redact_sensitive = isTRUE(redact_sensitive)
+      )
+      art_rows[[i]] <- tibble::tibble(
+        format = "csv",
+        path = csv_res$path,
+        sha256 = csv_res$sha256,
+        bytes = as.double(csv_res$bytes)
+      )
+    }
+  }
+  do.call(rbind, art_rows)
 }
 
 #' Publish a custodian `BECMaster` snapshot and multi-format release artifacts
@@ -198,87 +394,22 @@ vpro_master_publish_snapshot <- function(
   redact_sensitive = FALSE
 ) {
   vpro_assert_pg_conn(pg, require_custodian = TRUE)
-  tag <- vpro_validate_snapshot_tag(snapshot_tag, "snapshot_tag")
   overwrite <- vpro_pg_validate_flag(overwrite, "overwrite")
   redact_sensitive <- vpro_pg_validate_flag(redact_sensitive, "redact_sensitive")
   compress <- match.arg(compress)
 
-  if (!is.null(notes) && (!is.character(notes) || length(notes) != 1L)) {
-    cli::cli_abort("{.arg notes} must be {.code NULL} or a single character string.")
-  }
-  notes_clean <- if (is.null(notes) || is.na(notes[[1L]]) || !nzchar(trimws(notes[[1L]]))) {
-    NA_character_
-  } else {
-    trimws(notes[[1L]])
-  }
-
-  if (!is.character(formats) || length(formats) == 0L || anyNA(formats)) {
-    cli::cli_abort(
-      "{.arg formats} must be a non-empty subset of {.or {.val {.vpro_valid_snapshot_formats}}}."
-    )
-  }
-  req_formats <- unique(tolower(trimws(formats)))
-  bad_fmt <- setdiff(req_formats, .vpro_valid_snapshot_formats)
-  if (length(bad_fmt) > 0L || length(req_formats) == 0L) {
-    cli::cli_abort(
-      "Unsupported snapshot format(s) {.val {bad_fmt}} (expected subset of {.or {.val {.vpro_valid_snapshot_formats}}})."
-    )
-  }
-  if ("gpkg" %in% req_formats) {
-    rlang::check_installed("sf", reason = "to export EPSG:3005 GeoPackage snapshots.")
-  }
-
-  if (!is.character(out_dir) || length(out_dir) != 1L || is.na(out_dir) || !nzchar(trimws(out_dir))) {
-    cli::cli_abort("{.arg out_dir} must be a single non-empty directory path.")
-  }
-  out_dir_abs <- vpro_abs_path(trimws(out_dir))
-  if (file.exists(out_dir_abs) && !dir.exists(out_dir_abs)) {
-    cli::cli_abort("{.arg out_dir} points to an existing file rather than a directory: {.path {out_dir_abs}}.")
-  }
-  if (vpro_is_bundled_package_path(out_dir_abs)) {
-    cli::cli_abort("Refusing to publish snapshots inside installed package path: {.path {out_dir_abs}}.")
-  }
-  if (isTRUE(redact_sensitive)) {
-    .vpro_sensitive_species_codes(pg = pg, require_populated = TRUE)
-  }
-  if (!dir.exists(out_dir_abs)) {
-    dir.create(out_dir_abs, recursive = TRUE, showWarnings = FALSE)
-  }
-  out_dir_abs <- normalizePath(out_dir_abs, winslash = "/", mustWork = TRUE)
-
-  rds_dest <- file.path(out_dir_abs, paste0(tag, ".rds"))
-  sqlite_dest <- file.path(out_dir_abs, paste0(tag, ".db"))
-  gpkg_dest <- file.path(out_dir_abs, paste0(tag, ".gpkg"))
-  csv_dir_dest <- file.path(out_dir_abs, paste0(tag, "_csv"))
-  csv_tar_dest <- file.path(out_dir_abs, paste0(tag, "_csv.tar.gz"))
-
-  if ("sqlite" %in% req_formats && (file.exists(paste0(sqlite_dest, "-wal")) || file.exists(paste0(sqlite_dest, "-shm")))) {
-    cli::cli_abort(
-      "Refusing to write {.path {sqlite_dest}} while it is open in another VPro or database session."
-    )
-  }
-
-  if (!isTRUE(overwrite)) {
-    planned <- character()
-    if ("rds" %in% req_formats) {
-      planned <- c(planned, rds_dest)
-    }
-    if ("sqlite" %in% req_formats) {
-      planned <- c(planned, sqlite_dest)
-    }
-    if ("gpkg" %in% req_formats) {
-      planned <- c(planned, gpkg_dest)
-    }
-    if ("csv" %in% req_formats) {
-      planned <- c(planned, csv_tar_dest, csv_dir_dest)
-    }
-    existing <- planned[file.exists(planned) | dir.exists(planned)]
-    if (length(existing) > 0L) {
-      cli::cli_abort(
-        "Destination snapshot artifact(s) already exist (pass {.code overwrite = TRUE} to replace): {.path {existing}}."
-      )
-    }
-  }
+  cfg <- .vpro_snap_validate_publish_args(
+    pg = pg,
+    snapshot_tag = snapshot_tag,
+    out_dir = out_dir,
+    formats = formats,
+    notes = notes,
+    overwrite = overwrite,
+    redact_sensitive = redact_sensitive
+  )
+  tag <- cfg$tag
+  notes_clean <- cfg$notes_clean
+  req_formats <- cfg$req_formats
 
   snap_proj_name <- vpro_snapshot_project_prefix(
     tag,
@@ -293,14 +424,13 @@ vpro_master_publish_snapshot <- function(
     is.null(bbox)
 
   want_sqlite <- "sqlite" %in% req_formats
-  stage_dir <- NULL
   if (!want_sqlite) {
     stage_dir <- tempfile(pattern = "vpro-snap-stage-")
     dir.create(stage_dir, recursive = TRUE, showWarnings = FALSE)
     on.exit(unlink(stage_dir, recursive = TRUE, force = TRUE), add = TRUE)
     stage_sqlite_path <- file.path(stage_dir, paste0(snap_proj_name, ".db"))
   } else {
-    stage_sqlite_path <- sqlite_dest
+    stage_sqlite_path <- cfg$sqlite_dest
   }
 
   pull_res <- vpro_master_pull_impl(
@@ -364,66 +494,20 @@ vpro_master_publish_snapshot <- function(
     notes = notes_clean
   )
 
-  art_rows <- vector("list", length(req_formats))
-  for (i in seq_along(req_formats)) {
-    fmt <- req_formats[[i]]
-    if (identical(fmt, "sqlite")) {
-      art_rows[[i]] <- tibble::tibble(
-        format = "sqlite",
-        path = pull_res$dest_path,
-        sha256 = tolower(trimws(as.character(pull_res$sha256))),
-        bytes = as.double(file.info(pull_res$dest_path)$size)
-      )
-    } else if (identical(fmt, "rds")) {
-      rds_res <- vpro_export_rds(
-        ws = ws_snap,
-        path = rds_dest,
-        snapshot_tag = tag,
-        provenance = prov_meta,
-        compress = compress,
-        redact_sensitive = isTRUE(redact_sensitive)
-      )
-      art_rows[[i]] <- tibble::tibble(
-        format = "rds",
-        path = rds_res$path,
-        sha256 = rds_res$sha256,
-        bytes = as.double(rds_res$bytes)
-      )
-    } else if (identical(fmt, "gpkg")) {
-      gpkg_written <- vpro_export_gpkg(
-        ws_snap,
-        path = gpkg_dest,
-        crs = 3005,
-        scope = "project",
-        overwrite = overwrite
-      )
-      unlink(c(paste0(gpkg_written, "-wal"), paste0(gpkg_written, "-shm")), force = TRUE)
-      gpkg_norm <- normalizePath(gpkg_written, winslash = "/", mustWork = TRUE)
-      art_rows[[i]] <- tibble::tibble(
-        format = "gpkg",
-        path = gpkg_norm,
-        sha256 = tolower(trimws(unname(as.character(vpro_sha256_file(gpkg_norm))))),
-        bytes = as.double(file.info(gpkg_norm)$size)
-      )
-    } else if (identical(fmt, "csv")) {
-      csv_res <- vpro_write_snapshot_csv_bundle(
-        ws = ws_snap,
-        snapshot_tag = tag,
-        out_dir_abs = out_dir_abs,
-        provenance = prov_meta,
-        overwrite = overwrite,
-        redact_sensitive = isTRUE(redact_sensitive)
-      )
-      art_rows[[i]] <- tibble::tibble(
-        format = "csv",
-        path = csv_res$path,
-        sha256 = csv_res$sha256,
-        bytes = as.double(csv_res$bytes)
-      )
-    }
-  }
+  artifacts_tbl <- .vpro_snap_write_format_artifacts(
+    req_formats = req_formats,
+    ws_snap = ws_snap,
+    pull_res = pull_res,
+    tag = tag,
+    out_dir_abs = cfg$out_dir_abs,
+    rds_dest = cfg$rds_dest,
+    gpkg_dest = cfg$gpkg_dest,
+    prov_meta = prov_meta,
+    compress = compress,
+    overwrite = overwrite,
+    redact_sensitive = redact_sensitive
+  )
 
-  artifacts_tbl <- do.call(rbind, art_rows)
   ord_fmt <- order(artifacts_tbl$format, method = "radix")
   art_sig <- paste(
     paste0(artifacts_tbl$format[ord_fmt], ":", tolower(artifacts_tbl$sha256[ord_fmt])),

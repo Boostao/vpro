@@ -251,10 +251,26 @@ print.vpro_pg_status <- function(x, ...) {
 
   cli::cli_h3("vpro_pg_status ({x$role} on {.val {x$dbname}}, TLS {.val {x$sslmode}})")
   cli::cli_bullets(c(
-    "*" = "Server: PostgreSQL {x$server_version} ({pgis_lbl}, {x$latency_ms} ms)",
-    "*" = "Capabilities: bootstrapped={x$schemas_bootstrapped}, read={x$can_read_master}, stage={x$can_submit_staging}, merge={x$can_merge_master}",
-    "*" = "BECMaster: {x$becmaster_plots} plots, {x$becmaster_veg} veg rows | Snapshots: {snap_lbl}",
-    "*" = "Standards: {std_lbl} | Pending staging: {x$pending_submissions}"
+    "*" = .vpro_cli_escape(paste0("Server: PostgreSQL ", x$server_version, " (", pgis_lbl, ", ", x$latency_ms, " ms)")),
+    "*" = .vpro_cli_escape(paste0(
+      "Capabilities: bootstrapped=",
+      x$schemas_bootstrapped,
+      ", read=",
+      x$can_read_master,
+      ", stage=",
+      x$can_submit_staging,
+      ", merge=",
+      x$can_merge_master
+    )),
+    "*" = .vpro_cli_escape(paste0(
+      "BECMaster: ",
+      x$becmaster_plots,
+      " plots, ",
+      x$becmaster_veg,
+      " veg rows | Snapshots: ",
+      snap_lbl
+    )),
+    "*" = .vpro_cli_escape(paste0("Standards: ", std_lbl, " | Pending staging: ", x$pending_submissions))
   ))
   invisible(x)
 }
@@ -288,6 +304,102 @@ as_tibble.vpro_pg_status <- function(x, ...) {
   )
 }
 
+.vpro_pg_apply_role_grants <- function(pg, target_schemas, contrib_r, custod_r) {
+  role_exists <- function(r_name) {
+    if (!nzchar(r_name)) {
+      return(FALSE)
+    }
+    d <- vpro_pg_query(
+      pg,
+      "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1) AS ok",
+      params = list(r_name),
+      action = "Check PostgreSQL pg_roles"
+    )
+    nrow(d) >= 1L && isTRUE(as.logical(d$ok[[1L]]))
+  }
+
+  has_contrib_role <- role_exists(contrib_r)
+  has_custod_role <- role_exists(custod_r)
+  if (!has_contrib_role && !has_custod_role) {
+    return(list(role_grants_applied = FALSE, contributor_role_set = FALSE))
+  }
+
+  grant_stmts <- character(0L)
+  for (sch in target_schemas) {
+    q_sch <- vpro_quote_ident(sch)
+    grant_stmts <- c(
+      grant_stmts,
+      paste0("REVOKE ALL ON SCHEMA ", q_sch, " FROM PUBLIC"),
+      paste0("REVOKE ALL ON ALL TABLES IN SCHEMA ", q_sch, " FROM PUBLIC"),
+      paste0("REVOKE ALL ON ALL SEQUENCES IN SCHEMA ", q_sch, " FROM PUBLIC")
+    )
+  }
+
+  if (has_custod_role) {
+    q_admin <- vpro_quote_ident(custod_r)
+    for (sch in target_schemas) {
+      q_sch <- vpro_quote_ident(sch)
+      grant_stmts <- c(
+        grant_stmts,
+        paste0("GRANT ALL PRIVILEGES ON SCHEMA ", q_sch, " TO ", q_admin),
+        paste0("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA ", q_sch, " TO ", q_admin),
+        paste0("GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA ", q_sch, " TO ", q_admin)
+      )
+    }
+  }
+
+  if (has_contrib_role) {
+    q_user <- vpro_quote_ident(contrib_r)
+    grant_stmts <- c(
+      grant_stmts,
+      paste0("REVOKE ALL ON ALL TABLES IN SCHEMA becmaster FROM ", q_user),
+      paste0("REVOKE ALL ON ALL SEQUENCES IN SCHEMA becmaster FROM ", q_user),
+      paste0("REVOKE ALL ON ALL TABLES IN SCHEMA staging FROM ", q_user),
+      paste0("REVOKE ALL ON ALL SEQUENCES IN SCHEMA staging FROM ", q_user),
+      paste0("REVOKE ALL ON ALL TABLES IN SCHEMA standards FROM ", q_user),
+      paste0("REVOKE ALL ON ALL SEQUENCES IN SCHEMA standards FROM ", q_user),
+      paste0("GRANT USAGE ON SCHEMA becmaster, staging, standards TO ", q_user),
+      paste0("GRANT SELECT ON ALL TABLES IN SCHEMA becmaster TO ", q_user),
+      paste0("GRANT SELECT ON ALL TABLES IN SCHEMA standards TO ", q_user),
+      paste0("GRANT INSERT ON TABLE becmaster.download_log TO ", q_user),
+      paste0("GRANT USAGE, SELECT ON SEQUENCE becmaster.download_log_id_seq TO ", q_user),
+      paste0("GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA staging TO ", q_user),
+      paste0("GRANT USAGE, SELECT ON SEQUENCE staging.audit_audit_seq_seq TO ", q_user),
+      "ALTER TABLE staging.submissions ENABLE ROW LEVEL SECURITY",
+      "DROP POLICY IF EXISTS submissions_contributor_select ON staging.submissions",
+      paste0("CREATE POLICY submissions_contributor_select ON staging.submissions FOR SELECT TO ", q_user, " USING (true)"),
+      "DROP POLICY IF EXISTS submissions_contributor_insert ON staging.submissions",
+      paste0(
+        "CREATE POLICY submissions_contributor_insert ON staging.submissions FOR INSERT TO ",
+        q_user,
+        " WITH CHECK (status = 'pending' AND compliance_passed = TRUE AND db_role = current_user AND reviewed_by IS NULL AND merged_tx_id IS NULL)"
+      )
+    )
+    for (stg_tbl in c("env", "admin", "veg", "humus", "mineral", "other", "metadata", "audit")) {
+      q_tbl <- vpro_quote_ident(stg_tbl)
+      grant_stmts <- c(
+        grant_stmts,
+        paste0("DROP POLICY IF EXISTS ", vpro_quote_ident(paste0(stg_tbl, "_contributor_select")), " ON staging.", q_tbl),
+        paste0("DROP POLICY IF EXISTS ", vpro_quote_ident(paste0(stg_tbl, "_contributor_insert")), " ON staging.", q_tbl),
+        paste0("ALTER TABLE staging.", q_tbl, " DISABLE ROW LEVEL SECURITY")
+      )
+    }
+  }
+
+  vpro_pg_exec_safe(
+    function() {
+      DBI::dbWithTransaction(pg$conn, {
+        for (g_stmt in grant_stmts) {
+          DBI::dbExecute(pg$conn, g_stmt)
+        }
+      })
+    },
+    action = "Apply PostgreSQL role grants and RLS policies"
+  )
+
+  list(role_grants_applied = TRUE, contributor_role_set = has_contrib_role)
+}
+
 #' Bootstrap `becmaster`, `staging`, and `standards` PostgreSQL schemas
 #'
 #' Non-destructively inspects `information_schema.schemata` and
@@ -315,7 +427,10 @@ vpro_master_bootstrap <- function(pg, contributor_role = NULL, custodian_role = 
       return("")
     }
     if (!is.character(r) || length(r) != 1L || is.na(r)) {
-      cli::cli_abort("{.arg {arg_nm}} must be {.code NULL} or a single character string.")
+      cli::cli_abort(
+        "{.arg {arg_nm}} must be {.code NULL} or a single character string.",
+        class = c("vpro_error_cloud", "vpro_error")
+      )
     }
     trimws(r)
   }
@@ -323,7 +438,8 @@ vpro_master_bootstrap <- function(pg, contributor_role = NULL, custodian_role = 
   custod_r <- norm_role(custodian_role, "custodian_role")
   if (nzchar(contrib_r) && nzchar(custod_r) && identical(contrib_r, custod_r)) {
     cli::cli_abort(
-      "{.arg contributor_role} and {.arg custodian_role} must be distinct PostgreSQL roles."
+      "{.arg contributor_role} and {.arg custodian_role} must be distinct PostgreSQL roles.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
 
@@ -366,7 +482,8 @@ vpro_master_bootstrap <- function(pg, contributor_role = NULL, custodian_role = 
       )
       if (nrow(priv) == 0L || !isTRUE(as.logical(priv$ok[[1L]]))) {
         cli::cli_abort(
-          "Custodian role lacks CREATE privilege on existing PostgreSQL schema {.val {s_name}}."
+          "Custodian role lacks CREATE privilege on existing PostgreSQL schema {.val {s_name}}.",
+          class = c("vpro_error_cloud", "vpro_error")
         )
       }
     } else {
@@ -376,10 +493,13 @@ vpro_master_bootstrap <- function(pg, contributor_role = NULL, custodian_role = 
         action = "Check database CREATE privilege"
       )
       if (nrow(db_priv) == 0L || !isTRUE(as.logical(db_priv$ok[[1L]]))) {
-        cli::cli_abort(c(
-          "Custodian role lacks CREATE privilege on database to initialize schema {.val {s_name}}.",
-          "i" = "Ask a PostgreSQL DBA/superuser to run GRANT CREATE ON DATABASE <db> TO <custodian_role>."
-        ))
+        cli::cli_abort(
+          c(
+            "Custodian role lacks CREATE privilege on database to initialize schema {.val {s_name}}.",
+            "i" = "Ask a PostgreSQL DBA/superuser to run GRANT CREATE ON DATABASE <db> TO <custodian_role>."
+          ),
+          class = c("vpro_error_cloud", "vpro_error")
+        )
       }
       vpro_pg_execute(
         pg,
@@ -432,9 +552,9 @@ vpro_master_bootstrap <- function(pg, contributor_role = NULL, custodian_role = 
     postgis_schema = postgis_schema
   )
 
-  applied_migrations <- character(0L)
-  vpro_pg_exec_safe(
+  applied_migrations <- vpro_pg_exec_safe(
     function() {
+      applied_out <- character(0L)
       DBI::dbWithTransaction(pg$conn, {
         for (stmt in stmts) {
           DBI::dbExecute(pg$conn, stmt)
@@ -444,107 +564,15 @@ vpro_master_bootstrap <- function(pg, contributor_role = NULL, custodian_role = 
             pg$conn,
             "INSERT INTO becmaster.schema_migrations (version, name) VALUES (1, 'v1_becmaster_staging_standards') ON CONFLICT (version) DO NOTHING"
           )
-          applied_migrations <<- "1:v1_becmaster_staging_standards"
+          applied_out <- "1:v1_becmaster_staging_standards"
         }
       })
+      applied_out
     },
     action = "Bootstrap PostgreSQL BECMaster schemas"
   )
 
-  role_exists <- function(r_name) {
-    if (!nzchar(r_name)) {
-      return(FALSE)
-    }
-    d <- vpro_pg_query(
-      pg,
-      "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1) AS ok",
-      params = list(r_name),
-      action = "Check PostgreSQL pg_roles"
-    )
-    nrow(d) >= 1L && isTRUE(as.logical(d$ok[[1L]]))
-  }
-
-  has_contrib_role <- role_exists(contrib_r)
-  has_custod_role <- role_exists(custod_r)
-  role_grants_applied <- FALSE
-  contributor_role_set <- FALSE
-
-  if (has_contrib_role || has_custod_role) {
-    grant_stmts <- character(0L)
-    for (sch in target_schemas) {
-      q_sch <- vpro_quote_ident(sch)
-      grant_stmts <- c(
-        grant_stmts,
-        paste0("REVOKE ALL ON SCHEMA ", q_sch, " FROM PUBLIC"),
-        paste0("REVOKE ALL ON ALL TABLES IN SCHEMA ", q_sch, " FROM PUBLIC"),
-        paste0("REVOKE ALL ON ALL SEQUENCES IN SCHEMA ", q_sch, " FROM PUBLIC")
-      )
-    }
-
-    if (has_custod_role) {
-      q_admin <- vpro_quote_ident(custod_r)
-      for (sch in target_schemas) {
-        q_sch <- vpro_quote_ident(sch)
-        grant_stmts <- c(
-          grant_stmts,
-          paste0("GRANT ALL PRIVILEGES ON SCHEMA ", q_sch, " TO ", q_admin),
-          paste0("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA ", q_sch, " TO ", q_admin),
-          paste0("GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA ", q_sch, " TO ", q_admin)
-        )
-      }
-    }
-
-    if (has_contrib_role) {
-      q_user <- vpro_quote_ident(contrib_r)
-      grant_stmts <- c(
-        grant_stmts,
-        paste0("REVOKE ALL ON ALL TABLES IN SCHEMA becmaster FROM ", q_user),
-        paste0("REVOKE ALL ON ALL SEQUENCES IN SCHEMA becmaster FROM ", q_user),
-        paste0("REVOKE ALL ON ALL TABLES IN SCHEMA staging FROM ", q_user),
-        paste0("REVOKE ALL ON ALL SEQUENCES IN SCHEMA staging FROM ", q_user),
-        paste0("REVOKE ALL ON ALL TABLES IN SCHEMA standards FROM ", q_user),
-        paste0("REVOKE ALL ON ALL SEQUENCES IN SCHEMA standards FROM ", q_user),
-        paste0("GRANT USAGE ON SCHEMA becmaster, staging, standards TO ", q_user),
-        paste0("GRANT SELECT ON ALL TABLES IN SCHEMA becmaster TO ", q_user),
-        paste0("GRANT SELECT ON ALL TABLES IN SCHEMA standards TO ", q_user),
-        paste0("GRANT INSERT ON TABLE becmaster.download_log TO ", q_user),
-        paste0("GRANT USAGE, SELECT ON SEQUENCE becmaster.download_log_id_seq TO ", q_user),
-        paste0("GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA staging TO ", q_user),
-        paste0("GRANT USAGE, SELECT ON SEQUENCE staging.audit_audit_seq_seq TO ", q_user),
-        "ALTER TABLE staging.submissions ENABLE ROW LEVEL SECURITY",
-        "DROP POLICY IF EXISTS submissions_contributor_select ON staging.submissions",
-        paste0("CREATE POLICY submissions_contributor_select ON staging.submissions FOR SELECT TO ", q_user, " USING (true)"),
-        "DROP POLICY IF EXISTS submissions_contributor_insert ON staging.submissions",
-        paste0(
-          "CREATE POLICY submissions_contributor_insert ON staging.submissions FOR INSERT TO ",
-          q_user,
-          " WITH CHECK (status = 'pending' AND compliance_passed = TRUE AND db_role = current_user AND reviewed_by IS NULL AND merged_tx_id IS NULL)"
-        )
-      )
-      for (stg_tbl in c("env", "admin", "veg", "humus", "mineral", "other", "metadata", "audit")) {
-        q_tbl <- vpro_quote_ident(stg_tbl)
-        grant_stmts <- c(
-          grant_stmts,
-          paste0("DROP POLICY IF EXISTS ", vpro_quote_ident(paste0(stg_tbl, "_contributor_select")), " ON staging.", q_tbl),
-          paste0("DROP POLICY IF EXISTS ", vpro_quote_ident(paste0(stg_tbl, "_contributor_insert")), " ON staging.", q_tbl),
-          paste0("ALTER TABLE staging.", q_tbl, " DISABLE ROW LEVEL SECURITY")
-        )
-      }
-    }
-
-    vpro_pg_exec_safe(
-      function() {
-        DBI::dbWithTransaction(pg$conn, {
-          for (g_stmt in grant_stmts) {
-            DBI::dbExecute(pg$conn, g_stmt)
-          }
-        })
-      },
-      action = "Apply PostgreSQL role grants and RLS policies"
-    )
-    role_grants_applied <- TRUE
-    contributor_role_set <- has_contrib_role
-  }
+  grant_res <- .vpro_pg_apply_role_grants(pg, target_schemas, contrib_r, custod_r)
 
   after_tbl_df <- vpro_pg_query(
     pg,
@@ -572,8 +600,8 @@ vpro_master_bootstrap <- function(pg, contributor_role = NULL, custodian_role = 
     applied_migrations = applied_migrations,
     postgis_enabled = has_postgis,
     pgcrypto_enabled = has_pgcrypto,
-    role_grants_applied = role_grants_applied,
-    contributor_role_set = contributor_role_set,
+    role_grants_applied = grant_res$role_grants_applied,
+    contributor_role_set = grant_res$contributor_role_set,
     bootstrapped_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
   )
 }

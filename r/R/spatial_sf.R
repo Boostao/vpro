@@ -144,10 +144,10 @@ vpro_sf <- function(
   scope <- match.arg(scope)
 
   if (!is.logical(audit_geodesy) || length(audit_geodesy) != 1L || is.na(audit_geodesy)) {
-    rlang::abort("`audit_geodesy` must be TRUE or FALSE.")
+    cli::cli_abort("`audit_geodesy` must be TRUE or FALSE.", class = c("vpro_error_spatial", "vpro_error"))
   }
   if (!is.logical(exclude_modifiers) || length(exclude_modifiers) != 1L || is.na(exclude_modifiers)) {
-    rlang::abort("`exclude_modifiers` must be TRUE or FALSE.")
+    cli::cli_abort("`exclude_modifiers` must be TRUE or FALSE.", class = c("vpro_error_spatial", "vpro_error"))
   }
 
   col_proj <- if (identical(columns, "all") || is.null(columns)) {
@@ -370,10 +370,10 @@ vpro_export_gpkg <- function(
   scope <- match.arg(scope)
 
   if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(trimws(path))) {
-    rlang::abort("`path` must be a single non-empty `.gpkg` file path.")
+    cli::cli_abort("`path` must be a single non-empty `.gpkg` file path.", class = c("vpro_error_spatial", "vpro_error"))
   }
   if (!is.logical(overwrite) || length(overwrite) != 1L || is.na(overwrite)) {
-    rlang::abort("`overwrite` must be TRUE or FALSE.")
+    cli::cli_abort("`overwrite` must be TRUE or FALSE.", class = c("vpro_error_spatial", "vpro_error"))
   }
 
   out_path <- vpro_abs_path(trimws(path))
@@ -384,7 +384,7 @@ vpro_export_gpkg <- function(
 
   if (file.exists(out_path)) {
     if (!isTRUE(overwrite)) {
-      rlang::abort(paste0("GeoPackage already exists and `overwrite = FALSE`: ", out_path))
+      cli::cli_abort(.vpro_cli_escape(paste0("GeoPackage already exists and `overwrite = FALSE`: ", out_path)), class = c("vpro_error_spatial", "vpro_error"))
     }
     unlink(c(out_path, paste0(out_path, "-wal"), paste0(out_path, "-shm")))
   }

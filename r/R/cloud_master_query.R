@@ -63,7 +63,10 @@ vpro_master_env <- function(
 
   if (!is.null(columns)) {
     if (!is.character(columns)) {
-      cli::cli_abort("{.arg columns} must be {.code NULL} or a character vector of column names.")
+      cli::cli_abort(
+        "{.arg columns} must be {.code NULL} or a character vector of column names.",
+        class = c("vpro_error_cloud", "vpro_error")
+      )
     }
     req_cols <- unique(c("PlotNumber", as.character(columns)))
     env_fields <- env_fields[tolower(env_fields) %in% tolower(req_cols)]
@@ -300,7 +303,8 @@ vpro_master_veg <- function(
 
   if (!is.null(lump) && !identical(lump, FALSE) && !is.data.frame(lump)) {
     cli::cli_abort(
-      "{.arg lump} in {.fn vpro_master_veg} must be {.code NULL}, {.code FALSE}, or a {.cls data.frame} containing {.field SppCode} and {.field LumpCode}."
+      "{.arg lump} in {.fn vpro_master_veg} must be {.code NULL}, {.code FALSE}, or a {.cls data.frame} containing {.field SppCode} and {.field LumpCode}.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   lump_tbl <- vpro_lump_map(ws = NULL, lump = lump)

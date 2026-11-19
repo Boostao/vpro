@@ -6,7 +6,8 @@ vpro_pg_clean_tokens <- function(x, arg_name = "filter") {
   }
   if (is.numeric(x) && identical(arg_name, "plots")) {
     cli::cli_abort(
-      "{.arg plots} must be a character vector so leading-zero PlotNumbers (e.g. {.val 00337}) are preserved."
+      "{.arg plots} must be a character vector so leading-zero PlotNumbers (e.g. {.val 00337}) are preserved.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   chr <- trimws(as.character(x))
@@ -19,17 +20,26 @@ vpro_pg_validate_limit <- function(limit, allow_null = TRUE) {
     if (isTRUE(allow_null)) {
       return(NULL)
     }
-    cli::cli_abort("{.arg limit} must be a positive integer.")
+    cli::cli_abort(
+      "{.arg limit} must be a positive integer.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   if (!is.numeric(limit) || length(limit) != 1L || is.na(limit) || !is.finite(limit) || limit < 1 || limit != trunc(limit)) {
-    cli::cli_abort("{.arg limit} must be a single positive integer (>= 1).")
+    cli::cli_abort(
+      "{.arg limit} must be a single positive integer (>= 1).",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   as.integer(limit)
 }
 
 vpro_pg_validate_flag <- function(x, arg_name) {
   if (!is.logical(x) || length(x) != 1L || is.na(x)) {
-    cli::cli_abort("{.arg {arg_name}} must be {.code TRUE} or {.code FALSE}.")
+    cli::cli_abort(
+      "{.arg {arg_name}} must be {.code TRUE} or {.code FALSE}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   x
 }
@@ -98,15 +108,20 @@ vpro_pg_subset_where <- function(
       bbox_clean <- as.double(bbox)
     } else {
       cli::cli_abort(
-        "{.arg bbox} must be a numeric vector of length 4 {.code c(min_lon, min_lat, max_lon, max_lat)} or an {.cls sf} {.cls bbox} object."
+        "{.arg bbox} must be a numeric vector of length 4 {.code c(min_lon, min_lat, max_lon, max_lat)} or an {.cls sf} {.cls bbox} object.",
+        class = c("vpro_error_cloud", "vpro_error")
       )
     }
     if (anyNA(bbox_clean) || any(!is.finite(bbox_clean))) {
-      cli::cli_abort("{.arg bbox} coordinates must be finite numbers.")
+      cli::cli_abort(
+        "{.arg bbox} coordinates must be finite numbers.",
+        class = c("vpro_error_cloud", "vpro_error")
+      )
     }
     if (bbox_clean[[1L]] > bbox_clean[[3L]] || bbox_clean[[2L]] > bbox_clean[[4L]]) {
       cli::cli_abort(
-        "{.arg bbox} requires {.code min_lon <= max_lon} and {.code min_lat <= max_lat}."
+        "{.arg bbox} requires {.code min_lon <= max_lon} and {.code min_lat <= max_lat}.",
+        class = c("vpro_error_cloud", "vpro_error")
       )
     }
   }
@@ -118,10 +133,11 @@ vpro_pg_subset_where <- function(
   }
 
   clauses <- character()
-  params <- list()
+  param_state <- new.env(parent = emptyenv())
+  param_state$params <- list()
   next_param <- function(val) {
-    params[[length(params) + 1L]] <<- val
-    paste0("$", length(params))
+    param_state$params[[length(param_state$params) + 1L]] <- val
+    paste0("$", length(param_state$params))
   }
 
   if (length(zones_clean) > 0L) {
@@ -200,16 +216,19 @@ vpro_pg_subset_where <- function(
   }
 
   if (length(clauses) == 0L && !isTRUE(has_limit) && !isTRUE(allow_full)) {
-    cli::cli_abort(c(
-      "At least one subset filter is required before querying {.code becmaster}.",
-      "i" = "Supply {.arg zones}, {.arg subzones}, {.arg project_ids}, {.arg plots}, {.arg bbox}, a positive {.arg limit}, or set {.code allow_full = TRUE}."
-    ))
+    cli::cli_abort(
+      c(
+        "At least one subset filter is required before querying {.code becmaster}.",
+        "i" = "Supply {.arg zones}, {.arg subzones}, {.arg project_ids}, {.arg plots}, {.arg bbox}, a positive {.arg limit}, or set {.code allow_full = TRUE}."
+      ),
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
 
   list(
     where_sql = if (length(clauses) > 0L) paste0("WHERE ", paste(clauses, collapse = " AND ")) else "",
     clauses = clauses,
-    params = params,
+    params = param_state$params,
     filters = list(
       zones = zones_clean,
       subzones = subzones_clean,
@@ -256,17 +275,21 @@ vpro_pg_subset_where <- function(
     if (!is.character(vlists_path) || length(vlists_path) != 1L || is.na(vlists_path) || !nzchar(trimws(vlists_path))) {
       if (is.null(pg) && length(codes) == 0L && isTRUE(require_populated)) {
         cli::cli_abort(
-          "{.arg vlists_path} must be a non-empty file path to {.file VLists.db} for rare-plant coordinate redaction."
+          "{.arg vlists_path} must be a non-empty file path to {.file VLists.db} for rare-plant coordinate redaction.",
+          class = c("vpro_error_cloud", "vpro_error")
         )
       }
     } else {
       vdb_cand <- trimws(vlists_path)
       if (!file.exists(vdb_cand)) {
         if (is.null(pg) && length(codes) == 0L && isTRUE(require_populated)) {
-          cli::cli_abort(c(
-            "Species conservation catalogue {.path {vdb_cand}} was not found.",
-            "i" = "Refusing to return or export unredacted plot coordinates when sensitive-species redaction is required."
-          ))
+          cli::cli_abort(
+            c(
+              "Species conservation catalogue {.path {vdb_cand}} was not found.",
+              "i" = "Refusing to return or export unredacted plot coordinates when sensitive-species redaction is required."
+            ),
+            class = c("vpro_error_cloud", "vpro_error")
+          )
         }
       } else {
         vdb <- vdb_cand
@@ -282,7 +305,8 @@ vpro_pg_subset_where <- function(
     if (inherits(dbc, "error")) {
       if (is.null(pg) && length(codes) == 0L && isTRUE(require_populated)) {
         cli::cli_abort(
-          "Failed to open species conservation catalogue {.path {vdb}} for rare-plant coordinate redaction: {conditionMessage(dbc)}"
+          "Failed to open species conservation catalogue {.path {vdb}} for rare-plant coordinate redaction: {conditionMessage(dbc)}",
+          class = c("vpro_error_cloud", "vpro_error")
         )
       }
     } else if (!is.null(dbc)) {
@@ -359,17 +383,31 @@ vpro_pg_subset_where <- function(
       "VLists.db / standards.usys_spp_attributes"
     }
     if (!isTRUE(has_any_attr_table)) {
-      cli::cli_abort(c(
-        "Cannot redact rare-plant coordinates because species conservation table {.code USysSppAttributes} ({.code standards.usys_spp_attributes}) is missing ({src_lbl}).",
-        "i" = "Refusing to return or export unredacted plot coordinates when sensitive-species redaction is required.",
-        "i" = "Supply a species catalogue populated with BC Conservation Data Centre (CDC) Red/Blue status codes ({.val R}/{.val B}), or set {.code redact_sensitive = FALSE} only when unredacted coordinates are authorized."
-      ))
+      cli::cli_abort(
+        c(
+          paste0(
+            "Cannot redact rare-plant coordinates because species conservation table {.code USysSppAttributes} ({.code standards.usys_spp_attributes}) is missing (",
+            .vpro_cli_escape(src_lbl),
+            ")."
+          ),
+          "i" = "Refusing to return or export unredacted plot coordinates when sensitive-species redaction is required.",
+          "i" = "Supply a species catalogue populated with BC Conservation Data Centre (CDC) Red/Blue status codes ({.val R}/{.val B}), or set {.code redact_sensitive = FALSE} only when unredacted coordinates are authorized."
+        ),
+        class = c("vpro_error_cloud", "vpro_error")
+      )
     }
-    cli::cli_abort(c(
-      "Cannot redact rare-plant coordinates because {.code USysSppAttributes.RedBlueList} contains 0 Red/Blue-listed species rows ({src_lbl}).",
-      "i" = "Refusing to return or export unredacted plot coordinates when sensitive-species redaction is required.",
-      "i" = "Populate BC Conservation Data Centre (CDC) Red/Blue status codes ({.val R}/{.val B}) in {.file VLists.db} / {.code standards.usys_spp_attributes}, or set {.code redact_sensitive = FALSE} only when unredacted coordinates are authorized."
-    ))
+    cli::cli_abort(
+      c(
+        paste0(
+          "Cannot redact rare-plant coordinates because {.code USysSppAttributes.RedBlueList} contains 0 Red/Blue-listed species rows (",
+          .vpro_cli_escape(src_lbl),
+          ")."
+        ),
+        "i" = "Refusing to return or export unredacted plot coordinates when sensitive-species redaction is required.",
+        "i" = "Populate BC Conservation Data Centre (CDC) Red/Blue status codes ({.val R}/{.val B}) in {.file VLists.db} / {.code standards.usys_spp_attributes}, or set {.code redact_sensitive = FALSE} only when unredacted coordinates are authorized."
+      ),
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
 
   sort(as.character(codes), method = "radix")
@@ -664,7 +702,8 @@ vpro_validate_splinter_project_name <- function(project_name, allow_reserved_nam
     !is.character(project_name) || length(project_name) != 1L || is.na(project_name) || !validUTF8(project_name) || trimws(project_name) != project_name || !nzchar(project_name)
   ) {
     cli::cli_abort(
-      "{.arg project_name} must be a non-empty string without leading or trailing whitespace."
+      "{.arg project_name} must be a non-empty string without leading or trailing whitespace.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   project_name <- tryCatch(
@@ -672,6 +711,7 @@ vpro_validate_splinter_project_name <- function(project_name, allow_reserved_nam
     error = function(e) {
       cli::cli_abort(
         "{.arg project_name} must start with an ASCII letter and contain only ASCII letters, digits, or underscores (max 31 chars).",
+        class = c("vpro_error_cloud", "vpro_error"),
         parent = e
       )
     }
@@ -680,7 +720,8 @@ vpro_validate_splinter_project_name <- function(project_name, allow_reserved_nam
     low <- tolower(project_name)
     if (low %in% c("none", "sample") || grepl("master", low, fixed = TRUE)) {
       cli::cli_abort(
-        "Target {.arg project_name} {.val {project_name}} is reserved ({.val None}, {.val Sample}, and names containing {.val master} are not permitted)."
+        "Target {.arg project_name} {.val {project_name}} is reserved ({.val None}, {.val Sample}, and names containing {.val master} are not permitted).",
+        class = c("vpro_error_cloud", "vpro_error")
       )
     }
   }

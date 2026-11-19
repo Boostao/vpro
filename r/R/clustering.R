@@ -22,6 +22,132 @@ vpro_with_seed <- function(seed, expr) {
   force(expr)
 }
 
+.vpro_fit_cluster_method <- function(method, mat, dist_mat, k_eff, m, dnoise, beta, unit_prefix, plots_chr) {
+  n_plots <- length(plots_chr)
+  if (method %in% c("ward.D2", "average")) {
+    hc <- stats::hclust(dist_mat, method = method)
+    hc$labels <- plots_chr
+    grp <- as.integer(stats::cutree(hc, k = k_eff))
+    coph <- suppressWarnings(stats::cor(dist_mat, stats::cophenetic(hc)))
+    return(list(
+      dendrogram = hc,
+      coph = if (is.finite(coph)) as.double(coph) else NA_real_,
+      cluster_int = grp,
+      site_unit = sprintf("%s_%02d", unit_prefix, grp),
+      max_memb = rep(1.0, n_plots),
+      is_noise = rep(FALSE, n_plots),
+      fuzzy_weights = NULL,
+      pam_medoids = NULL
+    ))
+  }
+  if (identical(method, "beta_flexible")) {
+    if (!is.numeric(beta) || length(beta) != 1L || !is.finite(beta) || beta >= 1 || beta <= -1) {
+      cli::cli_abort("`beta` must be a finite number strictly between -1 and 1.", class = c("vpro_error_analysis", "vpro_error"))
+    }
+    alpha <- (1.0 - as.double(beta)) / 2.0
+    ag <- cluster::agnes(
+      dist_mat,
+      diss = TRUE,
+      method = "flexible",
+      par.method = c(alpha, alpha, as.double(beta), 0.0)
+    )
+    hc <- stats::as.hclust(ag)
+    hc$labels <- plots_chr
+    grp <- as.integer(stats::cutree(hc, k = k_eff))
+    coph <- suppressWarnings(stats::cor(dist_mat, stats::cophenetic(hc)))
+    return(list(
+      dendrogram = hc,
+      coph = if (is.finite(coph)) as.double(coph) else NA_real_,
+      cluster_int = grp,
+      site_unit = sprintf("%s_%02d", unit_prefix, grp),
+      max_memb = rep(1.0, n_plots),
+      is_noise = rep(FALSE, n_plots),
+      fuzzy_weights = NULL,
+      pam_medoids = NULL
+    ))
+  }
+  if (identical(method, "pam")) {
+    pm <- cluster::pam(dist_mat, k = k_eff, diss = TRUE)
+    grp <- as.integer(pm$clustering)
+    meds <- as.character(pm$medoids)
+    names(meds) <- sprintf("%s_%02d", unit_prefix, seq_along(meds))
+    return(list(
+      dendrogram = NULL,
+      coph = NA_real_,
+      cluster_int = grp,
+      site_unit = sprintf("%s_%02d", unit_prefix, grp),
+      max_memb = rep(1.0, n_plots),
+      is_noise = rep(FALSE, n_plots),
+      fuzzy_weights = NULL,
+      pam_medoids = meds
+    ))
+  }
+
+  vc_data <- vpro_dense_transform(mat, "chord")
+  m_eff <- max(1.05, as.double(m))
+  vc_obj <- if (identical(method, "vegclust_nc")) {
+    vegclust::vegclust(
+      x = vc_data,
+      mobileCenters = k_eff,
+      method = "NC",
+      m = m_eff,
+      dnoise = max(0.05, as.double(dnoise)),
+      nstart = 20L,
+      iter.max = 100L
+    )
+  } else {
+    vegclust::vegclust(
+      x = vc_data,
+      mobileCenters = k_eff,
+      method = "FCM",
+      m = m_eff,
+      nstart = 20L,
+      iter.max = 100L
+    )
+  }
+  memb_mat <- as.matrix(vc_obj$memb)
+  rownames(memb_mat) <- plots_chr
+  defuzz <- as.character(vegclust::defuzzify(vc_obj)$cluster)
+  c_int <- rep(NA_integer_, n_plots)
+  s_unit <- character(n_plots)
+  noise_flag <- rep(FALSE, n_plots)
+  max_m <- apply(memb_mat, 1L, max, na.rm = TRUE)
+
+  for (i in seq_len(n_plots)) {
+    raw_lbl <- defuzz[[i]]
+    if (is.na(raw_lbl) || identical(raw_lbl, "N") || identical(raw_lbl, "N+")) {
+      noise_flag[[i]] <- TRUE
+      c_int[[i]] <- NA_integer_
+      s_unit[[i]] <- paste0(unit_prefix, "_Noise")
+    } else {
+      num <- suppressWarnings(as.integer(gsub("[^0-9]", "", raw_lbl)))
+      if (is.finite(num)) {
+        c_int[[i]] <- num
+        s_unit[[i]] <- sprintf("%s_%02d", unit_prefix, num)
+      } else {
+        s_unit[[i]] <- paste0(unit_prefix, "_", raw_lbl)
+      }
+    }
+  }
+  fw_df <- data.frame(
+    PlotNumber = plots_chr,
+    memb_mat,
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+  rownames(fw_df) <- plots_chr
+  list(
+    dendrogram = NULL,
+    coph = NA_real_,
+    cluster_int = c_int,
+    site_unit = s_unit,
+    max_memb = as.double(max_m),
+    is_noise = noise_flag,
+    fuzzy_weights = fw_df,
+    pam_medoids = NULL
+  )
+}
+
 #' Cluster VPro plots with hierarchical, medoid, or fuzzy noise classification
 #'
 #' Builds a community matrix via [vpro_matrix()], computes ecological
@@ -86,12 +212,12 @@ vpro_cluster <- function(
   }
 
   if (!is.character(unit_prefix) || length(unit_prefix) != 1L || is.na(unit_prefix) || !nzchar(trimws(unit_prefix))) {
-    rlang::abort("`unit_prefix` must be a single non-empty character string.")
+    cli::cli_abort("`unit_prefix` must be a single non-empty character string.", class = c("vpro_error_analysis", "vpro_error"))
   }
   unit_prefix <- trimws(unit_prefix)
 
   if (!is.numeric(k) || length(k) != 1L || is.na(k) || k < 2) {
-    rlang::abort("`k` must be a single integer >= 2.")
+    cli::cli_abort("`k` must be a single integer >= 2.", class = c("vpro_error_analysis", "vpro_error"))
   }
 
   mat_raw <- vpro_matrix(
@@ -107,7 +233,7 @@ vpro_cluster <- function(
 
   n_plots <- nrow(mat)
   if (n_plots < 3L) {
-    rlang::abort(sprintf("`vpro_cluster()` requires at least 3 vegetated plots (found %d).", n_plots))
+    cli::cli_abort(.vpro_cli_escape(sprintf("`vpro_cluster()` requires at least 3 vegetated plots (found %d).", n_plots)), class = c("vpro_error_analysis", "vpro_error"))
   }
   k_eff <- as.integer(max(2L, min(as.integer(k), n_plots - 1L)))
   plots_chr <- as.character(rownames(mat))
@@ -118,128 +244,10 @@ vpro_cluster <- function(
     vegan::vegdist(mat, method = distance)
   }
 
-  fit <- vpro_with_seed(seed, {
-    if (method %in% c("ward.D2", "average")) {
-      hc <- stats::hclust(dist_mat, method = method)
-      hc$labels <- plots_chr
-      grp <- as.integer(stats::cutree(hc, k = k_eff))
-      coph <- suppressWarnings(stats::cor(dist_mat, stats::cophenetic(hc)))
-      list(
-        dendrogram = hc,
-        coph = if (is.finite(coph)) as.double(coph) else NA_real_,
-        cluster_int = grp,
-        site_unit = sprintf("%s_%02d", unit_prefix, grp),
-        max_memb = rep(1.0, n_plots),
-        is_noise = rep(FALSE, n_plots),
-        fuzzy_weights = NULL,
-        pam_medoids = NULL
-      )
-    } else if (identical(method, "beta_flexible")) {
-      if (!is.numeric(beta) || length(beta) != 1L || !is.finite(beta) || beta >= 1 || beta <= -1) {
-        rlang::abort("`beta` must be a finite number strictly between -1 and 1.")
-      }
-      alpha <- (1.0 - as.double(beta)) / 2.0
-      ag <- cluster::agnes(
-        dist_mat,
-        diss = TRUE,
-        method = "flexible",
-        par.method = c(alpha, alpha, as.double(beta), 0.0)
-      )
-      hc <- stats::as.hclust(ag)
-      hc$labels <- plots_chr
-      grp <- as.integer(stats::cutree(hc, k = k_eff))
-      coph <- suppressWarnings(stats::cor(dist_mat, stats::cophenetic(hc)))
-      list(
-        dendrogram = hc,
-        coph = if (is.finite(coph)) as.double(coph) else NA_real_,
-        cluster_int = grp,
-        site_unit = sprintf("%s_%02d", unit_prefix, grp),
-        max_memb = rep(1.0, n_plots),
-        is_noise = rep(FALSE, n_plots),
-        fuzzy_weights = NULL,
-        pam_medoids = NULL
-      )
-    } else if (identical(method, "pam")) {
-      pm <- cluster::pam(dist_mat, k = k_eff, diss = TRUE)
-      grp <- as.integer(pm$clustering)
-      meds <- as.character(pm$medoids)
-      names(meds) <- sprintf("%s_%02d", unit_prefix, seq_along(meds))
-      list(
-        dendrogram = NULL,
-        coph = NA_real_,
-        cluster_int = grp,
-        site_unit = sprintf("%s_%02d", unit_prefix, grp),
-        max_memb = rep(1.0, n_plots),
-        is_noise = rep(FALSE, n_plots),
-        fuzzy_weights = NULL,
-        pam_medoids = meds
-      )
-    } else {
-      vc_data <- vpro_dense_transform(mat, "chord")
-      m_eff <- max(1.05, as.double(m))
-      vc_obj <- if (identical(method, "vegclust_nc")) {
-        vegclust::vegclust(
-          x = vc_data,
-          mobileCenters = k_eff,
-          method = "NC",
-          m = m_eff,
-          dnoise = max(0.05, as.double(dnoise)),
-          nstart = 20L,
-          iter.max = 100L
-        )
-      } else {
-        vegclust::vegclust(
-          x = vc_data,
-          mobileCenters = k_eff,
-          method = "FCM",
-          m = m_eff,
-          nstart = 20L,
-          iter.max = 100L
-        )
-      }
-      memb_mat <- as.matrix(vc_obj$memb)
-      rownames(memb_mat) <- plots_chr
-      defuzz <- as.character(vegclust::defuzzify(vc_obj)$cluster)
-      c_int <- rep(NA_integer_, n_plots)
-      s_unit <- character(n_plots)
-      noise_flag <- rep(FALSE, n_plots)
-      max_m <- apply(memb_mat, 1L, max, na.rm = TRUE)
-
-      for (i in seq_len(n_plots)) {
-        raw_lbl <- defuzz[[i]]
-        if (is.na(raw_lbl) || identical(raw_lbl, "N") || identical(raw_lbl, "N+")) {
-          noise_flag[[i]] <- TRUE
-          c_int[[i]] <- NA_integer_
-          s_unit[[i]] <- paste0(unit_prefix, "_Noise")
-        } else {
-          num <- suppressWarnings(as.integer(gsub("[^0-9]", "", raw_lbl)))
-          if (is.finite(num)) {
-            c_int[[i]] <- num
-            s_unit[[i]] <- sprintf("%s_%02d", unit_prefix, num)
-          } else {
-            s_unit[[i]] <- paste0(unit_prefix, "_", raw_lbl)
-          }
-        }
-      }
-      fw_df <- data.frame(
-        PlotNumber = plots_chr,
-        memb_mat,
-        check.names = FALSE,
-        stringsAsFactors = FALSE
-      )
-      rownames(fw_df) <- plots_chr
-      list(
-        dendrogram = NULL,
-        coph = NA_real_,
-        cluster_int = c_int,
-        site_unit = s_unit,
-        max_memb = as.double(max_m),
-        is_noise = noise_flag,
-        fuzzy_weights = fw_df,
-        pam_medoids = NULL
-      )
-    }
-  })
+  fit <- vpro_with_seed(
+    seed,
+    .vpro_fit_cluster_method(method, mat, dist_mat, k_eff, m, dnoise, beta, unit_prefix, plots_chr)
+  )
 
   # Compute per-plot silhouette widths across non-noise clusters (or all groups if needed)
   sil_vec <- rep(0.0, n_plots)
@@ -388,7 +396,7 @@ plot.vpro_clusters <- function(x, type = c("auto", "dendrogram", "ordination"), 
   }
   if (identical(type, "dendrogram")) {
     if (is.null(x$dendrogram)) {
-      rlang::abort("`x` has no hierarchical dendrogram; use `type = \"ordination\"`.")
+      cli::cli_abort("`x` has no hierarchical dendrogram; use `type = \"ordination\"`.", class = c("vpro_error_analysis", "vpro_error"))
     }
     dots <- list(...)
     plot_args <- utils::modifyList(
@@ -508,11 +516,11 @@ vpro_indicators <- function(
     unname(g_map[plots_chr])
   } else if (is.data.frame(clusters)) {
     if (!("PlotNumber" %in% names(clusters))) {
-      rlang::abort("`clusters` data.frame must contain a `PlotNumber` column.")
+      cli::cli_abort("`clusters` data.frame must contain a `PlotNumber` column.", class = c("vpro_error_analysis", "vpro_error"))
     }
     u_col <- intersect(c("SiteUnit", "Cluster", "Group"), names(clusters))
     if (length(u_col) == 0L) {
-      rlang::abort("`clusters` data.frame must contain a `SiteUnit`, `Cluster`, or `Group` column.")
+      cli::cli_abort("`clusters` data.frame must contain a `SiteUnit`, `Cluster`, or `Group` column.", class = c("vpro_error_analysis", "vpro_error"))
     }
     g_map <- stats::setNames(as.character(clusters[[u_col[[1L]]]]), as.character(clusters[["PlotNumber"]]))
     unname(g_map[plots_chr])
@@ -523,10 +531,10 @@ vpro_indicators <- function(
     } else if (length(clusters) == nrow(mat)) {
       as.character(clusters)
     } else {
-      rlang::abort("Unnamed `clusters` vector must match the number of rows in `vpro_matrix(ws, ...)`.")
+      cli::cli_abort("Unnamed `clusters` vector must match the number of rows in `vpro_matrix(ws, ...)`.", class = c("vpro_error_analysis", "vpro_error"))
     }
   } else {
-    rlang::abort("`clusters` must be NULL, a `vpro_clusters` object, a data.frame, or a group vector.")
+    cli::cli_abort("`clusters` must be NULL, a `vpro_clusters` object, a data.frame, or a group vector.", class = c("vpro_error_analysis", "vpro_error"))
   }
 
   valid_rows <- !is.na(grp_vec) & nzchar(trimws(grp_vec)) & !grepl("_Noise$", grp_vec)
@@ -534,7 +542,7 @@ vpro_indicators <- function(
   grp_sub <- trimws(grp_vec[valid_rows])
 
   if (nrow(mat_sub) < 2L || length(unique(grp_sub)) < 2L) {
-    rlang::abort("`vpro_indicators()` requires plots spanning at least 2 non-empty groups.")
+    cli::cli_abort("`vpro_indicators()` requires plots spanning at least 2 non-empty groups.", class = c("vpro_error_analysis", "vpro_error"))
   }
 
   keep_spp <- colSums(mat_sub > 0) > 0

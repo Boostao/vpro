@@ -217,7 +217,7 @@ vpro_lump_map <- function(ws = NULL, lump = TRUE) {
     s_ix <- match("sppcode", nms)
     l_ix <- match("lumpcode", nms)
     if (is.na(s_ix) || is.na(l_ix)) {
-      rlang::abort("Custom `lump` data.frame must contain `SppCode` and `LumpCode` columns.")
+      cli::cli_abort("Custom `lump` data.frame must contain `SppCode` and `LumpCode` columns.", class = c("vpro_error_taxonomy", "vpro_error"))
     }
     u_ix <- match("use", nms)
     use_vec <- if (is.na(u_ix)) rep(TRUE, nrow(lump)) else vpro_access_to_logical(lump[[u_ix]])
@@ -236,7 +236,7 @@ vpro_lump_map <- function(ws = NULL, lump = TRUE) {
     tables <- vpro_sqlite_physical_tables(ws$lump_path)
     vpro_resolve_table_suffix(tables, lump, "Lump", default_prefix = ws$project)
   } else {
-    rlang::abort("`lump` must be TRUE, FALSE, a table name, or a two-column data.frame.")
+    cli::cli_abort("`lump` must be TRUE, FALSE, a table name, or a two-column data.frame.", class = c("vpro_error_taxonomy", "vpro_error"))
   }
   if (is.null(tbl_name)) {
     return(empty)

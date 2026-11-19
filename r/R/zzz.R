@@ -12,7 +12,10 @@ vpro_bundled_file <- function(..., must_work = TRUE) {
     if (file.exists(dev_path)) {
       path <- normalizePath(dev_path, winslash = "/", mustWork = TRUE)
     } else if (isTRUE(must_work)) {
-      rlang::abort(paste0("Bundled vpro resource was not found: ", file.path(...)))
+      cli::cli_abort(
+        .vpro_cli_escape(paste0("Bundled vpro resource was not found: ", file.path(...))),
+        class = c("vpro_error_resource", "vpro_error")
+      )
     } else {
       return("")
     }

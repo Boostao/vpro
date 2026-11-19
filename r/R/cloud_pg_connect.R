@@ -100,22 +100,34 @@ vpro_split_char <- function(s, sep) {
 
 vpro_validate_url_port_token <- function(port_tok) {
   if (!grepl("^[0-9]+$", port_tok)) {
-    cli::cli_abort("Invalid port in PostgreSQL URL (must be an integer in 1..65535).")
+    cli::cli_abort(
+      "Invalid port in PostgreSQL URL (must be an integer in 1..65535).",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   port_num <- suppressWarnings(as.integer(port_tok))
   if (is.na(port_num) || port_num < 1L || port_num > 65535L) {
-    cli::cli_abort("Invalid port in PostgreSQL URL (must be an integer in 1..65535).")
+    cli::cli_abort(
+      "Invalid port in PostgreSQL URL (must be an integer in 1..65535).",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   port_num
 }
 
 vpro_parse_pg_url_impl <- function(raw_url) {
   if (!is.character(raw_url) || length(raw_url) != 1L || is.na(raw_url) || !nzchar(trimws(raw_url))) {
-    cli::cli_abort("PostgreSQL connection URL must be a non-empty character string.")
+    cli::cli_abort(
+      "PostgreSQL connection URL must be a non-empty character string.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   u <- trimws(raw_url)
   if (!grepl("^postgres(?:ql)?://", u, ignore.case = TRUE, perl = TRUE)) {
-    cli::cli_abort("Invalid PostgreSQL URL scheme (expected {.code postgres://} or {.code postgresql://}).")
+    cli::cli_abort(
+      "Invalid PostgreSQL URL scheme (expected {.code postgres://} or {.code postgresql://}).",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   rest <- sub("^postgres(?:ql)?://", "", u, ignore.case = TRUE, perl = TRUE)
 
@@ -169,23 +181,35 @@ vpro_parse_pg_url_impl <- function(raw_url) {
       } else if (startsWith(hp_item, "[")) {
         close_br <- regexpr("]", hp_item, fixed = TRUE)[[1L]]
         if (close_br <= 1L) {
-          cli::cli_abort("Malformed bracketed IPv6 host in PostgreSQL URL.")
+          cli::cli_abort(
+            "Malformed bracketed IPv6 host in PostgreSQL URL.",
+            class = c("vpro_error_cloud", "vpro_error")
+          )
         }
         item_hosts[[idx]] <- vpro_urldecode_safe(substr(hp_item, 2L, close_br - 1L))
         after_br <- substring(hp_item, close_br + 1L)
         if (startsWith(after_br, ":") && nchar(after_br) > 1L) {
           item_ports[[idx]] <- substring(after_br, 2L)
         } else if (nzchar(after_br)) {
-          cli::cli_abort("Malformed port specification in PostgreSQL URL.")
+          cli::cli_abort(
+            "Malformed port specification in PostgreSQL URL.",
+            class = c("vpro_error_cloud", "vpro_error")
+          )
         }
       } else {
         if (grepl("[\\[\\]]", hp_item)) {
-          cli::cli_abort("Malformed bracketed IPv6 host in PostgreSQL URL.")
+          cli::cli_abort(
+            "Malformed bracketed IPv6 host in PostgreSQL URL.",
+            class = c("vpro_error_cloud", "vpro_error")
+          )
         }
         colons <- gregexpr(":", hp_item, fixed = TRUE)[[1L]]
         if (colons[[1L]] > 0L) {
           if (length(colons) > 1L) {
-            cli::cli_abort("Malformed IPv6 host in PostgreSQL URL (enclose IPv6 literals in [...] brackets).")
+            cli::cli_abort(
+              "Malformed IPv6 host in PostgreSQL URL (enclose IPv6 literals in [...] brackets).",
+              class = c("vpro_error_cloud", "vpro_error")
+            )
           }
           colon_pos <- colons[[1L]]
           item_hosts[[idx]] <- vpro_urldecode_safe(substr(hp_item, 1L, colon_pos - 1L))
@@ -255,7 +279,10 @@ vpro_parse_pg_url_impl <- function(raw_url) {
     for (pt in port_tokens) {
       pt_trim <- trimws(pt)
       if (!nzchar(pt_trim)) {
-        cli::cli_abort("Invalid port in PostgreSQL URL (must be an integer in 1..65535).")
+        cli::cli_abort(
+          "Invalid port in PostgreSQL URL (must be an integer in 1..65535).",
+          class = c("vpro_error_cloud", "vpro_error")
+        )
       }
       parsed_ports <- c(parsed_ports, vpro_validate_url_port_token(pt_trim))
     }
@@ -291,17 +318,26 @@ vpro_parse_pg_url <- function(raw_url) {
 vpro_validate_pg_port <- function(port_val, label = "port") {
   if (is.numeric(port_val) && length(port_val) == 1L && !is.na(port_val)) {
     if (!is.finite(port_val) || port_val != trunc(port_val) || port_val < 1 || port_val > 65535) {
-      cli::cli_abort("Invalid PostgreSQL {label} (must be an integer between 1 and 65535).")
+      cli::cli_abort(
+        "Invalid PostgreSQL {label} (must be an integer between 1 and 65535).",
+        class = c("vpro_error_cloud", "vpro_error")
+      )
     }
     return(as.integer(port_val))
   }
   s <- trimws(as.character(port_val[[1L]]))
   if (!grepl("^[0-9]+$", s)) {
-    cli::cli_abort("Invalid PostgreSQL {label} (must be an integer between 1 and 65535).")
+    cli::cli_abort(
+      "Invalid PostgreSQL {label} (must be an integer between 1 and 65535).",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   iv <- suppressWarnings(as.integer(s))
   if (is.na(iv) || iv < 1L || iv > 65535L) {
-    cli::cli_abort("Invalid PostgreSQL {label} (must be an integer between 1 and 65535).")
+    cli::cli_abort(
+      "Invalid PostgreSQL {label} (must be an integer between 1 and 65535).",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   iv
 }
@@ -310,7 +346,8 @@ vpro_validate_pg_sslmode <- function(sslmode) {
   s <- trimws(as.character(sslmode[[1L]]))
   if (!(s %in% .vpro_valid_sslmodes)) {
     cli::cli_abort(
-      "Invalid PostgreSQL {.arg sslmode} {.val {s}} (expected one of {.or {.val {.vpro_valid_sslmodes}}})."
+      "Invalid PostgreSQL {.arg sslmode} {.val {s}} (expected one of {.or {.val {.vpro_valid_sslmodes}}}).",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   s
@@ -482,10 +519,13 @@ vpro_require_pg_tls <- function(host, sslmode) {
     return(invisible(TRUE))
   }
   if (mode %in% c("disable", "allow", "prefer")) {
-    cli::cli_abort(c(
-      "TLS is required for remote PostgreSQL hosts.",
-      "i" = "Set {.arg sslmode} (or {.envvar VPRO_PG_SSLMODE}) to {.val require}, {.val verify-ca} or {.val verify-full}; {.val disable}, {.val allow} and {.val prefer} are only permitted for localhost."
-    ), class = "vpro_pg_tls_required")
+    cli::cli_abort(
+      c(
+        "TLS is required for remote PostgreSQL hosts.",
+        "i" = "Set {.arg sslmode} (or {.envvar VPRO_PG_SSLMODE}) to {.val require}, {.val verify-ca} or {.val verify-full}; {.val disable}, {.val allow} and {.val prefer} are only permitted for localhost."
+      ),
+      class = c("vpro_pg_tls_required", "vpro_error_cloud", "vpro_error")
+    )
   }
   invisible(TRUE)
 }
@@ -533,22 +573,31 @@ vpro_require_disposable_pg_test_db <- function(
   conf_clean <- if (is.character(confirmed_db) && length(confirmed_db) == 1L && !is.na(confirmed_db)) trimws(confirmed_db) else ""
 
   if (!identical(db_clean, contrib_clean)) {
-    cli::cli_abort(c(
-      "Refusing destructive PostgreSQL test execution: custodian ({.val {db_clean}}) and contributor ({.val {contrib_clean}}) database names differ.",
-      "i" = "Point both roles at the same dedicated test/scratch database (e.g. {.val becmaster_test})."
-    ), class = "vpro_pg_destructive_db_refused")
+    cli::cli_abort(
+      c(
+        "Refusing destructive PostgreSQL test execution: custodian ({.val {db_clean}}) and contributor ({.val {contrib_clean}}) database names differ.",
+        "i" = "Point both roles at the same dedicated test/scratch database (e.g. {.val becmaster_test})."
+      ),
+      class = c("vpro_pg_destructive_db_refused", "vpro_error_cloud", "vpro_error")
+    )
   }
   if (!vpro_is_disposable_pg_test_dbname(db_clean)) {
-    cli::cli_abort(c(
-      "Refusing destructive PostgreSQL test execution against non-test database {.val {db_clean}}.",
-      "i" = "Target database must never be {.val becmaster} and must include an explicit test/scratch marker (e.g. {.val becmaster_test}, {.val becmaster_qa}, {.val becmaster_tmp}, or {.val becmaster_scratch})."
-    ), class = "vpro_pg_destructive_db_refused")
+    cli::cli_abort(
+      c(
+        "Refusing destructive PostgreSQL test execution against non-test database {.val {db_clean}}.",
+        "i" = "Target database must never be {.val becmaster} and must include an explicit test/scratch marker (e.g. {.val becmaster_test}, {.val becmaster_qa}, {.val becmaster_tmp}, or {.val becmaster_scratch})."
+      ),
+      class = c("vpro_pg_destructive_db_refused", "vpro_error_cloud", "vpro_error")
+    )
   }
   if (!nzchar(conf_clean) || !identical(conf_clean, db_clean)) {
-    cli::cli_abort(c(
-      "Refusing destructive PostgreSQL test execution without matching {.envvar VPRO_LIVE_PG_DESTRUCTIVE_DB} confirmation.",
-      "i" = "Set {.envvar VPRO_LIVE_PG_DESTRUCTIVE_DB} to {.val {db_clean}} to confirm the test database is disposable."
-    ), class = "vpro_pg_destructive_db_refused")
+    cli::cli_abort(
+      c(
+        "Refusing destructive PostgreSQL test execution without matching {.envvar VPRO_LIVE_PG_DESTRUCTIVE_DB} confirmation.",
+        "i" = "Set {.envvar VPRO_LIVE_PG_DESTRUCTIVE_DB} to {.val {db_clean}} to confirm the test database is disposable."
+      ),
+      class = c("vpro_pg_destructive_db_refused", "vpro_error_cloud", "vpro_error")
+    )
   }
   invisible(TRUE)
 }
@@ -691,6 +740,41 @@ vpro_resolve_pg_credentials <- function(
   )
 }
 
+.vpro_collect_secret_candidates <- function(val) {
+  if (is.null(val) || length(val) == 0L) {
+    return(character(0L))
+  }
+  cand <- character(0L)
+  for (item in as.character(val)) {
+    if (is.na(item)) {
+      next
+    }
+    for (v in unique(c(item, trimws(item)))) {
+      if (nchar(v) < 1L) {
+        next
+      }
+      cand <- c(
+        cand,
+        v,
+        utils::URLencode(v, reserved = TRUE),
+        utils::URLencode(v, reserved = FALSE)
+      )
+      if (grepl("^postgres(?:ql)?://", v, ignore.case = TRUE, perl = TRUE)) {
+        pw <- tryCatch(vpro_parse_pg_url_impl(v)$password, error = function(e) "")
+        if (nchar(pw) >= 1L) {
+          cand <- c(
+            cand,
+            pw,
+            utils::URLencode(pw, reserved = TRUE),
+            utils::URLencode(pw, reserved = FALSE)
+          )
+        }
+      }
+    }
+  }
+  cand
+}
+
 vpro_redact_pg_secrets <- function(msg, secrets = character(), redact_ip = FALSE) {
   if (is.null(msg)) {
     return("")
@@ -704,41 +788,7 @@ vpro_redact_pg_secrets <- function(msg, secrets = character(), redact_ip = FALSE
     return(out)
   }
 
-  cand <- character(0L)
-  add_candidate <- function(val) {
-    if (is.null(val) || length(val) == 0L) {
-      return(invisible(NULL))
-    }
-    for (item in as.character(val)) {
-      if (is.na(item)) {
-        next
-      }
-      for (v in unique(c(item, trimws(item)))) {
-        if (nchar(v) < 1L) {
-          next
-        }
-        cand <<- c(
-          cand,
-          v,
-          utils::URLencode(v, reserved = TRUE),
-          utils::URLencode(v, reserved = FALSE)
-        )
-        if (grepl("^postgres(?:ql)?://", v, ignore.case = TRUE, perl = TRUE)) {
-          pw <- tryCatch(vpro_parse_pg_url_impl(v)$password, error = function(e) "")
-          if (nchar(pw) >= 1L) {
-            cand <<- c(
-              cand,
-              pw,
-              utils::URLencode(pw, reserved = TRUE),
-              utils::URLencode(pw, reserved = FALSE)
-            )
-          }
-        }
-      }
-    }
-    invisible(NULL)
-  }
-  add_candidate(secrets)
+  cand <- .vpro_collect_secret_candidates(secrets)
   cand <- unique(cand[nzchar(cand) & nchar(cand) >= 1L])
   if (length(cand) > 1L) {
     cand <- cand[order(nchar(cand), decreasing = TRUE)]
@@ -844,10 +894,16 @@ vpro_master_connect <- function(
 ) {
   role <- match.arg(role)
   if (!is.logical(bootstrap) || length(bootstrap) != 1L || is.na(bootstrap)) {
-    cli::cli_abort("{.arg bootstrap} must be {.code TRUE} or {.code FALSE}.")
+    cli::cli_abort(
+      "{.arg bootstrap} must be {.code TRUE} or {.code FALSE}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   if (isTRUE(bootstrap) && !identical(role, "custodian")) {
-    cli::cli_abort("{.arg bootstrap = TRUE} requires {.code role = \"custodian\"}.")
+    cli::cli_abort(
+      "{.arg bootstrap = TRUE} requires {.code role = \"custodian\"}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
 
   rlang::check_installed("RPostgres", reason = "to connect to the PostgreSQL BECMaster service.")
@@ -867,15 +923,21 @@ vpro_master_connect <- function(
 
   if (!nzchar(creds$host) || !nzchar(creds$user)) {
     if (identical(role, "custodian")) {
-      cli::cli_abort(c(
-        "PostgreSQL custodian credentials are not configured.",
-        "i" = "Set {.envvar VPRO_PG_HOST}, {.envvar VPRO_PG_ADMIN_USER}, and {.envvar VPRO_PG_ADMIN_PASSWORD} (or {.envvar VPRO_PG_ADMIN_URL}), or configure {.file becmaster.env} in {.fn vpro_config_dir}."
-      ))
+      cli::cli_abort(
+        c(
+          "PostgreSQL custodian credentials are not configured.",
+          "i" = "Set {.envvar VPRO_PG_HOST}, {.envvar VPRO_PG_ADMIN_USER}, and {.envvar VPRO_PG_ADMIN_PASSWORD} (or {.envvar VPRO_PG_ADMIN_URL}), or configure {.file becmaster.env} in {.fn vpro_config_dir}."
+        ),
+        class = c("vpro_error_cloud", "vpro_error")
+      )
     }
-    cli::cli_abort(c(
-      "PostgreSQL contributor credentials are not configured.",
-      "i" = "Set {.envvar VPRO_PG_HOST}, {.envvar VPRO_PG_USER}, and {.envvar VPRO_PG_PASSWORD} (or {.envvar VPRO_PG_URL}), or configure {.file becmaster.env} in {.fn vpro_config_dir}."
-    ))
+    cli::cli_abort(
+      c(
+        "PostgreSQL contributor credentials are not configured.",
+        "i" = "Set {.envvar VPRO_PG_HOST}, {.envvar VPRO_PG_USER}, and {.envvar VPRO_PG_PASSWORD} (or {.envvar VPRO_PG_URL}), or configure {.file becmaster.env} in {.fn vpro_config_dir}."
+      ),
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   vpro_require_pg_tls(creds$host, creds$sslmode)
   dial_host <- vpro_libpq_host(creds$host)
@@ -946,7 +1008,8 @@ vpro_master_disconnect <- function(pg) {
   }
   if (!inherits(pg, "vpro_pg_conn") || !is.list(pg) || is.null(pg$conn)) {
     cli::cli_abort(
-      "{.arg pg} must be a {.cls vpro_pg_conn} connection created by {.fn vpro_master_connect}."
+      "{.arg pg} must be a {.cls vpro_pg_conn} connection created by {.fn vpro_master_connect}.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   valid <- tryCatch(DBI::dbIsValid(pg$conn), error = function(e) FALSE)
@@ -984,12 +1047,19 @@ print.vpro_pg_conn <- function(x, ...) {
     "<none>"
   }
 
-  cli::cli_h3("vpro_pg_conn [{state_lbl}] ({safe_role})")
+  cli::cli_h3(.vpro_cli_escape(paste0("vpro_pg_conn [", state_lbl, "] (", safe_role, ")")))
   cli::cli_bullets(c(
-    "*" = "Endpoint: {safe_host}:{safe_port}/{safe_db} (user: {.val {safe_user}}, TLS sslmode: {.val {safe_ssl}})",
-    "*" = "BECMaster: {plots_lbl} plots, {veg_lbl} veg rows",
-    "*" = "Active standards: {std_lbl}",
-    "*" = "Pending staging submissions: {pending_lbl}"
+    "*" = paste0(
+      .vpro_cli_escape(paste0("Endpoint: ", safe_host, ":", safe_port, "/", safe_db, " (user: ")),
+      "{.val ",
+      .vpro_cli_escape(safe_user),
+      "}, TLS sslmode: {.val ",
+      .vpro_cli_escape(safe_ssl),
+      "})"
+    ),
+    "*" = .vpro_cli_escape(paste0("BECMaster: ", plots_lbl, " plots, ", veg_lbl, " veg rows")),
+    "*" = .vpro_cli_escape(paste0("Active standards: ", std_lbl)),
+    "*" = .vpro_cli_escape(paste0("Pending staging submissions: ", pending_lbl))
   ))
   invisible(x)
 }

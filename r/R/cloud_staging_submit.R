@@ -45,7 +45,10 @@ vpro_staging_submit <- function(
   custodian_override <- vpro_pg_validate_flag(custodian_override, "custodian_override")
 
   if (!is.character(submitter) || length(submitter) != 1L || is.na(submitter) || !nzchar(trimws(submitter))) {
-    cli::cli_abort("{.arg submitter} must be a single non-empty character string.")
+    cli::cli_abort(
+      "{.arg submitter} must be a single non-empty character string.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   submitter_clean <- trimws(submitter)
   notes_clean <- vpro_validate_optional_scalar_chr(notes, "notes")
@@ -57,14 +60,16 @@ vpro_staging_submit <- function(
     vpro_connect(ws)
   } else {
     cli::cli_abort(
-      "{.arg ws} must be a {.cls vpro_workspace} handle or a single non-empty project name / SQLite path."
+      "{.arg ws} must be a {.cls vpro_workspace} handle or a single non-empty project name / SQLite path.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   vpro_assert_workspace(ws)
 
   if (identical(tolower(trimws(ws$project)), "sample")) {
     cli::cli_abort(
-      "The built-in {.val Sample} project cannot be submitted to provincial {.code BECMaster} staging."
+      "The built-in {.val Sample} project cannot be submitted to provincial {.code BECMaster} staging.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   if (
@@ -72,7 +77,8 @@ vpro_staging_submit <- function(
       (is.null(ws$su) || !nzchar(trimws(ws$su)) || identical(tolower(trimws(ws$su)), "none"))
   ) {
     cli::cli_abort(
-      "{.code scope = \"su\"} requires an active {.file *_SU} site-unit table on {.arg ws}."
+      "{.code scope = \"su\"} requires an active {.file *_SU} site-unit table on {.arg ws}.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
 
@@ -114,13 +120,16 @@ vpro_staging_submit <- function(
 
   can_override <- isTRUE(custodian_override) && identical(pg$role, "custodian")
   if (!compliance_passed && !can_override) {
-    cli::cli_abort(c(
-      "Staging submission for project {.val {ws_snap$project}} blocked by pre-flight compliance gate ({total_blocking} blocking error{?s}).",
-      "x" = "Standards/LMH25/orphan errors: {n_val_errors} (warnings: {n_val_warnings})",
-      "x" = "Text length / encoding errors: {n_utf16_errors}",
-      "x" = "Vegetation cover (0 to under 100%) errors: {n_cover_errors}",
-      "i" = "Inspect violations with {.fn vpro_validate} and resolve errors before calling {.fn vpro_staging_submit}."
-    ))
+    cli::cli_abort(
+      c(
+        "Staging submission for project {.val {ws_snap$project}} blocked by pre-flight compliance gate ({total_blocking} blocking error{?s}).",
+        "x" = "Standards/LMH25/orphan errors: {n_val_errors} (warnings: {n_val_warnings})",
+        "x" = "Text length / encoding errors: {n_utf16_errors}",
+        "x" = "Vegetation cover (0 to under 100%) errors: {n_cover_errors}",
+        "i" = "Inspect violations with {.fn vpro_validate} and resolve errors before calling {.fn vpro_staging_submit}."
+      ),
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
 
   combined_issues <- rbind(val$issues, bounds_res$utf16_issues, bounds_res$cover_issues)
@@ -339,16 +348,18 @@ vpro_staging_list <- function(
   limit_int <- vpro_pg_validate_limit(limit, allow_null = FALSE)
 
   clauses <- character(0L)
-  params <- list()
+  param_state <- new.env(parent = emptyenv())
+  param_state$params <- list()
   next_param <- function(val) {
-    params[[length(params) + 1L]] <<- val
-    paste0("$", length(params))
+    param_state$params[[length(param_state$params) + 1L]] <- val
+    paste0("$", length(param_state$params))
   }
 
   if (!is.null(status)) {
     if (!is.character(status) || length(status) != 1L || is.na(status)) {
       cli::cli_abort(
-        "{.arg status} must be {.code NULL}, {.val all}, or one of {.val pending}, {.val approved}, {.val rejected}, {.val merged}."
+        "{.arg status} must be {.code NULL}, {.val all}, or one of {.val pending}, {.val approved}, {.val rejected}, {.val merged}.",
+        class = c("vpro_error_cloud", "vpro_error")
       )
     }
     st_clean <- tolower(trimws(status))
@@ -356,7 +367,8 @@ vpro_staging_list <- function(
       valid_st <- c("pending", "approved", "rejected", "merged")
       if (!(st_clean %in% valid_st)) {
         cli::cli_abort(
-          "{.arg status} must be {.code NULL}, {.val all}, or one of {.or {.val {valid_st}}}."
+          "{.arg status} must be {.code NULL}, {.val all}, or one of {.or {.val {valid_st}}}.",
+          class = c("vpro_error_cloud", "vpro_error")
         )
       }
       clauses <- c(clauses, paste0("status = ", next_param(st_clean)))
@@ -377,7 +389,7 @@ vpro_staging_list <- function(
     lim_p
   )
 
-  df <- vpro_pg_query(pg, sql, params = params, action = "list staging.submissions")
+  df <- vpro_pg_query(pg, sql, params = param_state$params, action = "list staging.submissions")
   vpro_format_staging_queue_df(df)
 }
 
@@ -395,7 +407,8 @@ print.vpro_staging_queue <- function(x, ...) {
   } else {
     counts <- table(x$status)
     parts <- paste0(names(counts), "=", as.integer(counts))
-    cli::cli_h3("vpro_staging_queue ({n} submission{?s}: {paste(parts, collapse = ', ')})")
+    summary_str <- paste(parts, collapse = ", ")
+    cli::cli_h3(paste0("vpro_staging_queue ({n} submission{?s}: ", .vpro_cli_escape(summary_str), ")"))
   }
   NextMethod()
   invisible(x)
@@ -432,7 +445,10 @@ vpro_staging_inspect <- function(pg, submission_id) {
   )
   df <- vpro_pg_query(pg, sql, params = list(sub_id), action = "inspect staging submission")
   if (nrow(df) == 0L) {
-    cli::cli_abort("Staging submission {.val {sub_id}} was not found.")
+    cli::cli_abort(
+      "Staging submission {.val {sub_id}} was not found.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
 
   summary_tbl <- vpro_format_staging_queue_df(df[1L, , drop = FALSE])
@@ -630,7 +646,10 @@ vpro_staging_reject <- function(pg, submission_id, reviewer_notes, actor = NULL)
   sub_id <- vpro_validate_uuid_arg(submission_id, "submission_id")
 
   if (!is.character(reviewer_notes) || length(reviewer_notes) != 1L || is.na(reviewer_notes) || !nzchar(trimws(reviewer_notes))) {
-    cli::cli_abort("{.arg reviewer_notes} must be a single non-empty character string.")
+    cli::cli_abort(
+      "{.arg reviewer_notes} must be a single non-empty character string.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   notes_clean <- trimws(reviewer_notes)
   actor_clean <- vpro_validate_optional_scalar_chr(actor, "actor")
@@ -651,7 +670,8 @@ vpro_staging_reject <- function(pg, submission_id, reviewer_notes, actor = NULL)
   )
   if (identical(as.integer(aff), 0L)) {
     cli::cli_abort(
-      "Staging submission {.val {sub_id}} is not in {.val pending} status or does not exist."
+      "Staging submission {.val {sub_id}} is not in {.val pending} status or does not exist.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
 

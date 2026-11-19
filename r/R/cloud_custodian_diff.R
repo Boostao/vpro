@@ -306,6 +306,250 @@ vpro_same_nullable_str <- function(a, b) {
   identical(as.character(a), as.character(b))
 }
 
+.vpro_diff_new_acc <- function() {
+  acc <- new.env(parent = emptyenv())
+  acc$cid <- character(0L)
+  acc$plot <- character(0L)
+  acc$tbl <- character(0L)
+  acc$key <- character(0L)
+  acc$fld <- character(0L)
+  acc$base <- character(0L)
+  acc$src <- character(0L)
+  acc$tgt <- character(0L)
+  acc$kind <- character(0L)
+  acc$def <- character(0L)
+  acc$prot <- logical(0L)
+  acc
+}
+
+.vpro_diff_push_item <- function(acc, cid, pl, tbl, key, fld, bv, sv, tv, knd, def_r, prot) {
+  idx <- length(acc$cid) + 1L
+  acc$cid[[idx]] <- cid
+  acc$plot[[idx]] <- pl
+  acc$tbl[[idx]] <- tbl
+  acc$key[[idx]] <- key
+  acc$fld[[idx]] <- fld
+  acc$base[[idx]] <- if (is.null(bv) || length(bv) == 0L) NA_character_ else as.character(bv[[1L]])
+  acc$src[[idx]] <- if (is.null(sv) || length(sv) == 0L) NA_character_ else as.character(sv[[1L]])
+  acc$tgt[[idx]] <- if (is.null(tv) || length(tv) == 0L) NA_character_ else as.character(tv[[1L]])
+  acc$kind[[idx]] <- knd
+  acc$def[[idx]] <- def_r
+  acc$prot[[idx]] <- isTRUE(prot)
+}
+
+.vpro_diff_lookup_base <- function(ctx, suffix, plot, rk, field) {
+  if (!ctx$has_base || !exists(plot, envir = ctx$base_plot_env, inherits = FALSE)) {
+    return(list(val = NA_character_, in_base = FALSE))
+  }
+  b_df <- ctx$base_snap$comp[[suffix]][[plot]]
+  if (is.null(b_df) || !(rk %in% rownames(b_df))) {
+    return(list(val = NA_character_, in_base = TRUE))
+  }
+  row_vec <- stats::setNames(as.character(b_df[rk, , drop = TRUE]), names(b_df))
+  if (identical(field, "*")) {
+    return(list(val = vpro_summarize_cloud_row(ctx$spec_cache[[suffix]], row_vec), in_base = TRUE))
+  }
+  list(val = row_vec[[field]], in_base = TRUE)
+}
+
+.vpro_diff_compare_table_rows <- function(acc, ctx, suffix, plot) {
+  spec <- ctx$spec_cache[[suffix]]
+  s_df <- ctx$src_snap$comp[[suffix]][[plot]]
+  t_df <- ctx$tgt_snap$comp[[suffix]][[plot]]
+  b_df <- if (ctx$has_base) ctx$base_snap$comp[[suffix]][[plot]] else NULL
+  s_keys <- if (!is.null(s_df)) rownames(s_df) else character(0L)
+  t_keys <- if (!is.null(t_df)) rownames(t_df) else character(0L)
+  b_keys <- if (!is.null(b_df)) rownames(b_df) else character(0L)
+  if (length(s_keys) == 0L && length(t_keys) == 0L) {
+    return(list(has_real_conflict = FALSE, has_fast_forward = FALSE))
+  }
+
+  rks <- sort(unique(c(s_keys, t_keys)), method = "radix")
+  diff_cols <- setdiff(spec$name, c("ID", "PlotNumber", "Plot"))
+  has_real_conflict <- FALSE
+  has_fast_forward <- FALSE
+
+  is_ambiguous <- function(rk) {
+    if (suffix %in% c("Env", "Admin")) {
+      return(FALSE)
+    }
+    base_k <- sub("#.*$", "", rk)
+    k2 <- paste0(base_k, "#2")
+    grepl("#", rk, fixed = TRUE) || (k2 %in% s_keys) || (k2 %in% t_keys) || (k2 %in% b_keys)
+  }
+
+  for (rk in rks) {
+    has_s <- rk %in% s_keys
+    has_t <- rk %in% t_keys
+    ambig <- is_ambiguous(rk)
+
+    if (has_s && !has_t) {
+      s_vec <- stats::setNames(as.character(s_df[rk, , drop = TRUE]), names(s_df))
+      s_sum <- vpro_summarize_cloud_row(spec, s_vec)
+      lb <- .vpro_diff_lookup_base(ctx, suffix, plot, rk, "*")
+      if (!ambig && ctx$has_base && lb$in_base && is.na(lb$val)) {
+        knd <- "FastForward"
+        def_r <- "accept_source"
+        has_fast_forward <- TRUE
+      } else {
+        knd <- "Conflict"
+        def_r <- "keep_target"
+        has_real_conflict <- TRUE
+      }
+      .vpro_diff_push_item(
+        acc,
+        paste0(plot, "::", suffix, "::", rk),
+        plot,
+        suffix,
+        rk,
+        "*",
+        lb$val,
+        s_sum,
+        NA_character_,
+        knd,
+        def_r,
+        FALSE
+      )
+      next
+    }
+
+    if (!has_s && has_t) {
+      t_vec <- stats::setNames(as.character(t_df[rk, , drop = TRUE]), names(t_df))
+      t_sum <- vpro_summarize_cloud_row(spec, t_vec)
+      lb <- .vpro_diff_lookup_base(ctx, suffix, plot, rk, "*")
+      if (!ambig && ctx$has_base && lb$in_base && vpro_same_nullable_str(t_sum, lb$val)) {
+        knd <- "FastForward"
+        def_r <- "accept_source"
+        has_fast_forward <- TRUE
+      } else {
+        knd <- "Conflict"
+        def_r <- "keep_target"
+        has_real_conflict <- TRUE
+      }
+      .vpro_diff_push_item(
+        acc,
+        paste0(plot, "::", suffix, "::", rk),
+        plot,
+        suffix,
+        rk,
+        "*",
+        lb$val,
+        NA_character_,
+        t_sum,
+        knd,
+        def_r,
+        FALSE
+      )
+      next
+    }
+
+    s_vec <- stats::setNames(as.character(s_df[rk, , drop = TRUE]), names(s_df))
+    t_vec <- stats::setNames(as.character(t_df[rk, , drop = TRUE]), names(t_df))
+
+    for (col_nm in diff_cols) {
+      sv <- s_vec[[col_nm]]
+      tv <- t_vec[[col_nm]]
+      if (vpro_same_nullable_str(sv, tv)) {
+        next
+      }
+      fld_key <- if (suffix %in% c("Env", "Admin")) col_nm else paste0(rk, ".", col_nm)
+      lb <- .vpro_diff_lookup_base(ctx, suffix, plot, rk, col_nm)
+      is_prot <- identical(suffix, "Admin") && (col_nm %in% .vpro_custodian_protected_admin_fields)
+
+      knd <- "Conflict"
+      def_r <- "keep_target"
+      if (!is_prot && !ambig && ctx$has_base && lb$in_base) {
+        if (vpro_same_nullable_str(tv, lb$val) && !vpro_same_nullable_str(sv, lb$val)) {
+          knd <- "FastForward"
+          def_r <- "accept_source"
+          has_fast_forward <- TRUE
+        } else if (vpro_same_nullable_str(sv, lb$val) && !vpro_same_nullable_str(tv, lb$val)) {
+          knd <- "TargetModifiedOnly"
+          def_r <- "keep_target"
+        } else {
+          has_real_conflict <- TRUE
+        }
+      } else {
+        has_real_conflict <- TRUE
+      }
+
+      .vpro_diff_push_item(
+        acc,
+        paste0(plot, "::", suffix, "::", fld_key),
+        plot,
+        suffix,
+        fld_key,
+        col_nm,
+        lb$val,
+        sv,
+        tv,
+        knd,
+        def_r,
+        is_prot
+      )
+    }
+  }
+
+  list(has_real_conflict = has_real_conflict, has_fast_forward = has_fast_forward)
+}
+
+.vpro_diff_compare_plot <- function(acc, ctx, plot) {
+  in_src <- exists(plot, envir = ctx$src_plot_env, inherits = FALSE)
+  in_tgt <- exists(plot, envir = ctx$tgt_plot_env, inherits = FALSE)
+
+  if (in_src && !in_tgt) {
+    if (ctx$has_base && exists(plot, envir = ctx$base_plot_env, inherits = FALSE)) {
+      .vpro_diff_push_item(
+        acc,
+        paste0(plot, "::Env::Plot"),
+        plot,
+        "Env",
+        "Plot",
+        "PlotNumber",
+        "Present",
+        "Present",
+        NA_character_,
+        "Conflict",
+        "keep_target",
+        FALSE
+      )
+      return(list(category = "Conflict", n_items = 1L))
+    }
+    return(list(category = "Added", n_items = 0L))
+  }
+
+  if (!in_src && in_tgt) {
+    return(list(category = "TargetOnly", n_items = 0L))
+  }
+
+  if (!in_src && !in_tgt) {
+    return(list(category = "Identical", n_items = 0L))
+  }
+
+  before_n <- length(acc$cid)
+  has_real_conflict <- FALSE
+  has_fast_forward <- FALSE
+
+  for (suffix in .vpro_merge_table_suffixes) {
+    tbl_res <- .vpro_diff_compare_table_rows(acc, ctx, suffix, plot)
+    has_real_conflict <- has_real_conflict || tbl_res$has_real_conflict
+    has_fast_forward <- has_fast_forward || tbl_res$has_fast_forward
+  }
+
+  n_pl_items <- length(acc$cid) - before_n
+  cat_out <- if (n_pl_items == 0L) {
+    "Identical"
+  } else if (!has_real_conflict && has_fast_forward) {
+    "FastForward"
+  } else if (!has_real_conflict) {
+    "TargetOnly"
+  } else {
+    "Conflict"
+  }
+
+  list(category = cat_out, n_items = n_pl_items)
+}
+
 vpro_compute_3way_diff <- function(
   submission_id,
   source_project,
@@ -345,277 +589,43 @@ vpro_compute_3way_diff <- function(
     method = "radix"
   )
 
-  src_plot_env <- new.env(hash = TRUE, parent = emptyenv())
-  for (p in src_snap$plots) {
-    assign(p, TRUE, envir = src_plot_env)
-  }
-  tgt_plot_env <- new.env(hash = TRUE, parent = emptyenv())
-  for (p in tgt_snap$plots) {
-    assign(p, TRUE, envir = tgt_plot_env)
-  }
-  base_plot_env <- new.env(hash = TRUE, parent = emptyenv())
-  if (has_base) {
-    for (p in base_snap$plots) {
-      assign(p, TRUE, envir = base_plot_env)
+  make_plot_env <- function(plots_vec) {
+    env <- new.env(hash = TRUE, parent = emptyenv())
+    for (p in plots_vec) {
+      assign(p, TRUE, envir = env)
     }
+    env
   }
 
-  spec_cache <- stats::setNames(
-    lapply(.vpro_merge_table_suffixes, vpro_pg_vp08_specs),
-    .vpro_merge_table_suffixes
+  ctx <- list(
+    has_base = has_base,
+    src_snap = src_snap,
+    tgt_snap = tgt_snap,
+    base_snap = base_snap,
+    src_plot_env = make_plot_env(src_snap$plots),
+    tgt_plot_env = make_plot_env(tgt_snap$plots),
+    base_plot_env = make_plot_env(if (has_base) base_snap$plots else character(0L)),
+    spec_cache = stats::setNames(
+      lapply(.vpro_merge_table_suffixes, vpro_pg_vp08_specs),
+      .vpro_merge_table_suffixes
+    )
   )
 
-  lookup_base <- function(suffix, plot, rk, field) {
-    if (!has_base || !exists(plot, envir = base_plot_env, inherits = FALSE)) {
-      return(list(val = NA_character_, in_base = FALSE))
-    }
-    b_df <- base_snap$comp[[suffix]][[plot]]
-    if (is.null(b_df) || !(rk %in% rownames(b_df))) {
-      return(list(val = NA_character_, in_base = TRUE))
-    }
-    row_vec <- stats::setNames(as.character(b_df[rk, , drop = TRUE]), names(b_df))
-    if (identical(field, "*")) {
-      return(list(val = vpro_summarize_cloud_row(spec_cache[[suffix]], row_vec), in_base = TRUE))
-    }
-    list(val = row_vec[[field]], in_base = TRUE)
-  }
-
-  added_count <- 0L
-  identical_count <- 0L
-  fast_forward_count <- 0L
-  conflict_count <- 0L
-  target_only_count <- 0L
-
+  acc <- .vpro_diff_new_acc()
   plot_cats <- character(length(overlap_plots))
   plot_n_items <- integer(length(overlap_plots))
 
-  it_cid <- character(0L)
-  it_plot <- character(0L)
-  it_tbl <- character(0L)
-  it_key <- character(0L)
-  it_fld <- character(0L)
-  it_base <- character(0L)
-  it_src <- character(0L)
-  it_tgt <- character(0L)
-  it_kind <- character(0L)
-  it_def <- character(0L)
-  it_prot <- logical(0L)
-
-  push_item <- function(cid, pl, tbl, key, fld, bv, sv, tv, knd, def_r, prot) {
-    idx <- length(it_cid) + 1L
-    it_cid[[idx]] <<- cid
-    it_plot[[idx]] <<- pl
-    it_tbl[[idx]] <<- tbl
-    it_key[[idx]] <<- key
-    it_fld[[idx]] <<- fld
-    it_base[[idx]] <<- if (is.null(bv) || length(bv) == 0L) NA_character_ else as.character(bv[[1L]])
-    it_src[[idx]] <<- if (is.null(sv) || length(sv) == 0L) NA_character_ else as.character(sv[[1L]])
-    it_tgt[[idx]] <<- if (is.null(tv) || length(tv) == 0L) NA_character_ else as.character(tv[[1L]])
-    it_kind[[idx]] <<- knd
-    it_def[[idx]] <<- def_r
-    it_prot[[idx]] <<- isTRUE(prot)
-  }
-
   for (pi in seq_along(overlap_plots)) {
-    plot <- overlap_plots[[pi]]
-    in_src <- exists(plot, envir = src_plot_env, inherits = FALSE)
-    in_tgt <- exists(plot, envir = tgt_plot_env, inherits = FALSE)
-
-    if (in_src && !in_tgt) {
-      if (has_base && exists(plot, envir = base_plot_env, inherits = FALSE)) {
-        cid <- paste0(plot, "::Env::Plot")
-        push_item(
-          cid,
-          plot,
-          "Env",
-          "Plot",
-          "PlotNumber",
-          "Present",
-          "Present",
-          NA_character_,
-          "Conflict",
-          "keep_target",
-          FALSE
-        )
-        conflict_count <- conflict_count + 1L
-        plot_cats[[pi]] <- "Conflict"
-        plot_n_items[[pi]] <- 1L
-      } else {
-        added_count <- added_count + 1L
-        plot_cats[[pi]] <- "Added"
-        plot_n_items[[pi]] <- 0L
-      }
-      next
-    }
-
-    if (!in_src && in_tgt) {
-      target_only_count <- target_only_count + 1L
-      plot_cats[[pi]] <- "TargetOnly"
-      plot_n_items[[pi]] <- 0L
-      next
-    }
-
-    if (!in_src && !in_tgt) {
-      plot_cats[[pi]] <- "Identical"
-      plot_n_items[[pi]] <- 0L
-      next
-    }
-
-    before_n <- length(it_cid)
-    has_real_conflict <- FALSE
-    has_fast_forward <- FALSE
-
-    for (suffix in .vpro_merge_table_suffixes) {
-      spec <- spec_cache[[suffix]]
-      s_df <- src_snap$comp[[suffix]][[plot]]
-      t_df <- tgt_snap$comp[[suffix]][[plot]]
-      b_df <- if (has_base) base_snap$comp[[suffix]][[plot]] else NULL
-      s_keys <- if (!is.null(s_df)) rownames(s_df) else character(0L)
-      t_keys <- if (!is.null(t_df)) rownames(t_df) else character(0L)
-      b_keys <- if (!is.null(b_df)) rownames(b_df) else character(0L)
-      if (length(s_keys) == 0L && length(t_keys) == 0L) {
-        next
-      }
-      rks <- sort(unique(c(s_keys, t_keys)), method = "radix")
-
-      is_ambiguous <- function(rk) {
-        if (suffix %in% c("Env", "Admin")) {
-          return(FALSE)
-        }
-        base_k <- sub("#.*$", "", rk)
-        k2 <- paste0(base_k, "#2")
-        grepl("#", rk, fixed = TRUE) || (k2 %in% s_keys) || (k2 %in% t_keys) || (k2 %in% b_keys)
-      }
-
-      diff_cols <- setdiff(spec$name, c("ID", "PlotNumber", "Plot"))
-
-      for (rk in rks) {
-        has_s <- rk %in% s_keys
-        has_t <- rk %in% t_keys
-        ambig <- is_ambiguous(rk)
-
-        if (has_s && !has_t) {
-          s_vec <- stats::setNames(as.character(s_df[rk, , drop = TRUE]), names(s_df))
-          s_sum <- vpro_summarize_cloud_row(spec, s_vec)
-          lb <- lookup_base(suffix, plot, rk, "*")
-          if (!ambig && has_base && lb$in_base && is.na(lb$val)) {
-            knd <- "FastForward"
-            def_r <- "accept_source"
-            has_fast_forward <- TRUE
-          } else {
-            knd <- "Conflict"
-            def_r <- "keep_target"
-            has_real_conflict <- TRUE
-          }
-          push_item(
-            paste0(plot, "::", suffix, "::", rk),
-            plot,
-            suffix,
-            rk,
-            "*",
-            lb$val,
-            s_sum,
-            NA_character_,
-            knd,
-            def_r,
-            FALSE
-          )
-          next
-        }
-
-        if (!has_s && has_t) {
-          t_vec <- stats::setNames(as.character(t_df[rk, , drop = TRUE]), names(t_df))
-          t_sum <- vpro_summarize_cloud_row(spec, t_vec)
-          lb <- lookup_base(suffix, plot, rk, "*")
-          if (!ambig && has_base && lb$in_base && vpro_same_nullable_str(t_sum, lb$val)) {
-            knd <- "FastForward"
-            def_r <- "accept_source"
-            has_fast_forward <- TRUE
-          } else {
-            knd <- "Conflict"
-            def_r <- "keep_target"
-            has_real_conflict <- TRUE
-          }
-          push_item(
-            paste0(plot, "::", suffix, "::", rk),
-            plot,
-            suffix,
-            rk,
-            "*",
-            lb$val,
-            NA_character_,
-            t_sum,
-            knd,
-            def_r,
-            FALSE
-          )
-          next
-        }
-
-        s_vec <- stats::setNames(as.character(s_df[rk, , drop = TRUE]), names(s_df))
-        t_vec <- stats::setNames(as.character(t_df[rk, , drop = TRUE]), names(t_df))
-
-        for (col_nm in diff_cols) {
-          sv <- s_vec[[col_nm]]
-          tv <- t_vec[[col_nm]]
-          if (vpro_same_nullable_str(sv, tv)) {
-            next
-          }
-          fld_key <- if (suffix %in% c("Env", "Admin")) col_nm else paste0(rk, ".", col_nm)
-          lb <- lookup_base(suffix, plot, rk, col_nm)
-          is_prot <- identical(suffix, "Admin") && (col_nm %in% .vpro_custodian_protected_admin_fields)
-
-          knd <- "Conflict"
-          def_r <- "keep_target"
-          if (!is_prot && !ambig && has_base && lb$in_base) {
-            if (vpro_same_nullable_str(tv, lb$val) && !vpro_same_nullable_str(sv, lb$val)) {
-              knd <- "FastForward"
-              def_r <- "accept_source"
-              has_fast_forward <- TRUE
-            } else if (vpro_same_nullable_str(sv, lb$val) && !vpro_same_nullable_str(tv, lb$val)) {
-              knd <- "TargetModifiedOnly"
-              def_r <- "keep_target"
-            } else {
-              has_real_conflict <- TRUE
-            }
-          } else {
-            has_real_conflict <- TRUE
-          }
-
-          push_item(
-            paste0(plot, "::", suffix, "::", fld_key),
-            plot,
-            suffix,
-            fld_key,
-            col_nm,
-            lb$val,
-            sv,
-            tv,
-            knd,
-            def_r,
-            is_prot
-          )
-        }
-      }
-    }
-
-    n_pl_items <- length(it_cid) - before_n
-    plot_n_items[[pi]] <- n_pl_items
-
-    if (n_pl_items == 0L) {
-      identical_count <- identical_count + 1L
-      plot_cats[[pi]] <- "Identical"
-    } else if (!has_real_conflict && has_fast_forward) {
-      fast_forward_count <- fast_forward_count + 1L
-      plot_cats[[pi]] <- "FastForward"
-    } else if (!has_real_conflict) {
-      target_only_count <- target_only_count + 1L
-      plot_cats[[pi]] <- "TargetOnly"
-    } else {
-      conflict_count <- conflict_count + 1L
-      plot_cats[[pi]] <- "Conflict"
-    }
+    pl_res <- .vpro_diff_compare_plot(acc, ctx, overlap_plots[[pi]])
+    plot_cats[[pi]] <- pl_res$category
+    plot_n_items[[pi]] <- pl_res$n_items
   }
+
+  added_count <- sum(plot_cats == "Added")
+  identical_count <- sum(plot_cats == "Identical")
+  fast_forward_count <- sum(plot_cats == "FastForward")
+  conflict_count <- sum(plot_cats == "Conflict")
+  target_only_count <- sum(plot_cats == "TargetOnly")
 
   plots_tbl <- tibble::tibble(
     PlotNumber = overlap_plots,
@@ -624,17 +634,17 @@ vpro_compute_3way_diff <- function(
   )
 
   items_tbl <- tibble::tibble(
-    conflict_id = it_cid,
-    PlotNumber = it_plot,
-    table = it_tbl,
-    key = it_key,
-    field = it_fld,
-    base_val = it_base,
-    source_val = it_src,
-    target_val = it_tgt,
-    kind = it_kind,
-    default_resolution = it_def,
-    custodian_protected = it_prot
+    conflict_id = acc$cid,
+    PlotNumber = acc$plot,
+    table = acc$tbl,
+    key = acc$key,
+    field = acc$fld,
+    base_val = acc$base,
+    source_val = acc$src,
+    target_val = acc$tgt,
+    kind = acc$kind,
+    default_resolution = acc$def,
+    custodian_protected = acc$prot
   )
 
   conflicts_tbl <- items_tbl[items_tbl$kind == "Conflict", , drop = FALSE]

@@ -585,62 +585,12 @@
   )
 }
 
-#' Compute BEC differential and diagnostic vegetation synthesis
-#'
-#' Aggregates plot-level vegetation across `SiteUnit`s (or `~` tilde
-#' `BreakpointUnit`s when `hierarchy_breaks = TRUE`), applying VPro cover
-#' precision and the `99%` per-layer cap on lumped taxa, then computes Presence
-#' (`I..V` / `1..5`), Domin-Krajina Significance (`+`, `1..9`), Goldstream and
-#' Prominence scores, classic VPro diagnostic classifications (`d`, `dd`, `cd`,
-#' `c`, `ic`), and BEC refined differential tiers (`d1`, `d2`, `d3`, `dd1`,
-#' `dd2`, `dd3`, `dd4`, `cd`, `c`, `ic`).
-#'
-#' @param ws A `vpro_workspace` handle created by [vpro_connect()].
-#' @param lump Logical (`TRUE` uses active `ws$lump`), `FALSE`, a `*_Lump` table
-#'   name, or a two-column `data.frame(SppCode, LumpCode)`.
-#' @param exclude_modifiers Logical; if `TRUE` (default), excludes `.support`,
-#'   `.poor`, and `.nudum` units.
-#' @param min_constancy Numeric minimum species constancy percentage (`[0, 100]`)
-#'   required in at least one unit to retain a species.
-#' @param average_type Cover denominator for Domin-Krajina significance,
-#'   Goldstream, and Prominence: `"unit"` (`sum(cover) / n_plots`, standard BEC
-#'   `By n Plots`) or `"characteristic"` (`sum(cover) / n_present`).
-#' @param hierarchy_breaks Logical; if `TRUE` and `ws$hierarchy` contains `~`
-#'   breakpoint nodes, rolls plots up to their `BreakpointUnit`.
-#' @param cover_precedence Stratum cover precedence: `"sublayer_sum"` (default,
-#'   matching standard VPro diagnostics where `TotalA`/`TotalB` is used only
-#'   when sublayers are `NA`) or `"strata_totals"` (matching `vpro_veg` where
-#'   positive `TotalA`/`TotalB` overrides sublayers).
-#' @return An S3 object of class `vpro_diagnostics` containing `$unit_species`
-#'   (long tibble), `$crosstab` (wide species-by-unit tibble with
-#'   `DiagnosticUnit`, `Diagnosis`, `BECDiagnosticUnit`, and `BECDiagnosis`), and
-#'   `$units` (unit summary tibble).
-#' @export
-vpro_diagnostics <- function(
-  ws,
-  lump = TRUE,
-  exclude_modifiers = TRUE,
-  min_constancy = 0,
-  average_type = c("unit", "characteristic"),
-  hierarchy_breaks = FALSE,
-  cover_precedence = c("sublayer_sum", "strata_totals")
+.vpro_empty_diagnostics_result <- function(
+  ordered_units = character(),
+  n_plots_map = integer(),
+  average_type = "unit",
+  breaks_applied = FALSE
 ) {
-  vpro_assert_workspace(ws)
-  .vpro_register_wave2b_s3()
-  average_type <- match.arg(average_type)
-  cover_precedence <- match.arg(cover_precedence)
-  if (!is.numeric(min_constancy) || length(min_constancy) != 1L || is.na(min_constancy) || min_constancy < 0 || min_constancy > 100) {
-    rlang::abort("`min_constancy` must be a single number between 0 and 100.")
-  }
-
-  scoped <- .vpro_resolve_classified_plots(
-    ws,
-    exclude_modifiers = exclude_modifiers,
-    hierarchy_breaks = hierarchy_breaks
-  )
-  su_df <- scoped$su
-  ordered_units <- scoped$units
-
   empty_unit_spp <- tibble::tibble(
     SiteUnit = character(),
     Species = character(),
@@ -666,7 +616,7 @@ vpro_diagnostics <- function(
     bec_diagnosis = character(),
     is_diagnostic_unit = logical()
   )
-  empty_crosstab <- tibble::tibble(
+  ct <- tibble::tibble(
     Species = character(),
     ScientificName = character(),
     EnglishName = character(),
@@ -677,42 +627,20 @@ vpro_diagnostics <- function(
     BECDiagnosticUnit = character(),
     BECDiagnosis = character()
   )
-  empty_units <- tibble::tibble(
-    SiteUnit = character(),
-    n_plots = integer(),
-    species_richness = integer(),
-    n_diagnostic = integer(),
-    n_constant = integer(),
-    diag_potential_sum = numeric()
-  )
-
-  if (length(ordered_units) == 0L || nrow(su_df) == 0L) {
-    return(structure(
-      list(
-        unit_species = empty_unit_spp,
-        crosstab = empty_crosstab,
-        units = empty_units,
-        average_type = average_type,
-        hierarchy_breaks = scoped$breaks_applied
-      ),
-      class = "vpro_diagnostics"
-    ))
+  for (u in ordered_units) {
+    ct[[u]] <- character()
   }
-
-  # Unit plot counts (distinct PlotNumber per unit)
-  su_dt <- data.table::as.data.table(su_df)
-  su_dt <- unique(su_dt, by = c("PlotNumber", "SiteUnit"))
-  unit_counts_dt <- su_dt[, list(n_plots = .N), by = "SiteUnit"]
-  n_plots_map <- stats::setNames(as.integer(unit_counts_dt[["n_plots"]]), unit_counts_dt[["SiteUnit"]])
-
-  veg_ps <- .vpro_extract_plot_species_veg(
-    ws,
-    su_dt[["PlotNumber"]],
-    lump = lump,
-    cover_precedence = cover_precedence
-  )
-  if (nrow(veg_ps) == 0L) {
-    units_tbl <- tibble::tibble(
+  units_tbl <- if (length(ordered_units) == 0L) {
+    tibble::tibble(
+      SiteUnit = character(),
+      n_plots = integer(),
+      species_richness = integer(),
+      n_diagnostic = integer(),
+      n_constant = integer(),
+      diag_potential_sum = numeric()
+    )
+  } else {
+    tibble::tibble(
       SiteUnit = ordered_units,
       n_plots = unname(n_plots_map[ordered_units]),
       species_richness = rep(0L, length(ordered_units)),
@@ -720,104 +648,34 @@ vpro_diagnostics <- function(
       n_constant = rep(0L, length(ordered_units)),
       diag_potential_sum = rep(0.0, length(ordered_units))
     )
-    ct <- empty_crosstab
-    for (u in ordered_units) {
-      ct[[u]] <- character()
-    }
-    return(structure(
-      list(
-        unit_species = empty_unit_spp,
-        crosstab = ct,
-        units = units_tbl,
-        average_type = average_type,
-        hierarchy_breaks = scoped$breaks_applied
-      ),
-      class = "vpro_diagnostics"
-    ))
   }
-
-  veg_dt <- merge(
-    su_dt,
-    data.table::as.data.table(veg_ps),
-    by = "PlotNumber",
-    all = FALSE,
-    allow.cartesian = TRUE
-  )
-  agg_dt <- veg_dt[,
+  structure(
     list(
-      n_present = .N,
-      sum_cover = sum(get("Cover"))
+      unit_species = empty_unit_spp,
+      crosstab = ct,
+      units = units_tbl,
+      average_type = average_type,
+      hierarchy_breaks = breaks_applied
     ),
-    by = c("SiteUnit", "Species")
-  ]
+    class = "vpro_diagnostics"
+  )
+}
 
-  data.table::set(agg_dt, j = "n_plots", value = unname(n_plots_map[agg_dt[["SiteUnit"]]]))
-  presence_raw <- pmin(agg_dt[["n_present"]] / agg_dt[["n_plots"]], 1.0)
-  constancy_raw <- presence_raw * 100.0
-  mean_unit_raw <- agg_dt[["sum_cover"]] / agg_dt[["n_plots"]]
-  mean_pres_raw <- agg_dt[["sum_cover"]] / agg_dt[["n_present"]]
-
-  # Filter species by min_constancy across units
-  agg_dt[, "constancy_raw" := constancy_raw]
-  if (min_constancy > 0) {
-    max_c_dt <- agg_dt[, list(max_c = max(get("constancy_raw"))), by = "Species"]
-    keep_spp <- max_c_dt[["Species"]][max_c_dt[["max_c"]] >= min_constancy]
-    agg_dt <- agg_dt[agg_dt[["Species"]] %in% keep_spp]
-    if (nrow(agg_dt) == 0L) {
-      units_tbl <- tibble::tibble(
-        SiteUnit = ordered_units,
-        n_plots = unname(n_plots_map[ordered_units]),
-        species_richness = rep(0L, length(ordered_units)),
-        n_diagnostic = rep(0L, length(ordered_units)),
-        n_constant = rep(0L, length(ordered_units)),
-        diag_potential_sum = rep(0.0, length(ordered_units))
-      )
-      ct <- empty_crosstab
-      for (u in ordered_units) {
-        ct[[u]] <- character()
-      }
-      return(structure(
-        list(
-          unit_species = empty_unit_spp,
-          crosstab = ct,
-          units = units_tbl,
-          average_type = average_type,
-          hierarchy_breaks = scoped$breaks_applied
-        ),
-        class = "vpro_diagnostics"
-      ))
-    }
-    presence_raw <- pmin(agg_dt[["n_present"]] / agg_dt[["n_plots"]], 1.0)
-    constancy_raw <- presence_raw * 100.0
-    mean_unit_raw <- agg_dt[["sum_cover"]] / agg_dt[["n_plots"]]
-    mean_pres_raw <- agg_dt[["sum_cover"]] / agg_dt[["n_present"]]
-  }
-
-  eff_cover <- if (identical(average_type, "unit")) mean_unit_raw else mean_pres_raw
-  pres_cls <- vpro_presence_class(presence_raw)
-  pres_num <- as.integer(vpro_presence_class(presence_raw, format = "numeric"))
-  sig_cls <- vpro_significance_class(eff_cover)
-  sig_num <- ifelse(sig_cls == "+", 0L, suppressWarnings(as.integer(sig_cls)))
-  gold_vec <- vpro_goldstream_class(eff_cover, presence_raw, return_score = TRUE)
-  prom_vec <- vpro_prominence_class(eff_cover, presence_raw, return_score = TRUE)
-  cell_code_vec <- paste0(pres_num, " - ", sig_cls)
-  diag_pot_vec <- .vpro_calc_diagnostic_potential(constancy_raw, mean_unit_raw)$diagnostic_potential
-
-  tax <- vpro_taxonomy(ws, include_synonyms = FALSE, include_user = TRUE)
-  all_spp <- sort(unique(agg_dt[["Species"]]), method = "radix")
-  tax_m <- match(all_spp, tax$Code)
-  spp_sci <- ifelse(is.na(tax_m), all_spp, tax$ScientificName[tax_m])
-  spp_eng <- ifelse(is.na(tax_m), "", ifelse(is.na(tax$EnglishName[tax_m]), "", tax$EnglishName[tax_m]))
-  spp_lf <- as.integer(tax$Lifeform[tax_m])
-  lf_meta <- .vpro_lifeform_catalog(spp_lf)
-  spp_stratum <- lf_meta$stratum_group
-
+.vpro_classify_diagnostics_matrices <- function(
+  all_spp,
+  ordered_units,
+  agg_dt,
+  cell_code_vec,
+  presence_raw,
+  pres_num,
+  sig_num,
+  mean_unit_raw
+) {
   spp_idx <- match(agg_dt[["Species"]], all_spp)
   unit_idx <- match(agg_dt[["SiteUnit"]], ordered_units)
   n_spp <- length(all_spp)
   n_u <- length(ordered_units)
 
-  # Build species x unit matrices for fast vectorised / rowwise classification
   code_mat <- matrix(NA_character_, nrow = n_spp, ncol = n_u, dimnames = list(all_spp, ordered_units))
   pres_mat <- matrix(0.0, nrow = n_spp, ncol = n_u)
   pnum_mat <- matrix(0L, nrow = n_spp, ncol = n_u)
@@ -869,14 +727,48 @@ vpro_diagnostics <- function(
     cell_bec_mat[s_i, ] <- bec_res$cell_diagnosis
   }
 
-  # Order species matching app/internal/diagnostics/engine.go:
-  # diagnostic units first (in ordered_units order), then non-diagnostic, by stratum -> lifeform -> constancy -> cover
-  has_diag <- !is.na(diag_unit) & nzchar(diag_unit)
-  diag_u_rank <- ifelse(has_diag, match(diag_unit, ordered_units), n_u + 1L)
+  list(
+    spp_idx = spp_idx,
+    lin_idx = lin_idx,
+    code_mat = code_mat,
+    pres_mat = pres_mat,
+    pnum_mat = pnum_mat,
+    mcov_mat = mcov_mat,
+    diag_unit = diag_unit,
+    diag_str = diag_str,
+    bec_unit = bec_unit,
+    bec_str = bec_str,
+    cell_v7_mat = cell_v7_mat,
+    cell_bec_mat = cell_bec_mat,
+    cell_prim_mat = cell_prim_mat
+  )
+}
+
+.vpro_assemble_diagnostics_tables <- function(
+  ws,
+  all_spp,
+  ordered_units,
+  n_plots_map,
+  agg_dt,
+  mats,
+  metrics,
+  average_type,
+  breaks_applied
+) {
+  tax <- vpro_taxonomy(ws, include_synonyms = FALSE, include_user = TRUE)
+  tax_m <- match(all_spp, tax$Code)
+  spp_sci <- ifelse(is.na(tax_m), all_spp, tax$ScientificName[tax_m])
+  spp_eng <- ifelse(is.na(tax_m), "", ifelse(is.na(tax$EnglishName[tax_m]), "", tax$EnglishName[tax_m]))
+  spp_lf <- as.integer(tax$Lifeform[tax_m])
+  spp_stratum <- .vpro_lifeform_catalog(spp_lf)$stratum_group
+
+  n_u <- length(ordered_units)
+  has_diag <- !is.na(mats$diag_unit) & nzchar(mats$diag_unit)
+  diag_u_rank <- ifelse(has_diag, match(mats$diag_unit, ordered_units), n_u + 1L)
   st_rank <- .vpro_stratum_rank(spp_stratum)
   lf_sort <- ifelse(is.na(spp_lf), 999L, spp_lf)
-  max_const_spp <- apply(pres_mat * 100.0, 1L, max)
-  max_cov_spp <- apply(mcov_mat, 1L, max)
+  max_const_spp <- apply(mats$pres_mat * 100.0, 1L, max)
+  max_cov_spp <- apply(mats$mcov_mat, 1L, max)
 
   spp_ord <- order(
     ifelse(has_diag, 0L, 1L),
@@ -890,25 +782,25 @@ vpro_diagnostics <- function(
     method = "radix"
   )
 
-  # Assemble wide $crosstab tibble
   ct_list <- list(
     Species = all_spp[spp_ord],
     ScientificName = spp_sci[spp_ord],
     EnglishName = spp_eng[spp_ord],
     Lifeform = spp_lf[spp_ord],
     StratumGroup = spp_stratum[spp_ord],
-    DiagnosticUnit = diag_unit[spp_ord],
-    Diagnosis = diag_str[spp_ord],
-    BECDiagnosticUnit = bec_unit[spp_ord],
-    BECDiagnosis = bec_str[spp_ord]
+    DiagnosticUnit = mats$diag_unit[spp_ord],
+    Diagnosis = mats$diag_str[spp_ord],
+    BECDiagnosticUnit = mats$bec_unit[spp_ord],
+    BECDiagnosis = mats$bec_str[spp_ord]
   )
-  code_mat_ord <- code_mat[spp_ord, , drop = FALSE]
+  code_mat_ord <- mats$code_mat[spp_ord, , drop = FALSE]
   for (u_j in seq_len(n_u)) {
     ct_list[[ordered_units[[u_j]]]] <- as.character(code_mat_ord[, u_j])
   }
   crosstab_tbl <- tibble::as_tibble(ct_list)
 
-  # Assemble long $unit_species tibble
+  spp_idx <- mats$spp_idx
+  lin_idx <- mats$lin_idx
   unit_species_tbl <- tibble::tibble(
     SiteUnit = as.character(agg_dt[["SiteUnit"]]),
     Species = as.character(agg_dt[["Species"]]),
@@ -918,21 +810,21 @@ vpro_diagnostics <- function(
     StratumGroup = as.character(spp_stratum[spp_idx]),
     n_plots = as.integer(agg_dt[["n_plots"]]),
     n_present = as.integer(agg_dt[["n_present"]]),
-    presence = presence_raw,
-    constancy = vpro_round_ace(constancy_raw, 1L),
-    presence_class = pres_cls,
-    presence_num = pres_num,
-    mean_cover_unit = vpro_round_ace(mean_unit_raw, 2L),
-    mean_cover_present = vpro_round_ace(mean_pres_raw, 2L),
-    significance_class = sig_cls,
-    significance_num = as.integer(sig_num),
-    goldstream = vpro_round_ace(gold_vec, 2L),
-    prominence = vpro_round_ace(prom_vec, 2L),
-    cell_code = cell_code_vec,
-    diagnostic_potential = vpro_round_ace(diag_pot_vec, 2L),
-    diagnosis = as.character(cell_v7_mat[lin_idx]),
-    bec_diagnosis = as.character(cell_bec_mat[lin_idx]),
-    is_diagnostic_unit = as.logical(cell_prim_mat[lin_idx])
+    presence = metrics$presence_raw,
+    constancy = vpro_round_ace(metrics$constancy_raw, 1L),
+    presence_class = metrics$pres_cls,
+    presence_num = metrics$pres_num,
+    mean_cover_unit = vpro_round_ace(metrics$mean_unit_raw, 2L),
+    mean_cover_present = vpro_round_ace(metrics$mean_pres_raw, 2L),
+    significance_class = metrics$sig_cls,
+    significance_num = as.integer(metrics$sig_num),
+    goldstream = vpro_round_ace(metrics$gold_vec, 2L),
+    prominence = vpro_round_ace(metrics$prom_vec, 2L),
+    cell_code = metrics$cell_code_vec,
+    diagnostic_potential = vpro_round_ace(metrics$diag_pot_vec, 2L),
+    diagnosis = as.character(mats$cell_v7_mat[lin_idx]),
+    bec_diagnosis = as.character(mats$cell_bec_mat[lin_idx]),
+    is_diagnostic_unit = as.logical(mats$cell_prim_mat[lin_idx])
   )
   us_ord <- order(
     match(unit_species_tbl$SiteUnit, ordered_units),
@@ -945,24 +837,17 @@ vpro_diagnostics <- function(
   )
   unit_species_tbl <- unit_species_tbl[us_ord, , drop = FALSE]
 
-  # Assemble $units summary tibble
-  richness_vec <- colSums(pnum_mat > 0L)
-  n_const_vec <- colSums(pnum_mat == 5L)
-  n_diag_vec <- colSums(cell_prim_mat)
   dpot_sum_vec <- vapply(
     ordered_units,
-    function(u) {
-      vpro_round_ace(sum(diag_pot_vec[agg_dt[["SiteUnit"]] == u]), 2L)
-    },
+    function(u) vpro_round_ace(sum(metrics$diag_pot_vec[agg_dt[["SiteUnit"]] == u]), 2L),
     numeric(1)
   )
-
   units_tbl <- tibble::tibble(
     SiteUnit = ordered_units,
     n_plots = unname(n_plots_map[ordered_units]),
-    species_richness = as.integer(unname(richness_vec)),
-    n_diagnostic = as.integer(unname(n_diag_vec)),
-    n_constant = as.integer(unname(n_const_vec)),
+    species_richness = as.integer(unname(colSums(mats$pnum_mat > 0L))),
+    n_diagnostic = as.integer(unname(colSums(mats$cell_prim_mat))),
+    n_constant = as.integer(unname(colSums(mats$pnum_mat == 5L))),
     diag_potential_sum = unname(dpot_sum_vec)
   )
 
@@ -972,9 +857,155 @@ vpro_diagnostics <- function(
       crosstab = crosstab_tbl,
       units = units_tbl,
       average_type = average_type,
-      hierarchy_breaks = scoped$breaks_applied
+      hierarchy_breaks = breaks_applied
     ),
     class = "vpro_diagnostics"
+  )
+}
+
+#' Compute BEC differential and diagnostic vegetation synthesis
+#'
+#' Aggregates plot-level vegetation across `SiteUnit`s (or `~` tilde
+#' `BreakpointUnit`s when `hierarchy_breaks = TRUE`), applying VPro cover
+#' precision and the `99%` per-layer cap on lumped taxa, then computes Presence
+#' (`I..V` / `1..5`), Domin-Krajina Significance (`+`, `1..9`), Goldstream and
+#' Prominence scores, classic VPro diagnostic classifications (`d`, `dd`, `cd`,
+#' `c`, `ic`), and BEC refined differential tiers (`d1`, `d2`, `d3`, `dd1`,
+#' `dd2`, `dd3`, `dd4`, `cd`, `c`, `ic`).
+#'
+#' @param ws A `vpro_workspace` handle created by [vpro_connect()].
+#' @param lump Logical (`TRUE` uses active `ws$lump`), `FALSE`, a `*_Lump` table
+#'   name, or a two-column `data.frame(SppCode, LumpCode)`.
+#' @param exclude_modifiers Logical; if `TRUE` (default), excludes `.support`,
+#'   `.poor`, and `.nudum` units.
+#' @param min_constancy Numeric minimum species constancy percentage (`[0, 100]`)
+#'   required in at least one unit to retain a species.
+#' @param average_type Cover denominator for Domin-Krajina significance,
+#'   Goldstream, and Prominence: `"unit"` (`sum(cover) / n_plots`, standard BEC
+#'   `By n Plots`) or `"characteristic"` (`sum(cover) / n_present`).
+#' @param hierarchy_breaks Logical; if `TRUE` and `ws$hierarchy` contains `~`
+#'   breakpoint nodes, rolls plots up to their `BreakpointUnit`.
+#' @param cover_precedence Stratum cover precedence: `"sublayer_sum"` (default,
+#'   matching standard VPro diagnostics where `TotalA`/`TotalB` is used only
+#'   when sublayers are `NA`) or `"strata_totals"` (matching `vpro_veg` where
+#'   positive `TotalA`/`TotalB` overrides sublayers).
+#' @return An S3 object of class `vpro_diagnostics` containing `$unit_species`
+#'   (long tibble), `$crosstab` (wide species-by-unit tibble with
+#'   `DiagnosticUnit`, `Diagnosis`, `BECDiagnosticUnit`, and `BECDiagnosis`), and
+#'   `$units` (unit summary tibble).
+#' @export
+vpro_diagnostics <- function(
+  ws,
+  lump = TRUE,
+  exclude_modifiers = TRUE,
+  min_constancy = 0,
+  average_type = c("unit", "characteristic"),
+  hierarchy_breaks = FALSE,
+  cover_precedence = c("sublayer_sum", "strata_totals")
+) {
+  vpro_assert_workspace(ws)
+  .vpro_register_wave2b_s3()
+  average_type <- match.arg(average_type)
+  cover_precedence <- match.arg(cover_precedence)
+  if (!is.numeric(min_constancy) || length(min_constancy) != 1L || is.na(min_constancy) || min_constancy < 0 || min_constancy > 100) {
+    cli::cli_abort(
+      "`min_constancy` must be a single number between 0 and 100.",
+      class = c("vpro_error_diagnostics", "vpro_error")
+    )
+  }
+
+  scoped <- .vpro_resolve_classified_plots(
+    ws,
+    exclude_modifiers = exclude_modifiers,
+    hierarchy_breaks = hierarchy_breaks
+  )
+  su_df <- scoped$su
+  ordered_units <- scoped$units
+  if (length(ordered_units) == 0L || nrow(su_df) == 0L) {
+    return(.vpro_empty_diagnostics_result(average_type = average_type, breaks_applied = scoped$breaks_applied))
+  }
+
+  su_dt <- unique(data.table::as.data.table(su_df), by = c("PlotNumber", "SiteUnit"))
+  unit_counts_dt <- su_dt[, list(n_plots = .N), by = "SiteUnit"]
+  n_plots_map <- stats::setNames(as.integer(unit_counts_dt[["n_plots"]]), unit_counts_dt[["SiteUnit"]])
+
+  veg_ps <- .vpro_extract_plot_species_veg(
+    ws,
+    su_dt[["PlotNumber"]],
+    lump = lump,
+    cover_precedence = cover_precedence
+  )
+  if (nrow(veg_ps) == 0L) {
+    return(.vpro_empty_diagnostics_result(ordered_units, n_plots_map, average_type, scoped$breaks_applied))
+  }
+
+  veg_dt <- merge(
+    su_dt,
+    data.table::as.data.table(veg_ps),
+    by = "PlotNumber",
+    all = FALSE,
+    allow.cartesian = TRUE
+  )
+  agg_dt <- veg_dt[, list(n_present = .N, sum_cover = sum(get("Cover"))), by = c("SiteUnit", "Species")]
+  data.table::set(agg_dt, j = "n_plots", value = unname(n_plots_map[agg_dt[["SiteUnit"]]]))
+
+  if (min_constancy > 0) {
+    agg_dt[, "constancy_raw" := pmin(get("n_present") / get("n_plots"), 1.0) * 100.0]
+    max_c_dt <- agg_dt[, list(max_c = max(get("constancy_raw"))), by = "Species"]
+    keep_spp <- max_c_dt[["Species"]][max_c_dt[["max_c"]] >= min_constancy]
+    agg_dt <- agg_dt[agg_dt[["Species"]] %in% keep_spp]
+    if (nrow(agg_dt) == 0L) {
+      return(.vpro_empty_diagnostics_result(ordered_units, n_plots_map, average_type, scoped$breaks_applied))
+    }
+  }
+
+  presence_raw <- pmin(agg_dt[["n_present"]] / agg_dt[["n_plots"]], 1.0)
+  constancy_raw <- presence_raw * 100.0
+  mean_unit_raw <- agg_dt[["sum_cover"]] / agg_dt[["n_plots"]]
+  mean_pres_raw <- agg_dt[["sum_cover"]] / agg_dt[["n_present"]]
+  eff_cover <- if (identical(average_type, "unit")) mean_unit_raw else mean_pres_raw
+  pres_cls <- vpro_presence_class(presence_raw)
+  pres_num <- as.integer(vpro_presence_class(presence_raw, format = "numeric"))
+  sig_cls <- vpro_significance_class(eff_cover)
+  sig_num <- ifelse(sig_cls == "+", 0L, suppressWarnings(as.integer(sig_cls)))
+
+  metrics <- list(
+    presence_raw = presence_raw,
+    constancy_raw = constancy_raw,
+    mean_unit_raw = mean_unit_raw,
+    mean_pres_raw = mean_pres_raw,
+    pres_cls = pres_cls,
+    pres_num = pres_num,
+    sig_cls = sig_cls,
+    sig_num = sig_num,
+    gold_vec = vpro_goldstream_class(eff_cover, presence_raw, return_score = TRUE),
+    prom_vec = vpro_prominence_class(eff_cover, presence_raw, return_score = TRUE),
+    cell_code_vec = paste0(pres_num, " - ", sig_cls),
+    diag_pot_vec = .vpro_calc_diagnostic_potential(constancy_raw, mean_unit_raw)$diagnostic_potential
+  )
+
+  all_spp <- sort(unique(agg_dt[["Species"]]), method = "radix")
+  mats <- .vpro_classify_diagnostics_matrices(
+    all_spp = all_spp,
+    ordered_units = ordered_units,
+    agg_dt = agg_dt,
+    cell_code_vec = metrics$cell_code_vec,
+    presence_raw = presence_raw,
+    pres_num = pres_num,
+    sig_num = sig_num,
+    mean_unit_raw = mean_unit_raw
+  )
+
+  .vpro_assemble_diagnostics_tables(
+    ws = ws,
+    all_spp = all_spp,
+    ordered_units = ordered_units,
+    n_plots_map = n_plots_map,
+    agg_dt = agg_dt,
+    mats = mats,
+    metrics = metrics,
+    average_type = average_type,
+    breaks_applied = scoped$breaks_applied
   )
 }
 
@@ -989,7 +1020,7 @@ print.vpro_diagnostics <- function(x, ...) {
   cli::cli_h3("vpro_diagnostics ({nrow(x$units)} unit{?s}, {nrow(x$crosstab)} species)")
   cli::cli_bullets(c(
     "*" = "Classified plots: {sum(x$units$n_plots)} (average_type: {.val {x$average_type}}, hierarchy_breaks: {x$hierarchy_breaks})",
-    "*" = "Diagnostic species (classic BEC classes): {n_diag}/{nrow(x$crosstab)}"
+    "*" = paste0("Diagnostic species (classic BEC classes): ", n_diag, "/", nrow(x$crosstab))
   ))
   invisible(x)
 }

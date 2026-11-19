@@ -2,7 +2,7 @@
 
 .vpro_normalize_operation <- function(op) {
   if (is.null(op) || length(op) == 0L || is.na(op[[1L]])) {
-    rlang::abort("Profile rule `operation` must be one of 'Common', 'Add', or 'Subtract'.")
+    cli::cli_abort("Profile rule `operation` must be one of 'Common', 'Add', or 'Subtract'.", class = c("vpro_error_analysis", "vpro_error"))
   }
   raw <- tolower(trimws(as.character(op[[1L]])))
   if (raw %in% c("common", "common plots", "intersect", "intersection")) {
@@ -14,12 +14,12 @@
   if (raw %in% c("subtract", "subtract plots", "remove", "difference", "diff")) {
     return("Subtract")
   }
-  rlang::abort(paste0("Unsupported profile operation `", op[[1L]], "`. Expected 'Common', 'Add', or 'Subtract'."))
+  cli::cli_abort(.vpro_cli_escape(paste0("Unsupported profile operation `", op[[1L]], "`. Expected 'Common', 'Add', or 'Subtract'.")), class = c("vpro_error_analysis", "vpro_error"))
 }
 
 .vpro_normalize_operator <- function(operator, value) {
   if (is.null(operator) || length(operator) == 0L || is.na(operator[[1L]]) || !nzchar(trimws(as.character(operator[[1L]])))) {
-    rlang::abort("Profile rule `operator` must be a non-empty string.")
+    cli::cli_abort("Profile rule `operator` must be a non-empty string.", class = c("vpro_error_analysis", "vpro_error"))
   }
   op_up <- toupper(gsub("[[:space:]]+", " ", trimws(as.character(operator[[1L]]))))
   val_is_null_token <- is.null(value) ||
@@ -35,7 +35,7 @@
   if (op_up %in% c(">", ">=", "<", "<=", "LIKE", "NOT LIKE", "IS NULL", "IS NOT NULL")) {
     return(op_up)
   }
-  rlang::abort(paste0("Unsupported profile operator `", operator[[1L]], "`."))
+  cli::cli_abort(.vpro_cli_escape(paste0("Unsupported profile operator `", operator[[1L]], "`.")), class = c("vpro_error_analysis", "vpro_error"))
 }
 
 #' Construct a tidy plot-profiling rule
@@ -77,7 +77,7 @@ vpro_profile_rule <- function(
     table <- table[[1L]]
   }
   if (!is.character(table) || length(table) != 1L || is.na(table)) {
-    rlang::abort("`table` must be one of 'Veg', 'Lump', 'Env', 'Humus', 'Mineral', or 'Admin'.")
+    cli::cli_abort("`table` must be one of 'Veg', 'Lump', 'Env', 'Humus', 'Mineral', or 'Admin'.", class = c("vpro_error_analysis", "vpro_error"))
   }
   tbl_low <- tolower(trimws(table))
   tbl_map <- c(
@@ -89,7 +89,7 @@ vpro_profile_rule <- function(
     "mineral" = "Mineral"
   )
   if (!(tbl_low %in% names(tbl_map))) {
-    rlang::abort(paste0("Unsupported `table` value `", table, "`."))
+    cli::cli_abort(.vpro_cli_escape(paste0("Unsupported `table` value `", table, "`.")), class = c("vpro_error_analysis", "vpro_error"))
   }
   norm_table <- unname(tbl_map[[tbl_low]])
 
@@ -107,7 +107,7 @@ vpro_profile_rule <- function(
 
   if (norm_table %in% c("Veg", "Lump")) {
     if (is.null(species) || length(species) != 1L || is.na(species) || !nzchar(trimws(as.character(species)))) {
-      rlang::abort("`species` must be a non-empty species code for `Veg` / `Lump` profiling rules.")
+      cli::cli_abort("`species` must be a non-empty species code for `Veg` / `Lump` profiling rules.", class = c("vpro_error_analysis", "vpro_error"))
     }
     norm_species <- toupper(trimws(as.character(species)))
     norm_layer <- if (is.null(layer) || length(layer) == 0L || is.na(layer[[1L]]) || !nzchar(trimws(as.character(layer[[1L]])))) {
@@ -122,7 +122,7 @@ vpro_profile_rule <- function(
     }
   } else {
     if (is.null(field) || length(field) != 1L || is.na(field) || !nzchar(trimws(as.character(field)))) {
-      rlang::abort(paste0("`field` must be a non-empty column name for `", norm_table, "` profiling rules."))
+      cli::cli_abort(.vpro_cli_escape(paste0("`field` must be a non-empty column name for `", norm_table, "` profiling rules.")), class = c("vpro_error_analysis", "vpro_error"))
     }
     norm_field <- trimws(as.character(field))
     norm_species <- NA_character_
@@ -150,8 +150,7 @@ vpro_profile_rule <- function(
 #' @return `x`, invisibly.
 #' @export
 print.vpro_profile_rule <- function(x, ...) {
-  desc <- .vpro_describe_rule(x)
-  cli::cli_text("<vpro_profile_rule [{x$operation}] {.field {desc}}>")
+  cli::cli_text("<vpro_profile_rule [{x$operation}] {.field {(.vpro_describe_rule(x))}}>")
   invisible(x)
 }
 
@@ -220,7 +219,7 @@ print.vpro_profile_rule <- function(x, ...) {
     if (identical(operator, "!=")) {
       return(!is.na(vec) & (vec != target_lgl))
     }
-    rlang::abort(paste0("Operator `", operator, "` is not valid for logical column."))
+    cli::cli_abort(.vpro_cli_escape(paste0("Operator `", operator, "` is not valid for logical column.")), class = c("vpro_error_analysis", "vpro_error"))
   }
 
   val_num <- suppressWarnings(as.numeric(value))
@@ -309,10 +308,10 @@ print.vpro_profile_rule <- function(x, ...) {
       if (is.list(item)) {
         return(do.call(vpro_profile_rule, item))
       }
-      rlang::abort("Each element of `rules` must be a `vpro_profile_rule` object.")
+      cli::cli_abort("Each element of `rules` must be a `vpro_profile_rule` object.", class = c("vpro_error_analysis", "vpro_error"))
     }))
   }
-  rlang::abort("`rules` must be a `vpro_profile_rule`, a list of `vpro_profile_rule` objects, or a rule `data.frame`.")
+  cli::cli_abort("`rules` must be a `vpro_profile_rule`, a list of `vpro_profile_rule` objects, or a rule `data.frame`.", class = c("vpro_error_analysis", "vpro_error"))
 }
 
 .vpro_eval_veg_rule <- function(rule, universe_plots, raw_veg_dt, lump_map_vec) {
@@ -371,7 +370,7 @@ print.vpro_profile_rule <- function(x, ...) {
     cand <- if (startsWith(l_key, "cover") || startsWith(l_key, "total")) l_key else paste0("cover", l_key)
     hit <- cov_cols[tolower(cov_cols) == cand]
     if (length(hit) == 0L) {
-      rlang::abort(paste0("Unknown vegetation profiling layer `", rule$layer, "`."))
+      cli::cli_abort(.vpro_cli_escape(paste0("Unknown vegetation profiling layer `", rule$layer, "`.")), class = c("vpro_error_analysis", "vpro_error"))
     }
     hit
   }
@@ -438,7 +437,7 @@ print.vpro_profile_rule <- function(x, ...) {
 
   thr <- suppressWarnings(as.numeric(rule$value))
   if (is.na(thr)) {
-    rlang::abort(paste0("Vegetation cover criterion must be numeric (got `", rule$value, "`)."))
+    cli::cli_abort(.vpro_cli_escape(paste0("Vegetation cover criterion must be numeric (got `", rule$value, "`).")), class = c("vpro_error_analysis", "vpro_error"))
   }
 
   if (identical(op, "=") && thr == 0) {
@@ -509,7 +508,7 @@ vpro_profile <- function(
     tables <- vpro_sqlite_physical_tables(ws$project_path)
     prof_tbl <- vpro_resolve_table_suffix(tables, profile_table, "Profile", default_prefix = ws$project)
     if (is.null(prof_tbl)) {
-      rlang::abort("No `rules` supplied and no `*_Profile` table found in workspace.")
+      cli::cli_abort("No `rules` supplied and no `*_Profile` table found in workspace.", class = c("vpro_error_analysis", "vpro_error"))
     }
     dbc_prof <- vpro_sqlite_ro(ws$project_path)
     prof_df <- tryCatch(
@@ -596,7 +595,7 @@ vpro_profile <- function(
   eval_soil <- function(soil_tbl, rule) {
     col_ix <- match(tolower(rule$field), tolower(names(soil_tbl)))
     if (is.na(col_ix)) {
-      rlang::abort(paste0("Column `", rule$field, "` not found in `<Project>_", rule$table, "`."))
+      cli::cli_abort(.vpro_cli_escape(paste0("Column `", rule$field, "` not found in `<Project>_", rule$table, "`.")), class = c("vpro_error_analysis", "vpro_error"))
     }
     if (identical(rule$operator, "IS NULL")) {
       non_null_plots <- unique(soil_tbl$PlotNumber[.vpro_eval_field_predicate(soil_tbl[[col_ix]], "IS NOT NULL", NULL)])
@@ -615,7 +614,7 @@ vpro_profile <- function(
     matched <- if (r$table %in% c("Env", "Admin")) {
       col_ix <- match(tolower(r$field), tolower(names(env_all)))
       if (is.na(col_ix)) {
-        rlang::abort(paste0("Column `", r$field, "` not found in `<Project>_Env` / `<Project>_Admin`."))
+        cli::cli_abort(.vpro_cli_escape(paste0("Column `", r$field, "` not found in `<Project>_Env` / `<Project>_Admin`.")), class = c("vpro_error_analysis", "vpro_error"))
       }
       hits <- .vpro_eval_field_predicate(env_all[[col_ix]], r$operator, r$value)
       universe_plots[hits]
@@ -678,7 +677,18 @@ print.vpro_profile_result <- function(x, ...) {
   for (i in seq_len(nrow(x$steps))) {
     st <- x$steps[i, ]
     cli::cli_bullets(c(
-      "*" = "Step {st$step} [{st$operation}] {st$description} -> matched {st$matched_n}, retained {st$retained_n}"
+      "*" = .vpro_cli_escape(paste0(
+        "Step ",
+        st$step,
+        " [",
+        st$operation,
+        "] ",
+        st$description,
+        " -> matched ",
+        st$matched_n,
+        ", retained ",
+        st$retained_n
+      ))
     ))
   }
   invisible(x)

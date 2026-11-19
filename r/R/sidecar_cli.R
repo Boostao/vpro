@@ -20,7 +20,10 @@ vpro_parse_sidecar_payload <- function(payload_json) {
     return(payload_json)
   }
   if (!is.character(payload_json) || length(payload_json) != 1L || is.na(payload_json)) {
-    rlang::abort("`payload_json` must be a JSON string, a path to a `.json` file, or a named list.")
+    cli::cli_abort(
+      "`payload_json` must be a JSON string, a path to a `.json` file, or a named list.",
+      class = c("vpro_error_sidecar", "vpro_error")
+    )
   }
   trimmed <- trimws(payload_json)
   if (file.exists(trimmed) && !dir.exists(trimmed)) {
@@ -264,8 +267,7 @@ vpro_sidecar_climate_asmr <- function(req) {
   )
 }
 
-vpro_sidecar_run_clustering <- function(req) {
-  rlang::check_installed("vegan", reason = "to run multivariate clustering.")
+.vpro_sidecar_prepare_cluster_ws <- function(req) {
   project_path <- as.character(req$projectPath)
   project_name <- as.character(req$projectName)
   lump_arg <- if (isTRUE(req$applyLump)) {
@@ -287,16 +289,6 @@ vpro_sidecar_run_clustering <- function(req) {
     ws$vlists_path <- normalizePath(req$vlistsPath, winslash = "/", mustWork = TRUE)
   }
 
-  method_req <- if (!is.null(req$method) && nzchar(req$method)) toupper(as.character(req$method)) else "NC"
-  distance_metric <- if (!is.null(req$distance) && nzchar(req$distance)) tolower(as.character(req$distance)) else "bray"
-  linkage <- if (!is.null(req$linkage) && nzchar(req$linkage)) as.character(req$linkage) else "ward.D2"
-  transform_mode <- if (!is.null(req$transform) && nzchar(req$transform)) tolower(as.character(req$transform)) else "sqrt"
-  k_req <- if (!is.null(req$k)) as.integer(req$k) else 3L
-  fuzziness_m <- if (!is.null(req$fuzziness)) as.numeric(req$fuzziness) else 1.25
-  dnoise_val <- if (!is.null(req$dnoise)) as.numeric(req$dnoise) else 0.75
-  cut_height <- if (!is.null(req$cutHeight) && is.finite(as.numeric(req$cutHeight)) && as.numeric(req$cutHeight) > 0) as.numeric(req$cutHeight) else NA_real_
-  unit_prefix <- if (!is.null(req$unitPrefix) && nzchar(req$unitPrefix)) as.character(req$unitPrefix) else "CL"
-
   lump_applied_count <- 0L
   if (!identical(lump_arg, FALSE)) {
     lump_tbl <- vpro_lump_map(ws, lump = lump_arg)
@@ -311,52 +303,41 @@ vpro_sidecar_run_clustering <- function(req) {
     }
   }
 
-  mat_raw <- vpro_matrix(ws, scope = "project", value = "cover", strata = "total", lump = if (!identical(lump_arg, FALSE)) lump_arg else FALSE, transform = "none")
+  mat_raw <- vpro_matrix(
+    ws,
+    scope = "project",
+    value = "cover",
+    strata = "total",
+    lump = if (!identical(lump_arg, FALSE)) lump_arg else FALSE,
+    transform = "none"
+  )
   if (!is.null(req$plotNumbers) && length(req$plotNumbers) > 0L) {
     keep_p <- intersect(rownames(mat_raw), as.character(req$plotNumbers))
     mat_raw <- mat_raw[keep_p, , drop = FALSE]
   }
   mat_raw <- mat_raw[rowSums(mat_raw > 0) > 0, colSums(mat_raw > 0) > 0, drop = FALSE]
-  plots_unique <- rownames(mat_raw)
-  spp_unique <- colnames(mat_raw)
-  if (length(plots_unique) < 3L) {
-    rlang::abort(sprintf("Clustering requires at least 3 vegetated plots in scope (found %d).", length(plots_unique)))
-  }
-  k <- max(2L, min(k_req, length(plots_unique) - 1L))
-
-  mat_trans <- switch(
-    transform_mode,
-    sqrt = sqrt(mat_raw),
-    log1p = log1p(mat_raw),
-    chord = vegan::decostand(mat_raw, method = "normalize"),
-    hellinger = vegan::decostand(mat_raw, method = "hellinger"),
-    mat_raw
-  )
-  dist_obj <- if (identical(distance_metric, "chord")) {
-    stats::dist(vegan::decostand(mat_trans, method = "normalize"), method = "euclidean")
-  } else {
-    vegan::vegdist(mat_trans, method = if (distance_metric %in% c("bray", "jaccard", "kulczynski", "euclidean", "manhattan")) distance_metric else "bray")
+  if (nrow(mat_raw) < 3L) {
+    cli::cli_abort(
+      .vpro_cli_escape(sprintf("Clustering requires at least 3 vegetated plots in scope (found %d).", nrow(mat_raw))),
+      class = c("vpro_error_sidecar", "vpro_error")
+    )
   }
 
-  hc_method <- if (linkage %in% c("ward.D2", "average", "complete", "single", "mcquitty")) linkage else "ward.D2"
-  hc <- stats::hclust(dist_obj, method = hc_method)
-  if (identical(method_req, "BETA_FLEXIBLE")) {
-    rlang::check_installed("cluster", reason = "to run flexible-beta hierarchical clustering.")
-    beta_val <- if (!is.null(req$beta) && is.finite(as.numeric(req$beta))) as.numeric(req$beta) else -0.25
-    if (beta_val <= -1.0 || beta_val >= 1.0) {
-      rlang::abort("`beta` must be a finite number strictly between -1 and 1.")
-    }
-    alpha <- (1.0 - beta_val) / 2.0
-    ag <- cluster::agnes(dist_obj, diss = TRUE, method = "flexible", par.method = c(alpha, alpha, beta_val, 0.0))
-    hc <- stats::as.hclust(ag)
-    hc$labels <- plots_unique
-    hc_method <- "beta_flexible"
-  }
-  coph_corr <- suppressWarnings(stats::cor(dist_obj, stats::cophenetic(hc)))
-  if (!is.finite(coph_corr)) {
-    coph_corr <- 0.0
-  }
+  list(ws = ws, mat_raw = mat_raw, lump_applied_count = lump_applied_count)
+}
 
+.vpro_sidecar_fit_clusters <- function(
+  mat_trans,
+  dist_obj,
+  hc,
+  plots_unique,
+  method_req,
+  k,
+  fuzziness_m,
+  dnoise_val,
+  cut_height,
+  unit_prefix
+) {
   cluster_labels <- character(length(plots_unique))
   names(cluster_labels) <- plots_unique
   max_membership <- rep(1.0, length(plots_unique))
@@ -430,6 +411,17 @@ vpro_sidecar_run_clustering <- function(req) {
     }
   }
 
+  list(
+    cluster_labels = cluster_labels,
+    max_membership = max_membership,
+    is_noise = is_noise,
+    effective_cut = effective_cut,
+    sil_widths = sil_widths,
+    mean_sil = mean_sil
+  )
+}
+
+.vpro_sidecar_summarize_clusters <- function(ws, mat_raw, cluster_labels, sil_widths) {
   tax <- vpro_taxonomy(ws, include_synonyms = FALSE, include_user = TRUE)
   syn_map <- vpro_synonym_map(ws)
   tax_ix <- function(sc) {
@@ -451,7 +443,7 @@ vpro_sidecar_run_clustering <- function(req) {
   }
   col_sum_means <- colSums(cl_mean_mat)
 
-  cluster_summaries <- lapply(unique_clusters, function(cname) {
+  lapply(unique_clusters, function(cname) {
     idx <- which(cluster_labels == cname)
     sub_m <- mat_raw[idx, , drop = FALSE]
     pres_pct <- (colSums(sub_m > 0) / length(idx)) * 100.0
@@ -483,15 +475,85 @@ vpro_sidecar_run_clustering <- function(req) {
       indicators = indicators
     )
   })
+}
 
-  dendro <- vpro_build_dendrogram_geometry(hc, cluster_labels, plots_unique, is_noise, effective_cut)
+vpro_sidecar_run_clustering <- function(req) {
+  rlang::check_installed("vegan", reason = "to run multivariate clustering.")
+  prep <- .vpro_sidecar_prepare_cluster_ws(req)
+  ws <- prep$ws
+  mat_raw <- prep$mat_raw
+  plots_unique <- rownames(mat_raw)
+  spp_unique <- colnames(mat_raw)
+
+  method_req <- if (!is.null(req$method) && nzchar(req$method)) toupper(as.character(req$method)) else "NC"
+  distance_metric <- if (!is.null(req$distance) && nzchar(req$distance)) tolower(as.character(req$distance)) else "bray"
+  linkage <- if (!is.null(req$linkage) && nzchar(req$linkage)) as.character(req$linkage) else "ward.D2"
+  transform_mode <- if (!is.null(req$transform) && nzchar(req$transform)) tolower(as.character(req$transform)) else "sqrt"
+  k_req <- if (!is.null(req$k)) as.integer(req$k) else 3L
+  fuzziness_m <- if (!is.null(req$fuzziness)) as.numeric(req$fuzziness) else 1.25
+  dnoise_val <- if (!is.null(req$dnoise)) as.numeric(req$dnoise) else 0.75
+  cut_height <- if (!is.null(req$cutHeight) && is.finite(as.numeric(req$cutHeight)) && as.numeric(req$cutHeight) > 0) as.numeric(req$cutHeight) else NA_real_
+  unit_prefix <- if (!is.null(req$unitPrefix) && nzchar(req$unitPrefix)) as.character(req$unitPrefix) else "CL"
+  k <- max(2L, min(k_req, length(plots_unique) - 1L))
+
+  mat_trans <- switch(
+    transform_mode,
+    sqrt = sqrt(mat_raw),
+    log1p = log1p(mat_raw),
+    chord = vegan::decostand(mat_raw, method = "normalize"),
+    hellinger = vegan::decostand(mat_raw, method = "hellinger"),
+    mat_raw
+  )
+  dist_obj <- if (identical(distance_metric, "chord")) {
+    stats::dist(vegan::decostand(mat_trans, method = "normalize"), method = "euclidean")
+  } else {
+    vegan::vegdist(mat_trans, method = if (distance_metric %in% c("bray", "jaccard", "kulczynski", "euclidean", "manhattan")) distance_metric else "bray")
+  }
+
+  hc_method <- if (linkage %in% c("ward.D2", "average", "complete", "single", "mcquitty")) linkage else "ward.D2"
+  hc <- stats::hclust(dist_obj, method = hc_method)
+  if (identical(method_req, "BETA_FLEXIBLE")) {
+    rlang::check_installed("cluster", reason = "to run flexible-beta hierarchical clustering.")
+    beta_val <- if (!is.null(req$beta) && is.finite(as.numeric(req$beta))) as.numeric(req$beta) else -0.25
+    if (beta_val <= -1.0 || beta_val >= 1.0) {
+      cli::cli_abort(
+        "`beta` must be a finite number strictly between -1 and 1.",
+        class = c("vpro_error_sidecar", "vpro_error")
+      )
+    }
+    alpha <- (1.0 - beta_val) / 2.0
+    ag <- cluster::agnes(dist_obj, diss = TRUE, method = "flexible", par.method = c(alpha, alpha, beta_val, 0.0))
+    hc <- stats::as.hclust(ag)
+    hc$labels <- plots_unique
+    hc_method <- "beta_flexible"
+  }
+  coph_corr <- suppressWarnings(stats::cor(dist_obj, stats::cophenetic(hc)))
+  if (!is.finite(coph_corr)) {
+    coph_corr <- 0.0
+  }
+
+  fit <- .vpro_sidecar_fit_clusters(
+    mat_trans = mat_trans,
+    dist_obj = dist_obj,
+    hc = hc,
+    plots_unique = plots_unique,
+    method_req = method_req,
+    k = k,
+    fuzziness_m = fuzziness_m,
+    dnoise_val = dnoise_val,
+    cut_height = cut_height,
+    unit_prefix = unit_prefix
+  )
+  cluster_summaries <- .vpro_sidecar_summarize_clusters(ws, mat_raw, fit$cluster_labels, fit$sil_widths)
+  dendro <- vpro_build_dendrogram_geometry(hc, fit$cluster_labels, plots_unique, fit$is_noise, fit$effective_cut)
+
   memberships <- lapply(seq_along(plots_unique), function(i) {
     list(
       plotNumber = plots_unique[[i]],
-      clusterUnit = unname(cluster_labels[[i]]),
-      membership = max_membership[[i]],
-      isNoise = is_noise[[i]],
-      silhouette = sil_widths[[i]],
+      clusterUnit = unname(fit$cluster_labels[[i]]),
+      membership = fit$max_membership[[i]],
+      isNoise = fit$is_noise[[i]],
+      silhouette = fit$sil_widths[[i]],
       speciesRichness = as.integer(sum(mat_raw[i, ] > 0))
     )
   })
@@ -505,10 +567,10 @@ vpro_sidecar_run_clustering <- function(req) {
     k = as.integer(k),
     plotCount = as.integer(length(plots_unique)),
     speciesCount = as.integer(length(spp_unique)),
-    lumpAppliedRows = as.integer(lump_applied_count),
+    lumpAppliedRows = as.integer(prep$lump_applied_count),
     copheneticCorrelation = round(coph_corr, 4),
-    meanSilhouette = mean_sil,
-    noiseCount = as.integer(sum(is_noise)),
+    meanSilhouette = fit$mean_sil,
+    noiseCount = as.integer(sum(fit$is_noise)),
     clusters = cluster_summaries,
     memberships = memberships,
     dendrogram = dendro

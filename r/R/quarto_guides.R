@@ -322,7 +322,7 @@ vpro_render_guide <- function(
   out_ext <- tolower(tools::file_ext(output_file))
   protected_dbs <- c(ws$project_path, ws$su_path, ws$vlists_path, ws$vuser_path, ws$vpro64_path, ws$vmetadata_path)
   if (out_ext %in% c("db", "sqlite", "sqlite3", "accdb", "mdb") || output_file %in% protected_dbs) {
-    rlang::abort(paste0("Refusing to write rendered guide over a database path: ", output_file))
+    cli::cli_abort(.vpro_cli_escape(paste0("Refusing to write rendered guide over a database path: ", output_file)), class = c("vpro_error_report", "vpro_error"))
   }
   dir.create(dirname(output_file), recursive = TRUE, showWarnings = FALSE)
 
@@ -379,7 +379,7 @@ vpro_render_guide <- function(
 
   if (!rendered_ok) {
     if (identical(format, "pdf")) {
-      rlang::abort("PDF rendering requires Quarto + a working LaTeX/Typst engine, which failed or was not found.")
+      cli::cli_abort("PDF rendering requires Quarto + a working LaTeX/Typst engine, which failed or was not found.", class = c("vpro_error_report", "vpro_error"))
     }
     rlang::check_installed("rmarkdown", reason = "to render BEC HTML guides when Quarto CLI is unavailable.")
     renderer_used <- "rmarkdown_fallback"
@@ -410,7 +410,7 @@ vpro_render_guide <- function(
     !file.copy(rendered_path, tmp_pub, overwrite = TRUE) ||
       (!file.rename(tmp_pub, output_file) && !file.copy(tmp_pub, output_file, overwrite = TRUE))
   ) {
-    rlang::abort(paste0("Failed to publish rendered guide to: ", output_file))
+    cli::cli_abort(.vpro_cli_escape(paste0("Failed to publish rendered guide to: ", output_file)), class = c("vpro_error_report", "vpro_error"))
   }
 
   structure(

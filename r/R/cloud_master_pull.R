@@ -1,5 +1,460 @@
 # PostgreSQL BECMaster Subset Checkout to Local VP08 SQLite ------------------
 
+.vpro_pull_resolve_dest_path <- function(dest_path, overwrite) {
+  if (!is.character(dest_path) || length(dest_path) != 1L || is.na(dest_path) || !nzchar(trimws(dest_path))) {
+    cli::cli_abort(
+      "{.arg dest_path} must be a single non-empty file path.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
+  }
+  dest_clean <- trimws(dest_path)
+  if (!nzchar(tools::file_ext(dest_clean))) {
+    dest_clean <- paste0(dest_clean, ".db")
+  }
+  dest_resolved <- vpro_abs_path(dest_clean)
+
+  if (vpro_is_protected_support_db(dest_resolved) || vpro_is_bundled_package_path(dest_resolved)) {
+    cli::cli_abort(
+      "Refusing to write subset database onto protected system or bundled path: {.path {dest_resolved}}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
+  }
+  if (file.exists(paste0(dest_resolved, "-wal")) || file.exists(paste0(dest_resolved, "-shm"))) {
+    cli::cli_abort(
+      "Refusing to write to {.path {dest_resolved}} while it is open in another VPro or database session.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
+  }
+  if (file.exists(dest_resolved)) {
+    if (dir.exists(dest_resolved)) {
+      cli::cli_abort(
+        "{.arg dest_path} points to an existing directory: {.path {dest_resolved}}.",
+        class = c("vpro_error_cloud", "vpro_error")
+      )
+    }
+    if (!isTRUE(overwrite)) {
+      cli::cli_abort(
+        "Destination SQLite file already exists (pass {.code overwrite = TRUE} to replace): {.path {dest_resolved}}.",
+        class = c("vpro_error_cloud", "vpro_error")
+      )
+    }
+  }
+  dest_resolved
+}
+
+.vpro_pull_stream_plot_table <- function(
+  pg,
+  sq_con,
+  project_name,
+  plot_chunks,
+  sensitive_plots,
+  pg_tbl,
+  plot_col,
+  suffix
+) {
+  spec <- vpro_pg_vp08_specs(suffix)
+  col_names <- as.character(spec$name)
+  quoted_cols <- paste(vapply(col_names, vpro_quote_ident, character(1)), collapse = ", ")
+  dst_tbl <- paste0(project_name, "_", suffix)
+  dst_fields <- DBI::dbListFields(sq_con, dst_tbl)
+  enforce_unique_id <- suffix %in% c("Veg", "Humus", "Mineral", "Other")
+  used_ids <- new.env(hash = TRUE, parent = emptyenv())
+  total_rows <- 0L
+
+  ord_clause <- if (identical(suffix, "Audit")) {
+    " ORDER BY audit_seq ASC"
+  } else if ("ID" %in% col_names) {
+    paste0(" ORDER BY ", vpro_quote_ident(plot_col), ', "ID"')
+  } else {
+    paste0(" ORDER BY ", vpro_quote_ident(plot_col))
+  }
+
+  for (ch in plot_chunks) {
+    q <- paste0(
+      "SELECT ",
+      quoted_cols,
+      " FROM becmaster.",
+      vpro_quote_ident(pg_tbl),
+      " WHERE ",
+      vpro_quote_ident(plot_col),
+      " = ANY($1::text[])",
+      ord_clause
+    )
+    part <- vpro_pg_query(
+      pg,
+      q,
+      params = list(vpro_pg_text_array(ch)),
+      action = paste0("stream becmaster.", pg_tbl)
+    )
+    if (nrow(part) == 0L) {
+      next
+    }
+    part <- vpro_pg_canonicalize_to_sqlite(part, spec)
+    if (plot_col %in% names(part)) {
+      part[[plot_col]] <- as.character(part[[plot_col]])
+    }
+    if (identical(suffix, "Env") && length(sensitive_plots) > 0L) {
+      part <- .vpro_redact_coord_df(part, sensitive_plots)
+    }
+    bool_cols <- as.character(spec$name[!is.na(spec$is_bool) & spec$is_bool])
+    for (bc in intersect(bool_cols, names(part))) {
+      part[[bc]] <- vpro_logical_to_access(part[[bc]])
+    }
+    if (identical(suffix, "Veg") && "Species" %in% names(part)) {
+      part$Species <- as.character(part$Species)
+      part$Species[is.na(part$Species)] <- ""
+    }
+    if (identical(suffix, "Audit") && "Project" %in% names(part)) {
+      part$Project <- rep(project_name, nrow(part))
+    }
+    if (enforce_unique_id && "ID" %in% names(part)) {
+      part$ID <- vpro_assign_unique_ids(
+        part$ID,
+        used_env = used_ids,
+        start_id = 100000000,
+        require_positive = FALSE
+      )
+    }
+    keep_cols <- intersect(dst_fields, names(part))
+    DBI::dbAppendTable(sq_con, dst_tbl, part[, keep_cols, drop = FALSE])
+    total_rows <- total_rows + nrow(part)
+  }
+  total_rows
+}
+
+.vpro_pull_populate_metadata_and_ids <- function(pg, sq_con, project_name) {
+  ref_pids <- DBI::dbGetQuery(
+    sq_con,
+    paste0(
+      'SELECT DISTINCT "ProjectID" FROM ',
+      vpro_quote_ident(paste0(project_name, "_Env")),
+      ' WHERE typeof("ProjectID") = \'text\' AND TRIM("ProjectID") <> \'\''
+    )
+  )$ProjectID
+  ref_pids <- vpro_pg_clean_tokens(ref_pids, "project_ids")
+
+  meta_n <- 0L
+  meta_dst <- paste0(project_name, "_Metadata")
+  if (length(ref_pids) > 0L) {
+    meta_spec <- vpro_pg_vp08_specs("Metadata")
+    meta_cols <- as.character(meta_spec$name)
+    meta_csv <- paste(vapply(meta_cols, vpro_quote_ident, character(1)), collapse = ", ")
+    meta_df <- vpro_pg_query(
+      pg,
+      paste0(
+        "SELECT ",
+        meta_csv,
+        ' FROM becmaster.metadata WHERE "ProjectID" = ANY($1::text[]) ORDER BY "ProjectID"'
+      ),
+      params = list(vpro_pg_text_array(ref_pids)),
+      action = "stream becmaster.metadata"
+    )
+    if (nrow(meta_df) > 0L) {
+      meta_df <- vpro_pg_canonicalize_to_sqlite(meta_df, meta_spec)
+      if ("ID" %in% names(meta_df)) {
+        used_meta_ids <- new.env(hash = TRUE, parent = emptyenv())
+        meta_df$ID <- vpro_assign_unique_ids(
+          meta_df$ID,
+          used_env = used_meta_ids,
+          start_id = 1,
+          require_positive = TRUE
+        )
+      }
+      meta_fields <- DBI::dbListFields(sq_con, meta_dst)
+      keep_m <- intersect(meta_fields, names(meta_df))
+      DBI::dbAppendTable(sq_con, meta_dst, meta_df[, keep_m, drop = FALSE])
+      meta_n <- nrow(meta_df)
+    }
+  }
+
+  if (meta_n == 0L) {
+    DBI::dbExecute(
+      sq_con,
+      paste0(
+        "INSERT INTO ",
+        vpro_quote_ident(meta_dst),
+        ' ("ProjectID", "ProjectTitle", "ID") VALUES (?, ?, 1)'
+      ),
+      params = list(project_name, paste0(project_name, " BECMaster Subset"))
+    )
+    meta_n <- 1L
+  }
+
+  for (sfx in c("Veg", "Humus", "Mineral", "Other", "Metadata", "Audit")) {
+    full_tbl <- paste0(project_name, "_", sfx)
+    q_full <- vpro_quote_ident(full_tbl)
+    DBI::dbExecute(
+      sq_con,
+      paste0(
+        'INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") ',
+        "SELECT ?, \"ID\" FROM ",
+        q_full,
+        ' WHERE typeof("ID") = \'integer\' AND "ID" >= 0'
+      ),
+      params = list(q_full)
+    )
+  }
+
+  meta_n
+}
+
+.vpro_pull_build_su_table <- function(sq_con, project_name, unit_col, unit_col_fallback) {
+  su_tbl <- paste0(project_name, "_SU")
+  q_su <- vpro_quote_ident(su_tbl)
+  q_env <- vpro_quote_ident(paste0(project_name, "_Env"))
+  q_adm <- vpro_quote_ident(paste0(project_name, "_Admin"))
+
+  DBI::dbExecute(
+    sq_con,
+    paste0("CREATE TABLE ", q_su, ' ("PlotNumber" TEXT, "SiteUnit" TEXT)')
+  )
+
+  coalesced_su_expr <- paste(
+    "COALESCE(",
+    "  NULLIF(TRIM(CAST(a.\"BECSiteUnit\" AS TEXT)), ''),",
+    "  NULLIF(TRIM(CAST(a.\"UserSiteUnit\" AS TEXT)), ''),",
+    "  CASE",
+    "    WHEN e.\"Zone\" IS NOT NULL AND TRIM(CAST(e.\"Zone\" AS TEXT)) <> ''",
+    "     AND e.\"SiteSeries\" IS NOT NULL AND TRIM(CAST(e.\"SiteSeries\" AS TEXT)) <> ''",
+    "    THEN TRIM(CAST(e.\"Zone\" AS TEXT)) || COALESCE(TRIM(CAST(e.\"SubZone\" AS TEXT)), '') || '/' || TRIM(CAST(e.\"SiteSeries\" AS TEXT))",
+    "    ELSE NULL",
+    "  END",
+    ")"
+  )
+
+  su_expr <- if (is.null(unit_col)) {
+    coalesced_su_expr
+  } else if (identical(unit_col, "BECSiteUnit")) {
+    'NULLIF(TRIM(CAST(a."BECSiteUnit" AS TEXT)), \'\')'
+  } else if (identical(unit_col, "UserSiteUnit")) {
+    'NULLIF(TRIM(CAST(a."UserSiteUnit" AS TEXT)), \'\')'
+  } else if (identical(unit_col, "SiteSeries")) {
+    paste(
+      "CASE",
+      "  WHEN e.\"Zone\" IS NOT NULL AND TRIM(CAST(e.\"Zone\" AS TEXT)) <> ''",
+      "   AND e.\"SiteSeries\" IS NOT NULL AND TRIM(CAST(e.\"SiteSeries\" AS TEXT)) <> ''",
+      "  THEN TRIM(CAST(e.\"Zone\" AS TEXT)) || COALESCE(TRIM(CAST(e.\"SubZone\" AS TEXT)), '') || '/' || TRIM(CAST(e.\"SiteSeries\" AS TEXT))",
+      "  WHEN e.\"SiteSeries\" IS NOT NULL AND TRIM(CAST(e.\"SiteSeries\" AS TEXT)) <> ''",
+      "  THEN TRIM(CAST(e.\"SiteSeries\" AS TEXT))",
+      "  ELSE NULL",
+      "END"
+    )
+  } else {
+    coalesced_su_expr
+  }
+
+  insert_su_with_expr <- function(expr_sql) {
+    DBI::dbExecute(
+      sq_con,
+      paste0(
+        "INSERT INTO ",
+        q_su,
+        ' ("PlotNumber", "SiteUnit") ',
+        "SELECT PlotNumber, SiteUnit FROM (",
+        '  SELECT CAST(e."PlotNumber" AS TEXT) AS PlotNumber, ',
+        expr_sql,
+        " AS SiteUnit ",
+        "  FROM ",
+        q_env,
+        " AS e ",
+        "  LEFT JOIN ",
+        q_adm,
+        ' AS a ON e."PlotNumber" = a."Plot" ',
+        '  WHERE typeof(e."PlotNumber") = \'text\' AND TRIM(e."PlotNumber") <> \'\' ',
+        '  ORDER BY e."PlotNumber"',
+        ") WHERE SiteUnit IS NOT NULL AND TRIM(SiteUnit) <> ''"
+      )
+    )
+    as.integer(DBI::dbGetQuery(sq_con, paste0("SELECT COUNT(*) AS n FROM ", q_su))$n[[1L]])
+  }
+
+  su_n <- insert_su_with_expr(su_expr)
+  if (su_n == 0L && !is.null(unit_col) && isTRUE(unit_col_fallback)) {
+    su_n <- insert_su_with_expr(coalesced_su_expr)
+  }
+
+  DBI::dbExecute(
+    sq_con,
+    paste0(
+      "CREATE UNIQUE INDEX ",
+      vpro_quote_ident(paste0("uidx_", su_tbl, "_PlotNumber")),
+      " ON ",
+      q_su,
+      ' ("PlotNumber")'
+    )
+  )
+  DBI::dbExecute(
+    sq_con,
+    paste0(
+      "CREATE INDEX ",
+      vpro_quote_ident(paste0("idx_", su_tbl, "_SiteUnit")),
+      " ON ",
+      q_su,
+      ' ("SiteUnit")'
+    )
+  )
+  DBI::dbExecute(
+    sq_con,
+    'INSERT OR REPLACE INTO "_table_metadata" ("table_name", "description") VALUES (?, \'VP04\')',
+    params = list(su_tbl)
+  )
+
+  su_n
+}
+
+.vpro_pull_capture_snapshot_meta <- function(pg) {
+  snap_bec_ver <- "BECdb_v13_2026"
+  snap_tax_ver <- "BCPlantTaxa_v19_2025"
+  rel_in_tx <- tryCatch(
+    vpro_pg_query(
+      pg,
+      "SELECT bec_version, taxonomy_version FROM standards.library_releases WHERE is_current = TRUE ORDER BY published_at DESC, release_id DESC LIMIT 1",
+      params = NULL,
+      action = "query active standards release inside snapshot"
+    ),
+    error = function(e) data.frame()
+  )
+  if (nrow(rel_in_tx) >= 1L) {
+    if (!is.na(rel_in_tx$bec_version[[1L]]) && nzchar(trimws(as.character(rel_in_tx$bec_version[[1L]])))) {
+      snap_bec_ver <- trimws(as.character(rel_in_tx$bec_version[[1L]]))
+    }
+    if (!is.na(rel_in_tx$taxonomy_version[[1L]]) && nzchar(trimws(as.character(rel_in_tx$taxonomy_version[[1L]])))) {
+      snap_tax_ver <- trimws(as.character(rel_in_tx$taxonomy_version[[1L]]))
+    }
+  }
+  tail_in_tx <- tryCatch(
+    vpro_pg_query(
+      pg,
+      "SELECT COALESCE((SELECT row_hash FROM becmaster.audit ORDER BY audit_seq DESC LIMIT 1), $1) AS tail_hash",
+      params = list(.vpro_genesis_audit_hash),
+      action = "query audit tail row_hash inside snapshot"
+    ),
+    error = function(e) data.frame(tail_hash = .vpro_genesis_audit_hash)
+  )
+  snap_tail_hash <- if (nrow(tail_in_tx) >= 1L && !is.na(tail_in_tx$tail_hash[[1L]]) && nzchar(trimws(as.character(tail_in_tx$tail_hash[[1L]])))) {
+    tolower(trimws(as.character(tail_in_tx$tail_hash[[1L]])))
+  } else {
+    .vpro_genesis_audit_hash
+  }
+
+  list(
+    bec_version = snap_bec_ver,
+    taxonomy_version = snap_tax_ver,
+    tail_audit_hash = snap_tail_hash
+  )
+}
+
+.vpro_pull_publish_sqlite_workspace <- function(
+  tmp_db,
+  dest_resolved,
+  project_name,
+  overwrite,
+  redact_sensitive,
+  sens_codes,
+  role
+) {
+  insp <- vpro_project_inspect(tmp_db, project_name)
+  if (!isTRUE(insp$compatible)) {
+    cli::cli_abort(
+      "Staged subset SQLite database did not pass {.code VP08} compatibility verification.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
+  }
+
+  wal_con <- DBI::dbConnect(RSQLite::SQLite(), tmp_db, flags = RSQLite::SQLITE_RW)
+  tryCatch(
+    {
+      DBI::dbExecute(wal_con, "PRAGMA journal_mode = WAL")
+      DBI::dbExecute(wal_con, "PRAGMA wal_checkpoint(TRUNCATE)")
+    },
+    finally = {
+      if (DBI::dbIsValid(wal_con)) DBI::dbDisconnect(wal_con)
+    }
+  )
+  unlink(c(paste0(tmp_db, "-wal"), paste0(tmp_db, "-shm")), force = TRUE)
+
+  if (file.exists(paste0(dest_resolved, "-wal")) || file.exists(paste0(dest_resolved, "-shm"))) {
+    cli::cli_abort(
+      "Refusing to overwrite {.path {dest_resolved}} while it is open in another VPro or database session.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
+  }
+
+  if (!file.rename(tmp_db, dest_resolved)) {
+    if (isTRUE(overwrite) && file.exists(dest_resolved)) {
+      unlink(dest_resolved)
+    }
+    if (!file.rename(tmp_db, dest_resolved)) {
+      if (!file.copy(tmp_db, dest_resolved, overwrite = isTRUE(overwrite))) {
+        cli::cli_abort(
+          "Failed to atomically publish subset SQLite database to {.path {dest_resolved}}.",
+          class = c("vpro_error_cloud", "vpro_error")
+        )
+      }
+      unlink(tmp_db, force = TRUE)
+    }
+  }
+
+  dest_final <- normalizePath(dest_resolved, winslash = "/", mustWork = TRUE)
+  ws <- vpro_connect(dest_final)
+  attr(ws, "cloud_redacted") <- isTRUE(redact_sensitive)
+  if (isTRUE(redact_sensitive)) {
+    attr(ws, "cloud_sensitive_codes") <- sens_codes
+  }
+  attr(ws, "cloud_role") <- as.character(role)
+
+  clean_con <- DBI::dbConnect(RSQLite::SQLite(), dest_final, flags = RSQLite::SQLITE_RW)
+  tryCatch(
+    {
+      DBI::dbGetQuery(clean_con, "SELECT 1 FROM sqlite_master LIMIT 1")
+      DBI::dbExecute(clean_con, "PRAGMA wal_checkpoint(TRUNCATE)")
+    },
+    finally = {
+      if (DBI::dbIsValid(clean_con)) DBI::dbDisconnect(clean_con)
+    }
+  )
+  sha256 <- tolower(trimws(unname(as.character(vpro_sha256_file(dest_final)))))
+
+  list(dest_final = dest_final, ws = ws, sha256 = sha256)
+}
+
+.vpro_pull_record_download_log <- function(pg, sub_filters, limit_int, allow_full, plot_count) {
+  actor <- if (!is.null(pg$user) && length(pg$user) >= 1L && !is.na(pg$user[[1L]]) && nzchar(trimws(as.character(pg$user[[1L]])))) {
+    trimws(as.character(pg$user[[1L]]))
+  } else {
+    "VProUser"
+  }
+  role_tier <- if (!is.null(pg$role) && length(pg$role) >= 1L && !is.na(pg$role[[1L]]) && nzchar(trimws(as.character(pg$role[[1L]])))) {
+    trimws(as.character(pg$role[[1L]]))
+  } else {
+    "contributor"
+  }
+  filter_json <- vpro_serialize_subset_filter_json(
+    sub_filters,
+    limit_int = limit_int,
+    allow_full = allow_full
+  )
+  log_df <- vpro_pg_query(
+    pg,
+    paste(
+      "INSERT INTO becmaster.download_log (actor, role_tier, filter_json, format, plot_count)",
+      "VALUES ($1, $2, $3::jsonb, 'VP08_SQLite', $4)",
+      "RETURNING id"
+    ),
+    params = list(actor, role_tier, filter_json, as.integer(plot_count)),
+    action = "record becmaster.download_log entry"
+  )
+  if (nrow(log_df) >= 1L && "id" %in% names(log_df)) {
+    id_chr <- as.character(log_df$id[[1L]])
+    id_dbl <- suppressWarnings(as.double(id_chr))
+    if (!is.na(id_dbl) && abs(id_dbl) <= .Machine$integer.max) {
+      return(as.integer(id_chr))
+    }
+    return(id_dbl)
+  }
+  NA_integer_
+}
+
 vpro_master_pull_impl <- function(
   pg,
   dest_path,
@@ -29,36 +484,7 @@ vpro_master_pull_impl <- function(
     project_name,
     allow_reserved_name = allow_reserved_name
   )
-
-  if (!is.character(dest_path) || length(dest_path) != 1L || is.na(dest_path) || !nzchar(trimws(dest_path))) {
-    cli::cli_abort("{.arg dest_path} must be a single non-empty file path.")
-  }
-  dest_clean <- trimws(dest_path)
-  if (!nzchar(tools::file_ext(dest_clean))) {
-    dest_clean <- paste0(dest_clean, ".db")
-  }
-  dest_resolved <- vpro_abs_path(dest_clean)
-
-  if (vpro_is_protected_support_db(dest_resolved) || vpro_is_bundled_package_path(dest_resolved)) {
-    cli::cli_abort(
-      "Refusing to write subset database onto protected system or bundled path: {.path {dest_resolved}}."
-    )
-  }
-  if (file.exists(paste0(dest_resolved, "-wal")) || file.exists(paste0(dest_resolved, "-shm"))) {
-    cli::cli_abort(
-      "Refusing to write to {.path {dest_resolved}} while it is open in another VPro or database session."
-    )
-  }
-  if (file.exists(dest_resolved)) {
-    if (dir.exists(dest_resolved)) {
-      cli::cli_abort("{.arg dest_path} points to an existing directory: {.path {dest_resolved}}.")
-    }
-    if (!isTRUE(overwrite)) {
-      cli::cli_abort(
-        "Destination SQLite file already exists (pass {.code overwrite = TRUE} to replace): {.path {dest_resolved}}."
-      )
-    }
-  }
+  dest_resolved <- .vpro_pull_resolve_dest_path(dest_path, overwrite)
 
   sub <- vpro_pg_subset_where(
     pg = pg,
@@ -114,7 +540,10 @@ vpro_master_pull_impl <- function(
   plot_list <- as.character(matched_df$PlotNumber)
   plot_list <- plot_list[!is.na(plot_list) & nzchar(plot_list)]
   if (length(plot_list) == 0L) {
-    cli::cli_abort("Subset filter matched 0 plots in {.code becmaster.env}.")
+    cli::cli_abort(
+      "Subset filter matched 0 plots in {.code becmaster.env}.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
 
   sensitive_plots <- if (isTRUE(redact_sensitive)) {
@@ -142,14 +571,13 @@ vpro_master_pull_impl <- function(
   DBI::dbExecute(sq_con, "PRAGMA journal_mode = DELETE")
   DBI::dbExecute(sq_con, "PRAGMA synchronous = NORMAL")
 
+  plot_chunks <- split(plot_list, ceiling(seq_along(plot_list) / 20000L))
   veg_n <- 0L
   humus_n <- 0L
   mineral_n <- 0L
   other_n <- 0L
   meta_n <- 0L
   su_n <- 0L
-
-  plot_chunks <- split(plot_list, ceiling(seq_along(plot_list) / 20000L))
 
   DBI::dbWithTransaction(sq_con, {
     deferred_idx <- vpro_clone_sample_schema(sq_con, project_name)
@@ -170,84 +598,13 @@ vpro_master_pull_impl <- function(
       'CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" ("ChildTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("ChildTable", "ID"))'
     )
 
-    stream_plot_table <- function(pg_tbl, plot_col, suffix) {
-      spec <- vpro_pg_vp08_specs(suffix)
-      col_names <- as.character(spec$name)
-      quoted_cols <- paste(vapply(col_names, vpro_quote_ident, character(1)), collapse = ", ")
-      dst_tbl <- paste0(project_name, "_", suffix)
-      dst_fields <- DBI::dbListFields(sq_con, dst_tbl)
-      enforce_unique_id <- suffix %in% c("Veg", "Humus", "Mineral", "Other")
-      used_ids <- new.env(hash = TRUE, parent = emptyenv())
-      total_rows <- 0L
-
-      ord_clause <- if (identical(suffix, "Audit")) {
-        " ORDER BY audit_seq ASC"
-      } else if ("ID" %in% col_names) {
-        paste0(" ORDER BY ", vpro_quote_ident(plot_col), ', "ID"')
-      } else {
-        paste0(" ORDER BY ", vpro_quote_ident(plot_col))
-      }
-
-      for (ch in plot_chunks) {
-        q <- paste0(
-          "SELECT ",
-          quoted_cols,
-          " FROM becmaster.",
-          vpro_quote_ident(pg_tbl),
-          " WHERE ",
-          vpro_quote_ident(plot_col),
-          " = ANY($1::text[])",
-          ord_clause
-        )
-        part <- vpro_pg_query(
-          pg,
-          q,
-          params = list(vpro_pg_text_array(ch)),
-          action = paste0("stream becmaster.", pg_tbl)
-        )
-        if (nrow(part) == 0L) {
-          next
-        }
-        part <- vpro_pg_canonicalize_to_sqlite(part, spec)
-        if (plot_col %in% names(part)) {
-          part[[plot_col]] <- as.character(part[[plot_col]])
-        }
-        if (identical(suffix, "Env") && length(sensitive_plots) > 0L) {
-          part <- .vpro_redact_coord_df(part, sensitive_plots)
-        }
-        bool_cols <- as.character(spec$name[!is.na(spec$is_bool) & spec$is_bool])
-        for (bc in intersect(bool_cols, names(part))) {
-          part[[bc]] <- vpro_logical_to_access(part[[bc]])
-        }
-        if (identical(suffix, "Veg") && "Species" %in% names(part)) {
-          part$Species <- as.character(part$Species)
-          part$Species[is.na(part$Species)] <- ""
-        }
-        if (identical(suffix, "Audit") && "Project" %in% names(part)) {
-          part$Project <- rep(project_name, nrow(part))
-        }
-        if (enforce_unique_id && "ID" %in% names(part)) {
-          part$ID <- vpro_assign_unique_ids(
-            part$ID,
-            used_env = used_ids,
-            start_id = 100000000,
-            require_positive = FALSE
-          )
-        }
-        keep_cols <- intersect(dst_fields, names(part))
-        DBI::dbAppendTable(sq_con, dst_tbl, part[, keep_cols, drop = FALSE])
-        total_rows <- total_rows + nrow(part)
-      }
-      total_rows
-    }
-
-    stream_plot_table("env", "PlotNumber", "Env")
-    stream_plot_table("admin", "Plot", "Admin")
-    veg_n <- stream_plot_table("veg", "PlotNumber", "Veg")
-    humus_n <- stream_plot_table("humus", "PlotNumber", "Humus")
-    mineral_n <- stream_plot_table("mineral", "PlotNumber", "Mineral")
-    other_n <- stream_plot_table("other", "PlotNumber", "Other")
-    stream_plot_table("audit", "PlotNumber", "Audit")
+    .vpro_pull_stream_plot_table(pg, sq_con, project_name, plot_chunks, sensitive_plots, "env", "PlotNumber", "Env")
+    .vpro_pull_stream_plot_table(pg, sq_con, project_name, plot_chunks, sensitive_plots, "admin", "Plot", "Admin")
+    veg_n <- .vpro_pull_stream_plot_table(pg, sq_con, project_name, plot_chunks, sensitive_plots, "veg", "PlotNumber", "Veg")
+    humus_n <- .vpro_pull_stream_plot_table(pg, sq_con, project_name, plot_chunks, sensitive_plots, "humus", "PlotNumber", "Humus")
+    mineral_n <- .vpro_pull_stream_plot_table(pg, sq_con, project_name, plot_chunks, sensitive_plots, "mineral", "PlotNumber", "Mineral")
+    other_n <- .vpro_pull_stream_plot_table(pg, sq_con, project_name, plot_chunks, sensitive_plots, "other", "PlotNumber", "Other")
+    .vpro_pull_stream_plot_table(pg, sq_con, project_name, plot_chunks, sensitive_plots, "audit", "PlotNumber", "Audit")
 
     DBI::dbExecute(
       sq_con,
@@ -255,326 +612,42 @@ vpro_master_pull_impl <- function(
       params = list(project_name)
     )
 
-    # Populate <Project>_Metadata for referenced ProjectIDs (with 1-row fallback)
-    ref_pids <- DBI::dbGetQuery(
-      sq_con,
-      paste0(
-        'SELECT DISTINCT "ProjectID" FROM ',
-        vpro_quote_ident(paste0(project_name, "_Env")),
-        ' WHERE typeof("ProjectID") = \'text\' AND TRIM("ProjectID") <> \'\''
-      )
-    )$ProjectID
-    ref_pids <- vpro_pg_clean_tokens(ref_pids, "project_ids")
-
-    meta_dst <- paste0(project_name, "_Metadata")
-    if (length(ref_pids) > 0L) {
-      meta_spec <- vpro_pg_vp08_specs("Metadata")
-      meta_cols <- as.character(meta_spec$name)
-      meta_csv <- paste(vapply(meta_cols, vpro_quote_ident, character(1)), collapse = ", ")
-      meta_df <- vpro_pg_query(
-        pg,
-        paste0(
-          "SELECT ",
-          meta_csv,
-          ' FROM becmaster.metadata WHERE "ProjectID" = ANY($1::text[]) ORDER BY "ProjectID"'
-        ),
-        params = list(vpro_pg_text_array(ref_pids)),
-        action = "stream becmaster.metadata"
-      )
-      if (nrow(meta_df) > 0L) {
-        meta_df <- vpro_pg_canonicalize_to_sqlite(meta_df, meta_spec)
-        if ("ID" %in% names(meta_df)) {
-          used_meta_ids <- new.env(hash = TRUE, parent = emptyenv())
-          meta_df$ID <- vpro_assign_unique_ids(
-            meta_df$ID,
-            used_env = used_meta_ids,
-            start_id = 1,
-            require_positive = TRUE
-          )
-        }
-        meta_fields <- DBI::dbListFields(sq_con, meta_dst)
-        keep_m <- intersect(meta_fields, names(meta_df))
-        DBI::dbAppendTable(sq_con, meta_dst, meta_df[, keep_m, drop = FALSE])
-        meta_n <- nrow(meta_df)
-      }
-    }
-
-    if (meta_n == 0L) {
-      DBI::dbExecute(
-        sq_con,
-        paste0(
-          "INSERT INTO ",
-          vpro_quote_ident(meta_dst),
-          ' ("ProjectID", "ProjectTitle", "ID") VALUES (?, ?, 1)'
-        ),
-        params = list(project_name, paste0(project_name, " BECMaster Subset"))
-      )
-      meta_n <- 1L
-    }
-
-    # Seed __VPRO_ChildIdentity for all child tables
-    for (sfx in c("Veg", "Humus", "Mineral", "Other", "Metadata", "Audit")) {
-      full_tbl <- paste0(project_name, "_", sfx)
-      q_full <- vpro_quote_ident(full_tbl)
-      DBI::dbExecute(
-        sq_con,
-        paste0(
-          'INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") ',
-          "SELECT ?, \"ID\" FROM ",
-          q_full,
-          ' WHERE typeof("ID") = \'integer\' AND "ID" >= 0'
-        ),
-        params = list(q_full)
-      )
-    }
-
-    # Build <Project>_SU so classification, matrix, and diagnostics work immediately
-    su_tbl <- paste0(project_name, "_SU")
-    q_su <- vpro_quote_ident(su_tbl)
-    q_env <- vpro_quote_ident(paste0(project_name, "_Env"))
-    q_adm <- vpro_quote_ident(paste0(project_name, "_Admin"))
-
-    DBI::dbExecute(
-      sq_con,
-      paste0("CREATE TABLE ", q_su, ' ("PlotNumber" TEXT, "SiteUnit" TEXT)')
-    )
-
-    coalesced_su_expr <- paste(
-      "COALESCE(",
-      "  NULLIF(TRIM(CAST(a.\"BECSiteUnit\" AS TEXT)), ''),",
-      "  NULLIF(TRIM(CAST(a.\"UserSiteUnit\" AS TEXT)), ''),",
-      "  CASE",
-      "    WHEN e.\"Zone\" IS NOT NULL AND TRIM(CAST(e.\"Zone\" AS TEXT)) <> ''",
-      "     AND e.\"SiteSeries\" IS NOT NULL AND TRIM(CAST(e.\"SiteSeries\" AS TEXT)) <> ''",
-      "    THEN TRIM(CAST(e.\"Zone\" AS TEXT)) || COALESCE(TRIM(CAST(e.\"SubZone\" AS TEXT)), '') || '/' || TRIM(CAST(e.\"SiteSeries\" AS TEXT))",
-      "    ELSE NULL",
-      "  END",
-      ")"
-    )
-
-    su_expr <- if (is.null(unit_col)) {
-      coalesced_su_expr
-    } else if (identical(unit_col, "BECSiteUnit")) {
-      'NULLIF(TRIM(CAST(a."BECSiteUnit" AS TEXT)), \'\')'
-    } else if (identical(unit_col, "UserSiteUnit")) {
-      'NULLIF(TRIM(CAST(a."UserSiteUnit" AS TEXT)), \'\')'
-    } else if (identical(unit_col, "SiteSeries")) {
-      paste(
-        "CASE",
-        "  WHEN e.\"Zone\" IS NOT NULL AND TRIM(CAST(e.\"Zone\" AS TEXT)) <> ''",
-        "   AND e.\"SiteSeries\" IS NOT NULL AND TRIM(CAST(e.\"SiteSeries\" AS TEXT)) <> ''",
-        "  THEN TRIM(CAST(e.\"Zone\" AS TEXT)) || COALESCE(TRIM(CAST(e.\"SubZone\" AS TEXT)), '') || '/' || TRIM(CAST(e.\"SiteSeries\" AS TEXT))",
-        "  WHEN e.\"SiteSeries\" IS NOT NULL AND TRIM(CAST(e.\"SiteSeries\" AS TEXT)) <> ''",
-        "  THEN TRIM(CAST(e.\"SiteSeries\" AS TEXT))",
-        "  ELSE NULL",
-        "END"
-      )
-    } else {
-      coalesced_su_expr
-    }
-
-    insert_su_with_expr <- function(expr_sql) {
-      DBI::dbExecute(
-        sq_con,
-        paste0(
-          "INSERT INTO ",
-          q_su,
-          ' ("PlotNumber", "SiteUnit") ',
-          "SELECT PlotNumber, SiteUnit FROM (",
-          '  SELECT CAST(e."PlotNumber" AS TEXT) AS PlotNumber, ',
-          expr_sql,
-          " AS SiteUnit ",
-          "  FROM ",
-          q_env,
-          " AS e ",
-          "  LEFT JOIN ",
-          q_adm,
-          ' AS a ON e."PlotNumber" = a."Plot" ',
-          '  WHERE typeof(e."PlotNumber") = \'text\' AND TRIM(e."PlotNumber") <> \'\' ',
-          '  ORDER BY e."PlotNumber"',
-          ") WHERE SiteUnit IS NOT NULL AND TRIM(SiteUnit) <> ''"
-        )
-      )
-      as.integer(DBI::dbGetQuery(sq_con, paste0("SELECT COUNT(*) AS n FROM ", q_su))$n[[1L]])
-    }
-
-    su_n <- insert_su_with_expr(su_expr)
-    if (su_n == 0L && !is.null(unit_col) && isTRUE(unit_col_fallback)) {
-      su_n <- insert_su_with_expr(coalesced_su_expr)
-    }
-
-    DBI::dbExecute(
-      sq_con,
-      paste0(
-        "CREATE UNIQUE INDEX ",
-        vpro_quote_ident(paste0("uidx_", su_tbl, "_PlotNumber")),
-        " ON ",
-        q_su,
-        ' ("PlotNumber")'
-      )
-    )
-    DBI::dbExecute(
-      sq_con,
-      paste0(
-        "CREATE INDEX ",
-        vpro_quote_ident(paste0("idx_", su_tbl, "_SiteUnit")),
-        " ON ",
-        q_su,
-        ' ("SiteUnit")'
-      )
-    )
-    DBI::dbExecute(
-      sq_con,
-      'INSERT OR REPLACE INTO "_table_metadata" ("table_name", "description") VALUES (?, \'VP04\')',
-      params = list(su_tbl)
-    )
+    meta_n <- .vpro_pull_populate_metadata_and_ids(pg, sq_con, project_name)
+    su_n <- .vpro_pull_build_su_table(sq_con, project_name, unit_col, unit_col_fallback)
 
     for (idx_sql in deferred_idx) {
       DBI::dbExecute(sq_con, idx_sql)
     }
   })
 
-  # Capture snapshot-consistent standards release & audit tail inside the same REPEATABLE READ transaction
-  snap_bec_ver <- "BECdb_v13_2026"
-  snap_tax_ver <- "BCPlantTaxa_v19_2025"
-  rel_in_tx <- tryCatch(
-    vpro_pg_query(
-      pg,
-      "SELECT bec_version, taxonomy_version FROM standards.library_releases WHERE is_current = TRUE ORDER BY published_at DESC, release_id DESC LIMIT 1",
-      params = NULL,
-      action = "query active standards release inside snapshot"
-    ),
-    error = function(e) data.frame()
-  )
-  if (nrow(rel_in_tx) >= 1L) {
-    if (!is.na(rel_in_tx$bec_version[[1L]]) && nzchar(trimws(as.character(rel_in_tx$bec_version[[1L]])))) {
-      snap_bec_ver <- trimws(as.character(rel_in_tx$bec_version[[1L]]))
-    }
-    if (!is.na(rel_in_tx$taxonomy_version[[1L]]) && nzchar(trimws(as.character(rel_in_tx$taxonomy_version[[1L]])))) {
-      snap_tax_ver <- trimws(as.character(rel_in_tx$taxonomy_version[[1L]]))
-    }
-  }
-  tail_in_tx <- tryCatch(
-    vpro_pg_query(
-      pg,
-      "SELECT COALESCE((SELECT row_hash FROM becmaster.audit ORDER BY audit_seq DESC LIMIT 1), $1) AS tail_hash",
-      params = list(.vpro_genesis_audit_hash),
-      action = "query audit tail row_hash inside snapshot"
-    ),
-    error = function(e) data.frame(tail_hash = .vpro_genesis_audit_hash)
-  )
-  snap_tail_hash <- if (nrow(tail_in_tx) >= 1L && !is.na(tail_in_tx$tail_hash[[1L]]) && nzchar(trimws(as.character(tail_in_tx$tail_hash[[1L]])))) {
-    tolower(trimws(as.character(tail_in_tx$tail_hash[[1L]])))
-  } else {
-    .vpro_genesis_audit_hash
-  }
+  snap_meta <- .vpro_pull_capture_snapshot_meta(pg)
 
-  # Close read-only PostgreSQL snapshot transaction cleanly before WAL finalization & download_log write
   vpro_pg_execute(pg, "ROLLBACK", params = NULL, action = "close subset snapshot transaction")
   tx_open <- FALSE
 
   DBI::dbDisconnect(sq_con)
 
-  insp <- vpro_project_inspect(tmp_db, project_name)
-  if (!isTRUE(insp$compatible)) {
-    cli::cli_abort("Staged subset SQLite database did not pass {.code VP08} compatibility verification.")
-  }
-
-  wal_con <- DBI::dbConnect(RSQLite::SQLite(), tmp_db, flags = RSQLite::SQLITE_RW)
-  tryCatch(
-    {
-      DBI::dbExecute(wal_con, "PRAGMA journal_mode = WAL")
-      DBI::dbExecute(wal_con, "PRAGMA wal_checkpoint(TRUNCATE)")
-    },
-    finally = {
-      if (DBI::dbIsValid(wal_con)) DBI::dbDisconnect(wal_con)
-    }
+  pub <- .vpro_pull_publish_sqlite_workspace(
+    tmp_db = tmp_db,
+    dest_resolved = dest_resolved,
+    project_name = project_name,
+    overwrite = overwrite,
+    redact_sensitive = redact_sensitive,
+    sens_codes = sens_codes,
+    role = pg$role
   )
-  unlink(c(paste0(tmp_db, "-wal"), paste0(tmp_db, "-shm")), force = TRUE)
-
-  if (file.exists(paste0(dest_resolved, "-wal")) || file.exists(paste0(dest_resolved, "-shm"))) {
-    cli::cli_abort(
-      "Refusing to overwrite {.path {dest_resolved}} while it is open in another VPro or database session."
-    )
-  }
-
-  if (!file.rename(tmp_db, dest_resolved)) {
-    if (isTRUE(overwrite) && file.exists(dest_resolved)) {
-      unlink(dest_resolved)
-    }
-    if (!file.rename(tmp_db, dest_resolved)) {
-      if (!file.copy(tmp_db, dest_resolved, overwrite = isTRUE(overwrite))) {
-        cli::cli_abort("Failed to atomically publish subset SQLite database to {.path {dest_resolved}}.")
-      }
-      unlink(tmp_db, force = TRUE)
-    }
-  }
   published <- TRUE
 
-  dest_final <- normalizePath(dest_resolved, winslash = "/", mustWork = TRUE)
-  ws <- vpro_connect(dest_final)
-  attr(ws, "cloud_redacted") <- isTRUE(redact_sensitive)
-  if (isTRUE(redact_sensitive)) {
-    attr(ws, "cloud_sensitive_codes") <- sens_codes
-  }
-  attr(ws, "cloud_role") <- as.character(pg$role)
-
-  # Cleanly close a RW handle after SQLITE_RO inspection inside vpro_connect() so
-  # SQLite removes idle -shm/-wal sidecars while preserving journal_mode = WAL
-  clean_con <- DBI::dbConnect(RSQLite::SQLite(), dest_final, flags = RSQLite::SQLITE_RW)
-  tryCatch(
-    {
-      DBI::dbGetQuery(clean_con, "SELECT 1 FROM sqlite_master LIMIT 1")
-      DBI::dbExecute(clean_con, "PRAGMA wal_checkpoint(TRUNCATE)")
-    },
-    finally = {
-      if (DBI::dbIsValid(clean_con)) DBI::dbDisconnect(clean_con)
-    }
-  )
-  sha256 <- tolower(trimws(unname(as.character(vpro_sha256_file(dest_final)))))
-
-  download_log_id <- NA_integer_
-  if (isTRUE(log_download)) {
-    actor <- if (!is.null(pg$user) && length(pg$user) >= 1L && !is.na(pg$user[[1L]]) && nzchar(trimws(as.character(pg$user[[1L]])))) {
-      trimws(as.character(pg$user[[1L]]))
-    } else {
-      "VProUser"
-    }
-    role_tier <- if (!is.null(pg$role) && length(pg$role) >= 1L && !is.na(pg$role[[1L]]) && nzchar(trimws(as.character(pg$role[[1L]])))) {
-      trimws(as.character(pg$role[[1L]]))
-    } else {
-      "contributor"
-    }
-    filter_json <- vpro_serialize_subset_filter_json(
-      sub$filters,
-      limit_int = limit_int,
-      allow_full = allow_full
-    )
-    log_df <- vpro_pg_query(
-      pg,
-      paste(
-        "INSERT INTO becmaster.download_log (actor, role_tier, filter_json, format, plot_count)",
-        "VALUES ($1, $2, $3::jsonb, 'VP08_SQLite', $4)",
-        "RETURNING id"
-      ),
-      params = list(actor, role_tier, filter_json, as.integer(length(plot_list))),
-      action = "record becmaster.download_log entry"
-    )
-    if (nrow(log_df) >= 1L && "id" %in% names(log_df)) {
-      id_chr <- as.character(log_df$id[[1L]])
-      id_dbl <- suppressWarnings(as.double(id_chr))
-      download_log_id <- if (!is.na(id_dbl) && abs(id_dbl) <= .Machine$integer.max) {
-        as.integer(id_chr)
-      } else {
-        id_dbl
-      }
-    }
+  download_log_id <- if (isTRUE(log_download)) {
+    .vpro_pull_record_download_log(pg, sub$filters, limit_int, allow_full, length(plot_list))
+  } else {
+    NA_integer_
   }
 
   list(
-    dest_path = dest_final,
+    dest_path = pub$dest_final,
     project_name = project_name,
-    sha256 = sha256,
+    sha256 = pub$sha256,
     plot_count = as.integer(length(plot_list)),
     veg_count = as.integer(veg_n),
     humus_count = as.integer(humus_n),
@@ -583,12 +656,8 @@ vpro_master_pull_impl <- function(
     metadata_count = as.integer(meta_n),
     su_count = as.integer(su_n),
     download_log_id = download_log_id,
-    snapshot_meta = list(
-      bec_version = snap_bec_ver,
-      taxonomy_version = snap_tax_ver,
-      tail_audit_hash = snap_tail_hash
-    ),
-    workspace = ws
+    snapshot_meta = snap_meta,
+    workspace = pub$ws
   )
 }
 

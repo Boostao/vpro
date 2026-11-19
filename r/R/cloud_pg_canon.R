@@ -6,7 +6,11 @@ vpro_pg_exec_safe <- function(expr_fn, secrets = character(), action = "PostgreS
     error = function(e) {
       raw_msg <- conditionMessage(e)
       clean_msg <- vpro_redact_pg_secrets(raw_msg, secrets = secrets)
-      cli::cli_abort("{action} failed: {clean_msg}", parent = NA)
+      cli::cli_abort(
+        .vpro_cli_escape(paste0(action, " failed: ", clean_msg)),
+        class = c("vpro_error_cloud", "vpro_error"),
+        parent = NA
+      )
     }
   )
 }
@@ -14,20 +18,25 @@ vpro_pg_exec_safe <- function(expr_fn, secrets = character(), action = "PostgreS
 vpro_assert_pg_conn <- function(pg, require_custodian = FALSE) {
   if (!inherits(pg, "vpro_pg_conn") || !is.list(pg) || is.null(pg$conn)) {
     cli::cli_abort(
-      "{.arg pg} must be a {.cls vpro_pg_conn} connection created by {.fn vpro_master_connect}."
+      "{.arg pg} must be a {.cls vpro_pg_conn} connection created by {.fn vpro_master_connect}.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   valid <- tryCatch(DBI::dbIsValid(pg$conn), error = function(e) FALSE)
   if (!isTRUE(valid)) {
     cli::cli_abort(
-      "PostgreSQL BECMaster connection is closed or invalid. Reconnect with {.fn vpro_master_connect}."
+      "PostgreSQL BECMaster connection is closed or invalid. Reconnect with {.fn vpro_master_connect}.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   if (isTRUE(require_custodian) && !identical(pg$role, "custodian")) {
-    cli::cli_abort(c(
-      "This operation requires a {.val custodian} PostgreSQL connection (active role: {.val {pg$role}}).",
-      "i" = "Connect with {.code vpro_master_connect(role = \"custodian\")}."
-    ))
+    cli::cli_abort(
+      c(
+        "This operation requires a {.val custodian} PostgreSQL connection (active role: {.val {pg$role}}).",
+        "i" = "Connect with {.code vpro_master_connect(role = \"custodian\")}."
+      ),
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   invisible(pg)
 }
@@ -60,19 +69,21 @@ vpro_pg_query <- function(con, sql, params = NULL, action = "PostgreSQL query") 
 }
 
 vpro_pg_begin_isolated_tx <- function(conn, begin_sql, caller_fn = "PostgreSQL transaction") {
-  already_in_tx <- FALSE
+  tx_state <- new.env(parent = emptyenv())
+  tx_state$already_in_tx <- FALSE
   withCallingHandlers(
     vpro_muffle_pg_result_warning(DBI::dbExecute(conn, begin_sql)),
     warning = function(w) {
       if (grepl("already a transaction in progress", conditionMessage(w), ignore.case = TRUE)) {
-        already_in_tx <<- TRUE
+        tx_state$already_in_tx <- TRUE
         invokeRestart("muffleWarning")
       }
     }
   )
-  if (already_in_tx) {
+  if (tx_state$already_in_tx) {
     cli::cli_abort(
-      "Cannot start isolated transaction in {.fn {caller_fn}} because {.arg con} already has an open PostgreSQL transaction."
+      "Cannot start isolated transaction in {.fn {caller_fn}} because {.arg con} already has an open PostgreSQL transaction.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   TRUE
@@ -146,7 +157,10 @@ vpro_pg_format_utc_text <- function(v, col_name) {
       }
       if (is.raw(el)) {
         if (any(el == as.raw(0L))) {
-          cli::cli_abort("Column {.field {col_name}} contains embedded NUL bytes.")
+          cli::cli_abort(
+            "Column {.field {col_name}} contains embedded NUL bytes.",
+            class = c("vpro_error_cloud", "vpro_error")
+          )
         }
         out[[idx]] <- rawToChar(el)
       } else {
@@ -196,12 +210,18 @@ vpro_pg_canonicalize_to_pg <- function(df, spec) {
         trimmed <- trimws(raw_col)
         res_bool <- vpro_logical_to_access(raw_col)
         if (any(!is.na(trimmed) & nzchar(trimmed) & is.na(res_bool))) {
-          cli::cli_abort("Column {.field {col_name}} contains invalid Access boolean text.")
+          cli::cli_abort(
+            "Column {.field {col_name}} contains invalid Access boolean text.",
+            class = c("vpro_error_cloud", "vpro_error")
+          )
         }
         out_cols[[i]] <- res_bool
       } else if (is.numeric(raw_col)) {
         if (any(!is.na(raw_col) & !is.finite(raw_col))) {
-          cli::cli_abort("Column {.field {col_name}} contains non-finite numeric boolean value.")
+          cli::cli_abort(
+            "Column {.field {col_name}} contains non-finite numeric boolean value.",
+            class = c("vpro_error_cloud", "vpro_error")
+          )
         }
         out_cols[[i]] <- vpro_logical_to_access(raw_col)
       } else {
@@ -218,15 +238,22 @@ vpro_pg_canonicalize_to_pg <- function(df, spec) {
         non_na <- !is.na(chr)
         if (any(non_na)) {
           if (any(!validUTF8(chr[non_na]) & is.na(iconv(chr[non_na], from = "", to = "UTF-8")))) {
-            cli::cli_abort("Column {.field {col_name}} contains invalid UTF-8 text.")
+            cli::cli_abort(
+              "Column {.field {col_name}} contains invalid UTF-8 text.",
+              class = c("vpro_error_cloud", "vpro_error")
+            )
           }
           u16 <- vpro_utf16_len(chr[non_na])
           if (anyNA(u16)) {
-            cli::cli_abort("Column {.field {col_name}} contains invalid or unsupported text characters.")
+            cli::cli_abort(
+              "Column {.field {col_name}} contains invalid or unsupported text characters.",
+              class = c("vpro_error_cloud", "vpro_error")
+            )
           }
           if (utf16_max > 0L && any(u16 > utf16_max)) {
             cli::cli_abort(
-              "Column {.field {col_name}} exceeds maximum length of {utf16_max} characters."
+              "Column {.field {col_name}} exceeds maximum length of {utf16_max} characters.",
+              class = c("vpro_error_cloud", "vpro_error")
             )
           }
           chr[non_na] <- enc2utf8(chr[non_na])
@@ -253,10 +280,16 @@ vpro_pg_canonicalize_to_pg <- function(df, spec) {
         rounded <- vpro_go_round(num)
         ok <- !is.na(rounded)
         if (identical(pg_type, "SMALLINT") && any(ok & (rounded < -32768 | rounded > 32767))) {
-          cli::cli_abort("Column {.field {col_name}} overflows PostgreSQL SMALLINT (-32768..32767).")
+          cli::cli_abort(
+            "Column {.field {col_name}} overflows PostgreSQL SMALLINT (-32768..32767).",
+            class = c("vpro_error_cloud", "vpro_error")
+          )
         }
         if (any(ok & (rounded < -2147483647 | rounded > 2147483647))) {
-          cli::cli_abort("Column {.field {col_name}} overflows 32-bit R integer bounds.")
+          cli::cli_abort(
+            "Column {.field {col_name}} overflows 32-bit R integer bounds.",
+            class = c("vpro_error_cloud", "vpro_error")
+          )
         }
         res_int <- rep(NA_integer_, n_rows)
         if (any(ok)) {
@@ -283,12 +316,16 @@ vpro_pg_canonicalize_to_pg <- function(df, spec) {
           non_na <- !is.na(num)
           if (any(non_na)) {
             if (any(!is.finite(num[non_na]) | num[non_na] < 0)) {
-              cli::cli_abort("Cover column {.field {col_name}} must be finite and >= 0.")
+              cli::cli_abort(
+                "Cover column {.field {col_name}} must be finite and >= 0.",
+                class = c("vpro_error_cloud", "vpro_error")
+              )
             }
             narrowed <- vpro_narrow_float32(num)
             if (any(is.na(narrowed[non_na]) | narrowed[non_na] < 0 | narrowed[non_na] >= 100)) {
               cli::cli_abort(
-                "Cover column {.field {col_name}} must be >= 0 and strictly under 100%."
+                "Cover column {.field {col_name}} must be >= 0 and strictly under 100%.",
+                class = c("vpro_error_cloud", "vpro_error")
               )
             }
             out_cols[[i]] <- narrowed
@@ -419,14 +456,20 @@ vpro_compute_audit_row_hash <- function(prev_hash, merge_tx_id, vp08_audit_value
   audit_spec <- .vpro_pg_vp08_spec_map$Audit
   vals_list <- if (is.data.frame(vp08_audit_values)) {
     if (nrow(vp08_audit_values) != 1L) {
-      cli::cli_abort("{.arg vp08_audit_values} data frame must have exactly 1 row.")
+      cli::cli_abort(
+        "{.arg vp08_audit_values} data frame must have exactly 1 row.",
+        class = c("vpro_error_cloud", "vpro_error")
+      )
     }
     if (all(audit_spec$name %in% names(vp08_audit_values))) {
       as.list(vp08_audit_values[1L, audit_spec$name, drop = FALSE])
     } else if (ncol(vp08_audit_values) == nrow(audit_spec)) {
       as.list(vp08_audit_values[1L, , drop = FALSE])
     } else {
-      cli::cli_abort("{.arg vp08_audit_values} must provide all 11 VP08 Audit columns.")
+      cli::cli_abort(
+        "{.arg vp08_audit_values} must provide all 11 VP08 Audit columns.",
+        class = c("vpro_error_cloud", "vpro_error")
+      )
     }
   } else {
     lst <- as.list(vp08_audit_values)
@@ -435,7 +478,10 @@ vpro_compute_audit_row_hash <- function(prev_hash, merge_tx_id, vp08_audit_value
     } else if (length(lst) == nrow(audit_spec)) {
       lst
     } else {
-      cli::cli_abort("{.arg vp08_audit_values} must contain exactly 11 VP08 Audit values.")
+      cli::cli_abort(
+        "{.arg vp08_audit_values} must contain exactly 11 VP08 Audit values.",
+        class = c("vpro_error_cloud", "vpro_error")
+      )
     }
   }
 

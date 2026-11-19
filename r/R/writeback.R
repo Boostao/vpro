@@ -91,16 +91,16 @@ vpro_is_bundled_package_path <- function(path) {
 
 vpro_assert_writable_project_db <- function(db_path, con = NULL) {
   if (!is.character(db_path) || length(db_path) != 1L || is.na(db_path) || !nzchar(trimws(db_path))) {
-    rlang::abort("Target SQLite database path must be a single non-empty string.")
+    cli::cli_abort("Target SQLite database path must be a single non-empty string.", class = c("vpro_error_writeback", "vpro_error"))
   }
   if (!file.exists(db_path) || dir.exists(db_path)) {
-    rlang::abort(paste0("Target SQLite database does not exist: ", db_path))
+    cli::cli_abort(.vpro_cli_escape(paste0("Target SQLite database does not exist: ", db_path)), class = c("vpro_error_writeback", "vpro_error"))
   }
   if (vpro_is_protected_support_db(db_path, con = con)) {
-    rlang::abort(paste0(
+    cli::cli_abort(.vpro_cli_escape(paste0(
       "Refusing write-back to protected VPro system/reference database: ",
       basename(db_path)
-    ))
+    )), class = c("vpro_error_writeback", "vpro_error"))
   }
   if (
     vpro_is_bundled_package_path(db_path) ||
@@ -111,11 +111,11 @@ vpro_assert_writable_project_db <- function(db_path, con = NULL) {
           normalizePath(vpro_bundled_db("Sample.db"), winslash = "/", mustWork = FALSE)
         ))
   ) {
-    rlang::abort(paste0(
+    cli::cli_abort(.vpro_cli_escape(paste0(
       "Refusing write-back to read-only installed `vpro` package database: ",
       db_path,
       ". Copy the database to a user workspace before writing."
-    ))
+    )), class = c("vpro_error_writeback", "vpro_error"))
   }
   normalizePath(db_path, winslash = "/", mustWork = TRUE)
 }
@@ -158,52 +158,52 @@ vpro_normalize_actor <- function(actor) {
 vpro_assert_safe_prefix <- function(raw_name, full_table, project_name, kind = c("candidate_su", "su", "lump")) {
   kind <- match.arg(kind)
   if (!is.character(raw_name) || length(raw_name) != 1L || is.na(raw_name) || !nzchar(trimws(raw_name))) {
-    rlang::abort("Target table name must be a single non-empty character string.")
+    cli::cli_abort("Target table name must be a single non-empty character string.", class = c("vpro_error_writeback", "vpro_error"))
   }
   nm <- trimws(enc2utf8(raw_name))
   ft <- trimws(enc2utf8(full_table))
   if (!validUTF8(nm) || !validUTF8(ft) || grepl("[\r\n]", nm) || grepl("[\r\n]", ft)) {
-    rlang::abort("Target table name must be valid UTF-8 without control characters.")
+    cli::cli_abort("Target table name must be valid UTF-8 without control characters.", class = c("vpro_error_writeback", "vpro_error"))
   }
 
   # Hard refusal guards: Master* / *Master*, USys*, BECSiteUnit, core VP08 tables
   if (grepl("master", nm, ignore.case = TRUE) || grepl("master", ft, ignore.case = TRUE)) {
-    rlang::abort(paste0(
+    cli::cli_abort(.vpro_cli_escape(paste0(
       "Refusing write-back to Master-protected table `",
       ft,
       "` (`Master*` prefixes are read-only)."
-    ))
+    )), class = c("vpro_error_writeback", "vpro_error"))
   }
   if (grepl("^usys", nm, ignore.case = TRUE) || grepl("^usys", ft, ignore.case = TRUE)) {
-    rlang::abort(paste0(
+    cli::cli_abort(.vpro_cli_escape(paste0(
       "Refusing write-back to system table/view `",
       ft,
       "` (`USys*` objects are protected)."
-    ))
+    )), class = c("vpro_error_writeback", "vpro_error"))
   }
   if (
     grepl("^becsiteunit(_su|_lump)?$", nm, ignore.case = TRUE) ||
       grepl("^becsiteunit(_su|_lump)?$", ft, ignore.case = TRUE)
   ) {
-    rlang::abort(paste0(
+    cli::cli_abort(.vpro_cli_escape(paste0(
       "Refusing write-back to custodian-locked table `",
       ft,
       "` (`BECSiteUnit` is protected)."
-    ))
+    )), class = c("vpro_error_writeback", "vpro_error"))
   }
 
   core_pat <- paste0("_(", paste(.vpro_core_project_suffixes, collapse = "|"), ")$")
   if (grepl(core_pat, nm, ignore.case = TRUE) || grepl(core_pat, ft, ignore.case = TRUE)) {
-    rlang::abort(paste0(
+    cli::cli_abort(.vpro_cli_escape(paste0(
       "Refusing write-back targeting core VP08 table `",
       ft,
       "`."
-    ))
+    )), class = c("vpro_error_writeback", "vpro_error"))
   }
   if (!is.null(project_name) && nzchar(project_name)) {
     core_exact <- tolower(paste0(project_name, "_", .vpro_core_project_suffixes))
     if (tolower(nm) %in% core_exact || tolower(ft) %in% core_exact) {
-      rlang::abort(paste0("Refusing write-back targeting core VP08 table `", ft, "`."))
+      cli::cli_abort(.vpro_cli_escape(paste0("Refusing write-back targeting core VP08 table `", ft, "`.")), class = c("vpro_error_writeback", "vpro_error"))
     }
   }
 
@@ -212,35 +212,35 @@ vpro_assert_safe_prefix <- function(raw_name, full_table, project_name, kind = c
 
 vpro_validate_plot_numbers_strict <- function(plot_vec, arg = "PlotNumber") {
   if (!is.character(plot_vec)) {
-    rlang::abort(paste0(
+    cli::cli_abort(.vpro_cli_escape(paste0(
       "`",
       arg,
       "` must be a literal `character` vector (never numeric) to preserve leading zeroes such as '00337'."
-    ))
+    )), class = c("vpro_error_writeback", "vpro_error"))
   }
   if (length(plot_vec) == 0L) {
-    rlang::abort(paste0("`", arg, "` must contain at least one plot."))
+    cli::cli_abort(.vpro_cli_escape(paste0("`", arg, "` must contain at least one plot.")), class = c("vpro_error_writeback", "vpro_error"))
   }
   if (anyNA(plot_vec) || any(!nzchar(trimws(plot_vec)))) {
-    rlang::abort(paste0("`", arg, "` must not contain `NA` or blank values."))
+    cli::cli_abort(.vpro_cli_escape(paste0("`", arg, "` must not contain `NA` or blank values.")), class = c("vpro_error_writeback", "vpro_error"))
   }
   u16 <- vpro_utf16_len(plot_vec)
   if (anyNA(u16)) {
-    rlang::abort(paste0("`", arg, "` contains malformed UTF-8 or unpaired surrogates."))
+    cli::cli_abort(.vpro_cli_escape(paste0("`", arg, "` contains malformed UTF-8 or unpaired surrogates.")), class = c("vpro_error_writeback", "vpro_error"))
   }
   if (any(u16 > 7L)) {
     bad <- plot_vec[which(u16 > 7L)[[1L]]]
-    rlang::abort(paste0(
+    cli::cli_abort(.vpro_cli_escape(paste0(
       "`",
       arg,
       "` value '",
       bad,
       "' exceeds VPro's 7-character limit."
-    ))
+    )), class = c("vpro_error_writeback", "vpro_error"))
   }
   if (anyDuplicated(plot_vec) > 0L) {
     dup <- plot_vec[duplicated(plot_vec)][[1L]]
-    rlang::abort(paste0("`", arg, "` must be unique; duplicate plot '", dup, "' found."))
+    cli::cli_abort(.vpro_cli_escape(paste0("`", arg, "` must be unique; duplicate plot '", dup, "' found.")), class = c("vpro_error_writeback", "vpro_error"))
   }
   plot_vec
 }
@@ -268,9 +268,7 @@ vpro_extract_su_memberships <- function(memberships) {
     }
   }
   if (is.null(df) || !is.data.frame(df)) {
-    rlang::abort(
-      "`memberships` must be a `vpro_clusters` object or a `data.frame` containing `PlotNumber` and `SiteUnit` (or `Cluster`)."
-    )
+    cli::cli_abort("`memberships` must be a `vpro_clusters` object or a `data.frame` containing `PlotNumber` and `SiteUnit` (or `Cluster`).", class = c("vpro_error_writeback", "vpro_error"))
   }
 
   nms_low <- tolower(names(df))
@@ -290,9 +288,7 @@ vpro_extract_su_memberships <- function(memberships) {
     }
   }
   if (is.na(p_ix) || is.na(u_ix)) {
-    rlang::abort(
-      "`memberships` must contain `PlotNumber` and `SiteUnit` (or `Cluster` / `ClusterUnit`) columns."
-    )
+    cli::cli_abort("`memberships` must contain `PlotNumber` and `SiteUnit` (or `Cluster` / `ClusterUnit`) columns.", class = c("vpro_error_writeback", "vpro_error"))
   }
 
   raw_plots <- df[[p_ix]]
@@ -300,15 +296,15 @@ vpro_extract_su_memberships <- function(memberships) {
 
   raw_units <- df[[u_ix]]
   if (anyNA(raw_units)) {
-    rlang::abort("`SiteUnit` / `Cluster` must not contain `NA` values.")
+    cli::cli_abort("`SiteUnit` / `Cluster` must not contain `NA` values.", class = c("vpro_error_writeback", "vpro_error"))
   }
   units_chr <- trimws(as.character(raw_units))
   if (any(!nzchar(units_chr))) {
-    rlang::abort("`SiteUnit` / `Cluster` must not contain blank strings.")
+    cli::cli_abort("`SiteUnit` / `Cluster` must not contain blank strings.", class = c("vpro_error_writeback", "vpro_error"))
   }
   u16_units <- vpro_utf16_len(units_chr)
   if (anyNA(u16_units) || any(u16_units > 50L)) {
-    rlang::abort("`SiteUnit` values must be valid text up to 50 characters.")
+    cli::cli_abort("`SiteUnit` values must be valid text up to 50 characters.", class = c("vpro_error_writeback", "vpro_error"))
   }
 
   tibble::tibble(
@@ -319,7 +315,7 @@ vpro_extract_su_memberships <- function(memberships) {
 
 vpro_reserve_next_id_in_tx <- function(dbc, table_name, id_col = "ID") {
   if (!is.character(table_name) || length(table_name) != 1L || is.na(table_name) || !nzchar(trimws(table_name))) {
-    rlang::abort("`table_name` must be a single non-empty table name.")
+    cli::cli_abort("`table_name` must be a single non-empty table name.", class = c("vpro_error_writeback", "vpro_error"))
   }
   raw_unquoted <- gsub('""', '"', sub('^"(.*)"$', "\\1", trimws(enc2utf8(table_name))))
   found_tbl <- DBI::dbGetQuery(
@@ -328,7 +324,7 @@ vpro_reserve_next_id_in_tx <- function(dbc, table_name, id_col = "ID") {
     params = list(raw_unquoted)
   )
   if (nrow(found_tbl) == 0L) {
-    rlang::abort(paste0("Target child table `", raw_unquoted, "` does not exist in SQLite database."))
+    cli::cli_abort(.vpro_cli_escape(paste0("Target child table `", raw_unquoted, "` does not exist in SQLite database.")), class = c("vpro_error_writeback", "vpro_error"))
   }
   unquoted <- as.character(found_tbl$name[[1L]])
   qt <- vpro_quote_ident(unquoted)
@@ -395,7 +391,7 @@ vpro_reserve_next_id_in_tx <- function(dbc, table_name, id_col = "ID") {
           break
         }
         if (candidate >= .Machine$integer.max) {
-          rlang::abort(paste0("Child ID space exhausted for table `", unquoted, "`."))
+          cli::cli_abort(.vpro_cli_escape(paste0("Child ID space exhausted for table `", unquoted, "`.")), class = c("vpro_error_writeback", "vpro_error"))
         }
         candidate <- candidate + 1
       }
@@ -447,7 +443,7 @@ vpro_append_project_audit_in_tx <- function(
     params = list(audit_cand)
   )
   if (nrow(found) == 0L) {
-    rlang::abort(paste0("Required project audit table `", audit_cand, "` does not exist; aborting write-back."))
+    cli::cli_abort(.vpro_cli_escape(paste0("Required project audit table `", audit_cand, "` does not exist; aborting write-back.")), class = c("vpro_error_writeback", "vpro_error"))
   }
   actual_audit <- as.character(found$name[[1L]])
   q_audit <- vpro_quote_ident(actual_audit)
@@ -516,7 +512,7 @@ vpro_find_existing_table_ci <- function(dbc, table_name) {
     return(NULL)
   }
   if (any(tolower(res$type) == "view")) {
-    rlang::abort(paste0("Refusing write-back targeting SQLite view `", res$name[[1L]], "`."))
+    cli::cli_abort(.vpro_cli_escape(paste0("Refusing write-back targeting SQLite view `", res$name[[1L]], "`.")), class = c("vpro_error_writeback", "vpro_error"))
   }
   as.character(res$name[[1L]])
 }
@@ -587,7 +583,7 @@ vpro_write_su <- function(
       raw_nm <- paste0(substr(base, 1L, 14L), "_ClusterCandidate")
     } else {
       if (!is.character(su) || length(su) != 1L || is.na(su) || !nzchar(trimws(su))) {
-        rlang::abort("`su` must be a single non-empty character string.")
+        cli::cli_abort("`su` must be a single non-empty character string.", class = c("vpro_error_writeback", "vpro_error"))
       }
       raw_nm <- trimws(enc2utf8(su))
       vpro_assert_safe_prefix(raw_nm, raw_nm, ws$project, kind = "candidate_su")
@@ -598,53 +594,51 @@ vpro_write_su <- function(
       }
     }
     if (!validUTF8(base) || !grepl("^[A-Za-z][A-Za-z0-9_]*$", base)) {
-      rlang::abort(paste0(
+      cli::cli_abort(.vpro_cli_escape(paste0(
         "Candidate prefix `",
         base,
         "` must start with an ASCII letter and contain only ASCII letters, digits, or underscores (max 14 characters)."
-      ))
+      )), class = c("vpro_error_writeback", "vpro_error"))
     }
     if (tolower(base) %in% c("none", "filtered", "usyssutabledynamic") || grepl("^usys", base, ignore.case = TRUE)) {
-      rlang::abort(paste0("Candidate prefix `", base, "` is reserved by VPro."))
+      cli::cli_abort(.vpro_cli_escape(paste0("Candidate prefix `", base, "` is reserved by VPro.")), class = c("vpro_error_writeback", "vpro_error"))
     }
     if (nchar(base) > 14L) {
       base <- substr(base, 1L, 14L)
     }
     if (tolower(base) %in% c("none", "filtered") || !grepl("^[A-Za-z][A-Za-z0-9_]{0,13}$", base)) {
-      rlang::abort(paste0(
+      cli::cli_abort(.vpro_cli_escape(paste0(
         "Candidate prefix `",
         base,
         "` must start with an ASCII letter and contain only ASCII letters, digits, or underscores (max 14 characters)."
-      ))
+      )), class = c("vpro_error_writeback", "vpro_error"))
     }
     cand_prefix <- paste0(base, "_ClusterCandidate")
     target_table <- paste0(cand_prefix, "_SU")
     vpro_assert_safe_prefix(cand_prefix, target_table, ws$project, kind = "candidate_su")
   } else {
     if (is.null(su)) {
-      rlang::abort("`su` must be a single non-empty character string when `candidate = FALSE`.")
+      cli::cli_abort("`su` must be a single non-empty character string when `candidate = FALSE`.", class = c("vpro_error_writeback", "vpro_error"))
     }
     if (!is.character(su) || length(su) != 1L || is.na(su) || !nzchar(trimws(su))) {
-      rlang::abort("`su` must be a single non-empty character string.")
+      cli::cli_abort("`su` must be a single non-empty character string.", class = c("vpro_error_writeback", "vpro_error"))
     }
     raw_nm <- trimws(enc2utf8(su))
     base <- sub("_SU$", "", raw_nm, ignore.case = TRUE)
     target_table <- paste0(base, "_SU")
     vpro_assert_safe_prefix(raw_nm, target_table, ws$project, kind = "su")
     if (tolower(base) %in% c("none", "usyssutabledynamic", "filtered")) {
-      rlang::abort(paste0("Target SU name `", base, "` is reserved by VPro."))
+      cli::cli_abort(.vpro_cli_escape(paste0("Target SU name `", base, "` is reserved by VPro.")), class = c("vpro_error_writeback", "vpro_error"))
     }
     if (grepl("_clustercandidate$", base, ignore.case = TRUE)) {
-      rlang::abort(
-        "Pass `candidate = TRUE` to `vpro_write_su()` when writing `*_ClusterCandidate_SU` staging tables."
-      )
+      cli::cli_abort("Pass `candidate = TRUE` to `vpro_write_su()` when writing `*_ClusterCandidate_SU` staging tables.", class = c("vpro_error_writeback", "vpro_error"))
     }
     if (!grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", base)) {
-      rlang::abort(paste0(
+      cli::cli_abort(.vpro_cli_escape(paste0(
         "Target SU name `",
         base,
         "` must start with an ASCII letter, contain only ASCII letters, digits, or underscores, and be at most 31 characters."
-      ))
+      )), class = c("vpro_error_writeback", "vpro_error"))
     }
   }
 
@@ -654,18 +648,18 @@ vpro_write_su <- function(
   written_table <- vpro_with_immediate_tx(ws$project_path, con = ws, fn = function(dbc) {
     existing <- vpro_find_existing_table_ci(dbc, target_table)
     if (is.null(existing) && !isTRUE(create)) {
-      rlang::abort(paste0(
+      cli::cli_abort(.vpro_cli_escape(paste0(
         "Target SU table `",
         target_table,
         "` does not exist; set `create = TRUE` to create a new working `*_SU` table."
-      ))
+      )), class = c("vpro_error_writeback", "vpro_error"))
     }
     if (!is.null(existing) && !isTRUE(overwrite)) {
-      rlang::abort(paste0(
+      cli::cli_abort(.vpro_cli_escape(paste0(
         "Target SU table `",
         existing,
         "` already exists; set `overwrite = TRUE` to replace it."
-      ))
+      )), class = c("vpro_error_writeback", "vpro_error"))
     }
 
     actual_tbl <- if (is.null(existing)) target_table else existing
@@ -763,7 +757,7 @@ vpro_write_lump <- function(
   vpro_assert_writable_project_db(ws$project_path, con = ws)
 
   if (!is.character(lump) || length(lump) != 1L || is.na(lump) || !nzchar(trimws(lump))) {
-    rlang::abort("`lump` must be a single non-empty character string.")
+    cli::cli_abort("`lump` must be a single non-empty character string.", class = c("vpro_error_writeback", "vpro_error"))
   }
   raw_nm <- trimws(lump)
   base <- sub("_Lump$", "", raw_nm, ignore.case = TRUE)
@@ -772,25 +766,25 @@ vpro_write_lump <- function(
   vpro_assert_safe_prefix(raw_nm, target_table, ws$project, kind = "lump")
 
   if (tolower(base) %in% c("none", "combinedspp", "attribute", "filtered")) {
-    rlang::abort(paste0("Lump table name `", base, "` is reserved by VPro."))
+    cli::cli_abort(.vpro_cli_escape(paste0("Lump table name `", base, "` is reserved by VPro.")), class = c("vpro_error_writeback", "vpro_error"))
   }
   if (!grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", base)) {
-    rlang::abort(paste0(
+    cli::cli_abort(.vpro_cli_escape(paste0(
       "Lump table name `",
       base,
       "` must start with an ASCII letter, contain only ASCII letters, digits, or underscores, and be at most 31 characters."
-    ))
+    )), class = c("vpro_error_writeback", "vpro_error"))
   }
 
   if (!is.data.frame(lump_df)) {
-    rlang::abort("`lump_df` must be a `data.frame` containing `LumpCode` and `SppCode` columns.")
+    cli::cli_abort("`lump_df` must be a `data.frame` containing `LumpCode` and `SppCode` columns.", class = c("vpro_error_writeback", "vpro_error"))
   }
   nms_low <- tolower(names(lump_df))
   l_ix <- match("lumpcode", nms_low)
   s_ix <- match("sppcode", nms_low)
   u_ix <- match("use", nms_low)
   if (is.na(l_ix) || is.na(s_ix)) {
-    rlang::abort("`lump_df` must contain `LumpCode` and `SppCode` columns.")
+    cli::cli_abort("`lump_df` must contain `LumpCode` and `SppCode` columns.", class = c("vpro_error_writeback", "vpro_error"))
   }
 
   n_rows <- nrow(lump_df)
@@ -798,33 +792,33 @@ vpro_write_lump <- function(
     raw_lump <- lump_df[[l_ix]]
     raw_spp <- lump_df[[s_ix]]
     if (anyNA(raw_lump) || anyNA(raw_spp)) {
-      rlang::abort("`LumpCode` and `SppCode` must not contain `NA` values.")
+      cli::cli_abort("`LumpCode` and `SppCode` must not contain `NA` values.", class = c("vpro_error_writeback", "vpro_error"))
     }
     clean_lump <- toupper(trimws(as.character(raw_lump)))
     clean_spp <- toupper(trimws(as.character(raw_spp)))
     if (any(!nzchar(clean_lump)) || any(!nzchar(clean_spp))) {
-      rlang::abort("`LumpCode` and `SppCode` must not be blank.")
+      cli::cli_abort("`LumpCode` and `SppCode` must not be blank.", class = c("vpro_error_writeback", "vpro_error"))
     }
     u16_lump <- vpro_utf16_len(clean_lump)
     u16_spp <- vpro_utf16_len(clean_spp)
     if (anyNA(u16_lump) || anyNA(u16_spp)) {
-      rlang::abort("`LumpCode` and `SppCode` must be valid UTF-8 without unpaired surrogates.")
+      cli::cli_abort("`LumpCode` and `SppCode` must be valid UTF-8 without unpaired surrogates.", class = c("vpro_error_writeback", "vpro_error"))
     }
     if (any(u16_lump > 50L)) {
       bad_l <- clean_lump[which(u16_lump > 50L)[[1L]]]
-      rlang::abort(paste0("`LumpCode` '", bad_l, "' exceeds the 50-character limit."))
+      cli::cli_abort(.vpro_cli_escape(paste0("`LumpCode` '", bad_l, "' exceeds the 50-character limit.")), class = c("vpro_error_writeback", "vpro_error"))
     }
     if (any(u16_spp > 8L)) {
       bad_s <- clean_spp[which(u16_spp > 8L)[[1L]]]
-      rlang::abort(paste0("`SppCode` '", bad_s, "' exceeds the 8-character limit (8 UTF-16 code units)."))
+      cli::cli_abort(.vpro_cli_escape(paste0("`SppCode` '", bad_s, "' exceeds the 8-character limit (8 UTF-16 code units).")), class = c("vpro_error_writeback", "vpro_error"))
     }
     if (any(clean_lump == clean_spp)) {
       same_c <- clean_spp[which(clean_lump == clean_spp)[[1L]]]
-      rlang::abort(paste0("`LumpCode` and `SppCode` cannot be identical ('", same_c, "')."))
+      cli::cli_abort(.vpro_cli_escape(paste0("`LumpCode` and `SppCode` cannot be identical ('", same_c, "').")), class = c("vpro_error_writeback", "vpro_error"))
     }
     if (anyDuplicated(clean_spp) > 0L) {
       dup_s <- clean_spp[duplicated(clean_spp)][[1L]]
-      rlang::abort(paste0("`SppCode` must be unique in `*_Lump`; duplicate '", dup_s, "' found."))
+      cli::cli_abort(.vpro_cli_escape(paste0("`SppCode` must be unique in `*_Lump`; duplicate '", dup_s, "' found.")), class = c("vpro_error_writeback", "vpro_error"))
     }
     use_int <- if (is.na(u_ix)) {
       rep(-1L, n_rows)
@@ -844,18 +838,18 @@ vpro_write_lump <- function(
   written_table <- vpro_with_immediate_tx(ws$project_path, con = ws, fn = function(dbc) {
     existing <- vpro_find_existing_table_ci(dbc, target_table)
     if (is.null(existing) && !isTRUE(create)) {
-      rlang::abort(paste0(
+      cli::cli_abort(.vpro_cli_escape(paste0(
         "Target lump table `",
         target_table,
         "` does not exist; set `create = TRUE` to create it."
-      ))
+      )), class = c("vpro_error_writeback", "vpro_error"))
     }
     if (!is.null(existing) && !isTRUE(overwrite)) {
-      rlang::abort(paste0(
+      cli::cli_abort(.vpro_cli_escape(paste0(
         "Target lump table `",
         existing,
         "` already exists; set `overwrite = TRUE` to confirm replacing it."
-      ))
+      )), class = c("vpro_error_writeback", "vpro_error"))
     }
 
     actual_tbl <- if (is.null(existing)) target_table else existing

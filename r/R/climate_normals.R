@@ -314,7 +314,7 @@ vpro_climate <- function(
 
   if (!isTRUE(allow_fallback)) {
     if (isTRUE(force_offline)) {
-      rlang::abort("Cannot set both `force_offline = TRUE` and `allow_fallback = FALSE`.")
+      cli::cli_abort("Cannot set both `force_offline = TRUE` and `allow_fallback = FALSE`.", class = c("vpro_error_climate", "vpro_error"))
     }
     rlang::check_installed("climr", reason = "to downscale plot climate normals when `allow_fallback = FALSE`.")
   }
@@ -448,9 +448,7 @@ vpro_climate <- function(
     }
     if (is.null(computed)) {
       if (!isTRUE(allow_fallback)) {
-        rlang::abort(
-          "Local `climr` rasters were unavailable or downscaling failed, and `allow_fallback = FALSE`."
-        )
+        cli::cli_abort("Local `climr` rasters were unavailable or downscaling failed, and `allow_fallback = FALSE`.", class = c("vpro_error_climate", "vpro_error"))
       }
       computed <- vpro_compute_bgc_lapse_normals(pts_df, ref_period = ref_period)
     }

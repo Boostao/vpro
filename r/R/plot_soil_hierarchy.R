@@ -275,7 +275,7 @@ vpro_metadata <- function(ws) {
 vpro_hierarchy_to_table <- function(nodes_df, preserve_tilde = FALSE) {
   req <- c("ID", "Name", "Parent", "Level")
   if (!is.data.frame(nodes_df) || !all(req %in% names(nodes_df))) {
-    rlang::abort("`nodes_df` must contain `ID`, `Name`, `Parent`, and `Level` columns.")
+    cli::cli_abort("`nodes_df` must contain `ID`, `Name`, `Parent`, and `Level` columns.", class = c("vpro_error_read", "vpro_error"))
   }
   if (nrow(nodes_df) == 0L) {
     empty <- as.list(rep(list(character()), length(.vpro_hierarchy_level_names)))
@@ -363,7 +363,7 @@ vpro_hierarchy_to_table <- function(nodes_df, preserve_tilde = FALSE) {
 #' @export
 vpro_table_to_hierarchy <- function(wide_df, level_names = NULL) {
   if (!is.data.frame(wide_df) || ncol(wide_df) == 0L) {
-    rlang::abort("`wide_df` must be a non-empty data frame of hierarchy level columns.")
+    cli::cli_abort("`wide_df` must be a non-empty data frame of hierarchy level columns.", class = c("vpro_error_read", "vpro_error"))
   }
   if (is.null(level_names)) {
     std <- intersect(.vpro_hierarchy_level_names, names(wide_df))
@@ -531,10 +531,9 @@ vpro_hierarchy <- function(ws, hierarchy = NULL, as = c("both", "nodes", "paths"
 
 #' @export
 print.vpro_hierarchy <- function(x, ...) {
-  n_brk <- sum(x$nodes$IsBreakpoint, na.rm = TRUE)
   cli::cli_h3("vpro_hierarchy: {.val {if (is.na(x$table)) '<none>' else x$table}}")
   cli::cli_bullets(c(
-    "*" = "Nodes: {nrow(x$nodes)} ({n_brk} `~` breakpoint{?s})",
+    "*" = "Nodes: {nrow(x$nodes)} ({sum(x$nodes$IsBreakpoint, na.rm = TRUE)} `~` breakpoint{?s})",
     "*" = "Terminal site-unit paths: {nrow(x$paths)}"
   ))
   invisible(x)

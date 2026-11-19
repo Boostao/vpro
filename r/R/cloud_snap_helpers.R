@@ -20,12 +20,16 @@
 
 vpro_validate_snapshot_tag <- function(snapshot_tag, arg_name = "snapshot_tag") {
   if (!is.character(snapshot_tag) || length(snapshot_tag) != 1L || is.na(snapshot_tag)) {
-    cli::cli_abort("{.arg {arg_name}} must be a single non-empty ASCII string.")
+    cli::cli_abort(
+      "{.arg {arg_name}} must be a single non-empty ASCII string.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   tag <- trimws(snapshot_tag)
   if (!grepl("^[A-Za-z0-9._-]{1,80}$", tag) || tag %in% c(".", "..")) {
     cli::cli_abort(
-      "{.arg {arg_name}} must be 1..80 characters containing only ASCII letters, digits, {.val .}, {.val _}, or {.val -}."
+      "{.arg {arg_name}} must be 1..80 characters containing only ASCII letters, digits, {.val .}, {.val _}, or {.val -}.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   tag
@@ -103,7 +107,8 @@ vpro_assert_char_plot_key <- function(df, col_name, table_label) {
   v <- df[[idx]]
   if (is.numeric(v) && any(!is.na(v))) {
     cli::cli_abort(
-      "Column {.field {col_name}} in RDS table {.val {table_label}} must be {.cls character} (not numeric) to preserve leading-zero PlotNumbers like {.val 00337}."
+      "Column {.field {col_name}} in RDS table {.val {table_label}} must be {.cls character} (not numeric) to preserve leading-zero PlotNumbers like {.val 00337}.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   invisible(NULL)
@@ -158,7 +163,8 @@ vpro_normalize_su_tibble <- function(su_df) {
   s_ix <- match("siteunit", nms)
   if (is.na(p_ix) || is.na(s_ix)) {
     cli::cli_abort(
-      "Site-unit table {.arg su} must contain {.field PlotNumber} and {.field SiteUnit} columns."
+      "Site-unit table {.arg su} must contain {.field PlotNumber} and {.field SiteUnit} columns.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   plots <- as.character(su_df[[p_ix]])
@@ -190,7 +196,8 @@ vpro_normalize_lump_tibble <- function(lump_df) {
   l_ix <- match("lumpcode", nms)
   if (is.na(s_ix) || is.na(l_ix)) {
     cli::cli_abort(
-      "Species lump table {.arg lump} must contain {.field SppCode} and {.field LumpCode} columns."
+      "Species lump table {.arg lump} must contain {.field SppCode} and {.field LumpCode} columns.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   u_ix <- match("use", nms)
@@ -371,6 +378,114 @@ vpro_extract_workspace_snapshot_tables <- function(con_ws) {
 
 # Pivot VPro Desktop ExportProjectRDS veg_long -> 44-col VP08 Veg ------------
 
+.vpro_veg_long_cov_map <- c(
+  "1" = "Cover1",
+  "a1" = "Cover1",
+  "cover1" = "Cover1",
+  "2" = "Cover2",
+  "a2" = "Cover2",
+  "cover2" = "Cover2",
+  "3" = "Cover3",
+  "a3" = "Cover3",
+  "cover3" = "Cover3",
+  "a" = "TotalA",
+  "totala" = "TotalA",
+  "4" = "Cover4",
+  "b1" = "Cover4",
+  "cover4" = "Cover4",
+  "5" = "Cover5",
+  "b2" = "Cover5",
+  "cover5" = "Cover5",
+  "5a" = "Cover5a",
+  "b2a" = "Cover5a",
+  "cover5a" = "Cover5a",
+  "5b" = "Cover5b",
+  "b2b" = "Cover5b",
+  "cover5b" = "Cover5b",
+  "5c" = "Cover5c",
+  "b2c" = "Cover5c",
+  "cover5c" = "Cover5c",
+  "b" = "TotalB",
+  "totalb" = "TotalB",
+  "6" = "Cover6",
+  "c" = "Cover6",
+  "cover6" = "Cover6",
+  "7" = "Cover7",
+  "d" = "Cover7",
+  "d1" = "Cover7",
+  "cover7" = "Cover7",
+  "8" = "Cover8",
+  "dw" = "Cover8",
+  "d2" = "Cover8",
+  "cover8" = "Cover8",
+  "9" = "Cover9",
+  "dr" = "Cover9",
+  "d3" = "Cover9",
+  "cover9" = "Cover9",
+  "10" = "Cover10",
+  "ep" = "Cover10",
+  "cover10" = "Cover10"
+)
+
+.vpro_veg_long_ht_map <- c(
+  "Cover1" = "Height1",
+  "Cover2" = "Height2",
+  "Cover3" = "Height3",
+  "TotalA" = "HeightA",
+  "Cover4" = "Height4",
+  "Cover5" = "Height5",
+  "Cover5a" = "Height5a",
+  "Cover5b" = "Height5b",
+  "Cover5c" = "Height5c",
+  "TotalB" = "HeightB",
+  "Cover6" = "Height6"
+)
+
+.vpro_veg_long_all_cov_cols <- c(
+  "Cover1",
+  "Cover2",
+  "Cover3",
+  "TotalA",
+  "Cover4",
+  "Cover5",
+  "Cover5a",
+  "Cover5b",
+  "Cover5c",
+  "TotalB",
+  "Cover6",
+  "Cover7",
+  "Cover8",
+  "Cover9",
+  "Cover10"
+)
+
+.vpro_veg_long_all_num_ht_cols <- c(
+  "Height1",
+  "Height2",
+  "Height3",
+  "HeightA",
+  "Height4",
+  "Height5",
+  "Height5a",
+  "Height5b",
+  "Height5c",
+  "Height6"
+)
+
+.vpro_fold_veg_long_max <- function(out_vec, hit_idx, row_idx, val_vec, narrow = FALSE) {
+  if (length(hit_idx) == 0L) {
+    return(out_vec)
+  }
+  for (k in hit_idx) {
+    r <- row_idx[[k]]
+    v <- val_vec[[k]]
+    if (is.na(out_vec[[r]]) || v > out_vec[[r]]) {
+      out_vec[[r]] <- v
+    }
+  }
+  if (isTRUE(narrow)) vpro_narrow_float32(out_vec) else out_vec
+}
+
 vpro_pivot_veg_long_to_vp08 <- function(veg_long_df) {
   veg_spec <- vpro_pg_vp08_specs("Veg")
   if (is.null(veg_long_df) || !is.data.frame(veg_long_df) || nrow(veg_long_df) == 0L) {
@@ -385,7 +500,8 @@ vpro_pivot_veg_long_to_vp08 <- function(veg_long_df) {
 
   if (is.null(plot_raw) || is.null(spp_raw) || is.null(lyr_raw) || is.null(cov_raw)) {
     cli::cli_abort(
-      "RDS {.val veg_long} table must contain {.field PlotNumber}, {.field Species}, {.field Layer}, and {.field Cover} columns."
+      "RDS {.val veg_long} table must contain {.field PlotNumber}, {.field Species}, {.field Layer}, and {.field Cover} columns.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
 
@@ -429,79 +545,17 @@ vpro_pivot_veg_long_to_vp08 <- function(veg_long_df) {
   ids <- ids[valid]
   flags <- flags[valid]
 
-  cov_map <- c(
-    "1" = "Cover1",
-    "a1" = "Cover1",
-    "cover1" = "Cover1",
-    "2" = "Cover2",
-    "a2" = "Cover2",
-    "cover2" = "Cover2",
-    "3" = "Cover3",
-    "a3" = "Cover3",
-    "cover3" = "Cover3",
-    "a" = "TotalA",
-    "totala" = "TotalA",
-    "4" = "Cover4",
-    "b1" = "Cover4",
-    "cover4" = "Cover4",
-    "5" = "Cover5",
-    "b2" = "Cover5",
-    "cover5" = "Cover5",
-    "5a" = "Cover5a",
-    "b2a" = "Cover5a",
-    "cover5a" = "Cover5a",
-    "5b" = "Cover5b",
-    "b2b" = "Cover5b",
-    "cover5b" = "Cover5b",
-    "5c" = "Cover5c",
-    "b2c" = "Cover5c",
-    "cover5c" = "Cover5c",
-    "b" = "TotalB",
-    "totalb" = "TotalB",
-    "6" = "Cover6",
-    "c" = "Cover6",
-    "cover6" = "Cover6",
-    "7" = "Cover7",
-    "d" = "Cover7",
-    "d1" = "Cover7",
-    "cover7" = "Cover7",
-    "8" = "Cover8",
-    "dw" = "Cover8",
-    "d2" = "Cover8",
-    "cover8" = "Cover8",
-    "9" = "Cover9",
-    "dr" = "Cover9",
-    "d3" = "Cover9",
-    "cover9" = "Cover9",
-    "10" = "Cover10",
-    "ep" = "Cover10",
-    "cover10" = "Cover10"
-  )
-
-  ht_map <- c(
-    "Cover1" = "Height1",
-    "Cover2" = "Height2",
-    "Cover3" = "Height3",
-    "TotalA" = "HeightA",
-    "Cover4" = "Height4",
-    "Cover5" = "Height5",
-    "Cover5a" = "Height5a",
-    "Cover5b" = "Height5b",
-    "Cover5c" = "Height5c",
-    "TotalB" = "HeightB",
-    "Cover6" = "Height6"
-  )
-
   non_empty_lyr <- nzchar(layers)
   mapped_cov_col <- rep(NA_character_, length(layers))
-  mapped_cov_col[non_empty_lyr] <- unname(cov_map[layers[non_empty_lyr]])
+  mapped_cov_col[non_empty_lyr] <- unname(.vpro_veg_long_cov_map[layers[non_empty_lyr]])
   unknown_lyr <- unique(layers[non_empty_lyr & is.na(mapped_cov_col)])
   if (length(unknown_lyr) > 0L) {
     cli::cli_abort(
-      "Unrecognized vegetation layer code(s) in {.val veg_long}: {.val {unknown_lyr}}."
+      "Unrecognized vegetation layer code(s) in {.val veg_long}: {.val {unknown_lyr}}.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
-  mapped_ht_col <- unname(ht_map[mapped_cov_col])
+  mapped_ht_col <- unname(.vpro_veg_long_ht_map[mapped_cov_col])
 
   grp_key <- paste0(plots, "\r", spp)
   u_keys <- unique(grp_key)
@@ -509,101 +563,34 @@ vpro_pivot_veg_long_to_vp08 <- function(veg_long_df) {
   n_out <- length(u_keys)
   first_pos <- match(u_keys, grp_key)
 
-  all_cov_cols <- c(
-    "Cover1",
-    "Cover2",
-    "Cover3",
-    "TotalA",
-    "Cover4",
-    "Cover5",
-    "Cover5a",
-    "Cover5b",
-    "Cover5c",
-    "TotalB",
-    "Cover6",
-    "Cover7",
-    "Cover8",
-    "Cover9",
-    "Cover10"
-  )
-  all_num_ht_cols <- c(
-    "Height1",
-    "Height2",
-    "Height3",
-    "HeightA",
-    "Height4",
-    "Height5",
-    "Height5a",
-    "Height5b",
-    "Height5c",
-    "Height6"
-  )
-
   out_list <- list(
     PlotNumber = plots[first_pos],
     Species = spp[first_pos],
     Layer = rep(NA_character_, n_out)
   )
-  for (cc in all_cov_cols) {
-    out_list[[cc]] <- rep(NA_real_, n_out)
-  }
-  for (hc in all_num_ht_cols) {
-    out_list[[hc]] <- rep(NA_real_, n_out)
-  }
-  out_list[["HeightB"]] <- rep(NA_character_, n_out)
-
-  for (cc in all_cov_cols) {
+  for (cc in .vpro_veg_long_all_cov_cols) {
     hit <- which(!is.na(mapped_cov_col) & mapped_cov_col == cc & !is.na(covers) & covers >= 0)
-    if (length(hit) > 0L) {
-      vec <- out_list[[cc]]
-      for (k in hit) {
-        r <- row_idx[[k]]
-        cv <- covers[[k]]
-        if (is.na(vec[[r]]) || cv > vec[[r]]) {
-          vec[[r]] <- cv
-        }
-      }
-      out_list[[cc]] <- vpro_narrow_float32(vec)
-    }
+    out_list[[cc]] <- .vpro_fold_veg_long_max(rep(NA_real_, n_out), hit, row_idx, covers, narrow = TRUE)
   }
-
-  for (hc in all_num_ht_cols) {
+  for (hc in .vpro_veg_long_all_num_ht_cols) {
     hit <- which(!is.na(mapped_ht_col) & mapped_ht_col == hc & !is.na(heights))
-    if (length(hit) > 0L) {
-      vec <- out_list[[hc]]
-      for (k in hit) {
-        r <- row_idx[[k]]
-        hv <- heights[[k]]
-        if (is.na(vec[[r]]) || hv > vec[[r]]) {
-          vec[[r]] <- hv
-        }
-      }
-      out_list[[hc]] <- vec
-    }
+    out_list[[hc]] <- .vpro_fold_veg_long_max(rep(NA_real_, n_out), hit, row_idx, heights, narrow = FALSE)
   }
 
+  out_list[["HeightB"]] <- rep(NA_character_, n_out)
   hit_hb <- which(!is.na(mapped_ht_col) & mapped_ht_col == "HeightB" & !is.na(heights))
   if (length(hit_hb) > 0L) {
-    hb_num <- rep(NA_real_, n_out)
-    for (k in hit_hb) {
-      r <- row_idx[[k]]
-      hv <- heights[[k]]
-      if (is.na(hb_num[[r]]) || hv > hb_num[[r]]) {
-        hb_num[[r]] <- hv
-      }
-    }
+    hb_num <- .vpro_fold_veg_long_max(rep(NA_real_, n_out), hit_hb, row_idx, heights, narrow = FALSE)
     ok_hb <- !is.na(hb_num)
     out_list[["HeightB"]][ok_hb] <- sub("\\.?0+$", "", sprintf("%.2f", hb_num[ok_hb]))
   }
 
   coll_out <- rep(NA_character_, n_out)
   hit_coll <- which(!is.na(collected) & nzchar(collected))
-  if (length(hit_coll) > 0L) {
-    for (k in hit_coll) {
-      r <- row_idx[[k]]
-      if (is.na(coll_out[[r]])) {
-        coll_out[[r]] <- substr(collected[[k]], 1L, 1L)
-      }
+  for (k in hit_coll) {
+    r <- row_idx[[k]]
+    if (is.na(coll_out[[r]])) {
+      coll_out[[r]] <- substr(collected[[k]], 1L, 1L)
     }
   }
   out_list[["Collected"]] <- coll_out

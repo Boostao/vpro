@@ -556,14 +556,14 @@ as_tibble.vpro_summary_env <- function(x, ...) {
 vpro_export_xlsx <- function(x, path, overwrite = TRUE) {
   rlang::check_installed("writexl", reason = "to export BEC synthesis workbooks to `.xlsx`.")
   if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(trimws(path))) {
-    rlang::abort("`path` must be a single non-empty `.xlsx` file path.")
+    cli::cli_abort("`path` must be a single non-empty `.xlsx` file path.", class = c("vpro_error_report", "vpro_error"))
   }
   if (!is.logical(overwrite) || length(overwrite) != 1L || is.na(overwrite)) {
-    rlang::abort("`overwrite` must be TRUE or FALSE.")
+    cli::cli_abort("`overwrite` must be TRUE or FALSE.", class = c("vpro_error_report", "vpro_error"))
   }
   out_path <- vpro_abs_path(trimws(path))
   if (file.exists(out_path) && !isTRUE(overwrite)) {
-    rlang::abort(paste0("Workbook already exists and `overwrite = FALSE`: ", out_path))
+    cli::cli_abort(.vpro_cli_escape(paste0("Workbook already exists and `overwrite = FALSE`: ", out_path)), class = c("vpro_error_report", "vpro_error"))
   }
 
   sheets <- if (inherits(x, "vpro_diagnostics")) {
@@ -618,7 +618,7 @@ vpro_export_xlsx <- function(x, path, overwrite = TRUE) {
     }
     stats::setNames(lapply(x, as.data.frame), nms)
   } else {
-    rlang::abort("`x` must be a vpro synthesis object, data.frame, or non-empty list of data.frames.")
+    cli::cli_abort("`x` must be a vpro synthesis object, data.frame, or non-empty list of data.frames.", class = c("vpro_error_report", "vpro_error"))
   }
 
   names(sheets) <- .vpro_sanitize_sheet_names(names(sheets))

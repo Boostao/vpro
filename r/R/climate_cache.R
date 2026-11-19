@@ -347,15 +347,15 @@ vpro_normalize_ref_period <- function(ref_period) {
     return("1961_1990")
   }
   if (!is.character(ref_period) || length(ref_period) != 1L) {
-    rlang::abort("`ref_period` must be a single character string ('1961_1990' or '1991_2020').")
+    cli::cli_abort("`ref_period` must be a single character string ('1961_1990' or '1991_2020').", class = c("vpro_error_climate", "vpro_error"))
   }
   norm <- gsub("-", "_", trimws(ref_period), fixed = TRUE)
   if (!(norm %in% c("1961_1990", "1991_2020"))) {
-    rlang::abort(paste0(
+    cli::cli_abort(.vpro_cli_escape(paste0(
       "Unsupported climate reference period `",
       ref_period,
       "` (expected '1961_1990' or '1991_2020')."
-    ))
+    )), class = c("vpro_error_climate", "vpro_error"))
   }
   norm
 }
@@ -371,7 +371,7 @@ vpro_normalize_ref_period <- function(ref_period) {
   } else if (length(ref_period) == length(vals$lat)) {
     rp <- vapply(ref_period, vpro_normalize_ref_period, character(1))
   } else {
-    rlang::abort("`ref_period` must have length 1 or match the coordinate vector length.")
+    cli::cli_abort("`ref_period` must have length 1 or match the coordinate vector length.", class = c("vpro_error_climate", "vpro_error"))
   }
 
   n <- length(vals$lat)
@@ -475,16 +475,16 @@ vpro_cache_climate <- function(ws, climate_df) {
   vpro_assert_writable_project_db(ws$project_path, con = ws)
 
   if (!is.data.frame(climate_df)) {
-    rlang::abort("`climate_df` must be a `data.frame` of plot climate records.")
+    cli::cli_abort("`climate_df` must be a `data.frame` of plot climate records.", class = c("vpro_error_climate", "vpro_error"))
   }
 
   req_cols <- setdiff(.vpro_plot_climate_cols, "ComputedAt")
   missing_cols <- setdiff(req_cols, names(climate_df))
   if (length(missing_cols) > 0L) {
-    rlang::abort(paste0(
+    cli::cli_abort(.vpro_cli_escape(paste0(
       "`climate_df` is missing required plot climate columns: ",
       paste(missing_cols, collapse = ", ")
-    ))
+    )), class = c("vpro_error_climate", "vpro_error"))
   }
 
   if (nrow(climate_df) == 0L) {
@@ -502,12 +502,12 @@ vpro_cache_climate <- function(ws, climate_df) {
   vpro_validate_plot_numbers_strict(climate_df$PlotNumber, "PlotNumber")
   hashes <- tolower(trimws(as.character(climate_df$CoordElevHash)))
   if (anyNA(hashes) || any(!grepl("^[0-9a-f]{32}$", hashes))) {
-    rlang::abort("`CoordElevHash` must be a 32-character hexadecimal SHA-256 prefix.")
+    cli::cli_abort("`CoordElevHash` must be a 32-character hexadecimal SHA-256 prefix.", class = c("vpro_error_climate", "vpro_error"))
   }
   ref_periods <- vapply(climate_df$RefPeriod, vpro_normalize_ref_period, character(1))
   sources <- trimws(as.character(climate_df$Source))
   if (anyNA(sources) || any(!nzchar(sources))) {
-    rlang::abort("`Source` must be non-empty for every plot climate row.")
+    cli::cli_abort("`Source` must be non-empty for every plot climate row.", class = c("vpro_error_climate", "vpro_error"))
   }
 
   now_iso <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")

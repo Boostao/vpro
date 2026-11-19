@@ -16,6 +16,112 @@ vpro_effective_site_unit <- function(site_unit, bgc = NULL, site_series = NULL) 
   su
 }
 
+.vpro_empty_edatopic_species <- function() {
+  tibble::tibble(
+    grid_type = character(),
+    SMR = integer(),
+    SNR = character(),
+    SNR_num = integer(),
+    Edatope = character(),
+    Species = character(),
+    ScientificName = character(),
+    EnglishName = character(),
+    Lifeform = integer(),
+    n_plots = integer(),
+    cell_plots = integer(),
+    constancy = numeric(),
+    mean_cover = numeric(),
+    mean_cover_all = numeric(),
+    prominence_tier = integer(),
+    order_score = numeric()
+  )
+}
+
+.vpro_build_edatopic_species <- function(veg_df, cell_plot_dt, cell_totals, min_constancy_pct) {
+  empty_species <- .vpro_empty_edatopic_species()
+  if (nrow(veg_df) == 0L || nrow(cell_plot_dt) == 0L) {
+    return(empty_species)
+  }
+
+  veg_dt <- data.table::as.data.table(veg_df[, c("PlotNumber", "Species", "Cover", "ScientificName", "EnglishName", "Lifeform"), drop = FALSE])
+  veg_dt <- veg_dt[!is.na(veg_dt[["Cover"]]) & veg_dt[["Cover"]] > 0]
+  if (anyDuplicated(veg_dt, by = c("PlotNumber", "Species")) > 0L) {
+    veg_dt <- veg_dt[,
+      list(
+        Cover = max(get("Cover"), na.rm = TRUE),
+        ScientificName = get("ScientificName")[[1L]],
+        EnglishName = get("EnglishName")[[1L]],
+        Lifeform = get("Lifeform")[[1L]]
+      ),
+      by = c("PlotNumber", "Species")
+    ]
+  }
+
+  joined_veg <- merge(cell_plot_dt, veg_dt, by = "PlotNumber", all = FALSE, allow.cartesian = TRUE)
+  if (nrow(joined_veg) == 0L) {
+    return(empty_species)
+  }
+
+  spp_agg <- joined_veg[,
+    list(
+      n_plots = .N,
+      sum_cover = sum(get("Cover"), na.rm = TRUE),
+      mean_cover = mean(get("Cover"), na.rm = TRUE),
+      ScientificName = get("ScientificName")[[1L]],
+      EnglishName = get("EnglishName")[[1L]],
+      Lifeform = as.integer(get("Lifeform")[[1L]])
+    ),
+    by = c("grid_type", "SMR", "SNR", "Species")
+  ]
+
+  spp_agg <- merge(spp_agg, cell_totals, by = c("grid_type", "SMR", "SNR"), all.x = TRUE, sort = FALSE)
+  data.table::set(spp_agg, j = "cell_plots", value = as.integer(spp_agg[["cell_total_plots"]]))
+  data.table::set(spp_agg, j = "constancy", value = vpro_round_ace((spp_agg[["n_plots"]] / spp_agg[["cell_plots"]]) * 100.0, 2L))
+  spp_agg <- spp_agg[spp_agg[["constancy"]] >= min_constancy_pct]
+  if (nrow(spp_agg) == 0L) {
+    return(empty_species)
+  }
+
+  mc_v <- spp_agg[["mean_cover"]]
+  co_v <- spp_agg[["constancy"]]
+  tier_v <- ifelse(
+    mc_v > 20.0 & co_v > 50.0,
+    1L,
+    ifelse(mc_v > 10.0 & co_v > 25.0, 2L, 3L)
+  )
+  data.table::set(spp_agg, j = "SNR_num", value = as.integer(match(spp_agg[["SNR"]], .vpro_snr_levels)))
+  data.table::set(spp_agg, j = "Edatope", value = paste0(spp_agg[["SMR"]], spp_agg[["SNR"]]))
+  data.table::set(spp_agg, j = "mean_cover", value = vpro_round_ace(mc_v, 2L))
+  data.table::set(spp_agg, j = "mean_cover_all", value = vpro_round_ace(spp_agg[["sum_cover"]] / spp_agg[["cell_plots"]], 2L))
+  data.table::set(spp_agg, j = "prominence_tier", value = as.integer(tier_v))
+  data.table::set(spp_agg, j = "order_score", value = vpro_round_ace(mc_v * co_v, 2L))
+
+  data.table::setorderv(
+    spp_agg,
+    c("grid_type", "SMR", "SNR_num", "prominence_tier", "order_score", "Species"),
+    c(1L, 1L, 1L, 1L, -1L, 1L)
+  )
+  spp_cols <- c(
+    "grid_type",
+    "SMR",
+    "SNR",
+    "SNR_num",
+    "Edatope",
+    "Species",
+    "ScientificName",
+    "EnglishName",
+    "Lifeform",
+    "n_plots",
+    "cell_plots",
+    "constancy",
+    "mean_cover",
+    "mean_cover_all",
+    "prominence_tier",
+    "order_score"
+  )
+  tibble::as_tibble(spp_agg[, spp_cols, with = FALSE])
+}
+
 vpro_build_edatopic_tables <- function(plot_grid_df, veg_df, min_constancy_pct) {
   empty_cells <- tibble::tibble(
     grid_type = character(),
@@ -52,24 +158,7 @@ vpro_build_edatopic_tables <- function(plot_grid_df, veg_df, min_constancy_pct) 
   )
   empty_hulls <- empty_bboxes
   empty_hulls$hull <- list()
-  empty_species <- tibble::tibble(
-    grid_type = character(),
-    SMR = integer(),
-    SNR = character(),
-    SNR_num = integer(),
-    Edatope = character(),
-    Species = character(),
-    ScientificName = character(),
-    EnglishName = character(),
-    Lifeform = integer(),
-    n_plots = integer(),
-    cell_plots = integer(),
-    constancy = numeric(),
-    mean_cover = numeric(),
-    mean_cover_all = numeric(),
-    prominence_tier = integer(),
-    order_score = numeric()
-  )
+  empty_species <- .vpro_empty_edatopic_species()
 
   if (nrow(plot_grid_df) == 0L) {
     return(list(
@@ -182,111 +271,11 @@ vpro_build_edatopic_tables <- function(plot_grid_df, veg_df, min_constancy_pct) 
   hulls_tbl <- bboxes_tbl
   hulls_tbl$hull <- hull_list
 
-  # Species prominence per (grid_type, SMR, SNR, Species) matching 2_0_EdatopicGrid_SpeciesDistribution.R
-  if (nrow(veg_df) == 0L || nrow(cell_plot_dt) == 0L) {
-    return(list(
-      cells = cells_tbl,
-      unit_bboxes = bboxes_tbl,
-      unit_hulls = hulls_tbl,
-      species = empty_species
-    ))
-  }
-
-  veg_dt <- data.table::as.data.table(veg_df[, c("PlotNumber", "Species", "Cover", "ScientificName", "EnglishName", "Lifeform"), drop = FALSE])
-  veg_dt <- veg_dt[!is.na(veg_dt[["Cover"]]) & veg_dt[["Cover"]] > 0]
-  # Deduplicate (PlotNumber, Species) if multiple site units mapped the same plot
-  if (anyDuplicated(veg_dt, by = c("PlotNumber", "Species")) > 0L) {
-    veg_dt <- veg_dt[,
-      list(
-        Cover = max(get("Cover"), na.rm = TRUE),
-        ScientificName = get("ScientificName")[[1L]],
-        EnglishName = get("EnglishName")[[1L]],
-        Lifeform = get("Lifeform")[[1L]]
-      ),
-      by = c("PlotNumber", "Species")
-    ]
-  }
-
-  joined_veg <- merge(cell_plot_dt, veg_dt, by = "PlotNumber", all = FALSE, allow.cartesian = TRUE)
-  if (nrow(joined_veg) == 0L) {
-    return(list(
-      cells = cells_tbl,
-      unit_bboxes = bboxes_tbl,
-      unit_hulls = hulls_tbl,
-      species = empty_species
-    ))
-  }
-
-  spp_agg <- joined_veg[,
-    list(
-      n_plots = .N,
-      sum_cover = sum(get("Cover"), na.rm = TRUE),
-      mean_cover = mean(get("Cover"), na.rm = TRUE),
-      ScientificName = get("ScientificName")[[1L]],
-      EnglishName = get("EnglishName")[[1L]],
-      Lifeform = as.integer(get("Lifeform")[[1L]])
-    ),
-    by = c("grid_type", "SMR", "SNR", "Species")
-  ]
-
-  spp_agg <- merge(spp_agg, cell_totals, by = c("grid_type", "SMR", "SNR"), all.x = TRUE, sort = FALSE)
-  data.table::set(spp_agg, j = "cell_plots", value = as.integer(spp_agg[["cell_total_plots"]]))
-  data.table::set(spp_agg, j = "constancy", value = vpro_round_ace((spp_agg[["n_plots"]] / spp_agg[["cell_plots"]]) * 100.0, 2L))
-  spp_agg <- spp_agg[spp_agg[["constancy"]] >= min_constancy_pct]
-
-  if (nrow(spp_agg) == 0L) {
-    return(list(
-      cells = cells_tbl,
-      unit_bboxes = bboxes_tbl,
-      unit_hulls = hulls_tbl,
-      species = empty_species
-    ))
-  }
-
-  mc_v <- spp_agg[["mean_cover"]]
-  co_v <- spp_agg[["constancy"]]
-  tier_v <- ifelse(
-    mc_v > 20.0 & co_v > 50.0,
-    1L,
-    ifelse(mc_v > 10.0 & co_v > 25.0, 2L, 3L)
-  )
-  data.table::set(spp_agg, j = "SNR_num", value = as.integer(match(spp_agg[["SNR"]], .vpro_snr_levels)))
-  data.table::set(spp_agg, j = "Edatope", value = paste0(spp_agg[["SMR"]], spp_agg[["SNR"]]))
-  data.table::set(spp_agg, j = "mean_cover", value = vpro_round_ace(mc_v, 2L))
-  data.table::set(spp_agg, j = "mean_cover_all", value = vpro_round_ace(spp_agg[["sum_cover"]] / spp_agg[["cell_plots"]], 2L))
-  data.table::set(spp_agg, j = "prominence_tier", value = as.integer(tier_v))
-  data.table::set(spp_agg, j = "order_score", value = vpro_round_ace(mc_v * co_v, 2L))
-
-  data.table::setorderv(
-    spp_agg,
-    c("grid_type", "SMR", "SNR_num", "prominence_tier", "order_score", "Species"),
-    c(1L, 1L, 1L, 1L, -1L, 1L)
-  )
-  spp_cols <- c(
-    "grid_type",
-    "SMR",
-    "SNR",
-    "SNR_num",
-    "Edatope",
-    "Species",
-    "ScientificName",
-    "EnglishName",
-    "Lifeform",
-    "n_plots",
-    "cell_plots",
-    "constancy",
-    "mean_cover",
-    "mean_cover_all",
-    "prominence_tier",
-    "order_score"
-  )
-  spp_tbl <- tibble::as_tibble(spp_agg[, spp_cols, with = FALSE])
-
   list(
     cells = cells_tbl,
     unit_bboxes = bboxes_tbl,
     unit_hulls = hulls_tbl,
-    species = spp_tbl
+    species = .vpro_build_edatopic_species(veg_df, cell_plot_dt, cell_totals, min_constancy_pct)
   )
 }
 
@@ -329,7 +318,7 @@ vpro_edatopic_grid <- function(
   ref_period <- vpro_normalize_ref_period(ref_period)
 
   if (!is.numeric(min_constancy) || length(min_constancy) != 1L || is.na(min_constancy) || min_constancy < 0 || min_constancy > 100) {
-    rlang::abort("`min_constancy` must be a single numeric percentage in `[0, 100]`.")
+    cli::cli_abort("`min_constancy` must be a single numeric percentage in `[0, 100]`.", class = c("vpro_error_edatopic", "vpro_error"))
   }
   min_const_pct <- if (min_constancy > 0 && min_constancy < 1) min_constancy * 100.0 else as.double(min_constancy)
 
@@ -529,7 +518,7 @@ vpro_bcgov_unit_palette <- function(n) {
 vpro_plot_edatope <- function(x, species = NULL, units = NULL, grid_type = NULL) {
   rlang::check_installed("ggplot2", reason = "to plot BEC edatopic grids.")
   if (!inherits(x, "vpro_edatope")) {
-    rlang::abort("`x` must be a `vpro_edatope` object created by `vpro_edatopic_grid()`.")
+    cli::cli_abort("`x` must be a `vpro_edatope` object created by `vpro_edatopic_grid()`.", class = c("vpro_error_edatopic", "vpro_error"))
   }
 
   avail_gt <- if (identical(x$mode, "dual")) c("relative", "actual") else x$mode
@@ -537,7 +526,7 @@ vpro_plot_edatope <- function(x, species = NULL, units = NULL, grid_type = NULL)
     gt_req <- unique(tolower(trimws(as.character(grid_type))))
     bad_gt <- setdiff(gt_req, c("relative", "actual"))
     if (length(bad_gt) > 0L) {
-      rlang::abort("`grid_type` must be NULL, 'relative', or 'actual'.")
+      cli::cli_abort("`grid_type` must be NULL, 'relative', or 'actual'.", class = c("vpro_error_edatopic", "vpro_error"))
     }
     avail_gt <- intersect(avail_gt, gt_req)
     if (length(avail_gt) == 0L) {
@@ -559,7 +548,7 @@ vpro_plot_edatope <- function(x, species = NULL, units = NULL, grid_type = NULL)
     spp_req <- unique(toupper(trimws(as.character(species))))
     spp_req <- spp_req[nzchar(spp_req)]
     if (length(spp_req) == 0L) {
-      rlang::abort("`species` must contain at least one non-empty species code.")
+      cli::cli_abort("`species` must contain at least one non-empty species code.", class = c("vpro_error_edatopic", "vpro_error"))
     }
 
     bg_spp <- do.call(

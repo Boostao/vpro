@@ -23,11 +23,17 @@
 
 vpro_validate_uuid_arg <- function(x, arg_name = "submission_id") {
   if (!is.character(x) || length(x) != 1L || is.na(x)) {
-    cli::cli_abort("{.arg {arg_name}} must be a single valid UUID string.")
+    cli::cli_abort(
+      "{.arg {arg_name}} must be a single valid UUID string.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   val <- tolower(trimws(x))
   if (!grepl(.vpro_uuid_regex, val, perl = TRUE)) {
-    cli::cli_abort("{.arg {arg_name}} {.val {x}} is not a valid submission ID.")
+    cli::cli_abort(
+      "{.arg {arg_name}} {.val {x}} is not a valid submission ID.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   val
 }
@@ -37,7 +43,10 @@ vpro_validate_optional_scalar_chr <- function(x, arg_name) {
     return(NA_character_)
   }
   if (!is.character(x) || length(x) != 1L) {
-    cli::cli_abort("{.arg {arg_name}} must be {.code NULL} or a single character string.")
+    cli::cli_abort(
+      "{.arg {arg_name}} must be {.code NULL} or a single character string.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   if (is.na(x)) {
     return(NA_character_)
@@ -52,18 +61,23 @@ vpro_validate_merge_resolution_vec <- function(x, arg_name) {
   }
   if (!is.character(x) || is.null(names(x))) {
     cli::cli_abort(
-      "{.arg {arg_name}} must be {.code NULL} or a named character vector of {.val keep_target} / {.val accept_source}."
+      "{.arg {arg_name}} must be {.code NULL} or a named character vector of {.val keep_target} / {.val accept_source}.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   nms <- names(x)
   if (anyNA(nms) || any(!nzchar(nms))) {
-    cli::cli_abort("All names in {.arg {arg_name}} must be non-empty.")
+    cli::cli_abort(
+      "All names in {.arg {arg_name}} must be non-empty.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
   }
   vals <- trimws(as.character(x))
   bad <- is.na(vals) | !(vals %in% c("keep_target", "accept_source"))
   if (any(bad)) {
     cli::cli_abort(
-      "Values in {.arg {arg_name}} must be {.val keep_target} or {.val accept_source}."
+      "Values in {.arg {arg_name}} must be {.val keep_target} or {.val accept_source}.",
+      class = c("vpro_error_cloud", "vpro_error")
     )
   }
   stats::setNames(vals, nms)
@@ -117,7 +131,11 @@ vpro_create_wal_consistent_snapshot <- function(src_path) {
     },
     error = function(e) {
       cleanup_fn()
-      cli::cli_abort("Failed to capture a consistent project snapshot: {conditionMessage(e)}", parent = e)
+      cli::cli_abort(
+        "Failed to capture a consistent project snapshot: {conditionMessage(e)}",
+        class = c("vpro_error_cloud", "vpro_error"),
+        parent = e
+      )
     },
     finally = {
       if (DBI::dbIsValid(con_ro)) {
@@ -171,84 +189,84 @@ vpro_repair_staging_child_ids <- function(ids_raw) {
   }
 }
 
+.vpro_preflight_u16_issues <- function(p_vec, tbl_lbl, col_nm, max_u16, vals_chr) {
+  if (length(vals_chr) == 0L) {
+    return(NULL)
+  }
+  non_na <- !is.na(vals_chr)
+  if (!any(non_na)) {
+    return(NULL)
+  }
+  idx_non_na <- which(non_na)
+  sub_v <- as.character(vals_chr[idx_non_na])
+  u16 <- vpro_utf16_len(sub_v)
+  bad_utf8 <- is.na(u16)
+  bad_len <- !is.na(u16) & (max_u16 > 0L) & (u16 > max_u16)
+  bad <- which(bad_utf8 | bad_len)
+  if (length(bad) == 0L) {
+    return(NULL)
+  }
+  orig_i <- idx_non_na[bad]
+  p_sub <- if (length(p_vec) == length(vals_chr)) as.character(p_vec[orig_i]) else rep("", length(orig_i))
+  det <- ifelse(
+    bad_utf8[bad],
+    sprintf("%s.%s contains invalid or unsupported text characters.", tbl_lbl, col_nm),
+    sprintf("%s.%s exceeds the %d-character limit (got %d).", tbl_lbl, col_nm, max_u16, u16[bad])
+  )
+  tibble::tibble(
+    PlotNumber = ifelse(is.na(p_sub), "", p_sub),
+    category = rep("utf16_bounds", length(orig_i)),
+    rule = rep(paste0("utf16:", tbl_lbl, ".", col_nm), length(orig_i)),
+    severity = rep("error", length(orig_i)),
+    detail = det
+  )
+}
+
+.vpro_preflight_cov_issues <- function(p_vec, tbl_lbl, col_nm, raw_vec) {
+  if (length(raw_vec) == 0L) {
+    return(NULL)
+  }
+  if (is.character(raw_vec)) {
+    s <- trimws(raw_vec)
+    non_blank <- !is.na(s) & nzchar(s)
+    if (!any(non_blank)) {
+      return(NULL)
+    }
+    idx_nb <- which(non_blank)
+    num <- suppressWarnings(as.double(s[idx_nb]))
+  } else {
+    non_na <- !is.na(raw_vec)
+    if (!any(non_na)) {
+      return(NULL)
+    }
+    idx_nb <- which(non_na)
+    num <- suppressWarnings(as.double(raw_vec[idx_nb]))
+  }
+  narrowed <- suppressWarnings(vpro_narrow_float32(ifelse(is.finite(num), num, NA_real_)))
+  bad <- which(is.na(num) | !is.finite(num) | num < 0 | is.na(narrowed) | narrowed < 0 | narrowed >= 100)
+  if (length(bad) == 0L) {
+    return(NULL)
+  }
+  orig_i <- idx_nb[bad]
+  p_sub <- if (length(p_vec) == length(raw_vec)) as.character(p_vec[orig_i]) else rep("", length(orig_i))
+  det <- sprintf(
+    "%s.%s cover value (%s) must be >= 0 and under 100%%.",
+    tbl_lbl,
+    col_nm,
+    as.character(raw_vec[orig_i])
+  )
+  tibble::tibble(
+    PlotNumber = ifelse(is.na(p_sub), "", p_sub),
+    category = rep("cover_bounds", length(orig_i)),
+    rule = rep(paste0("float32_cover:", tbl_lbl, ".", col_nm), length(orig_i)),
+    severity = rep("error", length(orig_i)),
+    detail = det
+  )
+}
+
 vpro_staging_preflight_bounds <- function(dbc, project, scoped_plots = NULL) {
   utf16_issues <- list()
   cover_issues <- list()
-
-  add_u16 <- function(p_vec, tbl_lbl, col_nm, max_u16, vals_chr) {
-    if (length(vals_chr) == 0L) {
-      return(invisible(NULL))
-    }
-    non_na <- !is.na(vals_chr)
-    if (!any(non_na)) {
-      return(invisible(NULL))
-    }
-    idx_non_na <- which(non_na)
-    sub_v <- as.character(vals_chr[idx_non_na])
-    u16 <- vpro_utf16_len(sub_v)
-    bad_utf8 <- is.na(u16)
-    bad_len <- !is.na(u16) & (max_u16 > 0L) & (u16 > max_u16)
-    bad <- which(bad_utf8 | bad_len)
-    if (length(bad) > 0L) {
-      orig_i <- idx_non_na[bad]
-      p_sub <- if (length(p_vec) == length(vals_chr)) as.character(p_vec[orig_i]) else rep("", length(orig_i))
-      det <- ifelse(
-        bad_utf8[bad],
-        sprintf("%s.%s contains invalid or unsupported text characters.", tbl_lbl, col_nm),
-        sprintf("%s.%s exceeds the %d-character limit (got %d).", tbl_lbl, col_nm, max_u16, u16[bad])
-      )
-      utf16_issues[[length(utf16_issues) + 1L]] <<- tibble::tibble(
-        PlotNumber = ifelse(is.na(p_sub), "", p_sub),
-        category = rep("utf16_bounds", length(orig_i)),
-        rule = rep(paste0("utf16:", tbl_lbl, ".", col_nm), length(orig_i)),
-        severity = rep("error", length(orig_i)),
-        detail = det
-      )
-    }
-    invisible(NULL)
-  }
-
-  add_cov <- function(p_vec, tbl_lbl, col_nm, raw_vec) {
-    if (length(raw_vec) == 0L) {
-      return(invisible(NULL))
-    }
-    if (is.character(raw_vec)) {
-      s <- trimws(raw_vec)
-      non_blank <- !is.na(s) & nzchar(s)
-      if (!any(non_blank)) {
-        return(invisible(NULL))
-      }
-      idx_nb <- which(non_blank)
-      num <- suppressWarnings(as.double(s[idx_nb]))
-    } else {
-      non_na <- !is.na(raw_vec)
-      if (!any(non_na)) {
-        return(invisible(NULL))
-      }
-      idx_nb <- which(non_na)
-      num <- suppressWarnings(as.double(raw_vec[idx_nb]))
-    }
-    narrowed <- suppressWarnings(vpro_narrow_float32(ifelse(is.finite(num), num, NA_real_)))
-    bad <- which(is.na(num) | !is.finite(num) | num < 0 | is.na(narrowed) | narrowed < 0 | narrowed >= 100)
-    if (length(bad) > 0L) {
-      orig_i <- idx_nb[bad]
-      p_sub <- if (length(p_vec) == length(raw_vec)) as.character(p_vec[orig_i]) else rep("", length(orig_i))
-      det <- sprintf(
-        "%s.%s cover value (%s) must be >= 0 and under 100%%.",
-        tbl_lbl,
-        col_nm,
-        as.character(raw_vec[orig_i])
-      )
-      cover_issues[[length(cover_issues) + 1L]] <<- tibble::tibble(
-        PlotNumber = ifelse(is.na(p_sub), "", p_sub),
-        category = rep("cover_bounds", length(orig_i)),
-        rule = rep(paste0("float32_cover:", tbl_lbl, ".", col_nm), length(orig_i)),
-        severity = rep("error", length(orig_i)),
-        detail = det
-      )
-    }
-    invisible(NULL)
-  }
 
   for (suffix in c("Env", "Admin", "Veg", "Humus", "Mineral", "Other", "Metadata")) {
     tbl_name <- paste0(project, "_", suffix)
@@ -301,9 +319,15 @@ vpro_staging_preflight_bounds <- function(dbc, project, scoped_plots = NULL) {
       }
       if (identical(present_spec$pg_type[[ci]], "TEXT")) {
         chr_val <- vpro_pg_format_utc_text(col_val, cn)
-        add_u16(p_vec, suffix, cn, present_spec$utf16_max[[ci]], chr_val)
+        u_iss <- .vpro_preflight_u16_issues(p_vec, suffix, cn, present_spec$utf16_max[[ci]], chr_val)
+        if (!is.null(u_iss)) {
+          utf16_issues[[length(utf16_issues) + 1L]] <- u_iss
+        }
       } else if (isTRUE(present_spec$is_cover[[ci]])) {
-        add_cov(p_vec, suffix, cn, col_val)
+        c_iss <- .vpro_preflight_cov_issues(p_vec, suffix, cn, col_val)
+        if (!is.null(c_iss)) {
+          cover_issues[[length(cover_issues) + 1L]] <- c_iss
+        }
       }
     }
   }
@@ -326,148 +350,37 @@ vpro_staging_preflight_bounds <- function(dbc, project, scoped_plots = NULL) {
   )
 }
 
-vpro_extract_submission_artifacts <- function(ws, snap_path, scope = c("project", "su")) {
-  scope <- match.arg(scope)
-  use_su <- identical(scope, "su")
-
-  su_scope_plots <- NULL
-  if (use_su) {
-    if (is.null(ws$su) || !nzchar(trimws(ws$su)) || identical(tolower(trimws(ws$su)), "none")) {
-      cli::cli_abort(
-        "{.code scope = \"su\"} requires an active {.file *_SU} site-unit table on {.arg project}."
-      )
-    }
-    dbc_su <- vpro_sqlite_ro(ws$su_path)
-    on.exit(DBI::dbDisconnect(dbc_su), add = TRUE)
-    su_q <- vpro_quote_ident(ws$su)
-    su_filter_df <- DBI::dbGetQuery(
-      dbc_su,
-      paste0(
-        'SELECT CAST("PlotNumber" AS TEXT) AS "PlotNumber" FROM ',
-        su_q,
-        ' WHERE typeof("PlotNumber") = \'text\' AND "PlotNumber" <> \'\''
-      )
+.vpro_sync_read_vp08_raw <- function(dbc, proj, suffix, where_clause = "", order_clause = "") {
+  tbl_nm <- paste0(proj, "_", suffix)
+  spec <- vpro_pg_vp08_specs(suffix)
+  if (!DBI::dbExistsTable(dbc, tbl_nm)) {
+    empty_df <- as.data.frame(
+      stats::setNames(replicate(nrow(spec), logical(0L), simplify = FALSE), spec$name),
+      stringsAsFactors = FALSE
     )
-    su_scope_plots <- unique(as.character(su_filter_df$PlotNumber))
-    if (length(su_scope_plots) == 0L) {
-      cli::cli_abort("Active Site Unit table {.val {ws$su}} contains no plots with valid text PlotNumber keys.")
-    }
+    return(vpro_pg_canonicalize_to_pg(empty_df, spec))
   }
-
-  dbc <- vpro_sqlite_ro(snap_path)
-  on.exit(DBI::dbDisconnect(dbc), add = TRUE)
-
-  proj <- ws$project
-  read_vp08_raw <- function(suffix, where_clause = "", order_clause = "") {
-    tbl_nm <- paste0(proj, "_", suffix)
-    spec <- vpro_pg_vp08_specs(suffix)
-    if (!DBI::dbExistsTable(dbc, tbl_nm)) {
-      empty_df <- as.data.frame(
-        stats::setNames(replicate(nrow(spec), logical(0L), simplify = FALSE), spec$name),
-        stringsAsFactors = FALSE
-      )
-      return(vpro_pg_canonicalize_to_pg(empty_df, spec))
-    }
-    existing_cols <- DBI::dbListFields(dbc, tbl_nm)
-    present_spec <- spec[tolower(spec$name) %in% tolower(existing_cols), , drop = FALSE]
-    if (nrow(present_spec) == 0L) {
-      empty_df <- as.data.frame(
-        stats::setNames(replicate(nrow(spec), logical(0L), simplify = FALSE), spec$name),
-        stringsAsFactors = FALSE
-      )
-      return(vpro_pg_canonicalize_to_pg(empty_df, spec))
-    }
-    sql <- paste0(
-      "SELECT ",
-      vpro_sqlite_select_vp08_sql(present_spec),
-      " FROM ",
-      vpro_quote_ident(tbl_nm),
-      where_clause,
-      order_clause
+  existing_cols <- DBI::dbListFields(dbc, tbl_nm)
+  present_spec <- spec[tolower(spec$name) %in% tolower(existing_cols), , drop = FALSE]
+  if (nrow(present_spec) == 0L) {
+    empty_df <- as.data.frame(
+      stats::setNames(replicate(nrow(spec), logical(0L), simplify = FALSE), spec$name),
+      stringsAsFactors = FALSE
     )
-    DBI::dbGetQuery(dbc, sql)
+    return(vpro_pg_canonicalize_to_pg(empty_df, spec))
   }
+  sql <- paste0(
+    "SELECT ",
+    vpro_sqlite_select_vp08_sql(present_spec),
+    " FROM ",
+    vpro_quote_ident(tbl_nm),
+    where_clause,
+    order_clause
+  )
+  DBI::dbGetQuery(dbc, sql)
+}
 
-  raw_env <- read_vp08_raw("Env", ' WHERE typeof("PlotNumber") = \'text\' AND "PlotNumber" <> \'\'')
-  if (nrow(raw_env) > 0L) {
-    raw_env$PlotNumber <- as.character(raw_env$PlotNumber)
-    if (!is.null(su_scope_plots)) {
-      raw_env <- raw_env[raw_env$PlotNumber %in% su_scope_plots, , drop = FALSE]
-    }
-    raw_env <- raw_env[!duplicated(raw_env$PlotNumber), , drop = FALSE]
-  }
-  scoped_plots <- if (nrow(raw_env) > 0L) as.character(raw_env$PlotNumber) else character(0L)
-  if (length(scoped_plots) == 0L) {
-    cli::cli_abort("Project {.val {proj}} contains no plots with valid text PlotNumber keys to submit.")
-  }
-
-  df_env <- vpro_pg_canonicalize_to_pg(raw_env, vpro_pg_vp08_specs("Env"))
-
-  raw_admin <- read_vp08_raw("Admin", ' WHERE typeof("Plot") = \'text\' AND "Plot" <> \'\'')
-  if (nrow(raw_admin) > 0L) {
-    raw_admin$Plot <- as.character(raw_admin$Plot)
-    raw_admin <- raw_admin[raw_admin$Plot %in% scoped_plots, , drop = FALSE]
-    raw_admin <- raw_admin[!duplicated(raw_admin$Plot), , drop = FALSE]
-  }
-  df_admin <- vpro_pg_canonicalize_to_pg(raw_admin, vpro_pg_vp08_specs("Admin"))
-
-  prep_child <- function(suffix) {
-    raw_c <- read_vp08_raw(
-      suffix,
-      ' WHERE typeof("PlotNumber") = \'text\' AND "PlotNumber" <> \'\'',
-      ' ORDER BY CAST("PlotNumber" AS BLOB)'
-    )
-    if (nrow(raw_c) > 0L) {
-      raw_c$PlotNumber <- as.character(raw_c$PlotNumber)
-      raw_c <- raw_c[raw_c$PlotNumber %in% scoped_plots, , drop = FALSE]
-    }
-    canon_c <- vpro_pg_canonicalize_to_pg(raw_c, vpro_pg_vp08_specs(suffix))
-    if (nrow(canon_c) > 0L && ("ID" %in% names(canon_c))) {
-      repaired_ids <- vpro_repair_staging_child_ids(canon_c$ID)
-      if (is.double(repaired_ids) && any(abs(repaired_ids) > .Machine$integer.max)) {
-        canon_c$ID <- sprintf("%.0f", repaired_ids)
-      } else {
-        canon_c$ID <- as.integer(repaired_ids)
-      }
-    }
-    canon_c
-  }
-
-  df_veg <- prep_child("Veg")
-  df_humus <- prep_child("Humus")
-  df_mineral <- prep_child("Mineral")
-  df_other <- prep_child("Other")
-
-  raw_meta <- read_vp08_raw("Metadata", ' WHERE "ProjectID" IS NOT NULL')
-  df_meta <- vpro_pg_canonicalize_to_pg(raw_meta, vpro_pg_vp08_specs("Metadata"))
-  if (nrow(df_meta) > 0L) {
-    keep_m <- !is.na(df_meta$ProjectID) & nzchar(df_meta$ProjectID)
-    df_meta <- df_meta[keep_m, , drop = FALSE]
-    if (nrow(df_meta) > 0L) {
-      df_meta <- df_meta[!duplicated(df_meta$ProjectID), , drop = FALSE]
-    }
-  }
-
-  raw_audit <- read_vp08_raw("Audit", "", " ORDER BY rowid")
-  df_audit <- vpro_pg_canonicalize_to_pg(raw_audit, vpro_pg_vp08_specs("Audit"))
-  if (nrow(df_audit) > 0L) {
-    p_aud <- df_audit$PlotNumber
-    keep_a <- is.na(p_aud) | !nzchar(p_aud) | (p_aud %in% scoped_plots)
-    df_audit <- df_audit[keep_a, , drop = FALSE]
-  }
-
-  # ProjectID resolution (Metadata first, then Env fallback)
-  project_id <- ""
-  if (nrow(df_meta) > 0L && !is.na(df_meta$ProjectID[[1L]]) && nzchar(trimws(df_meta$ProjectID[[1L]]))) {
-    project_id <- trimws(df_meta$ProjectID[[1L]])
-  } else if (nrow(df_env) > 0L) {
-    env_pids <- df_env$ProjectID[!is.na(df_env$ProjectID) & nzchar(trimws(df_env$ProjectID))]
-    if (length(env_pids) > 0L) {
-      project_id <- trimws(env_pids[[1L]])
-    }
-  }
-
-  # Referenced personal species from VUser.USysUserSpp
+.vpro_sync_extract_user_manifest <- function(ws, proj, df_veg) {
   ref_spp_upper <- character(0L)
   if (nrow(df_veg) > 0L) {
     sp_trimmed <- trimws(ifelse(is.na(df_veg$Species), "", df_veg$Species))
@@ -510,10 +423,7 @@ vpro_extract_submission_artifacts <- function(ws, snap_path, scope = c("project"
       if (nrow(u_df) > 0L) {
         for (ri in seq_len(nrow(u_df))) {
           cd <- u_df$Code[[ri]]
-          if (is.na(cd) || !nzchar(trimws(cd))) {
-            next
-          }
-          if (!(toupper(trimws(cd)) %in% ref_spp_upper)) {
+          if (is.na(cd) || !nzchar(trimws(cd)) || !(toupper(trimws(cd)) %in% ref_spp_upper)) {
             next
           }
           rec <- list(
@@ -541,7 +451,7 @@ vpro_extract_submission_artifacts <- function(ws, snap_path, scope = c("project"
   payload_sha256 <- vpro_sha256_utf8(species_json)[[1L]]
   exported_at <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
 
-  user_manifest <- list(
+  list(
     schemaVersion = "vpro.userspecies.v1",
     exportedAt = exported_at,
     sourceProject = proj,
@@ -549,8 +459,9 @@ vpro_extract_submission_artifacts <- function(ws, snap_path, scope = c("project"
     payloadSha256 = payload_sha256,
     species = species_records
   )
+}
 
-  # Extract <Project>_Lump (or active ws$lump)
+.vpro_sync_extract_lump_and_su <- function(ws, proj, snap_path) {
   lump_records <- list()
   lump_tbl <- if (!is.null(ws$lump) && nzchar(ws$lump)) ws$lump else paste0(proj, "_Lump")
   lump_db_path <- if (!is.null(ws$lump_path) && file.exists(ws$lump_path) && !identical(ws$lump_path, ws$project_path)) {
@@ -586,7 +497,6 @@ vpro_extract_submission_artifacts <- function(ws, snap_path, scope = c("project"
     }
   }
 
-  # Extract active *_SU (or <Project>_SU)
   su_records <- list()
   su_tbl_cand <- if (!is.null(ws$su) && nzchar(ws$su)) ws$su else paste0(proj, "_SU")
   su_db_cand <- if (!is.null(ws$su) && !is.null(ws$su_path) && file.exists(ws$su_path) && !identical(ws$su_path, ws$project_path)) {
@@ -619,6 +529,131 @@ vpro_extract_submission_artifacts <- function(ws, snap_path, scope = c("project"
     }
   }
 
+  list(lump_records = lump_records, su_records = su_records)
+}
+
+vpro_extract_submission_artifacts <- function(ws, snap_path, scope = c("project", "su")) {
+  scope <- match.arg(scope)
+  use_su <- identical(scope, "su")
+
+  su_scope_plots <- NULL
+  if (use_su) {
+    if (is.null(ws$su) || !nzchar(trimws(ws$su)) || identical(tolower(trimws(ws$su)), "none")) {
+      cli::cli_abort(
+        "{.code scope = \"su\"} requires an active {.file *_SU} site-unit table on {.arg project}.",
+        class = c("vpro_error_cloud", "vpro_error")
+      )
+    }
+    dbc_su <- vpro_sqlite_ro(ws$su_path)
+    on.exit(DBI::dbDisconnect(dbc_su), add = TRUE)
+    su_q <- vpro_quote_ident(ws$su)
+    su_filter_df <- DBI::dbGetQuery(
+      dbc_su,
+      paste0(
+        'SELECT CAST("PlotNumber" AS TEXT) AS "PlotNumber" FROM ',
+        su_q,
+        ' WHERE typeof("PlotNumber") = \'text\' AND "PlotNumber" <> \'\''
+      )
+    )
+    su_scope_plots <- unique(as.character(su_filter_df$PlotNumber))
+    if (length(su_scope_plots) == 0L) {
+      cli::cli_abort(
+        "Active Site Unit table {.val {ws$su}} contains no plots with valid text PlotNumber keys.",
+        class = c("vpro_error_cloud", "vpro_error")
+      )
+    }
+  }
+
+  dbc <- vpro_sqlite_ro(snap_path)
+  on.exit(DBI::dbDisconnect(dbc), add = TRUE)
+
+  proj <- ws$project
+  raw_env <- .vpro_sync_read_vp08_raw(dbc, proj, "Env", ' WHERE typeof("PlotNumber") = \'text\' AND "PlotNumber" <> \'\'')
+  if (nrow(raw_env) > 0L) {
+    raw_env$PlotNumber <- as.character(raw_env$PlotNumber)
+    if (!is.null(su_scope_plots)) {
+      raw_env <- raw_env[raw_env$PlotNumber %in% su_scope_plots, , drop = FALSE]
+    }
+    raw_env <- raw_env[!duplicated(raw_env$PlotNumber), , drop = FALSE]
+  }
+  scoped_plots <- if (nrow(raw_env) > 0L) as.character(raw_env$PlotNumber) else character(0L)
+  if (length(scoped_plots) == 0L) {
+    cli::cli_abort(
+      "Project {.val {proj}} contains no plots with valid text PlotNumber keys to submit.",
+      class = c("vpro_error_cloud", "vpro_error")
+    )
+  }
+
+  df_env <- vpro_pg_canonicalize_to_pg(raw_env, vpro_pg_vp08_specs("Env"))
+
+  raw_admin <- .vpro_sync_read_vp08_raw(dbc, proj, "Admin", ' WHERE typeof("Plot") = \'text\' AND "Plot" <> \'\'')
+  if (nrow(raw_admin) > 0L) {
+    raw_admin$Plot <- as.character(raw_admin$Plot)
+    raw_admin <- raw_admin[raw_admin$Plot %in% scoped_plots, , drop = FALSE]
+    raw_admin <- raw_admin[!duplicated(raw_admin$Plot), , drop = FALSE]
+  }
+  df_admin <- vpro_pg_canonicalize_to_pg(raw_admin, vpro_pg_vp08_specs("Admin"))
+
+  prep_child <- function(suffix) {
+    raw_c <- .vpro_sync_read_vp08_raw(
+      dbc,
+      proj,
+      suffix,
+      ' WHERE typeof("PlotNumber") = \'text\' AND "PlotNumber" <> \'\'',
+      ' ORDER BY CAST("PlotNumber" AS BLOB)'
+    )
+    if (nrow(raw_c) > 0L) {
+      raw_c$PlotNumber <- as.character(raw_c$PlotNumber)
+      raw_c <- raw_c[raw_c$PlotNumber %in% scoped_plots, , drop = FALSE]
+    }
+    canon_c <- vpro_pg_canonicalize_to_pg(raw_c, vpro_pg_vp08_specs(suffix))
+    if (nrow(canon_c) > 0L && ("ID" %in% names(canon_c))) {
+      repaired_ids <- vpro_repair_staging_child_ids(canon_c$ID)
+      if (is.double(repaired_ids) && any(abs(repaired_ids) > .Machine$integer.max)) {
+        canon_c$ID <- sprintf("%.0f", repaired_ids)
+      } else {
+        canon_c$ID <- as.integer(repaired_ids)
+      }
+    }
+    canon_c
+  }
+
+  df_veg <- prep_child("Veg")
+  df_humus <- prep_child("Humus")
+  df_mineral <- prep_child("Mineral")
+  df_other <- prep_child("Other")
+
+  raw_meta <- .vpro_sync_read_vp08_raw(dbc, proj, "Metadata", ' WHERE "ProjectID" IS NOT NULL')
+  df_meta <- vpro_pg_canonicalize_to_pg(raw_meta, vpro_pg_vp08_specs("Metadata"))
+  if (nrow(df_meta) > 0L) {
+    keep_m <- !is.na(df_meta$ProjectID) & nzchar(df_meta$ProjectID)
+    df_meta <- df_meta[keep_m, , drop = FALSE]
+    if (nrow(df_meta) > 0L) {
+      df_meta <- df_meta[!duplicated(df_meta$ProjectID), , drop = FALSE]
+    }
+  }
+
+  raw_audit <- .vpro_sync_read_vp08_raw(dbc, proj, "Audit", "", " ORDER BY rowid")
+  df_audit <- vpro_pg_canonicalize_to_pg(raw_audit, vpro_pg_vp08_specs("Audit"))
+  if (nrow(df_audit) > 0L) {
+    p_aud <- df_audit$PlotNumber
+    keep_a <- is.na(p_aud) | !nzchar(p_aud) | (p_aud %in% scoped_plots)
+    df_audit <- df_audit[keep_a, , drop = FALSE]
+  }
+
+  project_id <- ""
+  if (nrow(df_meta) > 0L && !is.na(df_meta$ProjectID[[1L]]) && nzchar(trimws(df_meta$ProjectID[[1L]]))) {
+    project_id <- trimws(df_meta$ProjectID[[1L]])
+  } else if (nrow(df_env) > 0L) {
+    env_pids <- df_env$ProjectID[!is.na(df_env$ProjectID) & nzchar(trimws(df_env$ProjectID))]
+    if (length(env_pids) > 0L) {
+      project_id <- trimws(env_pids[[1L]])
+    }
+  }
+
+  user_manifest <- .vpro_sync_extract_user_manifest(ws, proj, df_veg)
+  lump_su <- .vpro_sync_extract_lump_and_su(ws, proj, snap_path)
+
   list(
     scoped_plots = scoped_plots,
     project_id = project_id,
@@ -633,8 +668,8 @@ vpro_extract_submission_artifacts <- function(ws, snap_path, scope = c("project"
       audit = df_audit
     ),
     user_manifest = user_manifest,
-    lump_records = lump_records,
-    su_records = su_records
+    lump_records = lump_su$lump_records,
+    su_records = lump_su$su_records
   )
 }
 

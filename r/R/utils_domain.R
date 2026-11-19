@@ -20,13 +20,22 @@
   "Theme"
 )
 
+.vpro_cli_escape <- function(x) {
+  out <- gsub("([{}])", "\\1\\1", as.character(x))
+  names(out) <- names(x)
+  out
+}
+
 vpro_quote_ident <- function(x) {
   paste0('"', gsub('"', '""', as.character(x), fixed = TRUE), '"')
 }
 
 vpro_sqlite_ro <- function(path) {
   if (!is.character(path) || length(path) != 1L || is.na(path) || !file.exists(path)) {
-    rlang::abort(paste0("SQLite database does not exist: ", path))
+    cli::cli_abort(
+      .vpro_cli_escape(paste0("SQLite database does not exist: ", path)),
+      class = c("vpro_error_domain", "vpro_error")
+    )
   }
   con <- DBI::dbConnect(
     RSQLite::SQLite(),
@@ -46,7 +55,10 @@ vpro_sqlite_ro <- function(path) {
 
 vpro_sqlite_rw_immediate <- function(path) {
   if (!is.character(path) || length(path) != 1L || is.na(path) || !file.exists(path)) {
-    rlang::abort(paste0("SQLite database does not exist: ", path))
+    cli::cli_abort(
+      .vpro_cli_escape(paste0("SQLite database does not exist: ", path)),
+      class = c("vpro_error_domain", "vpro_error")
+    )
   }
   con <- DBI::dbConnect(
     RSQLite::SQLite(),
@@ -125,7 +137,7 @@ vpro_logical_to_access <- function(x) {
 #' @export
 vpro_narrow_float32 <- function(x) {
   if (!is.numeric(x)) {
-    rlang::abort("`x` must be a numeric vector.")
+    cli::cli_abort("`x` must be a numeric vector.", class = c("vpro_error_domain", "vpro_error"))
   }
   out <- rep(NA_real_, length(x))
   max_f32 <- 3.4028234663852886e+38
@@ -220,10 +232,13 @@ vpro_narrow_float32 <- function(x) {
 #' @export
 vpro_round_ace <- function(x, digits = 2L) {
   if (!is.numeric(x)) {
-    rlang::abort("`x` must be a numeric vector.")
+    cli::cli_abort("`x` must be a numeric vector.", class = c("vpro_error_domain", "vpro_error"))
   }
   if (!is.numeric(digits) || length(digits) != 1L || is.na(digits) || !is.finite(digits) || digits < 0 || digits != trunc(digits)) {
-    rlang::abort("`digits` must be a single non-negative integer.")
+    cli::cli_abort(
+      "`digits` must be a single non-negative integer.",
+      class = c("vpro_error_domain", "vpro_error")
+    )
   }
   d <- min(as.double(digits), 350.0)
   d_int <- as.integer(d)
@@ -275,10 +290,16 @@ vpro_sha256_file <- function(path) {
 
 vpro_value_vector <- function(value, argument) {
   if (!is.numeric(value) || length(value) == 0L) {
-    stop("`", argument, "` must be a nonempty numeric vector.", call. = FALSE)
+    cli::cli_abort(
+      .vpro_cli_escape(paste0("`", argument, "` must be a nonempty numeric vector.")),
+      class = c("vpro_error_domain", "vpro_error")
+    )
   }
   if (any(!is.finite(value) & !is.na(value))) {
-    stop("`", argument, "` must contain only finite values or NA.", call. = FALSE)
+    cli::cli_abort(
+      .vpro_cli_escape(paste0("`", argument, "` must contain only finite values or NA.")),
+      class = c("vpro_error_domain", "vpro_error")
+    )
   }
   as.numeric(value)
 }
@@ -288,14 +309,20 @@ vpro_value_recycle <- function(values) {
   size <- max(sizes)
   incompatible <- sizes != 1L & sizes != size
   if (any(incompatible)) {
-    stop("Inputs must have a common length or length one.", call. = FALSE)
+    cli::cli_abort(
+      "Inputs must have a common length or length one.",
+      class = c("vpro_error_domain", "vpro_error")
+    )
   }
   lapply(values, rep_len, length.out = size)
 }
 
 vpro_value_flag <- function(value, argument) {
   if (!is.logical(value) || length(value) != 1L || is.na(value)) {
-    stop("`", argument, "` must be TRUE or FALSE.", call. = FALSE)
+    cli::cli_abort(
+      .vpro_cli_escape(paste0("`", argument, "` must be TRUE or FALSE.")),
+      class = c("vpro_error_domain", "vpro_error")
+    )
   }
   value
 }
@@ -425,11 +452,17 @@ vpro_cap_percent <- function(x) {
 vpro_classify_diagnostic_codes <- function(unit_codes) {
   units <- names(unit_codes)
   if (!is.character(unit_codes) || length(unit_codes) == 0L || is.null(units) || anyNA(units) || any(!nzchar(units)) || anyDuplicated(units)) {
-    stop("`unit_codes` must be a nonempty named character vector with distinct, nonempty unit names.", call. = FALSE)
+    cli::cli_abort(
+      "`unit_codes` must be a nonempty named character vector with distinct, nonempty unit names.",
+      class = c("vpro_error_domain", "vpro_error")
+    )
   }
   present <- !is.na(unit_codes)
   if (any(!grepl("^[1-5] - (\\+|[1-9])$", unit_codes[present]))) {
-    stop("Nonmissing `unit_codes` must have the form '1 - +' through '5 - 9'.", call. = FALSE)
+    cli::cli_abort(
+      "Nonmissing `unit_codes` must have the form '1 - +' through '5 - 9'.",
+      class = c("vpro_error_domain", "vpro_error")
+    )
   }
   if (!any(present)) {
     return(list(unit = NA_character_, diagnosis = NA_character_))

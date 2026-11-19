@@ -56,6 +56,165 @@
   pts
 }
 
+.vpro_pairwise_empty_tables <- function() {
+  list(
+    pairs = tibble::tibble(
+      Unit1 = character(),
+      Unit2 = character(),
+      n_plots_1 = integer(),
+      n_plots_2 = integer(),
+      shared_diag = numeric(),
+      diff_tot_1 = numeric(),
+      diff_tot_2 = numeric(),
+      diff_tot = numeric(),
+      diff_ratio = numeric(),
+      bec_sim_min = numeric(),
+      bec_sim_mean = numeric(),
+      bec_sim_max = numeric(),
+      sorensen = numeric()
+    ),
+    species_diffs = tibble::tibble(
+      Unit1 = character(),
+      Unit2 = character(),
+      Species = character(),
+      ScientificName = character(),
+      constancy_1 = numeric(),
+      mean_cover_1 = numeric(),
+      constancy_2 = numeric(),
+      mean_cover_2 = numeric(),
+      shared_diag = numeric(),
+      d_points_1 = numeric(),
+      dd_points_1 = numeric(),
+      diff_pts_1 = numeric(),
+      d_points_2 = numeric(),
+      dd_points_2 = numeric(),
+      diff_pts_2 = numeric(),
+      favours_unit = character()
+    )
+  )
+}
+
+.vpro_pairwise_compare_pair <- function(
+  u1,
+  u2,
+  n_plots_1,
+  n_plots_2,
+  i,
+  j,
+  all_spp,
+  sci_map,
+  cov_mat,
+  con_mat,
+  pot_mat,
+  elig_spp_mask,
+  min_constancy,
+  noise_constancy,
+  min_diff,
+  min_dd
+) {
+  sor <- .vpro_sorensen_vec(cov_mat[, i], cov_mat[, j])
+  sor_r <- vpro_round_ace(sor, 4L)
+
+  in_u1 <- elig_spp_mask & (con_mat[, i] > noise_constancy)
+  in_u2 <- elig_spp_mask & (con_mat[, j] > noise_constancy)
+  union_mask <- in_u1 | in_u2
+
+  c1 <- ifelse(in_u1, con_mat[, i], 0.0)[union_mask]
+  m1 <- ifelse(in_u1, cov_mat[, i], 0.0)[union_mask]
+  p1 <- ifelse(in_u1, pot_mat[, i], 0.0)[union_mask]
+
+  c2 <- ifelse(in_u2, con_mat[, j], 0.0)[union_mask]
+  m2 <- ifelse(in_u2, cov_mat[, j], 0.0)[union_mask]
+  p2 <- ifelse(in_u2, pot_mat[, j], 0.0)[union_mask]
+  spp_sub <- all_spp[union_mask]
+
+  diff_row <- NULL
+  keep_pot <- (p1 > 0) | (p2 > 0)
+  if (any(keep_pot)) {
+    c1 <- c1[keep_pot]
+    m1 <- m1[keep_pot]
+    p1 <- p1[keep_pot]
+    c2 <- c2[keep_pot]
+    m2 <- m2[keep_pot]
+    p2 <- p2[keep_pot]
+    spp_sub <- spp_sub[keep_pot]
+
+    sh_spp <- pmin(p1, p2)
+    d1 <- .vpro_pairwise_d_points(c1, c2, m1, min_constancy = min_constancy, min_diff = min_diff)
+    dd1 <- .vpro_pairwise_dd_points(m1, m2, min_dd = min_dd)
+    pts1 <- d1 + dd1
+    both1 <- d1 > min_diff & dd1 > min_diff
+    pts1[both1] <- pts1[both1] * 1.25
+    pts1 <- pmin(pts1, 10.0)
+
+    d2 <- .vpro_pairwise_d_points(c2, c1, m2, min_constancy = min_constancy, min_diff = min_diff)
+    dd2 <- .vpro_pairwise_dd_points(m2, m1, min_dd = min_dd)
+    pts2 <- d2 + dd2
+    both2 <- d2 > min_diff & dd2 > min_diff
+    pts2[both2] <- pts2[both2] * 1.25
+    pts2 <- pmin(pts2, 10.0)
+
+    shared_diag <- sum(sh_spp)
+    diff_tot_1 <- sum(pts1)
+    diff_tot_2 <- sum(pts2)
+
+    has_diff <- (pts1 > 0) | (pts2 > 0) | (sh_spp > 0)
+    if (any(has_diff)) {
+      k_ix <- which(has_diff)
+      ord_d <- k_ix[order(-pmax(pts1[k_ix], pts2[k_ix]), -sh_spp[k_ix], spp_sub[k_ix], method = "radix")]
+      fav <- ifelse(pts1[ord_d] > pts2[ord_d], u1, ifelse(pts2[ord_d] > pts1[ord_d], u2, "shared"))
+      diff_row <- tibble::tibble(
+        Unit1 = rep(u1, length(ord_d)),
+        Unit2 = rep(u2, length(ord_d)),
+        Species = spp_sub[ord_d],
+        ScientificName = unname(sci_map[spp_sub[ord_d]]),
+        constancy_1 = vpro_round_ace(c1[ord_d], 1L),
+        mean_cover_1 = vpro_round_ace(m1[ord_d], 2L),
+        constancy_2 = vpro_round_ace(c2[ord_d], 1L),
+        mean_cover_2 = vpro_round_ace(m2[ord_d], 2L),
+        shared_diag = vpro_round_ace(sh_spp[ord_d], 2L),
+        d_points_1 = vpro_round_ace(d1[ord_d], 2L),
+        dd_points_1 = vpro_round_ace(dd1[ord_d], 2L),
+        diff_pts_1 = vpro_round_ace(pts1[ord_d], 2L),
+        d_points_2 = vpro_round_ace(d2[ord_d], 2L),
+        dd_points_2 = vpro_round_ace(dd2[ord_d], 2L),
+        diff_pts_2 = vpro_round_ace(pts2[ord_d], 2L),
+        favours_unit = fav
+      )
+    }
+  } else {
+    shared_diag <- 0.0
+    diff_tot_1 <- 0.0
+    diff_tot_2 <- 0.0
+  }
+
+  diff_tot <- diff_tot_1 + diff_tot_2
+  denom_tot <- diff_tot + 2.0 * shared_diag
+  diff_ratio <- if (denom_tot > 0) (2.0 * shared_diag) / denom_tot else 0.0
+  r1 <- if ((diff_tot_1 + shared_diag) > 0) shared_diag / (diff_tot_1 + shared_diag) else 0.0
+  r2 <- if ((diff_tot_2 + shared_diag) > 0) shared_diag / (diff_tot_2 + shared_diag) else 0.0
+  bec_mean <- (r1 + r2) / 2.0
+  bec_r <- vpro_round_ace(bec_mean, 4L)
+
+  pair_row <- tibble::tibble(
+    Unit1 = u1,
+    Unit2 = u2,
+    n_plots_1 = n_plots_1,
+    n_plots_2 = n_plots_2,
+    shared_diag = vpro_round_ace(shared_diag, 2L),
+    diff_tot_1 = vpro_round_ace(diff_tot_1, 2L),
+    diff_tot_2 = vpro_round_ace(diff_tot_2, 2L),
+    diff_tot = vpro_round_ace(diff_tot, 2L),
+    diff_ratio = vpro_round_ace(diff_ratio, 4L),
+    bec_sim_min = vpro_round_ace(min(r1, r2), 4L),
+    bec_sim_mean = bec_r,
+    bec_sim_max = vpro_round_ace(max(r1, r2), 4L),
+    sorensen = sor_r
+  )
+
+  list(sor_r = sor_r, bec_r = bec_r, pair_row = pair_row, diff_row = diff_row)
+}
+
 #' Compute BEC diagnostic-potential pairwise unit similarity
 #'
 #' Implements the B.C. Ministry of Forests BEC pairwise unit comparison method
@@ -97,46 +256,15 @@ vpro_pairwise <- function(
   cover_precedence <- match.arg(cover_precedence)
   min_plots <- as.integer(min_plots)
   if (length(min_plots) != 1L || is.na(min_plots) || min_plots < 1L) {
-    rlang::abort("`min_plots` must be a positive integer.")
+    cli::cli_abort("`min_plots` must be a positive integer.", class = c("vpro_error_diagnostics", "vpro_error"))
   }
+
+  empties <- .vpro_pairwise_empty_tables()
+  empty_pairs <- empties$pairs
+  empty_diffs <- empties$species_diffs
 
   scoped <- .vpro_resolve_classified_plots(ws, exclude_modifiers = exclude_modifiers)
   su_df <- scoped$su
-
-  empty_pairs <- tibble::tibble(
-    Unit1 = character(),
-    Unit2 = character(),
-    n_plots_1 = integer(),
-    n_plots_2 = integer(),
-    shared_diag = numeric(),
-    diff_tot_1 = numeric(),
-    diff_tot_2 = numeric(),
-    diff_tot = numeric(),
-    diff_ratio = numeric(),
-    bec_sim_min = numeric(),
-    bec_sim_mean = numeric(),
-    bec_sim_max = numeric(),
-    sorensen = numeric()
-  )
-  empty_diffs <- tibble::tibble(
-    Unit1 = character(),
-    Unit2 = character(),
-    Species = character(),
-    ScientificName = character(),
-    constancy_1 = numeric(),
-    mean_cover_1 = numeric(),
-    constancy_2 = numeric(),
-    mean_cover_2 = numeric(),
-    shared_diag = numeric(),
-    d_points_1 = numeric(),
-    dd_points_1 = numeric(),
-    diff_pts_1 = numeric(),
-    d_points_2 = numeric(),
-    dd_points_2 = numeric(),
-    diff_pts_2 = numeric(),
-    favours_unit = character()
-  )
-
   if (nrow(su_df) == 0L) {
     empty_mat <- matrix(numeric(), nrow = 0L, ncol = 0L)
     return(structure(
@@ -223,13 +351,7 @@ vpro_pairwise <- function(
     all = FALSE,
     allow.cartesian = TRUE
   )
-  agg_dt <- veg_dt[,
-    list(
-      n_present = .N,
-      sum_cover = sum(get("Cover"))
-    ),
-    by = c("SiteUnit", "Species")
-  ]
+  agg_dt <- veg_dt[, list(n_present = .N, sum_cover = sum(get("Cover"))), by = c("SiteUnit", "Species")]
   data.table::set(agg_dt, j = "n_plots", value = unname(n_plots_map[agg_dt[["SiteUnit"]]]))
 
   mean_cov <- pmin(agg_dt[["sum_cover"]] / agg_dt[["n_plots"]], 100.0)
@@ -248,10 +370,7 @@ vpro_pairwise <- function(
   sci_map <- stats::setNames(ifelse(is.na(tax_m), all_spp, tax$ScientificName[tax_m]), all_spp)
 
   n_spp <- length(all_spp)
-  s_ix <- match(agg_dt[["Species"]], all_spp)
-  u_ix <- match(agg_dt[["SiteUnit"]], elig_units)
-  lin_ix <- cbind(s_ix, u_ix)
-
+  lin_ix <- cbind(match(agg_dt[["Species"]], all_spp), match(agg_dt[["SiteUnit"]], elig_units))
   cov_mat <- matrix(0.0, nrow = n_spp, ncol = n_u, dimnames = list(all_spp, elig_units))
   con_mat <- matrix(0.0, nrow = n_spp, ncol = n_u, dimnames = list(all_spp, elig_units))
   pot_mat <- matrix(0.0, nrow = n_spp, ncol = n_u, dimnames = list(all_spp, elig_units))
@@ -259,9 +378,7 @@ vpro_pairwise <- function(
   con_mat[lin_ix] <- const_pct
   pot_mat[lin_ix] <- dpot
 
-  # Eligible species for BEC differential potential: max constancy >= min_constancy
   elig_spp_mask <- apply(con_mat, 1L, max) >= min_constancy
-
   pair_rows <- list()
   diff_rows <- list()
 
@@ -269,109 +386,32 @@ vpro_pairwise <- function(
     u1 <- elig_units[[i]]
     for (j in (i + 1L):n_u) {
       u2 <- elig_units[[j]]
-      sor <- .vpro_sorensen_vec(cov_mat[, i], cov_mat[, j])
-      sim_mat[i, j] <- vpro_round_ace(sor, 4L)
-      sim_mat[j, i] <- vpro_round_ace(sor, 4L)
-
-      in_u1 <- elig_spp_mask & (con_mat[, i] > noise_constancy)
-      in_u2 <- elig_spp_mask & (con_mat[, j] > noise_constancy)
-      union_mask <- in_u1 | in_u2
-
-      c1 <- ifelse(in_u1, con_mat[, i], 0.0)[union_mask]
-      m1 <- ifelse(in_u1, cov_mat[, i], 0.0)[union_mask]
-      p1 <- ifelse(in_u1, pot_mat[, i], 0.0)[union_mask]
-
-      c2 <- ifelse(in_u2, con_mat[, j], 0.0)[union_mask]
-      m2 <- ifelse(in_u2, cov_mat[, j], 0.0)[union_mask]
-      p2 <- ifelse(in_u2, pot_mat[, j], 0.0)[union_mask]
-      spp_sub <- all_spp[union_mask]
-
-      keep_pot <- (p1 > 0) | (p2 > 0)
-      if (any(keep_pot)) {
-        c1 <- c1[keep_pot]
-        m1 <- m1[keep_pot]
-        p1 <- p1[keep_pot]
-        c2 <- c2[keep_pot]
-        m2 <- m2[keep_pot]
-        p2 <- p2[keep_pot]
-        spp_sub <- spp_sub[keep_pot]
-
-        sh_spp <- pmin(p1, p2)
-        d1 <- .vpro_pairwise_d_points(c1, c2, m1, min_constancy = min_constancy, min_diff = min_diff)
-        dd1 <- .vpro_pairwise_dd_points(m1, m2, min_dd = min_dd)
-        pts1 <- d1 + dd1
-        both1 <- d1 > min_diff & dd1 > min_diff
-        pts1[both1] <- pts1[both1] * 1.25
-        pts1 <- pmin(pts1, 10.0)
-
-        d2 <- .vpro_pairwise_d_points(c2, c1, m2, min_constancy = min_constancy, min_diff = min_diff)
-        dd2 <- .vpro_pairwise_dd_points(m2, m1, min_dd = min_dd)
-        pts2 <- d2 + dd2
-        both2 <- d2 > min_diff & dd2 > min_diff
-        pts2[both2] <- pts2[both2] * 1.25
-        pts2 <- pmin(pts2, 10.0)
-
-        shared_diag <- sum(sh_spp)
-        diff_tot_1 <- sum(pts1)
-        diff_tot_2 <- sum(pts2)
-
-        has_diff <- (pts1 > 0) | (pts2 > 0) | (sh_spp > 0)
-        if (any(has_diff)) {
-          k_ix <- which(has_diff)
-          ord_d <- k_ix[order(-pmax(pts1[k_ix], pts2[k_ix]), -sh_spp[k_ix], spp_sub[k_ix], method = "radix")]
-          fav <- ifelse(pts1[ord_d] > pts2[ord_d], u1, ifelse(pts2[ord_d] > pts1[ord_d], u2, "shared"))
-          diff_rows[[length(diff_rows) + 1L]] <- tibble::tibble(
-            Unit1 = rep(u1, length(ord_d)),
-            Unit2 = rep(u2, length(ord_d)),
-            Species = spp_sub[ord_d],
-            ScientificName = unname(sci_map[spp_sub[ord_d]]),
-            constancy_1 = vpro_round_ace(c1[ord_d], 1L),
-            mean_cover_1 = vpro_round_ace(m1[ord_d], 2L),
-            constancy_2 = vpro_round_ace(c2[ord_d], 1L),
-            mean_cover_2 = vpro_round_ace(m2[ord_d], 2L),
-            shared_diag = vpro_round_ace(sh_spp[ord_d], 2L),
-            d_points_1 = vpro_round_ace(d1[ord_d], 2L),
-            dd_points_1 = vpro_round_ace(dd1[ord_d], 2L),
-            diff_pts_1 = vpro_round_ace(pts1[ord_d], 2L),
-            d_points_2 = vpro_round_ace(d2[ord_d], 2L),
-            dd_points_2 = vpro_round_ace(dd2[ord_d], 2L),
-            diff_pts_2 = vpro_round_ace(pts2[ord_d], 2L),
-            favours_unit = fav
-          )
-        }
-      } else {
-        shared_diag <- 0.0
-        diff_tot_1 <- 0.0
-        diff_tot_2 <- 0.0
-      }
-
-      diff_tot <- diff_tot_1 + diff_tot_2
-      denom_tot <- diff_tot + 2.0 * shared_diag
-      diff_ratio <- if (denom_tot > 0) (2.0 * shared_diag) / denom_tot else 0.0
-      r1 <- if ((diff_tot_1 + shared_diag) > 0) shared_diag / (diff_tot_1 + shared_diag) else 0.0
-      r2 <- if ((diff_tot_2 + shared_diag) > 0) shared_diag / (diff_tot_2 + shared_diag) else 0.0
-      bec_mean <- (r1 + r2) / 2.0
-      bec_min <- min(r1, r2)
-      bec_max <- max(r1, r2)
-
-      bec_mat[i, j] <- vpro_round_ace(bec_mean, 4L)
-      bec_mat[j, i] <- vpro_round_ace(bec_mean, 4L)
-
-      pair_rows[[length(pair_rows) + 1L]] <- tibble::tibble(
-        Unit1 = u1,
-        Unit2 = u2,
+      cmp <- .vpro_pairwise_compare_pair(
+        u1 = u1,
+        u2 = u2,
         n_plots_1 = unname(n_plots_map[[u1]]),
         n_plots_2 = unname(n_plots_map[[u2]]),
-        shared_diag = vpro_round_ace(shared_diag, 2L),
-        diff_tot_1 = vpro_round_ace(diff_tot_1, 2L),
-        diff_tot_2 = vpro_round_ace(diff_tot_2, 2L),
-        diff_tot = vpro_round_ace(diff_tot, 2L),
-        diff_ratio = vpro_round_ace(diff_ratio, 4L),
-        bec_sim_min = vpro_round_ace(bec_min, 4L),
-        bec_sim_mean = vpro_round_ace(bec_mean, 4L),
-        bec_sim_max = vpro_round_ace(bec_max, 4L),
-        sorensen = vpro_round_ace(sor, 4L)
+        i = i,
+        j = j,
+        all_spp = all_spp,
+        sci_map = sci_map,
+        cov_mat = cov_mat,
+        con_mat = con_mat,
+        pot_mat = pot_mat,
+        elig_spp_mask = elig_spp_mask,
+        min_constancy = min_constancy,
+        noise_constancy = noise_constancy,
+        min_diff = min_diff,
+        min_dd = min_dd
       )
+      sim_mat[i, j] <- cmp$sor_r
+      sim_mat[j, i] <- cmp$sor_r
+      bec_mat[i, j] <- cmp$bec_r
+      bec_mat[j, i] <- cmp$bec_r
+      pair_rows[[length(pair_rows) + 1L]] <- cmp$pair_row
+      if (!is.null(cmp$diff_row)) {
+        diff_rows[[length(diff_rows) + 1L]] <- cmp$diff_row
+      }
     }
   }
 
@@ -416,6 +456,28 @@ as_tibble.vpro_pairwise <- function(x, ...) {
   x$pairs
 }
 
+.vpro_outliers_transform_matrix <- function(mat, transform) {
+  if (identical(transform, "sqrt")) {
+    return(sqrt(pmax(mat, 0.0)))
+  }
+  if (identical(transform, "log1p")) {
+    return(log1p(pmax(mat, 0.0)))
+  }
+  if (identical(transform, "hellinger")) {
+    rs <- rowSums(mat)
+    pos <- rs > 0
+    mat[pos, ] <- sqrt(mat[pos, , drop = FALSE] / rs[pos])
+    return(mat)
+  }
+  if (identical(transform, "chord")) {
+    rn <- sqrt(rowSums(mat^2))
+    pos <- rn > 0
+    mat[pos, ] <- mat[pos, , drop = FALSE] / rn[pos]
+    return(mat)
+  }
+  mat
+}
+
 #' Detect candidate misclassified and anomalous plots via leave-one-out centroids
 #'
 #' For every plot in an assigned `SiteUnit` with `>= 2` plots, computes its
@@ -458,7 +520,7 @@ vpro_outliers <- function(
   transform <- match.arg(tolower(as.character(transform[[1L]])), c("none", "raw", "sqrt", "log1p", "chord", "hellinger"))
   cover_precedence <- match.arg(cover_precedence)
   if (!is.numeric(threshold) || length(threshold) != 1L || is.na(threshold) || threshold < 0 || threshold > 1) {
-    rlang::abort("`threshold` must be a single number in [0, 1].")
+    cli::cli_abort("`threshold` must be a single number in [0, 1].", class = c("vpro_error_diagnostics", "vpro_error"))
   }
   keep_singletons <- isTRUE(keep_singletons)
 
@@ -515,49 +577,27 @@ vpro_outliers <- function(
   )
   all_spp <- sort(unique(as.character(veg_ps$Species)), method = "radix")
 
-  # Build Plot x Species cover matrix across all classified plots (so singleton rival units can also act as centroids)
   uniq_plots <- unique(all_plots)
   mat <- matrix(0.0, nrow = length(uniq_plots), ncol = length(all_spp), dimnames = list(uniq_plots, all_spp))
   if (nrow(veg_ps) > 0L && length(all_spp) > 0L) {
-    r_ix <- match(veg_ps$PlotNumber, uniq_plots)
-    c_ix <- match(veg_ps$Species, all_spp)
-    mat[cbind(r_ix, c_ix)] <- veg_ps$Cover
+    mat[cbind(match(veg_ps$PlotNumber, uniq_plots), match(veg_ps$Species, all_spp))] <- veg_ps$Cover
   }
-
-  # Apply cover transformation
-  if (identical(transform, "sqrt")) {
-    mat <- sqrt(pmax(mat, 0.0))
-  } else if (identical(transform, "log1p")) {
-    mat <- log1p(pmax(mat, 0.0))
-  } else if (identical(transform, "hellinger")) {
-    rs <- rowSums(mat)
-    pos <- rs > 0
-    mat[pos, ] <- sqrt(mat[pos, , drop = FALSE] / rs[pos])
-  } else if (identical(transform, "chord")) {
-    rn <- sqrt(rowSums(mat^2))
-    pos <- rn > 0
-    mat[pos, ] <- mat[pos, , drop = FALSE] / rn[pos]
-  }
+  mat <- .vpro_outliers_transform_matrix(mat, transform)
 
   use_cosine <- transform %in% c("chord", "hellinger")
   sim_fn <- function(v1, v2) {
     if (use_cosine) {
       n1 <- sqrt(sum(v1^2))
       n2 <- sqrt(sum(v2^2))
-      if (n1 <= 0 || n2 <= 0) {
-        return(0.0)
-      }
+      if (n1 <= 0 || n2 <= 0) return(0.0)
       return(min(max(sum(v1 * v2) / (n1 * n2), 0.0), 1.0))
     }
     .vpro_sorensen_vec(v1, v2)
   }
 
-  # Precompute unit sum vectors and centroids
   unit_sums <- lapply(stats::setNames(all_units, all_units), function(u) {
     u_plots <- su_dt[["PlotNumber"]][su_dt[["SiteUnit"]] == u]
-    if (ncol(mat) == 0L) {
-      return(numeric(0))
-    }
+    if (ncol(mat) == 0L) return(numeric(0))
     colSums(mat[u_plots, , drop = FALSE])
   })
   unit_centroids <- lapply(stats::setNames(all_units, all_units), function(u) {
@@ -603,18 +643,12 @@ vpro_outliers <- function(
   reason <- ifelse(
     misclassified & low_sim,
     "closer_to_rival_and_below_threshold",
-    ifelse(
-      misclassified,
-      "closer_to_rival",
-      ifelse(low_sim, "below_threshold", "ok")
-    )
+    ifelse(misclassified, "closer_to_rival", ifelse(low_sim, "below_threshold", "ok"))
   )
 
   env_m <- match(eval_su[["PlotNumber"]], env_df$PlotNumber)
   pull_env_chr <- function(col) {
-    if (!(col %in% names(env_df))) {
-      return(rep(NA_character_, n_eval))
-    }
+    if (!(col %in% names(env_df))) return(rep(NA_character_, n_eval))
     as.character(env_df[[col]][env_m])
   }
 
@@ -637,7 +671,6 @@ vpro_outliers <- function(
     NutrientRegime = pull_env_chr("NutrientRegime")
   )
 
-  # Sort worst-first: flagged first, then smallest (most negative) margin, then lowest own_similarity
   ord <- order(!q_tbl$flagged, !q_tbl$misclassified, q_tbl$margin, q_tbl$own_similarity, q_tbl$PlotNumber, method = "radix")
   q_tbl <- q_tbl[ord, , drop = FALSE]
   out_tbl <- q_tbl[q_tbl$flagged, , drop = FALSE]
@@ -664,7 +697,7 @@ print.vpro_outliers <- function(x, ...) {
   cli::cli_h3("vpro_outliers ({nrow(x$outliers)} flagged / {nrow(x$queue)} evaluated plots)")
   cli::cli_bullets(c(
     "*" = "Transform: {.val {x$transform}} | Threshold: {.val {x$threshold}}",
-    "*" = "Closer to rival unit (`margin < 0`): {n_mis}"
+    "*" = paste0("Closer to rival unit (`margin < 0`): ", n_mis)
   ))
   invisible(x)
 }
