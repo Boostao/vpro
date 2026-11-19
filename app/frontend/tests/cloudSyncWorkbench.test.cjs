@@ -174,11 +174,113 @@ test('subset filter, bbox, compliance gate, custodian-protected field, and snaps
   assert.match(cloudSync.validateSnapshotTagInput('bad tag/slash'), /ASCII letters/);
 });
 
+test('UX-CLOUD-003: numeric input parsers handle number, string, null, undefined, empty, NaN, and negative/out-of-range values without TypeError', () => {
+  // 1. buildSubsetFilterDraft limitRaw (Svelte 5 <input type="number"> coerces to number | null)
+  for (const [raw, expected] of [
+    [5, 5],
+    [1, 1],
+    ['5', 5],
+    ['  250  ', 250],
+  ]) {
+    const res = cloudSync.buildSubsetFilterDraft({
+      zonesRaw: 'CWH',
+      subzonesRaw: '',
+      projectIdsRaw: '',
+      plotNumbersRaw: '',
+      bboxRaw: '',
+      limitRaw: raw,
+    });
+    assert.equal(res.error, null);
+    assert.deepEqual(structuredClone(res.filter), { zones: ['CWH'], limit: expected });
+  }
+
+  for (const emptyVal of [null, undefined, '', '   ']) {
+    const withZone = cloudSync.buildSubsetFilterDraft({
+      zonesRaw: 'CWH',
+      subzonesRaw: '',
+      projectIdsRaw: '',
+      plotNumbersRaw: '',
+      bboxRaw: '',
+      limitRaw: emptyVal,
+    });
+    assert.equal(withZone.error, null);
+    assert.deepEqual(structuredClone(withZone.filter), { zones: ['CWH'] });
+
+    const allEmpty = cloudSync.buildSubsetFilterDraft({
+      zonesRaw: '',
+      subzonesRaw: '',
+      projectIdsRaw: '',
+      plotNumbersRaw: '',
+      bboxRaw: '',
+      limitRaw: emptyVal,
+    });
+    assert.equal(allEmpty.filter, null);
+    assert.match(allEmpty.error, /Specify at least one regional filter/);
+  }
+
+  for (const badLimit of [0, '0', -1, -5, '-5', 2.5, '2.5', Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 1e21, 'abc']) {
+    const badRes = cloudSync.buildSubsetFilterDraft({
+      zonesRaw: 'CWH',
+      subzonesRaw: '',
+      projectIdsRaw: '',
+      plotNumbersRaw: '',
+      bboxRaw: '',
+      limitRaw: badLimit,
+    });
+    assert.equal(badRes.filter, null);
+    assert.equal(badRes.error, 'Subset plot limit must be a positive integer.');
+  }
+
+  // 2. parseSessionPortInput (Port override 1..65535)
+  for (const [raw, expected] of [
+    [5433, 5433],
+    [1, 1],
+    [65535, 65535],
+    ['5433', 5433],
+    [' 5432 ', 5432],
+  ]) {
+    assert.deepEqual(structuredClone(cloudSync.parseSessionPortInput(raw)), { port: expected, error: null });
+  }
+
+  for (const emptyPort of [null, undefined, '', '   ']) {
+    assert.deepEqual(structuredClone(cloudSync.parseSessionPortInput(emptyPort)), { port: undefined, error: null });
+  }
+
+  for (const badPort of [0, '0', -1, '-5432', 65536, 70000, '70000', 5432.5, '5432.5', Number.NaN, Number.POSITIVE_INFINITY, 1e21, 'abc']) {
+    const res = cloudSync.parseSessionPortInput(badPort);
+    assert.equal(res.port, undefined);
+    assert.equal(res.error, 'Server port must be an integer between 1 and 65535.');
+  }
+
+  // 3. parseAuditChainLimitInput (Audit Limit >= 0, empty -> 0)
+  for (const [raw, expected] of [
+    [0, 0],
+    ['0', 0],
+    [100, 100],
+    [' 250 ', 250],
+    [null, 0],
+    [undefined, 0],
+    ['', 0],
+    ['   ', 0],
+  ]) {
+    assert.deepEqual(structuredClone(cloudSync.parseAuditChainLimitInput(raw)), { limit: expected, error: null });
+  }
+
+  for (const badAudit of [-1, -5, '-5', 1.5, '1.5', Number.NaN, Number.POSITIVE_INFINITY, 1e21, 'abc']) {
+    const res = cloudSync.parseAuditChainLimitInput(badAudit);
+    assert.equal(res.error, 'Audit limit must be a non-negative integer (0 = all).');
+  }
+});
+
 test('offline SSR render of CloudSyncWorkbench shows BC Gov bar, Contributor controls, password inputs, and zero leaked secrets', () => {
   const src = read('CloudSyncWorkbench.svelte');
   assert.doesNotMatch(src, /[\u{1F300}-\u{1FAFF}]/u, 'CloudSyncWorkbench must contain zero emojis');
   const compiledClient = compile(src, { filename: 'CloudSyncWorkbench.svelte', generate: 'client' });
   assert.deepEqual(compiledClient.warnings, []);
+  const compiledAuth = compile(read('CloudSyncAuthPanel.svelte'), { filename: 'CloudSyncAuthPanel.svelte', generate: 'client' });
+  assert.deepEqual(compiledAuth.warnings, []);
+  const compiledPull = compile(read('CloudSyncPullPanel.svelte'), { filename: 'CloudSyncPullPanel.svelte', generate: 'client' });
+  assert.deepEqual(compiledPull.warnings, []);
 
   let networkCalledDuringSSR = false;
   const ssrPort = new Proxy(
@@ -258,7 +360,7 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
     setSessionInputs(vals) {
       if (vals.roleMode !== undefined) selectedRoleMode = vals.roleMode;
       if (vals.host !== undefined) overrideHost = vals.host;
-      if (vals.port !== undefined) overridePort = vals.port;
+      if ('port' in vals) overridePort = vals.port;
       if (vals.user !== undefined) overrideUser = vals.user;
       if (vals.password !== undefined) overridePassword = vals.password;
       if (vals.adminUser !== undefined) overrideAdminUser = vals.adminUser;
@@ -270,6 +372,7 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
     setSubsetInputs(vals) {
       if (vals.zones !== undefined) subsetZonesRaw = vals.zones;
       if (vals.plots !== undefined) subsetPlotNumbersRaw = vals.plots;
+      if ('limit' in vals) subsetLimitRaw = vals.limit;
       if (vals.targetProject !== undefined) subsetTargetProject = vals.targetProject;
       if (vals.activate !== undefined) subsetActivateOnSuccess = vals.activate;
     },
@@ -786,6 +889,37 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
     assert.equal(String(api.getState().statusMessage).includes(testSecretA), false);
     assert.equal(String(api.getState().statusMessage).includes(testSecretB), false);
 
+    // 2b. UX-CLOUD-003: numeric/null/undefined/empty/NaN/invalid Port override never throws TypeError
+    api.setSessionInputs({ port: 5433 });
+    client.flush();
+    await api.applySessionConfig(false);
+    client.flush();
+    assert.equal(api.getState().error, null);
+    assert.equal(dispatches.at(-1)[0], 'configureCloudSyncSession');
+    assert.equal(dispatches.at(-1)[1].port, 5433);
+
+    for (const emptyPort of [null, undefined, '', '   ']) {
+      api.setSessionInputs({ port: emptyPort });
+      client.flush();
+      await api.applySessionConfig(false);
+      client.flush();
+      assert.equal(api.getState().error, null);
+      assert.equal(dispatches.at(-1)[0], 'configureCloudSyncSession');
+      assert.equal(dispatches.at(-1)[1].port, undefined);
+    }
+
+    for (const badPort of [70000, 0, -1, Number.NaN, '70000']) {
+      const countBeforeBadPort = dispatches.length;
+      api.setSessionInputs({ port: badPort });
+      client.flush();
+      await api.applySessionConfig(false);
+      client.flush();
+      assert.equal(dispatches.length, countBeforeBadPort, 'invalid port must not invoke configureCloudSyncSession');
+      assert.equal(api.getState().error, 'Server port must be an integer between 1 and 65535.');
+    }
+    api.setSessionInputs({ port: 5432 });
+    client.flush();
+
     // 3. operationHeld guard blocks actions before invoking Wails
     const countBeforeHeld = dispatches.length;
     props.operationHeld = true;
@@ -819,6 +953,47 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
     client.flush();
     assert.equal(switchedStates.length, 2);
     assert.equal(switchedStates[1].activeProject, 'Skeena_Sub_2026');
+
+    // 4b. UX-CLOUD-003: numeric/null/undefined/empty/NaN/negative Subset Plot Limit in both Preview and Pull
+    api.setSubsetInputs({ zones: 'CWH', plots: '', limit: 5, targetProject: 'Skeena_Limit5' });
+    client.flush();
+    await api.runPreviewSubset();
+    client.flush();
+    assert.equal(api.getState().error, null);
+    assert.equal(dispatches.at(-1)[0], 'previewBECMasterSubset');
+    assert.equal(dispatches.at(-1)[1].limit, 5);
+
+    await api.runPullSubset();
+    client.flush();
+    assert.equal(api.getState().error, null);
+    assert.equal(dispatches.at(-1)[0], 'pullBECMasterSubset');
+    assert.equal(dispatches.at(-1)[2].filter.limit, 5);
+
+    for (const emptyLimit of [null, undefined, '', '   ']) {
+      api.setSubsetInputs({ zones: 'CWH', limit: emptyLimit });
+      client.flush();
+      await api.runPreviewSubset();
+      client.flush();
+      assert.equal(api.getState().error, null);
+      assert.equal(dispatches.at(-1)[1].limit, undefined);
+    }
+
+    for (const badLimit of [-5, 0, Number.NaN, 2.5, '-3']) {
+      const countBeforeBadLimit = dispatches.length;
+      api.setSubsetInputs({ zones: 'CWH', limit: badLimit, targetProject: 'Skeena_Limit5' });
+      client.flush();
+      await api.runPreviewSubset();
+      client.flush();
+      assert.equal(dispatches.length, countBeforeBadLimit);
+      assert.equal(api.getState().error, 'Subset plot limit must be a positive integer.');
+
+      await api.runPullSubset();
+      client.flush();
+      assert.equal(dispatches.length, countBeforeBadLimit);
+      assert.equal(api.getState().error, 'Subset plot limit must be a positive integer.');
+    }
+    api.setSubsetInputs({ limit: '' });
+    client.flush();
 
     // 5. Staging Pre-Flight compliance gate blocks non-compliant Contributor upload
     preflightPasses = false;
@@ -861,6 +1036,26 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
     assert.equal(api.getState().auditChainResult.valid, true);
     assert.equal(api.getState().auditChainResult.verifiedRows, 100);
     assert.equal(api.getState().auditChainResult.partialWindow, true);
+
+    for (const emptyOrZeroAudit of [0, '0', null, undefined, '', '   ']) {
+      api.setAuditChainLimit(emptyOrZeroAudit);
+      client.flush();
+      await api.runVerifyAuditChain();
+      client.flush();
+      assert.equal(api.getState().error, null);
+      assert.equal(dispatches.at(-1)[0], 'verifyBECMasterAuditChain');
+      assert.equal(dispatches.at(-1)[1], 0);
+    }
+
+    for (const badAudit of [-1, -5, '-5', Number.NaN, 1.5]) {
+      const countBeforeBadAudit = dispatches.length;
+      api.setAuditChainLimit(badAudit);
+      client.flush();
+      await api.runVerifyAuditChain();
+      client.flush();
+      assert.equal(dispatches.length, countBeforeBadAudit);
+      assert.equal(api.getState().error, 'Audit limit must be a non-negative integer (0 = all).');
+    }
     await api.runPublishStandards();
     api.setSeedPath('/data/BECMaster_fixing.db');
     client.flush();

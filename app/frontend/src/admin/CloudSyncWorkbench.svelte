@@ -12,6 +12,8 @@
   import {
     defaultCloudSyncPort,
     validateProjectNameInput,
+    parseSessionPortInput,
+    parseAuditChainLimitInput,
     buildSubsetFilterDraft,
     canUploadStagingSubmission,
     buildInitialCloudMergeFieldResolutions,
@@ -72,7 +74,7 @@
   let connectionReport = $state.raw<CloudConnectionReport | null>(null);
   let selectedRoleMode = $state<CloudRoleMode>('contributor');
   let overrideHost = $state('');
-  let overridePort = $state('5432');
+  let overridePort = $state<string | number | null | undefined>('5432');
   let overrideDatabase = $state('');
   let overrideSslMode = $state('require');
   let overrideUser = $state('');
@@ -86,7 +88,7 @@
   let subsetProjectIdsRaw = $state('');
   let subsetPlotNumbersRaw = $state('');
   let subsetBboxRaw = $state('');
-  let subsetLimitRaw = $state('');
+  let subsetLimitRaw = $state<string | number | null | undefined>('');
   let subsetAllowFull = $state(false);
   let subsetPreview = $state.raw<SubsetPreview | null>(null);
   let subsetTargetProject = $state('');
@@ -104,7 +106,7 @@
   let submissions = $state.raw<StagingSubmissionSummary[]>([]);
 
   let bootstrapResult = $state.raw<SchemaBootstrapResult | null>(null);
-  let auditChainLimit = $state(0);
+  let auditChainLimit = $state<string | number | null | undefined>(0);
   let auditChainResult = $state.raw<AuditChainVerification | null>(null);
   let publishStandardsResult = $state.raw<PublishStandardsResult | null>(null);
   let seedSourceDbPath = $state('');
@@ -233,14 +235,14 @@
 
   async function applySessionConfig(clearOverrides = false) {
     let parsedPort: number | undefined;
-    if (!clearOverrides && overridePort.trim() !== '') {
-      const p = Number(overridePort.trim());
-      if (!Number.isInteger(p) || p < 1 || p > 65535) {
-        error = 'Server port must be an integer between 1 and 65535.';
+    if (!clearOverrides) {
+      const portParsed = parseSessionPortInput(overridePort);
+      if (portParsed.error) {
+        error = portParsed.error;
         notifyCloud('error', 'Invalid cloud server port', error);
         return;
       }
-      parsedPort = p;
+      parsedPort = portParsed.port;
     }
     const req = $state.snapshot(
       clearOverrides
@@ -468,7 +470,13 @@
   }
 
   async function runVerifyAuditChain() {
-    const parsedLimit = Number.isInteger(Number(auditChainLimit)) && Number(auditChainLimit) > 0 ? Number(auditChainLimit) : 0;
+    const limitParsed = parseAuditChainLimitInput(auditChainLimit);
+    if (limitParsed.error) {
+      error = limitParsed.error;
+      notifyCloud('error', 'Invalid audit limit', error);
+      return;
+    }
+    const parsedLimit = limitParsed.limit;
     await runCloudOp('Verify Audit Chain', 'verifying BECMaster audit hash chain', async (isCurrent, capturedSecrets) => {
       const res = await port.verifyBECMasterAuditChain(parsedLimit);
       if (!isCurrent()) return;

@@ -475,12 +475,42 @@ export interface SubsetFilterDraftInput {
   projectIdsRaw: string;
   plotNumbersRaw: string;
   bboxRaw: string;
-  limitRaw?: string;
+  limitRaw?: string | number | null | undefined;
   allowFullCheckout?: boolean;
 }
 
-export function parseBboxInput(raw: string): { bbox?: number[]; error: string | null } {
-  const trimmed = raw.trim();
+export function parseSessionPortInput(raw: string | number | null | undefined): {
+  port?: number;
+  error: string | null;
+} {
+  const trimmed = String(raw ?? '').trim();
+  if (trimmed === '') {
+    return { port: undefined, error: null };
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 65535) {
+    return { error: 'Server port must be an integer between 1 and 65535.' };
+  }
+  return { port: parsed, error: null };
+}
+
+export function parseAuditChainLimitInput(raw: string | number | null | undefined): {
+  limit: number;
+  error: string | null;
+} {
+  const trimmed = String(raw ?? '').trim();
+  if (trimmed === '') {
+    return { limit: 0, error: null };
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    return { limit: 0, error: 'Audit limit must be a non-negative integer (0 = all).' };
+  }
+  return { limit: parsed, error: null };
+}
+
+export function parseBboxInput(raw: string | null | undefined): { bbox?: number[]; error: string | null } {
+  const trimmed = String(raw ?? '').trim();
   if (trimmed === '') {
     return { bbox: undefined, error: null };
   }
@@ -520,10 +550,10 @@ export function buildSubsetFilterDraft(input: SubsetFilterDraftInput): { filter:
   }
 
   let limit: number | undefined;
-  const limitTrimmed = (input.limitRaw ?? '').trim();
+  const limitTrimmed = String(input.limitRaw ?? '').trim();
   if (limitTrimmed !== '') {
     const parsed = Number(limitTrimmed);
-    if (!Number.isInteger(parsed) || parsed <= 0) {
+    if (!Number.isSafeInteger(parsed) || parsed <= 0) {
       return { filter: null, error: 'Subset plot limit must be a positive integer.' };
     }
     limit = parsed;

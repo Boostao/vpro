@@ -15,7 +15,7 @@
     pullStandardsResult: PullStandardsResult | null;
     selectedRoleMode: CloudRoleMode;
     overrideHost: string;
-    overridePort: string;
+    overridePort: string | number | null | undefined;
     overrideDatabase: string;
     overrideSslMode: string;
     overrideUser: string;

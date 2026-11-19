@@ -9,7 +9,7 @@
     subsetProjectIdsRaw: string;
     subsetPlotNumbersRaw: string;
     subsetBboxRaw: string;
-    subsetLimitRaw: string;
+    subsetLimitRaw: string | number | null | undefined;
     subsetAllowFull: boolean;
     subsetPreview: SubsetPreview | null;
     subsetTargetProject: string;
