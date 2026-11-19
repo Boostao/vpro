@@ -449,8 +449,11 @@ test('UX-CLASS-006: Classification Assign buttons resist clipping on long BEC co
   assert.match(synthViewSrc, /@media\s*\(max-width:\s*1200px\)[\s\S]*?\.syn-workspace-grid\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
 
   const matrixSrc = readSrc('diagnostics/SynthesisMatrixTab.svelte');
-  assert.match(matrixSrc, /@media\s*\(max-width:\s*1200px\)/);
-  assert.match(matrixSrc, /\.sticky-col\.col-sci\s*\{[\s\S]*?position:\s*static/);
+  assert.match(matrixSrc, /tbody\s+td\.sticky-col\.col-code,\s*tbody\s+td\.sticky-col\.col-sci\s*\{[\s\S]*?background:\s*var\(--vpro-surface\)/);
+  assert.match(matrixSrc, /thead\s+th\.sticky-col\.col-code,\s*thead\s+th\.sticky-col\.col-sci\s*\{[\s\S]*?background:\s*var\(--vpro-navy\)[\s\S]*?color:\s*var\(--vpro-surface\)/);
+  assert.doesNotMatch(matrixSrc, /(?:^|\n)\s*\.sticky-col\.col-(?:code|sci)\s*\{[^}]*background:\s*var\(--vpro-surface\)/);
+  assert.match(matrixSrc, /@media\s*\(max-width:\s*1200px\)[\s\S]*?tbody\s+td\.sticky-col\.col-sci\s*\{[\s\S]*?position:\s*static/);
+  assert.match(matrixSrc, /@media\s*\(max-width:\s*1200px\)[\s\S]*?thead\s+th\.sticky-col\.col-sci\s*\{[\s\S]*?position:\s*sticky[\s\S]*?top:\s*0[\s\S]*?left:\s*auto/);
 });
 
 test('UX-CLASS-007: zero Access/SQLite engineering jargon in src/classification/ and RuntimeError stripped from classification banners', () => {

@@ -182,7 +182,6 @@
     width: 78px;
     max-width: 86px;
     white-space: nowrap;
-    background: var(--vpro-surface);
   }
 
   .sticky-col.col-sci {
@@ -191,12 +190,20 @@
     z-index: 2;
     max-width: 175px;
     overflow-wrap: anywhere;
+  }
+
+  tbody td.sticky-col.col-code,
+  tbody td.sticky-col.col-sci {
     background: var(--vpro-surface);
   }
 
-  thead th.sticky-col {
+  thead th.sticky-col.col-code,
+  thead th.sticky-col.col-sci {
+    position: sticky;
+    top: 0;
     z-index: 4;
     background: var(--vpro-navy);
+    color: var(--vpro-surface);
   }
 
   .col-lf {
@@ -210,8 +217,18 @@
 
   @media (max-width: 1200px) {
     .sticky-col.col-sci {
-      position: static;
       max-width: 145px;
+    }
+
+    tbody td.sticky-col.col-sci {
+      position: static;
+    }
+
+    thead th.sticky-col.col-sci {
+      position: sticky;
+      top: 0;
+      left: auto;
+      z-index: 3;
     }
 
     .col-lf {
