@@ -3,6 +3,7 @@ package cloudsync
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -113,21 +114,24 @@ func MaskSensitiveEnvRow(cols []ColumnSpec, rowArgs []any) {
 	}
 }
 
-func loadSensitiveSpeciesFromSQLiteVLists(ctx context.Context, vlistsPath string) (map[string]struct{}, error) {
+func readSensitiveSpeciesFromSQLiteVLists(ctx context.Context, vlistsPath string) (map[string]struct{}, bool, error) {
 	out := map[string]struct{}{}
 	trimmed := strings.TrimSpace(vlistsPath)
 	if trimmed == "" {
-		return out, nil
+		return out, false, nil
 	}
 	db, err := sqlutil.OpenReadOnlyContext(ctx, trimmed)
 	if err != nil {
-		return out, err
+		return out, false, err
 	}
 	defer db.Close()
 
 	var hasTbl int
-	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='USysSppAttributes'`).Scan(&hasTbl); err != nil || hasTbl == 0 {
-		return out, err
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='USysSppAttributes'`).Scan(&hasTbl); err != nil {
+		return out, false, err
+	}
+	if hasTbl == 0 {
+		return out, false, nil
 	}
 	rows, err := db.QueryContext(ctx, `
 		SELECT UPPER(TRIM(CAST("Code" AS TEXT))), COALESCE(CAST("RedBlueList" AS TEXT), ''), COALESCE(CAST("Codetype" AS TEXT), '')
@@ -136,13 +140,13 @@ func loadSensitiveSpeciesFromSQLiteVLists(ctx context.Context, vlistsPath string
 		  AND "RedBlueList" IS NOT NULL AND TRIM(CAST("RedBlueList" AS TEXT)) <> ''
 	`)
 	if err != nil {
-		return out, err
+		return out, true, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var code, rbl, ct string
 		if err := rows.Scan(&code, &rbl, &ct); err != nil {
-			return out, err
+			return out, true, err
 		}
 		if strings.EqualFold(strings.TrimSpace(ct), "S") {
 			continue
@@ -151,14 +155,38 @@ func loadSensitiveSpeciesFromSQLiteVLists(ctx context.Context, vlistsPath string
 			out[code] = struct{}{}
 		}
 	}
-	return out, rows.Err()
+	return out, true, rows.Err()
 }
 
-func loadSensitiveSpeciesFromPG(ctx context.Context, q pgxQueryRowOrQuery) (map[string]struct{}, error) {
+func loadSensitiveSpeciesFromSQLiteVLists(ctx context.Context, vlistsPath string) (map[string]struct{}, error) {
+	trimmed := strings.TrimSpace(vlistsPath)
+	if trimmed == "" {
+		return nil, errors.New("VLists database path is required for rare-plant Red/Blue coordinate redaction")
+	}
+	out, hasTbl, err := readSensitiveSpeciesFromSQLiteVLists(ctx, trimmed)
+	if err != nil {
+		return nil, err
+	}
+	if !hasTbl {
+		return nil, fmt.Errorf("conservation status table USysSppAttributes is missing in %s; refusing to export unredacted plot coordinates without BC CDC Red/Blue status metadata", trimmed)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("USysSppAttributes.RedBlueList contains 0 Red/Blue-listed species rows in %s; refusing to export unredacted plot coordinates when sensitive-species redaction is required (populate BC CDC Red/Blue status codes first)", trimmed)
+	}
+	return out, nil
+}
+
+func readSensitiveSpeciesFromPG(ctx context.Context, q pgxQueryRowOrQuery) (map[string]struct{}, bool, error) {
 	out := map[string]struct{}{}
+	if q == nil {
+		return out, false, errors.New("PostgreSQL query handle is nil")
+	}
 	var hasTbl bool
-	if err := q.QueryRow(ctx, `SELECT to_regclass('standards.usys_spp_attributes') IS NOT NULL`).Scan(&hasTbl); err != nil || !hasTbl {
-		return out, nil
+	if err := q.QueryRow(ctx, `SELECT to_regclass('standards.usys_spp_attributes') IS NOT NULL`).Scan(&hasTbl); err != nil {
+		return out, false, err
+	}
+	if !hasTbl {
+		return out, false, nil
 	}
 	rows, err := q.Query(ctx, `
 		SELECT DISTINCT UPPER(TRIM("Code"))
@@ -168,19 +196,33 @@ func loadSensitiveSpeciesFromPG(ctx context.Context, q pgxQueryRowOrQuery) (map[
 		  AND UPPER(TRIM(COALESCE("RedBlueList", ''))) IN ('R', 'B', 'RED', 'BLUE')
 	`)
 	if err != nil {
-		return out, err
+		return out, true, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var code string
 		if err := rows.Scan(&code); err != nil {
-			return out, err
+			return out, true, err
 		}
 		if code != "" {
 			out[code] = struct{}{}
 		}
 	}
-	return out, rows.Err()
+	return out, true, rows.Err()
+}
+
+func loadSensitiveSpeciesFromPG(ctx context.Context, q pgxQueryRowOrQuery) (map[string]struct{}, error) {
+	out, hasTbl, err := readSensitiveSpeciesFromPG(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	if !hasTbl {
+		return nil, errors.New("conservation status table standards.usys_spp_attributes is missing in PostgreSQL; refusing to export unredacted plot coordinates without BC CDC Red/Blue status metadata")
+	}
+	if len(out) == 0 {
+		return nil, errors.New("standards.usys_spp_attributes contains 0 Red/Blue-listed species rows in PostgreSQL; refusing to export unredacted plot coordinates when sensitive-species redaction is required (populate BC CDC Red/Blue status codes first)")
+	}
+	return out, nil
 }
 
 type pgxQueryRowOrQuery interface {
@@ -190,20 +232,25 @@ type pgxQueryRowOrQuery interface {
 
 func findSensitivePlotsForSubsetPG(ctx context.Context, q pgxQueryRowOrQuery, plotList []string, vlistsPath string) (map[string]struct{}, error) {
 	sensitivePlots := map[string]struct{}{}
-	if len(plotList) == 0 {
-		return sensitivePlots, nil
-	}
 
-	speciesSet, err := loadSensitiveSpeciesFromPG(ctx, q)
+	speciesSet, pgHasTbl, err := readSensitiveSpeciesFromPG(ctx, q)
 	if err != nil {
 		return nil, err
 	}
-	if localSet, lErr := loadSensitiveSpeciesFromSQLiteVLists(ctx, vlistsPath); lErr == nil {
-		for code := range localSet {
-			speciesSet[code] = struct{}{}
-		}
+	localSet, localHasTbl, lErr := readSensitiveSpeciesFromSQLiteVLists(ctx, vlistsPath)
+	if lErr != nil && len(speciesSet) == 0 {
+		return nil, fmt.Errorf("read local VLists conservation status metadata: %w", lErr)
+	}
+	for code := range localSet {
+		speciesSet[code] = struct{}{}
 	}
 	if len(speciesSet) == 0 {
+		if !pgHasTbl && !localHasTbl {
+			return nil, errors.New("conservation status table standards.usys_spp_attributes / USysSppAttributes is missing; refusing to export unredacted plot coordinates without BC CDC Red/Blue status metadata")
+		}
+		return nil, errors.New("conservation status metadata (standards.usys_spp_attributes / USysSppAttributes.RedBlueList) contains 0 Red/Blue-listed species rows; refusing to export unredacted plot coordinates when sensitive-species redaction is required (populate BC CDC Red/Blue status codes first)")
+	}
+	if len(plotList) == 0 {
 		return sensitivePlots, nil
 	}
 
@@ -236,7 +283,8 @@ func findSensitivePlotsForSubsetPG(ctx context.Context, q pgxQueryRowOrQuery, pl
 
 // RedactSensitiveSQLiteProjectCoordinates joins <Project>_Veg against USysSppAttributes.RedBlueList
 // (from vlistsPath) and truncates Longitude/Latitude (0.1 deg) and UTM/XY (10 km) in <Project>_Env
-// for all plots containing Red/Blue-listed species.
+// for all plots containing Red/Blue-listed species. Fails closed when USysSppAttributes is missing
+// or contains zero Red/Blue-listed species rows.
 func RedactSensitiveSQLiteProjectCoordinates(ctx context.Context, sqlitePath, project, vlistsPath string) (int, error) {
 	if _, err := validateSplinterProjectName(project); err != nil {
 		return 0, err
@@ -244,9 +292,6 @@ func RedactSensitiveSQLiteProjectCoordinates(ctx context.Context, sqlitePath, pr
 	speciesSet, err := loadSensitiveSpeciesFromSQLiteVLists(ctx, vlistsPath)
 	if err != nil {
 		return 0, err
-	}
-	if len(speciesSet) == 0 {
-		return 0, nil
 	}
 
 	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(sqlitePath, "rw")+"&_txlock=immediate&_foreign_keys=on")

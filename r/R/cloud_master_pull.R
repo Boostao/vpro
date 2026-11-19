@@ -91,6 +91,12 @@ vpro_master_pull_impl <- function(
   )
   tx_open <- TRUE
 
+  sens_codes <- if (isTRUE(redact_sensitive)) {
+    .vpro_sensitive_species_codes(pg = pg, require_populated = TRUE)
+  } else {
+    character(0L)
+  }
+
   where_part <- if (nzchar(sub$where_sql)) paste0(" ", sub$where_sql) else ""
   limit_part <- if (!is.null(limit_int)) sprintf(" LIMIT %d", limit_int) else ""
   plot_sql <- paste0(
@@ -112,7 +118,6 @@ vpro_master_pull_impl <- function(
   }
 
   sensitive_plots <- if (isTRUE(redact_sensitive)) {
-    sens_codes <- .vpro_sensitive_species_codes(pg = pg)
     .vpro_sensitive_plots_in_pg(pg, plot_list, sens_codes)
   } else {
     character(0L)
@@ -508,7 +513,10 @@ vpro_master_pull_impl <- function(
 
   dest_final <- normalizePath(dest_resolved, winslash = "/", mustWork = TRUE)
   ws <- vpro_connect(dest_final)
-  attr(ws, "cloud_redacted") <- (isTRUE(redact_sensitive) && length(sensitive_plots) > 0L)
+  attr(ws, "cloud_redacted") <- isTRUE(redact_sensitive)
+  if (isTRUE(redact_sensitive)) {
+    attr(ws, "cloud_sensitive_codes") <- sens_codes
+  }
   attr(ws, "cloud_role") <- as.character(pg$role)
 
   # Cleanly close a RW handle after SQLITE_RO inspection inside vpro_connect() so

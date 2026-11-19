@@ -230,31 +230,72 @@ vpro_pg_subset_where <- function(
   )
 }
 
-.vpro_sensitive_species_codes <- function(pg = NULL, vlists_path = getOption("vpro.vlists_path", NULL)) {
+.vpro_sensitive_species_codes <- function(
+  pg = NULL,
+  vlists_path = getOption("vpro.vlists_path", NULL),
+  extra_codes = NULL,
+  require_populated = TRUE
+) {
+  require_populated <- vpro_pg_validate_flag(require_populated, "require_populated")
   codes <- character()
   syn_pairs <- data.frame(Code = character(), OldCode = character(), stringsAsFactors = FALSE)
+  checked_sources <- character()
+  has_any_attr_table <- FALSE
 
-  vdb <- if (!is.null(vlists_path) && is.character(vlists_path) && length(vlists_path) == 1L && !is.na(vlists_path) && nzchar(trimws(vlists_path)) && file.exists(vlists_path)) {
-    trimws(vlists_path)
+  if (!is.null(extra_codes)) {
+    extra_clean <- unique(toupper(trimws(as.character(extra_codes[!is.na(extra_codes)]))))
+    extra_clean <- extra_clean[nzchar(extra_clean)]
+    if (length(extra_clean) > 0L) {
+      codes <- c(codes, extra_clean)
+      has_any_attr_table <- TRUE
+    }
+  }
+
+  vdb <- ""
+  if (!is.null(vlists_path)) {
+    if (!is.character(vlists_path) || length(vlists_path) != 1L || is.na(vlists_path) || !nzchar(trimws(vlists_path))) {
+      if (is.null(pg) && length(codes) == 0L && isTRUE(require_populated)) {
+        cli::cli_abort(
+          "{.arg vlists_path} must be a non-empty file path to {.file VLists.db} for rare-plant coordinate redaction."
+        )
+      }
+    } else {
+      vdb_cand <- trimws(vlists_path)
+      if (!file.exists(vdb_cand)) {
+        if (is.null(pg) && length(codes) == 0L && isTRUE(require_populated)) {
+          cli::cli_abort(c(
+            "Species conservation catalogue {.path {vdb_cand}} was not found.",
+            "i" = "Refusing to return or export unredacted plot coordinates when sensitive-species redaction is required."
+          ))
+        }
+      } else {
+        vdb <- vdb_cand
+      }
+    }
   } else {
     cand <- file.path(vpro_data_dir(), "VLists.db")
-    if (file.exists(cand)) cand else tryCatch(vpro_bundled_db("VLists.db"), error = function(e) "")
+    vdb <- if (file.exists(cand)) cand else tryCatch(vpro_bundled_db("VLists.db"), error = function(e) "")
   }
 
   if (is.character(vdb) && length(vdb) == 1L && nzchar(vdb) && file.exists(vdb)) {
-    dbc <- tryCatch(vpro_sqlite_ro(vdb), error = function(e) NULL)
-    if (!is.null(dbc)) {
+    checked_sources <- c(checked_sources, vdb)
+    dbc <- tryCatch(vpro_sqlite_ro(vdb), error = function(e) e)
+    if (inherits(dbc, "error")) {
+      if (is.null(pg) && length(codes) == 0L && isTRUE(require_populated)) {
+        cli::cli_abort(
+          "Failed to open species conservation catalogue {.path {vdb}} for rare-plant coordinate redaction: {conditionMessage(dbc)}"
+        )
+      }
+    } else if (!is.null(dbc)) {
       on.exit(if (DBI::dbIsValid(dbc)) DBI::dbDisconnect(dbc), add = TRUE)
-      if (isTRUE(tryCatch(DBI::dbExistsTable(dbc, "USysSppAttributes"), error = function(e) FALSE))) {
-        attr_df <- tryCatch(
-          DBI::dbGetQuery(
-            dbc,
-            paste(
-              'SELECT DISTINCT UPPER(TRIM(CAST("Code" AS TEXT))) AS code FROM "USysSppAttributes"',
-              .vpro_sensitive_attr_where_sql()
-            )
-          ),
-          error = function(e) data.frame()
+      if (isTRUE(DBI::dbExistsTable(dbc, "USysSppAttributes"))) {
+        has_any_attr_table <- TRUE
+        attr_df <- DBI::dbGetQuery(
+          dbc,
+          paste(
+            'SELECT DISTINCT UPPER(TRIM(CAST("Code" AS TEXT))) AS code FROM "USysSppAttributes"',
+            .vpro_sensitive_attr_where_sql()
+          )
         )
         if (nrow(attr_df) > 0L) {
           codes <- c(codes, as.character(attr_df$code))
@@ -276,30 +317,24 @@ vpro_pg_subset_where <- function(
   }
 
   if (!is.null(pg)) {
-    has_pg_attr <- tryCatch(
-      {
-        chk <- vpro_pg_query(
-          pg,
-          "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'standards' AND table_name = 'usys_spp_attributes') AS ok",
-          params = NULL,
-          action = "check standards.usys_spp_attributes availability"
-        )
-        nrow(chk) >= 1L && isTRUE(vpro_access_to_logical(chk$ok[[1L]]))
-      },
-      error = function(e) FALSE
+    checked_sources <- c(checked_sources, "standards.usys_spp_attributes")
+    chk <- vpro_pg_query(
+      pg,
+      "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'standards' AND table_name = 'usys_spp_attributes') AS ok",
+      params = NULL,
+      action = "check standards.usys_spp_attributes availability"
     )
+    has_pg_attr <- nrow(chk) >= 1L && isTRUE(vpro_access_to_logical(chk$ok[[1L]]))
     if (isTRUE(has_pg_attr)) {
-      pg_attr <- tryCatch(
-        vpro_pg_query(
-          pg,
-          paste(
-            'SELECT DISTINCT UPPER(TRIM(CAST("Code" AS TEXT))) AS code FROM standards.usys_spp_attributes',
-            .vpro_sensitive_attr_where_sql()
-          ),
-          params = NULL,
-          action = "query sensitive species in standards.usys_spp_attributes"
+      has_any_attr_table <- TRUE
+      pg_attr <- vpro_pg_query(
+        pg,
+        paste(
+          'SELECT DISTINCT UPPER(TRIM(CAST("Code" AS TEXT))) AS code FROM standards.usys_spp_attributes',
+          .vpro_sensitive_attr_where_sql()
         ),
-        error = function(e) data.frame()
+        params = NULL,
+        action = "query sensitive species in standards.usys_spp_attributes"
       )
       if (nrow(pg_attr) > 0L) {
         codes <- c(codes, as.character(pg_attr$code))
@@ -317,6 +352,27 @@ vpro_pg_subset_where <- function(
     codes <- unique(c(codes, old_hits, canon_hits))
     codes <- codes[nzchar(codes)]
   }
+
+  if (isTRUE(require_populated) && length(codes) == 0L) {
+    src_lbl <- if (length(checked_sources) > 0L) {
+      paste(checked_sources, collapse = ", ")
+    } else {
+      "VLists.db / standards.usys_spp_attributes"
+    }
+    if (!isTRUE(has_any_attr_table)) {
+      cli::cli_abort(c(
+        "Cannot redact rare-plant coordinates because species conservation table {.code USysSppAttributes} ({.code standards.usys_spp_attributes}) is missing ({src_lbl}).",
+        "i" = "Refusing to return or export unredacted plot coordinates when sensitive-species redaction is required.",
+        "i" = "Supply a species catalogue populated with BC Conservation Data Centre (CDC) Red/Blue status codes ({.val R}/{.val B}), or set {.code redact_sensitive = FALSE} only when unredacted coordinates are authorized."
+      ))
+    }
+    cli::cli_abort(c(
+      "Cannot redact rare-plant coordinates because {.code USysSppAttributes.RedBlueList} contains 0 Red/Blue-listed species rows ({src_lbl}).",
+      "i" = "Refusing to return or export unredacted plot coordinates when sensitive-species redaction is required.",
+      "i" = "Populate BC Conservation Data Centre (CDC) Red/Blue status codes ({.val R}/{.val B}) in {.file VLists.db} / {.code standards.usys_spp_attributes}, or set {.code redact_sensitive = FALSE} only when unredacted coordinates are authorized."
+    ))
+  }
+
   sort(codes)
 }
 

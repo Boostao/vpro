@@ -21,9 +21,11 @@
 #'   `tail_audit_hash`, `notes`).
 #' @param compress Compression codec passed to [base::saveRDS()]: `"xz"`
 #'   (default maximum compression) or `"gzip"` (faster write).
-#' @param redact_sensitive Logical; if `TRUE`, redacts coordinates (`Latitude`,
-#'   `Longitude`, `UTMEasting`, `UTMNorthing`, `UTMZone`) to `NA` on plots
-#'   containing sensitive (`USysSppAttributes.RedBlueList`) species. Defaults to
+#' @param redact_sensitive Logical; if `TRUE`, generalizes coordinates
+#'   (`Latitude`, `Longitude`, `UTMEasting`, `UTMNorthing`, `XCoord`, `YCoord`)
+#'   to an ~10 km grid while preserving `UTMZone` on plots containing Red- or
+#'   Blue-listed (`USysSppAttributes.RedBlueList`) species, and aborts if
+#'   conservation status metadata is missing or unpopulated. Defaults to
 #'   `isTRUE(attr(ws, "cloud_redacted"))`.
 #' @return A list with `path`, `sha256`, `bytes`, `plot_count`, and `veg_count`.
 #' @seealso [vpro_import_rds()], [vpro_master_publish_snapshot()]
@@ -38,6 +40,7 @@ vpro_export_rds <- function(
 ) {
   vpro_assert_workspace(ws)
   compress <- match.arg(compress)
+  redact_sensitive <- vpro_pg_validate_flag(redact_sensitive, "redact_sensitive")
 
   if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(trimws(path))) {
     cli::cli_abort("{.arg path} must be a single non-empty {.file .rds} file path.")
@@ -67,15 +70,30 @@ vpro_export_rds <- function(
     )
   }
 
+  sens_codes <- if (isTRUE(redact_sensitive)) {
+    .vpro_sensitive_species_codes(
+      vlists_path = ws$vlists_path,
+      extra_codes = attr(ws, "cloud_sensitive_codes"),
+      require_populated = TRUE
+    )
+  } else {
+    character(0L)
+  }
+
   tables <- vpro_extract_workspace_snapshot_tables(ws)
-  if (isTRUE(redact_sensitive) && is.data.frame(tables$env) && nrow(tables$env) > 0L && is.data.frame(tables$veg) && nrow(tables$veg) > 0L && "Species" %in% names(tables$veg)) {
-    sens_codes <- .vpro_sensitive_species_codes(vlists_path = ws$vlists_path)
-    if (length(sens_codes) > 0L) {
-      veg_spp <- toupper(trimws(as.character(tables$veg$Species)))
-      sens_plots <- unique(as.character(tables$veg$PlotNumber[veg_spp %in% sens_codes]))
-      if (length(sens_plots) > 0L) {
-        tables$env <- .vpro_redact_coord_df(tables$env, sens_plots)
-      }
+  if (
+    isTRUE(redact_sensitive) &&
+      length(sens_codes) > 0L &&
+      is.data.frame(tables$env) &&
+      nrow(tables$env) > 0L &&
+      is.data.frame(tables$veg) &&
+      nrow(tables$veg) > 0L &&
+      "Species" %in% names(tables$veg)
+  ) {
+    veg_spp <- toupper(trimws(as.character(tables$veg$Species)))
+    sens_plots <- unique(as.character(tables$veg$PlotNumber[veg_spp %in% sens_codes]))
+    if (length(sens_plots) > 0L) {
+      tables$env <- .vpro_redact_coord_df(tables$env, sens_plots)
     }
   }
   plot_count <- as.integer(nrow(tables$env))

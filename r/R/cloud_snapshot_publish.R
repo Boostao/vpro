@@ -1,6 +1,8 @@
 # BECMaster Cloud Snapshot CSV Bundle & Publication --------------------------
 
 vpro_write_snapshot_csv_bundle <- function(ws, snapshot_tag, out_dir_abs, provenance, overwrite = FALSE, redact_sensitive = FALSE) {
+  overwrite <- vpro_pg_validate_flag(overwrite, "overwrite")
+  redact_sensitive <- vpro_pg_validate_flag(redact_sensitive, "redact_sensitive")
   csv_dir <- file.path(out_dir_abs, paste0(snapshot_tag, "_csv"))
   tar_path <- file.path(out_dir_abs, paste0(snapshot_tag, "_csv.tar.gz"))
 
@@ -9,6 +11,17 @@ vpro_write_snapshot_csv_bundle <- function(ws, snapshot_tag, out_dir_abs, proven
       "Snapshot CSV output already exists (pass {.code overwrite = TRUE} to replace): {.path {tar_path}}."
     )
   }
+
+  sens_codes <- if (isTRUE(redact_sensitive)) {
+    .vpro_sensitive_species_codes(
+      vlists_path = ws$vlists_path,
+      extra_codes = attr(ws, "cloud_sensitive_codes"),
+      require_populated = TRUE
+    )
+  } else {
+    character(0L)
+  }
+
   if (dir.exists(csv_dir) || file.exists(csv_dir)) {
     unlink(csv_dir, recursive = TRUE, force = TRUE)
   }
@@ -18,14 +31,19 @@ vpro_write_snapshot_csv_bundle <- function(ws, snapshot_tag, out_dir_abs, proven
 
   dir.create(csv_dir, recursive = TRUE, showWarnings = FALSE)
   tables <- vpro_extract_workspace_snapshot_tables(ws)
-  if (isTRUE(redact_sensitive) && is.data.frame(tables$env) && nrow(tables$env) > 0L && is.data.frame(tables$veg) && nrow(tables$veg) > 0L && "Species" %in% names(tables$veg)) {
-    sens_codes <- .vpro_sensitive_species_codes(vlists_path = ws$vlists_path)
-    if (length(sens_codes) > 0L) {
-      veg_spp <- toupper(trimws(as.character(tables$veg$Species)))
-      sens_plots <- unique(as.character(tables$veg$PlotNumber[veg_spp %in% sens_codes]))
-      if (length(sens_plots) > 0L) {
-        tables$env <- .vpro_redact_coord_df(tables$env, sens_plots)
-      }
+  if (
+    isTRUE(redact_sensitive) &&
+      length(sens_codes) > 0L &&
+      is.data.frame(tables$env) &&
+      nrow(tables$env) > 0L &&
+      is.data.frame(tables$veg) &&
+      nrow(tables$veg) > 0L &&
+      "Species" %in% names(tables$veg)
+  ) {
+    veg_spp <- toupper(trimws(as.character(tables$veg$Species)))
+    sens_plots <- unique(as.character(tables$veg$PlotNumber[veg_spp %in% sens_codes]))
+    if (length(sens_plots) > 0L) {
+      tables$env <- .vpro_redact_coord_df(tables$env, sens_plots)
     }
   }
 
@@ -153,9 +171,10 @@ vpro_write_snapshot_csv_bundle <- function(ws, snapshot_tag, out_dir_abs, proven
 #' @param compress Compression codec for `.rds` output (`"xz"` or `"gzip"`).
 #' @param overwrite Logical; if `TRUE`, replaces existing local artifacts and
 #'   updates an existing `snapshot_tag` row in `becmaster.snapshots`.
-#' @param redact_sensitive Logical; if `TRUE`, redacts coordinates on plots
-#'   containing sensitive (`USysSppAttributes.RedBlueList`) species across
-#'   generated artifacts.
+#' @param redact_sensitive Logical; if `TRUE`, generalizes coordinates to an
+#'   ~10 km grid (preserving `UTMZone`) on plots containing Red- or Blue-listed
+#'   (`USysSppAttributes.RedBlueList`) species across generated artifacts, and
+#'   aborts if conservation status metadata is missing or unpopulated.
 #' @return A structured list with `snapshot_tag`, `created_at`, `created_by`,
 #'   `plot_count`, `veg_count`, `bec_version`, `taxonomy_version`,
 #'   `manifest_sha256`, `notes`, and an `artifacts` tibble (`format`, `path`,
@@ -218,6 +237,9 @@ vpro_master_publish_snapshot <- function(
   }
   if (vpro_is_bundled_package_path(out_dir_abs)) {
     cli::cli_abort("Refusing to publish snapshots inside installed package path: {.path {out_dir_abs}}.")
+  }
+  if (isTRUE(redact_sensitive)) {
+    .vpro_sensitive_species_codes(pg = pg, require_populated = TRUE)
   }
   if (!dir.exists(out_dir_abs)) {
     dir.create(out_dir_abs, recursive = TRUE, showWarnings = FALSE)
