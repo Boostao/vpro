@@ -25,10 +25,11 @@
   ')'
 )
 
-.vpro_identity_seq_ddl <- paste(
-  'CREATE TABLE IF NOT EXISTS main."__VPRO_IdentitySeq" (',
-  '  "TableName" TEXT PRIMARY KEY,',
-  '  "LastID" INTEGER NOT NULL',
+.vpro_child_identity_ddl <- paste(
+  'CREATE TABLE IF NOT EXISTS main."__VPRO_ChildIdentity" (',
+  '  "ChildTable" TEXT NOT NULL,',
+  '  "ID" INTEGER NOT NULL,',
+  '  PRIMARY KEY ("ChildTable", "ID")',
   ')'
 )
 
@@ -306,34 +307,101 @@ vpro_extract_su_memberships <- function(memberships) {
 }
 
 vpro_reserve_next_id_in_tx <- function(dbc, table_name, id_col = "ID") {
-  DBI::dbExecute(dbc, .vpro_identity_seq_ddl)
-  cur_seq <- DBI::dbGetQuery(
-    dbc,
-    'SELECT "LastID" FROM main."__VPRO_IdentitySeq" WHERE "TableName" = ?',
-    params = list(table_name)
-  )
-  last_seq <- if (nrow(cur_seq) > 0L && !is.na(cur_seq$LastID[[1L]])) {
-    as.numeric(cur_seq$LastID[[1L]])
-  } else {
-    0
+  if (!is.character(table_name) || length(table_name) != 1L || is.na(table_name) || !nzchar(trimws(table_name))) {
+    rlang::abort("`table_name` must be a single non-empty table name.")
   }
-  qt <- vpro_quote_ident(table_name)
+  raw_unquoted <- gsub('""', '"', sub('^"(.*)"$', "\\1", trimws(enc2utf8(table_name))))
+  found_tbl <- DBI::dbGetQuery(
+    dbc,
+    "SELECT name FROM main.sqlite_master WHERE type = 'table' AND name = ? COLLATE NOCASE",
+    params = list(raw_unquoted)
+  )
+  if (nrow(found_tbl) == 0L) {
+    rlang::abort(paste0("Target child table `", raw_unquoted, "` does not exist in SQLite database."))
+  }
+  unquoted <- as.character(found_tbl$name[[1L]])
+  qt <- vpro_quote_ident(unquoted)
   qid <- vpro_quote_ident(id_col)
-  max_df <- DBI::dbGetQuery(
-    dbc,
-    paste0("SELECT COALESCE(MAX(CAST(", qid, " AS INTEGER)), 0) AS max_id FROM main.", qt)
+
+  DBI::dbExecute(dbc, .vpro_child_identity_ddl)
+
+  sql_parts <- c(
+    paste0(
+      "SELECT CAST(", qid, " AS INTEGER) AS id_val FROM main.", qt,
+      " WHERE typeof(", qid, ") = 'integer' AND ", qid, " > 0 AND ", qid, " <= 2147483647"
+    ),
+    paste(
+      'SELECT "ID" AS id_val FROM main."__VPRO_ChildIdentity"',
+      'WHERE "ChildTable" COLLATE NOCASE IN (?, ?) AND typeof("ID") = \'integer\' AND "ID" > 0 AND "ID" <= 2147483647'
+    )
   )
-  max_tbl <- if (nrow(max_df) > 0L && !is.na(max_df$max_id[[1L]])) {
-    as.numeric(max_df$max_id[[1L]])
-  } else {
-    0
+  sql_params <- list(qt, unquoted)
+
+  last_sep <- regexpr("_[^_]+$", unquoted)
+  if (last_sep > 1L) {
+    project_pfx <- substr(unquoted, 1L, last_sep - 1L)
+    suffix_part <- substr(unquoted, last_sep, nchar(unquoted))
+    if (tolower(suffix_part) != "_audit") {
+      audit_cand <- paste0(project_pfx, "_Audit")
+      audit_found <- DBI::dbGetQuery(
+        dbc,
+        "SELECT name FROM main.sqlite_master WHERE type = 'table' AND name = ? COLLATE NOCASE",
+        params = list(audit_cand)
+      )
+      if (nrow(audit_found) > 0L) {
+        q_audit <- vpro_quote_ident(as.character(audit_found$name[[1L]]))
+        plain_sfx <- substring(suffix_part, 2L)
+        sql_parts <- c(
+          sql_parts,
+          paste0(
+            'SELECT "ID" AS id_val FROM main.', q_audit,
+            ' WHERE "Table" COLLATE NOCASE IN (?, ?, ?) AND typeof("ID") = \'integer\' AND "ID" > 0 AND "ID" <= 2147483647'
+          )
+        )
+        sql_params <- c(sql_params, list(suffix_part, unquoted, plain_sfx))
+      }
+    }
   }
-  next_val <- max(last_seq, max_tbl, 0) + 1
-  next_int <- as.integer(min(next_val, .Machine$integer.max))
+
+  used_df <- DBI::dbGetQuery(
+    dbc,
+    paste0(paste(sql_parts, collapse = " UNION "), " ORDER BY id_val ASC"),
+    params = sql_params
+  )
+  used_num <- if (nrow(used_df) > 0L) as.numeric(used_df$id_val[!is.na(used_df$id_val)]) else numeric()
+  used_num <- sort(unique(used_num[is.finite(used_num) & used_num >= 1 & used_num <= .Machine$integer.max]))
+
+  if (length(used_num) == 0L) {
+    next_int <- 1L
+  } else {
+    max_used <- used_num[[length(used_num)]]
+    if (max_used < .Machine$integer.max) {
+      next_int <- as.integer(max_used + 1)
+    } else {
+      candidate <- 1
+      for (u in used_num) {
+        if (u > candidate) {
+          break
+        }
+        if (candidate >= .Machine$integer.max) {
+          rlang::abort(paste0("Child ID space exhausted for table `", unquoted, "`."))
+        }
+        candidate <- candidate + 1
+      }
+      next_int <- as.integer(candidate)
+    }
+  }
+
   DBI::dbExecute(
     dbc,
-    'INSERT OR REPLACE INTO main."__VPRO_IdentitySeq" ("TableName", "LastID") VALUES (?, ?)',
-    params = list(table_name, next_int)
+    paste(
+      'INSERT OR IGNORE INTO main."__VPRO_ChildIdentity" ("ChildTable", "ID")',
+      "SELECT ?, ? WHERE NOT EXISTS (",
+      '  SELECT 1 FROM main."__VPRO_ChildIdentity"',
+      '  WHERE "ChildTable" COLLATE NOCASE IN (?, ?) AND "ID" = ?',
+      ")"
+    ),
+    params = list(qt, next_int, qt, unquoted, next_int)
   )
   next_int
 }
@@ -358,7 +426,8 @@ vpro_append_project_audit_in_tx <- function(
   edit_field,
   before_val,
   after_val,
-  plot_number = NA_character_
+  plot_number = NA_character_,
+  child_id = NA_integer_
 ) {
   audit_cand <- paste0(project_name, "_Audit")
   found <- DBI::dbGetQuery(
@@ -377,7 +446,11 @@ vpro_append_project_audit_in_tx <- function(
   plot_param <- if (is.na(plot_number) || !nzchar(trimws(plot_number))) NA_character_ else as.character(plot_number)
 
   if ("ID" %in% flds) {
-    next_id <- vpro_reserve_next_id_in_tx(dbc, actual_audit, id_col = "ID")
+    id_param <- if (is.null(child_id) || length(child_id) == 0L || is.na(child_id[[1L]])) {
+      NA_integer_
+    } else {
+      as.integer(child_id[[1L]])
+    }
     DBI::dbExecute(
       dbc,
       paste0(
@@ -395,7 +468,7 @@ vpro_append_project_audit_in_tx <- function(
         now_ts,
         as.character(before_val),
         as.character(after_val),
-        next_id
+        id_param
       )
     )
   } else {
@@ -497,35 +570,54 @@ vpro_write_su <- function(
   if (missing(create) && is_candidate) {
     create <- TRUE
   }
-  if (is.null(su)) {
-    if (is_candidate) {
-      su <- paste0(gsub("(?i)master", "Mst", ws$project, perl = TRUE), "_ClusterCandidate")
-    } else {
-      rlang::abort("`su` must be a single non-empty character string when `candidate = FALSE`.")
-    }
-  }
-  if (!is.character(su) || length(su) != 1L || is.na(su) || !nzchar(trimws(su))) {
-    rlang::abort("`su` must be a single non-empty character string.")
-  }
-
-  raw_nm <- trimws(su)
-  base <- sub("_SU$", "", raw_nm, ignore.case = TRUE)
   if (is_candidate) {
-    base <- sub("_ClusterCandidate$", "", base, ignore.case = TRUE)
-    cand_prefix <- paste0(base, "_ClusterCandidate")
-    target_table <- paste0(cand_prefix, "_SU")
-    vpro_assert_safe_prefix(raw_nm, target_table, ws$project, kind = "candidate_su")
-    if (tolower(base) %in% c("none", "filtered")) {
-      rlang::abort(paste0("Candidate prefix `", base, "` is reserved by VPro."))
+    if (is.null(su)) {
+      base <- if (grepl("master", ws$project, ignore.case = TRUE)) "Proj" else trimws(enc2utf8(as.character(ws$project)))
+      raw_nm <- paste0(substr(base, 1L, 14L), "_ClusterCandidate")
+    } else {
+      if (!is.character(su) || length(su) != 1L || is.na(su) || !nzchar(trimws(su))) {
+        rlang::abort("`su` must be a single non-empty character string.")
+      }
+      raw_nm <- trimws(enc2utf8(su))
+      vpro_assert_safe_prefix(raw_nm, raw_nm, ws$project, kind = "candidate_su")
+      base <- sub("_SU$", "", raw_nm, ignore.case = TRUE)
+      base <- sub("_ClusterCandidate$", "", base, ignore.case = TRUE)
+      if (!nzchar(base)) {
+        base <- if (grepl("master", ws$project, ignore.case = TRUE)) "Proj" else trimws(enc2utf8(as.character(ws$project)))
+      }
     }
-    if (!grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", base)) {
+    if (!validUTF8(base) || !grepl("^[A-Za-z][A-Za-z0-9_]*$", base)) {
       rlang::abort(paste0(
         "Candidate prefix `",
         base,
-        "` must start with an ASCII letter, contain only ASCII letters, digits, or underscores, and be at most 31 characters."
+        "` must start with an ASCII letter and contain only ASCII letters, digits, or underscores (max 14 characters)."
       ))
     }
+    if (tolower(base) %in% c("none", "filtered", "usyssutabledynamic") || grepl("^usys", base, ignore.case = TRUE)) {
+      rlang::abort(paste0("Candidate prefix `", base, "` is reserved by VPro."))
+    }
+    if (nchar(base) > 14L) {
+      base <- substr(base, 1L, 14L)
+    }
+    if (tolower(base) %in% c("none", "filtered") || !grepl("^[A-Za-z][A-Za-z0-9_]{0,13}$", base)) {
+      rlang::abort(paste0(
+        "Candidate prefix `",
+        base,
+        "` must start with an ASCII letter and contain only ASCII letters, digits, or underscores (max 14 characters)."
+      ))
+    }
+    cand_prefix <- paste0(base, "_ClusterCandidate")
+    target_table <- paste0(cand_prefix, "_SU")
+    vpro_assert_safe_prefix(cand_prefix, target_table, ws$project, kind = "candidate_su")
   } else {
+    if (is.null(su)) {
+      rlang::abort("`su` must be a single non-empty character string when `candidate = FALSE`.")
+    }
+    if (!is.character(su) || length(su) != 1L || is.na(su) || !nzchar(trimws(su))) {
+      rlang::abort("`su` must be a single non-empty character string.")
+    }
+    raw_nm <- trimws(enc2utf8(su))
+    base <- sub("_SU$", "", raw_nm, ignore.case = TRUE)
     target_table <- paste0(base, "_SU")
     vpro_assert_safe_prefix(raw_nm, target_table, ws$project, kind = "su")
     if (tolower(base) %in% c("none", "usyssutabledynamic", "filtered")) {
@@ -626,7 +718,9 @@ vpro_write_su <- function(
 
   ws_next <- ws
   ws_next$su_path <- ws$project_path
-  invisible(vpro_use(ws_next, su = written_table))
+  ws_out <- vpro_use(ws_next, su = written_table)
+  ws_out$table <- written_table
+  invisible(ws_out)
 }
 
 #' Write or replace a taxonomic lumping (`*_Lump`) table
@@ -806,5 +900,7 @@ vpro_write_lump <- function(
 
   ws_next <- ws
   ws_next$lump_path <- ws$project_path
-  invisible(vpro_use(ws_next, lump = written_table))
+  ws_out <- vpro_use(ws_next, lump = written_table)
+  ws_out$table <- written_table
+  invisible(ws_out)
 }

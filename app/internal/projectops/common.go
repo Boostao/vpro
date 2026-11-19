@@ -357,9 +357,12 @@ func ensureChildIdentityTable(ctx context.Context, tx *sql.Tx) error {
 }
 
 func reserveChildID(ctx context.Context, tx *sql.Tx, childTable string, id int64) error {
-	quoted := vprocore.QuoteHeaderIdentifier(childTable)
-	_, err := tx.ExecContext(ctx, `INSERT INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") VALUES (?, ?)
-		ON CONFLICT ("ChildTable", "ID") DO NOTHING`, quoted, id)
+	unquoted := strings.ReplaceAll(strings.Trim(childTable, `"`), `""`, `"`)
+	quoted := vprocore.QuoteHeaderIdentifier(unquoted)
+	_, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID")
+		SELECT ?, ? WHERE NOT EXISTS (
+			SELECT 1 FROM "__VPRO_ChildIdentity" WHERE "ChildTable" COLLATE NOCASE IN (?, ?) AND "ID" = ?
+		)`, quoted, id, quoted, unquoted, id)
 	return err
 }
 
@@ -369,16 +372,29 @@ func allocateSafeChildID(ctx context.Context, tx *sql.Tx, project, suffix string
 	if err := ensureChildIdentityTable(ctx, tx); err != nil {
 		return 0, err
 	}
-	childTable := project + "_" + suffix
+	plainSuffix := strings.TrimPrefix(suffix, "_")
+	childTable := project + "_" + plainSuffix
 	quotedChild := vprocore.QuoteHeaderIdentifier(childTable)
-	quotedAudit := vprocore.QuoteHeaderIdentifier(project + "_Audit")
 
-	rows, err := tx.QueryContext(ctx, `SELECT "ID" FROM `+quotedChild+` WHERE typeof("ID")='integer' AND "ID" > 0
+	query := `SELECT "ID" FROM ` + quotedChild + ` WHERE typeof("ID")='integer' AND "ID" > 0
 		UNION
-		SELECT "ID" FROM `+quotedAudit+` WHERE "Table" COLLATE NOCASE IN (?, ?) AND typeof("ID")='integer' AND "ID" > 0
-		UNION
-		SELECT "ID" FROM "__VPRO_ChildIdentity" WHERE "ChildTable" IN (?, ?) AND "ID" > 0`,
-		"_"+suffix, childTable, quotedChild, childTable)
+		SELECT "ID" FROM "__VPRO_ChildIdentity" WHERE "ChildTable" COLLATE NOCASE IN (?, ?) AND typeof("ID")='integer' AND "ID" > 0`
+	args := []any{quotedChild, childTable}
+
+	if !strings.EqualFold(plainSuffix, "Audit") {
+		var actualAudit string
+		err := tx.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name=? COLLATE NOCASE LIMIT 1`, project+"_Audit").Scan(&actualAudit)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return 0, err
+		}
+		if actualAudit != "" {
+			quotedAudit := vprocore.QuoteHeaderIdentifier(actualAudit)
+			query += ` UNION SELECT "ID" FROM ` + quotedAudit + ` WHERE "Table" COLLATE NOCASE IN (?, ?, ?) AND typeof("ID")='integer' AND "ID" > 0`
+			args = append(args, "_"+plainSuffix, childTable, plainSuffix)
+		}
+	}
+
+	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
 		return 0, err
 	}

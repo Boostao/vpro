@@ -334,7 +334,7 @@ test_that("writeback enforces refusal guards, confirmation flags, provenance, le
   audit_rows <- vpro_audit(ws)
   new_audits <- audit_rows[!is.na(audit_rows$User) & audit_rows$User == "ecologist_test", ]
   expect_equal(nrow(new_audits), 4L)
-  expect_equal(length(unique(new_audits$ID)), 4L)
+  expect_true(all(is.na(new_audits$ID)))
 
   hist_all <- DBI::dbGetQuery(live_reader, 'SELECT "Action" FROM "__VPRO_RSidecarHistory" ORDER BY "ID"')
   expect_true(all(c("MaterializeClusterCandidate", "WriteWorkingSU", "WriteLumpTable") %in% hist_all$Action))

@@ -268,6 +268,100 @@ vpro_clone_sample_schema <- function(target_con, target_project) {
   deferred_idx
 }
 
+vpro_resolve_audit_child_suffixes <- function(raw_table, src_prj, dst_prj) {
+  t <- tolower(trimws(as.character(raw_table)))
+  if (length(t) == 0L || is.na(t) || !nzchar(t)) {
+    return(c("Veg", "Humus", "Mineral", "Other", "Metadata"))
+  }
+  for (pfx in c(paste0(tolower(src_prj), "_"), paste0(tolower(dst_prj), "_"), "_")) {
+    if (startsWith(t, pfx)) {
+      t <- substring(t, nchar(pfx) + 1L)
+      break
+    }
+  }
+  switch(
+    t,
+    veg = ,
+    vegetation = "Veg",
+    humus = ,
+    soilhumus = ,
+    organic = "Humus",
+    mineral = ,
+    soilmineral = "Mineral",
+    other = ,
+    vegother = "Other",
+    metadata = ,
+    projectmetadata = "Metadata",
+    env = ,
+    environment = ,
+    admin = ,
+    su = ,
+    hierarchy = ,
+    lump = ,
+    profile = ,
+    open = ,
+    close = ,
+    on = ,
+    off = ,
+    usysallspecs = ,
+    usystableoflists = character(),
+    c("Veg", "Humus", "Mineral", "Other", "Metadata")
+  )
+}
+
+vpro_seed_imported_child_identities <- function(sq_con, src_prj, dst_prj) {
+  DBI::dbExecute(
+    sq_con,
+    'CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" ("ChildTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("ChildTable", "ID"))'
+  )
+  for (sfx in c("Veg", "Humus", "Mineral", "Other", "Metadata", "Audit")) {
+    full_tbl <- paste0(dst_prj, "_", sfx)
+    q_full <- vpro_quote_ident(full_tbl)
+    DBI::dbExecute(
+      sq_con,
+      paste0(
+        'INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") ',
+        'SELECT ?, "ID" FROM ',
+        q_full,
+        ' WHERE typeof("ID") = \'integer\' AND "ID" > 0'
+      ),
+      params = list(q_full)
+    )
+  }
+
+  q_audit <- vpro_quote_ident(paste0(dst_prj, "_Audit"))
+  audit_pairs <- DBI::dbGetQuery(
+    sq_con,
+    paste0(
+      'SELECT DISTINCT COALESCE(CAST("Table" AS TEXT), \'\') AS tbl, "ID" AS id FROM ',
+      q_audit,
+      ' WHERE typeof("ID") = \'integer\' AND "ID" > 0'
+    )
+  )
+  if (nrow(audit_pairs) > 0L) {
+    child_col <- character()
+    id_col <- integer()
+    for (i in seq_len(nrow(audit_pairs))) {
+      sfxs <- vpro_resolve_audit_child_suffixes(audit_pairs$tbl[[i]], src_prj, dst_prj)
+      if (length(sfxs) > 0L) {
+        id_num <- suppressWarnings(as.numeric(audit_pairs$id[[i]]))
+        if (!is.na(id_num) && is.finite(id_num) && id_num > 0 && id_num <= .Machine$integer.max && id_num == trunc(id_num)) {
+          child_col <- c(child_col, vapply(paste0(dst_prj, "_", sfxs), vpro_quote_ident, character(1)))
+          id_col <- c(id_col, rep(as.integer(id_num), length(sfxs)))
+        }
+      }
+    }
+    if (length(child_col) > 0L) {
+      DBI::dbExecute(
+        sq_con,
+        'INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") VALUES (?, ?)',
+        params = list(child_col, id_col)
+      )
+    }
+  }
+  invisible(TRUE)
+}
+
 vpro_normalize_access_chunk <- function(df, target_fields, boolean_fields = character()) {
   out <- as.list(rep(list(NULL), length(target_fields)))
   names(out) <- target_fields
@@ -440,6 +534,10 @@ vpro_import_access <- function(
         '"PayloadJSON" TEXT NOT NULL)'
       )
     )
+    DBI::dbExecute(
+      sq_con,
+      'CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" ("ChildTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("ChildTable", "ID"))'
+    )
 
     env_target <- paste0(dst_prj, "_Env")
     admin_target <- paste0(dst_prj, "_Admin")
@@ -607,9 +705,34 @@ vpro_import_access <- function(
             keep[mal] <- FALSE
           }
         }
+        if (suffix %in% c("Veg", "Humus", "Mineral", "Other", "Metadata", "Audit")) {
+          id_ix <- match("id", tolower(names(ch)))
+          if (!is.na(id_ix) && any(!keep)) {
+            q_ids <- suppressWarnings(as.numeric(ch[[id_ix]][!keep]))
+            q_ids <- unique(as.integer(q_ids[!is.na(q_ids) & is.finite(q_ids) & q_ids > 0 & q_ids <= .Machine$integer.max & q_ids == trunc(q_ids)]))
+            if (length(q_ids) > 0L) {
+              DBI::dbExecute(
+                sq_con,
+                'INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") VALUES (?, ?)',
+                params = list(rep(vpro_quote_ident(dst_tbl), length(q_ids)), q_ids)
+              )
+            }
+          }
+        }
         if (any(keep)) {
           norm_df <- vpro_normalize_access_chunk(ch[keep, , drop = FALSE], dst_fields, bool_cols)
           if ("ID" %in% names(norm_df) && anyDuplicated(norm_df$ID[!is.na(norm_df$ID)])) {
+            if (suffix %in% c("Veg", "Humus", "Mineral", "Other", "Metadata", "Audit")) {
+              d_ids <- suppressWarnings(as.numeric(norm_df$ID))
+              d_ids <- unique(as.integer(d_ids[!is.na(d_ids) & is.finite(d_ids) & d_ids > 0 & d_ids <= .Machine$integer.max & d_ids == trunc(d_ids)]))
+              if (length(d_ids) > 0L) {
+                DBI::dbExecute(
+                  sq_con,
+                  'INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") VALUES (?, ?)',
+                  params = list(rep(vpro_quote_ident(dst_tbl), length(d_ids)), d_ids)
+                )
+              }
+            }
             norm_df$ID <- NULL
           }
           DBI::dbAppendTable(sq_con, dst_tbl, norm_df)
@@ -629,6 +752,8 @@ vpro_import_access <- function(
     if (ver == "VP08") {
       stream_child("Admin", "Plot", req_env = TRUE, dedupe = TRUE, bool_cols = admin_bools)
     }
+
+    vpro_seed_imported_child_identities(sq_con, src_prj, dst_prj)
 
     # 3. Import optional *_SU, *_Hierarchy, *_Lump, *_Profile tables
     for (src_tbl in insp$tables$table_name) {

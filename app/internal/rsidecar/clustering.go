@@ -17,7 +17,10 @@ import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-var candidatePrefixPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,13}$`)
+var (
+	candidatePrefixPattern        = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,13}$`)
+	candidateRawIdentifierPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*$`)
+)
 
 // ClusterIndicatorSpecies describes one diagnostic/indicator species for a cluster unit.
 type ClusterIndicatorSpecies struct {
@@ -87,8 +90,8 @@ type ClusteringRequest struct {
 	DNoise               float64  `json:"dnoise"`         // vegclust noise distance (default 0.75)
 	Beta                 *float64 `json:"beta,omitempty"` // Lance-Williams flexible-beta parameter in (-1.0, 1.0) (default -0.25)
 	CutHeight            float64  `json:"cutHeight"`      // Optional hierarchical cut height
-	ApplyLump            bool     `json:"applyLump"` // Fold <Name>_Lump (Use != 0) species codes
-	LumpName             string   `json:"lumpName"`  // Optional explicit Lump prefix (defaults to active project)
+	ApplyLump            bool     `json:"applyLump"`      // Fold <Name>_Lump (Use != 0) species codes
+	LumpName             string   `json:"lumpName"`       // Optional explicit Lump prefix (defaults to active project)
 	UseActiveSU          bool     `json:"useActiveSu"`
 	BGCFilter            string   `json:"bgcFilter"`
 	PlotNumbers          []string `json:"plotNumbers,omitempty"`
@@ -155,8 +158,12 @@ type PromoteCandidateSUResult struct {
 
 func resolveCandidateSUName(rawPrefix, projectName string) (string, error) {
 	base := strings.TrimSpace(rawPrefix)
-	base = strings.TrimSuffix(base, "_SU")
-	base = strings.TrimSuffix(base, "_ClusterCandidate")
+	if len(base) >= 3 && strings.EqualFold(base[len(base)-3:], "_SU") {
+		base = base[:len(base)-3]
+	}
+	if len(base) >= len("_ClusterCandidate") && strings.EqualFold(base[len(base)-len("_ClusterCandidate"):], "_ClusterCandidate") {
+		base = base[:len(base)-len("_ClusterCandidate")]
+	}
 	if base == "" {
 		base = projectName
 	}
@@ -165,10 +172,16 @@ func resolveCandidateSUName(rawPrefix, projectName string) (string, error) {
 	if strings.Contains(lower, "master") {
 		base = "Proj"
 	}
+	if !utf8.ValidString(base) || strings.ContainsRune(base, 0) || !candidateRawIdentifierPattern.MatchString(base) {
+		return "", fmt.Errorf("candidate prefix %q must start with an ASCII letter and contain only letters, digits, or underscores (max 14 chars)", rawPrefix)
+	}
+	if strings.EqualFold(base, "none") || strings.EqualFold(base, "filtered") || strings.EqualFold(base, "usyssutabledynamic") || strings.HasPrefix(strings.ToLower(base), "usys") {
+		return "", fmt.Errorf("candidate prefix %q is reserved by VPro", base)
+	}
 	if len(base) > 14 {
 		base = base[:14]
 	}
-	if !utf8.ValidString(base) || !candidatePrefixPattern.MatchString(base) {
+	if strings.EqualFold(base, "none") || strings.EqualFold(base, "filtered") || !candidatePrefixPattern.MatchString(base) {
 		return "", fmt.Errorf("candidate prefix %q must start with an ASCII letter and contain only letters, digits, or underscores (max 14 chars)", rawPrefix)
 	}
 	suName := base + "_ClusterCandidate"

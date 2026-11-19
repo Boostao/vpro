@@ -395,21 +395,34 @@ func AuditChildFieldsTracked(tx *sql.Tx, project, kind, plot string, id int64, f
 // remain exact in the unchanged numeric JS DTO. Imported signed IDs are kept.
 func AllocateChildID(tx *sql.Tx, table string) (int64, error) {
 	unquoted := strings.ReplaceAll(strings.Trim(table, `"`), `""`, `"`)
-	query := `SELECT "ID" FROM ` + table + ` WHERE typeof("ID")='integer' AND "ID" > 0
-		UNION SELECT "ID" FROM "__VPRO_ChildIdentity" WHERE "ChildTable" IN (?, ?) AND typeof("ID")='integer' AND "ID" > 0`
-	args := []any{table, unquoted}
+	quoted := QuoteHeaderIdentifier(unquoted)
+	query := `SELECT "ID" FROM ` + quoted + ` WHERE typeof("ID")='integer' AND "ID" > 0`
+	var args []any
+
+	var hasIdentity bool
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='__VPRO_ChildIdentity')`).Scan(&hasIdentity); err != nil {
+		return 0, err
+	}
+	if hasIdentity {
+		query += ` UNION SELECT "ID" FROM "__VPRO_ChildIdentity" WHERE "ChildTable" COLLATE NOCASE IN (?, ?) AND typeof("ID")='integer' AND "ID" > 0`
+		args = append(args, quoted, unquoted)
+	}
 
 	if lastSep := strings.LastIndexByte(unquoted, '_'); lastSep > 0 {
 		project := unquoted[:lastSep]
 		suffix := unquoted[lastSep:]
-		var hasAudit bool
-		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?)`, project+"_Audit").Scan(&hasAudit); err != nil {
-			return 0, err
-		}
-		if hasAudit {
-			auditTable := QuoteHeaderIdentifier(project + "_Audit")
-			query += ` UNION SELECT "ID" FROM ` + auditTable + ` WHERE "Table" COLLATE NOCASE IN (?, ?) AND typeof("ID")='integer' AND "ID" > 0`
-			args = append(args, suffix, unquoted)
+		if !strings.EqualFold(suffix, "_Audit") {
+			var actualAudit string
+			err := tx.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name=? COLLATE NOCASE LIMIT 1`, project+"_Audit").Scan(&actualAudit)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return 0, err
+			}
+			if actualAudit != "" {
+				auditTable := QuoteHeaderIdentifier(actualAudit)
+				plainSuffix := strings.TrimPrefix(suffix, "_")
+				query += ` UNION SELECT "ID" FROM ` + auditTable + ` WHERE "Table" COLLATE NOCASE IN (?, ?, ?) AND typeof("ID")='integer' AND "ID" > 0`
+				args = append(args, suffix, unquoted, plainSuffix)
+			}
 		}
 	}
 	query += ` ORDER BY "ID"`
@@ -492,7 +505,7 @@ func (s *PlotService) saveChildWithChecks(kind string, record any, mode childSav
 		return err
 	}
 	defer release()
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(s.OperationContext(), nil)
 	if err != nil {
 		return err
 	}
@@ -679,8 +692,11 @@ func (s *PlotService) saveChildWithChecks(kind string, record any, mode childSav
 			}
 		}
 	}
-	if _, err := tx.Exec(`INSERT INTO "__VPRO_ChildIdentity" ("ChildTable","ID") VALUES (?,?)
-		ON CONFLICT ("ChildTable","ID") DO NOTHING`, table, id); err != nil {
+	unquotedTable := project + "_" + kind
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable","ID")
+		SELECT ?, ? WHERE NOT EXISTS (
+			SELECT 1 FROM "__VPRO_ChildIdentity" WHERE "ChildTable" COLLATE NOCASE IN (?, ?) AND "ID" = ?
+		)`, table, id, table, unquotedTable, id); err != nil {
 		return err
 	}
 	if !creating && !deleting && len(fields) == 0 {
