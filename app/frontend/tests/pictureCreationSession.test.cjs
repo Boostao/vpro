@@ -60,12 +60,16 @@ test('native Cancel has no Create, while promise cancellation cannot dismiss an 
   assert.equal(calls.length, 0);
 });
 
-test('lost chooser delivery recovers the same selection without opening another modal or inventing a request UUID', async () => {
+test('failed chooser leaves session unblocked, while explicit recoverSelection with planned UUID still recovers orphaned selections', async () => {
   const { session, calls } = fixture({ choose: () => operation(Promise.reject(new Error('lost response'))) });
   assert.equal(await session.add(requestId), false);
   assert.equal(session.view().request, null);
+  assert.equal(session.closeState().blocked, false);
+  assert.equal(session.closeState().unsaved, false);
+  assert.equal(session.closeState().busy, false);
+  assert.match(session.view().error, /Picture selection unavailable/);
+  assert.equal(await session.recoverSelection(requestId), true);
   assert.equal(session.closeState().blocked, true);
-  assert.equal(await session.recoverSelection(), true);
   assert.equal(session.view().request.requestId, requestId);
   assert.equal(await session.create(), true);
   assert.equal(calls.filter(call => call === 'choose').length, 0);

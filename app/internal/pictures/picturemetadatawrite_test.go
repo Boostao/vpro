@@ -258,16 +258,19 @@ func TestPictureMetadataWriteStrictJSONAndNewValuePolicy(t *testing.T) {
 		}
 	}
 	for name, change := range map[string]vprocore.ProjectMetadataChange{
-		"ID":       {Column: "ID", Value: vprotest.MetadataInteger("1")},
-		"parent":   {Column: "PlotNumber", Value: vprotest.MetadataText("108050x")},
-		"comment":  {Column: "PicComment", Value: vprotest.MetadataText("forbidden")},
-		"recased":  {Column: "picName", Value: vprotest.MetadataText("new.jpg")},
-		"integer":  {Column: "PicName", Value: vprotest.MetadataInteger("1")},
-		"empty":    {Column: "PicName", Value: vprotest.MetadataText("")},
-		"overlong": {Column: "PicName", Value: vprotest.MetadataText(strings.Repeat("x", 256))},
-		"utf16":    {Column: "PicDir", Value: vprotest.MetadataText(strings.Repeat("😀", 128))},
-		"NUL":      {Column: "PicDir", Value: vprotest.MetadataText("a\x00b")},
-		"unicode":  {Column: "PicDir", Value: vprotest.MetadataText(string([]byte{0xff}))},
+		"ID":               {Column: "ID", Value: vprotest.MetadataInteger("1")},
+		"parent":           {Column: "PlotNumber", Value: vprotest.MetadataText("108050x")},
+		"comment-int":      {Column: "PicComment", Value: vprotest.MetadataInteger("1")},
+		"comment-overlong": {Column: "PicComment", Value: vprotest.MetadataText(strings.Repeat("x", 256))},
+		"comment-utf16":    {Column: "PicComment", Value: vprotest.MetadataText(strings.Repeat("😀", 128))},
+		"comment-NUL":      {Column: "PicComment", Value: vprotest.MetadataText("a\x00b")},
+		"recased":          {Column: "picName", Value: vprotest.MetadataText("new.jpg")},
+		"integer":          {Column: "PicName", Value: vprotest.MetadataInteger("1")},
+		"empty":            {Column: "PicName", Value: vprotest.MetadataText("")},
+		"overlong":         {Column: "PicName", Value: vprotest.MetadataText(strings.Repeat("x", 256))},
+		"utf16":            {Column: "PicDir", Value: vprotest.MetadataText(strings.Repeat("😀", 128))},
+		"NUL":              {Column: "PicDir", Value: vprotest.MetadataText("a\x00b")},
+		"unicode":          {Column: "PicDir", Value: vprotest.MetadataText(string([]byte{0xff}))},
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := request
@@ -310,6 +313,48 @@ func TestPictureMetadataWriteStrictJSONAndNewValuePolicy(t *testing.T) {
 	request.Changes = []vprocore.ProjectMetadataChange{{Column: "PicDir", Value: vprotest.MetadataText(strings.Repeat("😀", 127) + "x")}}
 	if _, err := EditPictureMetadata(service, t.Context(), state.ContextID, "108050", source, request); err != nil {
 		t.Fatal("255 UTF16-unit boundary rejected", err)
+	}
+}
+
+func TestPictureMetadataWritePicCommentLifecycleAndReceiptReplay(t *testing.T) {
+	service, state := vprotest.ReportServiceFixture(t, false)
+	source, _ := pictureLibraryFixture(t, `CREATE TABLE tblVPics(ID,PicDir,PicName,PlotNumber,PicComment);
+		INSERT INTO tblVPics(rowid,ID,PicDir,PicName,PlotNumber,PicComment) VALUES
+		(1,1,'Default','Pic01.jpg','108050',NULL);`)
+	if err := service.Plots.SetCurrentUser("ecologist"); err != nil {
+		t.Fatal(err)
+	}
+
+	steps := []struct {
+		reqID string
+		val   vprocore.ProjectMetadataCell
+	}{
+		{"comment-null-to-text", vprotest.MetadataText("South-facing subalpine fir canopy")},
+		{"comment-text-to-text", vprotest.MetadataText(strings.Repeat("😀", 127) + "!")},
+		{"comment-text-to-empty", vprotest.MetadataText("")},
+		{"comment-empty-to-null", vprocore.ProjectMetadataCell{Storage: "null"}},
+	}
+
+	for _, step := range steps {
+		review, err := ReadPictureMetadata(service, t.Context(), state.ContextID, "108050", source)
+		if err != nil || len(review.Records.Rows) != 1 {
+			t.Fatalf("ReadPictureMetadata before %s failed: %+v (%v)", step.reqID, review, err)
+		}
+		req := pictureMetadataEdit{
+			RequestID: step.reqID,
+			ID:        1,
+			Columns:   review.Records.Columns,
+			Original:  review.Records.Rows[0],
+			Changes:   []vprocore.ProjectMetadataChange{{Column: "PicComment", Value: step.val}},
+		}
+		res, err := EditPictureMetadata(service, t.Context(), state.ContextID, "108050", source, req)
+		if err != nil || !res.DidCommit || res.Replayed || !reflect.DeepEqual(res.Committed.Cells[4], step.val) {
+			t.Fatalf("%s commit failed: res=%+v err=%v", step.reqID, res, err)
+		}
+		replayed, err := LookupPictureMetadataReceipt(service, t.Context(), state.ContextID, "108050", source, req)
+		if err != nil || replayed == nil || !replayed.DidCommit || !replayed.Replayed || !reflect.DeepEqual(replayed.Committed.Cells[4], step.val) {
+			t.Fatalf("%s receipt lookup failed: replayed=%+v err=%v", step.reqID, replayed, err)
+		}
 	}
 }
 

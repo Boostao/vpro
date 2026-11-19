@@ -8,6 +8,9 @@ import (
 	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
 )
 
+type PictureOptions = picturespkg.PictureOptions
+type PictureOptionsUpdate = picturespkg.PictureOptionsUpdate
+
 type PictureService struct {
 	runtime *runtimeShutdownTracker
 	*picturespkg.PictureService
@@ -86,11 +89,14 @@ func buildPictureService(contexts *ContextService, dataDir string, baseLookup fu
 	if err != nil {
 		return nil, err
 	}
-	lookup := newDefaultPictureEnvLookup(baseLookup, defaultVPicsPath, defaultImagesDir)
-	svc, err := NewPictureService(contexts, lookup)
+	if baseLookup == nil {
+		baseLookup = func(string) (string, bool) { return "", false }
+	}
+	core, err := picturespkg.NewPictureServiceWithDefaults(unwrapContextService(contexts), baseLookup, defaultVPicsPath, defaultImagesDir)
 	if err != nil {
 		return nil, err
 	}
+	svc := &PictureService{PictureService: core}
 	metadata, err := NewPictureMetadataService(svc)
 	if err != nil {
 		return nil, err
@@ -107,6 +113,24 @@ func buildPictureService(contexts *ContextService, dataDir string, baseLookup fu
 	svc.Creation = creation
 	svc.Deletion = deletion
 	return svc, nil
+}
+
+func (s *PictureService) GetPictureOptions(ctx context.Context) (*PictureOptions, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.PictureService == nil {
+		return nil, errors.New("picture service is unavailable")
+	}
+	return s.PictureService.GetPictureOptions(ctx)
+}
+
+func (s *PictureService) SavePictureOptions(ctx context.Context, update PictureOptionsUpdate) (*PictureOptions, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.PictureService == nil {
+		return nil, errors.New("picture service is unavailable")
+	}
+	return s.PictureService.SavePictureOptions(ctx, update)
 }
 
 func (s *PictureService) GetMetadata(ctx context.Context, contextID, plot string) (*PictureMetadataReview, error) {

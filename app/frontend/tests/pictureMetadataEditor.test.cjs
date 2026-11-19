@@ -89,7 +89,7 @@ test('picture text is literal with independent NULL/empty choices and no partial
 });
 
 test('picture source bounds count UTF-16 units and preserve errors until a valid correction', () => {
-  for (const column of ['PicDir', 'PicName']) {
+  for (const column of ['PicDir', 'PicName', 'PicComment']) {
     const exact = '😀'.repeat(127) + 'x';
     let draft = editor.stagePictureMetadata(begin(), column, exact, false);
     assert.equal(editor.pictureMetadataChanges(draft)[0].value.text.length, 255);
@@ -121,9 +121,9 @@ test('picture historical invalid text/storage stays omitted when unchanged inste
   }
 });
 
-test('picture draft never implicitly edits identity/comments and requests revalidate rather than trusting staged cells', () => {
+test('picture draft never implicitly edits identity/plot parent and requests revalidate rather than trusting staged cells', () => {
   const draft = begin();
-  for (const column of ['ID', 'PlotNumber', 'PicComment', 'unknown']) {
+  for (const column of ['ID', 'PlotNumber', 'unknown']) {
     assert.throws(() => editor.stagePictureMetadata(draft, column, 'value', false), /Only existing picture/);
   }
   const staged = editor.stagePictureMetadata(draft, 'PicName', 'x'.repeat(256), false);

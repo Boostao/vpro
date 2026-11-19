@@ -126,13 +126,22 @@ export class PictureCreationSession {
         this.plannedId = null;
       }
     } catch (cause) {
-      if (generation === this.generation) this.state.error = `Picture selection outcome unavailable; recover the selection, not a new chooser: ${String(cause)}`;
+      if (generation === this.generation) {
+        this.state.selection = null;
+        this.state.request = null;
+        this.state.blocked = false;
+        this.plannedId = null;
+        this.state.error = `Picture selection unavailable; no picture was attached: ${String(cause)}`;
+      }
     } finally { this.finish(generation); }
     return selected ? this.create() : false;
   }
-  async recoverSelection(): Promise<boolean> {
+  async recoverSelection(plannedRequestId?: string): Promise<boolean> {
     this.idle();
-    if (!this.state.blocked) throw new Error('No retained picture selection requires recovery.');
+    const fallbackRequestId = this.plannedId ?? (plannedRequestId && validSIVIRequestId(plannedRequestId) ? plannedRequestId : null);
+    if (!this.state.blocked && !fallbackRequestId) {
+      throw new Error('No retained picture selection requires recovery.');
+    }
     const generation = this.begin('recovering-selection');
     try {
       if (generation !== this.generation) return false;
@@ -146,16 +155,27 @@ export class PictureCreationSession {
       this.state.selection = recovered;
       this.selectionAbsentVerified = recovered === null;
       if (this.state.selection && !this.state.request) {
-        if (!this.plannedId) throw new Error('The original planned creation UUID is unavailable; do not infer a new request.');
-        this.state.request = pictureCreationRequest(this.state.selection, this.owner, this.plannedId);
-      } else if (!this.state.selection && !this.attempted) {
+        if (!fallbackRequestId) throw new Error('The original planned creation UUID is unavailable; do not infer a new request.');
+        this.plannedId = fallbackRequestId;
+        this.state.request = pictureCreationRequest(this.state.selection, this.owner, fallbackRequestId);
+        this.state.blocked = true;
+      } else if (!this.state.selection && !this.attempted && !this.state.receipt) {
         this.state.request = null;
         this.state.blocked = false;
         this.plannedId = null;
       }
       return true;
     } catch (cause) {
-      if (generation === this.generation) this.state.error = `Picture selection recovery failed; retained state remains blocked: ${String(cause)}`;
+      if (generation === this.generation) {
+        if (!this.attempted && !this.state.selection && !this.state.receipt) {
+          this.state.request = null;
+          this.state.blocked = false;
+          this.plannedId = null;
+          this.state.error = `Picture selection recovery unavailable; workspace unlocked: ${String(cause)}`;
+        } else {
+          this.state.error = `Picture selection recovery failed; retained state remains blocked: ${String(cause)}`;
+        }
+      }
       return false;
     } finally { this.finish(generation); }
   }
@@ -219,7 +239,7 @@ export class PictureCreationSession {
   async release(): Promise<boolean> {
     this.idle();
     const selection = this.state.selection;
-    if (this.state.receipt || (this.attempted && !this.noCommitVerified) || (!selection && !this.selectionAbsentVerified)) {
+    if (this.state.receipt || (this.attempted && !this.noCommitVerified)) {
       throw new Error('Resolve durable history before releasing an attempted selection; committed receipts require acknowledgement.');
     }
     const generation = this.begin('releasing');

@@ -360,14 +360,15 @@ test('verified release unlocks a recovered unattempted selection without dispatc
     create: () => { throw new Error('Recovery/release must not Create'); },
   });
   assert.equal(await session.add(requestId), false);
+  assert.equal(session.closeState().blocked, false);
+  assert.equal(await session.recoverSelection(requestId), true);
   assert.equal(session.closeState().blocked, true);
-  assert.equal(await session.recoverSelection(), true);
   assert.equal(await session.release(), true);
   assert.equal(session.closeState().blocked, false);
   assert.deepEqual(calls, [selection().token]);
 });
 
-test('enabled Add with backend creation disabled retains the refusal until owned readonly recovery proves no selection', async () => {
+test('enabled Add with backend creation disabled or unavailable chooser returns to unblocked idle without locking Plot Pictures', async () => {
   const calls = [];
   const registry = loadTypeScript('pictureCreationSessions.ts', {
     '../bindings/github.com/boostao/vpro/app': { PictureService: {
@@ -384,14 +385,13 @@ test('enabled Add with backend creation disabled retains the refusal until owned
   });
   await panel.actions.operate('add');
   assert.match(session.view().error, /creation writing is disabled/);
-  assert.equal(activity.at(-1).blocked, true);
-  assert.equal(session.view().attempted, false);
-  await panel.actions.operate('selection');
   assert.equal(activity.at(-1).blocked, false);
+  assert.equal(activity.at(-1).busy, false);
+  assert.equal(session.view().attempted, false);
   assert.equal(session.view().selection, null);
   assert.equal(session.view().request, null);
   assert.equal(session.view().receipts.length, 0);
-  assert.deepEqual(calls, ['choose', 'recover']);
+  assert.deepEqual(calls, ['choose']);
   stop();
 });
 

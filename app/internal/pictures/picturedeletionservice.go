@@ -21,7 +21,7 @@ type PictureDeletionService struct {
 }
 
 func NewPictureDeletionService(pictures *PictureService) (*PictureDeletionService, error) {
-	if pictures == nil || pictures.Contexts == nil || pictures.source == nil {
+	if pictures == nil || pictures.Contexts == nil || pictures.currentSource() == nil {
 		return nil, errors.New("picture deletion requires explicit picture ownership")
 	}
 	return &PictureDeletionService{pictures: pictures,
@@ -104,7 +104,7 @@ func (s *PictureDeletionService) Delete(ctx context.Context, contextID, requestJ
 		return nil, err
 	}
 	defer finish()
-	result, err := DeletePicture(s.pictures.Contexts, ctx, contextID, s.pictures.source, request)
+	result, err := DeletePicture(s.pictures.Contexts, ctx, contextID, s.pictures.currentSource(), request)
 	if result.DidCommit {
 		return &result, err
 	}
@@ -123,7 +123,7 @@ func (s *PictureDeletionService) LookupReceipt(ctx context.Context, contextID, r
 		return nil, err
 	}
 	return withPictureLifecycleReceiptObservation(ctx, s, request.RequestID, func() (*PictureDeletionResult, error) {
-		return LookupPictureDeletionReceipt(s.pictures.Contexts, ctx, contextID, s.pictures.source, request)
+		return LookupPictureDeletionReceipt(s.pictures.Contexts, ctx, contextID, s.pictures.currentSource(), request)
 	})
 }
 
@@ -140,7 +140,7 @@ func (s *PictureDeletionService) Restore(ctx context.Context, contextID, request
 		return nil, err
 	}
 	defer finish()
-	result, err := RestorePicture(s.pictures.Contexts, ctx, contextID, s.pictures.source, request)
+	result, err := RestorePicture(s.pictures.Contexts, ctx, contextID, s.pictures.currentSource(), request)
 	if result.DidCommit {
 		return &result, err
 	}
@@ -159,7 +159,7 @@ func (s *PictureDeletionService) LookupRestorationReceipt(ctx context.Context, c
 		return nil, err
 	}
 	return withPictureLifecycleReceiptObservation(ctx, s, request.RequestID, func() (*PictureRestorationResult, error) {
-		return LookupPictureRestorationReceipt(s.pictures.Contexts, ctx, contextID, s.pictures.source, request)
+		return LookupPictureRestorationReceipt(s.pictures.Contexts, ctx, contextID, s.pictures.currentSource(), request)
 	})
 }
 
@@ -167,12 +167,12 @@ func (s *PictureDeletionService) GetHistory(ctx context.Context, contextID, plot
 	if err := s.require(ctx, true); err != nil {
 		return nil, err
 	}
-	return ReadPictureDeletionEvents(s.pictures.Contexts, ctx, contextID, s.pictures.source, plot)
+	return ReadPictureDeletionEvents(s.pictures.Contexts, ctx, contextID, s.pictures.currentSource(), plot)
 }
 
 func (s *PictureDeletionService) ReviewRestoration(ctx context.Context, contextID, plot, historyID string) (*PictureRestorationReview, error) {
 	if err := s.require(ctx, true); err != nil {
 		return nil, err
 	}
-	return ReviewPictureRestoration(s.pictures.Contexts, ctx, contextID, s.pictures.source, plot, historyID)
+	return ReviewPictureRestoration(s.pictures.Contexts, ctx, contextID, s.pictures.currentSource(), plot, historyID)
 }

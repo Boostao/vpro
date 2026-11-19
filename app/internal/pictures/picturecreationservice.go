@@ -78,7 +78,7 @@ type PictureCreationService struct {
 }
 
 func NewPictureCreationService(pictures *PictureService) (*PictureCreationService, error) {
-	if pictures == nil || pictures.Contexts == nil || pictures.source == nil {
+	if pictures == nil || pictures.Contexts == nil || pictures.currentSource() == nil {
 		return nil, errors.New("picture creation service requires explicit picture ownership")
 	}
 	return &PictureCreationService{
@@ -115,7 +115,7 @@ func (s *PictureCreationService) checkOwner(ctx context.Context, expected pictur
 }
 
 func (s *PictureCreationService) checkScope(ctx context.Context, dto PictureCreationSelection, source *ownedPictureLibrary) error {
-	if source == nil || s.pictures.source != source {
+	if source == nil || s.pictures.currentSource() != source {
 		return errors.New("picture creation selected library owner changed")
 	}
 	review, err := s.pictures.GetMetadata(ctx, dto.ContextID, dto.PlotNumber)
@@ -125,7 +125,7 @@ func (s *PictureCreationService) checkScope(ctx context.Context, dto PictureCrea
 	if review.ContextID != dto.ContextID || review.Project != dto.Project || review.PlotNumber != dto.PlotNumber {
 		return errors.New("picture creation reviewed context/project/parent changed")
 	}
-	if s.pictures.source != source {
+	if s.pictures.currentSource() != source {
 		return errors.New("picture creation selected library owner changed")
 	}
 	return nil
@@ -149,7 +149,7 @@ func (s *PictureCreationService) Choose(ctx context.Context, contextID, project,
 	if owner.window != nil {
 		dto.WindowID = owner.window.ID()
 	}
-	source := s.pictures.source
+	source := s.pictures.currentSource()
 	if err := s.checkScope(ctx, dto, source); err != nil {
 		return nil, err
 	}
@@ -247,7 +247,7 @@ func (s *PictureCreationService) RecoverSelection(ctx context.Context, contextID
 		return nil, errors.New("picture selection operation is still running; selection recovery is unavailable")
 	}
 	dto := PictureCreationSelection{ContextID: contextID, Project: project, PlotNumber: plot}
-	source := s.pictures.source
+	source := s.pictures.currentSource()
 	if capability != nil {
 		dto = capability.dto
 		source = capability.source
@@ -394,7 +394,7 @@ func (s *PictureCreationService) LookupReceipt(ctx context.Context, requestJSON 
 	s.reads[request.RequestID][observation] = struct{}{}
 	s.mu.Unlock()
 
-	receipt, err := LookupPictureCreationReceipt(s.pictures.Contexts, ctx, request.ContextID, s.pictures.source, request)
+	receipt, err := LookupPictureCreationReceipt(s.pictures.Contexts, ctx, request.ContextID, s.pictures.currentSource(), request)
 
 	s.mu.Lock()
 	changed := observation.changed || s.creating[request.RequestID] != nil

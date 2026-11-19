@@ -13,7 +13,7 @@ type PictureMetadataService struct {
 }
 
 func NewPictureMetadataService(pictures *PictureService) (*PictureMetadataService, error) {
-	if pictures == nil || pictures.Contexts == nil || pictures.source == nil {
+	if pictures == nil || pictures.Contexts == nil || pictures.currentSource() == nil {
 		return nil, errors.New("picture metadata service requires explicit picture ownership")
 	}
 	return &PictureMetadataService{pictures: pictures}, nil
@@ -40,7 +40,7 @@ func (s *PictureMetadataService) Save(ctx context.Context, contextID, plot, requ
 	if err := json.Unmarshal([]byte(requestJSON), &request); err != nil {
 		return nil, err
 	}
-	result, err := EditPictureMetadata(s.pictures.Contexts, ctx, contextID, plot, s.pictures.source, request)
+	result, err := EditPictureMetadata(s.pictures.Contexts, ctx, contextID, plot, s.pictures.currentSource(), request)
 	if err != nil {
 		return nil, err
 	}
@@ -55,5 +55,5 @@ func (s *PictureMetadataService) LookupReceipt(ctx context.Context, contextID, p
 	if err := json.Unmarshal([]byte(requestJSON), &request); err != nil {
 		return nil, err
 	}
-	return LookupPictureMetadataReceipt(s.pictures.Contexts, ctx, contextID, plot, s.pictures.source, request)
+	return LookupPictureMetadataReceipt(s.pictures.Contexts, ctx, contextID, plot, s.pictures.currentSource(), request)
 }

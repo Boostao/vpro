@@ -90,6 +90,76 @@
     busy = value;
     onBusyChange(value || metadataBlocked || creationBlocked || lifecycleBlocked);
   }
+
+  let optionsLoaded = $state(false);
+  let optionsBusy = $state(false);
+  let libraryPathDraft = $state('');
+  let childDirDraft = $state('');
+  let managerDirDraft = $state('');
+  let activeLibraryPath = $state('');
+  let activeManagerDir = $state('');
+  let defaultLibraryHint = $state('');
+  let defaultDirHint = $state('');
+
+  async function loadPictureOptions() {
+    if (optionsBusy) return;
+    optionsBusy = true;
+    try {
+      const { Call } = await import('@wailsio/runtime');
+      const current = await Call.ByName('main.PictureService.GetPictureOptions');
+      if (current && typeof current === 'object') {
+        libraryPathDraft = String(current.pictureLibraryPath ?? '');
+        childDirDraft = String(current.childDirectory ?? '');
+        managerDirDraft = String(current.managerDirectory ?? '');
+        activeLibraryPath = String(current.effectiveLibraryPath ?? '');
+        activeManagerDir = String(current.effectiveManagerDirectory ?? '');
+        defaultLibraryHint = String(current.defaultLibraryPath ?? '');
+        defaultDirHint = String(current.defaultImagesDirectory ?? '');
+        optionsLoaded = true;
+      }
+    } catch (cause) {
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Picture settings unavailable', String(cause), { category: 'entry', source: 'Plot Pictures' });
+      }
+    } finally {
+      optionsBusy = false;
+    }
+  }
+
+  async function savePictureOptionsFromManager(resetDefaults = false) {
+    if (optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked) return;
+    optionsBusy = true;
+    try {
+      const payload = resetDefaults
+        ? { pictureLibraryPath: '', childDirectory: '', managerDirectory: '' }
+        : { pictureLibraryPath: libraryPathDraft, childDirectory: childDirDraft, managerDirectory: managerDirDraft };
+      const { Call } = await import('@wailsio/runtime');
+      const updated = await Call.ByName('main.PictureService.SavePictureOptions', payload);
+      if (updated && typeof updated === 'object') {
+        libraryPathDraft = String(updated.pictureLibraryPath ?? '');
+        childDirDraft = String(updated.childDirectory ?? '');
+        managerDirDraft = String(updated.managerDirectory ?? '');
+        activeLibraryPath = String(updated.effectiveLibraryPath ?? '');
+        activeManagerDir = String(updated.effectiveManagerDirectory ?? '');
+        defaultLibraryHint = String(updated.defaultLibraryPath ?? '');
+        defaultDirHint = String(updated.defaultImagesDirectory ?? '');
+        optionsLoaded = true;
+      }
+      if (typeof notifications !== 'undefined') {
+        notifications.success(
+          'Picture library settings saved',
+          resetDefaults ? 'Restored default workspace picture paths.' : 'Updated picture library and folder paths.',
+          { category: 'entry', source: 'Plot Pictures' },
+        );
+      }
+    } catch (cause) {
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Picture library settings failed', String(cause), { category: 'entry', source: 'Plot Pictures' });
+      }
+    } finally {
+      optionsBusy = false;
+    }
+  }
 </script>
 
 <section class="manager" data-picture-manager aria-label="Plot Pictures">
@@ -103,6 +173,61 @@
       <button type="submit" disabled={busy || metadataBlocked || creationBlocked || lifecycleBlocked}>Select exact plot</button>
     </form>
   </header>
+  <details
+    class="library-options"
+    data-picture-manager-options
+    ontoggle={event => {
+      if (event.currentTarget.open && !optionsLoaded) void loadPictureOptions();
+    }}
+  >
+    <summary>Picture library &amp; folder settings</summary>
+    <form
+      class="options-form"
+      onsubmit={event => {
+        event.preventDefault();
+        void savePictureOptionsFromManager(false);
+      }}
+    >
+      <label for="picture-manager-library-path">Picture Library File (VPics.db)
+        <input
+          id="picture-manager-library-path"
+          bind:value={libraryPathDraft}
+          placeholder={defaultLibraryHint || 'Default workspace pics/VPics.db'}
+          disabled={optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked}
+        />
+      </label>
+      <label for="picture-manager-child-dir">Plot Entry Image Folder
+        <input
+          id="picture-manager-child-dir"
+          bind:value={childDirDraft}
+          placeholder={defaultDirHint || 'Default workspace pics/images'}
+          disabled={optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked}
+        />
+      </label>
+      <label for="picture-manager-dir">Plot Pictures Manager Folder
+        <input
+          id="picture-manager-dir"
+          bind:value={managerDirDraft}
+          placeholder={defaultDirHint || 'Default workspace pics/images'}
+          disabled={optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked}
+        />
+      </label>
+      <div class="options-actions">
+        <button
+          type="button"
+          disabled={optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked}
+          onclick={() => void savePictureOptionsFromManager(true)}
+        >Use Workspace Defaults</button>
+        <button
+          type="submit"
+          disabled={optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked}
+        >{optionsBusy ? 'Saving…' : 'Save Picture Paths'}</button>
+      </div>
+    </form>
+    {#if activeLibraryPath}
+      <p class="guidance">Active library: {activeLibraryPath}{activeManagerDir ? ` — Active folder: ${activeManagerDir}` : ''}</p>
+    {/if}
+  </details>
   {#if selected}
     <p data-picture-manager-parent>Selected literal parent: {JSON.stringify(selected)}</p>
     {#key selected}
@@ -132,4 +257,8 @@
   button:disabled, input:disabled { opacity: .5; }
   p { overflow-wrap: anywhere; }
   .guidance { font-size: .8rem; color: #474543; margin-top: 1rem; }
+  .library-options { margin: .75rem 0; padding: .65rem .75rem; border: 1px solid #D8D8D8; border-radius: .25rem; background: #FFFFFF; }
+  .library-options summary { cursor: pointer; font-weight: 600; color: #003366; }
+  .options-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr)); gap: .75rem; margin-top: .75rem; }
+  .options-actions { display: flex; flex-wrap: wrap; align-items: end; gap: .5rem; }
 </style>

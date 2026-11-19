@@ -3,7 +3,9 @@
   import { CheckCircle2, ShieldAlert, ShieldCheck, UserCog, X } from '@lucide/svelte';
   import {
     defaultUserSetupPort,
+    validatePictureOptionsInput,
     validateUserSetupName,
+    type PictureOptionsState,
     type UserAccreditation,
     type UserSetupPort,
   } from './userSetupModal';
@@ -26,11 +28,23 @@
 
   let status = $state.raw<UserAccreditation | null>(null);
   let draftUser = $state('');
+  let pictureOptions = $state.raw<PictureOptionsState | null>(null);
+  let draftLibraryPath = $state('');
+  let draftChildDir = $state('');
+  let draftManagerDir = $state('');
   let loading = $state(false);
   let saving = $state(false);
+  let pictureSaving = $state(false);
   let error = $state('');
   let savedNotice = $state('');
   let loadGen = 0;
+
+  function applyPictureOptions(opts: PictureOptionsState) {
+    pictureOptions = opts;
+    draftLibraryPath = opts.pictureLibraryPath ?? '';
+    draftChildDir = opts.childDirectory ?? '';
+    draftManagerDir = opts.managerDirectory ?? '';
+  }
 
   $effect(() => {
     const activeCtx = contextId;
@@ -46,10 +60,16 @@
     error = '';
     savedNotice = '';
     try {
-      const current = await port.getUserSetup(activeCtx);
+      const [current, picOpts] = await Promise.all([
+        port.getUserSetup(activeCtx),
+        port.getPictureOptions ? port.getPictureOptions().catch(() => null) : Promise.resolve(null),
+      ]);
       if (gen !== loadGen) return;
       status = current;
       draftUser = current.userName ?? '';
+      if (picOpts) {
+        applyPictureOptions(picOpts);
+      }
     } catch (cause) {
       if (gen === loadGen) {
         error = `Could not load user setup: ${String(cause)}`;
@@ -63,7 +83,7 @@
 
   async function submitUserSetup(event: SubmitEvent) {
     event.preventDefault();
-    if (saving || loading) return;
+    if (saving || pictureSaving || loading) return;
     const checked = validateUserSetupName(draftUser);
     if (!checked.valid) {
       error = checked.error;
@@ -91,9 +111,45 @@
     }
   }
 
+  async function savePicturePaths(resetDefaults = false) {
+    if (saving || pictureSaving || loading || !port.savePictureOptions) return;
+    const candidate = resetDefaults
+      ? { pictureLibraryPath: '', childDirectory: '', managerDirectory: '' }
+      : {
+          pictureLibraryPath: draftLibraryPath,
+          childDirectory: draftChildDir,
+          managerDirectory: draftManagerDir,
+        };
+    const checked = validatePictureOptionsInput(candidate);
+    if (!checked.valid) {
+      error = checked.error;
+      return;
+    }
+    const gen = ++loadGen;
+    pictureSaving = true;
+    error = '';
+    savedNotice = '';
+    try {
+      const updated = await port.savePictureOptions(checked.value);
+      if (gen !== loadGen) return;
+      applyPictureOptions(updated);
+      savedNotice = resetDefaults
+        ? 'Restored default workspace picture library and image folder paths.'
+        : 'Saved picture library and image folder paths.';
+    } catch (cause) {
+      if (gen === loadGen) {
+        error = `Could not save picture paths: ${String(cause)}`;
+      }
+    } finally {
+      if (gen === loadGen) {
+        pictureSaving = false;
+      }
+    }
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     if (!open) return;
-    if (event.key === 'Escape' && !saving) {
+    if (event.key === 'Escape' && !saving && !pictureSaving) {
       event.preventDefault();
       onclose();
     }
@@ -130,7 +186,7 @@
           type="button"
           aria-label="Close User Setup"
           data-user-setup-close
-          disabled={saving}
+          disabled={saving || pictureSaving}
           class="rounded border border-white/30 bg-white/10 p-1.5 text-white hover:bg-white/20 disabled:opacity-45"
           onclick={onclose}
         >
@@ -178,7 +234,7 @@
           <div class="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || pictureSaving}
               class="rounded border border-[#D8D8D8] bg-white px-3 py-1.5 text-xs font-semibold text-[#313132] hover:bg-[#F2F2F2] disabled:opacity-45"
               onclick={onclose}
             >
@@ -187,13 +243,116 @@
             <button
               type="submit"
               data-user-setup-save
-              disabled={loading || saving}
+              disabled={loading || saving || pictureSaving}
               class="rounded bg-[#003366] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#002244] disabled:opacity-45"
             >
               {saving ? 'Saving…' : 'Save User Name'}
             </button>
           </div>
         </form>
+
+        <section
+          aria-label="Picture Library and Folder Paths"
+          data-user-picture-options-panel
+          class="space-y-3 rounded border border-[#D8D8D8] bg-[#F9F9F8] p-3.5"
+        >
+          <div>
+            <h3 class="text-xs font-semibold text-[#003366]">Picture Library &amp; Folder Paths</h3>
+            <p class="mt-0.5 leading-relaxed text-[#474543]">
+              Choose the plot photograph index (<code class="font-mono">VPics.db</code>) and default image folders used when
+              <code class="font-mono">PicDir</code> is <code class="font-mono">Default</code>. Leave any field blank to use the workspace default.
+            </p>
+          </div>
+
+          {#if pictureOptions?.envOverride}
+            <p role="note" class="rounded border border-[#FCBA19] bg-[#FEF6E0] px-2.5 py-1.5 text-[11px] text-[#313132]">
+              Environment variable overrides are active for this session; saved preferences apply when launched without overrides.
+            </p>
+          {/if}
+
+          <form
+            onsubmit={(e) => {
+              e.preventDefault();
+              void savePicturePaths(false);
+            }}
+            class="space-y-2.5"
+          >
+            <div>
+              <label for="user-setup-picture-library-input" class="mb-1 block font-semibold text-[#003366]">
+                Picture Library File (<code class="font-mono">VPics.db</code>)
+              </label>
+              <input
+                id="user-setup-picture-library-input"
+                data-picture-library-path-input
+                type="text"
+                disabled={loading || saving || pictureSaving || !port.savePictureOptions}
+                bind:value={draftLibraryPath}
+                placeholder={pictureOptions?.defaultLibraryPath || 'Default workspace pics/VPics.db'}
+                class="w-full rounded border border-[#9F9F9F] bg-white px-2.5 py-1.5 font-mono text-xs text-[#313132] focus:border-[#003366] focus:outline-2 focus:outline-[#FCBA19]"
+              />
+              {#if pictureOptions?.effectiveLibraryPath}
+                <p class="mt-0.5 truncate font-mono text-[11px] text-[#474543]" title={pictureOptions.effectiveLibraryPath}>
+                  Active library: {pictureOptions.effectiveLibraryPath}
+                </p>
+              {/if}
+            </div>
+
+            <div>
+              <label for="user-setup-picture-child-dir-input" class="mb-1 block font-semibold text-[#003366]">
+                Plot Entry Image Folder (<code class="font-mono">ChildDirectory</code>)
+              </label>
+              <input
+                id="user-setup-picture-child-dir-input"
+                data-picture-child-dir-input
+                type="text"
+                disabled={loading || saving || pictureSaving || !port.savePictureOptions}
+                bind:value={draftChildDir}
+                placeholder={pictureOptions?.defaultImagesDirectory || 'Default workspace pics/images'}
+                class="w-full rounded border border-[#9F9F9F] bg-white px-2.5 py-1.5 font-mono text-xs text-[#313132] focus:border-[#003366] focus:outline-2 focus:outline-[#FCBA19]"
+              />
+            </div>
+
+            <div>
+              <label for="user-setup-picture-manager-dir-input" class="mb-1 block font-semibold text-[#003366]">
+                Plot Pictures Manager Folder (<code class="font-mono">ManagerDirectory</code>)
+              </label>
+              <input
+                id="user-setup-picture-manager-dir-input"
+                data-picture-manager-dir-input
+                type="text"
+                disabled={loading || saving || pictureSaving || !port.savePictureOptions}
+                bind:value={draftManagerDir}
+                placeholder={pictureOptions?.defaultImagesDirectory || 'Default workspace pics/images'}
+                class="w-full rounded border border-[#9F9F9F] bg-white px-2.5 py-1.5 font-mono text-xs text-[#313132] focus:border-[#003366] focus:outline-2 focus:outline-[#FCBA19]"
+              />
+              {#if pictureOptions?.effectiveManagerDirectory}
+                <p class="mt-0.5 truncate font-mono text-[11px] text-[#474543]" title={pictureOptions.effectiveManagerDirectory}>
+                  Active manager folder: {pictureOptions.effectiveManagerDirectory}
+                </p>
+              {/if}
+            </div>
+
+            <div class="flex flex-wrap items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                data-picture-options-reset
+                disabled={loading || saving || pictureSaving || !port.savePictureOptions}
+                class="rounded border border-[#D8D8D8] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#313132] hover:bg-[#F2F2F2] disabled:opacity-45"
+                onclick={() => void savePicturePaths(true)}
+              >
+                Use Workspace Defaults
+              </button>
+              <button
+                type="submit"
+                data-picture-options-save
+                disabled={loading || saving || pictureSaving || !port.savePictureOptions}
+                class="rounded bg-[#003366] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#002244] disabled:opacity-45"
+              >
+                {pictureSaving ? 'Saving…' : 'Save Picture Paths'}
+              </button>
+            </div>
+          </form>
+        </section>
 
         {#if loading}
           <p role="status" class="text-[#474543]">Checking BEC accreditation and restrictions…</p>

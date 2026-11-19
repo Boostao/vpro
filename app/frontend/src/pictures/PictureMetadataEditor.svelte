@@ -139,12 +139,14 @@
       {#each pictureMetadataColumns as column}
         {@const cell = pictureMetadataFieldValue(view.draft, column)}
         <div>
-          <label for={`picture-metadata-${column}`}>{column === 'PicDir' ? 'Picture Directory' : 'Picture File Name'}</label>
-          <input id={`picture-metadata-${column}`} value={cell.raw} disabled={disabled || view.busy || view.blocked || cell.nullValue}
+          <label for={`picture-metadata-${column}`}>{column === 'PicDir' ? 'Picture Directory' : column === 'PicName' ? 'Picture File Name' : 'Picture Comment / Caption'}</label>
+          <input id={`picture-metadata-${column}`} value={cell.raw}
+            placeholder={column === 'PicComment' ? 'Add a photo caption (leave blank for none)' : undefined}
+            disabled={disabled || view.busy || view.blocked || (column !== 'PicComment' && cell.nullValue)}
             aria-invalid={cell.error !== null}
-            oninput={event => stage(column, event.currentTarget.value, false)} />
+            oninput={event => stage(column, event.currentTarget.value, column === 'PicComment' && event.currentTarget.value === '')} />
           <label class="null"><input type="checkbox" checked={cell.nullValue} disabled={disabled || view.busy || view.blocked}
-            onchange={event => stage(column, cell.raw, event.currentTarget.checked)} />NULL {column}</label>
+            onchange={event => stage(column, column === 'PicComment' && event.currentTarget.checked ? '' : cell.raw, event.currentTarget.checked)} />NULL {column}</label>
           {#if cell.error}<p role="alert" class="error">{cell.error}</p>{/if}
         </div>
       {/each}
@@ -155,8 +157,8 @@
       <button onclick={() => void operation('discard')} disabled={disabled || view.busy}>Discard draft and reload picture</button>
       {#if view.busy}<button onclick={() => cancelMetadata()}>Cancel picture metadata operation</button>{/if}
     </div>
-    <p class="guidance">Literal text, at most255 UTF-16 units. Directory permits empty text or NULL; File Name permits NULL, not new empty text.
-      This saves only PicDir/PicName. It neither copies/renames image files nor authorizes external directories.
+    <p class="guidance">Literal text, at most 255 UTF-16 units. Directory permits empty text or NULL; File Name permits NULL, not new empty text; Comment / Caption stores text or NULL when cleared.
+      This saves PicDir, PicName, and PicComment. It neither copies/renames image files nor authorizes external directories.
       Discard reloads the current stored row; it does not undo a completed Save.</p>
   </section>
 {/if}

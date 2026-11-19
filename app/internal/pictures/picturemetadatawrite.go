@@ -149,6 +149,19 @@ func (err *pictureMetadataCommittedError) Error() string {
 
 func (err *pictureMetadataCommittedError) Unwrap() error { return err.cause }
 
+func pictureWritableColumnIndex(column string) (int, bool) {
+	switch column {
+	case "PicDir":
+		return 1, true
+	case "PicName":
+		return 2, true
+	case "PicComment":
+		return 4, true
+	default:
+		return -1, false
+	}
+}
+
 func preparePictureMetadataEdit(request pictureMetadataEdit) (int64, []vprocore.ProjectMetadataChange, error) {
 	if request.RequestID == "" || strings.ContainsRune(request.RequestID, 0) {
 		return 0, nil, errors.New("picture edit requires an explicit nonempty request identity")
@@ -182,10 +195,8 @@ func preparePictureMetadataEdit(request pictureMetadataEdit) (int64, []vprocore.
 	seen := map[string]bool{}
 	changes := []vprocore.ProjectMetadataChange{}
 	for _, change := range request.Changes {
-		i := 1
-		if change.Column == "PicName" {
-			i = 2
-		} else if change.Column != "PicDir" {
+		i, writable := pictureWritableColumnIndex(change.Column)
+		if !writable {
 			return 0, nil, fmt.Errorf("picture field %q is not writable", change.Column)
 		}
 		if seen[change.Column] {
@@ -566,9 +577,9 @@ func writePictureMetadata(ctx context.Context, source *ownedPictureLibrary, requ
 	var sets []string
 	var arguments []any
 	for _, change := range changes {
-		i := 1
-		if change.Column == "PicName" {
-			i = 2
+		i, ok := pictureWritableColumnIndex(change.Column)
+		if !ok {
+			return result, fmt.Errorf("picture field %q is not writable", change.Column)
 		}
 		planned.Cells[i] = change.Value
 		value, err := vprocore.MetadataCellValue(change.Value)
@@ -657,9 +668,10 @@ func replayPictureMetadata(ctx context.Context, tx *sql.Tx, request pictureMetad
 		_, changes, planErr := preparePictureMetadataEdit(history.Request)
 		planned := vprocore.ProjectMetadataRow{RowID: request.Original.RowID, Cells: append([]vprocore.ProjectMetadataCell{}, request.Original.Cells...)}
 		for _, change := range changes {
-			i := 1
-			if change.Column == "PicName" {
-				i = 2
+			i, ok := pictureWritableColumnIndex(change.Column)
+			if !ok {
+				planErr = errors.Join(planErr, fmt.Errorf("picture field %q is not writable", change.Column))
+				break
 			}
 			planned.Cells[i] = change.Value
 		}

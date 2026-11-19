@@ -120,8 +120,113 @@ func TestPictureServiceStrictReviewedPreviewAndReadOnlyMethods(t *testing.T) {
 		t.Fatal("read-only PictureService without attached deletion writer accepted DeletePicture")
 	}
 	kind := reflect.TypeOf(service)
-	if kind.NumMethod() != 17 {
+	if kind.NumMethod() != 19 {
 		t.Fatal("consolidated PictureService domain method count changed", kind.NumMethod())
+	}
+}
+
+func TestPictureServiceOptionsLifecyclePersistenceAndValidation(t *testing.T) {
+	contexts, state := vprotest.ContextServiceFixture(t)
+	defaultLib, defaultImgs, err := vprocore.EnsureDefaultPictureLibrary(contexts.Projects.Root)
+	if err != nil {
+		t.Fatalf("EnsureDefaultPictureLibrary: %v", err)
+	}
+	emptyLookup := pictureServiceLookup(nil)
+
+	service, err := NewPictureServiceWithDefaults(contexts, emptyLookup, defaultLib, defaultImgs)
+	if err != nil {
+		t.Fatalf("NewPictureServiceWithDefaults: %v", err)
+	}
+	creation, err := NewPictureCreationService(service)
+	if err != nil {
+		t.Fatalf("NewPictureCreationService: %v", err)
+	}
+	service.Creation = creation
+
+	initial, err := service.GetPictureOptions(context.Background())
+	if err != nil {
+		t.Fatalf("GetPictureOptions: %v", err)
+	}
+	if initial.PictureLibraryPath != "" || initial.ChildDirectory != "" || initial.ManagerDirectory != "" ||
+		initial.EffectiveLibraryPath != defaultLib || initial.EffectiveChildDirectory != defaultImgs ||
+		initial.EffectiveManagerDirectory != defaultImgs || initial.EnvOverride {
+		t.Fatalf("unexpected initial PictureOptions: %+v", initial)
+	}
+
+	// Custom valid VPics library + custom child/manager image directories
+	_, customLibPath := pictureLibraryFixture(t, pictureFixtureSchema)
+	customChildDir, _ := pictureImageFixture(t, "jpeg", 120, 90)
+	customManagerDir, _ := pictureImageFixture(t, "png", 160, 120)
+
+	saved, err := service.SavePictureOptions(context.Background(), PictureOptionsUpdate{
+		PictureLibraryPath: "  " + customLibPath + "  ",
+		ChildDirectory:     "  " + customChildDir.path + "  ",
+		ManagerDirectory:   "  " + customManagerDir.path + "  ",
+	})
+	if err != nil {
+		t.Fatalf("SavePictureOptions custom paths failed: %v", err)
+	}
+	if saved.PictureLibraryPath != customLibPath ||
+		saved.ChildDirectory != customChildDir.path ||
+		saved.ManagerDirectory != customManagerDir.path ||
+		saved.EffectiveLibraryPath != customLibPath ||
+		saved.EffectiveChildDirectory != customChildDir.path ||
+		saved.EffectiveManagerDirectory != customManagerDir.path {
+		t.Fatalf("SavePictureOptions did not apply custom paths live: %+v", saved)
+	}
+
+	// Verify reopened service from config.yml honors persisted PictureOptions over defaults
+	reopened, err := NewPictureServiceWithDefaults(contexts, emptyLookup, defaultLib, defaultImgs)
+	if err != nil {
+		t.Fatalf("reopen NewPictureServiceWithDefaults failed: %v", err)
+	}
+	reopenedOpts, err := reopened.GetPictureOptions(context.Background())
+	if err != nil {
+		t.Fatalf("reopened GetPictureOptions failed: %v", err)
+	}
+	if reopenedOpts.EffectiveLibraryPath != customLibPath ||
+		reopenedOpts.EffectiveChildDirectory != customChildDir.path ||
+		reopenedOpts.EffectiveManagerDirectory != customManagerDir.path {
+		t.Fatalf("persisted PictureOptions not honored on reopen: %+v", reopenedOpts)
+	}
+
+	// Reject invalid paths, non-VPics SQLite files, and aliased context DBs without mutating live options
+	_, nonVPicsPath := pictureLibraryFixture(t, `CREATE TABLE NotVPics(ID INTEGER);`)
+	for _, bad := range []PictureOptionsUpdate{
+		{PictureLibraryPath: "relative/VPics.db"},
+		{PictureLibraryPath: customLibPath + "\x00"},
+		{PictureLibraryPath: nonVPicsPath},
+		{PictureLibraryPath: contexts.Projects.Sqlite.Selection.ProjectPath},
+		{ChildDirectory: "relative/images"},
+		{ManagerDirectory: customLibPath}, // regular file, not directory
+	} {
+		if _, err := service.SavePictureOptions(context.Background(), bad); err == nil {
+			t.Fatalf("expected invalid PictureOptionsUpdate %+v to fail", bad)
+		}
+	}
+
+	// Reject reconfiguration while an active picture selection token is open
+	service.Creation.mu.Lock()
+	service.Creation.tokens["active-token"] = &pictureCreationCapability{
+		dto: PictureCreationSelection{Token: "active-token", ContextID: state.ContextID, Project: state.ActiveProject, PlotNumber: "00337"},
+	}
+	service.Creation.mu.Unlock()
+	if _, err := service.SavePictureOptions(context.Background(), PictureOptionsUpdate{}); err == nil || !strings.Contains(err.Error(), "active picture") {
+		t.Fatalf("expected active selection token to block SavePictureOptions, got %v", err)
+	}
+	service.Creation.mu.Lock()
+	delete(service.Creation.tokens, "active-token")
+	service.Creation.mu.Unlock()
+
+	// Reset back to workspace defaults ("")
+	reset, err := service.SavePictureOptions(context.Background(), PictureOptionsUpdate{})
+	if err != nil {
+		t.Fatalf("SavePictureOptions reset to defaults failed: %v", err)
+	}
+	if reset.PictureLibraryPath != "" || reset.ChildDirectory != "" || reset.ManagerDirectory != "" ||
+		reset.EffectiveLibraryPath != defaultLib || reset.EffectiveChildDirectory != defaultImgs ||
+		reset.EffectiveManagerDirectory != defaultImgs {
+		t.Fatalf("reset PictureOptions did not restore workspace defaults: %+v", reset)
 	}
 }
 

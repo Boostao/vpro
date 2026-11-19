@@ -72,10 +72,11 @@ test('picture editor renders associated source labels, identity, Zone 1 field er
   } } }).body;
   assert.match(output, /Literal parent/);
   assert.match(output, /physical row 9223372036854775806/);
-  for (const column of ['PicDir', 'PicName']) {
+  for (const column of ['PicDir', 'PicName', 'PicComment']) {
     assert.match(output, new RegExp(`for="picture-metadata-${column}"`));
     assert.match(output, new RegExp(`id="picture-metadata-${column}"`));
   }
+  assert.match(output, /Picture Comment \/ Caption/);
   assert.ok(output.indexOf('The picture Save outcome is unknown') < output.indexOf('picture-metadata-PicDir'));
   assert.match(output, /PicName permits NULL but not new empty text/);
   assert.doesNotMatch(output, /unknown receipt/);

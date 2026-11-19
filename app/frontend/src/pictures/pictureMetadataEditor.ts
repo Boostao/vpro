@@ -4,7 +4,7 @@ import sourcePolicy from '../../../resources/picture-metadata-policy.json';
 import { equalCell, metadataCellText, parseMetadataCell, type MetadataDraftCell } from '../admin/projectMetadataEditor';
 import { pictureMetadataFromWire, type PictureOwner, type PictureReview } from './pictureRead';
 
-export const pictureMetadataColumns = ['PicDir', 'PicName'] as const;
+export const pictureMetadataColumns = ['PicDir', 'PicName', 'PicComment'] as const;
 export type PictureMetadataColumn = typeof pictureMetadataColumns[number];
 export interface PictureMetadataDraft extends PictureOwner {
   columns: PictureReview['records']['columns'];
@@ -22,12 +22,13 @@ const policies = pictureMetadataColumns.map(name => {
   }
   const editor: ProjectMetadataEditorField = { name, kind: 'text', maximum: field.size, collection: false,
     referenceList: '', referenceColumn: '', limitToList: false, options: null };
-  return { name, allowEmpty: field.allowZeroLength, editor, index: name === 'PicDir' ? 1 : 2 };
+  const index = name === 'PicDir' ? 1 : name === 'PicName' ? 2 : 4;
+  return { name, allowEmpty: field.allowZeroLength, editor, index };
 });
 
 function policy(column: PictureMetadataColumn) {
   const result = policies.find(field => field.name === column);
-  if (!result) throw new Error('Only existing picture Directory and File Name are editable; identity/comments are not implicit changes.');
+  if (!result) throw new Error('Only existing picture Directory, File Name, and Comment are editable; identity and plot parent are not implicit changes.');
   return result;
 }
 
@@ -65,6 +66,17 @@ function parsed(draft: PictureMetadataDraft, column: PictureMetadataColumn, raw:
   const field = policy(column);
   const original = draft.original.cells?.[field.index];
   if (!original) throw new Error(`Original ${column} picture cell is missing; reload before editing.`);
+  if (column === 'PicComment' && !nullValue && raw === '') {
+    if (original.storage === 'text' && original.text === '') {
+      return { raw: '', nullValue: false, value: original, error: null };
+    }
+    return {
+      raw: '',
+      nullValue: true,
+      value: { storage: 'null', text: null, integer: null, real: null, blobHex: null },
+      error: null,
+    };
+  }
   const candidate = parseMetadataCell(field.editor, raw, nullValue, original);
   if (!candidate.error && !equalCell(candidate.value, original)) {
     if (!nullValue && raw.includes('\0')) candidate.error = `${column} contains NUL; raw input was not repaired.`;
