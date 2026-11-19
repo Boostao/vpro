@@ -115,46 +115,109 @@ type ContextPlotDB struct {
 	Ctx context.Context  `json:"-" yaml:"-"`
 }
 
+func resolveOverridePath(goos, directory, home string) (string, error) {
+	if directory == "~" {
+		if home == "" {
+			if goos == "windows" {
+				return "", errors.New("%USERPROFILE% is not defined")
+			}
+			return "", errors.New("$HOME is not defined")
+		}
+		return filepath.Abs(home)
+	}
+	if strings.HasPrefix(directory, "~/") || (goos == "windows" && strings.HasPrefix(directory, `~\`)) {
+		if home == "" {
+			if goos == "windows" {
+				return "", errors.New("%USERPROFILE% is not defined")
+			}
+			return "", errors.New("$HOME is not defined")
+		}
+		rest := directory[2:]
+		if rest == "" {
+			return filepath.Abs(home)
+		}
+		base := strings.TrimRight(home, `/\`)
+		if base == "" {
+			return filepath.Abs("/" + rest)
+		}
+		return filepath.Abs(base + string(filepath.Separator) + rest)
+	}
+	return filepath.Abs(directory)
+}
+
+func currentHomeDir(goos string) string {
+	if goos == "windows" {
+		if up := os.Getenv("USERPROFILE"); up != "" {
+			return up
+		}
+	}
+	if home := os.Getenv("HOME"); home != "" {
+		return home
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return home
+}
+
 func UserDataDir() (string, error) {
 	if directory := os.Getenv("VPRO_DATA_DIR"); directory != "" {
-		return filepath.Abs(directory)
+		return resolveOverridePath(runtime.GOOS, directory, currentHomeDir(runtime.GOOS))
 	}
 	if runtime.GOOS == "windows" {
 		if directory := os.Getenv("LOCALAPPDATA"); directory != "" {
-			return filepath.Join(directory, "vpro"), nil
+			return filepath.Abs(filepath.Join(directory, "vpro"))
 		}
-	}
-	if runtime.GOOS == "darwin" {
-		directory, err := os.UserConfigDir()
+		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", err
 		}
-		return filepath.Join(directory, "vpro"), nil
+		return filepath.Abs(filepath.Join(home, "AppData", "Local", "vpro"))
 	}
-	if runtime.GOOS == "linux" {
-		if directory := os.Getenv("XDG_DATA_HOME"); directory != "" {
-			return filepath.Join(directory, "vpro"), nil
+	if runtime.GOOS == "darwin" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
 		}
+		return filepath.Abs(filepath.Join(home, "Library", "Application Support", "vpro"))
+	}
+	if directory := os.Getenv("XDG_DATA_HOME"); directory != "" && filepath.IsAbs(directory) {
+		return filepath.Clean(filepath.Join(directory, "vpro")), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	if runtime.GOOS == "windows" {
-		return filepath.Join(home, "AppData", "Local", "vpro"), nil
-	}
-	return filepath.Join(home, ".local", "share", "vpro"), nil
+	return filepath.Abs(filepath.Join(home, ".local", "share", "vpro"))
 }
 
 func UserConfigDir() (string, error) {
 	if directory := os.Getenv("VPRO_CONFIG_DIR"); directory != "" {
-		return filepath.Abs(directory)
+		return resolveOverridePath(runtime.GOOS, directory, currentHomeDir(runtime.GOOS))
 	}
-	directory, err := os.UserConfigDir()
+	if runtime.GOOS == "windows" {
+		directory := os.Getenv("APPDATA")
+		if directory == "" {
+			return "", errors.New("%AppData% is not defined")
+		}
+		return filepath.Abs(filepath.Join(directory, "vpro"))
+	}
+	if runtime.GOOS == "darwin" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Abs(filepath.Join(home, "Library", "Application Support", "vpro"))
+	}
+	if directory := os.Getenv("XDG_CONFIG_HOME"); directory != "" && filepath.IsAbs(directory) {
+		return filepath.Clean(filepath.Join(directory, "vpro")), nil
+	}
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(directory, "vpro"), nil
+	return filepath.Abs(filepath.Join(home, ".config", "vpro"))
 }
 
 func OpenReadOnly(path string) (*sql.DB, error) {

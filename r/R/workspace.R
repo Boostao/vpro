@@ -10,24 +10,109 @@ vpro_first_nonempty <- function(...) {
   ""
 }
 
-vpro_clean_posix_path <- function(p) {
-  out <- gsub("\\\\", "/", p)
-  out <- gsub("/+", "/", out)
-  if (nchar(out) > 1L) {
-    out <- sub("/+$", "", out)
+vpro_lexical_clean_path <- function(p, convert_backslash = (.Platform$OS.type == "windows")) {
+  if (!is.character(p) || length(p) != 1L || is.na(p) || !nzchar(p)) {
+    return(".")
   }
-  out
+  s <- if (isTRUE(convert_backslash) || grepl("^([A-Za-z]:\\\\|\\\\\\\\)", p)) {
+    gsub("\\\\", "/", p)
+  } else {
+    p
+  }
+  prefix <- ""
+  rooted <- FALSE
+  rest <- s
+  if (grepl("^[A-Za-z]:(/|$)", s)) {
+    prefix <- paste0(substr(s, 1L, 2L), "/")
+    rooted <- TRUE
+    rest <- substring(s, 4L)
+  } else if (
+    (isTRUE(convert_backslash) || grepl("^\\\\\\\\", p)) &&
+      grepl("^//[^/]+/[^/]+", s)
+  ) {
+    m <- regexpr("^//[^/]+/[^/]+", s)
+    prefix <- regmatches(s, m)
+    rooted <- TRUE
+    rest <- substring(s, nchar(prefix) + 1L)
+  } else if (startsWith(s, "/")) {
+    prefix <- "/"
+    rooted <- TRUE
+    rest <- sub("^/+", "", s)
+  }
+
+  raw_segs <- if (nzchar(rest)) strsplit(rest, "/", fixed = TRUE)[[1L]] else character()
+  stk <- character()
+  for (seg in raw_segs) {
+    if (!nzchar(seg) || identical(seg, ".")) {
+      next
+    }
+    if (identical(seg, "..")) {
+      n_stk <- length(stk)
+      if (n_stk > 0L && !identical(stk[[n_stk]], "..")) {
+        stk <- stk[-n_stk]
+      } else if (!rooted) {
+        stk <- c(stk, "..")
+      }
+    } else {
+      stk <- c(stk, seg)
+    }
+  }
+
+  if (rooted) {
+    if (identical(prefix, "/")) {
+      return(paste0("/", paste(stk, collapse = "/")))
+    }
+    if (grepl("^[A-Za-z]:/$", prefix)) {
+      return(paste0(prefix, paste(stk, collapse = "/")))
+    }
+    if (length(stk) == 0L) {
+      return(prefix)
+    }
+    return(paste0(prefix, "/", paste(stk, collapse = "/")))
+  }
+  if (length(stk) == 0L) {
+    return(".")
+  }
+  paste(stk, collapse = "/")
 }
 
-vpro_abs_path <- function(p) {
-  if (.Platform$OS.type == "windows" && grepl("^/[^/\\\\]", p)) {
-    return(vpro_clean_posix_path(p))
+vpro_clean_posix_path <- function(p) {
+  vpro_lexical_clean_path(p, convert_backslash = TRUE)
+}
+
+vpro_abs_path <- function(
+  p,
+  home = Sys.getenv("HOME", unset = ""),
+  expand_tilde = TRUE,
+  is_windows = (.Platform$OS.type == "windows")
+) {
+  if (isTRUE(expand_tilde)) {
+    if (identical(p, "~")) {
+      if (!nzchar(home)) {
+        rlang::abort("$HOME is not defined; cannot expand `~` in VPro directory path.")
+      }
+      p <- home
+    } else if (startsWith(p, "~/") || (isTRUE(is_windows) && startsWith(p, "~\\"))) {
+      if (!nzchar(home)) {
+        rlang::abort("$HOME is not defined; cannot expand `~` in VPro directory path.")
+      }
+      rest <- substring(p, 3L)
+      base_home <- sub("[/\\\\]+$", "", home)
+      p <- if (!nzchar(rest)) {
+        home
+      } else if (!nzchar(base_home)) {
+        paste0("/", rest)
+      } else {
+        paste0(base_home, "/", rest)
+      }
+    }
   }
   is_abs <- grepl("^(/|[A-Za-z]:[/\\\\]|\\\\\\\\)", p)
-  if (!is_abs && !startsWith(p, "~")) {
-    p <- file.path(getwd(), p)
+  if (!is_abs) {
+    wd <- sub("[/\\\\]+$", "", gsub("\\\\", "/", getwd()))
+    p <- if (!nzchar(wd)) paste0("/", p) else paste0(wd, "/", p)
   }
-  normalizePath(p, winslash = "/", mustWork = FALSE)
+  vpro_lexical_clean_path(p, convert_backslash = is_windows)
 }
 
 vpro_resolve_data_dir <- function(
@@ -37,27 +122,47 @@ vpro_resolve_data_dir <- function(
   localappdata = Sys.getenv("LOCALAPPDATA", unset = ""),
   userprofile = Sys.getenv("USERPROFILE", unset = ""),
   xdg_data = Sys.getenv("XDG_DATA_HOME", unset = ""),
-  home = Sys.getenv("HOME", unset = "~")
+  home = Sys.getenv("HOME", unset = "")
 ) {
+  os_low <- tolower(as.character(os))
+  is_win <- grepl("windows|mingw", os_low)
+  eff_home <- if (is_win) vpro_first_nonempty(userprofile, home) else home
   override <- vpro_first_nonempty(opt, env_data)
   if (nzchar(override)) {
-    return(vpro_abs_path(override))
+    return(vpro_abs_path(override, home = eff_home, expand_tilde = TRUE, is_windows = is_win))
   }
-  os_low <- tolower(as.character(os))
-  if (grepl("windows|mingw", os_low)) {
+  if (is_win) {
     if (nzchar(localappdata)) {
-      p <- file.path(localappdata, "vpro")
+      p <- paste0(sub("[/\\\\]+$", "", localappdata), "/vpro")
     } else {
-      base_home <- vpro_first_nonempty(userprofile, home)
-      p <- file.path(base_home, "AppData", "Local", "vpro")
+      if (!nzchar(eff_home)) {
+        rlang::abort("%USERPROFILE% is not defined; cannot resolve Windows VPro data directory.")
+      }
+      p <- paste0(sub("[/\\\\]+$", "", eff_home), "/AppData/Local/vpro")
     }
   } else if (identical(os_low, "darwin")) {
-    p <- file.path(home, "Library", "Application Support", "vpro")
+    if (!nzchar(home)) {
+      rlang::abort("$HOME is not defined; cannot resolve macOS VPro data directory.")
+    }
+    base_home <- sub("/+$", "", home)
+    p <- if (nzchar(base_home)) {
+      paste0(base_home, "/Library/Application Support/vpro")
+    } else {
+      "/Library/Application Support/vpro"
+    }
   } else {
-    base_xdg <- if (nzchar(xdg_data)) xdg_data else file.path(home, ".local", "share")
-    p <- file.path(base_xdg, "vpro")
+    if (nzchar(xdg_data) && startsWith(xdg_data, "/")) {
+      base_xdg <- sub("/+$", "", xdg_data)
+      p <- if (nzchar(base_xdg)) paste0(base_xdg, "/vpro") else "/vpro"
+    } else {
+      if (!nzchar(home)) {
+        rlang::abort("$HOME is not defined; cannot resolve VPro data directory.")
+      }
+      base_home <- sub("/+$", "", home)
+      p <- if (nzchar(base_home)) paste0(base_home, "/.local/share/vpro") else "/.local/share/vpro"
+    }
   }
-  vpro_abs_path(p)
+  vpro_abs_path(p, home = eff_home, expand_tilde = FALSE, is_windows = is_win)
 }
 
 vpro_resolve_config_dir <- function(
@@ -67,25 +172,43 @@ vpro_resolve_config_dir <- function(
   appdata = Sys.getenv("APPDATA", unset = ""),
   userprofile = Sys.getenv("USERPROFILE", unset = ""),
   xdg_cfg = Sys.getenv("XDG_CONFIG_HOME", unset = ""),
-  home = Sys.getenv("HOME", unset = "~")
+  home = Sys.getenv("HOME", unset = "")
 ) {
+  os_low <- tolower(as.character(os))
+  is_win <- grepl("windows|mingw", os_low)
+  eff_home <- if (is_win) vpro_first_nonempty(userprofile, home) else home
   override <- vpro_first_nonempty(opt, env_cfg)
   if (nzchar(override)) {
-    return(vpro_abs_path(override))
+    return(vpro_abs_path(override, home = eff_home, expand_tilde = TRUE, is_windows = is_win))
   }
-  os_low <- tolower(as.character(os))
-  if (grepl("windows|mingw", os_low)) {
+  if (is_win) {
     if (!nzchar(appdata)) {
       rlang::abort("%APPDATA% is not defined; cannot resolve Windows VPro configuration directory.")
     }
-    p <- file.path(appdata, "vpro")
+    p <- paste0(sub("[/\\\\]+$", "", appdata), "/vpro")
   } else if (identical(os_low, "darwin")) {
-    p <- file.path(home, "Library", "Application Support", "vpro")
+    if (!nzchar(home)) {
+      rlang::abort("$HOME is not defined; cannot resolve macOS VPro configuration directory.")
+    }
+    base_home <- sub("/+$", "", home)
+    p <- if (nzchar(base_home)) {
+      paste0(base_home, "/Library/Application Support/vpro")
+    } else {
+      "/Library/Application Support/vpro"
+    }
   } else {
-    base_xdg <- if (nzchar(xdg_cfg)) xdg_cfg else file.path(home, ".config")
-    p <- file.path(base_xdg, "vpro")
+    if (nzchar(xdg_cfg) && startsWith(xdg_cfg, "/")) {
+      base_xdg <- sub("/+$", "", xdg_cfg)
+      p <- if (nzchar(base_xdg)) paste0(base_xdg, "/vpro") else "/vpro"
+    } else {
+      if (!nzchar(home)) {
+        rlang::abort("$HOME is not defined; cannot resolve VPro configuration directory.")
+      }
+      base_home <- sub("/+$", "", home)
+      p <- if (nzchar(base_home)) paste0(base_home, "/.config/vpro") else "/.config/vpro"
+    }
   }
-  vpro_abs_path(p)
+  vpro_abs_path(p, home = eff_home, expand_tilde = FALSE, is_windows = is_win)
 }
 
 #' Locate the `VPro` desktop user data directory
@@ -353,16 +476,67 @@ vpro_find_support_db <- function(name, data_dir, project_dir = NULL) {
   vpro_bundled_db(name)
 }
 
+.vpro_support_db_filenames <- tolower(c(
+  "vpro64.db",
+  "vlists.db",
+  "vlists-lookup.db",
+  "vuser.db",
+  "vmetadata.db",
+  "vmessageboard.db",
+  "vpics.db",
+  "bec.db",
+  "working-unit.db",
+  "site-codes.db",
+  "soil-codes.db",
+  "parent-codes.db",
+  "region-codes.db",
+  "geology-codes.db",
+  "plot-quality-site.db"
+))
+
+.vpro_find_workspace_project_db <- function(data_dir, base) {
+  if (is.null(data_dir) || !nzchar(data_dir)) {
+    return(character())
+  }
+  target_lower <- tolower(paste0(base, ".db"))
+  if (target_lower %in% .vpro_support_db_filenames) {
+    return(character())
+  }
+  direct <- c(
+    file.path(data_dir, "projects", paste0(base, ".db")),
+    file.path(data_dir, paste0(base, ".db"))
+  )
+  hits <- direct[file.exists(direct) & !dir.exists(direct)]
+  if (length(hits) > 0L) {
+    return(hits[[1L]])
+  }
+  for (d in c(file.path(data_dir, "projects"), data_dir)) {
+    if (!dir.exists(d)) {
+      next
+    }
+    entries <- list.files(d, full.names = FALSE)
+    m <- entries[tolower(entries) == target_lower]
+    if (length(m) > 0L) {
+      cand <- file.path(d, m[[1L]])
+      if (file.exists(cand) && !dir.exists(cand)) {
+        return(cand)
+      }
+    }
+  }
+  character()
+}
+
 #' Connect to a live `VPro` workspace, bundled `Sample`, SQLite `.db`, or Access archive
 #'
 #' Creates a lightweight, read-only-by-default S3 `vpro_workspace` handle.
 #' Called with zero arguments (`vpro_connect()`), auto-discovers the user's
 #' active `VPro` `config.yml` and VPro Desktop project workspace. Passing `"Sample"`
-#' (with default `data_dir`) opens the bundled read-only 2026 `VP08` `Sample`
-#' teaching workspace. Also accepts an explicit project name in `data_dir`, a
-#' `.db` / `.sqlite` / `.rds` file path, a directory containing `.db` projects,
-#' or an `.accdb` / `.mdb` archive (which is non-destructively converted into a
-#' session-temporary `VP08` SQLite file).
+#' opens the workspace `Sample.db` when present in `data_dir`, or falls back to
+#' the bundled read-only 2026 `VP08` `Sample` teaching workspace. Also accepts
+#' an explicit project name in `data_dir`, a `.db` / `.sqlite` / `.rds` file
+#' path, a directory containing `.db` projects, or an `.accdb` / `.mdb` archive
+#' (which is non-destructively converted into a session-temporary `VP08` SQLite
+#' file).
 #'
 #' @param project Optional project name, `"Sample"`, `.db` / `.rds` path,
 #'   directory path, or `.accdb`/`.mdb` path. When `NULL`, reads
@@ -386,9 +560,19 @@ vpro_connect <- function(
   data_dir = vpro_data_dir(),
   config_dir = vpro_config_dir()
 ) {
-  data_dir_missing <- missing(data_dir)
-  data_dir <- normalizePath(data_dir, winslash = "/", mustWork = FALSE)
-  config_dir <- normalizePath(config_dir, winslash = "/", mustWork = FALSE)
+  can_fallback_dirs <- !is.null(project) &&
+    is.character(project) &&
+    length(project) == 1L &&
+    !is.na(project) &&
+    (file.exists(trimws(project)) || identical(tolower(trimws(project)), "sample"))
+  data_dir <- tryCatch(
+    vpro_abs_path(data_dir),
+    error = function(e) if (missing(data_dir) && can_fallback_dirs) tempdir() else stop(e)
+  )
+  config_dir <- tryCatch(
+    vpro_abs_path(config_dir),
+    error = function(e) if (missing(config_dir) && can_fallback_dirs) tempdir() else stop(e)
+  )
   cfg_path <- file.path(config_dir, "config.yml")
   cfg_cur <- list()
   if (file.exists(cfg_path)) {
@@ -501,31 +685,45 @@ vpro_connect <- function(
         bundled_sample <- normalizePath(vpro_bundled_db("Sample.db"), winslash = "/", mustWork = FALSE)
         source_kind <- if (identical(project_path, bundled_sample)) "sample" else "file"
       }
-    } else if (identical(tolower(req), "sample") && data_dir_missing) {
-      sample_path <- vpro_bundled_db("Sample.db")
-      project_path <- normalizePath(sample_path, winslash = "/", mustWork = TRUE)
-      project_name <- "Sample"
-      data_dir <- dirname(project_path)
-      config_dir <- tempdir()
-      source_kind <- "sample"
-      if (is.null(su)) {
-        su <- "Sample_SU"
-      }
-      if (is.null(hierarchy)) {
-        hierarchy <- "Sample_Hierarchy"
-      }
-      if (is.null(lump)) lump <- "Sample_Lump"
     } else {
-      # Look up project name inside data_dir
+      # Look up project name inside data_dir before falling back to bundled Sample.db
       base <- sub("\\.(db|sqlite|sqlite3)$", "", req, ignore.case = TRUE)
-      candidates <- c(
-        file.path(data_dir, "projects", paste0(base, ".db")),
-        file.path(data_dir, paste0(base, ".db"))
-      )
-      existing <- candidates[file.exists(candidates) & !dir.exists(candidates)]
-      if (length(existing) > 0L) {
-        project_path <- normalizePath(existing[[1L]], winslash = "/", mustWork = TRUE)
-        project_name <- base
+      ws_hit <- .vpro_find_workspace_project_db(data_dir, base)
+      if (length(ws_hit) > 0L) {
+        project_path <- normalizePath(ws_hit, winslash = "/", mustWork = TRUE)
+        project_name <- tools::file_path_sans_ext(basename(ws_hit))
+        cfg_prj_match <- !is.null(cfg_cur$CurrProject) &&
+          identical(tolower(trimws(as.character(cfg_cur$CurrProject))), tolower(project_name))
+        if (cfg_prj_match) {
+          if (is.null(su) && !is.null(cfg_cur$CurrPlotlist) && nzchar(trimws(as.character(cfg_cur$CurrPlotlist)))) {
+            su <- trimws(as.character(cfg_cur$CurrPlotlist))
+          }
+          if (
+            !is.null(cfg_cur$SUPath) &&
+              nzchar(trimws(as.character(cfg_cur$SUPath))) &&
+              file.exists(trimws(as.character(cfg_cur$SUPath))) &&
+              !dir.exists(trimws(as.character(cfg_cur$SUPath)))
+          ) {
+            su_db_override <- normalizePath(trimws(as.character(cfg_cur$SUPath)), winslash = "/", mustWork = TRUE)
+          }
+          if (is.null(hierarchy) && !is.null(cfg_cur$CurrHierarchy) && nzchar(trimws(as.character(cfg_cur$CurrHierarchy)))) {
+            hierarchy <- trimws(as.character(cfg_cur$CurrHierarchy))
+          }
+          if (
+            !is.null(cfg_cur$HierarchyPath) &&
+              nzchar(trimws(as.character(cfg_cur$HierarchyPath))) &&
+              file.exists(trimws(as.character(cfg_cur$HierarchyPath))) &&
+              !dir.exists(trimws(as.character(cfg_cur$HierarchyPath)))
+          ) {
+            hier_db_override <- normalizePath(trimws(as.character(cfg_cur$HierarchyPath)), winslash = "/", mustWork = TRUE)
+          }
+          if (is.null(lump) && !is.null(cfg_cur$CurrLump) && nzchar(trimws(as.character(cfg_cur$CurrLump)))) {
+            lump <- trimws(as.character(cfg_cur$CurrLump))
+          }
+        }
+        if (is.null(su)) {
+          su <- "None"
+        }
       } else if (identical(tolower(base), "sample")) {
         sample_path <- vpro_bundled_db("Sample.db")
         project_path <- normalizePath(sample_path, winslash = "/", mustWork = TRUE)

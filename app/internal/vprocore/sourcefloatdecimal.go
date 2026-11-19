@@ -63,6 +63,12 @@ func RoundCalibratedDecimal(value float64, decimals int) float64 {
 	if math.IsNaN(value) || math.IsInf(value, 0) {
 		return value
 	}
+	if value == 0 {
+		return 0
+	}
+	if decimals < 0 {
+		decimals = 0
+	}
 	if decimals > 350 {
 		decimals = 350
 	}

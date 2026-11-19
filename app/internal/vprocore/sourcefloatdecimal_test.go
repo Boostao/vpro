@@ -44,6 +44,21 @@ func TestRoundCalibratedDecimalParity(t *testing.T) {
 	if got := RoundCalibratedDecimal(1e307, 2); got != 1e307 {
 		t.Fatalf("RoundCalibratedDecimal(1e307, 2) = %.17g, want 1e307", got)
 	}
+	if got := RoundCalibratedDecimal(math.MaxFloat64, 2); got != math.MaxFloat64 {
+		t.Fatalf("RoundCalibratedDecimal(MaxFloat64, 2) = %.17g, want MaxFloat64", got)
+	}
+	if got := RoundCalibratedDecimal(-math.MaxFloat64, 2); got != -math.MaxFloat64 {
+		t.Fatalf("RoundCalibratedDecimal(-MaxFloat64, 2) = %.17g, want -MaxFloat64", got)
+	}
+	if got := RoundCalibratedDecimal(math.SmallestNonzeroFloat64, 323); got != 0 || math.Signbit(got) {
+		t.Fatalf("RoundCalibratedDecimal(SmallestNonzeroFloat64, 323) = %.17g, want +0", got)
+	}
+	if got := RoundCalibratedDecimal(2*math.SmallestNonzeroFloat64, 323); got != 2*math.SmallestNonzeroFloat64 {
+		t.Fatalf("RoundCalibratedDecimal(2*SmallestNonzeroFloat64, 323) = %.17g, want %.17g", got, 2*math.SmallestNonzeroFloat64)
+	}
+	if got := RoundCalibratedDecimal(1.005, 500); got != 1.005 {
+		t.Fatalf("RoundCalibratedDecimal(1.005, 500) = %.17g, want 1.005", got)
+	}
 	if negZero := math.Copysign(0, -1); math.Signbit(RoundCalibratedDecimal(negZero, 2)) {
 		t.Fatal("RoundCalibratedDecimal(-0.0, 2) should clear signbit to +0.0")
 	}

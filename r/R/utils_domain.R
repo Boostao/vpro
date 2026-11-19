@@ -31,7 +31,8 @@ vpro_sqlite_ro <- function(path) {
   con <- DBI::dbConnect(
     RSQLite::SQLite(),
     normalizePath(path, winslash = "/", mustWork = TRUE),
-    flags = RSQLite::SQLITE_RO
+    flags = RSQLite::SQLITE_RO,
+    synchronous = NULL
   )
   tryCatch(
     {
@@ -157,12 +158,18 @@ vpro_narrow_float32 <- function(x) {
   if (m == 0.0) {
     if (digs[[1L]] >= 5L) {
       res <- as.numeric(paste0(if (neg) "-" else "", "1e", -d))
+      if (!is.finite(res)) {
+        return(v)
+      }
       return(if (res == 0.0) 0.0 else res)
     }
     return(0.0)
   }
   if (m >= 15.0) {
     res <- as.numeric(paste0(if (neg) "-" else "", s))
+    if (!is.finite(res)) {
+      return(v)
+    }
     return(if (res == 0.0) 0.0 else res)
   }
 
@@ -195,6 +202,9 @@ vpro_narrow_float32 <- function(x) {
     paste0(keep[[1L]], ".", paste0(keep[-1L], collapse = ""))
   }
   res <- as.numeric(paste0(if (neg) "-" else "", mant_out, "e", exp10))
+  if (!is.finite(res)) {
+    return(v)
+  }
   if (res == 0.0) 0.0 else res
 }
 
