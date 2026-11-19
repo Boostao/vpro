@@ -2,7 +2,6 @@ package envreport
 
 import (
 	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -188,10 +187,11 @@ func (s *EnvironmentWorkbookService) exportReviewed(ctx context.Context, context
 	}
 	return vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (*EnvironmentWorkbookOutcome, error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return nil, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		read := func() (environmentWorkbookSource, error) {
 			return vprocore.WithPublicationReadSnapshot(ctx, owner, hooks.snapshot, func(tx *sql.Tx) (environmentWorkbookSource, error) {
 				return readEnvironmentWorkbookSource(ctx, owner, tx, contextID, request.Title)

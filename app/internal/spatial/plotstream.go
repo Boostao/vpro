@@ -3,7 +3,6 @@ package spatial
 import (
 	"context"
 	"errors"
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"math"
 	"sort"
@@ -185,10 +184,11 @@ func extractSpatialPlotRecordsWithOptions(ctx context.Context, owner *vprocore.S
 }
 
 func listProjectSUTables(ctx context.Context, owner *vprocore.SqliteContext) ([]string, error) {
-	if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+	unlock, err := owner.AcquireMutex(ctx)
+	if err != nil {
 		return nil, err
 	}
-	defer owner.Mu.Unlock()
+	defer unlock()
 	tx, err := owner.BeginReadSnapshot(ctx)
 	if err != nil {
 		return nil, err

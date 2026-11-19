@@ -32,8 +32,8 @@ func TestProjectScopeSnapshotFailuresNeverInstallDraftsOrBuilds(t *testing.T) {
 				}
 			}
 		}
-		before := contexts.ProjectReportScopes.Read(state.ContextID)
-		selectedBefore := contexts.SelectedUnitSelections.Read(state.ContextID)
+		before := projectReportScopes(contexts).Read(state.ContextID)
+		selectedBefore := selectedUnitSelections(contexts).Read(state.ContextID)
 		for _, hooks := range []vprocore.PublicationReadSnapshotHooks{
 			{CommitRead: func(*sql.Tx) error { return errors.New("scope read commit failure") }},
 			{RollbackRead: func(*sql.Tx) error { return errors.New("scope cleanup failure") }},
@@ -50,8 +50,8 @@ func TestProjectScopeSnapshotFailuresNeverInstallDraftsOrBuilds(t *testing.T) {
 			case "build":
 				_, err = service.BuildLongVegetationProjectScope(ctx, state.ContextID, "2")
 			}
-			if err == nil || !reflect.DeepEqual(before, contexts.ProjectReportScopes.Read(state.ContextID)) ||
-				!reflect.DeepEqual(selectedBefore, contexts.SelectedUnitSelections.Read(state.ContextID)) {
+			if err == nil || !reflect.DeepEqual(before, projectReportScopes(contexts).Read(state.ContextID)) ||
+				!reflect.DeepEqual(selectedBefore, selectedUnitSelections(contexts).Read(state.ContextID)) {
 				t.Fatal("fallible read cleanup authorized scope/draft/Build mutation", operation, err)
 			}
 		}
@@ -83,7 +83,7 @@ func TestProjectScopeSwitchCannotInterleaveWithLegacyUnitCAS(t *testing.T) {
 		vegetationUnitRequest(t, 1, 3))
 	store.Replace = replace
 	if !outcome.Committed || !outcome.Changed || outcome.ErrorMessage != "" ||
-		contexts.ProjectReportScopes.Read(state.ContextID).SourceKind != vprocore.VegetationSelectedListScope {
+		projectReportScopes(contexts).Read(state.ContextID).SourceKind != vprocore.VegetationSelectedListScope {
 		t.Fatal("owned legacy CAS was split by scope switch or lost committed receipt", outcome)
 	}
 }
@@ -96,9 +96,9 @@ func TestProjectScopeContextRetirementClearsAuthorityOnlyAfterSuccessfulSwitch(t
 		projectScopeRequestJSON(t, "0", vprocore.VegetationProjectFieldsScope)); err != nil {
 		t.Fatal(err)
 	}
-	before := private.contexts.ProjectReportScopes.Read(state.ContextID)
+	before := projectReportScopes(private.contexts).Read(state.ContextID)
 	if _, err := private.contexts.SwitchContext("stale", vprotest.ContextSelection(state)); err == nil ||
-		!reflect.DeepEqual(before, private.contexts.ProjectReportScopes.Read(state.ContextID)) {
+		!reflect.DeepEqual(before, projectReportScopes(private.contexts).Read(state.ContextID)) {
 		t.Fatal("failed owner switch erased current scope authority", err)
 	}
 	next, err := private.contexts.SwitchContext(state.ContextID, vprotest.ContextSelection(state))
@@ -110,7 +110,7 @@ func TestProjectScopeContextRetirementClearsAuthorityOnlyAfterSuccessfulSwitch(t
 	}
 	current, err := scope.GetLongVegetationReportScope(ctx, next.ContextID)
 	if err != nil || current.SourceKind != vprocore.VegetationSelectedListScope || current.Revision != "0" ||
-		current.Build != nil || len(private.contexts.ProjectReportScopes.Entries) != 0 {
+		current.Build != nil || len(projectReportScopes(private.contexts).Entries) != 0 {
 		t.Fatal("new owner inherited project intent/draft/approval", current, err)
 	}
 }

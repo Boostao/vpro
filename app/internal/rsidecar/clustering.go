@@ -339,15 +339,16 @@ func RunMultivariateClustering(
 			}
 		}
 
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-			return nil, err
+		unlock, mErr := owner.AcquireMutex(ctx)
+		if mErr != nil {
+			return nil, mErr
 		}
 		vlistsPath := owner.Attachments["VLists"]
 		projectPath := owner.Selection.ProjectPath
 		projectName := owner.Selection.Project
 		activeSU := owner.Selection.SU
 		existingProjDB := owner.ProjectDB
-		owner.Mu.Unlock()
+		unlock()
 
 		if existingProjDB != nil {
 			if err := CheckpointProjectWAL(ctx, existingProjDB); err != nil {
@@ -751,26 +752,24 @@ func insertProjectAuditEntryOnConn(
 	if exists == 0 {
 		return nil
 	}
-	qAudit := vprocore.QuoteHeaderIdentifier(auditTable)
-	var plotParam any
+	var plotPtr *string
 	if strings.TrimSpace(plotNumber) != "" {
-		plotParam = plotNumber
+		p := plotNumber
+		plotPtr = &p
 	}
-
+	fieldCopy := editField
 	// Restore = 0 (Access FALSE); PlotNumber = NULL for project-level SU actions so _Env FK passes cleanly
-	_, err := conn.ExecContext(
-		ctx,
-		`INSERT INTO main.`+qAudit+` ("Project", "User", "PlotNumber", "Table", "EditField", "EditWhen", "BeforeEdit", "AfterEdit", "Restore", "Flag")
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
-		projectName,
-		userName,
-		plotParam,
-		tableName,
-		editField,
-		time.Now().UTC().Format("2006-01-02 15:04:05"),
-		beforeVal,
-		afterVal,
-	)
+	_, err := vprocore.RecordAudit(ctx, conn, vprocore.AuditWriteEntry{
+		Schema:     "main",
+		Project:    projectName,
+		User:       userName,
+		PlotNumber: plotPtr,
+		Table:      tableName,
+		EditField:  &fieldCopy,
+		EditWhen:   time.Now().UTC().Format("2006-01-02 15:04:05"),
+		BeforeEdit: beforeVal,
+		AfterEdit:  afterVal,
+	})
 	return err
 }
 

@@ -294,12 +294,11 @@ func RedactSensitiveSQLiteProjectCoordinates(ctx context.Context, sqlitePath, pr
 		return 0, err
 	}
 
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(sqlitePath, "rw")+"&_txlock=immediate&_foreign_keys=on")
+	db, err := sqlutil.OpenImmediateWriteSQLite(sqlitePath)
 	if err != nil {
 		return 0, err
 	}
 	defer db.Close()
-	db.SetMaxOpenConns(1)
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {

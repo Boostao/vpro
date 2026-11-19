@@ -95,7 +95,7 @@ func TestTwoPageSpeciesListLegacySaveDenial(t *testing.T) {
 		t.Fatal("legacy Save inherited independently gated Species authority", result, err)
 	}
 	if !reflect.DeepEqual(before, vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)) ||
-		len(contexts.TwoPageVegetationAttempts.Requests) != 0 {
+		len(twoPageVegAttempts(contexts).Requests) != 0 {
 		t.Fatal("refused gates mutated files or began an attempt")
 	}
 	service := twoPageSpeciesListFacade(t, contexts)

@@ -25,7 +25,7 @@ type TwoPageVegetationAttemptOutcome struct {
 }
 
 func BeginTwoPageVegetationAttempt(s *vprocore.ContextService, ctx context.Context, request twoPageVegetationRequest) (bool, error) {
-	ledger := &s.TwoPageVegetationAttempts
+	ledger := twoPageVegAttempts(s)
 	if err := sqlutil.AcquireMutexLease(ctx, &ledger.Mu); err != nil {
 		return false, err
 	}
@@ -42,7 +42,7 @@ func BeginTwoPageVegetationAttempt(s *vprocore.ContextService, ctx context.Conte
 }
 
 func FinishTwoPageVegetationAttempt(s *vprocore.ContextService, requestID string) {
-	ledger := &s.TwoPageVegetationAttempts
+	ledger := twoPageVegAttempts(s)
 	ledger.Mu.Lock()
 	defer ledger.Mu.Unlock()
 	ledger.Requests[requestID].Active--
@@ -61,7 +61,7 @@ func (s *TwoPageVegetationService) recoverTwoPageVegetationOutcome(ctx context.C
 	if err := json.Unmarshal([]byte(requestJSON), &request); err != nil {
 		return nil, err
 	}
-	ledger := &s.contexts.TwoPageVegetationAttempts
+	ledger := twoPageVegAttempts(s.contexts)
 	if err := sqlutil.AcquireMutexLease(ctx, &ledger.Mu); err != nil {
 		return nil, err
 	}

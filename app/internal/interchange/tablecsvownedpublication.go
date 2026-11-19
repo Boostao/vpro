@@ -1,7 +1,6 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -47,12 +46,13 @@ func PublishOwnedProjectTableCSVUsing(s *vprocore.ContextService, ctx context.Co
 	expected.Document = snapshotTableCSVBundleDocument(expected.Document)
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (result tableCSVPublication, resultErr error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return result, err
 		}
 		// Serialize owner-mutex writers and new project-pool borrows. Previously
 		// borrowed or external connections are not excluded by this mutex.
-		defer owner.Mu.Unlock()
+		defer unlock()
 		defer func() {
 			if result.Published && resultErr != nil {
 				resultErr = fmt.Errorf("owned table CSV bundle published; do not replay publication: %w", resultErr)

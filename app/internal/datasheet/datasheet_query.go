@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func tableExistsInSnapshot(ctx context.Context, tx *sql.Tx, role, table string) (bool, error) {
@@ -43,88 +43,70 @@ func listDatasheetTablesFiltered(ctx context.Context, contexts *vprocore.Context
 	if contexts == nil {
 		return nil, errors.New("datasheet context service is unavailable")
 	}
-	return vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (_ []DatasheetTableInfo, resultErr error) {
+	return vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) ([]DatasheetTableInfo, error) {
 		owner := plots.Projects.Sqlite
 		canEditMaster := plots.CanEditMasterBEC()
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-			return nil, err
-		}
-		defer owner.Mu.Unlock()
-		if err := vprocore.ProfileOwnedFiles(owner); err != nil {
-			return nil, err
-		}
-		tx, err := owner.BeginReadSnapshot(ctx)
-		if err != nil {
-			return nil, err
-		}
-		defer func() {
-			if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-				resultErr = errors.Join(resultErr, err)
-			}
-		}()
-
-		var targets []resolvedDatasheetTarget
-		if includeSystem {
-			targets = resolveExtendedDatasheetTargets(owner)
-		} else {
-			targets = resolveDatasheetTargets(owner)
-		}
-		out := make([]DatasheetTableInfo, 0, len(targets))
-		for _, target := range targets {
-			if err := ctx.Err(); err != nil {
+		return vprocore.WithReadSnapshotValue(ctx, owner, func(tx *sql.Tx) ([]DatasheetTableInfo, error) {
+			if err := vprocore.ProfileOwnedFiles(owner); err != nil {
 				return nil, err
 			}
-			info := DatasheetTableInfo{
-				Key:               target.key,
-				Label:             target.label,
-				Role:              target.role,
-				TableName:         target.tableName,
-				PinnedColumn:      target.pinnedColumn,
-				Available:         target.available,
-				UnavailableReason: target.unavailableReason,
-				Editable:          target.available && !target.readOnly,
-				ReadOnly:          !target.available || target.readOnly,
-				Columns:           []DatasheetColumnMeta{},
+			var targets []resolvedDatasheetTarget
+			if includeSystem {
+				targets = resolveExtendedDatasheetTargets(owner)
+			} else {
+				targets = resolveDatasheetTargets(owner)
 			}
-			if !target.available {
+			out := make([]DatasheetTableInfo, 0, len(targets))
+			for _, target := range targets {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				info := DatasheetTableInfo{
+					Key:               target.key,
+					Label:             target.label,
+					Role:              target.role,
+					TableName:         target.tableName,
+					PinnedColumn:      target.pinnedColumn,
+					Available:         target.available,
+					UnavailableReason: target.unavailableReason,
+					Editable:          target.available && !target.readOnly,
+					ReadOnly:          !target.available || target.readOnly,
+					Columns:           []DatasheetColumnMeta{},
+				}
+				if !target.available {
+					out = append(out, info)
+					continue
+				}
+				exists, err := tableExistsInSnapshot(ctx, tx, target.role, target.tableName)
+				if err != nil {
+					return nil, err
+				}
+				if !exists {
+					info.Available = false
+					info.Editable = false
+					info.ReadOnly = true
+					info.UnavailableReason = fmt.Sprintf("Table %s does not exist in %s database", target.tableName, target.role)
+					out = append(out, info)
+					continue
+				}
+				rawCols, err := vprocore.ReadSQLiteStorageColumns(ctx, tx, target.role, target.tableName)
+				if err != nil {
+					return nil, err
+				}
+				for _, col := range rawCols {
+					info.Columns = append(info.Columns, classifyColumnMeta(target.key, col, target.pinnedColumn, canEditMaster))
+				}
+				relation := vprocore.QuoteHeaderIdentifier(target.role) + "." + vprocore.QuoteHeaderIdentifier(target.tableName)
+				if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+relation).Scan(&info.RowCount); err != nil {
+					return nil, err
+				}
 				out = append(out, info)
-				continue
 			}
-			exists, err := tableExistsInSnapshot(ctx, tx, target.role, target.tableName)
-			if err != nil {
+			if err := vprocore.ProfileOwnedFiles(owner); err != nil {
 				return nil, err
 			}
-			if !exists {
-				info.Available = false
-				info.Editable = false
-				info.ReadOnly = true
-				info.UnavailableReason = fmt.Sprintf("Table %s does not exist in %s database", target.tableName, target.role)
-				out = append(out, info)
-				continue
-			}
-			rawCols, err := vprocore.ReadSQLiteStorageColumns(ctx, tx, target.role, target.tableName)
-			if err != nil {
-				return nil, err
-			}
-			for _, col := range rawCols {
-				info.Columns = append(info.Columns, classifyColumnMeta(target.key, col, target.pinnedColumn, canEditMaster))
-			}
-			relation := vprocore.QuoteHeaderIdentifier(target.role) + "." + vprocore.QuoteHeaderIdentifier(target.tableName)
-			if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+relation).Scan(&info.RowCount); err != nil {
-				return nil, err
-			}
-			out = append(out, info)
-		}
-		if err := vprocore.ProfileOwnedFiles(owner); err != nil {
-			return nil, err
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if err := tx.Commit(); err != nil {
-			return nil, err
-		}
-		return out, nil
+			return out, nil
+		})
 	})
 }
 

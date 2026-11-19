@@ -289,20 +289,13 @@ func loadTaxonomyCatalog(ctx context.Context, tx *sql.Tx) (map[string]speciesTax
 }
 
 func loadCatalogForContext(ctx context.Context, owner *vprocore.SqliteContext) (map[string]speciesTaxonomyEntry, map[string]string, error) {
-	if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-		return nil, nil, err
-	}
-	defer owner.Mu.Unlock()
-	tx, err := owner.BeginReadSnapshot(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer func() { _ = tx.Rollback() }()
-	catalog, genusMap, err := loadTaxonomyCatalog(ctx, tx)
-	if err != nil {
-		return nil, nil, err
-	}
-	if err := tx.Commit(); err != nil {
+	var catalog map[string]speciesTaxonomyEntry
+	var genusMap map[string]string
+	if err := owner.WithReadSnapshot(ctx, func(tx *sql.Tx) error {
+		var err error
+		catalog, genusMap, err = loadTaxonomyCatalog(ctx, tx)
+		return err
+	}); err != nil {
 		return nil, nil, err
 	}
 	return catalog, genusMap, nil
@@ -510,54 +503,17 @@ func DiscoverLumpTables(s *vprocore.ContextService, ctx context.Context, context
 	})
 }
 
-func withImmediateProjectWriteTx(ctx context.Context, owner *vprocore.SqliteContext, fn func(*sql.Conn) error) (resultErr error) {
-	if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-		return err
-	}
-	defer owner.Mu.Unlock()
-	if owner.Conn == nil {
-		return errors.New("project context is closed")
-	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(owner.Selection.ProjectPath, "rw")+"&_foreign_keys=on&_busy_timeout=5000&_journal_mode=WAL&_txlock=immediate")
-	if err != nil {
-		return err
-	}
-	defer func() { resultErr = errors.Join(resultErr, db.Close()) }()
-	db.SetMaxOpenConns(1)
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { resultErr = errors.Join(resultErr, conn.Close()) }()
-	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
-		return err
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_, _ = conn.ExecContext(context.WithoutCancel(ctx), "ROLLBACK")
-		}
-	}()
-	if err := fn(conn); err != nil {
-		return err
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
-		return err
-	}
-	committed = true
-	return nil
+func withImmediateProjectWriteTx(ctx context.Context, owner *vprocore.SqliteContext, fn func(*vprocore.WriteTx) error) error {
+	return owner.WithImmediateWriteTx(ctx, fn)
 }
 
-func createLumpTableInTx(ctx context.Context, conn *sql.Conn, baseName string) (string, error) {
+func createLumpTableInTx(ctx context.Context, wtx *vprocore.WriteTx, baseName string) (string, error) {
 	base, tableName, err := normalizeLumpBaseName(baseName)
 	if err != nil {
 		return "", err
 	}
 	var exists bool
-	if err := conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE name COLLATE NOCASE=?)`, tableName).Scan(&exists); err != nil {
+	if err := wtx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE name COLLATE NOCASE=?)`, tableName).Scan(&exists); err != nil {
 		return "", err
 	}
 	if exists {
@@ -565,16 +521,16 @@ func createLumpTableInTx(ctx context.Context, conn *sql.Conn, baseName string) (
 	}
 	quoted := vprocore.QuoteHeaderIdentifier(tableName)
 	idxName := vprocore.QuoteHeaderIdentifier("idx_" + base + "_Lump_LumpCode")
-	if _, err := conn.ExecContext(ctx, `CREATE TABLE `+quoted+` ("LumpCode" VARCHAR(50), "SppCode" VARCHAR(8) UNIQUE, "Use" BOOLEAN)`); err != nil {
+	if _, err := wtx.ExecContext(ctx, `CREATE TABLE `+quoted+` ("LumpCode" VARCHAR(50), "SppCode" VARCHAR(8) UNIQUE, "Use" BOOLEAN)`); err != nil {
 		return "", fmt.Errorf("create %s: %w", tableName, err)
 	}
-	if _, err := conn.ExecContext(ctx, `CREATE INDEX `+idxName+` ON `+quoted+` ("LumpCode")`); err != nil {
+	if _, err := wtx.ExecContext(ctx, `CREATE INDEX `+idxName+` ON `+quoted+` ("LumpCode")`); err != nil {
 		return "", fmt.Errorf("index %s: %w", tableName, err)
 	}
-	if _, err := conn.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "_table_metadata" ("table_name" TEXT PRIMARY KEY, "description" TEXT)`); err != nil {
+	if _, err := wtx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "_table_metadata" ("table_name" TEXT PRIMARY KEY, "description" TEXT)`); err != nil {
 		return "", err
 	}
-	if _, err := conn.ExecContext(ctx, `INSERT OR REPLACE INTO "_table_metadata" ("table_name", "description") VALUES (?, ?)`, tableName, LumpTableMetadataVersion); err != nil {
+	if _, err := wtx.ExecContext(ctx, `INSERT OR REPLACE INTO "_table_metadata" ("table_name", "description") VALUES (?, ?)`, tableName, LumpTableMetadataVersion); err != nil {
 		return "", err
 	}
 	return tableName, nil
@@ -584,9 +540,9 @@ func CreateLumpTable(s *vprocore.ContextService, ctx context.Context, contextID,
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (LumpTableSummary, error) {
 		owner := plots.Projects.Sqlite
 		var created string
-		if err := withImmediateProjectWriteTx(ctx, owner, func(conn *sql.Conn) error {
+		if err := withImmediateProjectWriteTx(ctx, owner, func(wtx *vprocore.WriteTx) error {
 			var err error
-			created, err = createLumpTableInTx(ctx, conn, name)
+			created, err = createLumpTableInTx(ctx, wtx, name)
 			return err
 		}); err != nil {
 			return LumpTableSummary{}, err
@@ -616,14 +572,14 @@ func SaveAsLumpTable(s *vprocore.ContextService, ctx context.Context, contextID,
 		var created string
 		activeCount := 0
 		lumpSet := map[string]struct{}{}
-		if err := withImmediateProjectWriteTx(ctx, owner, func(conn *sql.Conn) error {
+		if err := withImmediateProjectWriteTx(ctx, owner, func(wtx *vprocore.WriteTx) error {
 			var createErr error
-			created, createErr = createLumpTableInTx(ctx, conn, base)
+			created, createErr = createLumpTableInTx(ctx, wtx, base)
 			if createErr != nil {
 				return createErr
 			}
 			quoted := vprocore.QuoteHeaderIdentifier(created)
-			stmt, prepErr := conn.PrepareContext(ctx, `INSERT INTO `+quoted+` ("LumpCode", "SppCode", "Use") VALUES (?, ?, ?)`)
+			stmt, prepErr := wtx.PrepareContext(ctx, `INSERT INTO `+quoted+` ("LumpCode", "SppCode", "Use") VALUES (?, ?, ?)`)
 			if prepErr != nil {
 				return prepErr
 			}
@@ -665,20 +621,20 @@ func DeleteLumpTable(s *vprocore.ContextService, ctx context.Context, contextID,
 		if err != nil {
 			return struct{}{}, err
 		}
-		return struct{}{}, withImmediateProjectWriteTx(ctx, owner, func(conn *sql.Conn) error {
+		return struct{}{}, withImmediateProjectWriteTx(ctx, owner, func(wtx *vprocore.WriteTx) error {
 			var actualName string
-			if err := conn.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name COLLATE NOCASE=?`, tableName).Scan(&actualName); err != nil {
+			if err := wtx.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name COLLATE NOCASE=?`, tableName).Scan(&actualName); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					return fmt.Errorf("lump table %s was not found in the active project", tableName)
 				}
 				return err
 			}
-			if _, err := conn.ExecContext(ctx, `DROP TABLE `+vprocore.QuoteHeaderIdentifier(actualName)); err != nil {
+			if _, err := wtx.ExecContext(ctx, `DROP TABLE `+vprocore.QuoteHeaderIdentifier(actualName)); err != nil {
 				return err
 			}
 			var hasMeta bool
-			if err := conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='_table_metadata')`).Scan(&hasMeta); err == nil && hasMeta {
-				_, _ = conn.ExecContext(ctx, `DELETE FROM "_table_metadata" WHERE table_name COLLATE NOCASE=?`, actualName)
+			if err := wtx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='_table_metadata')`).Scan(&hasMeta); err == nil && hasMeta {
+				_, _ = wtx.ExecContext(ctx, `DELETE FROM "_table_metadata" WHERE table_name COLLATE NOCASE=?`, actualName)
 			}
 			return nil
 		})

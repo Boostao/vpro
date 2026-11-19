@@ -33,7 +33,7 @@ func TestProjectScopeBuildFinalRevalidationRejectsGapDriftWithoutReplacingReceip
 		if err != nil {
 			t.Fatal(err)
 		}
-		before := contexts.ProjectReportScopes.Read(state.ContextID)
+		before := projectReportScopes(contexts).Read(state.ContextID)
 		switch change {
 		case "project", "su":
 			role, table, column := "project", "Sample_Admin", "OfficeNotes"
@@ -66,7 +66,7 @@ func TestProjectScopeBuildFinalRevalidationRejectsGapDriftWithoutReplacingReceip
 				return nil
 			}
 		}
-		if result, err := scope.BuildLongVegetationProjectScope(ctx, state.ContextID, built.Revision); err == nil || result != nil || !reflect.DeepEqual(before, contexts.ProjectReportScopes.Read(state.ContextID)) {
+		if result, err := scope.BuildLongVegetationProjectScope(ctx, state.ContextID, built.Revision); err == nil || result != nil || !reflect.DeepEqual(before, projectReportScopes(contexts).Read(state.ContextID)) {
 			t.Fatal("gap drift/final-read failure installed stale current Build or replaced prior receipt", change, result, err)
 		}
 	}

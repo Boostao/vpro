@@ -407,32 +407,21 @@ func compileLumpSpecTx(ctx context.Context, tx *sql.Tx, project, projectPath str
 func PreviewLumpSpec(s *vprocore.ContextService, ctx context.Context, contextID string, spec LumpSpec) (LumpSpecPreview, error) {
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (LumpSpecPreview, error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-			return LumpSpecPreview{}, err
-		}
-		defer owner.Mu.Unlock()
-		tx, err := owner.BeginReadSnapshot(ctx)
-		if err != nil {
-			return LumpSpecPreview{}, err
-		}
-		defer func() { _ = tx.Rollback() }()
-
-		effective, rows, activeMap, err := compileLumpSpecTx(ctx, tx, owner.Selection.Project, owner.Selection.ProjectPath, spec)
-		if err != nil {
-			return LumpSpecPreview{}, err
-		}
-		impact, err := computeFoldingImpactFromTx(ctx, tx, owner.Selection.Project, activeMap, "LumpSpec_Preview", owner.Selection.ProjectPath)
-		if err != nil {
-			return LumpSpecPreview{}, err
-		}
-		if err := tx.Commit(); err != nil {
-			return LumpSpecPreview{}, err
-		}
-		return LumpSpecPreview{
-			EffectiveSpec: effective,
-			Rows:          rows,
-			Impact:        impact,
-		}, nil
+		return vprocore.WithReadSnapshotValue(ctx, owner, func(tx *sql.Tx) (LumpSpecPreview, error) {
+			effective, rows, activeMap, err := compileLumpSpecTx(ctx, tx, owner.Selection.Project, owner.Selection.ProjectPath, spec)
+			if err != nil {
+				return LumpSpecPreview{}, err
+			}
+			impact, err := computeFoldingImpactFromTx(ctx, tx, owner.Selection.Project, activeMap, "LumpSpec_Preview", owner.Selection.ProjectPath)
+			if err != nil {
+				return LumpSpecPreview{}, err
+			}
+			return LumpSpecPreview{
+				EffectiveSpec: effective,
+				Rows:          rows,
+				Impact:        impact,
+			}, nil
+		})
 	})
 }
 
@@ -449,27 +438,27 @@ func MaterializeLumpSpec(s *vprocore.ContextService, ctx context.Context, contex
 		owner := plots.Projects.Sqlite
 		activeCount := 0
 		lumpSet := map[string]struct{}{}
-		if err := withImmediateProjectWriteTx(ctx, owner, func(conn *sql.Conn) error {
+		if err := withImmediateProjectWriteTx(ctx, owner, func(wtx *vprocore.WriteTx) error {
 			var existingActual string
-			qErr := conn.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name COLLATE NOCASE=?`, tableName).Scan(&existingActual)
+			qErr := wtx.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name COLLATE NOCASE=?`, tableName).Scan(&existingActual)
 			if qErr == nil {
 				if !replaceExisting {
 					return fmt.Errorf("lump table %s already exists; set replaceExisting=true to overwrite", existingActual)
 				}
-				if _, err := conn.ExecContext(ctx, `DROP TABLE `+vprocore.QuoteHeaderIdentifier(existingActual)); err != nil {
+				if _, err := wtx.ExecContext(ctx, `DROP TABLE `+vprocore.QuoteHeaderIdentifier(existingActual)); err != nil {
 					return err
 				}
 			} else if !errors.Is(qErr, sql.ErrNoRows) {
 				return qErr
 			}
 
-			created, err := createLumpTableInTx(ctx, conn, base)
+			created, err := createLumpTableInTx(ctx, wtx, base)
 			if err != nil {
 				return err
 			}
 			tableName = created
 			quoted := vprocore.QuoteHeaderIdentifier(created)
-			stmt, err := conn.PrepareContext(ctx, `INSERT INTO `+quoted+` ("LumpCode", "SppCode", "Use") VALUES (?, ?, ?)`)
+			stmt, err := wtx.PrepareContext(ctx, `INSERT INTO `+quoted+` ("LumpCode", "SppCode", "Use") VALUES (?, ?, ?)`)
 			if err != nil {
 				return err
 			}

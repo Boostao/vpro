@@ -54,7 +54,9 @@ func readPlotProfileTableReview(ctx context.Context, c *vprocore.SqliteContext) 
 	if !profile.Source.Available || !profile.Source.Writable {
 		return PlotProfileTableReview{}, errors.New("existing-file profile creation requires current selected-profile write ownership")
 	}
-	template, err := readPlotProfileFileReview(ctx, c.Conn)
+	template, err := vprocore.WithCoordinatorConnValue(ctx, c, func(conn *sql.Conn) (PlotProfileFileReview, error) {
+		return readPlotProfileFileReview(ctx, conn)
+	})
 	if err != nil {
 		return PlotProfileTableReview{}, err
 	}
@@ -108,7 +110,7 @@ func CreateProfileTable(c *vprocore.SqliteContext, ctx context.Context, request 
 			if err != nil {
 				return err
 			}
-			template, err := readPlotProfileFileReview(ctx, c.Conn)
+			template, err := readPlotProfileFileReview(ctx, c.CoordinatorWhileLocked())
 			if err != nil {
 				return err
 			}

@@ -78,20 +78,11 @@ func GetLumpTableRows(s *vprocore.ContextService, ctx context.Context, contextID
 			return nil, err
 		}
 
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-			return nil, err
-		}
-		defer owner.Mu.Unlock()
-		tx, err := owner.BeginReadSnapshot(ctx)
+		catalog, err := vprocore.WithReadSnapshotValue(ctx, owner, func(tx *sql.Tx) (map[string]speciesTaxonomyEntry, error) {
+			cat, _, err := loadTaxonomyCatalog(ctx, tx)
+			return cat, err
+		})
 		if err != nil {
-			return nil, err
-		}
-		defer func() { _ = tx.Rollback() }()
-		catalog, _, err := loadTaxonomyCatalog(ctx, tx)
-		if err != nil {
-			return nil, err
-		}
-		if err := tx.Commit(); err != nil {
 			return nil, err
 		}
 		for i := range rawRows {
@@ -101,13 +92,13 @@ func GetLumpTableRows(s *vprocore.ContextService, ctx context.Context, contextID
 	})
 }
 
-func resolveConnLumpTable(ctx context.Context, conn *sql.Conn, requested string) (string, error) {
+func resolveConnLumpTable(ctx context.Context, wtx *vprocore.WriteTx, requested string) (string, error) {
 	_, tableName, err := normalizeLumpBaseName(requested)
 	if err != nil {
 		return "", err
 	}
 	var actual string
-	if err := conn.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name COLLATE NOCASE=?`, tableName).Scan(&actual); err != nil {
+	if err := wtx.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name COLLATE NOCASE=?`, tableName).Scan(&actual); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", fmt.Errorf("lump table %s does not exist in the active project", tableName)
 		}
@@ -130,23 +121,23 @@ func UpsertLumpRow(s *vprocore.ContextService, ctx context.Context, contextID, t
 		if _, ok := catalog[sppCode]; !ok && !input.AllowUnlisted {
 			return LumpRow{}, fmt.Errorf("species code %q was not found in VLists.USysAllSpecs or VUser.USysUserSpp", sppCode)
 		}
-		if err := withImmediateProjectWriteTx(ctx, owner, func(conn *sql.Conn) error {
-			actual, tErr := resolveConnLumpTable(ctx, conn, tableName)
+		if err := withImmediateProjectWriteTx(ctx, owner, func(wtx *vprocore.WriteTx) error {
+			actual, tErr := resolveConnLumpTable(ctx, wtx, tableName)
 			if tErr != nil {
 				return tErr
 			}
 			quoted := vprocore.QuoteHeaderIdentifier(actual)
 			var existingSpp string
-			qErr := conn.QueryRowContext(ctx, `SELECT SppCode FROM `+quoted+` WHERE SppCode COLLATE NOCASE=?`, sppCode).Scan(&existingSpp)
+			qErr := wtx.QueryRowContext(ctx, `SELECT SppCode FROM `+quoted+` WHERE SppCode COLLATE NOCASE=?`, sppCode).Scan(&existingSpp)
 			if qErr == nil {
-				_, uErr := conn.ExecContext(ctx, `UPDATE `+quoted+` SET "LumpCode"=?, "SppCode"=?, "Use"=? WHERE SppCode COLLATE NOCASE=?`,
+				_, uErr := wtx.ExecContext(ctx, `UPDATE `+quoted+` SET "LumpCode"=?, "SppCode"=?, "Use"=? WHERE SppCode COLLATE NOCASE=?`,
 					lumpCode, sppCode, accessBoolToInt(input.Use), existingSpp)
 				return uErr
 			}
 			if !errors.Is(qErr, sql.ErrNoRows) {
 				return qErr
 			}
-			_, iErr := conn.ExecContext(ctx, `INSERT INTO `+quoted+` ("LumpCode", "SppCode", "Use") VALUES (?, ?, ?)`,
+			_, iErr := wtx.ExecContext(ctx, `INSERT INTO `+quoted+` ("LumpCode", "SppCode", "Use") VALUES (?, ?, ?)`,
 				lumpCode, sppCode, accessBoolToInt(input.Use))
 			return iErr
 		}); err != nil {
@@ -176,22 +167,22 @@ func UpdateLumpRow(s *vprocore.ContextService, ctx context.Context, contextID, t
 		if _, ok := catalog[sppCode]; !ok && !input.AllowUnlisted {
 			return LumpRow{}, fmt.Errorf("species code %q was not found in VLists.USysAllSpecs or VUser.USysUserSpp", sppCode)
 		}
-		if err := withImmediateProjectWriteTx(ctx, owner, func(conn *sql.Conn) error {
-			actual, tErr := resolveConnLumpTable(ctx, conn, tableName)
+		if err := withImmediateProjectWriteTx(ctx, owner, func(wtx *vprocore.WriteTx) error {
+			actual, tErr := resolveConnLumpTable(ctx, wtx, tableName)
 			if tErr != nil {
 				return tErr
 			}
 			quoted := vprocore.QuoteHeaderIdentifier(actual)
 			if !strings.EqualFold(oldKey, sppCode) {
 				var conflict bool
-				if err := conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM `+quoted+` WHERE SppCode COLLATE NOCASE=?)`, sppCode).Scan(&conflict); err != nil {
+				if err := wtx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM `+quoted+` WHERE SppCode COLLATE NOCASE=?)`, sppCode).Scan(&conflict); err != nil {
 					return err
 				}
 				if conflict {
 					return fmt.Errorf("species code %q already exists in %s", sppCode, actual)
 				}
 			}
-			res, uErr := conn.ExecContext(ctx, `UPDATE `+quoted+` SET "LumpCode"=?, "SppCode"=?, "Use"=? WHERE SppCode COLLATE NOCASE=?`,
+			res, uErr := wtx.ExecContext(ctx, `UPDATE `+quoted+` SET "LumpCode"=?, "SppCode"=?, "Use"=? WHERE SppCode COLLATE NOCASE=?`,
 				lumpCode, sppCode, accessBoolToInt(input.Use), oldKey)
 			if uErr != nil {
 				return uErr
@@ -218,12 +209,12 @@ func DeleteLumpRow(s *vprocore.ContextService, ctx context.Context, contextID, t
 	}
 	_, err := vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (struct{}, error) {
 		owner := plots.Projects.Sqlite
-		return struct{}{}, withImmediateProjectWriteTx(ctx, owner, func(conn *sql.Conn) error {
-			actual, err := resolveConnLumpTable(ctx, conn, tableName)
+		return struct{}{}, withImmediateProjectWriteTx(ctx, owner, func(wtx *vprocore.WriteTx) error {
+			actual, err := resolveConnLumpTable(ctx, wtx, tableName)
 			if err != nil {
 				return err
 			}
-			res, err := conn.ExecContext(ctx, `DELETE FROM `+vprocore.QuoteHeaderIdentifier(actual)+` WHERE SppCode COLLATE NOCASE=?`, target)
+			res, err := wtx.ExecContext(ctx, `DELETE FROM `+vprocore.QuoteHeaderIdentifier(actual)+` WHERE SppCode COLLATE NOCASE=?`, target)
 			if err != nil {
 				return err
 			}
@@ -248,19 +239,19 @@ func ToggleLumpRow(s *vprocore.ContextService, ctx context.Context, contextID, t
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (LumpRow, error) {
 		owner := plots.Projects.Sqlite
 		var lumpCode, storedSpp string
-		if err := withImmediateProjectWriteTx(ctx, owner, func(conn *sql.Conn) error {
-			actual, err := resolveConnLumpTable(ctx, conn, tableName)
+		if err := withImmediateProjectWriteTx(ctx, owner, func(wtx *vprocore.WriteTx) error {
+			actual, err := resolveConnLumpTable(ctx, wtx, tableName)
 			if err != nil {
 				return err
 			}
 			quoted := vprocore.QuoteHeaderIdentifier(actual)
-			if err := conn.QueryRowContext(ctx, `SELECT LumpCode, SppCode FROM `+quoted+` WHERE SppCode COLLATE NOCASE=?`, target).Scan(&lumpCode, &storedSpp); err != nil {
+			if err := wtx.QueryRowContext(ctx, `SELECT LumpCode, SppCode FROM `+quoted+` WHERE SppCode COLLATE NOCASE=?`, target).Scan(&lumpCode, &storedSpp); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					return fmt.Errorf("species code %q was not found in %s", target, actual)
 				}
 				return err
 			}
-			_, err = conn.ExecContext(ctx, `UPDATE `+quoted+` SET "Use"=? WHERE SppCode COLLATE NOCASE=?`, accessBoolToInt(use), storedSpp)
+			_, err = wtx.ExecContext(ctx, `UPDATE `+quoted+` SET "Use"=? WHERE SppCode COLLATE NOCASE=?`, accessBoolToInt(use), storedSpp)
 			return err
 		}); err != nil {
 			return LumpRow{}, err
@@ -277,12 +268,12 @@ func SetAllLumpRowsUse(s *vprocore.ContextService, ctx context.Context, contextI
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (int, error) {
 		owner := plots.Projects.Sqlite
 		var updated int
-		err := withImmediateProjectWriteTx(ctx, owner, func(conn *sql.Conn) error {
-			actual, err := resolveConnLumpTable(ctx, conn, tableName)
+		err := withImmediateProjectWriteTx(ctx, owner, func(wtx *vprocore.WriteTx) error {
+			actual, err := resolveConnLumpTable(ctx, wtx, tableName)
 			if err != nil {
 				return err
 			}
-			res, err := conn.ExecContext(ctx, `UPDATE `+vprocore.QuoteHeaderIdentifier(actual)+` SET "Use"=?`, accessBoolToInt(use))
+			res, err := wtx.ExecContext(ctx, `UPDATE `+vprocore.QuoteHeaderIdentifier(actual)+` SET "Use"=?`, accessBoolToInt(use))
 			if err != nil {
 				return err
 			}
@@ -539,22 +530,8 @@ func PreviewLumpImpact(s *vprocore.ContextService, ctx context.Context, contextI
 			}
 		}
 
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-			return LumpImpactPreview{}, err
-		}
-		defer owner.Mu.Unlock()
-		tx, err := owner.BeginReadSnapshot(ctx)
-		if err != nil {
-			return LumpImpactPreview{}, err
-		}
-		defer func() { _ = tx.Rollback() }()
-		impact, err := computeFoldingImpactFromTx(ctx, tx, owner.Selection.Project, activeMap, resolvedTable, resolvedPath)
-		if err != nil {
-			return LumpImpactPreview{}, err
-		}
-		if err := tx.Commit(); err != nil {
-			return LumpImpactPreview{}, err
-		}
-		return impact, nil
+		return vprocore.WithReadSnapshotValue(ctx, owner, func(tx *sql.Tx) (LumpImpactPreview, error) {
+			return computeFoldingImpactFromTx(ctx, tx, owner.Selection.Project, activeMap, resolvedTable, resolvedPath)
+		})
 	})
 }

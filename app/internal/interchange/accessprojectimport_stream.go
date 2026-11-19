@@ -475,11 +475,7 @@ func seedImportedChildIdentities(ctx context.Context, tx *sql.Tx, sourceProject,
 		return err
 	}
 	accessImportProgressFromContext(ctx).emitStage("finalizing", "Finalizing indexes and audit history…")
-	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" (
-		"ChildTable" TEXT NOT NULL,
-		"ID" INTEGER NOT NULL,
-		PRIMARY KEY ("ChildTable", "ID")
-	)`); err != nil {
+	if err := vprocore.EnsureChildIdentityTable(ctx, tx); err != nil {
 		return err
 	}
 
@@ -487,12 +483,7 @@ func seedImportedChildIdentities(ctx context.Context, tx *sql.Tx, sourceProject,
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		qChild := vprocore.QuoteHeaderIdentifier(targetProject + "_" + suffix)
-		if _, err := tx.ExecContext(ctx,
-			`INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID")
-			 SELECT ?, "ID" FROM `+qChild+` WHERE typeof("ID") = 'integer' AND "ID" > 0`,
-			qChild,
-		); err != nil {
+		if err := vprocore.SeedChildIdentityFromTable(ctx, tx, targetProject+"_"+suffix, false); err != nil {
 			return err
 		}
 	}
@@ -524,7 +515,7 @@ func seedImportedChildIdentities(ctx context.Context, tx *sql.Tx, sourceProject,
 	}
 
 	if len(pairs) > 0 {
-		stmt, err := tx.PrepareContext(ctx, `INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") VALUES (?, ?)`)
+		stmt, err := vprocore.PrepareChildIdentityInsertStmt(ctx, tx)
 		if err != nil {
 			return err
 		}

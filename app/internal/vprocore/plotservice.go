@@ -423,11 +423,12 @@ func (s *PlotService) openActiveDB(readOnly bool) (*sql.DB, string, func(), erro
 		release()
 		return nil, "", nil, err
 	}
-	dsn := sqlutil.SqliteFileURI(dbPath, "rw") + "&_foreign_keys=on&_busy_timeout=5000&_txlock=immediate"
+	var db *sql.DB
 	if readOnly {
-		dsn = sqlutil.SqliteFileURI(dbPath, "ro") + "&_foreign_keys=on&_busy_timeout=5000"
+		db, err = sqlutil.OpenReadOnlyBusySQLite(dbPath)
+	} else {
+		db, err = sqlutil.OpenImmediateWriteSQLite(dbPath)
 	}
-	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		release()
 		return nil, "", nil, err

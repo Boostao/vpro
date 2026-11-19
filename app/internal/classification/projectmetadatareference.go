@@ -6,6 +6,7 @@ import (
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"sort"
@@ -83,77 +84,81 @@ var metadataHistoryFields = map[string]string{
 }
 
 func readProjectMetadataHistory(ctx context.Context, c *vprocore.SqliteContext, alias, table, column string) ([]ProjectMetadataOption, error) {
-	field := vprocore.QuoteHeaderIdentifier(column)
-	query := `SELECT rowid,typeof(` + field + `),CAST(` + field + ` AS BLOB) FROM ` +
-		vprocore.QuoteHeaderIdentifier(alias) + "." + vprocore.QuoteHeaderIdentifier(table)
-	if alias == "VMetaData" {
-		query += " WHERE " + field + " IS NOT NULL"
-	}
-	rows, err := c.Conn.QueryContext(ctx, query+" ORDER BY "+field+" COLLATE BINARY,rowid")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	options := []ProjectMetadataOption{}
-	for rows.Next() {
-		var rowID int64
-		var storage string
-		var raw []byte
-		if err := rows.Scan(&rowID, &storage, &raw); err != nil {
+	return vprocore.WithCoordinatorConnValue(ctx, c, func(conn *sql.Conn) ([]ProjectMetadataOption, error) {
+		field := vprocore.QuoteHeaderIdentifier(column)
+		query := `SELECT rowid,typeof(` + field + `),CAST(` + field + ` AS BLOB) FROM ` +
+			vprocore.QuoteHeaderIdentifier(alias) + "." + vprocore.QuoteHeaderIdentifier(table)
+		if alias == "VMetaData" {
+			query += " WHERE " + field + " IS NOT NULL"
+		}
+		rows, err := conn.QueryContext(ctx, query+" ORDER BY "+field+" COLLATE BINARY,rowid")
+		if err != nil {
 			return nil, err
 		}
-		option := ProjectMetadataOption{RowID: strconv.FormatInt(rowID, 10)}
-		if storage != "null" {
-			if storage != "text" {
-				return nil, errors.New("metadata history contains unsupported storage; no suggestion was converted")
-			}
-			value, err := vprocore.ProjectMetadataCellInternal(storage, raw)
-			if err != nil {
+		defer rows.Close()
+		options := []ProjectMetadataOption{}
+		for rows.Next() {
+			var rowID int64
+			var storage string
+			var raw []byte
+			if err := rows.Scan(&rowID, &storage, &raw); err != nil {
 				return nil, err
 			}
-			option.Value = value.Text
+			option := ProjectMetadataOption{RowID: strconv.FormatInt(rowID, 10)}
+			if storage != "null" {
+				if storage != "text" {
+					return nil, errors.New("metadata history contains unsupported storage; no suggestion was converted")
+				}
+				value, err := vprocore.ProjectMetadataCellInternal(storage, raw)
+				if err != nil {
+					return nil, err
+				}
+				option.Value = value.Text
+			}
+			options = append(options, option)
 		}
-		options = append(options, option)
-	}
-	return options, rows.Err()
+		return options, rows.Err()
+	})
 }
 
 func readProjectMetadataOptions(ctx context.Context, c *vprocore.SqliteContext, list, column string) ([]ProjectMetadataOption, error) {
-	field := vprocore.QuoteHeaderIdentifier(column)
-	rows, err := c.Conn.QueryContext(ctx, `SELECT rowid,typeof(`+field+`),CAST(`+field+` AS BLOB),
+	return vprocore.WithCoordinatorConnValue(ctx, c, func(conn *sql.Conn) ([]ProjectMetadataOption, error) {
+		field := vprocore.QuoteHeaderIdentifier(column)
+		rows, err := conn.QueryContext(ctx, `SELECT rowid,typeof(`+field+`),CAST(`+field+` AS BLOB),
 		typeof(ItemDescription),CAST(ItemDescription AS BLOB) FROM VLists.USysTableOfLists
 		WHERE ListName COLLATE BINARY=? ORDER BY ItemOrder,rowid`, list)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	result := []ProjectMetadataOption{}
-	for rows.Next() {
-		var id int64
-		var valueStorage, descriptionStorage string
-		var rawValue, rawDescription []byte
-		if err := rows.Scan(&id, &valueStorage, &rawValue, &descriptionStorage, &rawDescription); err != nil {
+		if err != nil {
 			return nil, err
 		}
-		option := ProjectMetadataOption{RowID: strconv.FormatInt(id, 10)}
-		for _, entry := range []struct {
-			storage string
-			raw     []byte
-			target  **string
-		}{{valueStorage, rawValue, &option.Value}, {descriptionStorage, rawDescription, &option.Description}} {
-			if entry.storage == "null" {
-				continue
-			}
-			if entry.storage != "text" {
-				return nil, errors.New("metadata reference contains unsupported historical storage; no code was converted")
-			}
-			cell, err := vprocore.ProjectMetadataCellInternal("text", entry.raw)
-			if err != nil {
+		defer rows.Close()
+		result := []ProjectMetadataOption{}
+		for rows.Next() {
+			var id int64
+			var valueStorage, descriptionStorage string
+			var rawValue, rawDescription []byte
+			if err := rows.Scan(&id, &valueStorage, &rawValue, &descriptionStorage, &rawDescription); err != nil {
 				return nil, err
 			}
-			*entry.target = cell.Text
+			option := ProjectMetadataOption{RowID: strconv.FormatInt(id, 10)}
+			for _, entry := range []struct {
+				storage string
+				raw     []byte
+				target  **string
+			}{{valueStorage, rawValue, &option.Value}, {descriptionStorage, rawDescription, &option.Description}} {
+				if entry.storage == "null" {
+					continue
+				}
+				if entry.storage != "text" {
+					return nil, errors.New("metadata reference contains unsupported historical storage; no code was converted")
+				}
+				cell, err := vprocore.ProjectMetadataCellInternal("text", entry.raw)
+				if err != nil {
+					return nil, err
+				}
+				*entry.target = cell.Text
+			}
+			result = append(result, option)
 		}
-		result = append(result, option)
-	}
-	return result, rows.Err()
+		return result, rows.Err()
+	})
 }

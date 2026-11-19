@@ -255,12 +255,11 @@ func writePictureDeletion(ctx context.Context, source *ownedPictureLibrary, requ
 	if err := errors.Join(ctx.Err(), source.checkFile(), validate()); err != nil {
 		return result, err
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(source.path, "rw")+"&_busy_timeout=5000&_txlock=immediate&_foreign_keys=on")
+	db, err := sqlutil.OpenImmediateWriteSQLite(source.path)
 	if err != nil {
 		return result, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, db.Close()) }()
-	db.SetMaxOpenConns(1)
 	tx, err := db.BeginTx(context.WithoutCancel(ctx), nil)
 	if err != nil {
 		return result, err

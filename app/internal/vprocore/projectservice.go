@@ -276,11 +276,10 @@ func SameDesktopPath(left, right string) bool {
 }
 
 func InitializeSQLiteWAL(ctx context.Context, path string) error {
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(path, "rw")+"&_busy_timeout=5000")
+	db, err := sqlutil.OpenSQLiteMode(path, "rw")
 	if err != nil {
 		return err
 	}
-	db.SetMaxOpenConns(1)
 	var journalMode string
 	if err := db.QueryRowContext(ctx, "PRAGMA journal_mode = WAL;").Scan(&journalMode); err != nil {
 		return errors.Join(err, db.Close())

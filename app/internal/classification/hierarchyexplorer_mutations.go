@@ -80,36 +80,7 @@ func (r *SaveFlatHierarchyRequest) UnmarshalJSON(data []byte) error {
 }
 
 func allocateHierarchyNodeID(ctx context.Context, tx *sql.Tx, tableName string) (int64, error) {
-	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS main.`+vprocore.QuoteHeaderIdentifier(hierarchyIdentityTable)+` (
-		"HierarchyTable" TEXT NOT NULL,
-		"ID" INTEGER NOT NULL,
-		PRIMARY KEY ("HierarchyTable", "ID")
-	)`); err != nil {
-		return 0, err
-	}
-	qTable := vprocore.QuoteHeaderIdentifier(tableName)
-	var maxID int64
-	if err := tx.QueryRowContext(ctx,
-		`SELECT COALESCE(MAX(id_val), 0) FROM (
-			SELECT "ID" AS id_val FROM main.`+qTable+` WHERE "ID" > 0
-			UNION
-			SELECT "ID" AS id_val FROM main.`+vprocore.QuoteHeaderIdentifier(hierarchyIdentityTable)+` WHERE "HierarchyTable" = ? AND "ID" > 0
-		)`,
-		tableName,
-	).Scan(&maxID); err != nil {
-		return 0, err
-	}
-	if maxID >= math.MaxInt32 {
-		return 0, errors.New("hierarchy node ID space exhausted")
-	}
-	nextID := maxID + 1
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO main.`+vprocore.QuoteHeaderIdentifier(hierarchyIdentityTable)+` ("HierarchyTable", "ID") VALUES (?, ?)`,
-		tableName, nextID,
-	); err != nil {
-		return 0, err
-	}
-	return nextID, nil
+	return vprocore.AllocateHierarchyNodeID(ctx, tx, hierarchyIdentityTable, tableName)
 }
 
 func validateHierarchyNodeName(rawName string, isBreak bool) (string, error) {
@@ -589,18 +560,7 @@ func DeleteHierarchyNode(ctx context.Context, contexts *vprocore.ContextService,
 		}
 
 		// Reserve all existing positive IDs in __VPRO_HierarchyIdentity before deleting so deleted IDs are never reused!
-		if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS main.`+vprocore.QuoteHeaderIdentifier(hierarchyIdentityTable)+` (
-			"HierarchyTable" TEXT NOT NULL,
-			"ID" INTEGER NOT NULL,
-			PRIMARY KEY ("HierarchyTable", "ID")
-		)`); err != nil {
-			return nil, nil, err
-		}
-		if _, err := tx.ExecContext(ctx,
-			`INSERT OR IGNORE INTO main.`+vprocore.QuoteHeaderIdentifier(hierarchyIdentityTable)+` ("HierarchyTable","ID")
-			 SELECT ?, "ID" FROM main.`+qTable+` WHERE "ID" > 0`,
-			tableName,
-		); err != nil {
+		if err := vprocore.SeedHierarchyNodeIDs(ctx, tx, hierarchyIdentityTable, tableName); err != nil {
 			return nil, nil, err
 		}
 
@@ -668,18 +628,7 @@ func SaveFlatHierarchyRows(ctx context.Context, contexts *vprocore.ContextServic
 		hasTag := hierarchyTableHasTagColumn(ctx, tx, tableName)
 
 		// Preserve existing node IDs by clean/raw name for stability, and ensure deleted IDs stay reserved.
-		if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS main.`+vprocore.QuoteHeaderIdentifier(hierarchyIdentityTable)+` (
-			"HierarchyTable" TEXT NOT NULL,
-			"ID" INTEGER NOT NULL,
-			PRIMARY KEY ("HierarchyTable", "ID")
-		)`); err != nil {
-			return nil, nil, err
-		}
-		if _, err := tx.ExecContext(ctx,
-			`INSERT OR IGNORE INTO main.`+vprocore.QuoteHeaderIdentifier(hierarchyIdentityTable)+` ("HierarchyTable","ID")
-			 SELECT ?, "ID" FROM main.`+qTable+` WHERE "ID" > 0`,
-			tableName,
-		); err != nil {
+		if err := vprocore.SeedHierarchyNodeIDs(ctx, tx, hierarchyIdentityTable, tableName); err != nil {
 			return nil, nil, err
 		}
 

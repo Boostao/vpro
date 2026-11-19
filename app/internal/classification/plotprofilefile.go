@@ -115,14 +115,16 @@ func readPlotProfileFileReview(ctx context.Context, conn *sql.Conn) (PlotProfile
 func ReviewPlotProfileFileCreation(s *vprocore.ContextService, ctx context.Context, contextID string) (PlotProfileFileReview, error) {
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (PlotProfileFileReview, error) {
 		c := plots.Projects.Sqlite
-		if err := vprocore.ProfileOwnedFiles(c); err != nil {
-			return PlotProfileFileReview{}, err
-		}
-		review, err := readPlotProfileFileReview(ctx, c.Conn)
-		if err != nil {
-			return PlotProfileFileReview{}, err
-		}
-		return review, vprocore.ProfileOwnedFiles(c)
+		return vprocore.WithCoordinatorConnValue(ctx, c, func(conn *sql.Conn) (PlotProfileFileReview, error) {
+			if err := vprocore.ProfileOwnedFiles(c); err != nil {
+				return PlotProfileFileReview{}, err
+			}
+			review, err := readPlotProfileFileReview(ctx, conn)
+			if err != nil {
+				return PlotProfileFileReview{}, err
+			}
+			return review, vprocore.ProfileOwnedFiles(c)
+		})
 	})
 }
 
@@ -148,7 +150,9 @@ func CreatePlotProfileFile(s *vprocore.ContextService, ctx context.Context, cont
 		if err := vprocore.ProfileOwnedFiles(owner); err != nil {
 			return struct{}{}, err
 		}
-		fresh, err := readPlotProfileFileReview(ctx, owner.Conn)
+		fresh, err := vprocore.WithCoordinatorConnValue(ctx, owner, func(conn *sql.Conn) (PlotProfileFileReview, error) {
+			return readPlotProfileFileReview(ctx, conn)
+		})
 		if err != nil {
 			return struct{}{}, err
 		}
@@ -169,7 +173,9 @@ func CreatePlotProfileFile(s *vprocore.ContextService, ctx context.Context, cont
 		if err := ctx.Err(); err != nil {
 			return struct{}{}, err
 		}
-		observed, err := readPlotProfileFileReview(ctx, owner.Conn)
+		observed, err := vprocore.WithCoordinatorConnValue(ctx, owner, func(conn *sql.Conn) (PlotProfileFileReview, error) {
+			return readPlotProfileFileReview(ctx, conn)
+		})
 		if err != nil {
 			return struct{}{}, err
 		}
@@ -199,12 +205,11 @@ func CreatePlotProfileFile(s *vprocore.ContextService, ctx context.Context, cont
 }
 
 func writePlotProfileFile(ctx context.Context, path string, request PlotProfileFileCreation) (resultErr error) {
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(path, "rw")+"&_journal_mode=DELETE&_synchronous=FULL")
+	db, err := sqlutil.OpenStagedSQLite(path)
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, db.Close()) }()
-	db.SetMaxOpenConns(1)
 	tx, err := sqlutil.BeginStagedTx(ctx, db)
 	if err != nil {
 		return err

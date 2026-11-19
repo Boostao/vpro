@@ -84,7 +84,6 @@ func DeleteTwoPageVegetationRow(s *vprocore.ContextService, ctx context.Context,
 			project := owner.Selection.Project
 			tableName := project + "_Veg"
 			quotedTbl := vprocore.QuoteHeaderIdentifier(tableName)
-			quotedAudit := vprocore.QuoteHeaderIdentifier(project + "_Audit")
 
 			var hasHistory bool
 			if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?)`, twoPageVegetationLifecycleHistoryTable).Scan(&hasHistory); err != nil {
@@ -199,13 +198,19 @@ func DeleteTwoPageVegetationRow(s *vprocore.ContextService, ctx context.Context,
 			}
 			species := extractVegTextFromRow(beforeRecords.Columns, deletedRow, "Species")
 			if len(auditEntries) == 0 {
-				ins, aErr := tx.ExecContext(ctx, `INSERT INTO `+quotedAudit+
-					` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`,
-					project, actor, req.PlotNumber, "_Veg", "Species", now, strconv.FormatInt(req.ID, 10), nil, req.ID)
+				aRowID, aErr := vprocore.RecordAudit(ctx, tx, vprocore.AuditWriteEntry{
+					Project:    project,
+					User:       actor,
+					PlotNumber: &req.PlotNumber,
+					Table:      "_Veg",
+					EditField:  vprocore.AuditString("Species"),
+					EditWhen:   now,
+					BeforeEdit: strconv.FormatInt(req.ID, 10),
+					ID:         &req.ID,
+				})
 				if aErr != nil {
 					return aErr
 				}
-				aRowID, _ := ins.LastInsertId()
 				ids, _ := vprocore.AuditRowIDs([]string{strconv.FormatInt(aRowID, 10)})
 				recs, _ := vprocore.SelectedAuditEntries(tx, project, req.PlotNumber, ids)
 				if len(recs) == 1 {
@@ -464,13 +469,19 @@ func RestoreTwoPageVegetationRow(s *vprocore.ContextService, ctx context.Context
 
 			now := time.Now().Format("2006-01-02 15:04:05")
 			var restoreAudits []vprocore.AuditEntry
-			aIns, err := tx.ExecContext(ctx, `INSERT INTO `+quotedAudit+
-				` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`,
-				project, actor, req.PlotNumber, "_Veg", "Species", now, nil, targetDeletion.Species, restoredID)
+			aRowID, err := vprocore.RecordAudit(ctx, tx, vprocore.AuditWriteEntry{
+				Project:    project,
+				User:       actor,
+				PlotNumber: &req.PlotNumber,
+				Table:      "_Veg",
+				EditField:  vprocore.AuditString("Species"),
+				EditWhen:   now,
+				AfterEdit:  targetDeletion.Species,
+				ID:         &restoredID,
+			})
 			if err != nil {
 				return err
 			}
-			aRowID, _ := aIns.LastInsertId()
 			ids, _ := vprocore.AuditRowIDs([]string{strconv.FormatInt(aRowID, 10)})
 			recs, _ := vprocore.SelectedAuditEntries(tx, project, req.PlotNumber, ids)
 			if len(recs) == 1 {

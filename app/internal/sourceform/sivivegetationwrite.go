@@ -195,7 +195,7 @@ func WriteSIVIVegetationCellsWithHooks(s *vprocore.ContextService, ctx context.C
 
 func SiviHeightContextParent(ctx context.Context, owner *vprocore.SqliteContext, plot string) error {
 	var member bool
-	if err := owner.Conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`, plot).
+	if err := owner.CoordinatorWhileLocked().QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`, plot).
 		Scan(&member); err != nil || !member {
 		return errors.Join(err, errors.New("SIVI parent is outside the selected context"))
 	}

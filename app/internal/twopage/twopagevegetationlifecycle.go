@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -173,33 +172,15 @@ func extractVegTextFromRow(cols []vprocore.ProjectMetadataColumn, row vprocore.P
 	return ""
 }
 
-func reserveTwoPageVegChildIDs(ctx context.Context, tx *sql.Tx, quotedTbl, unquotedTbl string, extraID *int64) error {
-	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" (
-		"ChildTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("ChildTable","ID"))`); err != nil {
+func reserveTwoPageVegChildIDs(ctx context.Context, tx *sql.Tx, quotedTbl, _ string, extraID *int64) error {
+	if err := vprocore.EnsureChildIdentityTable(ctx, tx); err != nil {
 		return err
 	}
-	idScan, err := tx.QueryContext(ctx, `SELECT "ID" FROM `+quotedTbl+` WHERE typeof("ID")='integer' AND "ID" > 0`)
-	if err != nil {
+	if err := vprocore.SeedChildIdentityFromTable(ctx, tx, quotedTbl, false); err != nil {
 		return err
 	}
-	var idsToReserve []int64
-	for idScan.Next() {
-		var v int64
-		if err := idScan.Scan(&v); err != nil {
-			idScan.Close()
-			return err
-		}
-		idsToReserve = append(idsToReserve, v)
-	}
-	if err := errors.Join(idScan.Err(), idScan.Close()); err != nil {
-		return err
-	}
-	if extraID != nil && *extraID >= 0 && !slices.Contains(idsToReserve, *extraID) {
-		idsToReserve = append(idsToReserve, *extraID)
-	}
-	for _, v := range idsToReserve {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO "__VPRO_ChildIdentity" ("ChildTable","ID") VALUES (?,?) ON CONFLICT DO NOTHING`,
-			unquotedTbl, v); err != nil {
+	if extraID != nil && *extraID >= 0 {
+		if err := vprocore.ReserveChildID(ctx, tx, quotedTbl, *extraID); err != nil {
 			return err
 		}
 	}
@@ -355,8 +336,7 @@ func CreateTwoPageVegetationRow(s *vprocore.ContextService, ctx context.Context,
 			if err := vprocore.ChildParent(tx, project, req.PlotNumber); err != nil {
 				return err
 			}
-			if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" (
-				"ChildTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("ChildTable","ID"))`); err != nil {
+			if err := vprocore.EnsureChildIdentityTable(ctx, tx); err != nil {
 				return err
 			}
 			newID, err := vprocore.AllocateChildID(tx, quotedTbl)

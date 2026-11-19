@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -222,10 +221,11 @@ func exportSiteUnitSummaryExtendedWorkbook(ctx context.Context, service *vprocor
 	}
 	return vprocore.WithContextPlotRequest(ctx, service, contextID, func(plots *vprocore.PlotService) (*SiteUnitSummaryWorkbookOutcome, error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return nil, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		read := func() (siteUnitSummaryExtendedSource, error) {
 			return vprocore.WithPublicationReadSnapshot(ctx, owner, hooks.snapshot, func(tx *sql.Tx) (siteUnitSummaryExtendedSource, error) {
 				return readSiteUnitSummaryExtendedSource(ctx, plots, owner, tx, contextID, options)

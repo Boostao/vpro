@@ -49,7 +49,7 @@ func PreviewProjectPlotProfilePresenceObserved(s *vprocore.ContextService, ctx c
 				result = projectPlotProfilePresencePreview{}
 			}
 		}()
-		if err := registerProfileFunctions(job.Conn); err != nil {
+		if err := registerProfileFunctions(job.CoordinatorWhileLocked()); err != nil {
 			return result, err
 		}
 		tx, err := job.BeginReadSnapshot(ctx)

@@ -3,7 +3,6 @@ package cloudsync
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -315,11 +314,10 @@ func materializeVListsFromRelationalStandards(ctx context.Context, pool interfac
 		return nil, err
 	}
 
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(tmpPath, "rw")+"&_journal_mode=DELETE&_synchronous=FULL")
+	db, err := sqlutil.OpenStagedSQLite(tmpPath)
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(1)
 	tx, err := sqlutil.BeginStagedTx(ctx, db)
 	if err != nil {
 		_ = db.Close()

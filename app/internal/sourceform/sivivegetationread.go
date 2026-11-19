@@ -1,7 +1,6 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -20,10 +19,11 @@ func ReadSIVIVegetation(s *vprocore.ContextService, ctx context.Context, context
 
 func readOwnedSIVIVegetation(ctx context.Context, plots *vprocore.PlotService, plot string, extended bool) (result []SiviVegetationProjection, resultErr error) {
 	owner := plots.Projects.Sqlite
-	if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+	unlock, err := owner.AcquireMutex(ctx)
+	if err != nil {
 		return nil, err
 	}
-	defer owner.Mu.Unlock()
+	defer unlock()
 	if err := vprocore.ProfileOwnedFiles(owner); err != nil {
 		return nil, err
 	}

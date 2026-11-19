@@ -81,7 +81,6 @@ func concatenateEnvFieldValues(values []string, fields []string, separator strin
 		return "", allNonEmpty
 	}
 
-	// Explicit per-gap separators (e.g., ["", "/"] for Zone + "" + SubZone + "/" + SiteSeries)
 	if len(fieldSeps) == len(values)-1 && len(values) > 1 {
 		var b strings.Builder
 		for i, val := range trimmed {
@@ -96,7 +95,6 @@ func concatenateEnvFieldValues(values []string, fields []string, separator strin
 		return b.String(), allNonEmpty
 	}
 
-	// Canonical BEC Zone+SubZone+"/"+SiteSeries shorthand
 	if useBECSlash && len(fields) >= 2 &&
 		strings.EqualFold(fields[0], "Zone") && strings.EqualFold(fields[1], "SubZone") {
 		bgc := trimmed[0] + trimmed[1]
@@ -123,6 +121,379 @@ func concatenateEnvFieldValues(values []string, fields []string, separator strin
 		}
 	}
 	return strings.Join(nonEmpty, separator), allNonEmpty
+}
+
+type suFromEnvTargetSpec struct {
+	mode       string
+	dest       string
+	targetSU   string
+	targetRole string
+	targetPath string
+}
+
+type envPlotConcat struct {
+	plot     string
+	computed string
+	complete bool
+}
+
+type plannedSUFromEnvWrite struct {
+	isInsert bool
+	plot     string
+	unit     string
+}
+
+func resolveSUFromEnvTarget(owner *vprocore.SqliteContext, mode string, request CreateSUFromEnvFieldsRequest) (suFromEnvTargetSpec, error) {
+	dest := strings.ToLower(strings.TrimSpace(request.Destination))
+	if dest == "" {
+		if strings.TrimSpace(request.FilePath) != "" {
+			dest = "new_file"
+		} else {
+			dest = "project"
+		}
+	}
+	spec := suFromEnvTargetSpec{mode: mode, dest: dest}
+	if mode == "new_table" {
+		validatedName, vErr := validateClassificationObjectName(request.TargetSUName, "SU")
+		if vErr != nil {
+			return suFromEnvTargetSpec{}, vErr
+		}
+		spec.targetSU = validatedName
+		if dest == "new_file" {
+			fresh, _, fErr := vprocore.FreshSQLiteDestination(request.FilePath, "SU")
+			if fErr != nil {
+				return suFromEnvTargetSpec{}, fErr
+			}
+			spec.targetPath = fresh
+		} else {
+			spec.targetPath = owner.Selection.ProjectPath
+		}
+		return spec, nil
+	}
+
+	if strings.TrimSpace(request.TargetSUName) != "" && !strings.EqualFold(strings.TrimSpace(request.TargetSUName), owner.Selection.SU) {
+		targetSUName := strings.TrimSpace(request.TargetSUName)
+		if !vprocore.ProjectNamePattern.MatchString(targetSUName) || strings.EqualFold(targetSUName, "None") {
+			return suFromEnvTargetSpec{}, fmt.Errorf("invalid existing SU table name %q", request.TargetSUName)
+		}
+		spec.targetSU = targetSUName
+		spec.targetRole = "project"
+		spec.targetPath = owner.Selection.ProjectPath
+		return spec, nil
+	}
+
+	if owner.Selection.SU == "" || owner.Selection.SU == "None" {
+		return suFromEnvTargetSpec{}, errors.New("an active Site Unit (SU) table must be selected for 'overwrite' or 'fill_unassigned_only' mode")
+	}
+	spec.targetSU = owner.Selection.SU
+	spec.targetRole = "su"
+	spec.targetPath = owner.Selection.SUPath
+	return spec, nil
+}
+
+func readSUFromEnvSnapshot(
+	ctx context.Context,
+	rtx *sql.Tx,
+	project string,
+	spec suFromEnvTargetSpec,
+	request CreateSUFromEnvFieldsRequest,
+) ([]envPlotConcat, map[string]*string, error) {
+	envCols, err := vprocore.ReadSQLiteStorageColumns(ctx, rtx, "project", project+"_Env")
+	if err != nil {
+		return nil, nil, err
+	}
+	adminCols, err := vprocore.ReadSQLiteStorageColumns(ctx, rtx, "project", project+"_Admin")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	envSet := make(map[string]string, len(envCols))
+	for _, c := range envCols {
+		envSet[strings.ToLower(c.Name)] = c.Name
+	}
+	adminSet := make(map[string]string, len(adminCols))
+	for _, c := range adminCols {
+		adminSet[strings.ToLower(c.Name)] = c.Name
+	}
+
+	selectExprs := []string{`CAST(env."PlotNumber" AS TEXT)`}
+	canonicalFields := make([]string, len(request.Fields))
+	for i, rawField := range request.Fields {
+		lower := strings.ToLower(strings.TrimSpace(rawField))
+		if actual, ok := envSet[lower]; ok {
+			canonicalFields[i] = actual
+			selectExprs = append(selectExprs, `COALESCE(CAST(env.`+vprocore.QuoteHeaderIdentifier(actual)+` AS TEXT), '')`)
+		} else if actual, ok := adminSet[lower]; ok {
+			canonicalFields[i] = actual
+			selectExprs = append(selectExprs, `COALESCE(CAST(admin.`+vprocore.QuoteHeaderIdentifier(actual)+` AS TEXT), '')`)
+		} else {
+			return nil, nil, fmt.Errorf("field %q was not found on %s_Env or %s_Admin", rawField, project, project)
+		}
+	}
+
+	envComputed, err := scanEnvPlotConcatRows(ctx, rtx, project, selectExprs, canonicalFields, request)
+	if err != nil {
+		return nil, nil, err
+	}
+	existingSU := map[string]*string{}
+	if spec.mode != "new_table" {
+		existingSU, err = readExistingSURowMap(ctx, rtx, spec.targetRole, spec.targetSU+"_SU")
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return envComputed, existingSU, nil
+}
+
+func scanEnvPlotConcatRows(
+	ctx context.Context,
+	rtx *sql.Tx,
+	project string,
+	selectExprs, canonicalFields []string,
+	request CreateSUFromEnvFieldsRequest,
+) ([]envPlotConcat, error) {
+	qSQL := `SELECT ` + strings.Join(selectExprs, ", ") +
+		` FROM "project".` + vprocore.QuoteHeaderIdentifier(project+"_Env") + ` AS env` +
+		` LEFT JOIN "project".` + vprocore.QuoteHeaderIdentifier(project+"_Admin") + ` AS admin` +
+		` ON admin."Plot" = env."PlotNumber" AND typeof(env."PlotNumber")='text' AND typeof(admin."Plot")='text'` +
+		` AND CAST(env."PlotNumber" AS BLOB)=CAST(admin."Plot" AS BLOB)` +
+		` WHERE env."PlotNumber" IS NOT NULL AND TRIM(CAST(env."PlotNumber" AS TEXT)) <> ''` +
+		` ORDER BY env."PlotNumber" COLLATE NOCASE ASC, env.rowid ASC`
+	rows, err := rtx.QueryContext(ctx, qSQL)
+	if err != nil {
+		return nil, err
+	}
+	var envComputed []envPlotConcat
+	seenEnvPlot := map[string]bool{}
+	for rows.Next() {
+		vals := make([]string, len(request.Fields)+1)
+		ptrs := make([]any, len(vals))
+		for i := range vals {
+			ptrs[i] = &vals[i]
+		}
+		if sErr := rows.Scan(ptrs...); sErr != nil {
+			rows.Close()
+			return nil, sErr
+		}
+		plotNum := vals[0]
+		if seenEnvPlot[plotNum] || len(utf16.Encode([]rune(plotNum))) > 7 {
+			continue
+		}
+		seenEnvPlot[plotNum] = true
+		unitStr, complete := concatenateEnvFieldValues(vals[1:], canonicalFields, request.Separator, request.FieldSeparators, request.UseBECSlashFormat)
+		if len(utf16.Encode([]rune(unitStr))) > 255 {
+			rows.Close()
+			return nil, fmt.Errorf("concatenated SiteUnit for plot %q exceeds 255 UTF-16 code units (%q)", plotNum, unitStr)
+		}
+		envComputed = append(envComputed, envPlotConcat{plot: plotNum, computed: unitStr, complete: complete})
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	return envComputed, nil
+}
+
+func readExistingSURowMap(ctx context.Context, rtx *sql.Tx, targetRole, suTableName string) (map[string]*string, error) {
+	var exists bool
+	if err := rtx.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM `+vprocore.QuoteHeaderIdentifier(targetRole)+`.sqlite_master WHERE type='table' AND name COLLATE BINARY=?)`,
+		suTableName,
+	).Scan(&exists); err != nil || !exists {
+		return nil, fmt.Errorf("existing SU table %s not found in %s database", suTableName, targetRole)
+	}
+	sRows, err := rtx.QueryContext(ctx,
+		`SELECT CAST("PlotNumber" AS TEXT), CAST("SiteUnit" AS TEXT) FROM `+
+			vprocore.QuoteHeaderIdentifier(targetRole)+`.`+vprocore.QuoteHeaderIdentifier(suTableName)+` WHERE typeof("PlotNumber")='text' ORDER BY rowid ASC`)
+	if err != nil {
+		return nil, err
+	}
+	existingSU := map[string]*string{}
+	for sRows.Next() {
+		var p, u sql.NullString
+		if err := sRows.Scan(&p, &u); err != nil {
+			sRows.Close()
+			return nil, err
+		}
+		if !p.Valid || strings.TrimSpace(p.String) == "" {
+			continue
+		}
+		if u.Valid && strings.TrimSpace(u.String) != "" {
+			val := strings.TrimSpace(u.String)
+			existingSU[p.String] = &val
+		} else {
+			existingSU[p.String] = nil
+		}
+	}
+	if err := errors.Join(sRows.Err(), sRows.Close()); err != nil {
+		return nil, err
+	}
+	return existingSU, nil
+}
+
+func planSUFromEnvWrites(
+	contextID string,
+	spec suFromEnvTargetSpec,
+	request CreateSUFromEnvFieldsRequest,
+	envComputed []envPlotConcat,
+	existingSU map[string]*string,
+) (*CreateSUFromEnvFieldsResult, []plannedSUFromEnvWrite) {
+	out := &CreateSUFromEnvFieldsResult{
+		ContextID:   contextID,
+		Mode:        spec.mode,
+		TargetSU:    spec.targetSU,
+		TableName:   spec.targetSU + "_SU",
+		FilePath:    spec.targetPath,
+		PreviewOnly: request.PreviewOnly,
+		Items:       make([]SUFromEnvPlotPreview, 0, len(envComputed)),
+	}
+	var writes []plannedSUFromEnvWrite
+	for _, item := range envComputed {
+		presentInSU := false
+		var prevUnit *string
+		if spec.mode != "new_table" {
+			prevUnit, presentInSU = existingSU[item.plot]
+			if request.ScopeToExistingSURowsOnly && !presentInSU {
+				continue
+			}
+		}
+		beforeStr := ""
+		if prevUnit != nil {
+			beforeStr = *prevUnit
+		}
+		if spec.mode == "fill_unassigned_only" && presentInSU && beforeStr != "" {
+			out.PreservedCount++
+			out.Items = append(out.Items, SUFromEnvPlotPreview{
+				PlotNumber: item.plot, BeforeSiteUnit: beforeStr, AfterSiteUnit: beforeStr, Action: "preserve_existing",
+			})
+			continue
+		}
+		if item.computed == "" || (request.SkipIncompleteRows && !item.complete) {
+			out.SkippedCount++
+			out.Items = append(out.Items, SUFromEnvPlotPreview{
+				PlotNumber: item.plot, BeforeSiteUnit: beforeStr, AfterSiteUnit: beforeStr, Action: "skip_blank",
+			})
+			continue
+		}
+		if spec.mode == "new_table" || !presentInSU {
+			out.InsertedCount++
+			out.Items = append(out.Items, SUFromEnvPlotPreview{
+				PlotNumber: item.plot, BeforeSiteUnit: "", AfterSiteUnit: item.computed, Action: "insert",
+			})
+			writes = append(writes, plannedSUFromEnvWrite{isInsert: true, plot: item.plot, unit: item.computed})
+		} else if beforeStr == item.computed {
+			out.UnchangedCount++
+			out.Items = append(out.Items, SUFromEnvPlotPreview{
+				PlotNumber: item.plot, BeforeSiteUnit: beforeStr, AfterSiteUnit: item.computed, Action: "unchanged",
+			})
+		} else {
+			out.UpdatedCount++
+			out.Items = append(out.Items, SUFromEnvPlotPreview{
+				PlotNumber: item.plot, BeforeSiteUnit: beforeStr, AfterSiteUnit: item.computed, Action: "update",
+			})
+			writes = append(writes, plannedSUFromEnvWrite{isInsert: false, plot: item.plot, unit: item.computed})
+		}
+	}
+	return out, writes
+}
+
+func commitStandaloneSUFromEnvFile(ctx context.Context, spec suFromEnvTargetSpec, writes []plannedSUFromEnvWrite, proposal string) error {
+	committed := false
+	db, err := sqlutil.OpenWALCreateSQLite(spec.targetPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = db.Close()
+		if !committed {
+			_ = os.Remove(spec.targetPath)
+		}
+	}()
+	wtx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if !committed {
+			_ = wtx.Rollback()
+		}
+	}()
+	if err := createSUTableObjectsInTx(ctx, wtx, spec.targetSU); err != nil {
+		return err
+	}
+	qTarget := vprocore.QuoteHeaderIdentifier(spec.targetSU + "_SU")
+	for _, w := range writes {
+		if _, err := wtx.ExecContext(ctx, `INSERT INTO main.`+qTarget+` ("PlotNumber","SiteUnit") VALUES (?,?)`, w.plot, w.unit); err != nil {
+			return err
+		}
+	}
+	if err := vprocore.AppendTechnicalProvenance(ctx, wtx, suFromEnvHistoryTable, suFromEnvHistorySQL, proposal, "create SU from Env fields"); err != nil {
+		return err
+	}
+	if err := wtx.Commit(); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
+func commitAttachedSUFromEnvTable(
+	ctx context.Context,
+	owner *vprocore.SqliteContext,
+	spec suFromEnvTargetSpec,
+	writes []plannedSUFromEnvWrite,
+	proposal string,
+) error {
+	writerRole := spec.targetRole
+	if spec.mode == "new_table" {
+		writerRole = "project"
+	}
+	validateFiles := func() error {
+		if err := owner.ValidateMetadataWriterFiles(); err != nil {
+			return err
+		}
+		info := owner.AttachmentInfo[writerRole]
+		if info == nil {
+			return fmt.Errorf("target role %s is unavailable", writerRole)
+		}
+		for role, sInfo := range owner.AttachmentInfo {
+			if strings.HasPrefix(role, "V") && os.SameFile(info, sInfo) {
+				return fmt.Errorf("target database shares a file with support role %s", role)
+			}
+		}
+		return nil
+	}
+	return owner.WithImmediateRoleWriteTx(ctx, writerRole, validateFiles, func(wtx *vprocore.WriteTx) error {
+		if spec.mode == "new_table" {
+			if err := createSUTableObjectsInTx(ctx, wtx.Tx, spec.targetSU); err != nil {
+				return err
+			}
+		}
+		qTarget := vprocore.QuoteHeaderIdentifier(spec.targetSU + "_SU")
+		for _, w := range writes {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if w.isInsert {
+				if _, err := wtx.ExecContext(ctx, `INSERT INTO main.`+qTarget+` ("PlotNumber","SiteUnit") VALUES (?,?)`, w.plot, w.unit); err != nil {
+					return err
+				}
+			} else {
+				updSQL := `UPDATE main.` + qTarget + ` SET "SiteUnit" = ? WHERE "PlotNumber" = ? AND typeof("PlotNumber")='text' AND CAST("PlotNumber" AS BLOB)=CAST(? AS BLOB)`
+				if spec.mode == "fill_unassigned_only" {
+					updSQL += ` AND ("SiteUnit" IS NULL OR TRIM("SiteUnit") = '')`
+				}
+				if _, err := wtx.ExecContext(ctx, updSQL, w.unit, w.plot, w.plot); err != nil {
+					return err
+				}
+			}
+		}
+		if len(writes) > 0 || spec.mode == "new_table" {
+			if err := vprocore.AppendTechnicalProvenance(ctx, wtx.Tx, suFromEnvHistoryTable, suFromEnvHistorySQL, proposal, "SU from Env fields"); err != nil {
+				return err
+			}
+		}
+		return validateFiles()
+	})
 }
 
 // CreateSUFromEnvFields populates Site Units from concatenated _Env/_Admin columns,
@@ -162,295 +533,22 @@ func CreateSUFromEnvFields(
 		currentSelection = owner.Selection
 		project := owner.Selection.Project
 
-		var targetSUName string
-		var targetRole string
-		var targetPath string
-		dest := strings.ToLower(strings.TrimSpace(request.Destination))
-		if dest == "" {
-			if strings.TrimSpace(request.FilePath) != "" {
-				dest = "new_file"
-			} else {
-				dest = "project"
-			}
-		}
-
-		if mode == "new_table" {
-			validatedName, vErr := validateClassificationObjectName(request.TargetSUName, "SU")
-			if vErr != nil {
-				return struct{}{}, vErr
-			}
-			targetSUName = validatedName
-			if dest == "new_file" {
-				fresh, _, fErr := vprocore.FreshSQLiteDestination(request.FilePath, "SU")
-				if fErr != nil {
-					return struct{}{}, fErr
-				}
-				targetPath = fresh
-			} else {
-				targetPath = owner.Selection.ProjectPath
-			}
-		} else {
-			// Existing *_SU table mode ("overwrite" | "fill_unassigned_only")
-			if strings.TrimSpace(request.TargetSUName) != "" && !strings.EqualFold(strings.TrimSpace(request.TargetSUName), owner.Selection.SU) {
-				// Targeting an in-project *_SU table by explicit name
-				targetSUName = strings.TrimSpace(request.TargetSUName)
-				if !vprocore.ProjectNamePattern.MatchString(targetSUName) || strings.EqualFold(targetSUName, "None") {
-					return struct{}{}, fmt.Errorf("invalid existing SU table name %q", request.TargetSUName)
-				}
-				targetRole = "project"
-				targetPath = owner.Selection.ProjectPath
-			} else {
-				if owner.Selection.SU == "" || owner.Selection.SU == "None" {
-					return struct{}{}, errors.New("an active Site Unit (SU) table must be selected for 'overwrite' or 'fill_unassigned_only' mode")
-				}
-				targetSUName = owner.Selection.SU
-				targetRole = "su"
-				targetPath = owner.Selection.SUPath
-			}
-		}
-
-		// Read _Env, _Admin, and (if applicable) existing *_SU inside a caller-owned read snapshot.
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-			return struct{}{}, err
-		}
-		rtx, sErr := owner.BeginReadSnapshot(ctx)
-		if sErr != nil {
-			owner.Mu.Unlock()
-			return struct{}{}, sErr
-		}
-
-		envCols, err := vprocore.ReadSQLiteStorageColumns(ctx, rtx, "project", project+"_Env")
+		spec, err := resolveSUFromEnvTarget(owner, mode, request)
 		if err != nil {
-			_ = rtx.Rollback()
-			owner.Mu.Unlock()
-			return struct{}{}, err
-		}
-		adminCols, err := vprocore.ReadSQLiteStorageColumns(ctx, rtx, "project", project+"_Admin")
-		if err != nil {
-			_ = rtx.Rollback()
-			owner.Mu.Unlock()
 			return struct{}{}, err
 		}
 
-		envSet := map[string]string{}
-		for _, c := range envCols {
-			envSet[strings.ToLower(c.Name)] = c.Name
-		}
-		adminSet := map[string]string{}
-		for _, c := range adminCols {
-			adminSet[strings.ToLower(c.Name)] = c.Name
-		}
-
-		selectExprs := []string{`CAST(env."PlotNumber" AS TEXT)`}
-		canonicalFields := make([]string, len(request.Fields))
-		for i, rawField := range request.Fields {
-			lower := strings.ToLower(strings.TrimSpace(rawField))
-			if actual, ok := envSet[lower]; ok {
-				canonicalFields[i] = actual
-				selectExprs = append(selectExprs, `COALESCE(CAST(env.`+vprocore.QuoteHeaderIdentifier(actual)+` AS TEXT), '')`)
-			} else if actual, ok := adminSet[lower]; ok {
-				canonicalFields[i] = actual
-				selectExprs = append(selectExprs, `COALESCE(CAST(admin.`+vprocore.QuoteHeaderIdentifier(actual)+` AS TEXT), '')`)
-			} else {
-				_ = rtx.Rollback()
-				owner.Mu.Unlock()
-				return struct{}{}, fmt.Errorf("field %q was not found on %s_Env or %s_Admin", rawField, project, project)
-			}
-		}
-
-		type envPlotConcat struct {
-			plot     string
-			computed string
-			complete bool
-		}
 		var envComputed []envPlotConcat
-
-		qSQL := `SELECT ` + strings.Join(selectExprs, ", ") +
-			` FROM "project".` + vprocore.QuoteHeaderIdentifier(project+"_Env") + ` AS env` +
-			` LEFT JOIN "project".` + vprocore.QuoteHeaderIdentifier(project+"_Admin") + ` AS admin` +
-			` ON admin."Plot" = env."PlotNumber" AND typeof(env."PlotNumber")='text' AND typeof(admin."Plot")='text'` +
-			` AND CAST(env."PlotNumber" AS BLOB)=CAST(admin."Plot" AS BLOB)` +
-			` WHERE env."PlotNumber" IS NOT NULL AND TRIM(CAST(env."PlotNumber" AS TEXT)) <> ''` +
-			` ORDER BY env."PlotNumber" COLLATE NOCASE ASC, env.rowid ASC`
-		rows, qErr := rtx.QueryContext(ctx, qSQL)
-		if qErr != nil {
-			_ = rtx.Rollback()
-			owner.Mu.Unlock()
-			return struct{}{}, qErr
-		}
-		seenEnvPlot := map[string]bool{}
-		for rows.Next() {
-			vals := make([]string, len(request.Fields)+1)
-			ptrs := make([]any, len(vals))
-			for i := range vals {
-				ptrs[i] = &vals[i]
-			}
-			if sErr := rows.Scan(ptrs...); sErr != nil {
-				rows.Close()
-				_ = rtx.Rollback()
-				owner.Mu.Unlock()
-				return struct{}{}, sErr
-			}
-			plotNum := vals[0]
-			if seenEnvPlot[plotNum] || len(utf16.Encode([]rune(plotNum))) > 7 {
-				continue
-			}
-			seenEnvPlot[plotNum] = true
-			unitStr, complete := concatenateEnvFieldValues(vals[1:], canonicalFields, request.Separator, request.FieldSeparators, request.UseBECSlashFormat)
-			if len(utf16.Encode([]rune(unitStr))) > 255 {
-				rows.Close()
-				_ = rtx.Rollback()
-				owner.Mu.Unlock()
-				return struct{}{}, fmt.Errorf("concatenated SiteUnit for plot %q exceeds 255 UTF-16 code units (%q)", plotNum, unitStr)
-			}
-			envComputed = append(envComputed, envPlotConcat{plot: plotNum, computed: unitStr, complete: complete})
-		}
-		rowsErr := rows.Err()
-		rows.Close()
-		if rowsErr != nil {
-			_ = rtx.Rollback()
-			owner.Mu.Unlock()
-			return struct{}{}, rowsErr
+		var existingSU map[string]*string
+		if err := owner.WithReadSnapshot(ctx, func(rtx *sql.Tx) error {
+			var snapErr error
+			envComputed, existingSU, snapErr = readSUFromEnvSnapshot(ctx, rtx, project, spec, request)
+			return snapErr
+		}); err != nil {
+			return struct{}{}, err
 		}
 
-		existingSU := map[string]*string{} // plotNumber -> existing SiteUnit (nil if NULL/empty)
-		if mode != "new_table" {
-			suTableName := targetSUName + "_SU"
-			exists, eErr := func() (bool, error) {
-				var ex bool
-				err := rtx.QueryRowContext(ctx,
-					`SELECT EXISTS(SELECT 1 FROM `+vprocore.QuoteHeaderIdentifier(targetRole)+`.sqlite_master WHERE type='table' AND name COLLATE BINARY=?)`,
-					suTableName,
-				).Scan(&ex)
-				return ex, err
-			}()
-			if eErr != nil || !exists {
-				_ = rtx.Rollback()
-				owner.Mu.Unlock()
-				return struct{}{}, fmt.Errorf("existing SU table %s not found in %s database", suTableName, targetRole)
-			}
-			sRows, sErr := rtx.QueryContext(ctx,
-				`SELECT CAST("PlotNumber" AS TEXT), CAST("SiteUnit" AS TEXT) FROM `+
-					vprocore.QuoteHeaderIdentifier(targetRole)+`.`+vprocore.QuoteHeaderIdentifier(suTableName)+` WHERE typeof("PlotNumber")='text' ORDER BY rowid ASC`)
-			if sErr != nil {
-				_ = rtx.Rollback()
-				owner.Mu.Unlock()
-				return struct{}{}, sErr
-			}
-			for sRows.Next() {
-				var p, u sql.NullString
-				if err := sRows.Scan(&p, &u); err != nil {
-					sRows.Close()
-					_ = rtx.Rollback()
-					owner.Mu.Unlock()
-					return struct{}{}, err
-				}
-				if !p.Valid || strings.TrimSpace(p.String) == "" {
-					continue
-				}
-				if u.Valid && strings.TrimSpace(u.String) != "" {
-					val := strings.TrimSpace(u.String)
-					existingSU[p.String] = &val
-				} else {
-					existingSU[p.String] = nil
-				}
-			}
-			sRowsErr := sRows.Err()
-			sRows.Close()
-			if sRowsErr != nil {
-				_ = rtx.Rollback()
-				owner.Mu.Unlock()
-				return struct{}{}, sRowsErr
-			}
-		}
-
-		_ = rtx.Rollback()
-		owner.Mu.Unlock()
-
-		// Plan inserts/updates/preserves deterministically
-		targetTableName := targetSUName + "_SU"
-		out := &CreateSUFromEnvFieldsResult{
-			ContextID:   contextID,
-			Mode:        mode,
-			TargetSU:    targetSUName,
-			TableName:   targetTableName,
-			FilePath:    targetPath,
-			PreviewOnly: request.PreviewOnly,
-			Items:       make([]SUFromEnvPlotPreview, 0, len(envComputed)),
-		}
-
-		type plannedSUWrite struct {
-			isInsert bool
-			plot     string
-			unit     string
-		}
-		var writes []plannedSUWrite
-
-		for _, item := range envComputed {
-			presentInSU := false
-			var prevUnit *string
-			if mode != "new_table" {
-				prevUnit, presentInSU = existingSU[item.plot]
-				if request.ScopeToExistingSURowsOnly && !presentInSU {
-					continue
-				}
-			}
-			beforeStr := ""
-			if prevUnit != nil {
-				beforeStr = *prevUnit
-			}
-
-			if mode == "fill_unassigned_only" && presentInSU && beforeStr != "" {
-				out.PreservedCount++
-				out.Items = append(out.Items, SUFromEnvPlotPreview{
-					PlotNumber:     item.plot,
-					BeforeSiteUnit: beforeStr,
-					AfterSiteUnit:  beforeStr,
-					Action:         "preserve_existing",
-				})
-				continue
-			}
-
-			if item.computed == "" || (request.SkipIncompleteRows && !item.complete) {
-				out.SkippedCount++
-				out.Items = append(out.Items, SUFromEnvPlotPreview{
-					PlotNumber:     item.plot,
-					BeforeSiteUnit: beforeStr,
-					AfterSiteUnit:  beforeStr,
-					Action:         "skip_blank",
-				})
-				continue
-			}
-
-			if mode == "new_table" || !presentInSU {
-				out.InsertedCount++
-				out.Items = append(out.Items, SUFromEnvPlotPreview{
-					PlotNumber:     item.plot,
-					BeforeSiteUnit: "",
-					AfterSiteUnit:  item.computed,
-					Action:         "insert",
-				})
-				writes = append(writes, plannedSUWrite{isInsert: true, plot: item.plot, unit: item.computed})
-			} else if beforeStr == item.computed {
-				out.UnchangedCount++
-				out.Items = append(out.Items, SUFromEnvPlotPreview{
-					PlotNumber:     item.plot,
-					BeforeSiteUnit: beforeStr,
-					AfterSiteUnit:  item.computed,
-					Action:         "unchanged",
-				})
-			} else {
-				out.UpdatedCount++
-				out.Items = append(out.Items, SUFromEnvPlotPreview{
-					PlotNumber:     item.plot,
-					BeforeSiteUnit: beforeStr,
-					AfterSiteUnit:  item.computed,
-					Action:         "update",
-				})
-				writes = append(writes, plannedSUWrite{isInsert: false, plot: item.plot, unit: item.computed})
-			}
-		}
-
+		out, writes := planSUFromEnvWrites(contextID, spec, request, envComputed, existingSU)
 		if request.PreviewOnly {
 			result = out
 			return struct{}{}, nil
@@ -460,117 +558,15 @@ func CreateSUFromEnvFields(
 		if err != nil {
 			return struct{}{}, err
 		}
-
-		if mode == "new_table" && dest == "new_file" {
-			committed := false
-			db, oErr := sql.Open("sqlite3", sqlutil.SqliteFileURI(targetPath, "rwc")+"&_foreign_keys=on&_busy_timeout=5000&_journal_mode=WAL&_txlock=immediate")
-			if oErr != nil {
-				return struct{}{}, oErr
-			}
-			defer func() {
-				_ = db.Close()
-				if !committed {
-					_ = os.Remove(targetPath)
-				}
-			}()
-			db.SetMaxOpenConns(1)
-			wtx, bErr := db.BeginTx(ctx, nil)
-			if bErr != nil {
-				return struct{}{}, bErr
-			}
-			if err := createSUTableObjectsInTx(ctx, wtx, targetSUName); err != nil {
-				_ = wtx.Rollback()
+		if spec.mode == "new_table" && spec.dest == "new_file" {
+			if err := commitStandaloneSUFromEnvFile(ctx, spec, writes, string(proposalBytes)); err != nil {
 				return struct{}{}, err
 			}
-			qTarget := vprocore.QuoteHeaderIdentifier(targetTableName)
-			for _, w := range writes {
-				if _, err := wtx.ExecContext(ctx, `INSERT INTO main.`+qTarget+` ("PlotNumber","SiteUnit") VALUES (?,?)`, w.plot, w.unit); err != nil {
-					_ = wtx.Rollback()
-					return struct{}{}, err
-				}
-			}
-			if err := vprocore.AppendTechnicalProvenance(ctx, wtx, suFromEnvHistoryTable, suFromEnvHistorySQL, string(proposalBytes), "create SU from Env fields"); err != nil {
-				_ = wtx.Rollback()
-				return struct{}{}, err
-			}
-			if err := wtx.Commit(); err != nil {
-				return struct{}{}, err
-			}
-			committed = true
 		} else {
-			writerRole := targetRole
-			if mode == "new_table" {
-				writerRole = "project"
-			}
-			validateFiles := func() error {
-				if err := owner.ValidateMetadataWriterFiles(); err != nil {
-					return err
-				}
-				info := owner.AttachmentInfo[writerRole]
-				if info == nil {
-					return fmt.Errorf("target role %s is unavailable", writerRole)
-				}
-				for role, sInfo := range owner.AttachmentInfo {
-					if strings.HasPrefix(role, "V") && os.SameFile(info, sInfo) {
-						return fmt.Errorf("target database shares a file with support role %s", role)
-					}
-				}
-				return nil
-			}
-
-			wErr := owner.WithSelectedFileWriter(ctx, writerRole, validateFiles, func(conn *sql.Conn) (txErr error) {
-				wtx, bErr := conn.BeginTx(ctx, nil) // BEGIN IMMEDIATE
-				if bErr != nil {
-					return bErr
-				}
-				defer func() {
-					if rb := wtx.Rollback(); rb != nil && !errors.Is(rb, sql.ErrTxDone) {
-						txErr = errors.Join(txErr, rb)
-					}
-				}()
-
-				if mode == "new_table" {
-					if err := createSUTableObjectsInTx(ctx, wtx, targetSUName); err != nil {
-						return err
-					}
-				}
-				qTarget := vprocore.QuoteHeaderIdentifier(targetTableName)
-				for _, w := range writes {
-					if err := ctx.Err(); err != nil {
-						return err
-					}
-					if w.isInsert {
-						if _, err := wtx.ExecContext(ctx, `INSERT INTO main.`+qTarget+` ("PlotNumber","SiteUnit") VALUES (?,?)`, w.plot, w.unit); err != nil {
-							return err
-						}
-					} else {
-						updSQL := `UPDATE main.` + qTarget + ` SET "SiteUnit" = ? WHERE "PlotNumber" = ? AND typeof("PlotNumber")='text' AND CAST("PlotNumber" AS BLOB)=CAST(? AS BLOB)`
-						if mode == "fill_unassigned_only" {
-							updSQL += ` AND ("SiteUnit" IS NULL OR TRIM("SiteUnit") = '')`
-						}
-						if _, err := wtx.ExecContext(ctx, updSQL, w.unit, w.plot, w.plot); err != nil {
-							return err
-						}
-					}
-				}
-				if len(writes) > 0 || mode == "new_table" {
-					if err := vprocore.AppendTechnicalProvenance(ctx, wtx, suFromEnvHistoryTable, suFromEnvHistorySQL, string(proposalBytes), "SU from Env fields"); err != nil {
-						return err
-					}
-				}
-				if err := validateFiles(); err != nil {
-					return err
-				}
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				return wtx.Commit()
-			})
-			if wErr != nil {
-				return struct{}{}, wErr
+			if err := commitAttachedSUFromEnvTable(ctx, owner, spec, writes, string(proposalBytes)); err != nil {
+				return struct{}{}, err
 			}
 		}
-
 		result = out
 		return struct{}{}, nil
 	})

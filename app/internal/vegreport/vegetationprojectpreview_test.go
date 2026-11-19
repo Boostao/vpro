@@ -166,11 +166,11 @@ func TestProjectOwnedPreviewNeverTreatsBuildNormalizationAsSavedPreference(t *te
 
 func TestProjectOwnedPreviewReadCleanupFailureCannotReturnSuccessfulOutput(t *testing.T) {
 	service, state, scope := projectPreviewFixture(t, false, true, true)
-	before := service.contexts.ProjectReportScopes.Read(state.ContextID)
+	before := projectReportScopes(service.contexts).Read(state.ContextID)
 	service.snapshot.CommitRead = func(*sql.Tx) error { return errors.New("project preview snapshot cleanup failure") }
 	result, err := service.PreviewLongVegetationProject(context.Background(), state.ContextID, projectReadJSON(t, scope))
 	if err == nil || !reflect.DeepEqual(result, LongVegetationProjectPreview{}) ||
-		!reflect.DeepEqual(before, service.contexts.ProjectReportScopes.Read(state.ContextID)) {
+		!reflect.DeepEqual(before, projectReportScopes(service.contexts).Read(state.ContextID)) {
 		t.Fatal("failed completed snapshot published project output or changed authority", result, err)
 	}
 	service.snapshot = vprocore.PublicationReadSnapshotHooks{}

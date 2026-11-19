@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -276,7 +275,6 @@ func DeleteTwoPageSoilHorizon(s *vprocore.ContextService, ctx context.Context, c
 			project := owner.Selection.Project
 			tableName := project + "_" + kind
 			quotedTbl := vprocore.QuoteHeaderIdentifier(tableName)
-			quotedAudit := vprocore.QuoteHeaderIdentifier(project + "_Audit")
 
 			// Check idempotent replay in __VPRO_TwoPageSoilHistory if table exists.
 			var hasHistory bool
@@ -350,32 +348,14 @@ func DeleteTwoPageSoilHorizon(s *vprocore.ContextService, ctx context.Context, c
 			}
 
 			// Ensure __VPRO_ChildIdentity exists and permanently reserve all existing + deleted IDs!
-			if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" (
-				"ChildTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("ChildTable","ID"))`); err != nil {
+			if err := vprocore.EnsureChildIdentityTable(ctx, tx); err != nil {
 				return err
 			}
-			idScan, err := tx.QueryContext(ctx, `SELECT "ID" FROM `+quotedTbl+` WHERE typeof("ID")='integer' AND "ID" > 0`)
-			if err != nil {
+			if err := vprocore.SeedChildIdentityFromTable(ctx, tx, quotedTbl, false); err != nil {
 				return err
 			}
-			var idsToReserve []int64
-			for idScan.Next() {
-				var v int64
-				if err := idScan.Scan(&v); err != nil {
-					idScan.Close()
-					return err
-				}
-				idsToReserve = append(idsToReserve, v)
-			}
-			if err := errors.Join(idScan.Err(), idScan.Close()); err != nil {
-				return err
-			}
-			if req.ID >= 0 && !slices.Contains(idsToReserve, req.ID) {
-				idsToReserve = append(idsToReserve, req.ID)
-			}
-			for _, v := range idsToReserve {
-				if _, err := tx.ExecContext(ctx, `INSERT INTO "__VPRO_ChildIdentity" ("ChildTable","ID") VALUES (?,?) ON CONFLICT DO NOTHING`,
-					quotedTbl, v); err != nil {
+			if req.ID >= 0 {
+				if err := vprocore.ReserveChildID(ctx, tx, quotedTbl, req.ID); err != nil {
 					return err
 				}
 			}
@@ -429,13 +409,19 @@ func DeleteTwoPageSoilHorizon(s *vprocore.ContextService, ctx context.Context, c
 			}
 			// If every non-identity cell was NULL, record at least Horizon/ID deletion audit row.
 			if len(auditEntries) == 0 {
-				ins, aErr := tx.ExecContext(ctx, `INSERT INTO `+quotedAudit+
-					` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`,
-					project, actor, req.PlotNumber, "_"+kind, "Horizon", now, strconv.FormatInt(req.ID, 10), nil, req.ID)
+				aRowID, aErr := vprocore.RecordAudit(ctx, tx, vprocore.AuditWriteEntry{
+					Project:    project,
+					User:       actor,
+					PlotNumber: &req.PlotNumber,
+					Table:      "_" + kind,
+					EditField:  vprocore.AuditString("Horizon"),
+					EditWhen:   now,
+					BeforeEdit: strconv.FormatInt(req.ID, 10),
+					ID:         &req.ID,
+				})
 				if aErr != nil {
 					return aErr
 				}
-				aRowID, _ := ins.LastInsertId()
 				ids, _ := vprocore.AuditRowIDs([]string{strconv.FormatInt(aRowID, 10)})
 				recs, _ := vprocore.SelectedAuditEntries(tx, project, req.PlotNumber, ids)
 				if len(recs) == 1 {

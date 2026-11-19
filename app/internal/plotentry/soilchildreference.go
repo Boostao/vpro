@@ -1,6 +1,7 @@
 package plotentry
 
 import (
+	"database/sql"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -40,37 +41,45 @@ func listChildSuggestions(ctx context.Context, plots *vprocore.PlotService, grou
 		args = append(args, group)
 	}
 	args = append(args, itemOrdered)
-	rows, err := plots.Projects.Sqlite.Conn.QueryContext(ctx, `SELECT
+	var out []SoilSuggestion
+	err := plots.Projects.Sqlite.WithCoordinatorConn(ctx, func(conn *sql.Conn) error {
+		rows, err := conn.QueryContext(ctx, `SELECT
 			ListName,ListFilter,ItemOrder,Item,ItemDescription,FieldUsedIn,ValidateLoops,
 			CASE WHEN Validate IS NULL THEN NULL WHEN CAST(Validate AS INTEGER) != 0 THEN 1 ELSE 0 END,
 			Note,CASE WHEN Flag IS NULL THEN NULL WHEN CAST(Flag AS INTEGER) != 0 THEN 1 ELSE 0 END
 			FROM USysTableOfLists
 			WHERE ListName IN (`+strings.TrimSuffix(strings.Repeat("?,", len(groups)), ",")+`)
 			ORDER BY ListName,CASE WHEN ListName=? THEN Item END,ItemOrder,Item`, args...)
+		if err != nil {
+			return fmt.Errorf("child reference suggestions unavailable: %w", err)
+		}
+		defer rows.Close()
+		result := []SoilSuggestion{}
+		counts := map[string]int{}
+		for rows.Next() {
+			var entry SoilSuggestion
+			if err := rows.Scan(&entry.ListName, &entry.ListFilter, &entry.ItemOrder, &entry.Item,
+				&entry.ItemDescription, &entry.FieldUsedIn, &entry.ValidateLoops, &entry.Validate, &entry.Note, &entry.Flag); err != nil {
+				return fmt.Errorf("child reference metadata could not be read: %w", err)
+			}
+			result = append(result, entry)
+			if entry.ListName != nil {
+				counts[*entry.ListName]++
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		for _, group := range groups {
+			if counts[group] == 0 {
+				return fmt.Errorf("child reference group %q is unavailable", group)
+			}
+		}
+		out = result
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("child reference suggestions unavailable: %w", err)
-	}
-	defer rows.Close()
-	result := []SoilSuggestion{}
-	counts := map[string]int{}
-	for rows.Next() {
-		var entry SoilSuggestion
-		if err := rows.Scan(&entry.ListName, &entry.ListFilter, &entry.ItemOrder, &entry.Item,
-			&entry.ItemDescription, &entry.FieldUsedIn, &entry.ValidateLoops, &entry.Validate, &entry.Note, &entry.Flag); err != nil {
-			return nil, fmt.Errorf("child reference metadata could not be read: %w", err)
-		}
-		result = append(result, entry)
-		if entry.ListName != nil {
-			counts[*entry.ListName]++
-		}
-	}
-	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	for _, group := range groups {
-		if counts[group] == 0 {
-			return nil, fmt.Errorf("child reference group %q is unavailable", group)
-		}
-	}
-	return result, nil
+	return out, nil
 }

@@ -576,12 +576,11 @@ func writePictureCreation(ctx context.Context, source *ownedPictureLibrary, requ
 	if err := source.checkFile(); err != nil {
 		return result, err
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(source.path, "rw")+"&_busy_timeout=5000&_txlock=immediate&_foreign_keys=on")
+	db, err := sqlutil.OpenImmediateWriteSQLite(source.path)
 	if err != nil {
 		return result, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, db.Close()) }()
-	db.SetMaxOpenConns(1)
 	if err := validate(); err != nil {
 		return result, err
 	}
@@ -693,7 +692,7 @@ func readPictureCreationReceipt(ctx context.Context, source *ownedPictureLibrary
 	if err := source.checkFile(); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(source.path, "ro")+"&_query_only=on&_busy_timeout=5000")
+	db, err := sqlutil.OpenQueryOnlySQLite(source.path)
 	if err != nil {
 		return nil, err
 	}
@@ -703,7 +702,6 @@ func readPictureCreationReceipt(ctx context.Context, source *ownedPictureLibrary
 			result = nil
 		}
 	}()
-	db.SetMaxOpenConns(1)
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, err

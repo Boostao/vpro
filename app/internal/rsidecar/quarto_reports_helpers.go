@@ -113,11 +113,12 @@ func buildQuartoVegSummary(
 	if len(plotNumbers) == 0 {
 		return []QuartoVegSummaryRow{}, nil
 	}
-	if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+	unlock, err := owner.AcquireMutex(ctx)
+	if err != nil {
 		return nil, err
 	}
-	defer owner.Mu.Unlock()
-	if owner.Conn == nil {
+	defer unlock()
+	if !owner.IsOpen() {
 		return nil, errors.New("project context is closed")
 	}
 

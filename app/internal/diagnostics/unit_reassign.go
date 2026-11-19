@@ -12,7 +12,6 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -35,7 +34,7 @@ type synthesisSUHistoryReceipt struct {
 }
 
 func validateWritableSUTarget(owner *vprocore.SqliteContext) (string, string, error) {
-	if owner == nil || owner.Conn == nil {
+	if !owner.IsOpen() {
 		return "", "", errors.New("classification context is closed")
 	}
 	suName := strings.TrimSpace(owner.Selection.SU)
@@ -151,10 +150,11 @@ func readSynthesisUndoStatus(ctx context.Context, tx *sql.Tx, suName string) (bo
 }
 
 func verifyPlotInProjectEnv(ctx context.Context, owner *vprocore.SqliteContext, plotNumber string) error {
-	if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+	unlock, err := owner.AcquireMutex(ctx)
+	if err != nil {
 		return err
 	}
-	defer owner.Mu.Unlock()
+	defer unlock()
 	tx, err := owner.BeginReadSnapshot(ctx)
 	if err != nil {
 		return err
@@ -614,12 +614,19 @@ func appendSynthesisSUAuditRow(
 	if actor == "" {
 		actor = "VProUser"
 	}
-	qAudit := vprocore.QuoteHeaderIdentifier(owner.Selection.Project + "_Audit")
 	// ENG-GO-004: a failed audit insert must abort the reassignment, never be ignored.
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO main.`+qAudit+` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag") VALUES (?,?,?,?,?,?,?,?,0,0)`,
-		owner.Selection.Project, actor, plotNumber, "_SU", "SiteUnit", time.Now().Format("2006-01-02 15:04:05"), before, after,
-	); err != nil {
+	plotCopy := plotNumber
+	if _, err := vprocore.RecordAudit(ctx, tx, vprocore.AuditWriteEntry{
+		Schema:     "main",
+		Project:    owner.Selection.Project,
+		User:       actor,
+		PlotNumber: &plotCopy,
+		Table:      "_SU",
+		EditField:  vprocore.AuditString("SiteUnit"),
+		EditWhen:   time.Now().Format("2006-01-02 15:04:05"),
+		BeforeEdit: before,
+		AfterEdit:  after,
+	}); err != nil {
 		return fmt.Errorf("record SU reassignment audit: %w", err)
 	}
 	return nil

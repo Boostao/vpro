@@ -149,7 +149,7 @@ func ValidateEnvironmentSiteUnitOwner(c *vprocore.SqliteContext) error {
 // project DB or an explicitly selected writable external SU .db file, while blocking
 // None, master/USys tables, and V* support databases.
 func ValidateWritableSiteUnitTransferOwner(c *vprocore.SqliteContext) error {
-	if c == nil || c.Conn == nil {
+	if !c.IsOpen() {
 		return errors.New("classification context is closed")
 	}
 	if err := c.ValidateMetadataWriterFiles(); err != nil {

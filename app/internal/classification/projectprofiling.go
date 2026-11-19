@@ -78,6 +78,12 @@ func ReviewProjectPlotProfileLumpTable(s *vprocore.ContextService, ctx context.C
 func ListProjectPlotProfileLumpTables(s *vprocore.ContextService, ctx context.Context, contextID string) ([]ProfileLumpChoice, error) {
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) ([]ProfileLumpChoice, error) {
 		c := plots.Projects.Sqlite
+		unlock, err := c.AcquireMutex(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer unlock()
+		conn := c.CoordinatorWhileLocked()
 		if err := vprocore.ProfileOwnedFiles(c); err != nil {
 			return nil, err
 		}
@@ -102,7 +108,7 @@ func ListProjectPlotProfileLumpTables(s *vprocore.ContextService, ctx context.Co
 				continue
 			}
 			seenFiles[role] = true
-			rows, err := c.Conn.QueryContext(ctx,
+			rows, err := conn.QueryContext(ctx,
 				`SELECT name FROM `+vprocore.QuoteHeaderIdentifier(role)+`.sqlite_master WHERE type='table' AND name LIKE '%\_Lump' ESCAPE '\' ORDER BY name COLLATE NOCASE`)
 			if err != nil {
 				continue
@@ -120,7 +126,7 @@ func ListProjectPlotProfileLumpTables(s *vprocore.ContextService, ctx context.Co
 					continue
 				}
 				var count int
-				_ = c.Conn.QueryRowContext(ctx,
+				_ = conn.QueryRowContext(ctx,
 					`SELECT COUNT(*) FROM `+vprocore.QuoteHeaderIdentifier(role)+`.`+vprocore.QuoteHeaderIdentifier(name)).Scan(&count)
 				loc := name
 				if role != "project" {
@@ -163,7 +169,9 @@ func readProjectProfileLump(ctx context.Context, c *vprocore.SqliteContext, loca
 	if err := c.RequireColumns(ctx, role, table, []string{"LumpCode", "SppCode", "Use"}); err != nil {
 		return vprocore.ProjectMetadataTable{}, fmt.Errorf("explicit lump table %s.%s unavailable: %w", role, table, err)
 	}
-	return vprocore.ReadSQLiteStorageRows(ctx, c.Conn, role, table, "", nil, "")
+	return vprocore.WithCoordinatorConnValue(ctx, c, func(conn *sql.Conn) (vprocore.ProjectMetadataTable, error) {
+		return vprocore.ReadSQLiteStorageRows(ctx, conn, role, table, "", nil, "")
+	})
 }
 
 func RunProjectPlotProfile(s *vprocore.ContextService, ctx context.Context, contextID string, request ProjectPlotProfileRunRequest) (ProjectPlotProfileResult, error) {
@@ -192,10 +200,11 @@ func RunProjectPlotProfileAfter(s *vprocore.ContextService, ctx context.Context,
 				result = ProjectPlotProfileResult{}
 			}
 		}()
-		if err := registerProfileFunctions(job.Conn); err != nil {
+		jobConn := job.CoordinatorWhileLocked()
+		if err := registerProfileFunctions(jobConn); err != nil {
 			return result, err
 		}
-		tx, err := job.Conn.BeginTx(ctx, nil)
+		tx, err := jobConn.BeginTx(ctx, nil)
 		if err != nil {
 			return result, err
 		}

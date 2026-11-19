@@ -81,7 +81,7 @@ func (s *LongVegetationSelectedUnitSelectionService) require(ctx context.Context
 	if err := vprocore.ValidateGoogleEarthReviewStrings(contextID); err != nil {
 		return err
 	}
-	return s.contexts.RequireSelectedListReportScope(contextID)
+	return vprocore.RequireSelectedListReportScope(s.contexts, contextID)
 }
 
 func selectedUnitRevision(value string) (int64, error) {
@@ -154,14 +154,14 @@ func (s *LongVegetationSelectedUnitSelectionService) GetLongVegetationSelectedUn
 	}
 	return vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (*LongVegetationSelectedUnitSelection, error) {
 		return vprocore.WithOwnedPreferenceSnapshot(ctx, plots, s.snapshot, func(owner *vprocore.SqliteContext, tx *sql.Tx) (*LongVegetationSelectedUnitSelection, error) {
-			if err := s.contexts.RequireSelectedListReportScope(contextID); err != nil {
+			if err := vprocore.RequireSelectedListReportScope(s.contexts, contextID); err != nil {
 				return nil, err
 			}
 			tables, err := readSelectedUnitSelectionTables(ctx, owner, tx)
 			if err != nil {
 				return nil, err
 			}
-			entry := s.contexts.SelectedUnitSelections.Read(contextID)
+			entry := selectedUnitSelections(s.contexts).Read(contextID)
 			result := selectedUnitSelectionDTO(contextID, owner, tables, entry)
 			if entry.Build != nil {
 				config, err := plots.Projects.Preferences.Snapshot()
@@ -202,17 +202,18 @@ func (s *LongVegetationSelectedUnitSelectionService) SetLongVegetationSelectedUn
 			s.beforeInstall()
 		}
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return nil, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		if err := vprocore.ProfileOwnedFiles(owner); err != nil {
 			return nil, err
 		}
-		if err := s.contexts.RequireSelectedListReportScope(contextID); err != nil {
+		if err := vprocore.RequireSelectedListReportScope(s.contexts, contextID); err != nil {
 			return nil, err
 		}
-		ledger := &s.contexts.SelectedUnitSelections
+		ledger := selectedUnitSelections(s.contexts)
 		ledger.Mu.Lock()
 		defer ledger.Mu.Unlock()
 		entry := ledger.Entries[contextID]
@@ -287,7 +288,7 @@ func (s *LongVegetationSelectedUnitSelectionService) BuildLongVegetationSelected
 		return nil, err
 	}
 	return vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (*LongVegetationSelectedUnitSelection, error) {
-		entry := s.contexts.SelectedUnitSelections.Read(contextID)
+		entry := selectedUnitSelections(s.contexts).Read(contextID)
 		if entry.Revision != expected {
 			return nil, errors.New("selected report unit draft changed; reload before Build")
 		}
@@ -314,17 +315,18 @@ func (s *LongVegetationSelectedUnitSelectionService) BuildLongVegetationSelected
 			s.beforeInstall()
 		}
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return nil, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		if err := vprocore.ProfileOwnedFiles(owner); err != nil {
 			return nil, err
 		}
-		if err := s.contexts.RequireSelectedListReportScope(contextID); err != nil {
+		if err := vprocore.RequireSelectedListReportScope(s.contexts, contextID); err != nil {
 			return nil, err
 		}
-		ledger := &s.contexts.SelectedUnitSelections
+		ledger := selectedUnitSelections(s.contexts)
 		ledger.Mu.Lock()
 		defer ledger.Mu.Unlock()
 		current := ledger.Entries[contextID]
@@ -348,10 +350,10 @@ func (s *LongVegetationSelectedUnitSelectionService) BuildLongVegetationSelected
 
 func ApprovedSelectedUnitFields(s *vprocore.ContextService, ctx context.Context, contextID string, owner *vprocore.SqliteContext,
 	tx *sql.Tx, config vprocore.ConfigValues) ([]string, error) {
-	if err := s.RequireSelectedListReportScope(contextID); err != nil {
+	if err := vprocore.RequireSelectedListReportScope(s, contextID); err != nil {
 		return nil, err
 	}
-	entry := s.SelectedUnitSelections.Read(contextID)
+	entry := selectedUnitSelections(s).Read(contextID)
 	return validateSelectedUnitApproval(ctx, contextID, owner, tx, config, entry)
 }
 

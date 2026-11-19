@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -31,74 +30,56 @@ func PreviewSiteUnitExclusions(
 		return nil, err
 	}
 
-	return vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (_ *SiteUnitExclusionPreview, resultErr error) {
+	return vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (*SiteUnitExclusionPreview, error) {
 		owner := plots.Projects.Sqlite
 		if owner.Selection.SU == "" || owner.Selection.SU == "None" {
 			return nil, errors.New("an active Site Unit (SU) table must be selected")
 		}
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-			return nil, err
-		}
-		defer owner.Mu.Unlock()
-		if err := vprocore.ProfileOwnedFiles(owner); err != nil {
-			return nil, err
-		}
-		tx, err := owner.BeginReadSnapshot(ctx)
-		if err != nil {
-			return nil, err
-		}
-		defer func() {
-			if rb := tx.Rollback(); rb != nil && !errors.Is(rb, sql.ErrTxDone) {
-				resultErr = errors.Join(resultErr, rb)
+		return vprocore.WithReadSnapshotValue(ctx, owner, func(tx *sql.Tx) (*SiteUnitExclusionPreview, error) {
+			if err := vprocore.ProfileOwnedFiles(owner); err != nil {
+				return nil, err
 			}
-		}()
-
-		suTable, err := vprocore.ReadSQLiteStorageRows(ctx, tx, "su", owner.Selection.SU+"_SU", "", nil, "")
-		if err != nil {
-			return nil, err
-		}
-		filteredSU, summary, err := FilterSUTableByExclusions(suTable, rules)
-		if err != nil {
-			return nil, err
-		}
-
-		out := &SiteUnitExclusionPreview{
-			ContextID:  contextID,
-			Project:    owner.Selection.Project,
-			SU:         owner.Selection.SU,
-			Hierarchy:  owner.Selection.Hierarchy,
-			Exclusions: summary,
-		}
-
-		if request.UseHierarchyBreakpoints {
-			if owner.Selection.Hierarchy == "" || owner.Selection.Hierarchy == "None" {
-				return nil, errors.New("an active Hierarchy table must be selected when UseHierarchyBreakpoints is enabled")
+			suTable, err := vprocore.ReadSQLiteStorageRows(ctx, tx, "su", owner.Selection.SU+"_SU", "", nil, "")
+			if err != nil {
+				return nil, err
 			}
-			nodes, hErr := loadHierarchyNodesFromTx(ctx, tx, owner.Selection.Hierarchy)
-			if hErr != nil {
-				return nil, hErr
+			filteredSU, summary, err := FilterSUTableByExclusions(suTable, rules)
+			if err != nil {
+				return nil, err
 			}
-			_, bpRes, bErr := resolveHierarchyBreakpointsOnSU(filteredSU, nodes, request.BreakpointOptions)
-			if bErr != nil {
-				return nil, bErr
-			}
-			bpRes.ContextID = contextID
-			bpRes.Project = owner.Selection.Project
-			bpRes.SU = owner.Selection.SU
-			bpRes.Hierarchy = owner.Selection.Hierarchy
-			out.Breakpoints = &bpRes
-		}
 
-		if err := vprocore.ProfileOwnedFiles(owner); err != nil {
-			return nil, err
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if err := tx.Commit(); err != nil {
-			return nil, err
-		}
-		return out, nil
+			out := &SiteUnitExclusionPreview{
+				ContextID:  contextID,
+				Project:    owner.Selection.Project,
+				SU:         owner.Selection.SU,
+				Hierarchy:  owner.Selection.Hierarchy,
+				Exclusions: summary,
+			}
+
+			if request.UseHierarchyBreakpoints {
+				if owner.Selection.Hierarchy == "" || owner.Selection.Hierarchy == "None" {
+					return nil, errors.New("an active Hierarchy table must be selected when UseHierarchyBreakpoints is enabled")
+				}
+				nodes, hErr := loadHierarchyNodesFromTx(ctx, tx, owner.Selection.Hierarchy)
+				if hErr != nil {
+					return nil, hErr
+				}
+				_, bpRes, bErr := resolveHierarchyBreakpointsOnSU(filteredSU, nodes, request.BreakpointOptions)
+				if bErr != nil {
+					return nil, bErr
+				}
+				bpRes.ContextID = contextID
+				bpRes.Project = owner.Selection.Project
+				bpRes.SU = owner.Selection.SU
+				bpRes.Hierarchy = owner.Selection.Hierarchy
+				out.Breakpoints = &bpRes
+			}
+
+			if err := vprocore.ProfileOwnedFiles(owner); err != nil {
+				return nil, err
+			}
+			return out, nil
+		})
 	})
 }
 

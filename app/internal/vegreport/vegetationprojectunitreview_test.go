@@ -113,14 +113,14 @@ func TestProjectUnitReviewStrictRequestsCleanupCancellationAndRetry(t *testing.T
 	if output, err := service.GetLongVegetationProjectUnitPreferences(ctx, "stale", projectReadJSON(t, scope)); err == nil || !reflect.DeepEqual(output, zero) {
 		t.Fatal("stale unit review owner accepted", output, err)
 	}
-	ledger := service.contexts.ProjectReportScopes.Read(state.ContextID)
+	ledger := projectReportScopes(service.contexts).Read(state.ContextID)
 	for _, hooks := range []vprocore.PublicationReadSnapshotHooks{
 		{CommitRead: func(*sql.Tx) error { return errors.New("unit review commit failure") }},
 		{RollbackRead: func(*sql.Tx) error { return errors.New("unit review cleanup failure") }},
 	} {
 		service.snapshot = hooks
 		if output, err := service.GetLongVegetationProjectUnitPreferences(ctx, state.ContextID, projectReadJSON(t, scope)); err == nil ||
-			!reflect.DeepEqual(output, zero) || !reflect.DeepEqual(ledger, service.contexts.ProjectReportScopes.Read(state.ContextID)) {
+			!reflect.DeepEqual(output, zero) || !reflect.DeepEqual(ledger, projectReportScopes(service.contexts).Read(state.ContextID)) {
 			t.Fatal("fallible read cleanup leaked unit review or changed authority", output, err)
 		}
 	}

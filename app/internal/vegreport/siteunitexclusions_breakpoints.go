@@ -9,7 +9,6 @@ import (
 	"strings"
 	"unicode/utf16"
 
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -328,7 +327,7 @@ func ResolveHierarchyBreakpointUnits(
 		return nil, err
 	}
 
-	return vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (_ *HierarchyBreakpointResolution, resultErr error) {
+	return vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (*HierarchyBreakpointResolution, error) {
 		owner := plots.Projects.Sqlite
 		if owner.Selection.SU == "" || owner.Selection.SU == "None" {
 			return nil, errors.New("an active Site Unit (SU) table must be selected")
@@ -336,53 +335,35 @@ func ResolveHierarchyBreakpointUnits(
 		if owner.Selection.Hierarchy == "" || owner.Selection.Hierarchy == "None" {
 			return nil, errors.New("an active Hierarchy table must be selected to resolve '~' breakpoints")
 		}
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-			return nil, err
-		}
-		defer owner.Mu.Unlock()
-		if err := vprocore.ProfileOwnedFiles(owner); err != nil {
-			return nil, err
-		}
-		tx, err := owner.BeginReadSnapshot(ctx)
-		if err != nil {
-			return nil, err
-		}
-		defer func() {
-			if rb := tx.Rollback(); rb != nil && !errors.Is(rb, sql.ErrTxDone) {
-				resultErr = errors.Join(resultErr, rb)
+		return vprocore.WithReadSnapshotValue(ctx, owner, func(tx *sql.Tx) (*HierarchyBreakpointResolution, error) {
+			if err := vprocore.ProfileOwnedFiles(owner); err != nil {
+				return nil, err
 			}
-		}()
+			suTable, err := vprocore.ReadSQLiteStorageRows(ctx, tx, "su", owner.Selection.SU+"_SU", "", nil, "")
+			if err != nil {
+				return nil, err
+			}
+			filteredSU, _, err := FilterSUTableByExclusions(suTable, rules)
+			if err != nil {
+				return nil, err
+			}
+			nodes, err := loadHierarchyNodesFromTx(ctx, tx, owner.Selection.Hierarchy)
+			if err != nil {
+				return nil, err
+			}
+			_, res, err := resolveHierarchyBreakpointsOnSU(filteredSU, nodes, request.Options)
+			if err != nil {
+				return nil, err
+			}
+			res.ContextID = contextID
+			res.Project = owner.Selection.Project
+			res.SU = owner.Selection.SU
+			res.Hierarchy = owner.Selection.Hierarchy
 
-		suTable, err := vprocore.ReadSQLiteStorageRows(ctx, tx, "su", owner.Selection.SU+"_SU", "", nil, "")
-		if err != nil {
-			return nil, err
-		}
-		filteredSU, _, err := FilterSUTableByExclusions(suTable, rules)
-		if err != nil {
-			return nil, err
-		}
-		nodes, err := loadHierarchyNodesFromTx(ctx, tx, owner.Selection.Hierarchy)
-		if err != nil {
-			return nil, err
-		}
-		_, res, err := resolveHierarchyBreakpointsOnSU(filteredSU, nodes, request.Options)
-		if err != nil {
-			return nil, err
-		}
-		res.ContextID = contextID
-		res.Project = owner.Selection.Project
-		res.SU = owner.Selection.SU
-		res.Hierarchy = owner.Selection.Hierarchy
-
-		if err := vprocore.ProfileOwnedFiles(owner); err != nil {
-			return nil, err
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if err := tx.Commit(); err != nil {
-			return nil, err
-		}
-		return &res, nil
+			if err := vprocore.ProfileOwnedFiles(owner); err != nil {
+				return nil, err
+			}
+			return &res, nil
+		})
 	})
 }

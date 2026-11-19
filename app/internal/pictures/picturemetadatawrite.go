@@ -366,11 +366,10 @@ func withPictureMetadataParentGuards[T any](ctx context.Context, owner *vprocore
 		if err != nil || !os.SameFile(current, guard.info) {
 			return result, errors.Join(err, errors.New("picture parent file identity changed before reservation"))
 		}
-		guard.db, err = sql.Open("sqlite3", sqlutil.SqliteFileURI(guard.path, "rw")+"&_busy_timeout=5000&_txlock=immediate")
+		guard.db, err = sqlutil.OpenImmediateLockSQLite(guard.path)
 		if err != nil {
 			return result, err
 		}
-		guard.db.SetMaxOpenConns(1)
 		// Cancellation must not asynchronously release a parent reservation while
 		// the library commit is in progress. Cleanup remains caller-owned.
 		guard.tx, err = guard.db.BeginTx(context.WithoutCancel(ctx), nil)
@@ -487,7 +486,7 @@ func LookupPictureMetadataReceipt(s *vprocore.ContextService, ctx context.Contex
 
 func readPictureMetadataReceipt(ctx context.Context, source *ownedPictureLibrary, request pictureMetadataEdit,
 	authority pictureMetadataWriteResult) (result *pictureMetadataWriteResult, resultErr error) {
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(source.path, "ro")+"&_query_only=on&_busy_timeout=5000")
+	db, err := sqlutil.OpenQueryOnlySQLite(source.path)
 	if err != nil {
 		return nil, err
 	}
@@ -497,7 +496,6 @@ func readPictureMetadataReceipt(ctx context.Context, source *ownedPictureLibrary
 			result = nil
 		}
 	}()
-	db.SetMaxOpenConns(1)
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -522,12 +520,11 @@ func readPictureMetadataReceipt(ctx context.Context, source *ownedPictureLibrary
 
 func writePictureMetadata(ctx context.Context, source *ownedPictureLibrary, request pictureMetadataEdit, rowID int64,
 	changes []vprocore.ProjectMetadataChange, receipt pictureMetadataWriteResult, validate func() error) (result pictureMetadataWriteResult, resultErr error) {
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(source.path, "rw")+"&_foreign_keys=on&_busy_timeout=5000&_txlock=immediate")
+	db, err := sqlutil.OpenImmediateWriteSQLite(source.path)
 	if err != nil {
 		return result, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, db.Close()) }()
-	db.SetMaxOpenConns(1)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return result, err

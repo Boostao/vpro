@@ -13,7 +13,6 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -231,10 +230,11 @@ func ExportTurboVeg(s *vprocore.ContextService, ctx context.Context, contextID s
 			return TurboVegExportOutcome{}, err
 		}
 
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return TurboVegExportOutcome{}, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		tx, err := owner.BeginReadSnapshot(ctx)
 		if err != nil {
 			return TurboVegExportOutcome{}, err
@@ -283,10 +283,11 @@ func loadActiveContextSpeciesResolver(s *vprocore.ContextService, ctx context.Co
 	}
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (*speciesImportResolver, error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return nil, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		tx, err := owner.BeginReadSnapshot(ctx)
 		if err != nil {
 			return nil, err
@@ -389,7 +390,6 @@ func populateVP08FromTVPlots(ctx context.Context, tx *sql.Tx, project string, pl
 	adminTbl := vprocore.QuoteHeaderIdentifier(project + "_Admin")
 	vegTbl := vprocore.QuoteHeaderIdentifier(project + "_Veg")
 	metaTbl := vprocore.QuoteHeaderIdentifier(project + "_Metadata")
-	auditTbl := vprocore.QuoteHeaderIdentifier(project + "_Audit")
 
 	envStmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO `+envTbl+` (
@@ -604,10 +604,15 @@ func populateVP08FromTVPlots(ctx context.Context, tx *sql.Tx, project string, pl
 			}
 		}
 
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO `+auditTbl+` ("Project","User","PlotNumber","Table","EditField","EditWhen","Restore","Flag")
-			VALUES (?, 'VPro', ?, 'Environment', 'Imported TurboVeg record', ?, 0, 0)`,
-			project, pNum, nowStr); err != nil {
+		pCopy := pNum
+		if _, err := vprocore.RecordAudit(ctx, tx, vprocore.AuditWriteEntry{
+			Project:    project,
+			User:       "VPro",
+			PlotNumber: &pCopy,
+			Table:      "_Env",
+			EditField:  vprocore.AuditString("Imported TurboVeg record"),
+			EditWhen:   nowStr,
+		}); err != nil {
 			return 0, 0, fmt.Errorf("insert audit for plot %s: %w", pNum, err)
 		}
 	}
@@ -636,18 +641,11 @@ func populateVP08FromTVPlots(ctx context.Context, tx *sql.Tx, project string, pl
 	}
 	// ENG-GO-004: reserve every imported child ID (same pattern as the Access import) so a later
 	// delete can never let AllocateChildID hand the same Veg/Metadata ID to a new row.
-	if _, err = tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" (
-		"ChildTable" TEXT NOT NULL,
-		"ID" INTEGER NOT NULL,
-		PRIMARY KEY ("ChildTable", "ID")
-	)`); err != nil {
+	if err = vprocore.EnsureChildIdentityTable(ctx, tx); err != nil {
 		return 0, 0, err
 	}
 	for _, suffix := range []string{"Veg", "Metadata"} {
-		qChild := vprocore.QuoteHeaderIdentifier(project + "_" + suffix)
-		if _, err = tx.ExecContext(ctx,
-			`INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID")
-			 SELECT ?, "ID" FROM `+qChild+` WHERE typeof("ID") = 'integer' AND "ID" > 0`, qChild); err != nil {
+		if err = vprocore.SeedChildIdentityFromTable(ctx, tx, project+"_"+suffix, false); err != nil {
 			return 0, 0, fmt.Errorf("reserve imported %s IDs: %w", suffix, err)
 		}
 	}

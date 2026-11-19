@@ -187,7 +187,7 @@ func TestSelectedUnitSessionBuildRejectsConcurrentDraftInvalidation(t *testing.T
 		t.Fatal(err)
 	}
 	service.snapshot.CommitRead = func(*sql.Tx) error {
-		ledger := &private.contexts.SelectedUnitSelections
+		ledger := selectedUnitSelections(private.contexts)
 		ledger.Mu.Lock()
 		ledger.Entries[state.ContextID] = vprocore.SelectedUnitSelectionEntry{Revision: 2, Fields: []string{}}
 		ledger.Mu.Unlock()
@@ -275,7 +275,7 @@ func TestSelectedUnitSessionRejectsStrictRequestsAndRetainsDraftOnReadCleanupFai
 	if result, err := service.BuildLongVegetationSelectedUnitSelection(ctx, state.ContextID, draft.Revision); err == nil || result != nil {
 		t.Fatal("failed snapshot installed successful Build", result, err)
 	}
-	entry := private.contexts.SelectedUnitSelections.Read(state.ContextID)
+	entry := selectedUnitSelections(private.contexts).Read(state.ContextID)
 	if entry.Build != nil || strconv.FormatInt(entry.Revision, 10) != draft.Revision {
 		t.Fatal("cleanup failure changed draft or approval", entry)
 	}

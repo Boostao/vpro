@@ -25,7 +25,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"unicode/utf8"
@@ -494,64 +493,6 @@ func ValidateTwoPageEntryJSONProperties(data []byte) error {
 	return ValidateSourceParentEntryJSONProperties(data, "complete-entry")
 }
 
-type twoPageSoilAttempt struct {
-	request any
-	Active  int  `json:"-" yaml:"-"`
-	Sealed  bool `json:"-" yaml:"-"`
-}
-
-type twoPageSoilAttemptLedger struct {
-	Mu       sync.Mutex                     `json:"-" yaml:"-"`
-	Requests map[string]*twoPageSoilAttempt `json:"-" yaml:"-"`
-}
-
-func (ledger *twoPageSoilAttemptLedger) Entry(requestID string, request any) (*twoPageSoilAttempt, error) {
-	if ledger.Requests == nil {
-		ledger.Requests = map[string]*twoPageSoilAttempt{}
-	}
-	existing := ledger.Requests[requestID]
-	if existing != nil {
-		if !reflect.DeepEqual(existing.request, request) {
-			return nil, errors.New("two-page soil UUID already belongs to another exact request payload")
-		}
-		return existing, nil
-	}
-	entry := &twoPageSoilAttempt{request: request}
-	ledger.Requests[requestID] = entry
-	return entry, nil
-}
-
-type twoPageVegetationAttempt struct {
-	payload string
-	Active  int  `json:"-" yaml:"-"`
-	Sealed  bool `json:"-" yaml:"-"`
-}
-
-type twoPageVegetationAttemptLedger struct {
-	Mu       sync.Mutex                           `json:"-" yaml:"-"`
-	Requests map[string]*twoPageVegetationAttempt `json:"-" yaml:"-"`
-}
-
-func (ledger *twoPageVegetationAttemptLedger) Entry(requestID string, request any) (*twoPageVegetationAttempt, error) {
-	raw, err := json.Marshal(request)
-	if err != nil {
-		return nil, err
-	}
-	payload := string(raw)
-	if ledger.Requests == nil {
-		ledger.Requests = map[string]*twoPageVegetationAttempt{}
-	}
-	if existing := ledger.Requests[requestID]; existing != nil {
-		if existing.payload != payload {
-			return nil, errors.New("two-page vegetation UUID already belongs to another exact request payload")
-		}
-		return existing, nil
-	}
-	entry := &twoPageVegetationAttempt{payload: payload}
-	ledger.Requests[requestID] = entry
-	return entry, nil
-}
-
 func VegetationLifeformInteger(cell ProjectMetadataCell) (*int, error) {
 	if _, err := MetadataCellValue(cell); err != nil {
 		return nil, err
@@ -595,11 +536,6 @@ type VegetationProjectScopeEntry struct {
 	Build      *LongVegetationProjectBuild `json:"-" yaml:"-"`
 }
 
-type vegetationProjectScopeLedger struct {
-	Mu      sync.Mutex                             `json:"-" yaml:"-"`
-	Entries map[string]VegetationProjectScopeEntry `json:"-" yaml:"-"`
-}
-
 func CloneProjectScopeEntry(entry VegetationProjectScopeEntry) VegetationProjectScopeEntry {
 	if entry.SourceKind == "" {
 		entry.SourceKind = VegetationSelectedListScope
@@ -616,22 +552,6 @@ func CloneProjectScopeEntry(entry VegetationProjectScopeEntry) VegetationProject
 		entry.Build = build
 	}
 	return entry
-}
-
-func (ledger *vegetationProjectScopeLedger) Read(contextID string) VegetationProjectScopeEntry {
-	ledger.Mu.Lock()
-	defer ledger.Mu.Unlock()
-	return CloneProjectScopeEntry(ledger.Entries[contextID])
-}
-
-func (s *ContextService) RequireSelectedListReportScope(contextID string) error {
-	s.ProjectReportScopes.Mu.Lock()
-	kind := s.ProjectReportScopes.Entries[contextID].SourceKind
-	s.ProjectReportScopes.Mu.Unlock()
-	if kind != "" && kind != VegetationSelectedListScope {
-		return errors.New("Long Vegetation has an explicit project report scope; this selected-list consumer is unavailable")
-	}
-	return nil
 }
 
 func VegetationReportIdentity(cell ProjectMetadataCell) (*string, error) {
@@ -680,11 +600,6 @@ type SelectedUnitSelectionEntry struct {
 	Build    *LongVegetationSelectedUnitBuild `json:"-" yaml:"-"`
 }
 
-type selectedUnitSelectionLedger struct {
-	Mu      sync.Mutex                            `json:"-" yaml:"-"`
-	Entries map[string]SelectedUnitSelectionEntry `json:"-" yaml:"-"`
-}
-
 func CloneSelectedUnitBuild(build *LongVegetationSelectedUnitBuild) *LongVegetationSelectedUnitBuild {
 	if build == nil {
 		return nil
@@ -697,13 +612,4 @@ func CloneSelectedUnitBuild(build *LongVegetationSelectedUnitBuild) *LongVegetat
 		result.Occurrences[i] = row
 	}
 	return result
-}
-
-func (ledger *selectedUnitSelectionLedger) Read(contextID string) SelectedUnitSelectionEntry {
-	ledger.Mu.Lock()
-	defer ledger.Mu.Unlock()
-	entry := ledger.Entries[contextID]
-	entry.Fields = append([]string{}, entry.Fields...)
-	entry.Build = CloneSelectedUnitBuild(entry.Build)
-	return entry
 }

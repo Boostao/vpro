@@ -85,7 +85,7 @@ func SetPlotProfileEditing(s *vprocore.ContextService, ctx context.Context, expe
 	}
 	defer s.Projects.Mu.Unlock()
 	owner := s.Projects.Sqlite
-	if expectedID == "" || expectedID != s.Projects.ContextID || owner == nil || owner.Conn == nil {
+	if expectedID == "" || expectedID != s.Projects.ContextID || !owner.IsOpen() {
 		return vprocore.ProjectState{}, errors.New("profile context changed or closed; review again before authorizing editing")
 	}
 	review, err := readProjectPlotProfile(ctx, owner)

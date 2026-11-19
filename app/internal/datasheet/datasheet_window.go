@@ -229,7 +229,7 @@ func parallelRangeScanDatasheetWindow(
 	minRowID, maxRowID int64,
 	limit, workers int,
 ) ([]DatasheetRow, int64, bool, error) {
-	roDB, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(dbPath, "ro")+"&_busy_timeout=5000")
+	roDB, err := sqlutil.OpenSQLiteMode(dbPath, "ro")
 	if err != nil {
 		return nil, 0, false, nil
 	}
@@ -459,10 +459,11 @@ func GetDatasheetPage(ctx context.Context, contexts *vprocore.ContextService, co
 			return nil, errors.New(target.unavailableReason)
 		}
 
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return nil, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		if err := vprocore.ProfileOwnedFiles(owner); err != nil {
 			return nil, err
 		}

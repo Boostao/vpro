@@ -178,11 +178,7 @@ func readExternalSUEnvironmentSource(ctx context.Context, owner *vprocore.Sqlite
 func ReviewExternalSUEnvironment(s *vprocore.ContextService, ctx context.Context, contextID string) (*externalSUEnvironmentSource, error) {
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (*externalSUEnvironmentSource, error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-			return nil, err
-		}
-		defer owner.Mu.Unlock()
-		return vprocore.WithPublicationReadSnapshot(ctx, owner, vprocore.PublicationReadSnapshotHooks{}, func(tx *sql.Tx) (*externalSUEnvironmentSource, error) {
+		return vprocore.WithOwnedPublicationSnapshot(ctx, owner, vprocore.PublicationReadSnapshotHooks{}, func(tx *sql.Tx) (*externalSUEnvironmentSource, error) {
 			return readExternalSUEnvironmentSource(ctx, owner, contextID, plots.CurrentUser, tx,
 				map[string]*sql.Tx{"su": tx, "VLists": tx, "VUser": tx},
 				map[string]string{"project": "project", "su": "su", "VLists": "VLists", "VUser": "VUser"})
@@ -252,11 +248,10 @@ func withExternalSUEnvironmentTransactions(ctx context.Context, owner *vprocore.
 		if item.roles[0] == "project" {
 			item.tx, err = project.BeginTx(context.WithoutCancel(ctx), nil)
 		} else {
-			item.db, err = sql.Open("sqlite3", sqlutil.SqliteFileURI(item.path, "rw")+"&_busy_timeout=5000&_txlock=immediate")
+			item.db, err = sqlutil.OpenImmediateLockSQLite(item.path)
 			if err != nil {
 				return false, err
 			}
-			item.db.SetMaxOpenConns(1)
 			item.tx, err = item.db.BeginTx(context.WithoutCancel(ctx), nil)
 		}
 		if err != nil {

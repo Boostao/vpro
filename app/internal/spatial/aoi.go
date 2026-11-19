@@ -567,11 +567,10 @@ func AssignSpatialAOIToSU(ctx context.Context, contexts *vprocore.ContextService
 			}()
 			tableName := suName + "_SU"
 			seeds := buildSpatialSURowSeeds(plotOrder, allProjectPlots, seen, siteUnit)
-			db, oErr := sql.Open("sqlite3", sqlutil.SqliteFileURI(tmpPath, "rw")+"&_foreign_keys=on&_busy_timeout=5000&_journal_mode=DELETE&_synchronous=FULL&_txlock=immediate")
+			db, oErr := sqlutil.OpenStagedSQLite(tmpPath, sqlutil.StagedSQLiteOptions{ForeignKeys: true, ImmediateTxLock: true, BusyTimeoutMs: 5000})
 			if oErr != nil {
 				return struct{}{}, oErr
 			}
-			db.SetMaxOpenConns(1)
 			tx, bErr := sqlutil.BeginStagedTx(ctx, db)
 			if bErr != nil {
 				_ = db.Close()

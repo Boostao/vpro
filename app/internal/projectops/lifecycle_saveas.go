@@ -291,11 +291,10 @@ func SaveProjectAs(s *vprocore.ContextService, ctx context.Context, contextID st
 		return SaveProjectAsResult{}, err
 	}
 
-	dstDB, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(tmpPath, "rw")+"&_journal_mode=DELETE&_synchronous=FULL&_txlock=immediate")
+	dstDB, err := sqlutil.OpenStagedSQLite(tmpPath, sqlutil.StagedSQLiteOptions{ImmediateTxLock: true})
 	if err != nil {
 		return SaveProjectAsResult{}, err
 	}
-	dstDB.SetMaxOpenConns(1)
 	dstTx, err := sqlutil.BeginStagedTx(ctx, dstDB)
 	if err != nil {
 		_ = dstDB.Close()
@@ -333,7 +332,7 @@ func SaveProjectAs(s *vprocore.ContextService, ctx context.Context, contextID st
 				return err
 			}
 			for _, entry := range childIds {
-				if _, err := dstTx.ExecContext(ctx, `INSERT INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") VALUES (?, ?) ON CONFLICT DO NOTHING`, entry.childTable, entry.id); err != nil {
+				if err := reserveChildID(ctx, dstTx, entry.childTable, entry.id); err != nil {
 					return err
 				}
 			}

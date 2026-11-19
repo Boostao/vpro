@@ -86,11 +86,11 @@ func TestProjectFieldCatalogueOwnedAttachedExternalAndNoneSchemasZeroWrites(t *t
 			if err != nil {
 				t.Fatal(err)
 			}
-			ledger := contexts.ProjectReportScopes.Read(state.ContextID)
+			ledger := projectReportScopes(contexts).Read(state.ContextID)
 			current, err := service.GetLongVegetationProjectFieldDefinitions(ctx, state.ContextID)
 			if err != nil || current.SourceKind != vprocore.VegetationProjectFieldsScope || current.Revision != draft.Revision ||
 				!reflect.DeepEqual(initial.Definitions, current.Definitions) ||
-				!reflect.DeepEqual(ledger, contexts.ProjectReportScopes.Read(state.ContextID)) {
+				!reflect.DeepEqual(ledger, projectReportScopes(contexts).Read(state.ContextID)) {
 				t.Fatal("catalogue changed retained invalid draft or stale scope identity", current, err)
 			}
 			current.Definitions[0].Name = "mutated"
@@ -155,11 +155,11 @@ func TestProjectFieldCatalogueSchemaDriftCorrectionAndBuildDataValidityRemainSep
 	if err != nil {
 		t.Fatal(err)
 	}
-	ledger := contexts.ProjectReportScopes.Read(state.ContextID)
+	ledger := projectReportScopes(contexts).Read(state.ContextID)
 	if output, err := service.BuildLongVegetationProjectScope(ctx, state.ContextID, active.Revision); err == nil || output != nil {
 		t.Fatal("schema availability authorized malformed row Build", output, err)
 	}
-	if !reflect.DeepEqual(ledger, contexts.ProjectReportScopes.Read(state.ContextID)) {
+	if !reflect.DeepEqual(ledger, projectReportScopes(contexts).Read(state.ContextID)) {
 		t.Fatal("failed data read mutated Build/revision")
 	}
 	exec(`UPDATE Sample_Env SET PlotNumber='108050' WHERE rowid=1;
@@ -236,14 +236,14 @@ func TestProjectFieldCatalogueDisabledStaleCancelledCleanupAndOwnerLease(t *test
 	if output, err := service.GetLongVegetationProjectFieldDefinitions(cancelled, state.ContextID); !errors.Is(err, context.Canceled) || output != nil {
 		t.Fatal("cancelled catalogue returned success", output, err)
 	}
-	before := contexts.ProjectReportScopes.Read(state.ContextID)
+	before := projectReportScopes(contexts).Read(state.ContextID)
 	for _, hooks := range []vprocore.PublicationReadSnapshotHooks{
 		{CommitRead: func(*sql.Tx) error { return errors.New("field snapshot failure") }},
 		{RollbackRead: func(*sql.Tx) error { return errors.New("field cleanup failure") }},
 	} {
 		service.snapshot = hooks
 		if output, err := service.GetLongVegetationProjectFieldDefinitions(ctx, state.ContextID); err == nil || output != nil ||
-			!reflect.DeepEqual(before, contexts.ProjectReportScopes.Read(state.ContextID)) {
+			!reflect.DeepEqual(before, projectReportScopes(contexts).Read(state.ContextID)) {
 			t.Fatal("fallible read cleanup leaked successful catalogue or changed authority", output, err)
 		}
 	}

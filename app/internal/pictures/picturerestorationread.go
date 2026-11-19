@@ -18,7 +18,7 @@ func withPictureHistoryReadSnapshot[T any](ctx context.Context, source *ownedPic
 	if err := source.checkFile(); err != nil {
 		return zero, err
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(source.path, "ro")+"&_query_only=on&_busy_timeout=5000")
+	db, err := sqlutil.OpenQueryOnlySQLite(source.path)
 	if err != nil {
 		return zero, err
 	}
@@ -28,14 +28,12 @@ func withPictureHistoryReadSnapshot[T any](ctx context.Context, source *ownedPic
 			result = zero
 		}
 	}()
-	db.SetMaxOpenConns(1)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return zero, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, conn.Close()) }()
-	reader := &vprocore.SqliteContext{Conn: conn}
-	tx, err := reader.BeginReadSnapshot(ctx)
+	tx, err := vprocore.BeginConnReadSnapshot(ctx, conn)
 	if err != nil {
 		return zero, err
 	}

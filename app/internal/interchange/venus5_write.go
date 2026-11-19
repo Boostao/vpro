@@ -26,7 +26,6 @@ func writeVenusToVP08Tx(
 	humusTbl := vprocore.QuoteHeaderIdentifier(targetProject + "_Humus")
 	mineralTbl := vprocore.QuoteHeaderIdentifier(targetProject + "_Mineral")
 	metaTbl := vprocore.QuoteHeaderIdentifier(targetProject + "_Metadata")
-	auditTbl := vprocore.QuoteHeaderIdentifier(targetProject + "_Audit")
 
 	envCols := []string{
 		"PlotNumber", "FieldNumber", "ProjectID", "Date", "SiteSurveyor", "Location",
@@ -116,14 +115,10 @@ func writeVenusToVP08Tx(
 	nowStr := time.Now().Format("2006-01-02 15:04:05")
 	projIDVal := truncateUTF16Units(sourceProject, 20)
 
-	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" (
-		"ChildTable" TEXT NOT NULL,
-		"ID" INTEGER NOT NULL,
-		PRIMARY KEY ("ChildTable", "ID")
-	)`); err != nil {
+	if err := vprocore.EnsureChildIdentityTable(ctx, tx); err != nil {
 		return 0, 0, 0, err
 	}
-	childIDStmt, err := tx.PrepareContext(ctx, `INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable","ID") VALUES (?,?)`)
+	childIDStmt, err := vprocore.PrepareChildIdentityInsertStmt(ctx, tx)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -157,11 +152,7 @@ func writeVenusToVP08Tx(
 		); err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx,
-			`INSERT INTO "__VPRO_ChildIdentity" ("ChildTable","ID") VALUES (?,?) ON CONFLICT DO NOTHING`,
-			srcTbl, id,
-		)
-		return err
+		return vprocore.ReserveChildID(ctx, tx, srcTbl, id)
 	}
 
 	for _, pl := range plots {
@@ -476,10 +467,16 @@ func writeVenusToVP08Tx(
 			mineralCount++
 		}
 
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO `+auditTbl+` ("Project","User","PlotNumber","Table","EditField","EditWhen","Restore","Flag")
-			VALUES (?, 'VPro', ?, 'Environment', ?, ?, 0, 0)`,
-			targetProject, pNum, fmt.Sprintf("Imported VENUS ver. %s record. Project: %s", venusVer, sourceProject), nowStr); err != nil {
+		pCopy := pNum
+		editLabel := fmt.Sprintf("Imported VENUS ver. %s record. Project: %s", venusVer, sourceProject)
+		if _, err := vprocore.RecordAudit(ctx, tx, vprocore.AuditWriteEntry{
+			Project:    targetProject,
+			User:       "VPro",
+			PlotNumber: &pCopy,
+			Table:      "_Env",
+			EditField:  &editLabel,
+			EditWhen:   nowStr,
+		}); err != nil {
 			return 0, 0, 0, fmt.Errorf("insert VENUS audit for plot %s: %w", pNum, err)
 		}
 	}

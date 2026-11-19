@@ -618,7 +618,6 @@ func ApplyProjectMetadataAutomation(s *vprocore.ContextService, ctx context.Cont
 
 			project := owner.Selection.Project
 			metaTbl := vprocore.QuoteHeaderIdentifier(project + "_Metadata")
-			auditTbl := vprocore.QuoteHeaderIdentifier(project + "_Audit")
 			now := time.Now().Format("2006-01-02 15:04:05")
 
 			effectivePID, rErr := resolveSingleExistingProjectID(ctx, tx, project, targetPID)
@@ -711,8 +710,15 @@ func ApplyProjectMetadataAutomation(s *vprocore.ContextService, ctx context.Cont
 			var updatedCols []string
 			auditCount := 0
 			if created {
-				if _, aErr := tx.ExecContext(ctx, `INSERT INTO `+auditTbl+` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`,
-					project, user, nil, "_Metadata", "ProjectID", now, nil, targetPID, metaID); aErr != nil {
+				if _, aErr := vprocore.RecordAudit(ctx, tx, vprocore.AuditWriteEntry{
+					Project:   project,
+					User:      user,
+					Table:     "_Metadata",
+					EditField: vprocore.AuditString("ProjectID"),
+					EditWhen:  now,
+					AfterEdit: targetPID,
+					ID:        &metaID,
+				}); aErr != nil {
 					return aErr
 				}
 				auditCount++
@@ -736,16 +742,17 @@ func ApplyProjectMetadataAutomation(s *vprocore.ContextService, ctx context.Cont
 				if _, uErr := tx.ExecContext(ctx, `UPDATE `+metaTbl+` SET `+vprocore.QuoteHeaderIdentifier(col)+` = ?, "DateLastEdited" = ? WHERE rowid = ?`, newVal, now, rowID); uErr != nil {
 					return uErr
 				}
-				var beforeAudit any
-				if oldRaw.Valid {
-					beforeAudit = oldRaw.String
-				}
-				var afterAudit any
-				if newText != nil {
-					afterAudit = *newText
-				}
-				if _, aErr := tx.ExecContext(ctx, `INSERT INTO `+auditTbl+` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`,
-					project, user, nil, "_Metadata", col, now, beforeAudit, afterAudit, metaID); aErr != nil {
+				colCopy := col
+				if _, aErr := vprocore.RecordAudit(ctx, tx, vprocore.AuditWriteEntry{
+					Project:    project,
+					User:       user,
+					Table:      "_Metadata",
+					EditField:  &colCopy,
+					EditWhen:   now,
+					BeforeEdit: oldRaw,
+					AfterEdit:  newText,
+					ID:         &metaID,
+				}); aErr != nil {
 					return aErr
 				}
 				updatedCols = append(updatedCols, col)

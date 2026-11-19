@@ -244,7 +244,6 @@ func CreateSIVIPlot(s *vprocore.ContextService, ctx context.Context, contextID s
 			project := owner.Selection.Project
 			envTbl := vprocore.QuoteHeaderIdentifier(project + "_Env")
 			adminTbl := vprocore.QuoteHeaderIdentifier(project + "_Admin")
-			auditTbl := vprocore.QuoteHeaderIdentifier(project + "_Audit")
 
 			if _, err := tx.ExecContext(ctx, siviCreationPlotHistoryDDL); err != nil {
 				return err
@@ -375,22 +374,28 @@ func CreateSIVIPlot(s *vprocore.ContextService, ctx context.Context, contextID s
 			}
 
 			// Record <Project>_Audit rows (Restore = 0, Flag = 0).
-			auditStmt, err := tx.PrepareContext(ctx, `INSERT INTO `+auditTbl+
-				` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,NULL,?,0,0,NULL)`)
+			auditStmt, err := vprocore.PrepareProjectAuditStmt(ctx, tx, "", project)
 			if err != nil {
 				return err
 			}
 			defer auditStmt.Close()
 
 			auditCount := 0
+			plotCopy := req.PlotNumber
 			for _, ea := range envAudits {
-				if _, err := auditStmt.ExecContext(ctx, project, actor, req.PlotNumber, "_Env", ea[0], now, ea[1]); err != nil {
+				f := ea[0]
+				if _, err := vprocore.ExecPreparedAudit(ctx, auditStmt, vprocore.AuditWriteEntry{
+					Project: project, User: actor, PlotNumber: &plotCopy, Table: "_Env", EditField: &f, EditWhen: now, AfterEdit: ea[1],
+				}); err != nil {
 					return err
 				}
 				auditCount++
 			}
 			for _, aa := range adminAudits {
-				if _, err := auditStmt.ExecContext(ctx, project, actor, req.PlotNumber, "_Admin", aa[0], now, aa[1]); err != nil {
+				f := aa[0]
+				if _, err := vprocore.ExecPreparedAudit(ctx, auditStmt, vprocore.AuditWriteEntry{
+					Project: project, User: actor, PlotNumber: &plotCopy, Table: "_Admin", EditField: &f, EditWhen: now, AfterEdit: aa[1],
+				}); err != nil {
 					return err
 				}
 				auditCount++
@@ -606,9 +611,15 @@ func UndoCreateSIVIPlot(s *vprocore.ContextService, ctx context.Context, context
 				"plotType":          prop.Request.PlotType,
 			})
 			// PlotNumber is NULL so <Project>_Audit foreign key to <Project>_Env(PlotNumber) is satisfied after deletion.
-			if _, err := tx.ExecContext(ctx, `INSERT INTO `+auditTbl+
-				` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,NULL,'_Env','UndoCreateSIVIPlot',?,?,?,0,0,NULL)`,
-				project, actor, now, storedPlot, string(undoReceiptJSON)); err != nil {
+			if _, err := vprocore.RecordAudit(ctx, tx, vprocore.AuditWriteEntry{
+				Project:    project,
+				User:       actor,
+				Table:      "_Env",
+				EditField:  vprocore.AuditString("UndoCreateSIVIPlot"),
+				EditWhen:   now,
+				BeforeEdit: storedPlot,
+				AfterEdit:  string(undoReceiptJSON),
+			}); err != nil {
 				return err
 			}
 
@@ -647,10 +658,11 @@ func ListCreatedSIVIPlots(s *vprocore.ContextService, ctx context.Context, conte
 	}
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (entries []SIVICreatedPlotEntry, resultErr error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return nil, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		tx, err := owner.BeginReadSnapshot(ctx)
 		if err != nil {
 			return nil, err

@@ -36,11 +36,12 @@ func readScopedEnvPlots(
 	siteUnitFilter string,
 	explicitPlots []string,
 ) ([]scopedEnvPlot, error) {
-	if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+	unlock, err := owner.AcquireMutex(ctx)
+	if err != nil {
 		return nil, err
 	}
-	defer owner.Mu.Unlock()
-	if owner.Conn == nil {
+	defer unlock()
+	if !owner.IsOpen() {
 		return nil, errors.New("project context is closed")
 	}
 
@@ -288,11 +289,12 @@ func readExistingPlotClimateCache(ctx context.Context, db *sql.DB) (map[string]c
 }
 
 func readExistingPlotClimateCacheReadOnly(ctx context.Context, owner *vprocore.SqliteContext) (map[string]cachedNormalRecord, error) {
-	if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+	unlock, err := owner.AcquireMutex(ctx)
+	if err != nil {
 		return nil, err
 	}
 	projectPath := owner.Selection.ProjectPath
-	owner.Mu.Unlock()
+	unlock()
 
 	roDB, err := sqlutil.OpenReadOnlyContext(ctx, projectPath)
 	if err != nil {

@@ -47,9 +47,10 @@ func TestTwoPageSoilAttemptCancellationAfterSealingRetainsLateDispatchRefusal(t 
 	if err := <-done; !errors.Is(err, context.Canceled) {
 		t.Fatal("owned in-flight recovery did not surface cancellation", err)
 	}
-	contexts.TwoPageSoilAttempts.Mu.Lock()
-	sealed := contexts.TwoPageSoilAttempts.Requests[request.RequestID].Sealed
-	contexts.TwoPageSoilAttempts.Mu.Unlock()
+	soilLedger := twoPageSoilAttempts(contexts)
+	soilLedger.Mu.Lock()
+	sealed := soilLedger.Requests[request.RequestID].Sealed
+	soilLedger.Mu.Unlock()
 	if !sealed {
 		t.Fatal("recovery cancellation before its snapshot unsealed a future late request")
 	}
@@ -82,9 +83,10 @@ func TestTwoPageSoilAttemptFacadeStagedCancellationAndPostcommitCompletionRecove
 				if err := db.QueryRow(`SELECT UpperDepth FROM Sample_Humus WHERE rowid=-7`).Scan(&depth); err != nil || depth != want {
 					t.Fatal("independent physical visibility differs", depth, want, err)
 				}
-				contexts.TwoPageSoilAttempts.Mu.Lock()
-				active := contexts.TwoPageSoilAttempts.Requests[request.RequestID].Active
-				contexts.TwoPageSoilAttempts.Mu.Unlock()
+				soilLedger := twoPageSoilAttempts(contexts)
+				soilLedger.Mu.Lock()
+				active := soilLedger.Requests[request.RequestID].Active
+				soilLedger.Mu.Unlock()
 				if active != 1 {
 					t.Fatal("actual facade observer lost its registered active request", active)
 				}
@@ -112,9 +114,10 @@ func TestTwoPageSoilAttemptFacadeStagedCancellationAndPostcommitCompletionRecove
 				postcommit && (result == nil || !result.DidCommit) {
 				t.Fatal("facade completion did not preserve the actual commit boundary", result, err)
 			}
-			contexts.TwoPageSoilAttempts.Mu.Lock()
-			active := contexts.TwoPageSoilAttempts.Requests[request.RequestID].Active
-			contexts.TwoPageSoilAttempts.Mu.Unlock()
+			soilLedger := twoPageSoilAttempts(contexts)
+			soilLedger.Mu.Lock()
+			active := soilLedger.Requests[request.RequestID].Active
+			soilLedger.Mu.Unlock()
 			if active != 0 {
 				t.Fatal("failed completion leaked an active facade attempt", active)
 			}

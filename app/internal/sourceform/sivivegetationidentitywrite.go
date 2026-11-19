@@ -156,7 +156,6 @@ func WriteSIVIIdentities(s *vprocore.ContextService, ctx context.Context, contex
 				return nil, false, err
 			}
 			when := time.Now().UTC().Format("2006-01-02 15:04:05")
-			auditTable := vprocore.QuoteHeaderIdentifier(project + "_Audit")
 			var auditRecords []vprocore.AuditEntry
 			for _, assignment := range assignments {
 				beforeVal, err := vprocore.MetadataCellValue(assignment.Before)
@@ -170,21 +169,23 @@ func WriteSIVIIdentities(s *vprocore.ContextService, ctx context.Context, contex
 				if !vprocore.AuditHeaderChange(beforeVal, afterVal, plots.AuditStrength) {
 					continue
 				}
-				auditID, expectedID, err := siviIdentityAuditID(assignment.Before, assignment.After)
+				_, expectedID, err := siviIdentityAuditID(assignment.Before, assignment.After)
 				if err != nil {
 					return nil, false, err
 				}
-				inserted, err := tx.ExecContext(ctx, `INSERT INTO `+auditTable+
-					` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`,
-					project, plots.CurrentUser, plot, "_Veg", assignment.Column, when,
-					vprocore.HeaderAuditValue(beforeVal), vprocore.HeaderAuditValue(afterVal), auditID)
-				if err != nil {
-					return nil, false, err
-				}
-				if count, err := inserted.RowsAffected(); err != nil || count != 1 {
-					return nil, false, errors.Join(err, errors.New("SIVI identity audit did not insert exactly one row"))
-				}
-				auditRowID, err := inserted.LastInsertId()
+				plotCopy := plot
+				colCopy := assignment.Column
+				auditRowID, err := vprocore.RecordAudit(ctx, tx, vprocore.AuditWriteEntry{
+					Project:    project,
+					User:       plots.CurrentUser,
+					PlotNumber: &plotCopy,
+					Table:      "_Veg",
+					EditField:  &colCopy,
+					EditWhen:   when,
+					BeforeEdit: vprocore.HeaderAuditValue(beforeVal),
+					AfterEdit:  vprocore.HeaderAuditValue(afterVal),
+					ID:         expectedID,
+				})
 				if err != nil {
 					return nil, false, err
 				}
@@ -290,8 +291,7 @@ func ReserveSourceChildIdentityPlan(ctx context.Context, tx *sql.Tx, project, ki
 	baseline := before
 	ledger, present := before[SiviIdentityLedger]
 	if !present {
-		if _, err := tx.ExecContext(ctx, `CREATE TABLE "__VPRO_ChildIdentity" (
-			"ChildTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("ChildTable","ID"))`); err != nil {
+		if err := vprocore.EnsureChildIdentityTable(ctx, tx); err != nil {
 			return nil, vprocore.ProjectMetadataTable{}, err
 		}
 		created, err := vprocore.EnvironmentSiteUnitTables(ctx, tx)
@@ -328,14 +328,7 @@ func ReserveSourceChildIdentityPlan(ctx context.Context, tx *sql.Tx, project, ki
 	}
 	sort.Strings(ordered)
 	for _, id := range ordered {
-		inserted, err := tx.ExecContext(ctx, `INSERT INTO "__VPRO_ChildIdentity" (ChildTable,ID) VALUES (?,?)`, table, id)
-		if err != nil {
-			return nil, vprocore.ProjectMetadataTable{}, err
-		}
-		if count, err := inserted.RowsAffected(); err != nil || count != 1 {
-			return nil, vprocore.ProjectMetadataTable{}, errors.Join(err, fmt.Errorf("%s reservation did not insert exactly one entry", operation))
-		}
-		rowID, err := inserted.LastInsertId()
+		rowID, err := vprocore.InsertStrictChildIDReservation(ctx, tx, table, id)
 		if err != nil {
 			return nil, vprocore.ProjectMetadataTable{}, err
 		}

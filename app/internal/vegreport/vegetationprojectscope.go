@@ -1,7 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -198,7 +197,7 @@ func (s *LongVegetationReportScopeService) GetLongVegetationReportScope(ctx cont
 	}
 	return vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (*LongVegetationReportScope, error) {
 		return vprocore.WithOwnedPreferenceSnapshot(ctx, plots, s.snapshot, func(owner *vprocore.SqliteContext, tx *sql.Tx) (*LongVegetationReportScope, error) {
-			entry := s.contexts.ProjectReportScopes.Read(contextID)
+			entry := projectReportScopes(s.contexts).Read(contextID)
 			result := projectScopeDTO(contextID, owner, entry)
 			if entry.Build != nil {
 				tables, err := readProjectScopeTables(ctx, owner, tx, entry)
@@ -229,10 +228,11 @@ func withProjectScopeInstall[T any](ctx context.Context, plots *vprocore.PlotSer
 		return zero, err
 	}
 	owner := plots.Projects.Sqlite
-	if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+	unlock, err := owner.AcquireMutex(ctx)
+	if err != nil {
 		return zero, err
 	}
-	defer owner.Mu.Unlock()
+	defer unlock()
 	if err := vprocore.ProfileOwnedFiles(owner); err != nil {
 		return zero, err
 	}
@@ -256,7 +256,7 @@ func (s *LongVegetationReportScopeService) SetLongVegetationReportScope(ctx cont
 	}
 	return vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (*LongVegetationReportScope, error) {
 		return withProjectScopeInstall(ctx, plots, s.snapshot, func(owner *vprocore.SqliteContext) (*LongVegetationReportScope, error) {
-			ledger := &s.contexts.ProjectReportScopes
+			ledger := projectReportScopes(s.contexts)
 			ledger.Mu.Lock()
 			defer ledger.Mu.Unlock()
 			entry := vprocore.CloneProjectScopeEntry(ledger.Entries[contextID])
@@ -270,7 +270,7 @@ func (s *LongVegetationReportScopeService) SetLongVegetationReportScope(ctx cont
 				return nil, err
 			}
 			if request.SourceKind != entry.SourceKind {
-				selected := &s.contexts.SelectedUnitSelections
+				selected := selectedUnitSelections(s.contexts)
 				selected.Mu.Lock()
 				defer selected.Mu.Unlock()
 				draft := selected.Entries[contextID]
@@ -303,7 +303,7 @@ func (s *LongVegetationReportScopeService) SetLongVegetationProjectFields(ctx co
 	}
 	return vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (*LongVegetationReportScope, error) {
 		return withProjectScopeInstall(ctx, plots, s.snapshot, func(owner *vprocore.SqliteContext) (*LongVegetationReportScope, error) {
-			ledger := &s.contexts.ProjectReportScopes
+			ledger := projectReportScopes(s.contexts)
 			ledger.Mu.Lock()
 			defer ledger.Mu.Unlock()
 			entry := vprocore.CloneProjectScopeEntry(ledger.Entries[contextID])
@@ -333,7 +333,7 @@ func (s *LongVegetationReportScopeService) BuildLongVegetationProjectScope(ctx c
 		return nil, err
 	}
 	return vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (*LongVegetationReportScope, error) {
-		entry := s.contexts.ProjectReportScopes.Read(contextID)
+		entry := projectReportScopes(s.contexts).Read(contextID)
 		if entry.Revision != expected {
 			return nil, errors.New("project report scope changed; reload before Build")
 		}
@@ -359,10 +359,11 @@ func (s *LongVegetationReportScopeService) BuildLongVegetationProjectScope(ctx c
 			s.beforeInstall()
 		}
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return nil, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		if err := vprocore.ProfileOwnedFiles(owner); err != nil {
 			return nil, err
 		}
@@ -386,7 +387,7 @@ func (s *LongVegetationReportScopeService) BuildLongVegetationProjectScope(ctx c
 		}); err != nil {
 			return nil, err
 		}
-		ledger := &s.contexts.ProjectReportScopes
+		ledger := projectReportScopes(s.contexts)
 		ledger.Mu.Lock()
 		defer ledger.Mu.Unlock()
 		if ledger.Entries[contextID].Revision != expected {
@@ -405,7 +406,7 @@ func (s *LongVegetationReportScopeService) BuildLongVegetationProjectScope(ctx c
 
 func ApprovedProjectScope(s *vprocore.ContextService, ctx context.Context, contextID string, owner *vprocore.SqliteContext,
 	tx *sql.Tx, config vprocore.ConfigValues) (vprocore.VegetationProjectScopeEntry, error) {
-	entry := s.ProjectReportScopes.Read(contextID)
+	entry := projectReportScopes(s).Read(contextID)
 	if entry.Build == nil {
 		return vprocore.VegetationProjectScopeEntry{}, errors.New("project report scope has no explicit current session Build")
 	}

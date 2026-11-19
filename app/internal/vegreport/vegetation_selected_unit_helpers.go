@@ -34,10 +34,10 @@ func selectedUnitConfigForChoice(values vprocore.ConfigValues, choice int) (vpro
 }
 
 func SelectedUnitAvailability(s *vprocore.ContextService, ctx context.Context, plots *vprocore.PlotService, tx *sql.Tx) (bool, error) {
-	if err := s.RequireSelectedListReportScope(plots.Projects.ContextID); err != nil {
+	if err := vprocore.RequireSelectedListReportScope(s, plots.Projects.ContextID); err != nil {
 		return false, err
 	}
-	entry := s.SelectedUnitSelections.Read(plots.Projects.ContextID)
+	entry := selectedUnitSelections(s).Read(plots.Projects.ContextID)
 	if entry.Build == nil {
 		return false, nil
 	}
@@ -58,7 +58,7 @@ func SelectedUnitAvailability(s *vprocore.ContextService, ctx context.Context, p
 
 func DecodeOwnedLongVegetationOptions(s *vprocore.ContextService, ctx context.Context, plots *vprocore.PlotService,
 	tx *sql.Tx, values vprocore.ConfigValues) (longVegetationOptions, error) {
-	if err := s.RequireSelectedListReportScope(plots.Projects.ContextID); err != nil {
+	if err := vprocore.RequireSelectedListReportScope(s, plots.Projects.ContextID); err != nil {
 		return longVegetationOptions{}, err
 	}
 	group, err := vprocore.ConfigInt(values, "ReportOptions", "LVUnitGroups", 1, 3)

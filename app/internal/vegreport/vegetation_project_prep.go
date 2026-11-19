@@ -47,7 +47,7 @@ func (s *LongVegetationReportScopeService) GetLongVegetationProjectFieldDefiniti
 				}
 				tables[i] = vprocore.ProjectMetadataTable{Columns: columns}
 			}
-			entry := s.contexts.ProjectReportScopes.Read(contextID)
+			entry := projectReportScopes(s.contexts).Read(contextID)
 			return &LongVegetationProjectFieldDefinitions{
 				ContextID: contextID, Project: owner.Selection.Project, ProjectPath: owner.Selection.ProjectPath,
 				SU: owner.Selection.SU, SUPath: owner.Selection.SUPath, SourceKind: entry.SourceKind,

@@ -257,9 +257,9 @@ func readTwoPageSoilReceipt(ctx context.Context, request twoPageSoilRequest, tab
 	return matched, ctx.Err()
 }
 
-func twoPageSoilSelectedParent(ctx context.Context, owner *vprocore.SqliteContext, plot string) error {
+func twoPageSoilSelectedParent(ctx context.Context, q vprocore.AuditSQLRowQueryer, plot string) error {
 	var selected bool
-	if err := owner.Conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv AS e
+	if err := q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv AS e
 		WHERE typeof(e.PlotNumber)='text' AND CAST(e.PlotNumber AS BLOB)=CAST(? AS BLOB))`, plot).Scan(&selected); err != nil {
 		return fmt.Errorf("two-page soil selected parent: %w", err)
 	}
@@ -283,7 +283,7 @@ func LookupTwoPageSoilReceipt(s *vprocore.ContextService, ctx context.Context, c
 			if owner.Selection.Project != detached.Original.Project {
 				return nil, errors.New("two-page soil receipt belongs to another current project")
 			}
-			if err := twoPageSoilSelectedParent(ctx, owner, detached.Original.Plot); err != nil {
+			if err := twoPageSoilSelectedParent(ctx, tx, detached.Original.Plot); err != nil {
 				return nil, err
 			}
 			var kind, name string

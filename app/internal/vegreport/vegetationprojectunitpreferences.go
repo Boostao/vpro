@@ -7,7 +7,6 @@ import (
 	"errors"
 	"reflect"
 
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -89,10 +88,11 @@ func (s *LongVegetationReportScopeService) saveProjectUnits(ctx context.Context,
 				return struct{}{}, err
 			}
 			owner := plots.Projects.Sqlite
-			if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+			unlock, err := owner.AcquireMutex(ctx)
+			if err != nil {
 				return struct{}{}, err
 			}
-			defer owner.Mu.Unlock()
+			defer unlock()
 			final, err := vprocore.WithPublicationReadSnapshot(ctx, owner, s.snapshot, func(tx *sql.Tx) (candidate, error) {
 				return read(owner, tx)
 			})

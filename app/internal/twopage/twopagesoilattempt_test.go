@@ -89,13 +89,14 @@ func TestTwoPageSoilAttemptRunningSharedFacadesAndCompletedReplay(t *testing.T) 
 	deadline := time.NewTimer(10 * time.Second)
 	defer deadline.Stop()
 	for {
-		contexts.TwoPageSoilAttempts.Mu.Lock()
-		entry := contexts.TwoPageSoilAttempts.Requests[request.RequestID]
+		soilLedger := twoPageSoilAttempts(contexts)
+		soilLedger.Mu.Lock()
+		entry := soilLedger.Requests[request.RequestID]
 		active := 0
 		if entry != nil {
 			active = entry.Active
 		}
-		contexts.TwoPageSoilAttempts.Mu.Unlock()
+		soilLedger.Mu.Unlock()
 		if active == 2 {
 			break
 		}
@@ -231,11 +232,12 @@ func TestTwoPageSoilAttemptRecoveryStrictTransportAndLeaseCancellation(t *testin
 	if outcome, err := service.RecoverOutcome(context.Background(), state.ContextID, `{"requestId":"bad"}`); err == nil || outcome != nil {
 		t.Fatal("invalid strict outcome request accepted", outcome, err)
 	}
-	contexts.TwoPageSoilAttempts.Mu.Lock()
+	soilLedger := twoPageSoilAttempts(contexts)
+	soilLedger.Mu.Lock()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	outcome, err := service.RecoverOutcome(ctx, state.ContextID, raw)
-	contexts.TwoPageSoilAttempts.Mu.Unlock()
+	soilLedger.Mu.Unlock()
 	if !errors.Is(err, context.Canceled) || outcome != nil {
 		t.Fatal("cancelled recovery waited for or crossed the attempt lease", outcome, err)
 	}

@@ -123,12 +123,11 @@ func (c *SqliteContext) WithSelectedFileWriter(ctx context.Context, role string,
 	if err := validate(); err != nil {
 		return err
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(c.Attachments[role], "rw")+"&_foreign_keys=on&_busy_timeout=5000&_txlock=immediate")
+	db, err := sqlutil.OpenImmediateWriteSQLite(c.Attachments[role])
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, db.Close()) }()
-	db.SetMaxOpenConns(1)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return err

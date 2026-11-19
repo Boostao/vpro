@@ -2,7 +2,6 @@ package envreport
 
 import (
 	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -62,10 +61,11 @@ func PreviewLongEnvironment(s *vprocore.ContextService, ctx context.Context, con
 		if owner.Selection.SU == "None" {
 			return result, errors.New("Long Environment requires an explicitly selected SU; project-only plots are not an implicit scope")
 		}
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return result, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		if err := vprocore.ProfileOwnedFiles(owner); err != nil {
 			return result, err
 		}

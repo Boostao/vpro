@@ -342,10 +342,11 @@ func scopedPlotsCTEAndPredicate(owner *vprocore.SqliteContext, outerExpr string)
 }
 
 func withScopedReadSnapshot(ctx context.Context, owner *vprocore.SqliteContext, fn func(tx *sql.Tx) error) error {
-	if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+	unlock, err := owner.AcquireMutex(ctx)
+	if err != nil {
 		return err
 	}
-	defer owner.Mu.Unlock()
+	defer unlock()
 
 	tx, err := owner.BeginReadSnapshot(ctx)
 	if err != nil {

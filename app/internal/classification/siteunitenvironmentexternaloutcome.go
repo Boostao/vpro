@@ -65,7 +65,7 @@ func lookupExternalSUEnvironmentReceipt(ctx context.Context, source *externalSUE
 	if err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(source.Paths["project"], "ro")+"&_busy_timeout=5000")
+	db, err := sqlutil.OpenSQLiteMode(source.Paths["project"], "ro")
 	if err != nil {
 		return nil, err
 	}

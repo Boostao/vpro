@@ -11,7 +11,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -194,12 +193,11 @@ func RestoreTwoPageSoilHorizon(s *vprocore.ContextService, ctx context.Context, 
 
 			// Ensure permanent reservation in __VPRO_ChildIdentity remains intact!
 			if restoredID >= 0 {
-				var reserved int
-				if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM "__VPRO_ChildIdentity" WHERE "ChildTable" = ? AND "ID" = ?`,
-					quotedTbl, restoredID).Scan(&reserved); err != nil {
+				reserved, err := vprocore.HasChildIDReservation(ctx, tx, quotedTbl, restoredID)
+				if err != nil {
 					return err
 				}
-				if reserved != 1 {
+				if !reserved {
 					return fmt.Errorf("%s horizon ID %d lost its permanent reservation in __VPRO_ChildIdentity", kind, restoredID)
 				}
 			}
@@ -247,13 +245,19 @@ func RestoreTwoPageSoilHorizon(s *vprocore.ContextService, ctx context.Context, 
 			now := time.Now().Format("2006-01-02 15:04:05")
 			hz := extractHorizonFromRow(origCols, *targetDeletion.DeletedRow)
 			var restoreAudits []vprocore.AuditEntry
-			aIns, err := tx.ExecContext(ctx, `INSERT INTO `+quotedAudit+
-				` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`,
-				project, actor, req.PlotNumber, "_"+kind, "Horizon", now, nil, hz, restoredID)
+			aRowID, err := vprocore.RecordAudit(ctx, tx, vprocore.AuditWriteEntry{
+				Project:    project,
+				User:       actor,
+				PlotNumber: &req.PlotNumber,
+				Table:      "_" + kind,
+				EditField:  vprocore.AuditString("Horizon"),
+				EditWhen:   now,
+				AfterEdit:  hz,
+				ID:         &restoredID,
+			})
 			if err != nil {
 				return err
 			}
-			aRowID, _ := aIns.LastInsertId()
 			ids, _ := vprocore.AuditRowIDs([]string{strconv.FormatInt(aRowID, 10)})
 			recs, _ := vprocore.SelectedAuditEntries(tx, project, req.PlotNumber, ids)
 			if len(recs) == 1 {
@@ -346,98 +350,77 @@ func ListTwoPageSoilDeletedHorizons(s *vprocore.ContextService, ctx context.Cont
 		return nil, errors.New("plotNumber must be a valid literal string")
 	}
 
-	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (entries []DeletedTwoPageSoilHorizonEntry, resultErr error) {
+	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) ([]DeletedTwoPageSoilHorizonEntry, error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-			return nil, err
-		}
-		defer owner.Mu.Unlock()
-		tx, err := owner.BeginReadSnapshot(ctx)
-		if err != nil {
-			return nil, err
-		}
-		defer func() {
-			if rb := tx.Rollback(); rb != nil && !errors.Is(rb, sql.ErrTxDone) {
-				resultErr = errors.Join(resultErr, rb)
-			}
-		}()
-
-		if err := twoPageSoilSelectedParent(ctx, owner, plotNumber); err != nil {
-			return nil, err
-		}
-
-		var exists bool
-		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM project.sqlite_master WHERE type='table' AND name=?)`, twoPageSoilHistoryTable).Scan(&exists); err != nil {
-			return nil, err
-		}
-		if !exists {
-			if err := tx.Commit(); err != nil {
+		return vprocore.WithReadSnapshotValue(ctx, owner, func(tx *sql.Tx) ([]DeletedTwoPageSoilHorizonEntry, error) {
+			if err := twoPageSoilSelectedParent(ctx, tx, plotNumber); err != nil {
 				return nil, err
 			}
-			return []DeletedTwoPageSoilHorizonEntry{}, nil
-		}
 
-		rows, err := tx.QueryContext(ctx, `SELECT RequestID, Proposal FROM project."__VPRO_TwoPageSoilHistory" ORDER BY rowid DESC`)
-		if err != nil {
-			return nil, err
-		}
-		var parsedList []twoPageSoilHistory
-		restoredSet := map[string]bool{}
-		for rows.Next() {
-			var reqID, raw string
-			if err := rows.Scan(&reqID, &raw); err != nil {
-				rows.Close()
+			var exists bool
+			if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM project.sqlite_master WHERE type='table' AND name=?)`, twoPageSoilHistoryTable).Scan(&exists); err != nil {
 				return nil, err
 			}
-			h, pErr := unmarshalAnyTwoPageSoilHistory(raw)
-			if pErr != nil {
-				rows.Close()
-				return nil, pErr
+			if !exists {
+				return []DeletedTwoPageSoilHorizonEntry{}, nil
 			}
-			if h.Action == "restore" && h.RestoreOfRequestID != nil {
-				restoredSet[*h.RestoreOfRequestID] = true
-			}
-			if h.Action == "delete" && h.Request.Original != nil &&
-				h.Request.Original.Project == owner.Selection.Project &&
-				h.Request.Original.Plot == plotNumber &&
-				h.Request.Original.Form == form {
-				parsedList = append(parsedList, h)
-			}
-		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
-			return nil, err
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if err := tx.Commit(); err != nil {
-			return nil, err
-		}
 
-		entries = make([]DeletedTwoPageSoilHorizonEntry, 0, len(parsedList))
-		for _, h := range parsedList {
-			if h.DeletedID == nil || h.DeletedRow == nil {
-				continue
+			rows, err := tx.QueryContext(ctx, `SELECT RequestID, Proposal FROM project."__VPRO_TwoPageSoilHistory" ORDER BY rowid DESC`)
+			if err != nil {
+				return nil, err
 			}
-			cols := h.Request.Original.Records.Columns
-			hz := extractHorizonFromRow(cols, *h.DeletedRow)
-			upper := extractFloatFromRow(cols, *h.DeletedRow, "UpperDepth")
-			lower := extractFloatFromRow(cols, *h.DeletedRow, "LowerDepth")
-			entries = append(entries, DeletedTwoPageSoilHorizonEntry{
-				DeleteRequestID: h.Request.RequestID,
-				PlotNumber:      plotNumber,
-				Form:            form,
-				Kind:            kind,
-				DeletedID:       *h.DeletedID,
-				Horizon:         hz,
-				UpperDepth:      upper,
-				LowerDepth:      lower,
-				DeletedBy:       h.Actor,
-				DeletedAt:       h.EditWhen,
-				Restored:        restoredSet[h.Request.RequestID],
-			})
-		}
-		return entries, nil
+			var parsedList []twoPageSoilHistory
+			restoredSet := map[string]bool{}
+			for rows.Next() {
+				var reqID, raw string
+				if err := rows.Scan(&reqID, &raw); err != nil {
+					rows.Close()
+					return nil, err
+				}
+				h, pErr := unmarshalAnyTwoPageSoilHistory(raw)
+				if pErr != nil {
+					rows.Close()
+					return nil, pErr
+				}
+				if h.Action == "restore" && h.RestoreOfRequestID != nil {
+					restoredSet[*h.RestoreOfRequestID] = true
+				}
+				if h.Action == "delete" && h.Request.Original != nil &&
+					h.Request.Original.Project == owner.Selection.Project &&
+					h.Request.Original.Plot == plotNumber &&
+					h.Request.Original.Form == form {
+					parsedList = append(parsedList, h)
+				}
+			}
+			if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+				return nil, err
+			}
+
+			entries := make([]DeletedTwoPageSoilHorizonEntry, 0, len(parsedList))
+			for _, h := range parsedList {
+				if h.DeletedID == nil || h.DeletedRow == nil {
+					continue
+				}
+				cols := h.Request.Original.Records.Columns
+				hz := extractHorizonFromRow(cols, *h.DeletedRow)
+				upper := extractFloatFromRow(cols, *h.DeletedRow, "UpperDepth")
+				lower := extractFloatFromRow(cols, *h.DeletedRow, "LowerDepth")
+				entries = append(entries, DeletedTwoPageSoilHorizonEntry{
+					DeleteRequestID: h.Request.RequestID,
+					PlotNumber:      plotNumber,
+					Form:            form,
+					Kind:            kind,
+					DeletedID:       *h.DeletedID,
+					Horizon:         hz,
+					UpperDepth:      upper,
+					LowerDepth:      lower,
+					DeletedBy:       h.Actor,
+					DeletedAt:       h.EditWhen,
+					Restored:        restoredSet[h.Request.RequestID],
+				})
+			}
+			return entries, nil
+		})
 	})
 }
 

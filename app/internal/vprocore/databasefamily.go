@@ -7,7 +7,6 @@ import (
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/boostao/vpro/app/resources"
@@ -321,11 +320,10 @@ func buildDefaultVPicsLibrarySeed() ([]byte, error) {
 		return nil, err
 	}
 
-	sqlDB, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(tmpPath, "rw")+"&_journal_mode=DELETE&_synchronous=FULL&_txlock=immediate")
+	sqlDB, err := sqlutil.OpenStagedSQLite(tmpPath, sqlutil.StagedSQLiteOptions{ImmediateTxLock: true})
 	if err != nil {
 		return nil, err
 	}
-	sqlDB.SetMaxOpenConns(1)
 	tx, err := sqlDB.Begin()
 	if err != nil {
 		_ = sqlDB.Close()
@@ -481,11 +479,6 @@ func ReplaceActiveVListsCatalogue(ctx context.Context, s *ContextService, expect
 		_ = candidate.Close()
 		return restorePrior(err)
 	}
-	s.SelectedUnitSelections.Mu.Lock()
-	s.SelectedUnitSelections.Entries = nil
-	s.SelectedUnitSelections.Mu.Unlock()
-	s.ProjectReportScopes.Mu.Lock()
-	s.ProjectReportScopes.Entries = nil
-	s.ProjectReportScopes.Mu.Unlock()
+	s.notifyContextSwitchHooks()
 	return state, nil
 }

@@ -211,10 +211,11 @@ func SearchBECUnitPicker(
 	if contexts != nil && contextID != "" {
 		extra, err := vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (_ []BECUnitPickerChoice, resultErr error) {
 			owner := plots.Projects.Sqlite
-			if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+			unlock, err := owner.AcquireMutex(ctx)
+			if err != nil {
 				return nil, err
 			}
-			defer owner.Mu.Unlock()
+			defer unlock()
 			tx, sErr := owner.BeginReadSnapshot(ctx)
 			if sErr != nil {
 				return nil, sErr

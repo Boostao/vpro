@@ -38,14 +38,16 @@ type SqliteContext struct {
 	userLogUser    string
 }
 
-// database/sql discards a pinned SQLite connection when a transaction's context
-// is cancelled. Keep cleanup caller-owned; every query still uses the request
-// context, and callers must check it before committing the read snapshot.
-func (c *SqliteContext) BeginReadSnapshot(ctx context.Context) (*sql.Tx, error) {
+// BeginConnReadSnapshot starts a caller-owned read-only snapshot transaction on a pinned
+// SQLite connection without binding transaction lifetime to ctx's asynchronous awaitDone watcher.
+func BeginConnReadSnapshot(ctx context.Context, conn *sql.Conn) (*sql.Tx, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	tx, err := c.Conn.BeginTx(context.WithoutCancel(ctx), &sql.TxOptions{ReadOnly: true})
+	if conn == nil {
+		return nil, errors.New("project context is closed")
+	}
+	tx, err := conn.BeginTx(context.WithoutCancel(ctx), &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, err
 	}
@@ -55,11 +57,25 @@ func (c *SqliteContext) BeginReadSnapshot(ctx context.Context) (*sql.Tx, error) 
 	return tx, nil
 }
 
+// database/sql discards a pinned SQLite connection when a transaction's context
+// is cancelled. Keep cleanup caller-owned; every query still uses the request
+// context, and callers must check it before committing the read snapshot.
+func (c *SqliteContext) BeginReadSnapshot(ctx context.Context) (*sql.Tx, error) {
+	if c == nil {
+		return nil, errors.New("project context is closed")
+	}
+	return BeginConnReadSnapshot(ctx, c.Conn)
+}
+
 func (c *SqliteContext) projectReadDatabase(ctx context.Context) (*sql.DB, error) {
 	if err := sqlutil.AcquireMutexLease(ctx, &c.Mu); err != nil {
 		return nil, err
 	}
 	defer c.Mu.Unlock()
+	return c.projectReadDatabaseLocked(ctx)
+}
+
+func (c *SqliteContext) projectReadDatabaseLocked(ctx context.Context) (*sql.DB, error) {
 	if c.Conn == nil {
 		return nil, errors.New("project context is closed")
 	}
@@ -69,7 +85,7 @@ func (c *SqliteContext) projectReadDatabase(ctx context.Context) (*sql.DB, error
 	if c.ProjectReadDB != nil {
 		return c.ProjectReadDB, nil
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(c.Selection.ProjectPath, "ro")+"&_foreign_keys=on&_busy_timeout=5000")
+	db, err := sqlutil.OpenReadOnlyBusySQLite(c.Selection.ProjectPath)
 	if err != nil {
 		return nil, err
 	}
@@ -87,13 +103,17 @@ func (c *SqliteContext) ProjectDatabase(ctx context.Context) (*sql.DB, error) {
 		return nil, err
 	}
 	defer c.Mu.Unlock()
+	return c.projectDatabaseLocked(ctx)
+}
+
+func (c *SqliteContext) projectDatabaseLocked(ctx context.Context) (*sql.DB, error) {
 	if c.Conn == nil {
 		return nil, errors.New("project context is closed")
 	}
 	if c.ProjectDB != nil {
 		return c.ProjectDB, nil
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(c.Selection.ProjectPath, "rw")+"&_foreign_keys=on&_busy_timeout=5000&_journal_mode=WAL&_txlock=immediate")
+	db, err := sqlutil.OpenWALWriteSQLite(c.Selection.ProjectPath)
 	if err != nil {
 		return nil, err
 	}
@@ -137,11 +157,10 @@ func NewSQLiteContext(ctx context.Context, selection DesktopSelection, support m
 			return nil, fmt.Errorf("invalid context family name %q", name)
 		}
 	}
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := sqlutil.OpenMemorySQLite()
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(1)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		db.Close()
@@ -567,14 +586,13 @@ func openWritableVPro64LogDB(ctx context.Context, path string) (*sql.DB, error) 
 	if info.Mode().Perm()&0222 == 0 {
 		return nil, nil
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(path, "rw")+"&_busy_timeout=5000&_txlock=immediate")
+	db, err := sqlutil.OpenImmediateLockSQLite(path)
 	if err != nil {
 		if isReadOnlyUserLogErr(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	db.SetMaxOpenConns(1)
 	var tableExists bool
 	if err := db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='USysUserLog' COLLATE BINARY)`).Scan(&tableExists); err != nil || !tableExists {
 		_ = db.Close()

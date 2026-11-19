@@ -47,7 +47,7 @@ type TwoPageSoilAttemptOutcome struct {
 }
 
 func BeginTwoPageSoilAttempt(s *vprocore.ContextService, ctx context.Context, request twoPageSoilRequest) (bool, error) {
-	ledger := &s.TwoPageSoilAttempts
+	ledger := twoPageSoilAttempts(s)
 	if err := sqlutil.AcquireMutexLease(ctx, &ledger.Mu); err != nil {
 		return false, err
 	}
@@ -64,7 +64,7 @@ func BeginTwoPageSoilAttempt(s *vprocore.ContextService, ctx context.Context, re
 }
 
 func FinishTwoPageSoilAttempt(s *vprocore.ContextService, requestID string) {
-	ledger := &s.TwoPageSoilAttempts
+	ledger := twoPageSoilAttempts(s)
 	ledger.Mu.Lock()
 	defer ledger.Mu.Unlock()
 	ledger.Requests[requestID].Active--
@@ -83,7 +83,7 @@ func (s *TwoPageSoilService) recoverTwoPageSoilOutcome(ctx context.Context, cont
 	if err := json.Unmarshal([]byte(requestJSON), &request); err != nil {
 		return nil, err
 	}
-	ledger := &s.contexts.TwoPageSoilAttempts
+	ledger := twoPageSoilAttempts(s.contexts)
 	if err := sqlutil.AcquireMutexLease(ctx, &ledger.Mu); err != nil {
 		return nil, err
 	}

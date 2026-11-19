@@ -375,10 +375,11 @@ func (s *LongVegetationProjectWorkbookService) exportReviewed(ctx context.Contex
 	}
 	return vprocore.WithContextPlotRequest(ctx, s.scope.contexts, contextID, func(plots *vprocore.PlotService) (*VegetationWorkbookOutcome, error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return nil, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		read := func() (vegetationProjectWorkbookSource, error) {
 			return vprocore.WithPublicationReadSnapshot(ctx, owner, hooks.snapshot, func(tx *sql.Tx) (vegetationProjectWorkbookSource, error) {
 				return s.readSource(ctx, plots, tx, contextID,

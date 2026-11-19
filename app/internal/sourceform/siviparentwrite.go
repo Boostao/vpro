@@ -391,13 +391,18 @@ func ApplySIVIParentAssignments(ctx context.Context, tx *sql.Tx, original *SiviP
 		if !vprocore.AuditHeaderChange(prior, assignment.Value, strength) {
 			continue
 		}
-		inserted, err := tx.ExecContext(ctx, `INSERT INTO `+vprocore.QuoteHeaderIdentifier(original.Project+"_Audit")+
-			` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,NULL)`,
-			original.Project, user, original.Plot, "_"+suffix, assignment.Column, when, vprocore.HeaderAuditValue(prior), vprocore.HeaderAuditValue(assignment.Value))
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		id, err := inserted.LastInsertId()
+		plotCopy := original.Plot
+		colCopy := assignment.Column
+		id, err := vprocore.RecordAudit(ctx, tx, vprocore.AuditWriteEntry{
+			Project:    original.Project,
+			User:       user,
+			PlotNumber: &plotCopy,
+			Table:      "_" + suffix,
+			EditField:  &colCopy,
+			EditWhen:   when,
+			BeforeEdit: vprocore.HeaderAuditValue(prior),
+			AfterEdit:  vprocore.HeaderAuditValue(assignment.Value),
+		})
 		if err != nil {
 			return nil, nil, nil, err
 		}

@@ -254,14 +254,9 @@ func QuarantineOrphanRecords(s *vprocore.ContextService, ctx context.Context, co
 
 			project := owner.Selection.Project
 			envTbl := vprocore.QuoteHeaderIdentifier(project + "_Env")
-			auditTbl := vprocore.QuoteHeaderIdentifier(project + "_Audit")
 			now := time.Now().Format("2006-01-02 15:04:05")
 
-			if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" (
-				"ChildTable" TEXT NOT NULL,
-				"ID" INTEGER NOT NULL,
-				PRIMARY KEY ("ChildTable", "ID")
-			)`); err != nil {
+			if err := vprocore.EnsureChildIdentityTable(ctx, tx); err != nil {
 				return err
 			}
 
@@ -440,8 +435,7 @@ func QuarantineOrphanRecords(s *vprocore.ContextService, ctx context.Context, co
 				}
 
 				for _, id := range tableIDs {
-					if _, err := tx.ExecContext(ctx, `INSERT INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") VALUES (?, ?) ON CONFLICT DO NOTHING`,
-						quotedSrc, id); err != nil {
+					if err := vprocore.ReserveChildID(ctx, tx, quotedSrc, id); err != nil {
 						return err
 					}
 					reservedIDs = append(reservedIDs, id)
@@ -465,12 +459,18 @@ func QuarantineOrphanRecords(s *vprocore.ContextService, ctx context.Context, co
 					"tables":           summaries,
 				})
 				// Note: PlotNumber is kept NULL because <Project>_Audit has a foreign key to <Project>_Env(PlotNumber).
-				aRes, aErr := tx.ExecContext(ctx, `INSERT INTO `+auditTbl+` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,NULL,?,?,?,?,?,0,0,NULL)`,
-					project, user, "__VPRO_Quarantine", "QuarantineOrphanRecords", now, nil, string(receiptBytes))
+				aID, aErr := vprocore.RecordAudit(ctx, tx, vprocore.AuditWriteEntry{
+					Project:   project,
+					User:      user,
+					Table:     "__VPRO_Quarantine",
+					EditField: vprocore.AuditString("QuarantineOrphanRecords"),
+					EditWhen:  now,
+					AfterEdit: string(receiptBytes),
+				})
 				if aErr != nil {
 					return aErr
 				}
-				auditID, _ = aRes.LastInsertId()
+				auditID = aID
 			}
 
 			if err := ctx.Err(); err != nil {

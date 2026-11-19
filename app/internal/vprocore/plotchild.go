@@ -5,6 +5,7 @@ import (
 )
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -369,16 +370,18 @@ func AuditChildFieldsTracked(tx *sql.Tx, project, kind, plot string, id int64, f
 		if !AuditHeaderChange(before[i], after[i], strength) {
 			continue
 		}
-		inserted, err := tx.Exec(`INSERT INTO `+QuoteHeaderIdentifier(project+"_Audit")+
-			` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`,
-			project, user, plot, "_"+kind, field.Column, when, HeaderAuditValue(before[i]), HeaderAuditValue(after[i]), id)
-		if err != nil {
-			return nil, err
-		}
-		if count, err := inserted.RowsAffected(); err != nil || count != 1 {
-			return nil, errors.Join(err, errors.New("child audit did not insert exactly one row"))
-		}
-		rowID, err := inserted.LastInsertId()
+		col := field.Column
+		rowID, err := RecordAudit(context.Background(), tx, AuditWriteEntry{
+			Project:    project,
+			User:       user,
+			PlotNumber: &plot,
+			Table:      "_" + kind,
+			EditField:  &col,
+			EditWhen:   when,
+			BeforeEdit: before[i],
+			AfterEdit:  after[i],
+			ID:         &id,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -475,48 +478,22 @@ func (s *PlotService) SaveChildWithDeleteCheck(kind string, record any, mode chi
 	return s.saveChildWithChecks(kind, record, mode, check, nil)
 }
 
-func (s *PlotService) saveChildWithChecks(kind string, record any, mode childSaveMode, check childDeleteCheck, createCheck childCreateCheck) error {
-	if err := s.RequireContextEdit(); err != nil {
-		return err
-	}
-	deleting := mode == ChildDelete
-	value := reflect.ValueOf(record)
-	plot := value.FieldByName("PlotNumber").String()
-	id := value.FieldByName("ID").Int()
-	if strings.TrimSpace(plot) == "" {
-		return errors.New("PlotNumber is required")
+func validateFiniteChildInputs(kind string, value reflect.Value, deleting bool) error {
+	if deleting || kind == "Humus" || kind == "Mineral" {
+		return nil
 	}
 	for _, field := range ChildFields[kind] {
-		if deleting {
-			continue
-		}
 		if kind == "Veg" && HeightProperties[ChildJSONKey(value, field)] {
-			continue
-		}
-		if kind == "Humus" || kind == "Mineral" {
 			continue
 		}
 		if number, ok := ChildValue(value, field).(float64); ok && (math.IsNaN(number) || math.IsInf(number, 0)) {
 			return fmt.Errorf("%s.%s must be finite", kind, field.Column)
 		}
 	}
-	db, project, release, err := s.GetActiveDB()
-	if err != nil {
-		return err
-	}
-	defer release()
-	tx, err := db.BeginTx(s.OperationContext(), nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err := ChildParent(tx, project, plot); err != nil {
-		return err
-	}
-	caps, err := ChildCapabilities(tx, project, kind)
-	if err != nil {
-		return err
-	}
+	return nil
+}
+
+func collectSuppliedChildColumns(kind string, record any, value reflect.Value, caps map[string]bool, deleting bool) ([]ChildField, []string, []any, error) {
 	var fields []ChildField
 	var columns []string
 	var after []any
@@ -526,7 +503,7 @@ func (s *PlotService) saveChildWithChecks(kind string, record any, mode childSav
 			ChildValue(value, field) != nil || present[strings.ToLower(ChildJSONKey(value, field))]
 		if !caps[strings.ToLower(field.Column)] {
 			if !deleting && ChildValue(value, field) != nil {
-				return fmt.Errorf("unsupported %s property %q: active project is missing verified column %q", kind, ChildJSONKey(value, field), field.Column)
+				return nil, nil, nil, fmt.Errorf("unsupported %s property %q: active project is missing verified column %q", kind, ChildJSONKey(value, field), field.Column)
 			}
 			continue
 		}
@@ -541,236 +518,207 @@ func (s *PlotService) saveChildWithChecks(kind string, record any, mode childSav
 			after = append(after, ChildValue(value, field))
 		}
 	}
-	if _, err := tx.Exec(`CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" (
-		"ChildTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("ChildTable","ID")
-	)`); err != nil {
-		return err
+	return fields, columns, after, nil
+}
+
+func loadExistingChildValues(tx *sql.Tx, table, kind, plot string, id int64, value reflect.Value, fields []ChildField, columns []string) ([]any, error) {
+	if err := RequireChildIdentity(tx, table, kind, plot, id); err != nil {
+		return nil, err
 	}
-	table := QuoteHeaderIdentifier(project + "_" + kind)
 	before := make([]any, len(fields))
-	creating := mode == childSave && id == 0
-	if createCheck != nil && !creating {
-		return errors.New("child creation checks require a new automatically allocated identity")
+	if len(fields) == 0 {
+		return before, nil
 	}
+	destinations := make([]any, len(fields))
+	readColumns := make([]string, len(fields))
+	for i, field := range fields {
+		member := value.FieldByName(field.Member)
+		readColumns[i] = headerReadColumn(columns[i], member)
+		elemKind := member.Kind()
+		if elemKind == reflect.Pointer {
+			elemKind = member.Type().Elem().Kind()
+		}
+		switch elemKind {
+		case reflect.Float64:
+			destinations[i] = new(sql.NullFloat64)
+		case reflect.Int:
+			destinations[i] = new(sql.NullInt64)
+		case reflect.Bool:
+			destinations[i] = new(sql.NullBool)
+		default:
+			destinations[i] = new(sql.NullString)
+		}
+	}
+	if err := tx.QueryRow(`SELECT `+strings.Join(readColumns, ",")+` FROM `+table+
+		` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, plot, plot, id).Scan(destinations...); err != nil {
+		return nil, err
+	}
+	for i, destination := range destinations {
+		switch v := destination.(type) {
+		case *sql.NullFloat64:
+			if v.Valid {
+				before[i] = v.Float64
+			}
+		case *sql.NullString:
+			if v.Valid {
+				before[i] = v.String
+			}
+		case *sql.NullInt64:
+			if v.Valid {
+				before[i] = int(v.Int64)
+			}
+		case *sql.NullBool:
+			if v.Valid {
+				before[i] = v.Bool
+			}
+		}
+	}
+	return before, nil
+}
+
+func filterChangedChildColumns(kind string, creating bool, fields []ChildField, columns []string, before, after []any) ([]ChildField, []string, []any, []any, error) {
+	var changedFields []ChildField
+	var changedColumns []string
+	var changedBefore, changedAfter []any
+	for i, field := range fields {
+		if !creating && reflect.DeepEqual(before[i], after[i]) {
+			continue
+		}
+		if err := validateChildField(kind, field.Column, after[i]); err != nil {
+			return nil, nil, nil, nil, err
+		}
+		changedFields = append(changedFields, field)
+		changedColumns = append(changedColumns, columns[i])
+		changedBefore = append(changedBefore, before[i])
+		changedAfter = append(changedAfter, after[i])
+	}
+	return changedFields, changedColumns, changedBefore, changedAfter, nil
+}
+
+func validateVegChildNumericChanges(value reflect.Value, plot string, id int64, fields []ChildField, before, after []any) error {
+	for i, field := range fields {
+		property := ChildJSONKey(value, field)
+		if !HeightProperties[property] && !VegetationCoverColumns[field.Column] {
+			continue
+		}
+		var oldNumber, newNumber *float64
+		if before[i] != nil {
+			number := before[i].(float64)
+			oldNumber = &number
+		}
+		if after[i] != nil {
+			number := after[i].(float64)
+			newNumber = &number
+		}
+		if err := ValidateHeightNumericChange(property, oldNumber, newNumber); err != nil {
+			return fmt.Errorf("Veg identity (%q, %d): %w", plot, id, err)
+		}
+	}
+	return nil
+}
+
+func validateSoilHorizonDepthChange(kind, plot string, id int64, creating bool, value reflect.Value, fields []ChildField) error {
+	modified := creating
+	for _, field := range fields {
+		if field.Column == "Horizon" || field.Column == "UpperDepth" || field.Column == "LowerDepth" {
+			modified = true
+			break
+		}
+	}
+	if !modified {
+		return nil
+	}
+	var effHorizon *string
+	var effUpper, effLower *float64
+	if hVal := value.FieldByName("Horizon"); hVal.Kind() == reflect.Pointer && !hVal.IsNil() {
+		s := hVal.Elem().String()
+		effHorizon = &s
+	}
+	if uVal := value.FieldByName("UpperDepth"); uVal.Kind() == reflect.Pointer && !uVal.IsNil() {
+		v := uVal.Elem().Float()
+		effUpper = &v
+	}
+	if lVal := value.FieldByName("LowerDepth"); lVal.Kind() == reflect.Pointer && !lVal.IsNil() {
+		v := lVal.Elem().Float()
+		effLower = &v
+	}
+	if err := ValidateSoilHorizonDepthSign(kind, effHorizon, effUpper, effLower); err != nil {
+		return fmt.Errorf("%s identity (%q, %d): %w", kind, plot, id, err)
+	}
+	return nil
+}
+
+func validateMineralCoarseFragsChange(tx *sql.Tx, table, plot string, id int64, creating bool, value reflect.Value, caps map[string]bool, fields []ChildField, after []any) error {
+	modified := creating
+	for _, field := range fields {
+		if MineralCoarseFragColumns[field.Column] {
+			modified = true
+			break
+		}
+	}
+	if !modified {
+		return nil
+	}
+	effCF := make(map[string]*int, 4)
 	if creating {
-		id, err = AllocateChildID(tx, table)
-		if err != nil {
-			return err
+		for col := range MineralCoarseFragColumns {
+			if mVal := value.FieldByName(col); mVal.Kind() == reflect.Pointer && !mVal.IsNil() {
+				v := int(mVal.Elem().Int())
+				effCF[col] = &v
+			}
 		}
 	} else {
-		if err := RequireChildIdentity(tx, table, kind, plot, id); err != nil {
-			return err
-		}
-		// Preserve SQL NULL and normalize scalar types for audit comparison.
-		destinations := make([]any, len(fields))
-		readColumns := make([]string, len(fields))
-		for i, field := range fields {
-			member := value.FieldByName(field.Member)
-			readColumns[i] = headerReadColumn(columns[i], member)
-			kind := member.Kind()
-			if kind == reflect.Pointer {
-				kind = member.Type().Elem().Kind()
-			}
-			switch kind {
-			case reflect.Float64:
-				destinations[i] = new(sql.NullFloat64)
-			case reflect.Int:
-				destinations[i] = new(sql.NullInt64)
-			case reflect.Bool:
-				destinations[i] = new(sql.NullBool)
-			default:
-				destinations[i] = new(sql.NullString)
+		cfCols := []string{"PercentCoarseFragsGravel", "PercentCoarseFragsCobbles", "PercentCoarseFragsStones", "PercentCoarseFragsTotal"}
+		var selCols []string
+		var dests []any
+		var activeCols []string
+		for _, col := range cfCols {
+			if caps[strings.ToLower(col)] {
+				selCols = append(selCols, `CAST(`+QuoteHeaderIdentifier(col)+` AS INTEGER)`)
+				dests = append(dests, new(sql.NullInt64))
+				activeCols = append(activeCols, col)
 			}
 		}
-		if len(fields) > 0 {
-			if err := tx.QueryRow(`SELECT `+strings.Join(readColumns, ",")+` FROM `+table+
-				` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, plot, plot, id).Scan(destinations...); err != nil {
+		if len(selCols) > 0 {
+			if err := tx.QueryRow(`SELECT `+strings.Join(selCols, ",")+` FROM `+table+` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, plot, plot, id).Scan(dests...); err != nil {
 				return err
 			}
-		}
-		for i, destination := range destinations {
-			switch v := destination.(type) {
-			case *sql.NullFloat64:
-				if v.Valid {
-					before[i] = v.Float64
-				}
-			case *sql.NullString:
-				if v.Valid {
-					before[i] = v.String
-				}
-			case *sql.NullInt64:
-				if v.Valid {
-					before[i] = int(v.Int64)
-				}
-			case *sql.NullBool:
-				if v.Valid {
-					before[i] = v.Bool
+			for i, col := range activeCols {
+				if nv := dests[i].(*sql.NullInt64); nv.Valid {
+					v := int(nv.Int64)
+					effCF[col] = &v
 				}
 			}
 		}
-	}
-	if check != nil {
-		if !deleting {
-			return errors.New("child deletion checks require a deletion")
-		}
-		extraFields, extraBefore, err := check(tx, table, plot, id)
-		if err != nil {
-			return err
-		}
-		if len(extraFields) != len(extraBefore) {
-			return errors.New("child deletion audit fields do not match their values")
-		}
-		fields = append(fields, extraFields...)
-		before = append(before, extraBefore...)
-		after = append(after, make([]any, len(extraFields))...)
-	}
-	if !deleting {
-		var changedFields []ChildField
-		var changedColumns []string
-		var changedBefore, changedAfter []any
 		for i, field := range fields {
-			if !creating && reflect.DeepEqual(before[i], after[i]) {
-				continue
-			}
-			if err := validateChildField(kind, field.Column, after[i]); err != nil {
-				return err
-			}
-			changedFields = append(changedFields, field)
-			changedColumns = append(changedColumns, columns[i])
-			changedBefore = append(changedBefore, before[i])
-			changedAfter = append(changedAfter, after[i])
-		}
-		fields, columns, before, after = changedFields, changedColumns, changedBefore, changedAfter
-	}
-	if kind == "Veg" && !deleting {
-		for i, field := range fields {
-			property := ChildJSONKey(value, field)
-			if !HeightProperties[property] && !VegetationCoverColumns[field.Column] {
-				continue
-			}
-			var oldNumber, newNumber *float64
-			if before[i] != nil {
-				number := before[i].(float64)
-				oldNumber = &number
-			}
-			if after[i] != nil {
-				number := after[i].(float64)
-				newNumber = &number
-			}
-			if err := ValidateHeightNumericChange(property, oldNumber, newNumber); err != nil {
-				return fmt.Errorf("Veg identity (%q, %d): %w", plot, id, err)
-			}
-		}
-	}
-	if (kind == "Humus" || kind == "Mineral") && !deleting {
-		depthOrHorizonModified := creating
-		if !depthOrHorizonModified {
-			for _, field := range fields {
-				if field.Column == "Horizon" || field.Column == "UpperDepth" || field.Column == "LowerDepth" {
-					depthOrHorizonModified = true
-					break
+			if MineralCoarseFragColumns[field.Column] {
+				if after[i] == nil {
+					effCF[field.Column] = nil
+				} else {
+					v := after[i].(int)
+					effCF[field.Column] = &v
 				}
 			}
 		}
-		if depthOrHorizonModified {
-			var effHorizon *string
-			var effUpper, effLower *float64
-			if hVal := value.FieldByName("Horizon"); hVal.Kind() == reflect.Pointer && !hVal.IsNil() {
-				s := hVal.Elem().String()
-				effHorizon = &s
-			}
-			if uVal := value.FieldByName("UpperDepth"); uVal.Kind() == reflect.Pointer && !uVal.IsNil() {
-				v := uVal.Elem().Float()
-				effUpper = &v
-			}
-			if lVal := value.FieldByName("LowerDepth"); lVal.Kind() == reflect.Pointer && !lVal.IsNil() {
-				v := lVal.Elem().Float()
-				effLower = &v
-			}
-			if err := ValidateSoilHorizonDepthSign(kind, effHorizon, effUpper, effLower); err != nil {
-				return fmt.Errorf("%s identity (%q, %d): %w", kind, plot, id, err)
-			}
-		}
 	}
-	if kind == "Mineral" && !deleting {
-		cfModified := creating
-		if !cfModified {
-			for _, field := range fields {
-				if MineralCoarseFragColumns[field.Column] {
-					cfModified = true
-					break
-				}
-			}
-		}
-		if cfModified {
-			effCF := make(map[string]*int, 4)
-			if creating {
-				for col := range MineralCoarseFragColumns {
-					if mVal := value.FieldByName(col); mVal.Kind() == reflect.Pointer && !mVal.IsNil() {
-						v := int(mVal.Elem().Int())
-						effCF[col] = &v
-					}
-				}
-			} else {
-				cfCols := []string{"PercentCoarseFragsGravel", "PercentCoarseFragsCobbles", "PercentCoarseFragsStones", "PercentCoarseFragsTotal"}
-				var selCols []string
-				var dests []any
-				var activeCols []string
-				for _, col := range cfCols {
-					if caps[strings.ToLower(col)] {
-						selCols = append(selCols, `CAST(`+QuoteHeaderIdentifier(col)+` AS INTEGER)`)
-						dests = append(dests, new(sql.NullInt64))
-						activeCols = append(activeCols, col)
-					}
-				}
-				if len(selCols) > 0 {
-					if err := tx.QueryRow(`SELECT `+strings.Join(selCols, ",")+` FROM `+table+` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, plot, plot, id).Scan(dests...); err != nil {
-						return err
-					}
-					for i, col := range activeCols {
-						if nv := dests[i].(*sql.NullInt64); nv.Valid {
-							v := int(nv.Int64)
-							effCF[col] = &v
-						}
-					}
-				}
-				for i, field := range fields {
-					if MineralCoarseFragColumns[field.Column] {
-						if after[i] == nil {
-							effCF[field.Column] = nil
-						} else {
-							v := after[i].(int)
-							effCF[field.Column] = &v
-						}
-					}
-				}
-			}
-			if err := ValidateMineralCoarseFragments(
-				effCF["PercentCoarseFragsGravel"],
-				effCF["PercentCoarseFragsCobbles"],
-				effCF["PercentCoarseFragsStones"],
-				effCF["PercentCoarseFragsTotal"],
-			); err != nil {
-				return fmt.Errorf("Mineral identity (%q, %d): %w", plot, id, err)
-			}
-		}
+	if err := ValidateMineralCoarseFragments(
+		effCF["PercentCoarseFragsGravel"],
+		effCF["PercentCoarseFragsCobbles"],
+		effCF["PercentCoarseFragsStones"],
+		effCF["PercentCoarseFragsTotal"],
+	); err != nil {
+		return fmt.Errorf("Mineral identity (%q, %d): %w", plot, id, err)
 	}
-	unquotedTable := project + "_" + kind
-	if _, err := tx.Exec(`INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable","ID")
-		SELECT ?, ? WHERE NOT EXISTS (
-			SELECT 1 FROM "__VPRO_ChildIdentity" WHERE "ChildTable" COLLATE NOCASE IN (?, ?) AND "ID" = ?
-		)`, table, id, table, unquotedTable, id); err != nil {
-		return err
-	}
-	if !creating && !deleting && len(fields) == 0 {
-		return tx.Commit()
-	}
-	var query string
-	var args []any
+	return nil
+}
+
+func execChildRowMutation(tx *sql.Tx, table, kind, plot string, id int64, creating, deleting bool, fields []ChildField, columns []string, after []any) error {
 	storedAfter := make([]any, len(after))
 	for i, entry := range after {
 		storedAfter[i] = HeaderStorageValue(entry)
 	}
+	var query string
+	var args []any
 	switch {
 	case deleting:
 		query = `DELETE FROM ` + table + ` WHERE ` + ExactTextPlotPredicate(`"PlotNumber"`) + ` AND "ID" = ?`
@@ -797,6 +745,110 @@ func (s *PlotService) saveChildWithChecks(kind string, record any, mode childSav
 	}
 	if affected != 1 {
 		return fmt.Errorf("%s mutation expected one row, found %d", kind, affected)
+	}
+	return nil
+}
+
+func (s *PlotService) saveChildWithChecks(kind string, record any, mode childSaveMode, check childDeleteCheck, createCheck childCreateCheck) error {
+	if err := s.RequireContextEdit(); err != nil {
+		return err
+	}
+	deleting := mode == ChildDelete
+	value := reflect.ValueOf(record)
+	plot := value.FieldByName("PlotNumber").String()
+	id := value.FieldByName("ID").Int()
+	if strings.TrimSpace(plot) == "" {
+		return errors.New("PlotNumber is required")
+	}
+	if err := validateFiniteChildInputs(kind, value, deleting); err != nil {
+		return err
+	}
+	ctx := s.OperationContext()
+	db, project, release, err := s.GetActiveDB()
+	if err != nil {
+		return err
+	}
+	defer release()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := ChildParent(tx, project, plot); err != nil {
+		return err
+	}
+	caps, err := ChildCapabilities(tx, project, kind)
+	if err != nil {
+		return err
+	}
+	fields, columns, after, err := collectSuppliedChildColumns(kind, record, value, caps, deleting)
+	if err != nil {
+		return err
+	}
+	if err := EnsureChildIdentityTable(ctx, tx); err != nil {
+		return err
+	}
+	table := QuoteHeaderIdentifier(project + "_" + kind)
+	before := make([]any, len(fields))
+	creating := mode == childSave && id == 0
+	if createCheck != nil && !creating {
+		return errors.New("child creation checks require a new automatically allocated identity")
+	}
+	if creating {
+		id, err = AllocateChildID(tx, table)
+		if err != nil {
+			return err
+		}
+	} else {
+		before, err = loadExistingChildValues(tx, table, kind, plot, id, value, fields, columns)
+		if err != nil {
+			return err
+		}
+	}
+	if check != nil {
+		if !deleting {
+			return errors.New("child deletion checks require a deletion")
+		}
+		extraFields, extraBefore, err := check(tx, table, plot, id)
+		if err != nil {
+			return err
+		}
+		if len(extraFields) != len(extraBefore) {
+			return errors.New("child deletion audit fields do not match their values")
+		}
+		fields = append(fields, extraFields...)
+		before = append(before, extraBefore...)
+		after = append(after, make([]any, len(extraFields))...)
+	}
+	if !deleting {
+		fields, columns, before, after, err = filterChangedChildColumns(kind, creating, fields, columns, before, after)
+		if err != nil {
+			return err
+		}
+		if kind == "Veg" {
+			if err := validateVegChildNumericChanges(value, plot, id, fields, before, after); err != nil {
+				return err
+			}
+		}
+		if kind == "Humus" || kind == "Mineral" {
+			if err := validateSoilHorizonDepthChange(kind, plot, id, creating, value, fields); err != nil {
+				return err
+			}
+		}
+		if kind == "Mineral" {
+			if err := validateMineralCoarseFragsChange(tx, table, plot, id, creating, value, caps, fields, after); err != nil {
+				return err
+			}
+		}
+	}
+	if err := ReserveChildID(ctx, tx, table, id); err != nil {
+		return err
+	}
+	if !creating && !deleting && len(fields) == 0 {
+		return tx.Commit()
+	}
+	if err := execChildRowMutation(tx, table, kind, plot, id, creating, deleting, fields, columns, after); err != nil {
+		return err
 	}
 	if createCheck != nil {
 		if err := createCheck(tx, table, plot, id); err != nil {

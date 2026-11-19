@@ -113,7 +113,7 @@ func withPictureLibrarySnapshot[T any](ctx context.Context, source *ownedPicture
 	if err := source.checkFile(); err != nil {
 		return result, err
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(source.path, "ro")+"&_query_only=on&_busy_timeout=5000")
+	db, err := sqlutil.OpenQueryOnlySQLite(source.path)
 	if err != nil {
 		return result, err
 	}
@@ -123,7 +123,6 @@ func withPictureLibrarySnapshot[T any](ctx context.Context, source *ownedPicture
 			result = zero
 		}
 	}()
-	db.SetMaxOpenConns(1)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return result, err
@@ -132,8 +131,7 @@ func withPictureLibrarySnapshot[T any](ctx context.Context, source *ownedPicture
 		resultErr = errors.Join(resultErr, conn.Close())
 	}()
 	// Reuse snapshot cleanup without registering pictures as a mandatory family.
-	reader := &vprocore.SqliteContext{Conn: conn}
-	tx, err := reader.BeginReadSnapshot(ctx)
+	tx, err := vprocore.BeginConnReadSnapshot(ctx, conn)
 	if err != nil {
 		return result, err
 	}

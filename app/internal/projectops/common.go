@@ -94,30 +94,30 @@ func inspectContextSnapshot(ctx context.Context, s *vprocore.ContextService, con
 	}
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (contextSnapshotInfo, error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		var snap contextSnapshotInfo
+		if err := owner.WithLease(ctx, func() error {
+			user := strings.TrimSpace(plots.CurrentUser)
+			if user == "" {
+				user = "VProUser"
+			}
+			snap = contextSnapshotInfo{
+				Root:          plots.Projects.Root,
+				Project:       owner.Selection.Project,
+				ProjectPath:   owner.Selection.ProjectPath,
+				SU:            owner.Selection.SU,
+				SUPath:        owner.Selection.SUPath,
+				Hierarchy:     owner.Selection.Hierarchy,
+				HierarchyPath: owner.Selection.HierarchyPath,
+				VListsPath:    owner.Attachments["VLists"],
+				VPro64Path:    owner.Attachments["VPro64"],
+				CurrentUser:   user,
+				AuditLevel:    plots.AuditStrength,
+			}
+			return nil
+		}); err != nil {
 			return contextSnapshotInfo{}, err
 		}
-		defer owner.Mu.Unlock()
-		if owner.Conn == nil {
-			return contextSnapshotInfo{}, errors.New("project context is closed")
-		}
-		user := strings.TrimSpace(plots.CurrentUser)
-		if user == "" {
-			user = "VProUser"
-		}
-		return contextSnapshotInfo{
-			Root:          plots.Projects.Root,
-			Project:       owner.Selection.Project,
-			ProjectPath:   owner.Selection.ProjectPath,
-			SU:            owner.Selection.SU,
-			SUPath:        owner.Selection.SUPath,
-			Hierarchy:     owner.Selection.Hierarchy,
-			HierarchyPath: owner.Selection.HierarchyPath,
-			VListsPath:    owner.Attachments["VLists"],
-			VPro64Path:    owner.Attachments["VPro64"],
-			CurrentUser:   user,
-			AuditLevel:    plots.AuditStrength,
-		}, nil
+		return snap, nil
 	})
 }
 
@@ -348,79 +348,14 @@ func insertExactTableRows(ctx context.Context, tx *sql.Tx, targetTable string, c
 }
 
 func ensureChildIdentityTable(ctx context.Context, tx *sql.Tx) error {
-	_, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" (
-		"ChildTable" TEXT NOT NULL,
-		"ID" INTEGER NOT NULL,
-		PRIMARY KEY ("ChildTable", "ID")
-	)`)
-	return err
+	return vprocore.EnsureChildIdentityTable(ctx, tx)
 }
 
 func reserveChildID(ctx context.Context, tx *sql.Tx, childTable string, id int64) error {
-	unquoted := strings.ReplaceAll(strings.Trim(childTable, `"`), `""`, `"`)
-	quoted := vprocore.QuoteHeaderIdentifier(unquoted)
-	_, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID")
-		SELECT ?, ? WHERE NOT EXISTS (
-			SELECT 1 FROM "__VPRO_ChildIdentity" WHERE "ChildTable" COLLATE NOCASE IN (?, ?) AND "ID" = ?
-		)`, quoted, id, quoted, unquoted, id)
-	return err
+	return vprocore.ReserveChildID(ctx, tx, childTable, id)
 }
 
-// allocateSafeChildID seeds __VPRO_ChildIdentity with all existing positive IDs in childTable
-// and Audit before calling vprocore.AllocateChildID so deleted IDs are never reused.
+// allocateSafeChildID delegates to vprocore.SeedAndAllocateChildID so deleted IDs are never reused.
 func allocateSafeChildID(ctx context.Context, tx *sql.Tx, project, suffix string) (int64, error) {
-	if err := ensureChildIdentityTable(ctx, tx); err != nil {
-		return 0, err
-	}
-	plainSuffix := strings.TrimPrefix(suffix, "_")
-	childTable := project + "_" + plainSuffix
-	quotedChild := vprocore.QuoteHeaderIdentifier(childTable)
-
-	query := `SELECT "ID" FROM ` + quotedChild + ` WHERE typeof("ID")='integer' AND "ID" > 0
-		UNION
-		SELECT "ID" FROM "__VPRO_ChildIdentity" WHERE "ChildTable" COLLATE NOCASE IN (?, ?) AND typeof("ID")='integer' AND "ID" > 0`
-	args := []any{quotedChild, childTable}
-
-	if !strings.EqualFold(plainSuffix, "Audit") {
-		var actualAudit string
-		err := tx.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name=? COLLATE NOCASE LIMIT 1`, project+"_Audit").Scan(&actualAudit)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return 0, err
-		}
-		if actualAudit != "" {
-			quotedAudit := vprocore.QuoteHeaderIdentifier(actualAudit)
-			query += ` UNION SELECT "ID" FROM ` + quotedAudit + ` WHERE "Table" COLLATE NOCASE IN (?, ?, ?) AND typeof("ID")='integer' AND "ID" > 0`
-			args = append(args, "_"+plainSuffix, childTable, plainSuffix)
-		}
-	}
-
-	rows, err := tx.QueryContext(ctx, query, args...)
-	if err != nil {
-		return 0, err
-	}
-	var existing []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			rows.Close()
-			return 0, err
-		}
-		existing = append(existing, id)
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
-		return 0, err
-	}
-	for _, id := range existing {
-		if err := reserveChildID(ctx, tx, childTable, id); err != nil {
-			return 0, err
-		}
-	}
-	nextID, err := vprocore.AllocateChildID(tx, quotedChild)
-	if err != nil {
-		return 0, err
-	}
-	if err := reserveChildID(ctx, tx, childTable, nextID); err != nil {
-		return 0, err
-	}
-	return nextID, nil
+	return vprocore.SeedAndAllocateChildID(ctx, tx, project, suffix)
 }

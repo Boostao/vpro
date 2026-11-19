@@ -13,7 +13,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -88,10 +87,11 @@ func PublishOwnedGoogleEarthKMLWithHooks(s *vprocore.ContextService, ctx context
 	expected = snapshotGoogleEarthKMLPreparation(expected)
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (result vprocore.ArtifactPublication, resultErr error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return result, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		defer func() {
 			if result.Published && resultErr != nil {
 				resultErr = fmt.Errorf("owned Google Earth KML published; do not replay publication: %w", resultErr)

@@ -63,7 +63,7 @@ type UserSiteUnitImportResult struct {
 }
 
 func validateUserSiteUnitWriter(c *vprocore.SqliteContext) error {
-	if c == nil || c.Conn == nil {
+	if !c.IsOpen() {
 		return errors.New("classification context is closed")
 	}
 	vuserPath := strings.TrimSpace(c.Attachments["VUser"])
@@ -214,10 +214,11 @@ func ListUserSiteUnitList(ctx context.Context, contexts *vprocore.ContextService
 	}
 	return vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (_ []UserSiteUnitEntry, resultErr error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return nil, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		tx, err := owner.BeginReadSnapshot(ctx)
 		if err != nil {
 			return nil, err

@@ -27,11 +27,12 @@ func extractActiveProjectSubmissionArtifacts(
 ) (projName, projPath, projID, actor, activeSU, activeSUPath string, suScopePlots map[string]struct{}, plotCount, vegCount int, userManifest CloudUserSpeciesManifest, lumpRows []StagingLumpRow, suRows []StagingSURow, err error) {
 	_, err = vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (struct{}, error) {
 		owner := plots.Projects.Sqlite
-		if lErr := sqlutil.AcquireMutexLease(ctx, &owner.Mu); lErr != nil {
+		unlock, lErr := owner.AcquireMutex(ctx)
+		if lErr != nil {
 			return struct{}{}, lErr
 		}
-		defer owner.Mu.Unlock()
-		if owner.Conn == nil {
+		defer unlock()
+		if !owner.IsOpen() {
 			return struct{}{}, errors.New("project context is closed")
 		}
 		projName = owner.Selection.Project
@@ -249,10 +250,11 @@ func extractActiveProjectSubmissionArtifacts(
 func runLayer1ComplianceFallback(ctx context.Context, s *vprocore.ContextService, contextID string) (ComplianceGateResult, error) {
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (ComplianceGateResult, error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return ComplianceGateResult{}, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		tx, err := owner.BeginReadSnapshot(ctx)
 		if err != nil {
 			return ComplianceGateResult{}, err

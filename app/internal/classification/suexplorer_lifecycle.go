@@ -143,86 +143,66 @@ func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, conte
 		var seeds []sqlutil.SURowSeed
 
 		if request.PopulateAllProjectPlots {
-			if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-				return struct{}{}, err
-			}
-			tx, snapErr := owner.BeginReadSnapshot(ctx)
-			if snapErr != nil {
-				owner.Mu.Unlock()
-				return struct{}{}, snapErr
-			}
-			adminUnits := map[string]string{}
-			if request.SeedFromUserSiteUnit {
-				aRows, aErr := tx.QueryContext(ctx,
-					`SELECT CAST("Plot" AS BLOB), CAST("UserSiteUnit" AS TEXT)
-					 FROM "project".`+vprocore.QuoteHeaderIdentifier(project+"_Admin")+`
-					 WHERE typeof("Plot")='text' AND "UserSiteUnit" IS NOT NULL`)
-				if aErr != nil {
-					_ = tx.Rollback()
-					owner.Mu.Unlock()
-					return struct{}{}, aErr
-				}
-				for aRows.Next() {
-					var rawPlot []byte
-					var u sql.NullString
-					if sErr := aRows.Scan(&rawPlot, &u); sErr != nil {
-						aRows.Close()
-						_ = tx.Rollback()
-						owner.Mu.Unlock()
-						return struct{}{}, sErr
-					}
-					key := string(rawPlot)
-					if _, exists := adminUnits[key]; !exists && u.Valid {
-						adminUnits[key] = u.String
-					}
-				}
-				if aErr := errors.Join(aRows.Err(), aRows.Close()); aErr != nil {
-					_ = tx.Rollback()
-					owner.Mu.Unlock()
-					return struct{}{}, aErr
-				}
-			}
-
-			rows, qErr := tx.QueryContext(ctx,
-				`SELECT CAST(env."PlotNumber" AS BLOB), CAST(env."PlotNumber" AS TEXT)
-				 FROM "project".`+vprocore.QuoteHeaderIdentifier(project+"_Env")+` AS env
-				 WHERE typeof(env."PlotNumber")='text' AND TRIM(env."PlotNumber") <> ''
-				 ORDER BY env."PlotNumber" COLLATE NOCASE ASC, env.rowid ASC`)
-			if qErr != nil {
-				_ = tx.Rollback()
-				owner.Mu.Unlock()
-				return struct{}{}, qErr
-			}
-			seen := map[string]bool{}
-			for rows.Next() {
-				var rawPlot []byte
-				var p string
-				if sErr := rows.Scan(&rawPlot, &p); sErr != nil {
-					rows.Close()
-					_ = tx.Rollback()
-					owner.Mu.Unlock()
-					return struct{}{}, sErr
-				}
-				rawKey := string(rawPlot)
-				if seen[rawKey] || !utf16UnitsWithin(p, 7) {
-					continue
-				}
-				seen[rawKey] = true
-				var unitPtr *string
+			if err := owner.WithReadSnapshot(ctx, func(tx *sql.Tx) error {
+				adminUnits := map[string]string{}
 				if request.SeedFromUserSiteUnit {
-					if uStr, ok := adminUnits[rawKey]; ok && strings.TrimSpace(uStr) != "" && utf16UnitsWithin(uStr, 255) {
-						val := uStr
-						unitPtr = &val
+					aRows, aErr := tx.QueryContext(ctx,
+						`SELECT CAST("Plot" AS BLOB), CAST("UserSiteUnit" AS TEXT)
+						 FROM "project".`+vprocore.QuoteHeaderIdentifier(project+"_Admin")+`
+						 WHERE typeof("Plot")='text' AND "UserSiteUnit" IS NOT NULL`)
+					if aErr != nil {
+						return aErr
+					}
+					for aRows.Next() {
+						var rawPlot []byte
+						var u sql.NullString
+						if sErr := aRows.Scan(&rawPlot, &u); sErr != nil {
+							aRows.Close()
+							return sErr
+						}
+						key := string(rawPlot)
+						if _, exists := adminUnits[key]; !exists && u.Valid {
+							adminUnits[key] = u.String
+						}
+					}
+					if aErr := errors.Join(aRows.Err(), aRows.Close()); aErr != nil {
+						return aErr
 					}
 				}
-				seeds = append(seeds, sqlutil.SURowSeed{PlotNumber: p, SiteUnit: unitPtr})
-			}
-			rowsErr := rows.Err()
-			rows.Close()
-			_ = tx.Rollback()
-			owner.Mu.Unlock()
-			if rowsErr != nil {
-				return struct{}{}, rowsErr
+
+				rows, qErr := tx.QueryContext(ctx,
+					`SELECT CAST(env."PlotNumber" AS BLOB), CAST(env."PlotNumber" AS TEXT)
+					 FROM "project".`+vprocore.QuoteHeaderIdentifier(project+"_Env")+` AS env
+					 WHERE typeof(env."PlotNumber")='text' AND TRIM(env."PlotNumber") <> ''
+					 ORDER BY env."PlotNumber" COLLATE NOCASE ASC, env.rowid ASC`)
+				if qErr != nil {
+					return qErr
+				}
+				seen := map[string]bool{}
+				for rows.Next() {
+					var rawPlot []byte
+					var p string
+					if sErr := rows.Scan(&rawPlot, &p); sErr != nil {
+						rows.Close()
+						return sErr
+					}
+					rawKey := string(rawPlot)
+					if seen[rawKey] || !utf16UnitsWithin(p, 7) {
+						continue
+					}
+					seen[rawKey] = true
+					var unitPtr *string
+					if request.SeedFromUserSiteUnit {
+						if uStr, ok := adminUnits[rawKey]; ok && strings.TrimSpace(uStr) != "" && utf16UnitsWithin(uStr, 255) {
+							val := uStr
+							unitPtr = &val
+						}
+					}
+					seeds = append(seeds, sqlutil.SURowSeed{PlotNumber: p, SiteUnit: unitPtr})
+				}
+				return errors.Join(rows.Err(), rows.Close())
+			}); err != nil {
+				return struct{}{}, err
 			}
 		}
 
@@ -269,7 +249,7 @@ func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, conte
 			}
 			targetPath = freshPath
 			committed := false
-			db, oErr := sql.Open("sqlite3", sqlutil.SqliteFileURI(freshPath, "rwc")+"&_foreign_keys=on&_busy_timeout=5000&_journal_mode=WAL&_txlock=immediate")
+			db, oErr := sqlutil.OpenWALCreateSQLite(freshPath)
 			if oErr != nil {
 				return struct{}{}, oErr
 			}
@@ -279,7 +259,6 @@ func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, conte
 					_ = sqlutil.RemoveSQLiteWithSidecars(freshPath)
 				}
 			}()
-			db.SetMaxOpenConns(1)
 			tx, bErr := sqlutil.BeginStagedTx(ctx, db)
 			if bErr != nil {
 				return struct{}{}, bErr
@@ -378,51 +357,37 @@ func SaveSUTableAs(ctx context.Context, contexts *vprocore.ContextService, conte
 
 		var copiedRows []sqlutil.SURowSeed
 
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		if err := owner.WithReadSnapshot(ctx, func(tx *sql.Tx) error {
+			role := "su"
+			if !strings.EqualFold(srcName, owner.Selection.SU) {
+				role = "project"
+			}
+			srcTable := srcName + "_SU"
+			rows, qErr := tx.QueryContext(ctx,
+				`SELECT CAST("PlotNumber" AS TEXT), CAST("SiteUnit" AS TEXT) FROM `+
+					vprocore.QuoteHeaderIdentifier(role)+`.`+vprocore.QuoteHeaderIdentifier(srcTable)+` ORDER BY rowid ASC`)
+			if qErr != nil {
+				return fmt.Errorf("read source SU %s: %w", srcTable, qErr)
+			}
+			for rows.Next() {
+				var p, u sql.NullString
+				if sErr := rows.Scan(&p, &u); sErr != nil {
+					rows.Close()
+					return sErr
+				}
+				seed := sqlutil.SURowSeed{PlotNull: !p.Valid}
+				if p.Valid {
+					seed.PlotNumber = p.String
+				}
+				if u.Valid {
+					v := u.String
+					seed.SiteUnit = &v
+				}
+				copiedRows = append(copiedRows, seed)
+			}
+			return errors.Join(rows.Err(), rows.Close())
+		}); err != nil {
 			return struct{}{}, err
-		}
-		tx, snapErr := owner.BeginReadSnapshot(ctx)
-		if snapErr != nil {
-			owner.Mu.Unlock()
-			return struct{}{}, snapErr
-		}
-		role := "su"
-		if !strings.EqualFold(srcName, owner.Selection.SU) {
-			role = "project"
-		}
-		srcTable := srcName + "_SU"
-		rows, qErr := tx.QueryContext(ctx,
-			`SELECT CAST("PlotNumber" AS TEXT), CAST("SiteUnit" AS TEXT) FROM `+
-				vprocore.QuoteHeaderIdentifier(role)+`.`+vprocore.QuoteHeaderIdentifier(srcTable)+` ORDER BY rowid ASC`)
-		if qErr != nil {
-			_ = tx.Rollback()
-			owner.Mu.Unlock()
-			return struct{}{}, fmt.Errorf("read source SU %s: %w", srcTable, qErr)
-		}
-		for rows.Next() {
-			var p, u sql.NullString
-			if sErr := rows.Scan(&p, &u); sErr != nil {
-				rows.Close()
-				_ = tx.Rollback()
-				owner.Mu.Unlock()
-				return struct{}{}, sErr
-			}
-			seed := sqlutil.SURowSeed{PlotNull: !p.Valid}
-			if p.Valid {
-				seed.PlotNumber = p.String
-			}
-			if u.Valid {
-				v := u.String
-				seed.SiteUnit = &v
-			}
-			copiedRows = append(copiedRows, seed)
-		}
-		rowsErr := rows.Err()
-		rows.Close()
-		_ = tx.Rollback()
-		owner.Mu.Unlock()
-		if rowsErr != nil {
-			return struct{}{}, rowsErr
 		}
 
 		targetTable := newName + "_SU"
@@ -468,7 +433,7 @@ func SaveSUTableAs(ctx context.Context, contexts *vprocore.ContextService, conte
 			}
 			targetPath = freshPath
 			committed := false
-			db, oErr := sql.Open("sqlite3", sqlutil.SqliteFileURI(freshPath, "rwc")+"&_foreign_keys=on&_busy_timeout=5000&_journal_mode=WAL&_txlock=immediate")
+			db, oErr := sqlutil.OpenWALCreateSQLite(freshPath)
 			if oErr != nil {
 				return struct{}{}, oErr
 			}
@@ -478,7 +443,6 @@ func SaveSUTableAs(ctx context.Context, contexts *vprocore.ContextService, conte
 					_ = sqlutil.RemoveSQLiteWithSidecars(freshPath)
 				}
 			}()
-			db.SetMaxOpenConns(1)
 			wtx, bErr := sqlutil.BeginStagedTx(ctx, db)
 			if bErr != nil {
 				return struct{}{}, bErr

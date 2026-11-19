@@ -50,16 +50,17 @@ func commitSummaryVegetationFieldList(ctx context.Context, service *SummaryVeget
 	return vprocore.WithContextPlotRequest(ctx, service.contexts, request.Review.ContextID,
 		func(plots *vprocore.PlotService) (outcome summaryFieldListWriterOutcome, resultErr error) {
 			owner := plots.Projects.Sqlite
-			if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+			unlock, err := owner.AcquireMutex(ctx)
+			if err != nil {
 				return outcome, err
 			}
-			defer owner.Mu.Unlock()
+			defer unlock()
 			actual := SummaryVegetationFieldListReview{
 				ContextID: request.Review.ContextID, Project: owner.Selection.Project, ProjectPath: owner.Selection.ProjectPath,
 				SU: owner.Selection.SU, SUPath: owner.Selection.SUPath, SourcePath: owner.Attachments["VPro64"],
 				Source: summaryVegetationFieldListSource, Physical: request.Review.Physical,
 			}
-			if owner.Conn == nil || !reflect.DeepEqual(actual, request.Review) {
+			if !owner.IsOpen() || !reflect.DeepEqual(actual, request.Review) {
 				return outcome, errors.New("Summary field-list request does not match actual owned context provenance")
 			}
 			files, err := openSummaryFieldListOwnedFiles(owner)
@@ -71,11 +72,10 @@ func commitSummaryVegetationFieldList(ctx context.Context, service *SummaryVeget
 					resultErr = errors.Join(resultErr, file.Close())
 				}
 			}()
-			db, err := sql.Open("sqlite3", "file::memory:?cache=private&_txlock=immediate&_busy_timeout=5000&_foreign_keys=on")
+			db, err := sqlutil.OpenPrivateMemoryImmediateSQLite()
 			if err != nil {
 				return outcome, err
 			}
-			db.SetMaxOpenConns(1)
 			defer func() {
 				resultErr = errors.Join(resultErr, db.Close())
 				if hooks.afterClose != nil {

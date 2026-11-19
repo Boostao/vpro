@@ -290,7 +290,7 @@ func SiviParentWriteFixture(t *testing.T, external bool, strength int) (*vprocor
 	if err := service.Plots.SetAuditStrength(strength); err != nil {
 		t.Fatal(err)
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(state.ProjectPath, "rw"))
+	db, err := sqlutil.OpenSQLiteMode(state.ProjectPath, "rw")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -362,7 +362,7 @@ func SiviProjectAssignmentWriteFixture(t *testing.T, external bool, source, stre
 	if err := service.Projects.Preferences.Update("Current", map[string]any{"ProjectIdSource": source}); err != nil {
 		t.Fatal(err)
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(state.ProjectPath, "rw"))
+	db, err := sqlutil.OpenSQLiteMode(state.ProjectPath, "rw")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -441,7 +441,7 @@ func SiviWriteFixture(t *testing.T, external bool, strength int) (*vprocore.Cont
 	if err := service.Plots.SetAuditStrength(strength); err != nil {
 		t.Fatal(err)
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(service.Projects.Sqlite.Attachments["project"], "rw"))
+	db, err := sqlutil.OpenSQLiteMode(service.Projects.Sqlite.Attachments["project"], "rw")
 	if err != nil {
 		t.Fatal(err)
 	}

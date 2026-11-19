@@ -93,7 +93,7 @@ func TestSelectedUnitSessionRetiredContextBuildReceiptsAreReleased(t *testing.T)
 		if _, err := contexts.SwitchContext("stale", vprocore.ContextSelection{}); err == nil {
 			t.Fatal("stale switch accepted")
 		}
-		if len(contexts.SelectedUnitSelections.Entries) != 1 {
+		if len(selectedUnitSelections(contexts).Entries) != 1 {
 			t.Fatal("failed switch erased current receipt")
 		}
 		selection := contexts.Projects.Sqlite.Selection
@@ -104,7 +104,7 @@ func TestSelectedUnitSessionRetiredContextBuildReceiptsAreReleased(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(contexts.SelectedUnitSelections.Entries) != 0 {
+		if len(selectedUnitSelections(contexts).Entries) != 0 {
 			t.Fatal("retired context retained unreachable large Build receipts")
 		}
 		if _, err := service.BuildLongVegetationSelectedUnitSelection(ctx, state.ContextID, built.Revision); err == nil {

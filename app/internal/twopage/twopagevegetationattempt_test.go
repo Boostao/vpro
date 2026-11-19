@@ -77,13 +77,14 @@ func TestTwoPageVegetationAttemptSharedActiveOwnershipAndCommittedSealing(t *tes
 	deadline := time.NewTimer(10 * time.Second)
 	defer deadline.Stop()
 	for {
-		contexts.TwoPageVegetationAttempts.Mu.Lock()
-		entry := contexts.TwoPageVegetationAttempts.Requests[request.RequestID]
+		vegLedger := twoPageVegAttempts(contexts)
+		vegLedger.Mu.Lock()
+		entry := vegLedger.Requests[request.RequestID]
 		active := 0
 		if entry != nil {
 			active = entry.Active
 		}
-		contexts.TwoPageVegetationAttempts.Mu.Unlock()
+		vegLedger.Mu.Unlock()
 		if active == 2 {
 			break
 		}
@@ -240,7 +241,7 @@ func TestTwoPageVegetationAttemptRotatedAbsenceIsUnknownAndLedgerCancellation(t 
 	}
 	request.RequestID = "b0cbfa00-1234-4123-8123-000000000002"
 	raw = vegetationAttemptJSON(t, request)
-	ledger := &contexts.TwoPageVegetationAttempts
+	ledger := twoPageVegAttempts(contexts)
 	ledger.Mu.Lock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	result, err := service.Save(ctx, next.ContextID, raw)
@@ -281,7 +282,7 @@ func TestTwoPageVegetationAttemptInFlightCancelAndPostcommitResult(t *testing.T)
 				!committed && result != nil {
 				t.Fatal("completion cancellation erased/misrepresented irreversible result", result, err)
 			}
-			ledger := &contexts.TwoPageVegetationAttempts
+			ledger := twoPageVegAttempts(contexts)
 			ledger.Mu.Lock()
 			active := ledger.Requests[request.RequestID].Active
 			ledger.Mu.Unlock()

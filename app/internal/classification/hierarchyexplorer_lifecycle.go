@@ -174,7 +174,7 @@ func CreateHierarchyTable(ctx context.Context, contexts *vprocore.ContextService
 			}
 			targetPath = freshPath
 			committed := false
-			db, oErr := sql.Open("sqlite3", sqlutil.SqliteFileURI(freshPath, "rwc")+"&_foreign_keys=on&_busy_timeout=5000&_journal_mode=WAL&_txlock=immediate")
+			db, oErr := sqlutil.OpenWALCreateSQLite(freshPath)
 			if oErr != nil {
 				return struct{}{}, oErr
 			}
@@ -184,7 +184,6 @@ func CreateHierarchyTable(ctx context.Context, contexts *vprocore.ContextService
 					_ = os.Remove(freshPath)
 				}
 			}()
-			db.SetMaxOpenConns(1)
 			tx, bErr := db.BeginTx(ctx, nil)
 			if bErr != nil {
 				return struct{}{}, bErr
@@ -297,16 +296,7 @@ func SaveHierarchyTableAs(ctx context.Context, contexts *vprocore.ContextService
 		}
 		var copied []copiedHierRow
 
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-			return struct{}{}, err
-		}
-		snapErr := func() error {
-			defer owner.Mu.Unlock()
-			tx, bErr := owner.BeginReadSnapshot(ctx)
-			if bErr != nil {
-				return bErr
-			}
-			defer func() { _ = tx.Rollback() }()
+		snapErr := owner.WithReadSnapshot(ctx, func(tx *sql.Tx) error {
 
 			var physical int
 			if qErr := tx.QueryRowContext(ctx,
@@ -360,8 +350,8 @@ func SaveHierarchyTableAs(ctx context.Context, contexts *vprocore.ContextService
 				}
 				copied = append(copied, item)
 			}
-			return errors.Join(rows.Err(), rows.Close(), tx.Commit())
-		}()
+			return errors.Join(rows.Err(), rows.Close())
+		})
 		if snapErr != nil {
 			return struct{}{}, snapErr
 		}
@@ -383,18 +373,7 @@ func SaveHierarchyTableAs(ctx context.Context, contexts *vprocore.ContextService
 					return err
 				}
 			}
-			if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS main.`+vprocore.QuoteHeaderIdentifier(hierarchyIdentityTable)+` (
-				"HierarchyTable" TEXT NOT NULL,
-				"ID" INTEGER NOT NULL,
-				PRIMARY KEY ("HierarchyTable", "ID")
-			)`); err != nil {
-				return err
-			}
-			if _, err := tx.ExecContext(ctx,
-				`INSERT OR IGNORE INTO main.`+vprocore.QuoteHeaderIdentifier(hierarchyIdentityTable)+` ("HierarchyTable","ID")
-				 SELECT ?, "ID" FROM main.`+qDest+` WHERE "ID" > 0`,
-				destTable,
-			); err != nil {
+			if err := vprocore.SeedHierarchyNodeIDs(ctx, tx, hierarchyIdentityTable, destTable); err != nil {
 				return err
 			}
 			return vprocore.AppendTechnicalProvenance(ctx, tx, hierarchyHistoryTable, hierarchyHistorySQL, string(proposalBytes), "hierarchy save-as")
@@ -427,7 +406,7 @@ func SaveHierarchyTableAs(ctx context.Context, contexts *vprocore.ContextService
 			}
 			targetPath = freshPath
 			committed := false
-			db, oErr := sql.Open("sqlite3", sqlutil.SqliteFileURI(freshPath, "rwc")+"&_foreign_keys=on&_busy_timeout=5000&_journal_mode=WAL&_txlock=immediate")
+			db, oErr := sqlutil.OpenWALCreateSQLite(freshPath)
 			if oErr != nil {
 				return struct{}{}, oErr
 			}
@@ -437,7 +416,6 @@ func SaveHierarchyTableAs(ctx context.Context, contexts *vprocore.ContextService
 					_ = os.Remove(freshPath)
 				}
 			}()
-			db.SetMaxOpenConns(1)
 			tx, bErr := db.BeginTx(ctx, nil)
 			if bErr != nil {
 				return struct{}{}, bErr

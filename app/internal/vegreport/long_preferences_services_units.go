@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -334,7 +333,7 @@ func (s *LongVegetationUnitPreferencesService) helper() vprocore.ReportPreferenc
 	}
 	var checkScope func(string) error
 	if s.contexts != nil {
-		checkScope = s.contexts.RequireSelectedListReportScope
+		checkScope = func(cid string) error { return vprocore.RequireSelectedListReportScope(s.contexts, cid) }
 	}
 	return vprocore.ReportPreferenceHelper{
 		Contexts:   s.contexts,
@@ -370,16 +369,16 @@ func (s *LongVegetationUnitPreferencesService) SaveLongVegetationUnitPreferences
 	h := s.helper()
 	out := LongVegetationUnitPreferencesOutcome(vprocore.RunReportPreferenceSave(ctx, h, contextID, requestJSON, "Long Vegetation report unit",
 		func(plots *vprocore.PlotService, request LongVegetationUnitPreferencesRequest) (vprocore.ReportPreferenceUpdate, error) {
-			if err := s.contexts.RequireSelectedListReportScope(contextID); err != nil {
+			if err := vprocore.RequireSelectedListReportScope(s.contexts, contextID); err != nil {
 				return vprocore.ReportPreferenceUpdate{}, err
 			}
 			if request.Expected.UnitGroups != 2 && request.Proposed.UnitGroups == 2 {
 				var captured vprocore.ReportPreferenceUpdate
 				_, snapErr := vprocore.WithOwnedPreferenceSnapshot(ctx, plots, h.Snapshot, func(owner *vprocore.SqliteContext, tx *sql.Tx) (struct{}, error) {
-					if err := s.contexts.RequireSelectedListReportScope(contextID); err != nil {
+					if err := vprocore.RequireSelectedListReportScope(s.contexts, contextID); err != nil {
 						return struct{}{}, err
 					}
-					ledger := &s.contexts.SelectedUnitSelections
+					ledger := selectedUnitSelections(s.contexts)
 					ledger.Mu.Lock()
 					defer ledger.Mu.Unlock()
 					values, err := plots.Projects.Preferences.Snapshot()
@@ -417,14 +416,15 @@ func (s *LongVegetationUnitPreferencesService) SaveLongVegetationUnitPreferences
 				return vprocore.ReportPreferenceUpdate{}, readErr
 			}
 			owner := plots.Projects.Sqlite
-			if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+			unlock, err := owner.AcquireMutex(ctx)
+			if err != nil {
 				return vprocore.ReportPreferenceUpdate{}, err
 			}
-			defer owner.Mu.Unlock()
+			defer unlock()
 			if err := vprocore.ProfileOwnedFiles(owner); err != nil {
 				return vprocore.ReportPreferenceUpdate{}, err
 			}
-			if err := s.contexts.RequireSelectedListReportScope(contextID); err != nil {
+			if err := vprocore.RequireSelectedListReportScope(s.contexts, contextID); err != nil {
 				return vprocore.ReportPreferenceUpdate{}, err
 			}
 			if request.Expected.UnitGroups != request.Proposed.UnitGroups && !s.availability(false).allows(request.Proposed.UnitGroups) {

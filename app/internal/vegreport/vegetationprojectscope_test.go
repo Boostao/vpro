@@ -71,7 +71,7 @@ func TestProjectScopeExclusiveAuthorityRetainsIndependentDraftsAndZeroWrites(t *
 		if err != nil || active.Revision != "1" || active.SourceKind != vprocore.VegetationProjectFieldsScope || active.Build != nil {
 			t.Fatal("explicit project scope install", active, err)
 		}
-		inactive := contexts.SelectedUnitSelections.Read(state.ContextID)
+		inactive := selectedUnitSelections(contexts).Read(state.ContextID)
 		if inactive.Revision != 3 || inactive.Build != nil || !reflect.DeepEqual(inactive.Fields, []string{"PlotNumber"}) {
 			t.Fatal("scope switch lost selected draft or retained selected approval", inactive)
 		}
@@ -294,10 +294,10 @@ func TestProjectScopeStrictCASAndFailedInstallsAreAtomic(t *testing.T) {
 		projectScopeRequestJSON(t, "0", vprocore.VegetationProjectFieldsScope))
 	cancel()
 	owner.Mu.Unlock()
-	if !errors.Is(err, context.DeadlineExceeded) || private.contexts.ProjectReportScopes.Read(state.ContextID).Revision != 0 {
+	if !errors.Is(err, context.DeadlineExceeded) || projectReportScopes(private.contexts).Read(state.ContextID).Revision != 0 {
 		t.Fatal("cancelled waiting scope switch changed authority", err)
 	}
-	ledger := &private.contexts.ProjectReportScopes
+	ledger := projectReportScopes(private.contexts)
 	ledger.Mu.Lock()
 	ledger.Entries = map[string]vprocore.VegetationProjectScopeEntry{state.ContextID: {Revision: math.MaxInt64, SourceKind: vprocore.VegetationSelectedListScope}}
 	ledger.Mu.Unlock()
@@ -305,7 +305,7 @@ func TestProjectScopeStrictCASAndFailedInstallsAreAtomic(t *testing.T) {
 		projectScopeRequestJSON(t, "9223372036854775807", vprocore.VegetationProjectFieldsScope)); err == nil {
 		t.Fatal("scope revision overflow accepted")
 	}
-	if private.contexts.SelectedUnitSelections.Read(state.ContextID).Revision != 0 {
+	if selectedUnitSelections(private.contexts).Read(state.ContextID).Revision != 0 {
 		t.Fatal("failed exhausted switch partially invalidated selected draft")
 	}
 }
@@ -350,8 +350,8 @@ func TestProjectScopeStaleBuildAndSelectedBuildCannotInstallAcrossScopeSwitch(t 
 			}
 			_, buildErr = scope.BuildLongVegetationProjectScope(ctx, state.ContextID, draft.Revision)
 		}
-		if buildErr == nil || private.contexts.SelectedUnitSelections.Read(state.ContextID).Build != nil ||
-			private.contexts.ProjectReportScopes.Read(state.ContextID).Build != nil {
+		if buildErr == nil || selectedUnitSelections(private.contexts).Read(state.ContextID).Build != nil ||
+			projectReportScopes(private.contexts).Read(state.ContextID).Build != nil {
 			t.Fatal("stale opposite-scope Build installed competing approval", selectedBuild, buildErr)
 		}
 	}

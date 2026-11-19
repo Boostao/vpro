@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/internal/vprocore"
 	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func readSinglePhysicalRowByRowID(ctx context.Context, tx *sql.Tx, tableName string, columns []DatasheetColumnMeta, rowID int64) ([]vprocore.ProjectMetadataCell, error) {
@@ -45,6 +46,293 @@ func readSinglePhysicalRowByRowID(ctx context.Context, tx *sql.Tx, tableName str
 		cells[i] = cell
 	}
 	return cells, nil
+}
+
+type orderedDatasheetRowEdits struct {
+	rowID int64
+	edits []DatasheetCellEdit
+}
+
+type preparedDatasheetCellMutation struct {
+	colIndex   int
+	colMeta    DatasheetColumnMeta
+	beforeCell vprocore.ProjectMetadataCell
+	afterCell  vprocore.ProjectMetadataCell
+	driverVal  any
+	beforeText *string
+	afterText  *string
+}
+
+func groupDatasheetEditsByRow(edits []DatasheetCellEdit) ([]int64, map[int64]*orderedDatasheetRowEdits, error) {
+	rowOrder := []int64{}
+	byRow := map[int64]*orderedDatasheetRowEdits{}
+	seenCell := map[string]bool{}
+	for _, edit := range edits {
+		rid, parseErr := strconv.ParseInt(strings.TrimSpace(edit.RowID), 10, 64)
+		if parseErr != nil {
+			return nil, nil, fmt.Errorf("invalid datasheet rowId %q", edit.RowID)
+		}
+		colKey := fmt.Sprintf("%d:%s", rid, strings.ToLower(strings.TrimSpace(edit.Column)))
+		if seenCell[colKey] {
+			return nil, nil, fmt.Errorf("duplicate datasheet edit for row %d column %q in one batch", rid, edit.Column)
+		}
+		seenCell[colKey] = true
+		bucket := byRow[rid]
+		if bucket == nil {
+			bucket = &orderedDatasheetRowEdits{rowID: rid}
+			byRow[rid] = bucket
+			rowOrder = append(rowOrder, rid)
+		}
+		bucket.edits = append(bucket.edits, edit)
+	}
+	return rowOrder, byRow, nil
+}
+
+func prepareDatasheetRowMutations(
+	target resolvedDatasheetTarget,
+	rid int64,
+	edits []DatasheetCellEdit,
+	columns []DatasheetColumnMeta,
+	colIndexByLower map[string]int,
+	currentCells []vprocore.ProjectMetadataCell,
+	canEditMaster bool,
+) ([]preparedDatasheetCellMutation, error) {
+	var mutations []preparedDatasheetCellMutation
+	for _, edit := range edits {
+		idx, ok := colIndexByLower[strings.ToLower(strings.TrimSpace(edit.Column))]
+		if !ok {
+			return nil, fmt.Errorf("unknown column %q on %s", edit.Column, target.tableName)
+		}
+		colMeta := columns[idx]
+		storedCell := currentCells[idx]
+		if !datasheetCellsSemanticallyEqual(storedCell, edit.Before, colMeta) {
+			return nil, fmt.Errorf("concurrency conflict on %s row %d column %s: stored value changed; reload before saving",
+				target.tableName, rid, colMeta.Name)
+		}
+		if !isProtectedDatasheetColumn(target.key, colMeta, canEditMaster) {
+			if _, cellErr := vprocore.MetadataCellValue(edit.After); cellErr == nil && datasheetCellsSemanticallyEqual(storedCell, edit.After, colMeta) {
+				continue
+			}
+		}
+		driverVal, afterAudit, normalizedCell, err := validateAndNormalizeDatasheetCell(target.key, colMeta, edit.After, canEditMaster)
+		if err != nil {
+			return nil, err
+		}
+		if datasheetCellsSemanticallyEqual(storedCell, normalizedCell, colMeta) {
+			continue
+		}
+		mutations = append(mutations, preparedDatasheetCellMutation{
+			colIndex:   idx,
+			colMeta:    colMeta,
+			beforeCell: storedCell,
+			afterCell:  normalizedCell,
+			driverVal:  driverVal,
+			beforeText: auditTextForStoredCell(storedCell, colMeta.IsBoolean),
+			afterText:  afterAudit,
+		})
+	}
+	return mutations, nil
+}
+
+func extractDatasheetRowIdentity(
+	targetKey string,
+	colIndexByLower map[string]int,
+	currentCells []vprocore.ProjectMetadataCell,
+	mutations []preparedDatasheetCellMutation,
+) (plotBefore, plotAfter string, childID *int64, projected []vprocore.ProjectMetadataCell, togglingEnvFlag bool) {
+	plotColName := plotColNameForDatasheetKey(targetKey)
+	if plotColName != "" {
+		if pIdx, ok := colIndexByLower[strings.ToLower(plotColName)]; ok && currentCells[pIdx].Text != nil {
+			plotBefore = *currentCells[pIdx].Text
+			plotAfter = plotBefore
+		}
+	}
+	if idIdx, ok := colIndexByLower["id"]; ok && isEditableDatasheetChildTable(targetKey) {
+		if currentCells[idIdx].Integer != nil {
+			if parsedID, pErr := strconv.ParseInt(*currentCells[idIdx].Integer, 10, 64); pErr == nil {
+				childID = &parsedID
+			}
+		}
+	}
+	projected = slices.Clone(currentCells)
+	for _, m := range mutations {
+		projected[m.colIndex] = m.afterCell
+		if strings.EqualFold(m.colMeta.Name, plotColName) && m.afterCell.Text != nil {
+			plotAfter = *m.afterCell.Text
+		}
+		if targetKey == "Env" && m.colMeta.Name == "Flag" {
+			togglingEnvFlag = true
+		}
+	}
+	return plotBefore, plotAfter, childID, projected, togglingEnvFlag
+}
+
+func validateDatasheetProjectedSoilCells(
+	targetKey string,
+	colIndexByLower map[string]int,
+	projectedCells []vprocore.ProjectMetadataCell,
+	mutations []preparedDatasheetCellMutation,
+) error {
+	if targetKey != "Humus" && targetKey != "Mineral" {
+		return nil
+	}
+	soilDepthTouched := false
+	cfTouched := false
+	for _, m := range mutations {
+		if m.colMeta.Name == "Horizon" || m.colMeta.Name == "UpperDepth" || m.colMeta.Name == "LowerDepth" {
+			soilDepthTouched = true
+		}
+		if vprocore.MineralCoarseFragColumns[m.colMeta.Name] {
+			cfTouched = true
+		}
+	}
+	if soilDepthTouched {
+		var effHz *string
+		if hIdx, hasH := colIndexByLower["horizon"]; hasH {
+			effHz = cellTextPtr(projectedCells[hIdx])
+		}
+		var effUp, effLo *float64
+		if uIdx, hasU := colIndexByLower["upperdepth"]; hasU {
+			effUp = cellFloat64Ptr(projectedCells[uIdx])
+		}
+		if lIdx, hasL := colIndexByLower["lowerdepth"]; hasL {
+			effLo = cellFloat64Ptr(projectedCells[lIdx])
+		}
+		if err := validateSoilHorizonDepthSign(targetKey, effHz, effUp, effLo); err != nil {
+			return err
+		}
+	}
+	if targetKey == "Mineral" && cfTouched {
+		cellAt := func(low string) vprocore.ProjectMetadataCell {
+			if idx, ok := colIndexByLower[low]; ok {
+				return projectedCells[idx]
+			}
+			return vprocore.ProjectMetadataCell{Storage: "null"}
+		}
+		return validateMineralCoarseFragsCells(
+			cellAt("percentcoarsefragsgravel"),
+			cellAt("percentcoarsefragscobbles"),
+			cellAt("percentcoarsefragsstones"),
+			cellAt("percentcoarsefragstotal"),
+		)
+	}
+	return nil
+}
+
+func recordDatasheetRowAudits(
+	ctx context.Context,
+	wtx *vprocore.WriteTx,
+	target resolvedDatasheetTarget,
+	sameAsProject bool,
+	currentUser, plotAfter, now string,
+	childID *int64,
+	mutations []preparedDatasheetCellMutation,
+) (int, error) {
+	if !sameAsProject || plotAfter == "" {
+		return 0, nil
+	}
+	canAudit := isProjectPlotFindReplaceTable(target.key)
+	if target.key == "SU" {
+		var envMatch int
+		if err := wtx.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM main.`+vprocore.QuoteHeaderIdentifier(wtx.Project+"_Env")+
+				` WHERE typeof("PlotNumber")='text' AND CAST("PlotNumber" AS BLOB)=CAST(? AS BLOB)`,
+			plotAfter,
+		).Scan(&envMatch); err != nil {
+			return 0, err
+		}
+		canAudit = envMatch == 1
+	}
+	if !canAudit {
+		return 0, nil
+	}
+	tableSuffix := "_" + target.key
+	auditCount := 0
+	for _, m := range mutations {
+		colCopy := m.colMeta.Name
+		plotCopy := plotAfter
+		if _, err := wtx.RecordAudit(ctx, vprocore.AuditWriteEntry{
+			Schema:     "main",
+			Project:    wtx.Project,
+			User:       currentUser,
+			PlotNumber: &plotCopy,
+			Table:      tableSuffix,
+			EditField:  &colCopy,
+			EditWhen:   now,
+			BeforeEdit: m.beforeText,
+			AfterEdit:  m.afterText,
+			ID:         childID,
+		}); err != nil {
+			return 0, fmt.Errorf("write audit for %s.%s: %w", target.tableName, m.colMeta.Name, err)
+		}
+		auditCount++
+	}
+	return auditCount, nil
+}
+
+func applySingleDatasheetRowEdits(
+	ctx context.Context,
+	wtx *vprocore.WriteTx,
+	target resolvedDatasheetTarget,
+	sameAsProject, canEditMaster bool,
+	currentUser, now string,
+	columns []DatasheetColumnMeta,
+	colIndexByLower map[string]int,
+	bucket *orderedDatasheetRowEdits,
+	result *DatasheetEditResult,
+) error {
+	rid := bucket.rowID
+	currentCells, err := readSinglePhysicalRowByRowID(ctx, wtx.Tx, target.tableName, columns, rid)
+	if err != nil {
+		return err
+	}
+	mutations, err := prepareDatasheetRowMutations(target, rid, bucket.edits, columns, colIndexByLower, currentCells, canEditMaster)
+	if err != nil || len(mutations) == 0 {
+		return err
+	}
+	plotBefore, plotAfter, childID, projectedCells, togglingEnvFlag := extractDatasheetRowIdentity(target.key, colIndexByLower, currentCells, mutations)
+	if sameAsProject && plotBefore != "" && !togglingEnvFlag && isProjectPlotFindReplaceTable(target.key) {
+		var lockedCount int
+		if err := wtx.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM main.`+vprocore.QuoteHeaderIdentifier(wtx.Project+"_Env")+
+				` WHERE typeof("PlotNumber")='text' AND CAST("PlotNumber" AS BLOB)=CAST(? AS BLOB) AND "Flag" IS NOT NULL AND CAST("Flag" AS INTEGER) <> 0`,
+			plotBefore,
+		).Scan(&lockedCount); err != nil {
+			return err
+		}
+		if lockedCount > 0 {
+			return fmt.Errorf("plot %q is locked (Flag = -1); unlock the plot before editing its cells", plotBefore)
+		}
+	}
+	if err := validateDatasheetProjectedSoilCells(target.key, colIndexByLower, projectedCells, mutations); err != nil {
+		return err
+	}
+
+	assignments := make([]string, len(mutations))
+	updateArgs := make([]any, 0, len(mutations)+1)
+	for i, m := range mutations {
+		assignments[i] = vprocore.QuoteHeaderIdentifier(m.colMeta.Name) + " = ?"
+		updateArgs = append(updateArgs, m.driverVal)
+	}
+	updateArgs = append(updateArgs, rid)
+	updateSQL := "UPDATE main." + vprocore.QuoteHeaderIdentifier(target.tableName) +
+		" SET " + strings.Join(assignments, ", ") + " WHERE rowid = ?"
+	execRes, err := wtx.ExecContext(ctx, updateSQL, updateArgs...)
+	if err != nil {
+		return fmt.Errorf("update %s row %d: %w", target.tableName, rid, err)
+	}
+	if affected, aErr := execRes.RowsAffected(); aErr != nil || affected != 1 {
+		return errors.Join(aErr, fmt.Errorf("update %s row %d affected %d rows (expected 1)", target.tableName, rid, affected))
+	}
+
+	result.UpdatedRows++
+	result.UpdatedCells += len(mutations)
+	auditRows, err := recordDatasheetRowAudits(ctx, wtx, target, sameAsProject, currentUser, plotAfter, now, childID, mutations)
+	if err != nil {
+		return err
+	}
+	result.AuditRows += auditRows
+	return nil
 }
 
 // ApplyDatasheetEdits validates and commits a batch of cell edits inside a single
@@ -85,49 +373,11 @@ func ApplyDatasheetEdits(ctx context.Context, contexts *vprocore.ContextService,
 			return nil, fmt.Errorf("table %s (%s) is read-only in datasheet mode", target.key, target.tableName)
 		}
 
-		// Group edits by rowID in deterministic submission order, rejecting duplicate (rowId, column).
-		type orderedRowEdits struct {
-			rowID int64
-			edits []DatasheetCellEdit
+		rowOrder, byRow, err := groupDatasheetEditsByRow(request.Edits)
+		if err != nil {
+			return nil, err
 		}
-		rowOrder := []int64{}
-		byRow := map[int64]*orderedRowEdits{}
-		seenCell := map[string]bool{}
-		for _, edit := range request.Edits {
-			rid, parseErr := strconv.ParseInt(strings.TrimSpace(edit.RowID), 10, 64)
-			if parseErr != nil {
-				return nil, fmt.Errorf("invalid datasheet rowId %q", edit.RowID)
-			}
-			colKey := fmt.Sprintf("%d:%s", rid, strings.ToLower(strings.TrimSpace(edit.Column)))
-			if seenCell[colKey] {
-				return nil, fmt.Errorf("duplicate datasheet edit for row %d column %q in one batch", rid, edit.Column)
-			}
-			seenCell[colKey] = true
-			bucket := byRow[rid]
-			if bucket == nil {
-				bucket = &orderedRowEdits{rowID: rid}
-				byRow[rid] = bucket
-				rowOrder = append(rowOrder, rid)
-			}
-			bucket.edits = append(bucket.edits, edit)
-		}
-
-		validateFiles := func() error {
-			if err := owner.ValidateMetadataWriterFiles(); err != nil {
-				return err
-			}
-			roleInfo := owner.AttachmentInfo[target.role]
-			if roleInfo == nil {
-				return fmt.Errorf("datasheet role %s is not attached", target.role)
-			}
-			for supportRole, info := range owner.AttachmentInfo {
-				if strings.HasPrefix(supportRole, "V") && os.SameFile(roleInfo, info) {
-					return fmt.Errorf("datasheet target %s shares a file with support database %s; writes are prohibited", target.tableName, supportRole)
-				}
-			}
-			return nil
-		}
-
+		validateFiles := validateDatasheetTargetFiles(owner, target)
 		result := &DatasheetEditResult{
 			ContextID: contextID,
 			TableKey:  target.key,
@@ -137,26 +387,16 @@ func ApplyDatasheetEdits(ctx context.Context, contexts *vprocore.ContextService,
 			owner.AttachmentInfo["project"] != nil &&
 			os.SameFile(owner.AttachmentInfo[target.role], owner.AttachmentInfo["project"])
 
-		err = owner.WithSelectedFileWriter(ctx, target.role, validateFiles, func(conn *sql.Conn) (txErr error) {
-			tx, err := conn.BeginTx(ctx, nil) // _txlock=immediate -> BEGIN IMMEDIATE
-			if err != nil {
-				return err
-			}
-			defer func() {
-				if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
-					txErr = errors.Join(txErr, rbErr)
-				}
-			}()
-
+		err = owner.WithImmediateRoleWriteTx(ctx, target.role, validateFiles, func(wtx *vprocore.WriteTx) error {
 			var physicalExists bool
-			if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM main.sqlite_master WHERE type='table' AND name COLLATE BINARY=?)", target.tableName).Scan(&physicalExists); err != nil {
+			if err := wtx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM main.sqlite_master WHERE type='table' AND name COLLATE BINARY=?)", target.tableName).Scan(&physicalExists); err != nil {
 				return err
 			}
 			if !physicalExists {
 				return fmt.Errorf("datasheet target %s must be a physical table, not a view", target.tableName)
 			}
 
-			rawCols, err := vprocore.ReadSQLiteStorageColumns(ctx, tx, "main", target.tableName)
+			rawCols, err := vprocore.ReadSQLiteStorageColumns(ctx, wtx.Tx, "main", target.tableName)
 			if err != nil {
 				return err
 			}
@@ -167,12 +407,8 @@ func ApplyDatasheetEdits(ctx context.Context, contexts *vprocore.ContextService,
 				colIndexByLower[strings.ToLower(col.Name)] = i
 			}
 
-			project := owner.Selection.Project
-			auditTable := vprocore.QuoteHeaderIdentifier(project + "_Audit")
 			now := time.Now().Format("2006-01-02 15:04:05")
-
-			// For Hierarchy edits, load full hierarchy map if Parent or Name changes so we enforce cycle & uniqueness invariants.
-			var hierarchyParentCheck bool
+			hierarchyParentCheck := false
 			if target.key == "Hierarchy" {
 				for _, ed := range request.Edits {
 					if strings.EqualFold(ed.Column, "Parent") {
@@ -185,241 +421,19 @@ func ApplyDatasheetEdits(ctx context.Context, contexts *vprocore.ContextService,
 				if err := ctx.Err(); err != nil {
 					return err
 				}
-				bucket := byRow[rid]
-				currentCells, err := readSinglePhysicalRowByRowID(ctx, tx, target.tableName, columns, rid)
-				if err != nil {
+				if err := applySingleDatasheetRowEdits(
+					ctx, wtx, target, sameAsProject, canEditMaster, currentUser, now,
+					columns, colIndexByLower, byRow[rid], result,
+				); err != nil {
 					return err
-				}
-
-				type preparedCellMutation struct {
-					colIndex   int
-					colMeta    DatasheetColumnMeta
-					beforeCell vprocore.ProjectMetadataCell
-					afterCell  vprocore.ProjectMetadataCell
-					driverVal  any
-					beforeText *string
-					afterText  *string
-				}
-				var mutations []preparedCellMutation
-
-				for _, edit := range bucket.edits {
-					idx, ok := colIndexByLower[strings.ToLower(strings.TrimSpace(edit.Column))]
-					if !ok {
-						return fmt.Errorf("unknown column %q on %s", edit.Column, target.tableName)
-					}
-					colMeta := columns[idx]
-					storedCell := currentCells[idx]
-
-					// Optimistic concurrency check against expected Before cell
-					if !datasheetCellsSemanticallyEqual(storedCell, edit.Before, colMeta) {
-						return fmt.Errorf("concurrency conflict on %s row %d column %s: stored value changed; reload before saving",
-							target.tableName, rid, colMeta.Name)
-					}
-
-					if !isProtectedDatasheetColumn(target.key, colMeta, canEditMaster) {
-						if _, cellErr := vprocore.MetadataCellValue(edit.After); cellErr == nil && datasheetCellsSemanticallyEqual(storedCell, edit.After, colMeta) {
-							continue
-						}
-					}
-
-					driverVal, afterAudit, normalizedCell, err := validateAndNormalizeDatasheetCell(target.key, colMeta, edit.After, canEditMaster)
-					if err != nil {
-						return err
-					}
-
-					// Omit unchanged cells so untouched / no-op cells never trigger spurious updates or audit rows!
-					if datasheetCellsSemanticallyEqual(storedCell, normalizedCell, colMeta) {
-						continue
-					}
-
-					mutations = append(mutations, preparedCellMutation{
-						colIndex:   idx,
-						colMeta:    colMeta,
-						beforeCell: storedCell,
-						afterCell:  normalizedCell,
-						driverVal:  driverVal,
-						beforeText: auditTextForStoredCell(storedCell, colMeta.IsBoolean),
-						afterText:  afterAudit,
-					})
-				}
-
-				if len(mutations) == 0 {
-					continue
-				}
-
-				// Determine plot identity & child ID before/after mutation for plot-lock check and <Project>_Audit logging.
-				var plotBefore, plotAfter string
-				var childID *int64
-				plotColName := ""
-				switch target.key {
-				case "Env", "Veg", "Humus", "Mineral", "Other", "SU":
-					plotColName = "PlotNumber"
-				case "Admin":
-					plotColName = "Plot"
-				}
-				if plotColName != "" {
-					if pIdx, ok := colIndexByLower[strings.ToLower(plotColName)]; ok && currentCells[pIdx].Text != nil {
-						plotBefore = *currentCells[pIdx].Text
-						plotAfter = plotBefore
-					}
-				}
-				if idIdx, ok := colIndexByLower["id"]; ok && (target.key == "Veg" || target.key == "Humus" || target.key == "Mineral" || target.key == "Other") {
-					if currentCells[idIdx].Integer != nil {
-						if parsedID, pErr := strconv.ParseInt(*currentCells[idIdx].Integer, 10, 64); pErr == nil {
-							childID = &parsedID
-						}
-					}
-				}
-
-				// Apply candidate post-edit row projection for cross-column soil depth sign check and plot rename tracking.
-				projectedCells := slices.Clone(currentCells)
-				togglingEnvFlag := false
-				for _, m := range mutations {
-					projectedCells[m.colIndex] = m.afterCell
-					if strings.EqualFold(m.colMeta.Name, plotColName) && m.afterCell.Text != nil {
-						plotAfter = *m.afterCell.Text
-					}
-					if target.key == "Env" && m.colMeta.Name == "Flag" {
-						togglingEnvFlag = true
-					}
-				}
-
-				// Check locked plot guard on project plot tables unless the user is explicitly toggling _Env.Flag.
-				if sameAsProject && plotBefore != "" && !togglingEnvFlag &&
-					(target.key == "Env" || target.key == "Admin" || target.key == "Veg" || target.key == "Humus" || target.key == "Mineral" || target.key == "Other") {
-					var lockedCount int
-					if err := tx.QueryRowContext(ctx,
-						`SELECT COUNT(*) FROM main.`+vprocore.QuoteHeaderIdentifier(project+"_Env")+
-							` WHERE typeof("PlotNumber")='text' AND CAST("PlotNumber" AS BLOB)=CAST(? AS BLOB) AND "Flag" IS NOT NULL AND CAST("Flag" AS INTEGER) <> 0`,
-						plotBefore,
-					).Scan(&lockedCount); err != nil {
-						return err
-					}
-					if lockedCount > 0 {
-						return fmt.Errorf("plot %q is locked (Flag = -1); unlock the plot before editing its cells", plotBefore)
-					}
-				}
-
-				// Soil horizon LMH25 depth sign check ONLY when Horizon, UpperDepth, or LowerDepth is part of this row's mutations!
-				if target.key == "Humus" || target.key == "Mineral" {
-					soilDepthTouched := false
-					for _, m := range mutations {
-						if m.colMeta.Name == "Horizon" || m.colMeta.Name == "UpperDepth" || m.colMeta.Name == "LowerDepth" {
-							soilDepthTouched = true
-							break
-						}
-					}
-					if soilDepthTouched {
-						var effHz *string
-						if hIdx, hasH := colIndexByLower["horizon"]; hasH {
-							effHz = cellTextPtr(projectedCells[hIdx])
-						}
-						var effUp, effLo *float64
-						if uIdx, hasU := colIndexByLower["upperdepth"]; hasU {
-							effUp = cellFloat64Ptr(projectedCells[uIdx])
-						}
-						if lIdx, hasL := colIndexByLower["lowerdepth"]; hasL {
-							effLo = cellFloat64Ptr(projectedCells[lIdx])
-						}
-						if err := validateSoilHorizonDepthSign(target.key, effHz, effUp, effLo); err != nil {
-							return err
-						}
-					}
-					if target.key == "Mineral" {
-						cfTouched := false
-						for _, m := range mutations {
-							if vprocore.MineralCoarseFragColumns[m.colMeta.Name] {
-								cfTouched = true
-								break
-							}
-						}
-						if cfTouched {
-							cellAt := func(low string) vprocore.ProjectMetadataCell {
-								if idx, ok := colIndexByLower[low]; ok {
-									return projectedCells[idx]
-								}
-								return vprocore.ProjectMetadataCell{Storage: "null"}
-							}
-							if err := validateMineralCoarseFragsCells(
-								cellAt("percentcoarsefragsgravel"),
-								cellAt("percentcoarsefragscobbles"),
-								cellAt("percentcoarsefragsstones"),
-								cellAt("percentcoarsefragstotal"),
-							); err != nil {
-								return err
-							}
-						}
-					}
-				}
-
-				// Execute UPDATE touching ONLY mutated columns (preserving untouched historical out-of-rule columns).
-				assignments := make([]string, len(mutations))
-				updateArgs := make([]any, 0, len(mutations)+1)
-				for i, m := range mutations {
-					assignments[i] = vprocore.QuoteHeaderIdentifier(m.colMeta.Name) + " = ?"
-					updateArgs = append(updateArgs, m.driverVal)
-				}
-				updateArgs = append(updateArgs, rid)
-				updateSQL := "UPDATE main." + vprocore.QuoteHeaderIdentifier(target.tableName) +
-					" SET " + strings.Join(assignments, ", ") + " WHERE rowid = ?"
-				execRes, err := tx.ExecContext(ctx, updateSQL, updateArgs...)
-				if err != nil {
-					return fmt.Errorf("update %s row %d: %w", target.tableName, rid, err)
-				}
-				if affected, aErr := execRes.RowsAffected(); aErr != nil || affected != 1 {
-					return errors.Join(aErr, fmt.Errorf("update %s row %d affected %d rows (expected 1)", target.tableName, rid, affected))
-				}
-
-				result.UpdatedRows++
-				result.UpdatedCells += len(mutations)
-
-				// Write one <Project>_Audit row per mutated project cell inside the same BEGIN IMMEDIATE transaction!
-				if sameAsProject && plotAfter != "" {
-					canAudit := target.key == "Env" || target.key == "Admin" ||
-						target.key == "Veg" || target.key == "Humus" || target.key == "Mineral" || target.key == "Other"
-					if target.key == "SU" {
-						var envMatch int
-						if err := tx.QueryRowContext(ctx,
-							`SELECT COUNT(*) FROM main.`+vprocore.QuoteHeaderIdentifier(project+"_Env")+
-								` WHERE typeof("PlotNumber")='text' AND CAST("PlotNumber" AS BLOB)=CAST(? AS BLOB)`,
-							plotAfter,
-						).Scan(&envMatch); err != nil {
-							return err
-						}
-						canAudit = envMatch == 1
-					}
-					if canAudit {
-						tableSuffix := "_" + target.key
-						for _, m := range mutations {
-							if childID != nil {
-								if _, err := tx.ExecContext(ctx,
-									`INSERT INTO main.`+auditTable+
-										` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`,
-									project, currentUser, plotAfter, tableSuffix, m.colMeta.Name, now, m.beforeText, m.afterText, *childID,
-								); err != nil {
-									return fmt.Errorf("write child audit for %s.%s: %w", target.tableName, m.colMeta.Name, err)
-								}
-							} else {
-								if _, err := tx.ExecContext(ctx,
-									`INSERT INTO main.`+auditTable+
-										` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag") VALUES (?,?,?,?,?,?,?,?,0,0)`,
-									project, currentUser, plotAfter, tableSuffix, m.colMeta.Name, now, m.beforeText, m.afterText,
-								); err != nil {
-									return fmt.Errorf("write parent audit for %s.%s: %w", target.tableName, m.colMeta.Name, err)
-								}
-							}
-							result.AuditRows++
-						}
-					}
 				}
 			}
 
 			if hierarchyParentCheck {
-				if err := verifyHierarchyAcyclicInTx(ctx, tx, target.tableName); err != nil {
+				if err := verifyHierarchyAcyclicInTx(ctx, wtx.Tx, target.tableName); err != nil {
 					return err
 				}
 			}
-
 			if result.UpdatedCells > 0 {
 				proposalBytes, err := json.Marshal(struct {
 					ContextID string               `json:"contextId"`
@@ -429,18 +443,11 @@ func ApplyDatasheetEdits(ctx context.Context, contexts *vprocore.ContextService,
 				if err != nil {
 					return err
 				}
-				if err := vprocore.AppendTechnicalProvenance(ctx, tx, datasheetHistoryTable, datasheetHistorySQL, string(proposalBytes), "datasheet edit"); err != nil {
+				if err := vprocore.AppendTechnicalProvenance(ctx, wtx.Tx, datasheetHistoryTable, datasheetHistorySQL, string(proposalBytes), "datasheet edit"); err != nil {
 					return err
 				}
 			}
-
-			if err := validateFiles(); err != nil {
-				return err
-			}
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			return tx.Commit()
+			return validateFiles()
 		})
 		if err != nil {
 			return nil, err

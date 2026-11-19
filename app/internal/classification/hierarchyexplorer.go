@@ -545,10 +545,11 @@ func GetHierarchyExplorer(ctx context.Context, contexts *vprocore.ContextService
 			}, nil
 		}
 
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return nil, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		if err := vprocore.ProfileOwnedFiles(owner); err != nil {
 			return nil, err
 		}

@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
 	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type DatasheetInsertChildRowRequest struct {
@@ -132,18 +133,9 @@ func InsertDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextServ
 
 		validateFiles := validateDatasheetTargetFiles(owner, target)
 		var out *DatasheetInsertChildRowResult
-		wErr := owner.WithSelectedFileWriter(ctx, target.role, validateFiles, func(conn *sql.Conn) (txErr error) {
-			tx, err := conn.BeginTx(ctx, nil)
-			if err != nil {
-				return err
-			}
-			defer func() {
-				if rb := tx.Rollback(); rb != nil && !errors.Is(rb, sql.ErrTxDone) {
-					txErr = errors.Join(txErr, rb)
-				}
-			}()
-
-			project := owner.Selection.Project
+		wErr := owner.WithImmediateRoleWriteTx(ctx, target.role, validateFiles, func(wtx *vprocore.WriteTx) error {
+			tx := wtx.Tx
+			project := wtx.Project
 			if err := vprocore.ChildParent(tx, project, request.PlotNumber); err != nil {
 				return err
 			}
@@ -160,12 +152,7 @@ func InsertDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextServ
 				colMetaByLower[strings.ToLower(col.Name)] = classifyColumnMeta(target.key, col, target.pinnedColumn, canEditMaster)
 			}
 
-			if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" (
-				"ChildTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("ChildTable","ID"))`); err != nil {
-				return err
-			}
-			quotedTable := vprocore.QuoteHeaderIdentifier(target.tableName)
-			newID, err := vprocore.AllocateChildID(tx, quotedTable)
+			newID, err := wtx.AllocateChildID(ctx, target.tableName)
 			if err != nil {
 				return err
 			}
@@ -181,9 +168,7 @@ func InsertDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextServ
 			hasFlag := false
 			var auditCols []string
 			var auditAfters []*string
-			var effHorizon vprocore.ProjectMetadataCell
-			var effUpper vprocore.ProjectMetadataCell
-			var effLower vprocore.ProjectMetadataCell
+			var effHorizon, effUpper, effLower vprocore.ProjectMetadataCell
 			var effGravel, effCobbles, effStones, effTotal vprocore.ProjectMetadataCell
 			effGravel.Storage, effCobbles.Storage, effStones.Storage, effTotal.Storage = "null", "null", "null", "null"
 			hasSpecies := false
@@ -249,12 +234,9 @@ func InsertDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextServ
 				}
 			}
 
-			if _, err := tx.ExecContext(ctx, `INSERT INTO "__VPRO_ChildIdentity" ("ChildTable","ID") VALUES (?,?) ON CONFLICT DO NOTHING`,
-				quotedTable, newID); err != nil {
-				return err
-			}
+			quotedTable := vprocore.QuoteHeaderIdentifier(target.tableName)
 			marks := strings.TrimSuffix(strings.Repeat("?,", len(insertCols)), ",")
-			res, err := tx.ExecContext(ctx, `INSERT INTO main.`+quotedTable+` (`+strings.Join(insertCols, ",")+`) VALUES (`+marks+`)`, insertVals...)
+			res, err := wtx.ExecContext(ctx, `INSERT INTO main.`+quotedTable+` (`+strings.Join(insertCols, ",")+`) VALUES (`+marks+`)`, insertVals...)
 			if err != nil {
 				return err
 			}
@@ -263,15 +245,22 @@ func InsertDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextServ
 				return err
 			}
 
-			auditTable := vprocore.QuoteHeaderIdentifier(project + "_Audit")
 			tableSuffix := "_" + target.key
 			now := time.Now().Format("2006-01-02 15:04:05")
+			plotCopy := request.PlotNumber
 			for i, colName := range auditCols {
-				if _, err := tx.ExecContext(ctx,
-					`INSERT INTO main.`+auditTable+
-						` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`,
-					project, currentUser, request.PlotNumber, tableSuffix, colName, now, nil, auditAfters[i], newID,
-				); err != nil {
+				colCopy := colName
+				if _, err := wtx.RecordAudit(ctx, vprocore.AuditWriteEntry{
+					Schema:     "main",
+					Project:    project,
+					User:       currentUser,
+					PlotNumber: &plotCopy,
+					Table:      tableSuffix,
+					EditField:  &colCopy,
+					EditWhen:   now,
+					AfterEdit:  auditAfters[i],
+					ID:         &newID,
+				}); err != nil {
 					return err
 				}
 			}
@@ -289,9 +278,6 @@ func InsertDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextServ
 				return err
 			}
 			if err := validateFiles(); err != nil {
-				return err
-			}
-			if err := tx.Commit(); err != nil {
 				return err
 			}
 			out = &DatasheetInsertChildRowResult{
@@ -350,17 +336,8 @@ func DeleteDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextServ
 
 		validateFiles := validateDatasheetTargetFiles(owner, target)
 		var out *DatasheetDeleteChildRowResult
-		wErr := owner.WithSelectedFileWriter(ctx, target.role, validateFiles, func(conn *sql.Conn) (txErr error) {
-			tx, err := conn.BeginTx(ctx, nil)
-			if err != nil {
-				return err
-			}
-			defer func() {
-				if rb := tx.Rollback(); rb != nil && !errors.Is(rb, sql.ErrTxDone) {
-					txErr = errors.Join(txErr, rb)
-				}
-			}()
-
+		wErr := owner.WithImmediateRoleWriteTx(ctx, target.role, validateFiles, func(wtx *vprocore.WriteTx) error {
+			tx := wtx.Tx
 			rawCols, err := vprocore.ReadSQLiteStorageColumns(ctx, tx, "main", target.tableName)
 			if err != nil {
 				return err
@@ -392,22 +369,20 @@ func DeleteDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextServ
 				return fmt.Errorf("concurrency conflict on %s row %d: expected ID %d, stored %d", target.tableName, rid, *request.ExpectedID, childID)
 			}
 
-			project := owner.Selection.Project
+			project := wtx.Project
 			if err := requirePlotUnlockedInMainTx(ctx, tx, project, plotNumber); err != nil {
 				return err
 			}
 
-			quotedTable := vprocore.QuoteHeaderIdentifier(target.tableName)
-			if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" (
-				"ChildTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("ChildTable","ID"))`); err != nil {
+			if err := wtx.EnsureChildIdentityTable(ctx); err != nil {
 				return err
 			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO "__VPRO_ChildIdentity" ("ChildTable","ID") VALUES (?,?) ON CONFLICT DO NOTHING`,
-				quotedTable, childID); err != nil {
+			if err := wtx.ReserveChildID(ctx, target.tableName, childID); err != nil {
 				return err
 			}
 
-			res, err := tx.ExecContext(ctx, `DELETE FROM main.`+quotedTable+` WHERE rowid = ?`, rid)
+			quotedTable := vprocore.QuoteHeaderIdentifier(target.tableName)
+			res, err := wtx.ExecContext(ctx, `DELETE FROM main.`+quotedTable+` WHERE rowid = ?`, rid)
 			if err != nil {
 				return err
 			}
@@ -415,7 +390,6 @@ func DeleteDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextServ
 				return errors.Join(aErr, fmt.Errorf("delete %s row %d affected %d rows (expected 1)", target.tableName, rid, affected))
 			}
 
-			auditTable := vprocore.QuoteHeaderIdentifier(project + "_Audit")
 			tableSuffix := "_" + target.key
 			now := time.Now().Format("2006-01-02 15:04:05")
 			auditCount := 0
@@ -423,22 +397,36 @@ func DeleteDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextServ
 				if col.Name == "PlotNumber" || col.Name == "ID" || cells[i].Storage == "null" {
 					continue
 				}
+				colCopy := col.Name
 				beforeText := auditTextForStoredCell(cells[i], col.IsBoolean)
-				if _, err := tx.ExecContext(ctx,
-					`INSERT INTO main.`+auditTable+
-						` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`,
-					project, currentUser, plotNumber, tableSuffix, col.Name, now, beforeText, nil, childID,
-				); err != nil {
+				if _, err := wtx.RecordAudit(ctx, vprocore.AuditWriteEntry{
+					Schema:     "main",
+					Project:    project,
+					User:       currentUser,
+					PlotNumber: &plotNumber,
+					Table:      tableSuffix,
+					EditField:  &colCopy,
+					EditWhen:   now,
+					BeforeEdit: beforeText,
+					ID:         &childID,
+				}); err != nil {
 					return err
 				}
 				auditCount++
 			}
 			if auditCount == 0 {
-				if _, err := tx.ExecContext(ctx,
-					`INSERT INTO main.`+auditTable+
-						` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`,
-					project, currentUser, plotNumber, tableSuffix, "ID", now, cells[idIdx].Integer, nil, childID,
-				); err != nil {
+				idField := "ID"
+				if _, err := wtx.RecordAudit(ctx, vprocore.AuditWriteEntry{
+					Schema:     "main",
+					Project:    project,
+					User:       currentUser,
+					PlotNumber: &plotNumber,
+					Table:      tableSuffix,
+					EditField:  &idField,
+					EditWhen:   now,
+					BeforeEdit: cells[idIdx].Integer,
+					ID:         &childID,
+				}); err != nil {
 					return err
 				}
 				auditCount = 1
@@ -458,9 +446,6 @@ func DeleteDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextServ
 				return err
 			}
 			if err := validateFiles(); err != nil {
-				return err
-			}
-			if err := tx.Commit(); err != nil {
 				return err
 			}
 			out = &DatasheetDeleteChildRowResult{

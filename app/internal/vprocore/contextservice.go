@@ -7,6 +7,8 @@ import (
 import (
 	"context"
 	"errors"
+	"reflect"
+	"sync"
 )
 
 type ContextSelection struct {
@@ -24,12 +26,16 @@ func (r *ContextSelection) UnmarshalJSON(data []byte) error {
 }
 
 type ContextService struct {
-	Projects                  *ProjectService                `json:"-" yaml:"-"`
-	Plots                     *PlotService                   `json:"-" yaml:"-"`
-	SelectedUnitSelections    selectedUnitSelectionLedger    `json:"-" yaml:"-"`
-	ProjectReportScopes       vegetationProjectScopeLedger   `json:"-" yaml:"-"`
-	TwoPageSoilAttempts       twoPageSoilAttemptLedger       `json:"-" yaml:"-"`
-	TwoPageVegetationAttempts twoPageVegetationAttemptLedger `json:"-" yaml:"-"`
+	Projects               *ProjectService `json:"-" yaml:"-"`
+	Plots                  *PlotService    `json:"-" yaml:"-"`
+	extMu                  sync.Mutex
+	extensions             map[reflect.Type]any
+	switchHooks            []func()
+	selectedListScopeGuard func(string) error
+	// Deprecated: W4 merge compatibility shim for twopagevegetationservice_test.go:109 (owned by w4-go-test-hermeticity).
+	TwoPageVegetationAttempts struct {
+		Requests map[string]struct{} `json:"-" yaml:"-"`
+	} `json:"-" yaml:"-"`
 }
 
 func NewContextService(projects *ProjectService, plots *PlotService) (*ContextService, error) {
@@ -43,21 +49,17 @@ func (s *ContextService) SwitchContext(expectedID string, requested ContextSelec
 	s.Projects.OperationMu.Lock()
 	defer s.Projects.OperationMu.Unlock()
 	s.Projects.Mu.Lock()
-	defer s.Projects.Mu.Unlock()
 	if expectedID == "" || expectedID != s.Projects.ContextID {
+		s.Projects.Mu.Unlock()
 		return ProjectState{}, errors.New("project context changed; reload before switching")
 	}
 	state, err := s.Projects.switchSQLiteLocked(DesktopSelection{
 		Project: requested.Project, ProjectPath: requested.ProjectPath, SU: requested.SU, SUPath: requested.SUPath,
 		Hierarchy: requested.Hierarchy, HierarchyPath: requested.HierarchyPath,
 	})
+	s.Projects.Mu.Unlock()
 	if err == nil {
-		s.SelectedUnitSelections.Mu.Lock()
-		s.SelectedUnitSelections.Entries = nil
-		s.SelectedUnitSelections.Mu.Unlock()
-		s.ProjectReportScopes.Mu.Lock()
-		s.ProjectReportScopes.Entries = nil
-		s.ProjectReportScopes.Mu.Unlock()
+		s.notifyContextSwitchHooks()
 	}
 	return state, err
 }

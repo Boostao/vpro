@@ -2,7 +2,6 @@ package projectops
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -120,11 +119,10 @@ func CreateNewProject(s *vprocore.ContextService, ctx context.Context, contextID
 		return NewProjectResult{}, err
 	}
 
-	sqlDB, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(tmpPath, "rw")+"&_journal_mode=DELETE&_synchronous=FULL&_txlock=immediate")
+	sqlDB, err := sqlutil.OpenStagedSQLite(tmpPath, sqlutil.StagedSQLiteOptions{ImmediateTxLock: true})
 	if err != nil {
 		return NewProjectResult{}, err
 	}
-	sqlDB.SetMaxOpenConns(1)
 	tx, err := sqlutil.BeginStagedTx(ctx, sqlDB)
 	if err != nil {
 		_ = sqlDB.Close()
@@ -196,7 +194,6 @@ func CreateNewProject(s *vprocore.ContextService, ctx context.Context, contextID
 			return fmt.Errorf("insert initial metadata row: %w", err)
 		}
 
-		auditTbl := vprocore.QuoteHeaderIdentifier(projectName + "_Audit")
 		for _, entry := range []struct {
 			table string
 			after any
@@ -205,8 +202,13 @@ func CreateNewProject(s *vprocore.ContextService, ctx context.Context, contextID
 			{"USysAllSpecs", allSpecsStamp},
 			{"USysTableOfLists", listsStamp},
 		} {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO `+auditTbl+` ("Project","User","Table","EditWhen","AfterEdit","Restore","Flag") VALUES (?,?,?,?,?,0,0)`,
-				projectName, snap.CurrentUser, entry.table, now, entry.after); err != nil {
+			if _, err := vprocore.RecordAudit(ctx, tx, vprocore.AuditWriteEntry{
+				Project:   projectName,
+				User:      snap.CurrentUser,
+				Table:     entry.table,
+				EditWhen:  now,
+				AfterEdit: entry.after,
+			}); err != nil {
 				return err
 			}
 		}

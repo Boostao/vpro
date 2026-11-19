@@ -260,7 +260,7 @@ func (s *PictureService) checkLibraryNotAliased(source *ownedPictureLibrary) err
 		candidates["support:"+role] = path
 	}
 	if owner := s.Contexts.Projects.Sqlite; owner != nil {
-		owner.Mu.Lock()
+		unlock := owner.LockBlocking()
 		for role, path := range owner.Attachments {
 			candidates["attachment:"+role] = path
 		}
@@ -270,7 +270,7 @@ func (s *PictureService) checkLibraryNotAliased(source *ownedPictureLibrary) err
 		if owner.Profile != nil {
 			candidates["profile"] = owner.Profile.Path
 		}
-		owner.Mu.Unlock()
+		unlock()
 	}
 	for role, path := range candidates {
 		if strings.TrimSpace(path) == "" {

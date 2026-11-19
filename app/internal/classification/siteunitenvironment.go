@@ -331,7 +331,6 @@ func TransferSiteUnitEnvironment(s *vprocore.ContextService, ctx context.Context
 				return err
 			}
 			rows := map[string]bool{}
-			auditTable := vprocore.QuoteHeaderIdentifier(fresh.Project + "_Audit")
 			auditWhen := time.Now().Format("2006-01-02 15:04:05")
 			var auditRecords []vprocore.AuditEntry
 			for _, change := range fresh.Changes {
@@ -365,14 +364,18 @@ func TransferSiteUnitEnvironment(s *vprocore.ContextService, ctx context.Context
 				// ENG-GO-004: every transferred Admin cell is recorded in <Project>_Audit in the same
 				// transaction, honouring the session AuditStrength like other header edits.
 				if vprocore.AuditHeaderChange(beforeValue, value, plots.AuditStrength) {
-					inserted, err := tx.ExecContext(ctx, `INSERT INTO `+auditTable+
-						` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag") VALUES (?,?,?,?,?,?,?,?,0,0)`,
-						fresh.Project, plots.CurrentUser, change.PlotNumber, "_Admin", change.Field, auditWhen,
-						vprocore.HeaderAuditValue(beforeValue), vprocore.HeaderAuditValue(value))
-					if err != nil {
-						return err
-					}
-					auditRowID, err := inserted.LastInsertId()
+					plotCopy := change.PlotNumber
+					fieldCopy := change.Field
+					auditRowID, err := vprocore.RecordAudit(ctx, tx, vprocore.AuditWriteEntry{
+						Project:    fresh.Project,
+						User:       plots.CurrentUser,
+						PlotNumber: &plotCopy,
+						Table:      "_Admin",
+						EditField:  &fieldCopy,
+						EditWhen:   auditWhen,
+						BeforeEdit: vprocore.HeaderAuditValue(beforeValue),
+						AfterEdit:  vprocore.HeaderAuditValue(value),
+					})
 					if err != nil {
 						return err
 					}

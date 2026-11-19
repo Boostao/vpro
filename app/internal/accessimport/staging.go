@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"hash"
 	"math"
 	"strings"
@@ -196,12 +197,11 @@ func prepareTable(ctx context.Context, name string, columns []SourceColumn, rows
 }
 
 func withStagingConnection(ctx context.Context, run func(*sql.Conn) error) (resultErr error) {
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := sqlutil.OpenMemorySQLite()
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, db.Close()) }()
-	db.SetMaxOpenConns(1)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return err

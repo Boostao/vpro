@@ -97,13 +97,11 @@ func reserveMetadataIdentities(ctx context.Context, tx *sql.Tx, project string) 
 	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" (
-		"ChildTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("ChildTable","ID"))`); err != nil {
+	if err := vprocore.EnsureChildIdentityTable(ctx, tx); err != nil {
 		return err
 	}
 	for id := range ids {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO "__VPRO_ChildIdentity" ("ChildTable","ID") VALUES (?,?)
-			ON CONFLICT ("ChildTable","ID") DO NOTHING`, table, id); err != nil {
+		if err := vprocore.ReserveChildID(ctx, tx, table, id); err != nil {
 			return err
 		}
 	}
@@ -179,7 +177,7 @@ func CreateProjectMetadata(s *vprocore.PlotService, request ProjectMetadataCreat
 	committed := false
 	resultErr = c.WithMetadataWriter(ctx, func(conn *sql.Conn) (err error) {
 		var member bool
-		if err := c.Conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`, request.PlotNumber).Scan(&member); err != nil || !member {
+		if err := c.CoordinatorWhileLocked().QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`, request.PlotNumber).Scan(&member); err != nil || !member {
 			return errors.Join(errors.New("blank metadata parent is outside the selected context"), err)
 		}
 		if template != nil {
@@ -229,7 +227,7 @@ func CreateProjectMetadata(s *vprocore.PlotService, request ProjectMetadataCreat
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO "__VPRO_ChildIdentity" ("ChildTable","ID") VALUES (?,?)`, table, id); err != nil {
+		if err := vprocore.ReserveChildID(ctx, tx, table, id); err != nil {
 			return err
 		}
 		cells := make([]vprocore.ProjectMetadataCell, len(current.Columns))
@@ -272,14 +270,17 @@ func CreateProjectMetadata(s *vprocore.PlotService, request ProjectMetadataCreat
 			if err != nil {
 				return err
 			}
-			audit, err := tx.ExecContext(ctx, `INSERT INTO `+vprocore.QuoteHeaderIdentifier(c.Selection.Project+"_Audit")+
-				` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID")
-				VALUES (?,?,?,'_Metadata','CreateRecord',?,NULL,?,0,0,?)`, c.Selection.Project, user,
-				request.PlotNumber, when, string(snapshot), id)
-			if err != nil {
-				return err
-			}
-			auditID, err := audit.LastInsertId()
+			plotCopy := request.PlotNumber
+			auditID, err := vprocore.RecordAudit(ctx, tx, vprocore.AuditWriteEntry{
+				Project:    c.Selection.Project,
+				User:       user,
+				PlotNumber: &plotCopy,
+				Table:      "_Metadata",
+				EditField:  vprocore.AuditString("CreateRecord"),
+				EditWhen:   when,
+				AfterEdit:  string(snapshot),
+				ID:         &id,
+			})
 			if err != nil {
 				return err
 			}
@@ -325,11 +326,11 @@ func CreateProjectMetadata(s *vprocore.PlotService, request ProjectMetadataCreat
 		if err := c.ValidateMetadataWriterFiles(); err != nil {
 			return err
 		}
-		if err := c.Conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`, request.PlotNumber).Scan(&member); err != nil || !member {
+		if err := c.CoordinatorWhileLocked().QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`, request.PlotNumber).Scan(&member); err != nil || !member {
 			return errors.Join(errors.New("blank metadata parent left selected context"), err)
 		}
-		var reserved bool
-		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM "__VPRO_ChildIdentity" WHERE ChildTable=? AND ID=?)`, table, id).Scan(&reserved); err != nil || !reserved {
+		reserved, err := vprocore.HasChildIDReservation(ctx, tx, table, id)
+		if err != nil || !reserved {
 			return errors.Join(errors.New("blank metadata identity reservation changed"), err)
 		}
 		if err := tx.Commit(); err != nil {

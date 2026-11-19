@@ -89,22 +89,22 @@ func ValidatePersonalSpeciesFiles(c *vprocore.SqliteContext) error {
 }
 
 func WithPersonalSpeciesWriter(c *vprocore.SqliteContext, ctx context.Context, operation func(*sql.Conn) error) (resultErr error) {
-	if err := sqlutil.AcquireMutexLease(ctx, &c.Mu); err != nil {
+	unlock, err := c.AcquireMutex(ctx)
+	if err != nil {
 		return err
 	}
-	defer c.Mu.Unlock()
-	if c.Conn == nil {
+	defer unlock()
+	if !c.IsOpen() {
 		return errors.New("personal species context is closed")
 	}
 	if err := ValidatePersonalSpeciesFiles(c); err != nil {
 		return err
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(c.Attachments["VUser"], "rw")+"&_foreign_keys=on&_busy_timeout=5000&_txlock=immediate")
+	db, err := sqlutil.OpenImmediateWriteSQLite(c.Attachments["VUser"])
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, db.Close()) }()
-	db.SetMaxOpenConns(1)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return err
@@ -202,19 +202,17 @@ func PlotCreatePersonalSpeciesDefinition(s *vprocore.PlotService, request Person
 			return err
 		}
 		when := time.Now().Format("2006-01-02 15:04:05")
-		result, err = tx.ExecContext(ctx, `INSERT INTO main.USysAuditTrail
-			("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit")
-			VALUES (?,?,NULL,'USysUserSpp','CreateRecord',?,NULL,?)`,
-			project, user, when, string(after))
+		auditID, err := vprocore.RecordUSysAudit(ctx, tx, vprocore.AuditWriteEntry{
+			Schema:    "main",
+			Project:   project,
+			User:      user,
+			Table:     "USysUserSpp",
+			EditField: vprocore.AuditString("CreateRecord"),
+			EditWhen:  when,
+			AfterEdit: string(after),
+		})
 		if err != nil {
 			return fmt.Errorf("personal species audit failed: %w", err)
-		}
-		if affected, err := result.RowsAffected(); err != nil || affected != 1 {
-			return errors.Join(fmt.Errorf("personal species audit expected one row, found %d", affected), err)
-		}
-		auditID, err := result.LastInsertId()
-		if err != nil {
-			return fmt.Errorf("personal species audit identity observation failed: %w", err)
 		}
 		var audited bool
 		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM main.USysAuditTrail

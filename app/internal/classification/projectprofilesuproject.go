@@ -148,7 +148,7 @@ func SaveProfileSUInProject(s *vprocore.ContextService, ctx context.Context, con
 					if err != nil {
 						return err
 					}
-					var reader vprocore.ProjectMetadataQueryer = owner.Conn
+					var reader vprocore.ProjectMetadataQueryer = owner.CoordinatorWhileLocked()
 					if os.SameFile(owner.AttachmentInfo[role], owner.AttachmentInfo["project"]) {
 						reader, role = tx, "main"
 					}
@@ -160,7 +160,7 @@ func SaveProfileSUInProject(s *vprocore.ContextService, ctx context.Context, con
 						return errors.New("selected profile rules changed during SU creation; table/provenance rolled back")
 					}
 					if request.Review.SU.SourceSU != nil {
-						reader, role = owner.Conn, "su"
+						reader, role = owner.CoordinatorWhileLocked(), "su"
 						if os.SameFile(owner.AttachmentInfo["su"], owner.AttachmentInfo["project"]) {
 							reader, role = tx, "main"
 						}
@@ -172,14 +172,14 @@ func SaveProfileSUInProject(s *vprocore.ContextService, ctx context.Context, con
 							return errors.New("selected SiteUnit records changed during SU creation; table/provenance rolled back")
 						}
 					}
-					if err := validateProfileSUTemplate(ctx, owner.Conn); err != nil {
+					if err := validateProfileSUTemplate(ctx, owner.CoordinatorWhileLocked()); err != nil {
 						return err
 					}
-					template, err := vprocore.ReadSQLiteStorageRows(ctx, owner.Conn, "VPro64", "USysSuTable", "", nil, "")
+					template, err := vprocore.ReadSQLiteStorageRows(ctx, owner.CoordinatorWhileLocked(), "VPro64", "USysSuTable", "", nil, "")
 					if err != nil {
 						return err
 					}
-					columns, err := vprocore.ProfileMetadataColumns(ctx, owner.Conn, "VPro64")
+					columns, err := vprocore.ProfileMetadataColumns(ctx, owner.CoordinatorWhileLocked(), "VPro64")
 					if err != nil {
 						return err
 					}

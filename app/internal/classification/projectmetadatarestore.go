@@ -257,7 +257,7 @@ func ReviewProjectMetadataRestoration(s *vprocore.ContextService, ctx context.Co
 				}
 			}()
 			var member bool
-			if err := c.Conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`, plot).Scan(&member); err != nil || !member {
+			if err := c.CoordinatorWhileLocked().QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`, plot).Scan(&member); err != nil || !member {
 				return errors.Join(errors.New("metadata restoration parent is outside the selected context"), err)
 			}
 			review, err = metadataRestoreReview(ctx, tx, c.Selection.Project, plot, contextID, historyID)
@@ -293,7 +293,7 @@ func RestoreProjectMetadata(s *vprocore.ContextService, ctx context.Context, con
 				}
 			}()
 			var member bool
-			if err := c.Conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`,
+			if err := c.CoordinatorWhileLocked().QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`,
 				request.Review.PlotNumber).Scan(&member); err != nil || !member {
 				return errors.Join(errors.New("metadata restoration parent is outside the selected context"), err)
 			}
@@ -373,7 +373,7 @@ func RestoreProjectMetadata(s *vprocore.ContextService, ctx context.Context, con
 			if err := c.ValidateMetadataWriterFiles(); err != nil {
 				return err
 			}
-			if err := c.Conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`,
+			if err := c.CoordinatorWhileLocked().QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`,
 				current.PlotNumber).Scan(&member); err != nil || !member {
 				return errors.Join(errors.New("metadata restoration parent left the selected context before commit"), err)
 			}
@@ -416,7 +416,7 @@ func ListProjectMetadataRestoreHistory(s *vprocore.ContextService, ctx context.C
 		c := plots.Projects.Sqlite
 		err := c.WithMetadataWriter(ctx, func(conn *sql.Conn) (resultErr error) {
 			var member bool
-			if err := c.Conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`, plot).Scan(&member); err != nil || !member {
+			if err := c.CoordinatorWhileLocked().QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`, plot).Scan(&member); err != nil || !member {
 				return errors.Join(errors.New("metadata history parent is outside the selected context"), err)
 			}
 			tx, err := conn.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})

@@ -321,12 +321,11 @@ func SaveProjectPlotProfileSU(s *vprocore.ContextService, ctx context.Context, c
 }
 
 func writeProfileSUFile(ctx context.Context, path string, request ProfileSUCreation) (resultErr error) {
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(path, "rw")+"&_journal_mode=DELETE&_synchronous=FULL")
+	db, err := sqlutil.OpenStagedSQLite(path)
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, db.Close()) }()
-	db.SetMaxOpenConns(1)
 	tx, err := sqlutil.BeginStagedTx(ctx, db)
 	if err != nil {
 		return err

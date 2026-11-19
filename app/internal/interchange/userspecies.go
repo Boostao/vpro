@@ -187,10 +187,11 @@ func ExportUserSpeciesList(s *vprocore.ContextService, ctx context.Context, cont
 
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (UserSpeciesExportResult, error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return UserSpeciesExportResult{}, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		tx, err := owner.BeginReadSnapshot(ctx)
 		if err != nil {
 			return UserSpeciesExportResult{}, err
@@ -572,10 +573,11 @@ func PreviewUserSpeciesImport(s *vprocore.ContextService, ctx context.Context, c
 	}
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (UserSpeciesImportPreview, error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return UserSpeciesImportPreview{}, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		tx, err := owner.BeginReadSnapshot(ctx)
 		if err != nil {
 			return UserSpeciesImportPreview{}, err
@@ -630,10 +632,11 @@ func ImportUserSpeciesList(s *vprocore.ContextService, ctx context.Context, cont
 			user = "VPro"
 		}
 
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return UserSpeciesImportResult{}, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		if err := validateVUserOwnership(owner); err != nil {
 			return UserSpeciesImportResult{}, err
 		}
@@ -651,12 +654,11 @@ func ImportUserSpeciesList(s *vprocore.ContextService, ctx context.Context, cont
 			return UserSpeciesImportResult{}, err
 		}
 
-		db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(owner.Attachments["VUser"], "rw")+"&_foreign_keys=on&_busy_timeout=5000&_txlock=immediate")
+		db, err := sqlutil.OpenImmediateWriteSQLite(owner.Attachments["VUser"])
 		if err != nil {
 			return UserSpeciesImportResult{}, err
 		}
 		defer db.Close()
-		db.SetMaxOpenConns(1)
 		conn, err := db.Conn(ctx)
 		if err != nil {
 			return UserSpeciesImportResult{}, err
@@ -702,10 +704,15 @@ func ImportUserSpeciesList(s *vprocore.ContextService, ctx context.Context, cont
 					return UserSpeciesImportResult{}, fmt.Errorf("insert user species %s: %w", rec.Code, err)
 				}
 				afterJSON, _ := json.Marshal(rec)
-				_, _ = conn.ExecContext(ctx, `
-					INSERT INTO main.USysAuditTrail ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit")
-					VALUES (?, ?, NULL, 'USysUserSpp', 'ImportInsert', ?, NULL, ?)`,
-					project, user, when, string(afterJSON))
+				_, _ = vprocore.RecordUSysAudit(ctx, conn, vprocore.AuditWriteEntry{
+					Schema:    "main",
+					Project:   project,
+					User:      user,
+					Table:     "USysUserSpp",
+					EditField: vprocore.AuditString("ImportInsert"),
+					EditWhen:  when,
+					AfterEdit: string(afterJSON),
+				})
 				inserted++
 
 			case "overwrite":
@@ -717,10 +724,16 @@ func ImportUserSpeciesList(s *vprocore.ContextService, ctx context.Context, cont
 					return UserSpeciesImportResult{}, fmt.Errorf("overwrite user species %s: %w", rec.Code, err)
 				}
 				afterJSON, _ := json.Marshal(rec)
-				_, _ = conn.ExecContext(ctx, `
-					INSERT INTO main.USysAuditTrail ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit")
-					VALUES (?, ?, NULL, 'USysUserSpp', 'ImportOverwrite', ?, ?, ?)`,
-					project, user, when, item.Reason, string(afterJSON))
+				_, _ = vprocore.RecordUSysAudit(ctx, conn, vprocore.AuditWriteEntry{
+					Schema:     "main",
+					Project:    project,
+					User:       user,
+					Table:      "USysUserSpp",
+					EditField:  vprocore.AuditString("ImportOverwrite"),
+					EditWhen:   when,
+					BeforeEdit: item.Reason,
+					AfterEdit:  string(afterJSON),
+				})
 				overwritten++
 
 			default:

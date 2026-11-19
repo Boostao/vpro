@@ -1,7 +1,6 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -59,10 +58,11 @@ func PublishOwnedPlotLabelPDF(s *vprocore.ContextService, ctx context.Context, c
 	}
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (result vprocore.ArtifactPublication, resultErr error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return result, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		defer func() {
 			if result.Published && resultErr != nil {
 				resultErr = fmt.Errorf("owned label PDF published; do not replay publication: %w", resultErr)

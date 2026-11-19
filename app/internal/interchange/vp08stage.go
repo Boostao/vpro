@@ -86,11 +86,10 @@ func stageAndPublishVP08Project(
 		return "", "", false, nil, err
 	}
 
-	sqlDB, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(tmpPath, "rw")+"&_journal_mode=DELETE&_synchronous=FULL")
+	sqlDB, err := sqlutil.OpenStagedSQLite(tmpPath)
 	if err != nil {
 		return "", "", false, nil, err
 	}
-	sqlDB.SetMaxOpenConns(1)
 	tx, err := sqlutil.BeginStagedTx(ctx, sqlDB)
 	if err != nil {
 		sqlDB.Close()

@@ -355,10 +355,9 @@ func ApplyOptimizeVeg(s *vprocore.ContextService, ctx context.Context, contextID
 
 			vegTable := project + "_Veg"
 			quotedVeg := vprocore.QuoteHeaderIdentifier(vegTable)
-			quotedAudit := vprocore.QuoteHeaderIdentifier(project + "_Audit")
 			now := time.Now().Format("2006-01-02 15:04:05")
 
-			auditStmt, err := tx.PrepareContext(ctx, `INSERT INTO `+quotedAudit+` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`)
+			auditStmt, err := vprocore.PrepareProjectAuditStmt(ctx, tx, "", project)
 			if err != nil {
 				return err
 			}
@@ -393,8 +392,18 @@ func ApplyOptimizeVeg(s *vprocore.ContextService, ctx context.Context, contextID
 					}
 					setParts = append(setParts, vprocore.QuoteHeaderIdentifier(col)+" = ?")
 					updateArgs = append(updateArgs, afterCell.sqlParam())
-					if _, err := auditStmt.ExecContext(ctx, project, user, plan.group.PlotNumber, "_Veg", col, now,
-						auditTextForRawCell(beforeCell), auditTextForRawCell(afterCell), survivorID); err != nil {
+					colCopy := col
+					if _, err := vprocore.ExecPreparedAudit(ctx, auditStmt, vprocore.AuditWriteEntry{
+						Project:    project,
+						User:       user,
+						PlotNumber: &plan.group.PlotNumber,
+						Table:      "_Veg",
+						EditField:  &colCopy,
+						EditWhen:   now,
+						BeforeEdit: auditTextForRawCell(beforeCell),
+						AfterEdit:  auditTextForRawCell(afterCell),
+						ID:         &survivorID,
+					}); err != nil {
 						return err
 					}
 					auditCount++
@@ -429,8 +438,17 @@ func ApplyOptimizeVeg(s *vprocore.ContextService, ctx context.Context, contextID
 						if beforeCell.storage == "null" || (col == "Flag" && beforeCell.storage == "integer" && beforeCell.intVal == 0) {
 							continue
 						}
-						if _, err := auditStmt.ExecContext(ctx, project, user, plan.group.PlotNumber, "_Veg", col, now,
-							auditTextForRawCell(beforeCell), nil, dupID); err != nil {
+						colCopy := col
+						if _, err := vprocore.ExecPreparedAudit(ctx, auditStmt, vprocore.AuditWriteEntry{
+							Project:    project,
+							User:       user,
+							PlotNumber: &plan.group.PlotNumber,
+							Table:      "_Veg",
+							EditField:  &colCopy,
+							EditWhen:   now,
+							BeforeEdit: auditTextForRawCell(beforeCell),
+							ID:         &dupID,
+						}); err != nil {
 							return err
 						}
 						auditCount++
@@ -462,8 +480,14 @@ func ApplyOptimizeVeg(s *vprocore.ContextService, ctx context.Context, contextID
 				"oldToSurvivorIdMap":     oldToSurvivorAll,
 				"custodianAuditOverride": req.CustodianAuditOverride,
 			})
-			if _, err := tx.ExecContext(ctx, `INSERT INTO `+quotedAudit+` ("Project","User","Table","EditField","EditWhen","AfterEdit","Restore","Flag") VALUES (?,?,?,?,?,?,0,0)`,
-				project, user, "_Veg", "OptimizeVeg", now, string(summaryJSON)); err != nil {
+			if _, err := vprocore.ExecPreparedAudit(ctx, auditStmt, vprocore.AuditWriteEntry{
+				Project:   project,
+				User:      user,
+				Table:     "_Veg",
+				EditField: vprocore.AuditString("OptimizeVeg"),
+				EditWhen:  now,
+				AfterEdit: string(summaryJSON),
+			}); err != nil {
 				return err
 			}
 			auditCount++

@@ -70,8 +70,13 @@ func (update *SpeciesCodeCheckUpdate) UnmarshalJSON(data []byte) error {
 func ReviewSpeciesCodes(s *vprocore.ContextService, ctx context.Context, contextID string) (SpeciesCodeCheckReview, error) {
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (SpeciesCodeCheckReview, error) {
 		c := plots.Projects.Sqlite
+		unlock, err := c.AcquireMutex(ctx)
+		if err != nil {
+			return SpeciesCodeCheckReview{}, err
+		}
+		defer unlock()
 		table := `"project".` + vprocore.QuoteHeaderIdentifier(c.Selection.Project+"_Veg")
-		rows, err := c.Conn.QueryContext(ctx, `SELECT v.ID,v.PlotNumber,v.Species,typeof(v.Species),
+		rows, err := c.CoordinatorWhileLocked().QueryContext(ctx, `SELECT v.ID,v.PlotNumber,v.Species,typeof(v.Species),
 			EXISTS(SELECT 1 FROM USysAllSpecs WHERE Code COLLATE BINARY=v.Species AND LOWER(COALESCE(CAST(Codetype AS TEXT),''))<>'s'),
 			(SELECT s.Code FROM USysAllSpecs s
 			 WHERE s.OldCode COLLATE BINARY=v.Species
@@ -136,7 +141,12 @@ func LookupSpeciesCodeCheckTarget(s *vprocore.ContextService, ctx context.Contex
 		if err := vprocore.ValidateVegetationSpeciesLookup(lookup.Code); err != nil {
 			return nil, err
 		}
-		rows, err := plots.Projects.Sqlite.Conn.QueryContext(ctx, `SELECT Code,ScientificName,Lifeform,EnglishName,Codetype,'master'
+		unlock, err := plots.Projects.Sqlite.AcquireMutex(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer unlock()
+		rows, err := plots.Projects.Sqlite.CoordinatorWhileLocked().QueryContext(ctx, `SELECT Code,ScientificName,Lifeform,EnglishName,Codetype,'master'
 			FROM USysAllSpecs WHERE Code COLLATE BINARY=? AND LOWER(COALESCE(CAST(Codetype AS TEXT),''))<>'s'
 			UNION ALL SELECT Code,ScientificName,LifeForm,EnglishName,Codetype,'user'
 			FROM USysUserSpp WHERE Code COLLATE BINARY=?
@@ -180,7 +190,7 @@ func SaveSpeciesCodeCheck(s *vprocore.ContextService, contextID string, updates 
 			validate := func(tx *sql.Tx, table, plot string) error {
 				c := plots.Projects.Sqlite
 				var allowed, listed bool
-				if err := c.Conn.QueryRowContext(plots.OperationContext(), `SELECT
+				if err := c.CoordinatorWhileLocked().QueryRowContext(plots.OperationContext(), `SELECT
 					EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?),
 					EXISTS(SELECT 1 FROM USysAllSpecs WHERE Code COLLATE BINARY=? AND LOWER(COALESCE(CAST(Codetype AS TEXT),''))<>'s') OR
 					EXISTS(SELECT 1 FROM USysUserSpp WHERE Code COLLATE BINARY=?)`,

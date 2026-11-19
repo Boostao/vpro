@@ -266,12 +266,12 @@ func ExportGeoPackage(s *vprocore.ContextService, ctx context.Context, contextID
 		adminCTE, scopeAdminPred := scopedPlotsCTEAndPredicate(owner, `t."Plot"`)
 
 		var (
-			suByPlot                map[string]string
-			envCols, adminCols      []gpkgColSpec
-			envRows, adminRows      [][]any
-			vegObs                  []longVegObservation
-			humusCols, mineralCols  []gpkgColSpec
-			humusRows, mineralRows  [][]any
+			suByPlot               map[string]string
+			envCols, adminCols     []gpkgColSpec
+			envRows, adminRows     [][]any
+			vegObs                 []longVegObservation
+			humusCols, mineralCols []gpkgColSpec
+			humusRows, mineralRows [][]any
 		)
 		if err := withScopedReadSnapshot(ctx, owner, func(readTx *sql.Tx) error {
 			var rErr error
@@ -332,11 +332,10 @@ func ExportGeoPackage(s *vprocore.ContextService, ctx context.Context, contextID
 		}()
 		_ = tmpFile.Close()
 
-		gpkgDB, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(tmpPath, "rw")+"&_journal_mode=DELETE&_synchronous=FULL")
+		gpkgDB, err := sqlutil.OpenStagedSQLite(tmpPath)
 		if err != nil {
 			return GeoPackageExportOutcome{}, err
 		}
-		gpkgDB.SetMaxOpenConns(1)
 
 		// Set GeoPackage 1.3.1 magic header PRAGMAs before creating tables
 		if _, err := gpkgDB.ExecContext(ctx, `PRAGMA application_id = 1196444487; PRAGMA user_version = 10300;`); err != nil {

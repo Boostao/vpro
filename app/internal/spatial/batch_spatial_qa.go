@@ -113,10 +113,11 @@ type rawSpatialPlotRow struct {
 }
 
 func queryScopedSpatialPlotRows(ctx context.Context, owner *vprocore.SqliteContext) ([]rawSpatialPlotRow, error) {
-	if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+	unlock, err := owner.AcquireMutex(ctx)
+	if err != nil {
 		return nil, err
 	}
-	defer owner.Mu.Unlock()
+	defer unlock()
 
 	tx, err := owner.BeginReadSnapshot(ctx)
 	if err != nil {

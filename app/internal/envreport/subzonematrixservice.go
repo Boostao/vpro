@@ -1,7 +1,6 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -224,10 +223,11 @@ func (s *SubzoneMatrixService) exportReviewed(ctx context.Context, contextID, re
 	}
 	return vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (*SubzoneMatrixWorkbookOutcome, error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		unlock, err := owner.AcquireMutex(ctx)
+		if err != nil {
 			return nil, err
 		}
-		defer owner.Mu.Unlock()
+		defer unlock()
 		read := func() (subzoneMatrixReview, error) {
 			return vprocore.WithPublicationReadSnapshot(ctx, owner, hooks.snapshot, func(tx *sql.Tx) (subzoneMatrixReview, error) {
 				return readSubzoneMatrixSnapshot(ctx, owner, tx, contextID)
