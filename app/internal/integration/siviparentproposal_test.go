@@ -1,14 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -17,9 +9,15 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-func assertSIVIProposalAssignments(t *testing.T, parent *sourceform.SiviParentProjection, assignments []sourceform.SiviParentScalarAssignment, optionDomain bool) {
+func assertSIVIProposalAssignments(t *testing.T, parent *sourceform.SourceParentProjection, assignments []sourceform.SourceParentScalarAssignment, optionDomain bool) {
 	t.Helper()
 	fields := []struct {
 		column, suffix string
@@ -41,7 +39,7 @@ func assertSIVIProposalAssignments(t *testing.T, parent *sourceform.SiviParentPr
 	} else {
 		fields = fields[:7]
 	}
-	expected := map[string]sourceform.SiviParentScalarAssignment{}
+	expected := map[string]sourceform.SourceParentScalarAssignment{}
 	for _, field := range fields {
 		columns, row := parent.EnvColumns, parent.Rows[0].Env
 		if field.suffix == "Admin" {
@@ -58,7 +56,7 @@ func assertSIVIProposalAssignments(t *testing.T, parent *sourceform.SiviParentPr
 			if reflect.DeepEqual(before, after) {
 				after, execution = vprocore.ProjectMetadataCell{Storage: "null"}, nil
 			}
-			expected[field.column] = sourceform.SiviParentScalarAssignment{
+			expected[field.column] = sourceform.SourceParentScalarAssignment{
 				ContextID: parent.ContextID, Table: parent.Project + "_" + field.suffix,
 				RowID: row.RowID, Column: field.column, Before: before, After: after, Value: execution,
 			}
@@ -116,7 +114,7 @@ func TestSIVIParentProposalOwnedDomainsSnapshotAndNoWrites(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, domain := range []string{"both", "scalar", "option", "unchanged"} {
-				scalarInput, optionInput := append([]sourceform.SiviParentScalarEdit(nil), scalars...), append([]sourceform.SiviParentScalarEdit(nil), options...)
+				scalarInput, optionInput := append([]sourceform.SourceParentScalarEdit(nil), scalars...), append([]sourceform.SourceParentScalarEdit(nil), options...)
 				switch domain {
 				case "scalar":
 					optionInput = nil
@@ -179,7 +177,7 @@ func TestSIVIParentProposalRejectsInvalidTailAndStaleOwnership(t *testing.T) {
 	files := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
 	for _, kind := range []string{"empty", "option-tail", "scalar-tail", "wrong-domain", "duplicate", "context", "row", "expected", "missing-pair"} {
 		t.Run(kind, func(t *testing.T) {
-			a, b := append([]sourceform.SiviParentScalarEdit(nil), scalars...), append([]sourceform.SiviParentScalarEdit(nil), options...)
+			a, b := append([]sourceform.SourceParentScalarEdit(nil), scalars...), append([]sourceform.SourceParentScalarEdit(nil), options...)
 			id, plot := state.ContextID, "108050"
 			switch kind {
 			case "empty":
@@ -320,8 +318,8 @@ func TestSIVIParentReadProjectionFailureAndLateCancellationKeepAttachments(t *te
 	sentinel := errors.New("rejected owned projection")
 	for _, cancelled := range []bool{false, true} {
 		ctx, cancel := context.WithCancel(context.Background())
-		got, err := vprocore.WithContextPlotRequest(ctx, service, state.ContextID, func(plots *vprocore.PlotService) (*sourceform.SiviParentProjection, error) {
-			return sourceform.WithOwnedSIVIParentRead(ctx, plots, state.ContextID, "108050", func(original *sourceform.SiviParentProjection) (*sourceform.SiviParentProjection, error) {
+		got, err := vprocore.WithContextPlotRequest(ctx, service, state.ContextID, func(plots *vprocore.PlotService) (*sourceform.SourceParentProjection, error) {
+			return sourceform.WithOwnedSIVIParentRead(ctx, plots, state.ContextID, "108050", func(original *sourceform.SourceParentProjection) (*sourceform.SourceParentProjection, error) {
 				if cancelled {
 					cancel()
 					return original, nil

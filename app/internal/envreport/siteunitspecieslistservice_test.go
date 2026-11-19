@@ -1,16 +1,14 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSummarySpeciesPreviewStrictRequestsAndZeroWrites(t *testing.T) {

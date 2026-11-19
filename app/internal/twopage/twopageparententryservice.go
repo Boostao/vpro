@@ -1,15 +1,13 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type TwoPageEntryReferenceFilters struct {
@@ -31,16 +29,16 @@ func (request *TwoPageEntryReferenceFilters) UnmarshalJSON(data []byte) error {
 }
 
 type TwoPageEntryCodeAcknowledgement struct {
-	ContextID string                               `json:"contextId"`
-	Project   string                               `json:"project"`
-	Plot      string                               `json:"plot"`
-	Form      string                               `json:"form"`
-	Table     string                               `json:"table"`
-	RowID     string                               `json:"rowId"`
-	Column    string                               `json:"column"`
-	Expected  vprocore.ProjectMetadataCell         `json:"expected"`
-	Value     vprocore.ProjectMetadataCell         `json:"value"`
-	Reference sourceform.SIVIParentSharedReference `json:"reference"`
+	ContextID string                                 `json:"contextId"`
+	Project   string                                 `json:"project"`
+	Plot      string                                 `json:"plot"`
+	Form      string                                 `json:"form"`
+	Table     string                                 `json:"table"`
+	RowID     string                                 `json:"rowId"`
+	Column    string                                 `json:"column"`
+	Expected  vprocore.ProjectMetadataCell           `json:"expected"`
+	Value     vprocore.ProjectMetadataCell           `json:"value"`
+	Reference sourceform.SourceParentSharedReference `json:"reference"`
 }
 
 func (request *TwoPageEntryCodeAcknowledgement) UnmarshalJSON(data []byte) error {
@@ -64,7 +62,7 @@ func (request *TwoPageEntryCodeAcknowledgement) UnmarshalJSON(data []byte) error
 	return nil
 }
 
-func decodeTwoPageEntryAcknowledgementReference(data []byte, reference *sourceform.SIVIParentSharedReference) error {
+func decodeTwoPageEntryAcknowledgementReference(data []byte, reference *sourceform.SourceParentSharedReference) error {
 	if err := vprocore.DecodeStrictRequiredJSON(data, reference, "complete-entry reference", "column", "listName", "required", "source", "available",
 		"diagnostic", "definitions", "choices"); err != nil {
 		return err
@@ -122,17 +120,16 @@ func decodeTwoPageEntryAcknowledgementReference(data []byte, reference *sourcefo
 }
 
 func (request TwoPageEntryCodeAcknowledgement) private() TwoPageEntryCodeAcknowledgementInternal {
-	return TwoPageEntryCodeAcknowledgementInternal{request.ContextID, request.Project, request.Plot, request.Form,
-		request.Table, request.RowID, request.Column, request.Expected, request.Value, request.Reference}
+	return TwoPageEntryCodeAcknowledgementInternal(request)
 }
 
 type TwoPageParentEntryWrite struct {
-	Original         *sourceform.SIVIParentProjection  `json:"original"`
-	Edits            []sourceform.SIVIParentCellEdit   `json:"edits"`
-	ProjectSource    int                               `json:"projectSource"`
-	WorkingSource    int                               `json:"workingSource"`
-	Acknowledgements []TwoPageEntryCodeAcknowledgement `json:"acknowledgements"`
-	ProjectSelection *sourceform.SIVIProjectSelection  `json:"projectSelection"`
+	Original         *sourceform.SourceParentProjection `json:"original"`
+	Edits            []sourceform.SourceParentCellEdit  `json:"edits"`
+	ProjectSource    int                                `json:"projectSource"`
+	WorkingSource    int                                `json:"workingSource"`
+	Acknowledgements []TwoPageEntryCodeAcknowledgement  `json:"acknowledgements"`
+	ProjectSelection *sourceform.SourceProjectSelection `json:"projectSelection"`
 }
 
 func (request *TwoPageParentEntryWrite) UnmarshalJSON(data []byte) error {
@@ -200,7 +197,7 @@ func (s *TwoPageParentEntryService) GetReferences(ctx context.Context, contextID
 }
 
 func (s *TwoPageParentEntryService) Save(ctx context.Context, contextID, plot, form string,
-	request TwoPageParentEntryWrite) (*sourceform.SIVIParentWriteResult, error) {
+	request TwoPageParentEntryWrite) (*sourceform.SourceParentWriteResult, error) {
 	if err := s.require(ctx, true); err != nil {
 		return nil, err
 	}
@@ -208,7 +205,7 @@ func (s *TwoPageParentEntryService) Save(ctx context.Context, contextID, plot, f
 	for _, acknowledgement := range request.Acknowledgements {
 		acknowledgements = append(acknowledgements, acknowledgement.private())
 	}
-	var selection *sourceform.SiviProjectSelection
+	var selection *sourceform.SourceProjectSelectionInternal
 	if request.ProjectSelection != nil {
 		private := request.ProjectSelection.Private()
 		selection = &private

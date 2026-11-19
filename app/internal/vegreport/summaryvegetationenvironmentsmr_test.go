@@ -1,16 +1,14 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"encoding/json"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSummaryEnvironmentalSMROriginalCases(t *testing.T) {

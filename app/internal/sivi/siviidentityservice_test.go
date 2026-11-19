@@ -1,19 +1,17 @@
 package sivi
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIIdentityServiceUnavailableContext(t *testing.T) {
@@ -24,6 +22,7 @@ func TestSIVIIdentityServiceUnavailableContext(t *testing.T) {
 	if result, err := missing.GetOriginal(context.Background(), "owned", "P", false); result != nil || err == nil {
 		t.Fatal("nil service produced an original", result, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if err := missing.require(nil); err == nil {
 		t.Fatal("nil context accepted")
 	}

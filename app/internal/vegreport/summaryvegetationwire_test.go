@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 func TestSummaryVegetationClientWireFixture(t *testing.T) {

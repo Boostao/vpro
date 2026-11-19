@@ -1,12 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -17,6 +11,10 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func strataFixture(values map[string]vprocore.ProjectMetadataCell) VegetationReportPreparation {

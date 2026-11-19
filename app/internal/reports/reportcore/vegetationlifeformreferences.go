@@ -1,15 +1,13 @@
 package reportcore
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 var VegetationLifeformReferenceColumns = []string{"Code", "ScientificName", "Lifeform", "EnglishName", "Codetype"}
@@ -77,7 +75,7 @@ func VegetationLifeformReferenceSourceSchemaWithInteger(ctx context.Context, tab
 	return columns, ctx.Err()
 }
 
-// USysAllSpecies projects five columns and UNIONs whole rows, not species
+// PrepareVegetationLifeformReferences — USysAllSpecies projects five columns and UNIONs whole rows, not species
 // codes. NULL CodeType fails the source <> 's' predicate before either join.
 func PrepareVegetationLifeformReferences(ctx context.Context, master, personal vprocore.ProjectMetadataTable) (VegetationLifeformReferences, error) {
 	fail := func(err error) (VegetationLifeformReferences, error) { return VegetationLifeformReferences{}, err }

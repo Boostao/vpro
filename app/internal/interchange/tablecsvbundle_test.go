@@ -1,10 +1,6 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"archive/zip"
 	"bytes"
 	"context"
@@ -17,6 +13,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func tableCSVBundleFixture(t *testing.T) tableCSVDocument {

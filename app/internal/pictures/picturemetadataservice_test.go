@@ -1,14 +1,12 @@
 package pictures
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestPictureMetadataServiceOwnerAndContextGuards(t *testing.T) {
@@ -18,6 +16,7 @@ func TestPictureMetadataServiceOwnerAndContextGuards(t *testing.T) {
 		}
 	}
 	var service *PictureMetadataService
+	//lint:ignore SA1012 intentional nil-context guard test
 	if err := service.require(nil); err == nil {
 		t.Fatal("nil request context accepted")
 	}

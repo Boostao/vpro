@@ -92,19 +92,22 @@ func readSUUnitAssignments(ctx context.Context, tx *sql.Tx, suTableName string) 
 	if err != nil {
 		return nil, nil, err
 	}
-	for suRows.Next() {
-		var p, u string
-		if err := suRows.Scan(&p, &u); err != nil {
-			suRows.Close()
-			return nil, nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, suRows.Close()) }()
+		for suRows.Next() {
+			var p, u string
+			if err := suRows.Scan(&p, &u); err != nil {
+
+				return err
+			}
+			suRawUnits[p] = strings.TrimSpace(u)
+			if _, seen := seenSUKey[p]; !seen {
+				seenSUKey[p] = struct{}{}
+				suPlotKeys = append(suPlotKeys, p)
+			}
 		}
-		suRawUnits[p] = strings.TrimSpace(u)
-		if _, seen := seenSUKey[p]; !seen {
-			seenSUKey[p] = struct{}{}
-			suPlotKeys = append(suPlotKeys, p)
-		}
-	}
-	if err := errors.Join(suRows.Err(), suRows.Close()); err != nil {
+		return suRows.Err()
+	}(); err != nil {
 		return nil, nil, err
 	}
 	return suRawUnits, suPlotKeys, nil

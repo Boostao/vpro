@@ -1,11 +1,6 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -17,6 +12,9 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type ProjectMetadataCreate struct {
@@ -81,20 +79,23 @@ func reserveMetadataIdentities(ctx context.Context, tx *sql.Tx, project string) 
 		return err
 	}
 	ids := map[int64]bool{}
-	for rows.Next() {
-		var storage string
-		var value sql.NullInt64
-		if err := rows.Scan(&storage, &value); err != nil {
-			rows.Close()
-			return err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var storage string
+			var value sql.NullInt64
+			if err := rows.Scan(&storage, &value); err != nil {
+
+				return err
+			}
+			if storage != "integer" || !value.Valid || value.Int64 < -2147483648 || value.Int64 > 2147483647 {
+
+				return errors.New("metadata stored/audited identity cannot be safely reserved; creation made no changes")
+			}
+			ids[value.Int64] = true
 		}
-		if storage != "integer" || !value.Valid || value.Int64 < -2147483648 || value.Int64 > 2147483647 {
-			rows.Close()
-			return errors.New("metadata stored/audited identity cannot be safely reserved; creation made no changes")
-		}
-		ids[value.Int64] = true
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return err
 	}
 	if err := vprocore.EnsureChildIdentityTable(ctx, tx); err != nil {
@@ -117,19 +118,22 @@ func metadataCreationParents(ctx context.Context, tx *sql.Tx, project, plot stri
 			return nil, err
 		}
 		fields := []string{"CAST(rowid AS TEXT)"}
-		for rows.Next() {
-			var cid, required, primary int
-			var name, declared string
-			var defaultValue sql.NullString
-			if err := rows.Scan(&cid, &name, &declared, &required, &defaultValue, &primary); err != nil {
-				rows.Close()
-				return nil, err
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+			for rows.Next() {
+				var cid, required, primary int
+				var name, declared string
+				var defaultValue sql.NullString
+				if err := rows.Scan(&cid, &name, &declared, &required, &defaultValue, &primary); err != nil {
+
+					return err
+				}
+				snapshot = append(snapshot, table, name, declared)
+				column := vprocore.QuoteHeaderIdentifier(name)
+				fields = append(fields, "typeof("+column+")", "hex(CAST("+column+" AS BLOB))")
 			}
-			snapshot = append(snapshot, table, name, declared)
-			column := vprocore.QuoteHeaderIdentifier(name)
-			fields = append(fields, "typeof("+column+")", "hex(CAST("+column+" AS BLOB))")
-		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return rows.Err()
+		}(); err != nil {
 			return nil, err
 		}
 		values, targets := make([]string, len(fields)), make([]any, len(fields))

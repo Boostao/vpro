@@ -1,14 +1,12 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 var OtherTextMaximum = map[string]int{
@@ -73,7 +71,7 @@ func (update *OtherRecordUpdate) UnmarshalJSON(data []byte) error {
 	}
 	raw, present := properties["id"]
 	if !present || string(raw) == "null" {
-		return errors.New("Other draft requires an explicit signed32 identity")
+		return errors.New("Other draft requires an explicit record ID")
 	}
 	return json.Unmarshal(data, (*plain)(update))
 }
@@ -85,11 +83,11 @@ func OtherNullable[T string | bool](value *T) any {
 	return *value
 }
 
-// Patch only explicit cells; expected values prevent stale full-row replacement.
+// UpdateOtherRecords — Patch only explicit cells; expected values prevent stale full-row replacement.
 func (s *PlotService) UpdateOtherRecords(plot string, updates []OtherRecordUpdate) error {
 	patches := make([]ChildRecordPatch, 0, len(updates))
 	for _, update := range updates {
-		patch := ChildRecordPatch{Kind: "Other", Id: update.ID, Cells: map[string]ChildExpectedValue{}}
+		patch := ChildRecordPatch{Kind: "Other", ID: update.ID, Cells: map[string]ChildExpectedValue{}}
 		for property, change := range update.Text {
 			patch.Cells[property] = ChildExpectedValue{OtherNullable(change.Expected), OtherNullable(change.Value), reflect.String}
 		}

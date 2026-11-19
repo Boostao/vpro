@@ -1,12 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -14,6 +8,10 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSelectedUnitAuthorityBuildCASSaveOptionsPreviewAndWorkbook(t *testing.T) {

@@ -1,17 +1,15 @@
 package sivi
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIParentTextOptionsRetainNativeCoercionAndUnchangedHistory(t *testing.T) {
@@ -19,7 +17,7 @@ func TestSIVIParentTextOptionsRetainNativeCoercionAndUnchangedHistory(t *testing
 		for _, value := range []vprocore.ProjectMetadataCell{vprotest.MetadataText("1"), vprotest.MetadataText("2"), {Storage: "null"}} {
 			env, admin, edit := sftest.SiviScalarFixture(t, column, vprotest.MetadataText("??"))
 			edit.Value = value
-			got, err := sourceform.PlanSIVIParentOptions(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit})
+			got, err := sourceform.PlanSIVIParentOptions(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit})
 			if err != nil || len(got) != 1 || got[0].Table != "Sample_Env" || got[0].RowID != edit.RowID ||
 				!reflect.DeepEqual(got[0].Before, vprotest.MetadataText("??")) || !reflect.DeepEqual(got[0].After, value) {
 				t.Fatal("source TEXT option mapping or literal invalid history changed", got, err)
@@ -35,7 +33,7 @@ func TestSIVIParentTextOptionsRetainNativeCoercionAndUnchangedHistory(t *testing
 		} {
 			env, admin, edit := sftest.SiviScalarFixture(t, column, old)
 			edit.Value = old
-			got, err := sourceform.PlanSIVIParentOptions(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit})
+			got, err := sourceform.PlanSIVIParentOptions(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit})
 			if err != nil || got == nil || len(got) != 0 {
 				t.Fatal("historical aliases were normalized or assigned", old, got, err)
 			}
@@ -47,7 +45,7 @@ func TestSIVIParentTextOptionsRetainNativeCoercionAndUnchangedHistory(t *testing
 		} {
 			env, admin, edit := sftest.SiviScalarFixture(t, column, vprocore.ProjectMetadataCell{Storage: "null"})
 			edit.Value = invalid
-			if got, err := sourceform.PlanSIVIParentOptions(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit}); err == nil || got != nil {
+			if got, err := sourceform.PlanSIVIParentOptions(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit}); err == nil || got != nil {
 				t.Fatal("new option was trimmed/coerced/guessed", invalid, got, err)
 			}
 		}
@@ -57,17 +55,17 @@ func TestSIVIParentTextOptionsRetainNativeCoercionAndUnchangedHistory(t *testing
 func TestSIVIParentTextOptionBatchOwnershipScopeCloneAndCancellation(t *testing.T) {
 	env, admin, age := sftest.SiviScalarFixture(t, "SV_StandAgeEstMeas", vprotest.MetadataText("1"))
 	age.Value = vprotest.MetadataText("2")
-	var height sourceform.SiviParentScalarEdit
+	var height sourceform.SourceParentScalarEdit
 	for i, column := range env.Columns {
 		if column.Name == "SV_StandHeightEstMeas" {
 			env.Rows[0].Cells[i] = vprotest.MetadataText("2")
-			height = sourceform.SiviParentScalarEdit{
+			height = sourceform.SourceParentScalarEdit{
 				ContextID: "owned", Table: age.Table, RowID: age.RowID, Column: column.Name,
 				Expected: vprotest.MetadataText("2"), Value: vprocore.ProjectMetadataCell{Storage: "null"},
 			}
 		}
 	}
-	edits := []sourceform.SiviParentScalarEdit{age, height}
+	edits := []sourceform.SourceParentScalarEdit{age, height}
 	got, err := sourceform.PlanSIVIParentOptions(context.Background(), "owned", "Sample", "108050", env, admin, edits)
 	if err != nil || len(got) != 2 || got[0].Value != "2" || got[1].Value != nil {
 		t.Fatal("two source groups collapsed or coerced", got, err)
@@ -92,7 +90,7 @@ func TestSIVIParentTextOptionBatchOwnershipScopeCloneAndCancellation(t *testing.
 		case "other-option":
 			invalid.Column = "PlotType"
 		}
-		if got, err := sourceform.PlanSIVIParentOptions(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{age, invalid}); err == nil || got != nil {
+		if got, err := sourceform.PlanSIVIParentOptions(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{age, invalid}); err == nil || got != nil {
 			t.Fatal("invalid tail/cross-domain target returned partial plan", kind, got, err)
 		}
 	}

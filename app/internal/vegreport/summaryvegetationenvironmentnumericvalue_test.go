@@ -1,17 +1,15 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSummaryEnvironmentalNumericValueSourceWire(t *testing.T) {
@@ -158,6 +156,7 @@ func TestSummaryEnvironmentalNumericValueArgumentsAndContext(t *testing.T) {
 	if !errors.Is(err, context.Canceled) || !reflect.DeepEqual(got, SummaryVegetationEnvironmentalValue{}) {
 		t.Fatal(got, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := prepareSummaryVegetationEnvironmentalNumericValue(nil, "SVSeepage", vprocore.ProjectMetadataCell{Storage: "null"}, &unit, env, su); err == nil {
 		t.Fatal("nil context accepted")
 	}

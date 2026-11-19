@@ -1,12 +1,6 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -16,6 +10,10 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func profileSUProjectFixture(t *testing.T) (*vprocore.ContextService, vprocore.ProjectState, ProfileSUProjectCreation) {

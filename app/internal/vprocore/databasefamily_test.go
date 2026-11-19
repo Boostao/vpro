@@ -1,10 +1,6 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"database/sql"
 	"os"
 	"path/filepath"
@@ -12,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/resources"
 )
 

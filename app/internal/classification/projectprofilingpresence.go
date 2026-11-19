@@ -1,16 +1,14 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type plotProfilePresenceSelector struct {

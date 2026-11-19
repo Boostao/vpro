@@ -140,7 +140,7 @@ func (request SummaryVegetationFieldListRequest) plannedActions() []summaryVeget
 	}
 	actions := make([]summaryVegetationFieldListAction, len(request.Actions))
 	for i, action := range request.Actions {
-		actions[i] = summaryVegetationFieldListAction{Kind: action.Kind, RowID: action.RowID, Selected: action.Selected}
+		actions[i] = summaryVegetationFieldListAction(action)
 	}
 	return actions
 }

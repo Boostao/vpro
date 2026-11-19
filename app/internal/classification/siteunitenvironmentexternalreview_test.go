@@ -1,14 +1,12 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"database/sql"
 	"errors"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestExternalSUEnvironmentServiceRetainsOneCurrentImmutableApproval(t *testing.T) {

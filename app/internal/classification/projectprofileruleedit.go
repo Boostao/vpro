@@ -1,10 +1,6 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -12,6 +8,8 @@ import (
 	"fmt"
 	"reflect"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type ProjectPlotProfileEdit struct {

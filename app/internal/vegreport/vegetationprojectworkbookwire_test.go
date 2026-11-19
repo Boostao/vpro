@@ -1,12 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -16,6 +10,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type projectWorkbookWireCase struct {
@@ -49,10 +47,10 @@ func TestProjectWorkbookStrictClientWireMatchesOriginalKernelAndSummary(t *testi
 			Bytes: len(prepared.Workbook.Bytes), Sheets: []reportcore.VegetationWorkbookSheet{}, SkippedUnits: []VegetationWorkbookSkippedUnit{},
 		}
 		for _, sheet := range prepared.Workbook.Sheets {
-			review.Sheets = append(review.Sheets, reportcore.VegetationWorkbookSheet{Unit: sheet.Unit, Name: sheet.Name})
+			review.Sheets = append(review.Sheets, reportcore.VegetationWorkbookSheet(sheet))
 		}
 		for _, skipped := range prepared.Workbook.SkippedUnits {
-			review.SkippedUnits = append(review.SkippedUnits, VegetationWorkbookSkippedUnit{skipped.Unit, skipped.Reason})
+			review.SkippedUnits = append(review.SkippedUnits, VegetationWorkbookSkippedUnit(skipped))
 		}
 		expectedTuples, expectedPlots := []int{4, 2, 2}[i], []int{4, 2, 1}[i]
 		if len(review.Scope.Build.ProjectTuples) != expectedTuples || review.Summary.SourcePlotRows != expectedPlots ||

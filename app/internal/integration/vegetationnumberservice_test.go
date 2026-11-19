@@ -1,14 +1,12 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"encoding/json"
 	"math"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestVegetationNumbersSourceFieldsAtomicRollbackAndHistoricalOmission(t *testing.T) {

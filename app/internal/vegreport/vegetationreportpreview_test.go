@@ -1,11 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"errors"
@@ -14,6 +9,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestLongVegetationOwnedLayerPreviewExternalScopeAndZeroWrites(t *testing.T) {

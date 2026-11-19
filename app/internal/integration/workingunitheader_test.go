@@ -1,15 +1,13 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestWorkingUnitHeaderBoundsNULLUTF16AndRawRoundTrip(t *testing.T) {

@@ -1,21 +1,18 @@
 package references
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"database/sql"
-
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/resources"
 	"math"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/resources"
 )
 
 var QualityDatabase = resources.PlotQualitySiteDB
@@ -40,7 +37,7 @@ type PlotQualityChoice struct {
 
 type QualityService struct {
 	Mu sync.RWMutex `json:"-" yaml:"-"`
-	Db *sql.DB      `json:"-" yaml:"-"`
+	DB *sql.DB      `json:"-" yaml:"-"`
 }
 
 func NewQualityService(dataDir string) (*QualityService, error) {
@@ -92,17 +89,17 @@ func NewQualityService(dataDir string) (*QualityService, error) {
 	if err := ValidateQualityDatabase(db, provenance); err != nil {
 		return nil, errors.Join(err, db.Close())
 	}
-	return &QualityService{Db: db}, nil
+	return &QualityService{DB: db}, nil
 }
 
 func (s *QualityService) Close() error {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
-	if s.Db == nil {
+	if s.DB == nil {
 		return nil
 	}
-	err := s.Db.Close()
-	s.Db = nil
+	err := s.DB.Close()
+	s.DB = nil
 	return err
 }
 
@@ -179,8 +176,8 @@ func (s *QualityService) ListPlotQualityChoices(ctx context.Context) ([]PlotQual
 		return nil, err
 	}
 	defer s.Mu.RUnlock()
-	if s.Db == nil {
+	if s.DB == nil {
 		return nil, errors.New("quality catalogue is closed")
 	}
-	return QualityChoices(sqlutil.ContextPlotDB{Db: s.Db, Ctx: ctx})
+	return QualityChoices(sqlutil.ContextPlotDB{DB: s.DB, Ctx: ctx})
 }

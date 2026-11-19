@@ -1,11 +1,6 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -14,18 +9,21 @@ import (
 	"errors"
 	"reflect"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const siviProjectAssignmentHistoryTable = "__VPRO_SIVIProjectAssignmentHistory"
 const SiviProjectAssignmentHistorySQL = `CREATE TABLE "__VPRO_SIVIProjectAssignmentHistory"(ID INTEGER PRIMARY KEY,Created TEXT NOT NULL,Proposal TEXT NOT NULL,Restored TEXT)`
 
-var siviProjectAssignmentHistoryDomain = SiviParentHistoryDomain{
-	siviProjectAssignmentHistoryTable, SiviProjectAssignmentHistorySQL, "SIVI ProjectID assignment", SiviProjectAssignmentHistoryAssignments,
+var siviProjectAssignmentHistoryDomain = SourceParentHistoryDomain{
+	siviProjectAssignmentHistoryTable, SiviProjectAssignmentHistorySQL, "SIVI ProjectID assignment", SourceProjectAssignmentHistoryAssignments,
 }
 
-type SiviProjectAssignmentHistory struct {
-	Selection    SiviProjectSelection
-	Choices      SIVIProjectChoices
+type SourceProjectAssignmentHistory struct {
+	Selection    SourceProjectSelectionInternal
+	Choices      SourceProjectChoices
 	Columns      []vprocore.ProjectMetadataColumn
 	Schema       []vprocore.SqliteSchemaObject
 	SchemaSHA256 string
@@ -43,7 +41,7 @@ func siviProjectAssignmentSchemaDigest(columns []vprocore.ProjectMetadataColumn,
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func SiviProjectAssignmentAvailability(ctx context.Context, tx *sql.Tx, source int) (bool, string, error) {
+func SourceProjectAssignmentAvailability(ctx context.Context, tx *sql.Tx, source int) (bool, string, error) {
 	if source == 1 {
 		return true, "Env metadata is guarded in the project transaction; Save independently rechecks membership and ownership.", nil
 	}
@@ -63,15 +61,15 @@ func SiviProjectAssignmentAvailability(ctx context.Context, tx *sql.Tx, source i
 	}
 }
 
-func ReadSIVIProjectAssignmentEvidence(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx, contextID string, selection SiviProjectSelection) (*SiviProjectAssignmentHistory, error) {
-	available, diagnostic, err := SiviProjectAssignmentAvailability(ctx, tx, selection.SourceOption)
+func ReadSourceProjectAssignmentEvidence(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx, contextID string, selection SourceProjectSelectionInternal) (*SourceProjectAssignmentHistory, error) {
+	available, diagnostic, err := SourceProjectAssignmentAvailability(ctx, tx, selection.SourceOption)
 	if err != nil {
 		return nil, err
 	}
 	if !available {
 		return nil, errors.New(diagnostic)
 	}
-	choices, err := ReadSIVIProjectChoicesAtAlias(ctx, owner, tx, contextID, selection.SourceOption, "main")
+	choices, err := ReadSourceProjectChoicesAtAlias(ctx, owner, tx, contextID, selection.SourceOption, "main")
 	if err != nil {
 		return nil, err
 	}
@@ -91,16 +89,16 @@ func ReadSIVIProjectAssignmentEvidence(ctx context.Context, owner *vprocore.Sqli
 	if err != nil {
 		return nil, err
 	}
-	return &SiviProjectAssignmentHistory{selection, *choices, table.Columns, schema, digest}, nil
+	return &SourceProjectAssignmentHistory{selection, *choices, table.Columns, schema, digest}, nil
 }
 
-func WriteSIVIProjectAssignment(s *vprocore.ContextService, ctx context.Context, contextID, plot string, original *SiviParentProjection, selection SiviProjectSelection) (*SiviParentWriteResult, error) {
-	return WriteSIVIParentPlannedWithHooks(s, ctx, contextID, plot, original, siviProjectAssignmentHistoryDomain, nil,
-		SiviProjectAssignmentWriteHooks(s, ctx, contextID, plot, selection))
+func WriteSIVIProjectAssignment(s *vprocore.ContextService, ctx context.Context, contextID, plot string, original *SourceParentProjection, selection SourceProjectSelectionInternal) (*SourceParentWriteResult, error) {
+	return WriteSourceParentPlannedWithHooks(s, ctx, contextID, plot, original, siviProjectAssignmentHistoryDomain, nil,
+		SourceProjectAssignmentWriteHooks(s, ctx, contextID, plot, selection))
 }
 
-func SiviProjectAssignmentWriteHooks(s *vprocore.ContextService, ctx context.Context, contextID, plot string, selection SiviProjectSelection) SiviParentWriteHooks {
-	var evidence *SiviProjectAssignmentHistory
+func SourceProjectAssignmentWriteHooks(s *vprocore.ContextService, ctx context.Context, contextID, plot string, selection SourceProjectSelectionInternal) SourceParentWriteHooks {
+	var evidence *SourceProjectAssignmentHistory
 	var owner *vprocore.SqliteContext
 	var preferences *vprocore.DesktopConfig
 	checkSource := func() error {
@@ -117,7 +115,7 @@ func SiviProjectAssignmentWriteHooks(s *vprocore.ContextService, ctx context.Con
 		}
 		return nil
 	}
-	return SiviParentWriteHooks{
+	return SourceParentWriteHooks{
 		Prepare: func(conn *sql.Conn) (func(), error) {
 			// The context request and owner leases precede the preference lease.
 			// No snapshot/update call may reacquire that preference mutex.
@@ -138,9 +136,9 @@ func SiviProjectAssignmentWriteHooks(s *vprocore.ContextService, ctx context.Con
 			}
 			return release, nil
 		},
-		Plan: func(tx *sql.Tx, observed *SiviParentProjection) ([]SiviParentScalarAssignment, error) {
+		Plan: func(tx *sql.Tx, observed *SourceParentProjection) ([]SourceParentScalarAssignment, error) {
 			var err error
-			evidence, err = ReadSIVIProjectAssignmentEvidence(ctx, owner, tx, contextID, selection)
+			evidence, err = ReadSourceProjectAssignmentEvidence(ctx, owner, tx, contextID, selection)
 			if err != nil {
 				return nil, err
 			}
@@ -156,7 +154,7 @@ func SiviProjectAssignmentWriteHooks(s *vprocore.ContextService, ctx context.Con
 			if err := checkSource(); err != nil {
 				return err
 			}
-			fresh, err := ReadSIVIProjectAssignmentEvidence(ctx, owner, tx, contextID, selection)
+			fresh, err := ReadSourceProjectAssignmentEvidence(ctx, owner, tx, contextID, selection)
 			if err != nil {
 				return err
 			}
@@ -165,11 +163,11 @@ func SiviProjectAssignmentWriteHooks(s *vprocore.ContextService, ctx context.Con
 			}
 			return nil
 		},
-		Decorate: func(event *SiviParentHistory) { event.ProjectAssignment = evidence },
+		Decorate: func(event *SourceParentHistory) { event.ProjectAssignment = evidence },
 	}
 }
 
-func SiviProjectAssignmentHistoryAssignments(ctx context.Context, event SiviParentHistory, project, plot string) ([]SiviParentScalarAssignment, error) {
+func SourceProjectAssignmentHistoryAssignments(ctx context.Context, event SourceParentHistory, project, plot string) ([]SourceParentScalarAssignment, error) {
 	if event.EntryPlan != nil {
 		return nil, errors.New("complete-entry source plans are not standalone ProjectID assignment history")
 	}
@@ -202,8 +200,8 @@ func SiviProjectAssignmentHistoryAssignments(ctx context.Context, event SiviPare
 	return planned, nil
 }
 
-func ValidateSourceProjectAssignmentHistory(ctx context.Context, original *SiviParentProjection, change SiviParentHistoryChange,
-	evidence *SiviProjectAssignmentHistory, controlID string) ([]SiviParentScalarAssignment, error) {
+func ValidateSourceProjectAssignmentHistory(ctx context.Context, original *SourceParentProjection, change SourceParentHistoryChange,
+	evidence *SourceProjectAssignmentHistory, controlID string) ([]SourceParentScalarAssignment, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

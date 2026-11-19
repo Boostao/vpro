@@ -1,17 +1,14 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"errors"
 	"fmt"
 	"math"
-
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 var profileCovers = []string{"Cover1", "Cover2", "Cover3", "Cover4", "Cover5", "Cover5a", "Cover5b", "Cover5c", "Cover6", "Cover7"}
@@ -69,7 +66,7 @@ func compilePlotProfileRules(table vprocore.ProjectMetadataTable, env []vprocore
 		seenRows[row.RowID] = true
 		cell := row.Cells[indices["Order"]]
 		if cell.Storage != "integer" || cell.Integer == nil {
-			return nil, fmt.Errorf("profile row %s requires a stored signed16 Order", row.RowID)
+			return nil, fmt.Errorf("profile row %s requires a whole-number Order value", row.RowID)
 		}
 		order, err := strconv.ParseInt(*cell.Integer, 10, 16)
 		if err != nil || seenOrders[order] {

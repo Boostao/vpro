@@ -1,16 +1,14 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func summaryEnvironmentalCategoryPreparationFixture() (vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable) {

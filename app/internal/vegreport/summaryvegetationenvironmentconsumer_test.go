@@ -1,10 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func summaryEnvironmentalConsumerFields(t *testing.T, values [][]any) vprocore.ProjectMetadataTable {
@@ -127,6 +125,7 @@ func TestSummaryEnvironmentalConsumerInvalidFramesCancellation(t *testing.T) {
 	if rows, err := planSummaryVegetationEnvironmentalRows(t.Context(), invalid, units, env, su); rows != nil || err == nil {
 		t.Fatal("invalid witness returned matrix", rows, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if rows, err := planSummaryVegetationEnvironmentalRows(nil, fields, units, env, su); rows != nil || err == nil {
 		t.Fatal("nil context returned matrix", rows, err)
 	}

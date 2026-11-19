@@ -1,14 +1,12 @@
 package sivi
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func TestSIVICreationServiceGuards(t *testing.T) {
@@ -19,6 +17,7 @@ func TestSIVICreationServiceGuards(t *testing.T) {
 	if err != nil || service == nil {
 		t.Fatalf("creation service unavailable: %v", err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if err := service.require(nil); err == nil {
 		t.Fatal("nil request context accepted")
 	}

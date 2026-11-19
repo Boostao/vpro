@@ -297,6 +297,7 @@ func populateGeoPackageTx(
 		if err != nil {
 			return outcome, err
 		}
+		defer vegStmt.Close()
 		for _, vo := range vegObs {
 			if !request.IncludeUnlocatedPlots && !locatedPlotSet[vo.PlotNumber] {
 				continue
@@ -309,11 +310,9 @@ func populateGeoPackageTx(
 				htAny = *vo.Height
 			}
 			if _, err := vegStmt.ExecContext(ctx, vo.PlotNumber, vo.SiteUnit, vo.Layer, vo.Species, vo.ScientificName, lfAny, vo.Cover, htAny, vo.Collected); err != nil {
-				vegStmt.Close()
 				return outcome, err
 			}
 		}
-		vegStmt.Close()
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO gpkg_contents (table_name, data_type, identifier, description, last_change, srs_id)
 			VALUES ('veg', 'attributes', 'veg', 'VPro Long Vegetation Observations', ?, 0)`, nowISO); err != nil {

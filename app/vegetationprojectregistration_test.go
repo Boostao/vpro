@@ -28,7 +28,24 @@ func TestProjectRegistrationUnconditionalDefaultOn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ContextService.GetState: %v", err)
 	}
-	noneState, err := contextSvc.SwitchContext(initState.ContextID, vprocorepkg.ContextSelection{
+
+	// Verify consolidated LongVegetationTabPreferences RPC pair (ENG-GO-009).
+	bundle, err := vegReportSvc.GetLongVegetationTabPreferences(ctx, initState.ContextID)
+	if err != nil || bundle == nil || bundle.Title == nil || bundle.Unit == nil {
+		t.Fatalf("GetLongVegetationTabPreferences failed: bundle=%+v err=%v", bundle, err)
+	}
+	tabSaved := vegReportSvc.SaveLongVegetationTabPreferences(ctx, initState.ContextID, LongVegetationTabPreferencesSaveRequest{
+		Tab: "title",
+		Title: &vegreportpkg.LongVegetationPreferencesRequest{
+			Expected: bundle.Title.Values,
+			Proposed: bundle.Title.Values,
+		},
+	})
+	if tabSaved == nil || tabSaved.ErrorMessage != "" {
+		t.Fatalf("SaveLongVegetationTabPreferences(title) failed: %+v", tabSaved)
+	}
+
+	noneState, err := contextSvc.SwitchContext(ctx, initState.ContextID, vprocorepkg.ContextSelection{
 		Project:       initState.ActiveProject,
 		ProjectPath:   initState.ProjectPath,
 		SU:            "None",
@@ -65,14 +82,10 @@ func TestProjectRegistrationUnconditionalDefaultOn(t *testing.T) {
 	if err != nil || scopeAfterUnit == nil {
 		t.Fatalf("GetLongVegetationReportScope after unit preference save failed: scope=%+v err=%v", scopeAfterUnit, err)
 	}
-	setReq, err := json.Marshal(map[string]string{
-		"revision":   scopeAfterUnit.Revision,
-		"sourceKind": vprocorepkg.VegetationProjectAllScope,
+	updatedScope, err := vegReportSvc.SetLongVegetationReportScope(ctx, noneState.ContextID, LongVegetationScopeRequest{
+		Revision:   scopeAfterUnit.Revision,
+		SourceKind: vprocorepkg.VegetationProjectAllScope,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	updatedScope, err := vegReportSvc.SetLongVegetationReportScope(ctx, noneState.ContextID, string(setReq))
 	if err != nil || updatedScope == nil || updatedScope.SourceKind != vprocorepkg.VegetationProjectAllScope {
 		t.Fatalf("SetLongVegetationReportScope(all-plots) failed: scope=%+v err=%v", updatedScope, err)
 	}
@@ -82,15 +95,11 @@ func TestProjectRegistrationUnconditionalDefaultOn(t *testing.T) {
 		t.Fatalf("BuildLongVegetationProjectScope failed: scope=%+v err=%v", builtScope, err)
 	}
 
-	reviewReq, err := json.Marshal(map[string]string{
-		"revision":          builtScope.Revision,
-		"buildApprovalHash": builtScope.Build.ApprovalHash,
-		"scope":             "unlumped",
+	wbReview, err := vegReportSvc.GetLongVegetationProjectWorkbookReview(ctx, noneState.ContextID, LongVegetationProjectWorkbookReadRequest{
+		Revision:          builtScope.Revision,
+		BuildApprovalHash: builtScope.Build.ApprovalHash,
+		Scope:             "unlumped",
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	wbReview, err := vegReportSvc.GetLongVegetationProjectWorkbookReview(ctx, noneState.ContextID, string(reviewReq))
 	if err != nil || wbReview == nil || wbReview.Bytes == 0 || len(wbReview.ApprovalHash) != 64 || len(wbReview.WorkbookSHA256) != 64 {
 		t.Fatalf("GetLongVegetationProjectWorkbookReview failed: review=%+v err=%v", wbReview, err)
 	}

@@ -1,11 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -16,6 +11,9 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func projectUnitJSON(t *testing.T, scope *LongVegetationReportScope, expected, proposed int) string {

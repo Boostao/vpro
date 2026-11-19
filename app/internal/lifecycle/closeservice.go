@@ -117,7 +117,7 @@ func (s *CloseService) requestClose() error {
 	return nil
 }
 
-// RegisterHook runs synchronously before Wails' closing listeners. Always
+// HandleWindowClosing — RegisterHook runs synchronously before Wails' closing listeners. Always
 // cancel this window event: ConfirmClose exits through the separate App.Quit.
 func (s *CloseService) HandleWindowClosing(event *application.WindowEvent) {
 	event.Cancel()
@@ -126,7 +126,7 @@ func (s *CloseService) HandleWindowClosing(event *application.WindowEvent) {
 	}
 }
 
-// Also guard application-level quit routes, not just the window's close button.
+// ShouldQuit — Also guard application-level quit routes, not just the window's close button.
 func (s *CloseService) ShouldQuit() bool {
 	s.mu.Lock()
 	approved := s.approved

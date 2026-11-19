@@ -1,16 +1,14 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type VegetationSpeciesUpdate struct {
@@ -179,7 +177,7 @@ func (s *PlotService) UpdateVegetationSpecies(plot string, updates []VegetationS
 			return err
 		}
 		patches = append(patches, ChildRecordPatch{
-			Kind: "Veg", Id: update.ID,
+			Kind: "Veg", ID: update.ID,
 			Cells: map[string]ChildExpectedValue{"species": {update.Expected, update.Value, reflect.String}},
 			Validate: func(tx *sql.Tx, table, plot string) error {
 				var visible bool

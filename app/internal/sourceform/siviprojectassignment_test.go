@@ -1,19 +1,17 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-func siviProjectSelectionFixture(t *testing.T, source int, before, value vprocore.ProjectMetadataCell) (vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, SIVIProjectChoices, SiviProjectSelection) {
+func siviProjectSelectionFixture(t *testing.T, source int, before, value vprocore.ProjectMetadataCell) (vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, SourceProjectChoices, SourceProjectSelectionInternal) {
 	t.Helper()
 	env, admin := vprotest.SiviParentTables(t)
 	for index, field := range env.Columns {
@@ -21,7 +19,7 @@ func siviProjectSelectionFixture(t *testing.T, source int, before, value vprocor
 			env.Rows[0].Cells[index] = vprocore.CloneSiteUnitCell(before)
 		}
 	}
-	choices := SIVIProjectChoices{ContextID: "owned", Project: "Sample", SourceOption: source,
+	choices := SourceProjectChoices{ContextID: "owned", Project: "Sample", SourceOption: source,
 		Source: "Env", Alias: "project", Table: "Sample_Metadata", Choices: vprocore.ProjectMetadataTable{
 			Columns: []vprocore.ProjectMetadataColumn{{Name: "ProjectID", DeclaredType: "TEXT"}, {Name: "ProjectTitle", DeclaredType: "TEXT"}},
 			Rows: []vprocore.ProjectMetadataRow{
@@ -32,7 +30,7 @@ func siviProjectSelectionFixture(t *testing.T, source int, before, value vprocor
 	if source == 2 {
 		choices.Source, choices.Alias, choices.Table = "Master", "VMetaData", "ProjectMetaData"
 	}
-	selection := SiviProjectSelection{ContextID: "owned", ControlID: "form:frmSIVIsite/ProjectID",
+	selection := SourceProjectSelectionInternal{ContextID: "owned", ControlID: "form:frmSIVIsite/ProjectID",
 		Table: "Sample_Env", RowID: env.Rows[0].RowID, Expected: vprocore.CloneSiteUnitCell(before),
 		SourceOption: source, MetadataAlias: choices.Alias, MetadataTable: choices.Table,
 		MetadataColumns:  append([]vprocore.ProjectMetadataColumn{}, choices.Choices.Columns...),
@@ -45,7 +43,7 @@ func TestSIVIProjectAssignmentPlansExplicitPhysicalDuplicateWithoutNormalization
 		value := "  Literal 🌱  "
 		env, admin, choices, selection := siviProjectSelectionFixture(t, source, vprotest.MetadataText("old"), vprotest.MetadataText(value))
 		plan, err := planSIVIProjectAssignment(context.Background(), "owned", "Sample", "108050", env, admin, choices, selection)
-		want := []SiviParentScalarAssignment{{"owned", "Sample_Env", env.Rows[0].RowID, "ProjectID", vprotest.MetadataText("old"), vprotest.MetadataText(value), value}}
+		want := []SourceParentScalarAssignment{{"owned", "Sample_Env", env.Rows[0].RowID, "ProjectID", vprotest.MetadataText("old"), vprotest.MetadataText(value), value}}
 		if err != nil || !reflect.DeepEqual(plan.Assignments, want) || plan.MetadataOriginal.RowID != "9007199254740993" ||
 			plan.MetadataOriginal.Cells[1].Storage != "null" || plan.MetadataTable != choices.Table || plan.SourceOption != source {
 			t.Fatal("physical duplicate/title provenance or literal assignment changed", plan, err)
@@ -83,59 +81,59 @@ func TestSIVIProjectAssignmentExactUTF16BoundaryAndHistoricalNoops(t *testing.T)
 }
 
 func TestSIVIProjectAssignmentRejectsForeignDriftAndUnavailableCompletion(t *testing.T) {
-	for _, mutation := range []func(*vprocore.ProjectMetadataTable, *vprocore.ProjectMetadataTable, *SIVIProjectChoices, *SiviProjectSelection){
-		func(_, _ *vprocore.ProjectMetadataTable, _ *SIVIProjectChoices, s *SiviProjectSelection) {
+	for _, mutation := range []func(*vprocore.ProjectMetadataTable, *vprocore.ProjectMetadataTable, *SourceProjectChoices, *SourceProjectSelectionInternal){
+		func(_, _ *vprocore.ProjectMetadataTable, _ *SourceProjectChoices, s *SourceProjectSelectionInternal) {
 			s.MetadataColumns = nil
 		},
-		func(_, _ *vprocore.ProjectMetadataTable, _ *SIVIProjectChoices, s *SiviProjectSelection) {
+		func(_, _ *vprocore.ProjectMetadataTable, _ *SourceProjectChoices, s *SourceProjectSelectionInternal) {
 			s.MetadataColumns[0].DeclaredType = "VARCHAR"
 		},
-		func(_, _ *vprocore.ProjectMetadataTable, _ *SIVIProjectChoices, s *SiviProjectSelection) {
+		func(_, _ *vprocore.ProjectMetadataTable, _ *SourceProjectChoices, s *SourceProjectSelectionInternal) {
 			s.MetadataColumns[0].Name = "projectid"
 		},
-		func(_, _ *vprocore.ProjectMetadataTable, c *SIVIProjectChoices, _ *SiviProjectSelection) {
+		func(_, _ *vprocore.ProjectMetadataTable, c *SourceProjectChoices, _ *SourceProjectSelectionInternal) {
 			c.Choices.Columns[1].DeclaredType = "VARCHAR"
 		},
-		func(_, _ *vprocore.ProjectMetadataTable, c *SIVIProjectChoices, _ *SiviProjectSelection) {
+		func(_, _ *vprocore.ProjectMetadataTable, c *SourceProjectChoices, _ *SourceProjectSelectionInternal) {
 			c.ContextID = "foreign"
 		},
-		func(_, _ *vprocore.ProjectMetadataTable, c *SIVIProjectChoices, _ *SiviProjectSelection) {
+		func(_, _ *vprocore.ProjectMetadataTable, c *SourceProjectChoices, _ *SourceProjectSelectionInternal) {
 			c.SourceOption = 2
 		},
-		func(_, _ *vprocore.ProjectMetadataTable, c *SIVIProjectChoices, _ *SiviProjectSelection) {
+		func(_, _ *vprocore.ProjectMetadataTable, c *SourceProjectChoices, _ *SourceProjectSelectionInternal) {
 			c.Source = "Master"
 		},
-		func(_, _ *vprocore.ProjectMetadataTable, _ *SIVIProjectChoices, s *SiviProjectSelection) {
+		func(_, _ *vprocore.ProjectMetadataTable, _ *SourceProjectChoices, s *SourceProjectSelectionInternal) {
 			s.ControlID = "form:frmSIVIsite/optProjectID"
 		},
-		func(_, _ *vprocore.ProjectMetadataTable, _ *SIVIProjectChoices, s *SiviProjectSelection) {
+		func(_, _ *vprocore.ProjectMetadataTable, _ *SourceProjectChoices, s *SourceProjectSelectionInternal) {
 			s.MetadataTable = "Other_Metadata"
 		},
-		func(_, _ *vprocore.ProjectMetadataTable, _ *SIVIProjectChoices, s *SiviProjectSelection) {
+		func(_, _ *vprocore.ProjectMetadataTable, _ *SourceProjectChoices, s *SourceProjectSelectionInternal) {
 			s.MetadataAlias = "VMetaData"
 		},
-		func(_, _ *vprocore.ProjectMetadataTable, _ *SIVIProjectChoices, s *SiviProjectSelection) {
+		func(_, _ *vprocore.ProjectMetadataTable, _ *SourceProjectChoices, s *SourceProjectSelectionInternal) {
 			s.MetadataOriginal.RowID = "1"
 		},
-		func(_, _ *vprocore.ProjectMetadataTable, _ *SIVIProjectChoices, s *SiviProjectSelection) {
+		func(_, _ *vprocore.ProjectMetadataTable, _ *SourceProjectChoices, s *SourceProjectSelectionInternal) {
 			s.MetadataOriginal.Cells = []vprocore.ProjectMetadataCell{vprotest.MetadataText("new"), vprotest.MetadataText("")}
 		},
-		func(_, _ *vprocore.ProjectMetadataTable, _ *SIVIProjectChoices, s *SiviProjectSelection) {
+		func(_, _ *vprocore.ProjectMetadataTable, _ *SourceProjectChoices, s *SourceProjectSelectionInternal) {
 			s.RowID = "1"
 		},
-		func(_, _ *vprocore.ProjectMetadataTable, _ *SIVIProjectChoices, s *SiviProjectSelection) {
+		func(_, _ *vprocore.ProjectMetadataTable, _ *SourceProjectChoices, s *SourceProjectSelectionInternal) {
 			s.Table = "Sample_Admin"
 		},
-		func(_, _ *vprocore.ProjectMetadataTable, _ *SIVIProjectChoices, s *SiviProjectSelection) {
+		func(_, _ *vprocore.ProjectMetadataTable, _ *SourceProjectChoices, s *SourceProjectSelectionInternal) {
 			s.Expected = vprotest.MetadataText("stale")
 		},
-		func(_, _ *vprocore.ProjectMetadataTable, c *SIVIProjectChoices, _ *SiviProjectSelection) {
+		func(_, _ *vprocore.ProjectMetadataTable, c *SourceProjectChoices, _ *SourceProjectSelectionInternal) {
 			c.Choices.Rows = append(c.Choices.Rows, c.Choices.Rows[0])
 		},
-		func(_, _ *vprocore.ProjectMetadataTable, c *SIVIProjectChoices, _ *SiviProjectSelection) {
+		func(_, _ *vprocore.ProjectMetadataTable, c *SourceProjectChoices, _ *SourceProjectSelectionInternal) {
 			c.Choices.Rows[0].RowID = "+1"
 		},
-		func(_, a *vprocore.ProjectMetadataTable, _ *SIVIProjectChoices, _ *SiviProjectSelection) {
+		func(_, a *vprocore.ProjectMetadataTable, _ *SourceProjectChoices, _ *SourceProjectSelectionInternal) {
 			a.Rows = append(a.Rows, a.Rows[0])
 		},
 	} {

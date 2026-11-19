@@ -1,18 +1,16 @@
 package sivi
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIHeightFacadeTransportAndOwnedRoundTrip(t *testing.T) {

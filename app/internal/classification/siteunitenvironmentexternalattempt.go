@@ -1,13 +1,11 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type externalSUEnvironmentAttempt struct {

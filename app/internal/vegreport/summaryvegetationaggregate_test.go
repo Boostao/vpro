@@ -1,16 +1,14 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"math"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func summaryCoverCells(values ...*float64) []vprocore.ProjectMetadataCell {
@@ -152,6 +150,7 @@ func TestSummaryVegetationAggregatesCancellationAndOwnership(t *testing.T) {
 			t.Fatal("cancelled aggregate leaked partial counts/sums", point, result, err)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if result, err := aggregateSummaryVegetationCovers(nil, covers, 1); err == nil || !reflect.DeepEqual(result, summaryVegetationCellInput{}) {
 		t.Fatal("nil context accepted", result, err)
 	}

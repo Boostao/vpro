@@ -1,11 +1,6 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -17,6 +12,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/mattn/go-sqlite3"
 )
 
@@ -114,13 +111,15 @@ func ListProjectPlotProfileLumpTables(s *vprocore.ContextService, ctx context.Co
 				continue
 			}
 			var candidates []string
-			for rows.Next() {
-				var name string
-				if err := rows.Scan(&name); err == nil {
-					candidates = append(candidates, name)
+			func() {
+				defer rows.Close()
+				for rows.Next() {
+					var name string
+					if err := rows.Scan(&name); err == nil {
+						candidates = append(candidates, name)
+					}
 				}
-			}
-			rows.Close()
+			}()
 			for _, name := range candidates {
 				if err := c.RequireColumns(ctx, role, name, []string{"LumpCode", "SppCode", "Use"}); err != nil {
 					continue
@@ -356,22 +355,25 @@ func queryProfilePlots(ctx context.Context, db interface {
 	}
 	defer rows.Close()
 	plots, seen := []string{}, map[string]bool{}
-	for rows.Next() {
-		var raw any
-		if err := rows.Scan(&raw); err != nil {
-			return nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var raw any
+			if err := rows.Scan(&raw); err != nil {
+				return err
+			}
+			value, valid := raw.(string)
+			if !valid || value == "" || !utf8.ValidString(value) {
+				return errors.New("profile scope contains unsupported/invalid plot identity; no identity was repaired")
+			}
+			if seen[value] {
+				return errors.New("profile query has ambiguous duplicate plot identities")
+			}
+			seen[value] = true
+			plots = append(plots, value)
 		}
-		value, valid := raw.(string)
-		if !valid || value == "" || !utf8.ValidString(value) {
-			return nil, errors.New("profile scope contains unsupported/invalid plot identity; no identity was repaired")
-		}
-		if seen[value] {
-			return nil, errors.New("profile query has ambiguous duplicate plot identities")
-		}
-		seen[value] = true
-		plots = append(plots, value)
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 	return plots, nil

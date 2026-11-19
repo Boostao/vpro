@@ -1,11 +1,6 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -13,6 +8,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestTwoPageSoilWriteLargeMemoCacheSpill(t *testing.T) {

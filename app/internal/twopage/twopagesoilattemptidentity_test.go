@@ -1,15 +1,13 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func TestTwoPageSoilAttemptRejectsRetargetedOwnerAndRetriesAfterExactCorrection(t *testing.T) {

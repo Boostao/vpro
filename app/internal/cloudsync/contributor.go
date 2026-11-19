@@ -7,13 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/jackc/pgx/v5"
 	"os"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/jackc/pgx/v5"
 )
 
 // PullStandardsResult reports whether local VLists.db was already current or atomically updated.

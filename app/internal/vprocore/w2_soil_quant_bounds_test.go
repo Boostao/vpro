@@ -208,25 +208,25 @@ func TestUXSoil005SoilChildAndHeaderBoundsWithLegacyTolerance(t *testing.T) {
 
 	// 4. Direct ContextService.SaveMineralRecord & UpdateMineralRecord (saveChildWithChecks) coarse-fragment consistency:
 	if err := service.SaveMineralRecord(state.ContextID, vprocore.MineralRecord{
-		PlotNumber:               "UX005A",
-		Horizon:                  str("BC"),
-		UpperDepth:               flt(30),
-		LowerDepth:               flt(50),
-		PercentCoarseFragsGravel: intP(60),
+		PlotNumber:                "UX005A",
+		Horizon:                   str("BC"),
+		UpperDepth:                flt(30),
+		LowerDepth:                flt(50),
+		PercentCoarseFragsGravel:  intP(60),
 		PercentCoarseFragsCobbles: intP(60),
-		PercentCoarseFragsStones: intP(60),
-		PercentCoarseFragsTotal:  intP(80),
+		PercentCoarseFragsStones:  intP(60),
+		PercentCoarseFragsTotal:   intP(80),
 	}); err == nil || !strings.Contains(err.Error(), "cannot exceed 100%") {
 		t.Fatalf("SaveMineralRecord with 60+60+60/80 should fail, got %v", err)
 	}
 	if err := service.SaveMineralRecord(state.ContextID, vprocore.MineralRecord{
-		PlotNumber:               "UX005A",
-		Horizon:                  str("BC"),
-		UpperDepth:               flt(30),
-		LowerDepth:               flt(50),
-		PercentCoarseFragsGravel: intP(30),
+		PlotNumber:                "UX005A",
+		Horizon:                   str("BC"),
+		UpperDepth:                flt(30),
+		LowerDepth:                flt(50),
+		PercentCoarseFragsGravel:  intP(30),
 		PercentCoarseFragsCobbles: intP(30),
-		PercentCoarseFragsTotal:  intP(50),
+		PercentCoarseFragsTotal:   intP(50),
 	}); err == nil || !strings.Contains(err.Error(), "PercentCoarseFragsTotal") {
 		t.Fatalf("SaveMineralRecord with 30+30 > Total 50 should fail, got %v", err)
 	}

@@ -1,17 +1,15 @@
 package datasheet
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestTwoPageVegetationTableProductionWire(t *testing.T) {

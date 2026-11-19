@@ -111,7 +111,7 @@ type contextSQLReader interface {
 }
 
 type ContextPlotDB struct {
-	Db  contextSQLReader `json:"-" yaml:"-"`
+	DB  contextSQLReader `json:"-" yaml:"-"`
 	Ctx context.Context  `json:"-" yaml:"-"`
 }
 
@@ -254,7 +254,7 @@ func ValidateQualityValue(name string, value *string) error {
 		return fmt.Errorf("%s must contain valid Unicode (invalid UTF-8)", name)
 	}
 	if *value == "" || len(utf16.Encode([]rune(*value))) > 15 {
-		return fmt.Errorf("%s must be NULL or a nonempty string of at most 15 UTF-16 units", name)
+		return fmt.Errorf("%s must be NULL or a nonempty string of at most 15 characters", name)
 	}
 	return nil
 }
@@ -384,7 +384,7 @@ func ValidateSiteCodeText(name string, value *string, limit int) error {
 		return fmt.Errorf("%s must contain valid Unicode (invalid UTF-8)", name)
 	}
 	if *value == "" || len(utf16.Encode([]rune(*value))) > limit {
-		return fmt.Errorf("%s must be NULL or a nonempty string of at most %d UTF-16 units", name, limit)
+		return fmt.Errorf("%s must be NULL or a nonempty string of at most %d characters", name, limit)
 	}
 	return nil
 }
@@ -401,9 +401,9 @@ func SqliteFileURI(path, mode string) string {
 }
 
 func (db ContextPlotDB) Query(query string, args ...any) (*sql.Rows, error) {
-	return db.Db.QueryContext(db.Ctx, query, args...)
+	return db.DB.QueryContext(db.Ctx, query, args...)
 }
 
 func (db ContextPlotDB) QueryRow(query string, args ...any) *sql.Row {
-	return db.Db.QueryRowContext(db.Ctx, query, args...)
+	return db.DB.QueryRowContext(db.Ctx, query, args...)
 }

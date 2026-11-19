@@ -13,6 +13,7 @@ import * as vprocore$0 from "../vprocore/models.js";
  */
 export interface AuditChainVerification {
     "verifiedRows": number;
+    "totalRows": number;
     "valid": boolean;
     "partialWindow": boolean;
     "tailHash": string;

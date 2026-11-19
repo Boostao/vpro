@@ -115,10 +115,9 @@ func TestWave2RedBlueListCoordinateRedactionAndStandardsDDL(t *testing.T) {
 		}
 	}
 
-	// Verify SQLite project redaction joins USysSppAttributes.RedBlueList, ignores 'Z'/'S', and leaves safe plots untouched
+	// Verify SQLite VLists conservation reader extracts 'R'/'B' non-synonyms and ignores 'Z'/'S'/''
 	tmpDir := t.TempDir()
 	vlistsPath := filepath.Join(tmpDir, "VLists.db")
-	projPath := filepath.Join(tmpDir, "Snap.db")
 
 	vdb, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(vlistsPath, "rwc"))
 	if err != nil {
@@ -137,53 +136,18 @@ func TestWave2RedBlueListCoordinateRedactionAndStandardsDDL(t *testing.T) {
 	}
 	_ = vdb.Close()
 
-	pdb, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(projPath, "rwc"))
-	if err != nil {
-		t.Fatal(err)
+	codes, hasTbl, err := readSensitiveSpeciesFromSQLiteVLists(ctx, vlistsPath)
+	if err != nil || !hasTbl {
+		t.Fatalf("readSensitiveSpeciesFromSQLiteVLists: hasTbl=%v err=%v", hasTbl, err)
 	}
-	if _, err := pdb.Exec(`
-		CREATE TABLE Snap_Env (PlotNumber TEXT, Longitude REAL, Latitude REAL, UTMEasting REAL, UTMNorthing REAL, XCoord REAL, YCoord REAL);
-		CREATE TABLE Snap_Veg (PlotNumber TEXT, Species TEXT);
-		INSERT INTO Snap_Env VALUES
-			('P001', -123.4567, 49.2891, 466721.0, 5441234.0, 466721.0, 5441234.0),
-			('P002', -124.9876, 50.1234, 358123.0, 5554321.0, NULL, NULL),
-			('P003', -122.1111, 48.9999, 512345.0, 5423456.0, NULL, NULL);
-		INSERT INTO Snap_Veg VALUES
-			('P001', 'RARESPP1'),
-			('P002', 'COMMON'),
-			('P003', 'SYNRARE'),
-			('P003', 'NODATA');
-	`); err != nil {
-		t.Fatal(err)
+	if len(codes) != 2 {
+		t.Fatalf("expected 2 Red/Blue species (RARESPP1, BLUESPP1), got %v", codes)
 	}
-	_ = pdb.Close()
-
-	maskedCount, err := RedactSensitiveSQLiteProjectCoordinates(ctx, projPath, "Snap", vlistsPath)
-	if err != nil {
-		t.Fatalf("RedactSensitiveSQLiteProjectCoordinates: %v", err)
+	if _, ok := codes["RARESPP1"]; !ok {
+		t.Fatal("missing RARESPP1")
 	}
-	if maskedCount != 1 {
-		t.Fatalf("expected exactly 1 masked sensitive plot (P001), got %d", maskedCount)
-	}
-
-	chk, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(projPath, "ro"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer chk.Close()
-
-	var lon, lat, e, n float64
-	if err := chk.QueryRow(`SELECT Longitude, Latitude, UTMEasting, UTMNorthing FROM Snap_Env WHERE PlotNumber='P001'`).Scan(&lon, &lat, &e, &n); err != nil {
-		t.Fatal(err)
-	}
-	if math.Abs(lon-(-123.4)) > 1e-9 || math.Abs(lat-49.2) > 1e-9 || e != 460000.0 || n != 5440000.0 {
-		t.Fatalf("P001 masked coords unexpected: lon=%v lat=%v e=%v n=%v", lon, lat, e, n)
-	}
-	if err := chk.QueryRow(`SELECT Longitude, Latitude FROM Snap_Env WHERE PlotNumber='P002'`).Scan(&lon, &lat); err != nil {
-		t.Fatal(err)
-	}
-	if lon != -124.9876 || lat != 50.1234 {
-		t.Fatalf("P002 non-sensitive coords mutated unexpectedly: lon=%v lat=%v", lon, lat)
+	if _, ok := codes["BLUESPP1"]; !ok {
+		t.Fatal("missing BLUESPP1")
 	}
 }
 
@@ -262,35 +226,7 @@ func TestSensitiveRedactionFailsClosedWhenConservationMetadataEmptyOrMissing(t *
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 
-	projPath := filepath.Join(tmpDir, "UnredactedGuard.db")
-	pdb, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(projPath, "rwc"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pdb.Exec(`
-		CREATE TABLE UnredactedGuard_Env (PlotNumber TEXT, Longitude REAL, Latitude REAL, UTMEasting REAL, UTMNorthing REAL, XCoord REAL, YCoord REAL);
-		CREATE TABLE UnredactedGuard_Veg (PlotNumber TEXT, Species TEXT);
-		INSERT INTO UnredactedGuard_Env VALUES ('P001', -123.4567, 49.2891, 466721.0, 5441234.0, 466721.0, 5441234.0);
-		INSERT INTO UnredactedGuard_Veg VALUES ('P001', 'ABIELAS');
-	`); err != nil {
-		t.Fatal(err)
-	}
-	_ = pdb.Close()
-
-	// 1. Shipped VLists.db has 8,262 USysSppAttributes rows with 0 RedBlueList codes -> must fail loud!
 	bundledVLists := resources.Path("resources", "database-family", "VLists.db")
-	if _, err := loadSensitiveSpeciesFromSQLiteVLists(ctx, bundledVLists); err == nil || !strings.Contains(err.Error(), "0 Red/Blue-listed species rows") {
-		t.Fatalf("expected loadSensitiveSpeciesFromSQLiteVLists on unpopulated bundled VLists.db to fail loud, got: %v", err)
-	}
-	if n, err := RedactSensitiveSQLiteProjectCoordinates(ctx, projPath, "UnredactedGuard", bundledVLists); err == nil || n != 0 || !strings.Contains(err.Error(), "0 Red/Blue-listed species rows") {
-		t.Fatalf("expected RedactSensitiveSQLiteProjectCoordinates on bundled VLists.db to fail closed, got n=%d err=%v", n, err)
-	}
-
-	// 2. Blank path, missing USysSppAttributes table, and Z/Y/S-synonym-only USysSppAttributes must all fail loud.
-	if _, err := RedactSensitiveSQLiteProjectCoordinates(ctx, projPath, "UnredactedGuard", ""); err == nil {
-		t.Fatal("expected empty vlistsPath to fail closed")
-	}
-
 	noTblVLists := filepath.Join(tmpDir, "VLists_NoTable.db")
 	ndb, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(noTblVLists, "rwc"))
 	if err != nil {
@@ -300,9 +236,6 @@ func TestSensitiveRedactionFailsClosedWhenConservationMetadataEmptyOrMissing(t *
 		t.Fatal(err)
 	}
 	_ = ndb.Close()
-	if _, err := RedactSensitiveSQLiteProjectCoordinates(ctx, projPath, "UnredactedGuard", noTblVLists); err == nil || !strings.Contains(err.Error(), "USysSppAttributes is missing") {
-		t.Fatalf("expected missing USysSppAttributes table to fail closed, got: %v", err)
-	}
 
 	zOnlyVLists := filepath.Join(tmpDir, "VLists_ZOnly.db")
 	zdb, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(zOnlyVLists, "rwc"))
@@ -320,37 +253,20 @@ func TestSensitiveRedactionFailsClosedWhenConservationMetadataEmptyOrMissing(t *
 		t.Fatal(err)
 	}
 	_ = zdb.Close()
-	if _, err := RedactSensitiveSQLiteProjectCoordinates(ctx, projPath, "UnredactedGuard", zOnlyVLists); err == nil || !strings.Contains(err.Error(), "0 Red/Blue-listed species rows") {
-		t.Fatalf("expected Z/Y/S-only USysSppAttributes to fail closed, got: %v", err)
-	}
 
-	// Verify UnredactedGuard_Env was not partially mutated when redaction aborted.
-	chk, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(projPath, "ro"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer chk.Close()
-	var lon, lat float64
-	if err := chk.QueryRow(`SELECT Longitude, Latitude FROM UnredactedGuard_Env WHERE PlotNumber='P001'`).Scan(&lon, &lat); err != nil {
-		t.Fatal(err)
-	}
-	if lon != -123.4567 || lat != 49.2891 {
-		t.Fatalf("expected failed redaction to leave database untouched, got lon=%v lat=%v", lon, lat)
-	}
-
-	// 3. PostgreSQL subset/snapshot redaction (findSensitivePlotsForSubsetPG & loadSensitiveSpeciesFromPG):
-	//    missing table or 0 Red/Blue rows in both PG and local VLists must fail closed.
+	// PostgreSQL subset/snapshot redaction (findSensitivePlotsForSubsetPG):
+	// missing table or 0 Red/Blue rows in both PG and local VLists must fail closed.
 	missingPG := &fakeSensitivePG{hasAttrTable: false}
-	if _, err := loadSensitiveSpeciesFromPG(ctx, missingPG); err == nil || !strings.Contains(err.Error(), "standards.usys_spp_attributes is missing") {
-		t.Fatalf("expected loadSensitiveSpeciesFromPG on missing table to fail closed, got: %v", err)
+	if _, err := findSensitivePlotsForSubsetPG(ctx, missingPG, []string{"P001"}, ""); err == nil || !strings.Contains(err.Error(), "is missing") {
+		t.Fatalf("expected findSensitivePlotsForSubsetPG on missing PG + blank local VLists to fail closed, got: %v", err)
 	}
 	if _, err := findSensitivePlotsForSubsetPG(ctx, missingPG, []string{"P001"}, noTblVLists); err == nil || !strings.Contains(err.Error(), "is missing") {
 		t.Fatalf("expected findSensitivePlotsForSubsetPG on missing PG + local tables to fail closed, got: %v", err)
 	}
 
 	emptyPG := &fakeSensitivePG{hasAttrTable: true, sensitiveCodes: nil}
-	if _, err := loadSensitiveSpeciesFromPG(ctx, emptyPG); err == nil || !strings.Contains(err.Error(), "0 Red/Blue-listed species rows") {
-		t.Fatalf("expected loadSensitiveSpeciesFromPG on empty table to fail closed, got: %v", err)
+	if _, err := findSensitivePlotsForSubsetPG(ctx, emptyPG, []string{"P001"}, zOnlyVLists); err == nil || !strings.Contains(err.Error(), "0 Red/Blue-listed species rows") {
+		t.Fatalf("expected findSensitivePlotsForSubsetPG on empty PG + Z/Y/S-only local VLists to fail closed, got: %v", err)
 	}
 	if _, err := findSensitivePlotsForSubsetPG(ctx, emptyPG, []string{"P001"}, bundledVLists); err == nil || !strings.Contains(err.Error(), "0 Red/Blue-listed species rows") {
 		t.Fatalf("expected findSensitivePlotsForSubsetPG on empty PG + bundled VLists to fail closed, got: %v", err)

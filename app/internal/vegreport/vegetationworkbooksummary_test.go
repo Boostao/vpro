@@ -1,11 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"encoding/hex"
@@ -16,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -106,6 +103,7 @@ func TestLongVegetationWorkbookSummaryMetadataCountsAndRefusals(t *testing.T) {
 	if _, err := prepareVegetationWorkbookSummary(ctx, "2026-10-06", env, su, metadata); !errors.Is(err, context.Canceled) {
 		t.Fatal("summary lost cancellation", err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := prepareVegetationWorkbookSummary(nil, "2026-10-06", env, su, metadata); err == nil {
 		t.Fatal("nil summary context accepted")
 	}

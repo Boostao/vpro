@@ -166,6 +166,7 @@ func TestGoogleEarthKMLDetachedBeforeCallbacksAndCancellationRetry(t *testing.T)
 			t.Fatal("cancelled preparation returned partial XML", when, err)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if data, err := prepareGoogleEarthKML(nil, "title", points); err == nil || data != nil {
 		t.Fatal("nil context silently replaced", err)
 	}

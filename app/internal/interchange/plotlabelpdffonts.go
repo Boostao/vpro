@@ -1,18 +1,15 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 const plotLabelPDFFontMaxBytes = 8 * 1024 * 1024
@@ -70,21 +67,6 @@ func readPlotLabelPDFFont(ctx context.Context, path, name string, open func(stri
 		return nil, err
 	}
 	return data, nil
-}
-
-func readPlotLabelPDFFonts(ctx context.Context, directory string, open func(string) (plotLabelPDFFontHandle, error)) (plotLabelPDFFonts, error) {
-	if directory == "" || !filepath.IsAbs(directory) {
-		return plotLabelPDFFonts{}, errors.New("runtime label fonts require an absolute system font directory")
-	}
-	regular, err := readPlotLabelPDFFont(ctx, filepath.Join(directory, "arial.ttf"), "ArialMT", open)
-	if err != nil {
-		return plotLabelPDFFonts{}, err
-	}
-	bold, err := readPlotLabelPDFFont(ctx, filepath.Join(directory, "arialbd.ttf"), "Arial-BoldMT", open)
-	if err != nil {
-		return plotLabelPDFFonts{}, err
-	}
-	return plotLabelPDFFonts{regular: regular, bold: bold, regularName: "ArialMT", boldName: "Arial-BoldMT"}, nil
 }
 
 func loadBundledPlotLabelPDFFonts(ctx context.Context) (plotLabelPDFFonts, error) {

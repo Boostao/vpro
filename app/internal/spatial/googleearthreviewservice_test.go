@@ -1,12 +1,6 @@
 package spatial
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -17,6 +11,10 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func googleEarthReviewRequestJSON(t *testing.T, request GoogleEarthReviewRequest) string {
@@ -91,8 +89,7 @@ UPDATE Sample_Env SET Longitude=-181,Latitude=91 WHERE rowid=(SELECT MIN(rowid) 
 			continue
 		}
 		row := want.Report.Rows[offset]
-		expected := GoogleEarthReviewRow{row.EnvRowID, row.MembershipRowID, row.PlotNumber,
-			row.StoredLongitude, row.Longitude, row.Latitude, row.Description}
+		expected := GoogleEarthReviewRow(row)
 		if len(got.Rows) != 1 || !reflect.DeepEqual(got.Rows[0], expected) {
 			t.Fatal("raw physical cells changed", got.Rows, expected)
 		}

@@ -469,6 +469,13 @@ export interface ProjectState {
     "plotProfile": PlotProfileSourceInfo;
 }
 
+export interface ReportPreferenceOutcome {
+    "contextId": string;
+    "changed": boolean;
+    "committed": boolean;
+    "errorMessage": string;
+}
+
 export interface SUInfo {
     "name": string;
     "kind": string;

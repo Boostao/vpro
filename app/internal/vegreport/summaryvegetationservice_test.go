@@ -1,11 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -16,6 +11,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func summaryVegetationServiceFixture(t *testing.T, external bool) (*SummaryVegetationService, vprocore.ProjectState) {
@@ -170,6 +168,7 @@ func TestSummaryVegetationServicePhysicalSchemaAndIndependentScope(t *testing.T)
 			t.Fatal("unsupported draft option accepted", args)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := service.Preview(nil, state.ContextID, 1, 6); err == nil {
 		t.Fatal("nil context accepted")
 	}

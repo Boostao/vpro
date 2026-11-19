@@ -1,12 +1,6 @@
 package validation
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -14,6 +8,10 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func speciesCodeCheckFixture(t *testing.T) (*vprocore.ContextService, vprocore.ProjectState, string) {

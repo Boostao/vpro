@@ -1,12 +1,6 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -17,6 +11,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 const vegetationWriteUUID = "b0cbfa00-1234-4123-8123-000000000001"

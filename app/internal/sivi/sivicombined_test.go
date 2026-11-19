@@ -1,18 +1,16 @@
 package sivi
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"math"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVICombinedPlanningPresentationsGroupsAndAssignmentOrder(t *testing.T) {
@@ -194,6 +192,7 @@ func TestSIVICombinedPlanningCancellationDiscardsMergedPlan(t *testing.T) {
 	if !complete {
 		t.Fatal("combined cancellation sweep never reached completion")
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if got, err := planSIVICombinedEdits(nil, "P", false, vprotest.SiviProjectionFixture(), edits); err == nil || got != nil {
 		t.Fatal("nil context accepted", got, err)
 	}

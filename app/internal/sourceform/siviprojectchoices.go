@@ -1,24 +1,22 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-type SIVIProjectChoices struct {
+type SourceProjectChoices struct {
 	ContextID, Project, Source, Alias, Table string
 	SourceOption                             int
 	Choices                                  vprocore.ProjectMetadataTable
 }
 
-type siviProjectChoices = SIVIProjectChoices
+type siviProjectChoices = SourceProjectChoices
 
 func projectSIVIProjectChoices(ctx context.Context, original vprocore.ProjectMetadataTable) (vprocore.ProjectMetadataTable, error) {
 	if err := ctx.Err(); err != nil {
@@ -75,20 +73,20 @@ func readOwnedSIVIProjectChoices(ctx context.Context, plots *vprocore.PlotServic
 	return ReadOwnedSIVIProjectChoicesAtSource(ctx, plots, contextID, source)
 }
 
-func ReadOwnedSIVIProjectChoicesAtSource(ctx context.Context, plots *vprocore.PlotService, contextID string, source int) (*SIVIProjectChoices, error) {
+func ReadOwnedSIVIProjectChoicesAtSource(ctx context.Context, plots *vprocore.PlotService, contextID string, source int) (*SourceProjectChoices, error) {
 	if source != 1 && source != 2 {
 		return nil, errors.New("SIVI ProjectID source must be Env (1) or Master (2)")
 	}
-	return vprocore.WithOwnedSIVISnapshot(ctx, plots, func(owner *vprocore.SqliteContext, tx *sql.Tx) (*SIVIProjectChoices, error) {
+	return vprocore.WithOwnedSIVISnapshot(ctx, plots, func(owner *vprocore.SqliteContext, tx *sql.Tx) (*SourceProjectChoices, error) {
 		return readSIVIProjectChoicesSnapshot(ctx, owner, tx, contextID, source)
 	})
 }
 
-func readSIVIProjectChoicesSnapshot(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx, contextID string, source int) (*SIVIProjectChoices, error) {
-	return ReadSIVIProjectChoicesAtAlias(ctx, owner, tx, contextID, source, "project")
+func readSIVIProjectChoicesSnapshot(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx, contextID string, source int) (*SourceProjectChoices, error) {
+	return ReadSourceProjectChoicesAtAlias(ctx, owner, tx, contextID, source, "project")
 }
 
-func ReadSIVIProjectChoicesAtAlias(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx, contextID string, source int, projectAlias string) (*SIVIProjectChoices, error) {
+func ReadSourceProjectChoicesAtAlias(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx, contextID string, source int, projectAlias string) (*SourceProjectChoices, error) {
 	if source != 1 && source != 2 {
 		return nil, errors.New("SIVI ProjectID source must be Env (1) or Master (2)")
 	}
@@ -111,14 +109,17 @@ func ReadSIVIProjectChoicesAtAlias(ctx context.Context, owner *vprocore.SqliteCo
 		return nil, err
 	}
 	count := 0
-	for matches.Next() {
-		if err := matches.Scan(&result.Table); err != nil {
-			matches.Close()
-			return nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, matches.Close()) }()
+		for matches.Next() {
+			if err := matches.Scan(&result.Table); err != nil {
+
+				return err
+			}
+			count++
 		}
-		count++
-	}
-	if err := errors.Join(matches.Err(), matches.Close()); err != nil {
+		return matches.Err()
+	}(); err != nil {
 		return nil, err
 	}
 	if count != 1 {

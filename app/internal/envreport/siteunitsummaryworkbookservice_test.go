@@ -1,12 +1,6 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -18,6 +12,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func summaryWorkbookServiceFixture(t *testing.T, external bool) (*SiteUnitSummaryWorkbookService, vprocore.ProjectState) {
@@ -137,6 +135,7 @@ func TestSiteUnitSummaryWorkbookServiceStrictRequestsAndRetainedScope(t *testing
 			t.Fatal("refusal reset saved scope", changes, err)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := service.GetReview(nil, state.ContextID, `{"method":1}`); err == nil {
 		t.Fatal("nil context accepted")
 	}

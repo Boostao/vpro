@@ -1,13 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,6 +8,11 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestSummaryVegetationGroupedAdditionalSourceOutcomes(t *testing.T) {

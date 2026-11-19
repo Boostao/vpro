@@ -1,10 +1,6 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -13,6 +9,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type HierarchyInfo struct {
@@ -35,19 +33,18 @@ func hierarchyCompatible(database sqlutil.HeaderDB, table string) (bool, error) 
 	if err != nil {
 		return false, err
 	}
+	defer rows.Close()
 	fields := make(map[string]string)
 	for rows.Next() {
 		var index, notNull, primaryKey int
 		var name, fieldType string
 		var defaultValue sql.NullString
 		if err := rows.Scan(&index, &name, &fieldType, &notNull, &defaultValue, &primaryKey); err != nil {
-			rows.Close()
 			return false, err
 		}
 		fields[name] = strings.ToUpper(fieldType)
 	}
 	err = rows.Err()
-	rows.Close()
 	if err != nil {
 		return false, err
 	}
@@ -87,7 +84,7 @@ func DiscoverHierarchiesContext(ctx context.Context, projectsDir string) ([]Hier
 			continue
 		}
 		var schemaVersion int
-		reader := sqlutil.ContextPlotDB{Db: database, Ctx: ctx}
+		reader := sqlutil.ContextPlotDB{DB: database, Ctx: ctx}
 		if err := reader.QueryRow("PRAGMA schema_version").Scan(&schemaVersion); err != nil {
 			database.Close()
 			if ctx.Err() != nil && errors.Is(err, ctx.Err()) {
@@ -125,11 +122,11 @@ func inspectHierarchies(database sqlutil.HeaderDB, file string) ([]HierarchyInfo
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	tables := []string{}
 	for rows.Next() {
 		var table string
 		if err := rows.Scan(&table); err != nil {
-			rows.Close()
 			return nil, err
 		}
 		if name, ok := strings.CutSuffix(table, "_Hierarchy"); ok && ProjectNamePattern.MatchString(name) {
@@ -137,7 +134,6 @@ func inspectHierarchies(database sqlutil.HeaderDB, file string) ([]HierarchyInfo
 		}
 	}
 	err = rows.Err()
-	rows.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +185,7 @@ func listHierarchyNodesContext(ctx context.Context, path, name string) ([]Hierar
 	if !exists {
 		return nil, fmt.Errorf("hierarchy table %q does not exist", table)
 	}
-	compatible, err := hierarchyCompatible(sqlutil.ContextPlotDB{Db: database, Ctx: ctx}, table)
+	compatible, err := hierarchyCompatible(sqlutil.ContextPlotDB{DB: database, Ctx: ctx}, table)
 	if err != nil {
 		return nil, err
 	}

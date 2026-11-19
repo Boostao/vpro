@@ -1,11 +1,6 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"archive/zip"
 	"bytes"
 	"context"
@@ -21,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -160,10 +157,8 @@ func TestSiteUnitSummaryWorkbookLiteralStringsNamesProvenanceAndDeterminism(t *t
 	longName := "=literal name 😃"
 	preview.Report.Units[0].LongName = &longName
 	preview.Report.Units[0].NameCandidates[0].Value = vprotest.MetadataText(longName)
-	for i, value := range []string{"=SUM(A1:A2)", "+1", "-2", "@name", "001", "1E20", "0.5", "1/2", "'literal",
-		" x \r\n\t😃 ", "_x0001_", "<>&"} {
-		preview.Report.Units[0].Values[i] = value
-	}
+	copy(preview.Report.Units[0].Values, []string{"=SUM(A1:A2)", "+1", "-2", "@name", "001", "1E20", "0.5", "1/2", "'literal",
+		" x \r\n\t😃 ", "_x0001_", "<>&"})
 	preview.Report.Units[0].Values[9] = preview.Report.Units[0].Values[8]
 	preview.Report.Units[0].Values[12] = "_x005F_x0001_ _x0001__x0001_ _xFFFF_"
 	preview.Report.Units[0].Values[13] = " x \r\n\t😃 "

@@ -1,12 +1,6 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -16,6 +10,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIProjectChoiceRawProjectionPreservesDuplicateNULLAndEmpty(t *testing.T) {

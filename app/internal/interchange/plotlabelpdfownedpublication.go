@@ -1,10 +1,6 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -14,6 +10,8 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type plotLabelPDFPublicationHooks struct {
@@ -95,25 +93,14 @@ func PublishOwnedPlotLabelPDF(s *vprocore.ContextService, ctx context.Context, c
 		if err := observe("validated"); err != nil {
 			return result, err
 		}
-		format := vprocore.ArtifactPublicationFormat{
-			Label: "label PDF", Artifact: "label PDF", CommitLabel: "owned label PDF",
-			StagePattern: ".vpro-label-pdf-*.tmp",
-			Encode: func(ctx context.Context) ([]byte, error) {
-				if err := ctx.Err(); err != nil {
-					return nil, err
-				}
-				return bytes.Clone(expected.Bytes), nil
-			},
-			Validate: func(ctx context.Context, data []byte) error {
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				if !bytes.Equal(data, expected.Bytes) {
-					return errors.New("label PDF differs from the internally prepared complete reviewed artifact")
-				}
-				return nil
-			},
-		}
+		format := vprocore.ReviewedBytesPublicationFormat(
+			"label PDF",
+			"label PDF",
+			"owned label PDF",
+			".vpro-label-pdf-*.tmp",
+			"label PDF differs from the internally prepared complete reviewed artifact",
+			expected.Bytes,
+		)
 		result, resultErr = vprocore.PublishArtifactChecked(ctx, requested, format, func() error {
 			if err := observe("precommit"); err != nil {
 				return err

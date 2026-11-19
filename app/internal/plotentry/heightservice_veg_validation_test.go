@@ -1,14 +1,12 @@
 package plotentry
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"math"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func setHeightVegProperty(record *vprocore.VegRecord, property string, value *float64) {

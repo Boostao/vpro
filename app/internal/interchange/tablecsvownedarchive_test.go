@@ -1,10 +1,6 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"archive/zip"
 	"bytes"
 	"context"
@@ -16,6 +12,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestOwnedTableCSVArchiveMetadataStatesAndLegacySeparation(t *testing.T) {

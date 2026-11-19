@@ -1,11 +1,6 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -17,6 +12,9 @@ import (
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type ProfileSUPlot struct {
@@ -173,7 +171,7 @@ func readProfileSUReview(ctx context.Context, tx *sql.Tx, filter ProjectPlotProf
 
 func validateProfileSUText(value string, maximum int) error {
 	if !utf8.ValidString(value) || strings.ContainsRune(value, 0) || len(utf16.Encode([]rune(value))) > maximum {
-		return fmt.Errorf("literal text must contain valid Unicode, no NUL and at most %d UTF-16 units; nothing was trimmed or repaired", maximum)
+		return fmt.Errorf("literal text must contain valid Unicode, no NUL and at most %d characters; nothing was trimmed or repaired", maximum)
 	}
 	return nil
 }

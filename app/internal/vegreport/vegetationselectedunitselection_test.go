@@ -1,12 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -17,6 +11,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func selectedUnitDraftJSON(t *testing.T, revision string, fields []string) string {
@@ -292,6 +290,7 @@ func TestSelectedUnitSessionRejectsStrictRequestsAndRetainsDraftOnReadCleanupFai
 	if result, err := service.BuildLongVegetationSelectedUnitSelection(ctx, state.ContextID, draft.Revision); err != nil || !result.BuildCurrent {
 		t.Fatal("failed/cancelled Build prevented explicit retry", result, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := service.GetLongVegetationSelectedUnitSelection(nil, state.ContextID); err == nil ||
 		!strings.Contains(err.Error(), "context") {
 		t.Fatal("nil context accepted", err)

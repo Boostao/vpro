@@ -1,11 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +8,9 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func calculateSummaryVegetationClass(ctx context.Context, meanCover, presence float64,
@@ -70,16 +68,6 @@ func calculateSummaryVegetationClass(ctx context.Context, meanCover, presence fl
 	return vprocore.ProjectMetadataCell{Storage: "integer", Integer: &text}, nil
 }
 
-func normalizeSummaryVegetationShowClass(display, showClass int) int {
-	if display == 4 || display == 5 {
-		if showClass == 0 {
-			return 1
-		}
-		return showClass
-	}
-	return 0
-}
-
 func validateSummaryVegetationClassMode(ctx context.Context, display, showClass int) error {
 	if ctx == nil {
 		return errors.New("summary vegetation class calculation requires a context")
@@ -105,7 +93,7 @@ func calculateSummaryVegetationClassFormula(ctx context.Context, sum *float64, c
 		return fail(err)
 	}
 	if count < 0 || count > math.MaxInt32 || numPlots < 0 || numPlots > math.MaxInt32 {
-		return fail(errors.New("summary vegetation class formula requires original nonnegative signed32 counts"))
+		return fail(errors.New("summary vegetation class formula requires original nonnegative counts"))
 	}
 	if sum != nil && (math.IsNaN(*sum) || math.IsInf(*sum, 0)) {
 		return fail(errors.New("summary vegetation class formula requires a finite DOUBLE sum"))

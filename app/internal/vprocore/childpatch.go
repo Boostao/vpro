@@ -17,7 +17,7 @@ type ChildExpectedValue struct {
 
 type ChildRecordPatch struct {
 	Kind     string                              `json:"-" yaml:"-"`
-	Id       int                                 `json:"-" yaml:"-"`
+	ID       int                                 `json:"-" yaml:"-"`
 	Cells    map[string]ChildExpectedValue       `json:"-" yaml:"-"`
 	Validate func(*sql.Tx, string, string) error `json:"-" yaml:"-"`
 	Observe  func(*sql.Tx, string, string) error `json:"-" yaml:"-"`
@@ -97,9 +97,9 @@ func (s *PlotService) UpdateChildPlotPatches(updates []ChildPlotPatch) (resultEr
 		if update.Kind != "Veg" && update.Kind != "Other" && update.Kind != "Humus" && update.Kind != "Mineral" {
 			return fmt.Errorf("unsupported child draft kind %q", update.Kind)
 		}
-		key := identity{update.Kind, update.Id}
-		if update.Id < math.MinInt32 || update.Id > math.MaxInt32 || seen[key] {
-			return errors.New("child drafts require distinct exact signed32 identities per table")
+		key := identity{update.Kind, update.ID}
+		if update.ID < math.MinInt32 || update.ID > math.MaxInt32 || seen[key] {
+			return errors.New("child drafts require distinct exact record IDs per table")
 		}
 		seen[key] = true
 		caps, available := capabilities[update.Kind]
@@ -111,7 +111,7 @@ func (s *PlotService) UpdateChildPlotPatches(updates []ChildPlotPatch) (resultEr
 			capabilities[update.Kind] = caps
 		}
 		table := QuoteHeaderIdentifier(project + "_" + update.Kind)
-		if err := RequireChildIdentity(tx, table, update.Kind, plot, int64(update.Id)); err != nil {
+		if err := RequireChildIdentity(tx, table, update.Kind, plot, int64(update.ID)); err != nil {
 			return err
 		}
 		shape := ChildPatchShape(update.Kind)
@@ -137,7 +137,7 @@ func (s *PlotService) UpdateChildPlotPatches(updates []ChildPlotPatch) (resultEr
 			column := QuoteHeaderIdentifier(field.Column)
 			var current any
 			if err := tx.QueryRowContext(ctx, `SELECT `+headerReadColumn(column, member)+` FROM `+table+
-				` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, plot, plot, update.Id).Scan(&current); err != nil {
+				` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, plot, plot, update.ID).Scan(&current); err != nil {
 				return err
 			}
 			if current != nil {
@@ -159,7 +159,7 @@ func (s *PlotService) UpdateChildPlotPatches(updates []ChildPlotPatch) (resultEr
 				}
 			}
 			if !reflect.DeepEqual(current, change.Expected) {
-				return fmt.Errorf("%s row %d.%s changed; cancel drafts and reload before editing", update.Kind, update.Id, field.Column)
+				return fmt.Errorf("%s row %d.%s changed; cancel drafts and reload before editing", update.Kind, update.ID, field.Column)
 			}
 			if reflect.DeepEqual(current, change.Value) {
 				continue
@@ -184,7 +184,7 @@ func (s *PlotService) UpdateChildPlotPatches(updates []ChildPlotPatch) (resultEr
 			}
 		}
 		result, err := tx.ExecContext(ctx, `UPDATE `+table+` SET `+strings.Join(assignments, ",")+
-			` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, append(args, plot, plot, update.Id)...)
+			` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, append(args, plot, plot, update.ID)...)
 		if err != nil {
 			return err
 		}
@@ -194,13 +194,13 @@ func (s *PlotService) UpdateChildPlotPatches(updates []ChildPlotPatch) (resultEr
 		if update.Observe != nil {
 			observations = append(observations, scoped)
 		}
-		if err := auditChildFields(tx, project, update.Kind, plot, int64(update.Id), fields, before, after, user, strength, when); err != nil {
+		if err := auditChildFields(tx, project, update.Kind, plot, int64(update.ID), fields, before, after, user, strength, when); err != nil {
 			return err
 		}
 	}
 	for _, scoped := range observations {
 		table := QuoteHeaderIdentifier(project + "_" + scoped.Patch.Kind)
-		if err := RequireChildIdentity(tx, table, scoped.Patch.Kind, scoped.Plot, int64(scoped.Patch.Id)); err != nil {
+		if err := RequireChildIdentity(tx, table, scoped.Patch.Kind, scoped.Plot, int64(scoped.Patch.ID)); err != nil {
 			return err
 		}
 		if err := scoped.Patch.Observe(tx, table, scoped.Plot); err != nil {

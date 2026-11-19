@@ -1,14 +1,12 @@
 package lifecycle
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const userLogMaxRows = 10000

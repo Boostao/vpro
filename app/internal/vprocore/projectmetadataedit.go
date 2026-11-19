@@ -1,10 +1,6 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -18,6 +14,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type ProjectMetadataChange struct {
@@ -252,15 +250,15 @@ func (s *PlotService) saveProjectMetadata(request ProjectMetadataEdit) error {
 	if request.PlotNumber == "" || !utf8.ValidString(request.PlotNumber) || request.ProjectID == nil ||
 		*request.ProjectID == "" || !utf8.ValidString(*request.ProjectID) ||
 		request.ID < -2147483648 || request.ID > 2147483647 {
-		return errors.New("metadata editing requires a literal parent/ProjectID and exact signed32 physical ID")
+		return errors.New("metadata editing requires a literal parent/ProjectID and exact record ID")
 	}
 	rowID, err := strconv.ParseInt(request.Original.RowID, 10, 64)
 	if err != nil || strconv.FormatInt(rowID, 10) != request.Original.RowID {
-		return errors.New("metadata editing requires the exact reviewed physical rowid")
+		return errors.New("metadata editing requires the reviewed metadata record")
 	}
 	changes := make([]ProjectMetadataChangeInternal, len(request.Changes))
 	for i, change := range request.Changes {
-		changes[i] = ProjectMetadataChangeInternal{change.Column, change.Value}
+		changes[i] = ProjectMetadataChangeInternal(change)
 	}
 	assignments, err := PrepareProjectMetadataChanges(request.Columns, request.Original, changes)
 	if err != nil {

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/boostao/vpro/app/internal/sqlutil"
@@ -98,13 +97,6 @@ func createSUTableObjectsInTx(ctx context.Context, tx *sql.Tx, suName string) er
 	return nil
 }
 
-func utf16UnitsWithin(s string, maxUnits int) bool {
-	if len(s) <= maxUnits {
-		return true
-	}
-	return len(utf16.Encode([]rune(s))) <= maxUnits
-}
-
 func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, contextID string, request CreateSUTableRequest) (*SUTableLifecycleResult, error) {
 	if ctx == nil {
 		return nil, errors.New("SU creation requires a request context")
@@ -153,19 +145,21 @@ func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, conte
 					if aErr != nil {
 						return aErr
 					}
-					for aRows.Next() {
-						var rawPlot []byte
-						var u sql.NullString
-						if sErr := aRows.Scan(&rawPlot, &u); sErr != nil {
-							aRows.Close()
-							return sErr
+					if aErr := func() (scanErr error) {
+						defer func() { scanErr = errors.Join(scanErr, aRows.Close()) }()
+						for aRows.Next() {
+							var rawPlot []byte
+							var u sql.NullString
+							if sErr := aRows.Scan(&rawPlot, &u); sErr != nil {
+								return sErr
+							}
+							key := string(rawPlot)
+							if _, exists := adminUnits[key]; !exists && u.Valid {
+								adminUnits[key] = u.String
+							}
 						}
-						key := string(rawPlot)
-						if _, exists := adminUnits[key]; !exists && u.Valid {
-							adminUnits[key] = u.String
-						}
-					}
-					if aErr := errors.Join(aRows.Err(), aRows.Close()); aErr != nil {
+						return aRows.Err()
+					}(); aErr != nil {
 						return aErr
 					}
 				}
@@ -179,28 +173,30 @@ func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, conte
 					return qErr
 				}
 				seen := map[string]bool{}
-				for rows.Next() {
-					var rawPlot []byte
-					var p string
-					if sErr := rows.Scan(&rawPlot, &p); sErr != nil {
-						rows.Close()
-						return sErr
-					}
-					rawKey := string(rawPlot)
-					if seen[rawKey] || !utf16UnitsWithin(p, 7) {
-						continue
-					}
-					seen[rawKey] = true
-					var unitPtr *string
-					if request.SeedFromUserSiteUnit {
-						if uStr, ok := adminUnits[rawKey]; ok && strings.TrimSpace(uStr) != "" && utf16UnitsWithin(uStr, 255) {
-							val := uStr
-							unitPtr = &val
+				return func() (scanErr error) {
+					defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+					for rows.Next() {
+						var rawPlot []byte
+						var p string
+						if sErr := rows.Scan(&rawPlot, &p); sErr != nil {
+							return sErr
 						}
+						rawKey := string(rawPlot)
+						if seen[rawKey] || !sqlutil.UTF16Within(p, 7) {
+							continue
+						}
+						seen[rawKey] = true
+						var unitPtr *string
+						if request.SeedFromUserSiteUnit {
+							if uStr, ok := adminUnits[rawKey]; ok && strings.TrimSpace(uStr) != "" && sqlutil.UTF16Within(uStr, 255) {
+								val := uStr
+								unitPtr = &val
+							}
+						}
+						seeds = append(seeds, sqlutil.SURowSeed{PlotNumber: p, SiteUnit: unitPtr})
 					}
-					seeds = append(seeds, sqlutil.SURowSeed{PlotNumber: p, SiteUnit: unitPtr})
-				}
-				return errors.Join(rows.Err(), rows.Close())
+					return rows.Err()
+				}()
 			}); err != nil {
 				return struct{}{}, err
 			}
@@ -369,23 +365,25 @@ func SaveSUTableAs(ctx context.Context, contexts *vprocore.ContextService, conte
 			if qErr != nil {
 				return fmt.Errorf("read source SU %s: %w", srcTable, qErr)
 			}
-			for rows.Next() {
-				var p, u sql.NullString
-				if sErr := rows.Scan(&p, &u); sErr != nil {
-					rows.Close()
-					return sErr
+			return func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+				for rows.Next() {
+					var p, u sql.NullString
+					if sErr := rows.Scan(&p, &u); sErr != nil {
+						return sErr
+					}
+					seed := sqlutil.SURowSeed{PlotNull: !p.Valid}
+					if p.Valid {
+						seed.PlotNumber = p.String
+					}
+					if u.Valid {
+						v := u.String
+						seed.SiteUnit = &v
+					}
+					copiedRows = append(copiedRows, seed)
 				}
-				seed := sqlutil.SURowSeed{PlotNull: !p.Valid}
-				if p.Valid {
-					seed.PlotNumber = p.String
-				}
-				if u.Valid {
-					v := u.String
-					seed.SiteUnit = &v
-				}
-				copiedRows = append(copiedRows, seed)
-			}
-			return errors.Join(rows.Err(), rows.Close())
+				return rows.Err()
+			}()
 		}); err != nil {
 			return struct{}{}, err
 		}

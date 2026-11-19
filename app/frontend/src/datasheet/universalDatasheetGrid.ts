@@ -403,9 +403,14 @@ export function parseAndValidateCellInput(
   if (col.kind === 'text') {
     // JavaScript string .length measures exact UTF-16 code units!
     if (col.maxUtf16 > 0 && rawInput.length > col.maxUtf16) {
+      const charCount = Array.from(rawInput).length;
+      const error =
+        charCount > col.maxUtf16
+          ? `${col.name} must be ${col.maxUtf16} characters or fewer (entered ${charCount} characters).`
+          : `${col.name} exceeds the ${col.maxUtf16}-character limit (${charCount} characters, ${rawInput.length} UTF-16 units for symbols).`;
       return {
         cell: null,
-        error: `${col.name} exceeds ${col.maxUtf16} characters (got ${rawInput.length}).`,
+        error,
       };
     }
     if (

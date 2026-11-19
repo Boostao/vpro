@@ -1,20 +1,18 @@
 package integration
 
 import (
+	"context"
+	"database/sql"
+	"reflect"
+	"strings"
+	"testing"
+
 	"github.com/boostao/vpro/app/internal/sivi"
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/sourceform/sftest"
 	"github.com/boostao/vpro/app/internal/twopage"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
-	"context"
-	"database/sql"
-	"reflect"
-	"strings"
-	"testing"
 )
 
 func TestSourceParentBooleanNullQualification(t *testing.T) {
@@ -51,7 +49,7 @@ func TestSourceParentBooleanTwoPageWriteBoundariesAndLegacyRestoration(t *testin
 							t.Fatal(err)
 						}
 					}
-					read := func() *sourceform.SiviParentProjection {
+					read := func() *sourceform.SourceParentProjection {
 						t.Helper()
 						parent, err := twopage.ReadTwoPageParent(service, context.Background(), state.ContextID, "108050", form)
 						if err != nil {
@@ -60,10 +58,10 @@ func TestSourceParentBooleanTwoPageWriteBoundariesAndLegacyRestoration(t *testin
 						return parent
 					}
 					approvals := 0
-					write := func(parent *sourceform.SiviParentProjection, edits []sourceform.SiviParentScalarEdit) (*sourceform.SiviParentWriteResult, error) {
+					write := func(parent *sourceform.SourceParentProjection, edits []sourceform.SourceParentScalarEdit) (*sourceform.SourceParentWriteResult, error) {
 						if complete {
 							return twopage.WriteTwoPageEntry(service, context.Background(), state.ContextID, parent.Plot, form, parent, edits, false,
-								func(*sql.Tx, *sourceform.SiviParentProjection, []sourceform.SiviParentScalarAssignment) error {
+								func(*sql.Tx, *sourceform.SourceParentProjection, []sourceform.SourceParentScalarAssignment) error {
 									approvals++
 									return nil
 								})
@@ -80,7 +78,7 @@ func TestSourceParentBooleanTwoPageWriteBoundariesAndLegacyRestoration(t *testin
 					parent := read()
 					before := vprotest.TwoPageWriteTables(t, db)
 					files := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
-					edits := []sourceform.SiviParentScalarEdit{
+					edits := []sourceform.SourceParentScalarEdit{
 						sftest.SiviParentEdit(t, parent, "SV_StandHeight", vprotest.SiviReal(5.25)),
 						sftest.SiviParentEdit(t, parent, column, vprocore.ProjectMetadataCell{Storage: "null"}),
 					}
@@ -96,14 +94,14 @@ func TestSourceParentBooleanTwoPageWriteBoundariesAndLegacyRestoration(t *testin
 					setPhysical(nil)
 					parent = read()
 					before = vprotest.TwoPageWriteTables(t, db)
-					result, err = write(parent, []sourceform.SiviParentScalarEdit{sftest.SiviParentEdit(t, parent, column, vprocore.ProjectMetadataCell{Storage: "null"})})
+					result, err = write(parent, []sourceform.SourceParentScalarEdit{sftest.SiviParentEdit(t, parent, column, vprocore.ProjectMetadataCell{Storage: "null"})})
 					if err != nil || result == nil || result.ChangedCells != 0 || result.HistoryID != "" ||
 						!reflect.DeepEqual(before, vprotest.TwoPageWriteTables(t, db)) {
 						t.Fatal("historical NULL was not omitted", result, err)
 					}
 					for _, integer := range []string{"-1", "0"} {
 						parent = read()
-						result, err = write(parent, []sourceform.SiviParentScalarEdit{sftest.SiviParentEdit(t, parent, column, vprotest.MetadataInteger(integer))})
+						result, err = write(parent, []sourceform.SourceParentScalarEdit{sftest.SiviParentEdit(t, parent, column, vprotest.MetadataInteger(integer))})
 						if err != nil || result == nil || result.ChangedCells != 1 || result.HistoryID == "" {
 							t.Fatal("explicit Yes/No failed", integer, result, err)
 						}
@@ -120,7 +118,7 @@ func TestSourceParentBooleanTwoPageWriteBoundariesAndLegacyRestoration(t *testin
 
 					setPhysical(-1)
 					parent = read()
-					edits = []sourceform.SiviParentScalarEdit{sftest.SiviParentEdit(t, parent, column, vprocore.ProjectMetadataCell{Storage: "null"})}
+					edits = []sourceform.SourceParentScalarEdit{sftest.SiviParentEdit(t, parent, column, vprocore.ProjectMetadataCell{Storage: "null"})}
 					history, err := twopage.TwoPageParentCommonHistory(form)
 					if complete {
 						history, err = twopage.TwoPageEntryHistory(form, false)
@@ -133,13 +131,13 @@ func TestSourceParentBooleanTwoPageWriteBoundariesAndLegacyRestoration(t *testin
 						t.Fatal(err)
 					}
 					// Construct a pre-correction receipt through the unchanged historical planner.
-					legacy, err := sourceform.WriteSIVIParentPlannedWithHooks(service, context.Background(), state.ContextID, parent.Plot, parent, history,
-						func(observed *sourceform.SiviParentProjection) ([]sourceform.SiviParentScalarAssignment, error) {
+					legacy, err := sourceform.WriteSourceParentPlannedWithHooks(service, context.Background(), state.ContextID, parent.Plot, parent, history,
+						func(observed *sourceform.SourceParentProjection) ([]sourceform.SourceParentScalarAssignment, error) {
 							if complete {
 								return twopage.PlanTwoPageEntryProjection(context.Background(), observed, edits, false)
 							}
 							return twopage.PlanTwoPageParentCommonProjection(context.Background(), observed, edits)
-						}, sourceform.SiviParentWriteHooks{Read: reader, Decorate: func(event *sourceform.SiviParentHistory) {
+						}, sourceform.SourceParentWriteHooks{Read: reader, Decorate: func(event *sourceform.SourceParentHistory) {
 							if complete {
 								event.EntryPlan = edits
 							}
@@ -183,7 +181,7 @@ func TestSourceParentBooleanNormalWritersRefuseMixedNullAtomically(t *testing.T)
 				}
 			} else {
 				height := 5.0
-				edits := sourceform.SiviParentDirectEdits{Scalars: []sourceform.SiviParentScalarEdit{
+				edits := sourceform.SiviParentDirectEdits{Scalars: []sourceform.SourceParentScalarEdit{
 					sftest.SiviParentEdit(t, parent, "SV_StandHeight", vprocore.ProjectMetadataCell{Storage: "real", Real: &height}),
 					sftest.SiviParentEdit(t, parent, "SV_FloodPlain", vprocore.ProjectMetadataCell{Storage: "null"}),
 				}}

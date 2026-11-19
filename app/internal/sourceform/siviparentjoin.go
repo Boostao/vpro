@@ -1,10 +1,6 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -14,6 +10,8 @@ import (
 	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SIVIParentJoinReview struct {
@@ -55,7 +53,7 @@ func ValidateSIVIPlotIdentity(value string) error {
 		}
 	}
 	if len(utf16.Encode([]rune(value))) > 7 {
-		return errors.New("plot identity exceeds 7 UTF-16 code units")
+		return errors.New("plot identity cannot exceed 7 characters")
 	}
 	return nil
 }
@@ -99,39 +97,42 @@ func readSIVIParentWriteJoin(ctx context.Context, tx *sql.Tx, alias, contextID, 
 		if err != nil {
 			return nil, err
 		}
-		for rows.Next() {
-			var id int64
-			var storage string
-			var raw []byte
-			if err := rows.Scan(&id, &storage, &raw); err != nil {
-				return nil, errors.Join(err, rows.Close())
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+			for rows.Next() {
+				var id int64
+				var storage string
+				var raw []byte
+				if err := rows.Scan(&id, &storage, &raw); err != nil {
+					return err
+				}
+				if storage != "text" {
+					unavailable = true
+					continue
+				}
+				cell, err := vprocore.ProjectMetadataCellInternal(storage, raw)
+				if err != nil {
+					return err
+				}
+				if _, err := vprocore.MetadataCellValue(cell); err != nil {
+					return err
+				}
+				if ValidateSIVIPlotIdentity(*cell.Text) != nil {
+					unavailable = true
+					continue
+				}
+				idText := strconv.FormatInt(id, 10)
+				if i == 0 {
+					result.EnvRowIDs = append(result.EnvRowIDs, idText)
+				} else {
+					result.AdminRowIDs = append(result.AdminRowIDs, idText)
+				}
+				if *cell.Text == plot {
+					literal[i]++
+				}
 			}
-			if storage != "text" {
-				unavailable = true
-				continue
-			}
-			cell, err := vprocore.ProjectMetadataCellInternal(storage, raw)
-			if err != nil {
-				return nil, errors.Join(err, rows.Close())
-			}
-			if _, err := vprocore.MetadataCellValue(cell); err != nil {
-				return nil, errors.Join(err, rows.Close())
-			}
-			if ValidateSIVIPlotIdentity(*cell.Text) != nil {
-				unavailable = true
-				continue
-			}
-			idText := strconv.FormatInt(id, 10)
-			if i == 0 {
-				result.EnvRowIDs = append(result.EnvRowIDs, idText)
-			} else {
-				result.AdminRowIDs = append(result.AdminRowIDs, idText)
-			}
-			if *cell.Text == plot {
-				literal[i]++
-			}
-		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return rows.Err()
+		}(); err != nil {
 			return nil, err
 		}
 	}
@@ -179,46 +180,49 @@ func readSIVIParentJoin(ctx context.Context, tx *sql.Tx, alias, contextID, proje
 		if err != nil {
 			return nil, err
 		}
-		for rows.Next() {
-			var id int64
-			var storage string
-			var raw []byte
-			if err := rows.Scan(&id, &storage, &raw); err != nil {
-				return nil, errors.Join(err, rows.Close())
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+			for rows.Next() {
+				var id int64
+				var storage string
+				var raw []byte
+				if err := rows.Scan(&id, &storage, &raw); err != nil {
+					return err
+				}
+				if storage == "null" {
+					continue
+				}
+				if storage != "text" {
+					unavailable = true
+					continue
+				}
+				cell, err := vprocore.ProjectMetadataCellInternal(storage, raw)
+				if err != nil {
+					return err
+				}
+				if _, err := vprocore.MetadataCellValue(cell); err != nil {
+					return err
+				}
+				key, valid := SiviASCIIPlotKey(*cell.Text)
+				if !valid {
+					unavailable = true
+					continue
+				}
+				if key != requested {
+					continue
+				}
+				idText := strconv.FormatInt(id, 10)
+				if i == 0 {
+					result.EnvRowIDs = append(result.EnvRowIDs, idText)
+				} else {
+					result.AdminRowIDs = append(result.AdminRowIDs, idText)
+				}
+				if *cell.Text == plot {
+					literal[i]++
+				}
 			}
-			if storage == "null" {
-				continue
-			}
-			if storage != "text" {
-				unavailable = true
-				continue
-			}
-			cell, err := vprocore.ProjectMetadataCellInternal(storage, raw)
-			if err != nil {
-				return nil, errors.Join(err, rows.Close())
-			}
-			if _, err := vprocore.MetadataCellValue(cell); err != nil {
-				return nil, errors.Join(err, rows.Close())
-			}
-			key, valid := SiviASCIIPlotKey(*cell.Text)
-			if !valid {
-				unavailable = true
-				continue
-			}
-			if key != requested {
-				continue
-			}
-			idText := strconv.FormatInt(id, 10)
-			if i == 0 {
-				result.EnvRowIDs = append(result.EnvRowIDs, idText)
-			} else {
-				result.AdminRowIDs = append(result.AdminRowIDs, idText)
-			}
-			if *cell.Text == plot {
-				literal[i]++
-			}
-		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return rows.Err()
+		}(); err != nil {
 			return nil, err
 		}
 	}

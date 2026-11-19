@@ -1,14 +1,12 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"database/sql"
 	"fmt"
 	"reflect"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 func OrdinaryTextFields(h FS882Header) []BecHeaderField {
@@ -117,10 +115,6 @@ func validateOrdinaryHeaderValuesWithCoverMode(h FS882Header, old *FS882Header, 
 		}
 	}
 	return ValidateSourceParentBooleanNull("SpeciesListComplete", previous.SpeciesListComplete == nil, h.SpeciesListComplete == nil)
-}
-
-func validateOrdinaryHeaderValues(h FS882Header, old *FS882Header) error {
-	return validateOrdinaryHeaderValuesWithCoverMode(h, old, true)
 }
 
 func (s *PlotService) validateOrdinaryHeaderValues(h FS882Header, old *FS882Header) error {

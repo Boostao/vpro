@@ -1,13 +1,11 @@
 package pictures
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func chooseNativePictureFile(ctx context.Context) (string, error) {

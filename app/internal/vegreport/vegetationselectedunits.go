@@ -1,10 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
@@ -12,6 +8,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type vegetationSelectedUnitOccurrence struct {

@@ -1,12 +1,6 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -18,6 +12,9 @@ import (
 	"time"
 
 	"github.com/boostao/vpro/app/internal/reports/subzonematrix"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 	"github.com/mattn/go-sqlite3"
 )
 

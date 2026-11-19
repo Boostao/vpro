@@ -3,16 +3,13 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"golang.org/x/sys/windows"
 )
 

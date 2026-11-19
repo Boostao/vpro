@@ -1,12 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -16,6 +10,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func summaryFieldListOwnedFixture(t *testing.T) (*SummaryVegetationFieldListService, string) {
@@ -122,6 +120,7 @@ func TestSummaryVegetationFieldListFacadeGateAndRequestRefusals(t *testing.T) {
 			t.Fatal("invalid context accepted source index", got, err)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if got, err := service.GetSummaryVegetationFieldList(nil, id); got != nil || err == nil {
 		t.Fatal("nil request context accepted", got, err)
 	}

@@ -144,7 +144,7 @@ func (c *ListCatalogueCache) ChoicesContext(ctx context.Context, path string, p 
 			return nil, err
 		}
 		c.Validations++
-		reader := ContextPlotDB{Db: candidate, Ctx: ctx}
+		reader := ContextPlotDB{DB: candidate, Ctx: ctx}
 		if err := listcatalog.ValidateDatabaseFor(reader, p, profile); err != nil {
 			return nil, errors.Join(LabelledReadError(label+" catalogue", err), candidate.Close())
 		}
@@ -192,15 +192,4 @@ func CloneCatalogueValue[T any](value *T) *T {
 	}
 	copy := *value
 	return &copy
-}
-
-func CheckListCatalogueChecksum(path string, p listcatalog.Provenance, label string) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("%s catalogue: %w", label, err)
-	}
-	if BecHash(data) != p.DatabaseSHA256 {
-		return fmt.Errorf("existing %s catalogue checksum mismatch; file was not replaced", label)
-	}
-	return nil
 }

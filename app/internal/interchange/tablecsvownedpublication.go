@@ -1,38 +1,20 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"reflect"
-)
 
-// Private preparation only: no desktop approval, feature gate or export API.
-func PublishOwnedProjectTableCSV(s *vprocore.ContextService, ctx context.Context, contextID string, expected ownedTableCSVReview, requested string) (tableCSVPublication, error) {
-	return PublishOwnedProjectTableCSVWithHooks(s, ctx, contextID, expected, requested, tableCSVOwnedPublicationHooks{})
-}
+	"github.com/boostao/vpro/app/internal/vprocore"
+)
 
 type tableCSVOwnedPublicationHooks struct {
 	observe      func(phase string) error
 	commitRead   func(*sql.Tx) error
 	rollbackRead func(*sql.Tx) error
 	publication  tableCSVPublicationHooks
-}
-
-func PublishOwnedProjectTableCSVWithHooks(s *vprocore.ContextService, ctx context.Context, contextID string, expected ownedTableCSVReview, requested string, hooks tableCSVOwnedPublicationHooks) (tableCSVPublication, error) {
-	return PublishOwnedProjectTableCSVUsing(s, ctx, contextID, expected, requested, hooks,
-		func(ctx context.Context, requested string, review ownedTableCSVReview, validate func() error, hooks tableCSVPublicationHooks) (tableCSVPublication, error) {
-			return publishTableCSVBundleChecked(ctx, requested, review.Document, validate, hooks)
-		})
-}
-
-func PublishOwnedProjectTableCSVArchive(s *vprocore.ContextService, ctx context.Context, contextID string, expected ownedTableCSVReview, requested string) (tableCSVPublication, error) {
-	return PublishOwnedProjectTableCSVArchiveWithHooks(s, ctx, contextID, expected, requested, tableCSVOwnedPublicationHooks{})
 }
 
 func PublishOwnedProjectTableCSVArchiveWithHooks(s *vprocore.ContextService, ctx context.Context, contextID string, expected ownedTableCSVReview, requested string, hooks tableCSVOwnedPublicationHooks) (tableCSVPublication, error) {

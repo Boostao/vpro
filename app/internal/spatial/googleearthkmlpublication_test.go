@@ -1,11 +1,6 @@
 package spatial
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -19,6 +14,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestGoogleEarthKMLPublicationLiteralXMLHashDetachedPointsAndNeverReplace(t *testing.T) {
@@ -96,6 +94,7 @@ func TestGoogleEarthKMLPublicationInvalidInputsNeverLeaveArtifacts(t *testing.T)
 		})
 	}
 	directory := t.TempDir()
+	//lint:ignore SA1012 intentional nil-context guard test
 	result, err := publishGoogleEarthKML(nil, filepath.Join(directory, "output.kml"), "", nil)
 	if err == nil || result.Published {
 		t.Fatalf("nil context accepted: %#v %v", result, err)

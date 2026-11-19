@@ -158,15 +158,18 @@ func validateOptimizeVegProjectSchema(ctx context.Context, db sqliteQueryer, pro
 	if err != nil {
 		return err
 	}
-	for tRows.Next() {
-		var name string
-		if err := tRows.Scan(&name); err != nil {
-			_ = tRows.Close()
-			return err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, tRows.Close()) }()
+		for tRows.Next() {
+			var name string
+			if err := tRows.Scan(&name); err != nil {
+
+				return err
+			}
+			existing[name] = true
 		}
-		existing[name] = true
-	}
-	if err := errors.Join(tRows.Err(), tRows.Close()); err != nil {
+		return tRows.Err()
+	}(); err != nil {
 		return err
 	}
 	for _, req := range []string{envTable, vegTable, auditTable} {
@@ -181,14 +184,17 @@ func validateOptimizeVegProjectSchema(ctx context.Context, db sqliteQueryer, pro
 				return mErr
 			}
 			var desc string
-			found := mRows.Next()
-			if found {
-				if err := mRows.Scan(&desc); err != nil {
-					_ = mRows.Close()
-					return err
+			var found bool
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, mRows.Close()) }()
+				found = mRows.Next()
+				if found {
+					if err := mRows.Scan(&desc); err != nil {
+						return err
+					}
 				}
-			}
-			if err := errors.Join(mRows.Err(), mRows.Close()); err != nil {
+				return mRows.Err()
+			}(); err != nil {
 				return err
 			}
 			if !found {
@@ -207,38 +213,44 @@ func validateOptimizeVegProjectSchema(ctx context.Context, db sqliteQueryer, pro
 	if err != nil {
 		return err
 	}
-	if badRows.Next() {
-		var rid int64
-		var typ, raw string
-		scanErr := badRows.Scan(&rid, &typ, &raw)
-		_ = badRows.Close()
-		if scanErr != nil {
-			return scanErr
+	if scanErr := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, badRows.Close()) }()
+		if badRows.Next() {
+			var rid int64
+			var typ, raw string
+			scanErr := badRows.Scan(&rid, &typ, &raw)
+
+			if scanErr != nil {
+				return scanErr
+			}
+			return fmt.Errorf("OptimizeVeg refused: record #%d in %s has invalid or non-32-bit ID (%s=%s); all vegetation rows must carry non-null unique signed 32-bit IDs",
+				rid, vegTable, typ, raw)
 		}
-		return fmt.Errorf("OptimizeVeg refused: rowid %d in %s has invalid or non-32-bit ID (%s=%s); all vegetation rows must carry non-null unique signed 32-bit IDs",
-			rid, vegTable, typ, raw)
-	}
-	if err := errors.Join(badRows.Err(), badRows.Close()); err != nil {
-		return err
+		return badRows.Err()
+	}(); scanErr != nil {
+		return scanErr
 	}
 
 	dupIDRows, err := db.QueryContext(ctx, `SELECT "ID", COUNT(*) FROM `+quotedVeg+` GROUP BY "ID" HAVING COUNT(*) > 1 LIMIT 1`)
 	if err != nil {
 		return err
 	}
-	if dupIDRows.Next() {
-		var dupID int64
-		var cnt int
-		scanErr := dupIDRows.Scan(&dupID, &cnt)
-		_ = dupIDRows.Close()
-		if scanErr != nil {
-			return scanErr
+	if scanErr := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, dupIDRows.Close()) }()
+		if dupIDRows.Next() {
+			var dupID int64
+			var cnt int
+			scanErr := dupIDRows.Scan(&dupID, &cnt)
+
+			if scanErr != nil {
+				return scanErr
+			}
+			return fmt.Errorf("OptimizeVeg refused: duplicate ID %d appears %d times in %s; every row must have a unique signed 32-bit ID",
+				dupID, cnt, vegTable)
 		}
-		return fmt.Errorf("OptimizeVeg refused: duplicate ID %d appears %d times in %s; every row must have a unique signed 32-bit ID",
-			dupID, cnt, vegTable)
-	}
-	if err := errors.Join(dupIDRows.Err(), dupIDRows.Close()); err != nil {
-		return err
+		return dupIDRows.Err()
+	}(); scanErr != nil {
+		return scanErr
 	}
 	return nil
 }
@@ -498,8 +510,12 @@ func ApplyOptimizeVeg(s *vprocore.ContextService, ctx context.Context, contextID
 				if fkErr != nil {
 					return fkErr
 				}
-				hasFKViolation := fkRows.Next()
-				if err := errors.Join(fkRows.Err(), fkRows.Close()); err != nil {
+				var hasFKViolation bool
+				if err := func() (scanErr error) {
+					defer func() { scanErr = errors.Join(scanErr, fkRows.Close()) }()
+					hasFKViolation = fkRows.Next()
+					return fkRows.Err()
+				}(); err != nil {
 					return err
 				}
 				if hasFKViolation {

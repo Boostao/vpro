@@ -1,47 +1,45 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-type TwoPageEntryApproval func(*sql.Tx, *sourceform.SiviParentProjection, []sourceform.SiviParentScalarAssignment) error
+type TwoPageEntryApproval func(*sql.Tx, *sourceform.SourceParentProjection, []sourceform.SourceParentScalarAssignment) error
 
 type TwoPageEntryLifecycle = sourceform.SourceParentEntryLifecycle
 
-func TwoPageEntryHistory(form string, masterAllowed bool) (sourceform.SiviParentHistoryDomain, error) {
+func TwoPageEntryHistory(form string, masterAllowed bool) (sourceform.SourceParentHistoryDomain, error) {
 	return twoPageEntryHistoryAuthority(form, func() bool { return masterAllowed })
 }
 
-func twoPageEntryHistoryAuthority(form string, masterAllowed func() bool) (sourceform.SiviParentHistoryDomain, error) {
+func twoPageEntryHistoryAuthority(form string, masterAllowed func() bool) (sourceform.SourceParentHistoryDomain, error) {
 	history, err := twoPageParentHistory(form, "Entry", "two-page complete entry",
-		func(ctx context.Context, original *sourceform.SiviParentProjection, edits []sourceform.SiviParentScalarEdit) ([]sourceform.SiviParentScalarAssignment, error) {
+		func(ctx context.Context, original *sourceform.SourceParentProjection, edits []sourceform.SourceParentScalarEdit) ([]sourceform.SourceParentScalarAssignment, error) {
 			return PlanTwoPageEntryProjection(ctx, original, edits, masterAllowed())
 		})
 	if err != nil {
-		return sourceform.SiviParentHistoryDomain{}, err
+		return sourceform.SourceParentHistoryDomain{}, err
 	}
-	history.Assignments = func(ctx context.Context, event sourceform.SiviParentHistory, project, plot string) ([]sourceform.SiviParentScalarAssignment, error) {
+	history.Assignments = func(ctx context.Context, event sourceform.SourceParentHistory, project, plot string) ([]sourceform.SourceParentScalarAssignment, error) {
 		return twoPageEntryHistoryAssignments(ctx, form, masterAllowed(), event, project, plot)
 	}
 	return history, nil
 }
 
-// This private boundary requires independent reference/role approval before publication.
-func WriteTwoPageEntry(s *vprocore.ContextService, ctx context.Context, contextID, plot, form string, original *sourceform.SiviParentProjection,
-	edits []sourceform.SiviParentScalarEdit, masterAllowed bool, approve TwoPageEntryApproval) (*sourceform.SiviParentWriteResult, error) {
+// WriteTwoPageEntry — This private boundary requires independent reference/role approval before publication.
+func WriteTwoPageEntry(s *vprocore.ContextService, ctx context.Context, contextID, plot, form string, original *sourceform.SourceParentProjection,
+	edits []sourceform.SourceParentScalarEdit, masterAllowed bool, approve TwoPageEntryApproval) (*sourceform.SourceParentWriteResult, error) {
 	return WriteTwoPageEntryWithLifecycle(s, ctx, contextID, plot, form, original, edits, masterAllowed, approve, TwoPageEntryLifecycle{})
 }
 
-func WriteTwoPageEntryWithLifecycle(s *vprocore.ContextService, ctx context.Context, contextID, plot, form string, original *sourceform.SiviParentProjection,
-	edits []sourceform.SiviParentScalarEdit, masterAllowed bool, approve TwoPageEntryApproval, lifecycle TwoPageEntryLifecycle) (*sourceform.SiviParentWriteResult, error) {
+func WriteTwoPageEntryWithLifecycle(s *vprocore.ContextService, ctx context.Context, contextID, plot, form string, original *sourceform.SourceParentProjection,
+	edits []sourceform.SourceParentScalarEdit, masterAllowed bool, approve TwoPageEntryApproval, lifecycle TwoPageEntryLifecycle) (*sourceform.SourceParentWriteResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -58,15 +56,15 @@ func WriteTwoPageEntryWithLifecycle(s *vprocore.ContextService, ctx context.Cont
 		return nil, err
 	}
 	var requestPlots *vprocore.PlotService
-	var entryPlan []sourceform.SiviParentScalarEdit
-	hooks := sourceform.SiviParentWriteHooks{
+	var entryPlan []sourceform.SourceParentScalarEdit
+	hooks := sourceform.SourceParentWriteHooks{
 		Authorize: func(plots *vprocore.PlotService) error {
 			authorizedMaster = masterAllowed && vprocore.MasterBECAllowed(plots.CurrentUser)
 			requestPlots = plots
 			return nil
 		},
 		Read: read,
-		Plan: func(tx *sql.Tx, observed *sourceform.SiviParentProjection) ([]sourceform.SiviParentScalarAssignment, error) {
+		Plan: func(tx *sql.Tx, observed *sourceform.SourceParentProjection) ([]sourceform.SourceParentScalarAssignment, error) {
 			assignments, err := PlanTwoPageEntryProjection(ctx, observed, edits, authorizedMaster)
 			if err != nil {
 				return nil, err
@@ -77,9 +75,9 @@ func WriteTwoPageEntryWithLifecycle(s *vprocore.ContextService, ctx context.Cont
 			if err := approve(tx, observed, assignments); err != nil {
 				return nil, fmt.Errorf("two-page complete entry approval: %w", err)
 			}
-			entryPlan = make([]sourceform.SiviParentScalarEdit, 0, len(assignments))
+			entryPlan = make([]sourceform.SourceParentScalarEdit, 0, len(assignments))
 			for _, assignment := range assignments {
-				entryPlan = append(entryPlan, sourceform.SiviParentScalarEdit{ContextID: assignment.ContextID, Table: assignment.Table, RowID: assignment.RowID,
+				entryPlan = append(entryPlan, sourceform.SourceParentScalarEdit{ContextID: assignment.ContextID, Table: assignment.Table, RowID: assignment.RowID,
 					Column: assignment.Column, Expected: vprocore.CloneSiteUnitCell(assignment.Before), Value: vprocore.CloneSiteUnitCell(assignment.After)})
 			}
 			return assignments, nil
@@ -101,13 +99,13 @@ func WriteTwoPageEntryWithLifecycle(s *vprocore.ContextService, ctx context.Cont
 			return lifecycle.Verify(requestPlots, tx)
 		}
 	}
-	hooks.Decorate = func(event *sourceform.SiviParentHistory) {
+	hooks.Decorate = func(event *sourceform.SourceParentHistory) {
 		event.EntryPlan = entryPlan
 		if lifecycle.Decorate != nil {
 			lifecycle.Decorate(event)
 		}
 	}
-	return sourceform.WriteSIVIParentPlannedWithHooks(s, ctx, contextID, plot, original, history, nil, hooks)
+	return sourceform.WriteSourceParentPlannedWithHooks(s, ctx, contextID, plot, original, history, nil, hooks)
 }
 
 func RestoreTwoPageEntry(s *vprocore.ContextService, ctx context.Context, contextID, plot, form, historyID string,

@@ -1,18 +1,16 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIParentCategoricalExactBoundsAndStorage(t *testing.T) {
@@ -29,12 +27,12 @@ func TestSIVIParentCategoricalExactBoundsAndStorage(t *testing.T) {
 				vprotest.MetadataText("Z"),
 			} {
 				edit.Value = value
-				got, err := sourceform.PlanSIVIParentCategorical(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit})
+				got, err := sourceform.PlanSIVIParentCategorical(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit})
 				var execution any
 				if value.Text != nil {
 					execution = *value.Text
 				}
-				want := []sourceform.SiviParentScalarAssignment{{
+				want := []sourceform.SourceParentScalarAssignment{{
 					ContextID: "owned", Table: "Sample_Env", RowID: edit.RowID, Column: field.column,
 					Before: vprotest.MetadataText("old"), After: value, Value: execution,
 				}}
@@ -49,7 +47,7 @@ func TestSIVIParentCategoricalExactBoundsAndStorage(t *testing.T) {
 				{Storage: "text", Text: vprotest.MetadataText("").Text, Integer: vprotest.MetadataInteger("1").Integer},
 			} {
 				edit.Value = value
-				if got, err := sourceform.PlanSIVIParentCategorical(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit}); err == nil || got != nil {
+				if got, err := sourceform.PlanSIVIParentCategorical(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit}); err == nil || got != nil {
 					t.Fatal("new overlength/malformed/nontext categorical value returned a plan", got, err)
 				}
 			}
@@ -66,13 +64,13 @@ func TestSIVIParentCategoricalHistoryAndClone(t *testing.T) {
 		} {
 			env, admin, edit := sftest.SiviScalarFixture(t, column, history)
 			edit.Value = vprocore.CloneSiteUnitCell(history)
-			got, err := sourceform.PlanSIVIParentCategorical(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit})
+			got, err := sourceform.PlanSIVIParentCategorical(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit})
 			if err != nil || got == nil || len(got) != 0 {
 				t.Fatal("unchanged categorical history became an assignment", column, got, err)
 			}
 			edit.Value = vprotest.MetadataText("z")
-			got, err = sourceform.PlanSIVIParentCategorical(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit})
-			want := []sourceform.SiviParentScalarAssignment{{ContextID: "owned", Table: "Sample_Env", RowID: edit.RowID, Column: column, Before: history, After: vprotest.MetadataText("z"), Value: "z"}}
+			got, err = sourceform.PlanSIVIParentCategorical(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit})
+			want := []sourceform.SourceParentScalarAssignment{{ContextID: "owned", Table: "Sample_Env", RowID: edit.RowID, Column: column, Before: history, After: vprotest.MetadataText("z"), Value: "z"}}
 			if err != nil || !reflect.DeepEqual(got, want) {
 				t.Fatal("categorical correction changed exact history/new storage", got, want, err)
 			}
@@ -99,8 +97,8 @@ func TestSIVIParentCategoricalHistoryAndClone(t *testing.T) {
 func TestSIVIParentCategoricalCompletePayloadAndDomainIsolation(t *testing.T) {
 	env, admin, snow := sftest.SiviScalarFixture(t, "SnowCoverregime", vprotest.MetadataText("S"))
 	snow.Value = vprotest.MetadataText("Z")
-	texture := sourceform.SiviParentScalarEdit{ContextID: "owned", Table: "Sample_Env", RowID: snow.RowID, Column: "SV_RootZoneTexture", Expected: vprotest.MetadataText("original"), Value: vprotest.MetadataText("  MiXeD \t ")}
-	ah := sourceform.SiviParentScalarEdit{ContextID: "owned", Table: "Sample_Env", RowID: snow.RowID, Column: "SV_AhorizonType", Expected: vprotest.MetadataText("Ah"), Value: vprotest.MetadataText("")}
+	texture := sourceform.SourceParentScalarEdit{ContextID: "owned", Table: "Sample_Env", RowID: snow.RowID, Column: "SV_RootZoneTexture", Expected: vprotest.MetadataText("original"), Value: vprotest.MetadataText("  MiXeD \t ")}
+	ah := sourceform.SourceParentScalarEdit{ContextID: "owned", Table: "Sample_Env", RowID: snow.RowID, Column: "SV_AhorizonType", Expected: vprotest.MetadataText("Ah"), Value: vprotest.MetadataText("")}
 	for index, column := range env.Columns {
 		switch column.Name {
 		case texture.Column:
@@ -109,8 +107,8 @@ func TestSIVIParentCategoricalCompletePayloadAndDomainIsolation(t *testing.T) {
 			env.Rows[0].Cells[index] = ah.Expected
 		}
 	}
-	edits := []sourceform.SiviParentScalarEdit{snow, texture, ah}
-	want := []sourceform.SiviParentScalarAssignment{
+	edits := []sourceform.SourceParentScalarEdit{snow, texture, ah}
+	want := []sourceform.SourceParentScalarAssignment{
 		{ContextID: "owned", Table: "Sample_Env", RowID: snow.RowID, Column: "SnowCoverregime", Before: vprotest.MetadataText("S"), After: vprotest.MetadataText("Z"), Value: "Z"},
 		{ContextID: "owned", Table: "Sample_Env", RowID: snow.RowID, Column: "SV_RootZoneTexture", Before: vprotest.MetadataText("original"), After: vprotest.MetadataText("  MiXeD \t "), Value: "  MiXeD \t "},
 		{ContextID: "owned", Table: "Sample_Env", RowID: snow.RowID, Column: "SV_AhorizonType", Before: vprotest.MetadataText("Ah"), After: vprotest.MetadataText(""), Value: ""},
@@ -144,13 +142,13 @@ func TestSIVIParentCategoricalCompletePayloadAndDomainIsolation(t *testing.T) {
 			case "overlength":
 				tail.Value = vprotest.MetadataText("123456")
 			}
-			if got, err := sourceform.PlanSIVIParentCategorical(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{snow, tail}); err == nil || got != nil {
+			if got, err := sourceform.PlanSIVIParentCategorical(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{snow, tail}); err == nil || got != nil {
 				t.Fatal("invalid categorical tail returned partial output", kind, got, err)
 			}
 		})
 	}
-	for _, planner := range []func(context.Context, string, string, string, vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, []sourceform.SiviParentScalarEdit) ([]sourceform.SiviParentScalarAssignment, error){
-		sourceform.PlanSIVIParentScalars, sourceform.PlanSIVIParentOptions, sourceform.PlanSIVIParentText,
+	for _, planner := range []func(context.Context, string, string, string, vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, []sourceform.SourceParentScalarEdit) ([]sourceform.SourceParentScalarAssignment, error){
+		sourceform.PlanSourceParentScalars, sourceform.PlanSIVIParentOptions, sourceform.PlanSIVIParentText,
 	} {
 		if got, err := planner(context.Background(), "owned", "Sample", "108050", env, admin, edits); err == nil || got != nil {
 			t.Fatal("categorical edits widened another domain", got, err)
@@ -180,13 +178,13 @@ func TestSIVIParentCategoricalCompletePayloadAndDomainIsolation(t *testing.T) {
 func TestSIVIParentCategoricalCancellationAndRetry(t *testing.T) {
 	env, admin, edit := sftest.SiviScalarFixture(t, "SnowCoverregime", vprotest.MetadataText("S"))
 	edit.Value = vprotest.MetadataText("Z")
-	ah := sourceform.SiviParentScalarEdit{ContextID: "owned", Table: "Sample_Env", RowID: edit.RowID, Column: "SV_AhorizonType", Expected: vprocore.ProjectMetadataCell{Storage: "null"}, Value: vprotest.MetadataText("")}
+	ah := sourceform.SourceParentScalarEdit{ContextID: "owned", Table: "Sample_Env", RowID: edit.RowID, Column: "SV_AhorizonType", Expected: vprocore.ProjectMetadataCell{Storage: "null"}, Value: vprotest.MetadataText("")}
 	for index, column := range env.Columns {
 		if column.Name == ah.Column {
 			env.Rows[0].Cells[index] = ah.Expected
 		}
 	}
-	edits := []sourceform.SiviParentScalarEdit{edit, ah}
+	edits := []sourceform.SourceParentScalarEdit{edit, ah}
 	probe := &vprotest.VegetationCancelContext{Context: context.Background(), Remaining: 10000}
 	if _, err := sourceform.ProjectSIVIParent(probe, "owned", "Sample", "108050", env, admin); err != nil {
 		t.Fatal(err)
@@ -201,7 +199,7 @@ func TestSIVIParentCategoricalCancellationAndRetry(t *testing.T) {
 		t.Fatal("pre-canceled categorical planning returned success", got, err)
 	}
 	got, err := sourceform.PlanSIVIParentCategorical(context.Background(), "owned", "Sample", "108050", env, admin, edits)
-	want := []sourceform.SiviParentScalarAssignment{
+	want := []sourceform.SourceParentScalarAssignment{
 		{ContextID: "owned", Table: "Sample_Env", RowID: edit.RowID, Column: "SnowCoverregime", Before: vprotest.MetadataText("S"), After: vprotest.MetadataText("Z"), Value: "Z"},
 		{ContextID: "owned", Table: "Sample_Env", RowID: edit.RowID, Column: "SV_AhorizonType", Before: vprocore.ProjectMetadataCell{Storage: "null"}, After: vprotest.MetadataText(""), Value: ""},
 	}

@@ -1,10 +1,6 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -15,6 +11,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 func (service *ProjectService) ProjectFile(project ProjectInfo) string {
@@ -331,7 +329,7 @@ func (service *ProjectService) SqliteStateContextLocked(ctx context.Context) (Pr
 		if err != nil {
 			return ProjectState{}, err
 		}
-		external, inspectErr := inspectHierarchies(sqlutil.ContextPlotDB{Db: db, Ctx: ctx}, filepath.Base(selection.HierarchyPath))
+		external, inspectErr := inspectHierarchies(sqlutil.ContextPlotDB{DB: db, Ctx: ctx}, filepath.Base(selection.HierarchyPath))
 		inspectErr = errors.Join(inspectErr, db.Close())
 		if inspectErr != nil {
 			return ProjectState{}, inspectErr

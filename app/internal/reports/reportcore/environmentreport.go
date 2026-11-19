@@ -1,15 +1,12 @@
 package reportcore
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
-
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type EnvironmentReportPlot struct {

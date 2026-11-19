@@ -293,11 +293,6 @@ func readSiteUnitLayerCodeTable(ctx context.Context, tx *sql.Tx) (vprocore.Proje
 	return vprocore.ReadPhysicalLocationTable(ctx, tx, "VPro64", "LayerCode")
 }
 
-func readSiteUnitQuickVegetationSource(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx,
-	contextID string, method int) (siteUnitQuickVegetationInput, error) {
-	return readSiteUnitQuickVegetationSourceWithScope(ctx, owner, tx, contextID, method, 1)
-}
-
 func readSiteUnitQuickVegetationSourceWithScope(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx,
 	contextID string, method, unitType int) (siteUnitQuickVegetationInput, error) {
 	environment, err := readSiteUnitSummaryWorkbookSourceWithScope(ctx, owner, tx, contextID, method, unitType)

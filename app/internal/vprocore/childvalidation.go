@@ -7,8 +7,9 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 var SoilChildTextMaximum = map[string]map[string]int{
@@ -43,8 +44,8 @@ func ValidateChildPhysicalText(name string, value any, maximum int) error {
 	if !ok || !utf8.ValidString(text) {
 		return fmt.Errorf("%s requires nullable valid Unicode text", name)
 	}
-	if maximum > 0 && len(utf16.Encode([]rune(text))) > maximum {
-		return fmt.Errorf("%s exceeds %d UTF-16 units", name, maximum)
+	if maximum > 0 && sqlutil.UTF16Len(text) > maximum {
+		return sqlutil.FormatMaxLengthError(name, text, maximum)
 	}
 	return nil
 }
@@ -352,15 +353,15 @@ func ValidateSoilHorizonDepthSign(kind string, horizon *string, upperDepth, lowe
 	switch class {
 	case SoilHorizonUpland:
 		if !(*upperDepth > *lowerDepth) {
-			return fmt.Errorf("Humus upland horizon %q is measured upward from 0 cm and requires UpperDepth > LowerDepth (got %v .. %v)", label, *upperDepth, *lowerDepth)
+			return fmt.Errorf("Humus upland horizon %q is measured upward from 0 cm and requires UpperDepth > LowerDepth (got %v to %v cm)", label, *upperDepth, *lowerDepth)
 		}
 	case SoilHorizonWetland:
 		if !(*upperDepth < *lowerDepth) {
-			return fmt.Errorf("Humus wetland horizon %q is measured downward and requires UpperDepth < LowerDepth (got %v .. %v)", label, *upperDepth, *lowerDepth)
+			return fmt.Errorf("Humus wetland horizon %q is measured downward and requires UpperDepth < LowerDepth (got %v to %v cm)", label, *upperDepth, *lowerDepth)
 		}
 	case SoilHorizonMineral:
 		if !(*upperDepth < *lowerDepth) {
-			return fmt.Errorf("Mineral horizon %q is measured downward and requires UpperDepth < LowerDepth (got %v .. %v)", label, *upperDepth, *lowerDepth)
+			return fmt.Errorf("Mineral horizon %q is measured downward and requires UpperDepth < LowerDepth (got %v to %v cm)", label, *upperDepth, *lowerDepth)
 		}
 	}
 	return nil

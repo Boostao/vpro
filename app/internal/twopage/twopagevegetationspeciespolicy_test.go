@@ -1,18 +1,16 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestTwoPageVegetationSpeciesDefinitionSourceRangePolicy(t *testing.T) {
@@ -54,7 +52,7 @@ func TestTwoPageVegetationSpeciesDefinitionSourceRangePolicy(t *testing.T) {
 					(!expected && !reflect.DeepEqual(projected, vprocore.ProjectMetadataTable{})) {
 					t.Fatal("source-specific width policy changed physical input/output", raw, projected, err)
 				}
-				legacy, legacyErr := sourceform.ProjectSIVISpeciesDefinitions(context.Background(), raw, personal)
+				legacy, legacyErr := sourceform.ProjectSourceSpeciesDefinitions(context.Background(), raw, personal)
 				if (legacyErr == nil) != test.personal ||
 					(test.personal && !reflect.DeepEqual(legacy, before)) {
 					t.Fatal("two-page LONG policy leaked into legacy SIVI projection", legacy, legacyErr)
@@ -69,6 +67,7 @@ func TestTwoPageVegetationSpeciesDefinitionSourceRangePolicy(t *testing.T) {
 		!reflect.DeepEqual(result, vprocore.ProjectMetadataTable{}) {
 		t.Fatal("cancelled projection returned partial definitions", result, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if result, err := projectTwoPageVegetationSpeciesDefinitions(nil, raw, false); err == nil ||
 		!reflect.DeepEqual(result, vprocore.ProjectMetadataTable{}) {
 		t.Fatal("nil-context projection returned definitions", result, err)

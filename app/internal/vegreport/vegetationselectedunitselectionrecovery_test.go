@@ -1,17 +1,15 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func TestSelectedUnitSessionInvalidProjectionDriftRetainsBuildReceiptAndCorrection(t *testing.T) {

@@ -1,15 +1,13 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"database/sql"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func substrateRestoreFixture(t *testing.T, column string, before, after *string) (*vprocore.PlotService, *sql.DB, string, string) {

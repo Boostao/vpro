@@ -148,7 +148,7 @@ func TestW2SIVIParentWriteHyphenUnicodeLeadingSpaceAndCaseVariants(t *testing.T)
 			t.Fatalf("ReadSIVIParent(%q) rows = %d, want 1", target, len(parent.Rows))
 		}
 		drafts := sourceform.SiviParentDirectEdits{
-			Scalars: []sourceform.SiviParentScalarEdit{
+			Scalars: []sourceform.SourceParentScalarEdit{
 				sftest.SiviParentEdit(t, parent, "SV_FloodPlain", vprotest.MetadataInteger("-1")),
 			},
 		}

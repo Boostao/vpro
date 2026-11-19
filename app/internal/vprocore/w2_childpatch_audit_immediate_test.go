@@ -84,7 +84,7 @@ func TestW2ChildPatchesDefaultConfigAndAuditStrengthMatrix(t *testing.T) {
 	if err := svc.Edit(state.ContextID, func(plots *vprocore.PlotService) error {
 		return plots.UpdateChildPatches("00337", []vprocore.ChildRecordPatch{{
 			Kind: "Veg",
-			Id:   vegID,
+			ID:   vegID,
 			Cells: map[string]vprocore.ChildExpectedValue{
 				"ll": {Expected: nil, Value: 1, Scalar: reflect.Int},
 			},
@@ -101,7 +101,7 @@ func TestW2ChildPatchesDefaultConfigAndAuditStrengthMatrix(t *testing.T) {
 	if err := svc.Edit(state.ContextID, func(plots *vprocore.PlotService) error {
 		return plots.UpdateChildPatches("00337", []vprocore.ChildRecordPatch{{
 			Kind: "Veg",
-			Id:   vegID,
+			ID:   vegID,
 			Cells: map[string]vprocore.ChildExpectedValue{
 				"ll": {Expected: 1, Value: 2, Scalar: reflect.Int},
 			},
@@ -118,7 +118,7 @@ func TestW2ChildPatchesDefaultConfigAndAuditStrengthMatrix(t *testing.T) {
 	if err := svc.Edit(state.ContextID, func(plots *vprocore.PlotService) error {
 		return plots.UpdateChildPatches("00337", []vprocore.ChildRecordPatch{{
 			Kind: "Veg",
-			Id:   vegID,
+			ID:   vegID,
 			Cells: map[string]vprocore.ChildExpectedValue{
 				"ll": {Expected: 2, Value: nil, Scalar: reflect.Int},
 			},
@@ -157,7 +157,7 @@ func TestW2ChildPatchesDefaultConfigAndAuditStrengthMatrix(t *testing.T) {
 			for step, tr := range transitions {
 				if err := childSvc.UpdateChildPatches("CHILD1", []vprocore.ChildRecordPatch{{
 					Kind: "Veg",
-					Id:   77,
+					ID:   77,
 					Cells: map[string]vprocore.ChildExpectedValue{
 						"ll": {Expected: tr.exp, Value: tr.val, Scalar: reflect.Int},
 					},
@@ -211,7 +211,7 @@ func TestW2UpdateChildPlotPatchesAcquiresBeginImmediateAndHonorsContext(t *testi
 	err = svc.Edit(state.ContextID, func(plots *vprocore.PlotService) error {
 		return plots.UpdateChildPatches("00337", []vprocore.ChildRecordPatch{{
 			Kind: "Veg",
-			Id:   vegID,
+			ID:   vegID,
 			Cells: map[string]vprocore.ChildExpectedValue{
 				"ll": {Expected: nil, Value: 5, Scalar: reflect.Int},
 			},
@@ -257,7 +257,7 @@ func TestW2UpdateChildPlotPatchesAcquiresBeginImmediateAndHonorsContext(t *testi
 	_, contendedErr := vprocore.WithContextPlotRequest(shortCtx, svc, state.ContextID, func(plots *vprocore.PlotService) (struct{}, error) {
 		return struct{}{}, plots.UpdateChildPatches("00337", []vprocore.ChildRecordPatch{{
 			Kind: "Veg",
-			Id:   vegID,
+			ID:   vegID,
 			Cells: map[string]vprocore.ChildExpectedValue{
 				"ll": {Expected: 5, Value: 9, Scalar: reflect.Int},
 			},

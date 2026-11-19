@@ -11,6 +11,27 @@ export interface AccessDatabaseInspection {
     "projects": AccessProjectCandidate[] | null;
 }
 
+export interface AccessImportProgress {
+    "contextId": string;
+
+    /**
+     * "inspect" | "import"
+     */
+    "operation": string;
+
+    /**
+     * "starting" | "inspecting" | "streaming" | "finalizing"
+     */
+    "phase": string;
+    "sourceTable"?: string;
+    "targetTable"?: string;
+    "tableIndex"?: number;
+    "tableRowsProcessed": number;
+    "tableRowsImported": number;
+    "totalRowsProcessed": number;
+    "message": string;
+}
+
 export interface AccessImportTableSummary {
     "suffix": string;
     "sourceTable": string;

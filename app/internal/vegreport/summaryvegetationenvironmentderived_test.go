@@ -1,17 +1,15 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"strconv"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSummaryEnvironmentalDerivedOriginalPhysicalCases(t *testing.T) {

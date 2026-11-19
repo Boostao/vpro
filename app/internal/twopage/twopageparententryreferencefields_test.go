@@ -1,14 +1,11 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-)
-
-import (
 	"reflect"
 	"testing"
 
 	"github.com/boostao/vpro/app/internal/fs882layout"
+	"github.com/boostao/vpro/app/internal/sourceform"
 )
 
 func TestTwoPageEntryReferenceSourceRejectsCountPreservingSubstitutions(t *testing.T) {
@@ -72,16 +69,16 @@ func TestTwoPageEntryReferenceSourceRejectsCountPreservingSubstitutions(t *testi
 
 func TestTwoPageEntryReferenceFieldsSourceAndPhysicalPolicies(t *testing.T) {
 	expected := map[string]TwoPageEntryReferenceField{
-		"LocationAccuracy":      {sourceform.SiviParentSharedReferencePolicy{Column: "LocationAccuracy", List: "accuracy", Reader: "family", Maximum: 6, Required: false}, "integer"},
-		"PlotType":              {sourceform.SiviParentSharedReferencePolicy{Column: "PlotType", List: "PlotType", Reader: "family", Maximum: 10, Required: false}, "text"},
-		"ProjectID":             {sourceform.SiviParentSharedReferencePolicy{Column: "ProjectID", List: "ProjectID", Reader: "project", Maximum: 30, Required: false}, "text"},
-		"Ecosection":            {sourceform.SiviParentSharedReferencePolicy{Column: "Ecosection", List: "ecosection", Reader: "ecosection", Maximum: 3, Required: false}, "text"},
-		"SurfaceTopographyType": {sourceform.SiviParentSharedReferencePolicy{Column: "SurfaceTopographyType", List: "SurfaceTopography", Reader: "family", Maximum: 3, Required: false}, "text"},
-		"SV_FullCruiseCard":     {sourceform.SiviParentSharedReferencePolicy{Column: "SV_FullCruiseCard", List: "MensurationType", Reader: "family", Maximum: 50, Required: false}, "text"},
-		"BedrockGeology3":       {sourceform.SiviParentSharedReferencePolicy{Column: "BedrockGeology3", List: "BedrockType", Reader: "geology", Maximum: 4, Required: false}, "text"},
-		"CoarseFragLith1":       {sourceform.SiviParentSharedReferencePolicy{Column: "CoarseFragLith1", List: "BedrockType", Reader: "parent", Maximum: 12, Required: false}, "text"},
-		"MesoSlopePosition":     {sourceform.SiviParentSharedReferencePolicy{Column: "MesoSlopePosition", List: "MesoSlopePosition", Reader: "family", Maximum: 3, Required: true}, "text"},
-		"SurfaceShape":          {sourceform.SiviParentSharedReferencePolicy{Column: "SurfaceShape", List: "SurfaceShape", Reader: "family", Maximum: 3, Required: true}, "text"},
+		"LocationAccuracy":      {sourceform.SourceParentSharedReferencePolicy{Column: "LocationAccuracy", List: "accuracy", Reader: "family", Maximum: 6, Required: false}, "integer"},
+		"PlotType":              {sourceform.SourceParentSharedReferencePolicy{Column: "PlotType", List: "PlotType", Reader: "family", Maximum: 10, Required: false}, "text"},
+		"ProjectID":             {sourceform.SourceParentSharedReferencePolicy{Column: "ProjectID", List: "ProjectID", Reader: "project", Maximum: 30, Required: false}, "text"},
+		"Ecosection":            {sourceform.SourceParentSharedReferencePolicy{Column: "Ecosection", List: "ecosection", Reader: "ecosection", Maximum: 3, Required: false}, "text"},
+		"SurfaceTopographyType": {sourceform.SourceParentSharedReferencePolicy{Column: "SurfaceTopographyType", List: "SurfaceTopography", Reader: "family", Maximum: 3, Required: false}, "text"},
+		"SV_FullCruiseCard":     {sourceform.SourceParentSharedReferencePolicy{Column: "SV_FullCruiseCard", List: "MensurationType", Reader: "family", Maximum: 50, Required: false}, "text"},
+		"BedrockGeology3":       {sourceform.SourceParentSharedReferencePolicy{Column: "BedrockGeology3", List: "BedrockType", Reader: "geology", Maximum: 4, Required: false}, "text"},
+		"CoarseFragLith1":       {sourceform.SourceParentSharedReferencePolicy{Column: "CoarseFragLith1", List: "BedrockType", Reader: "parent", Maximum: 12, Required: false}, "text"},
+		"MesoSlopePosition":     {sourceform.SourceParentSharedReferencePolicy{Column: "MesoSlopePosition", List: "MesoSlopePosition", Reader: "family", Maximum: 3, Required: true}, "text"},
+		"SurfaceShape":          {sourceform.SourceParentSharedReferencePolicy{Column: "SurfaceShape", List: "SurfaceShape", Reader: "family", Maximum: 3, Required: true}, "text"},
 	}
 	for _, form := range []string{"FS882-8x6XL", "FS882-8x6XL-CHARS"} {
 		fields, err := twoPageEntryReferenceFields(form)

@@ -6,12 +6,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 func buildStagingMergePreviewOnQueryer(
@@ -55,13 +56,17 @@ func buildStagingMergePreviewOnQueryer(
 		}
 		pRows, pErr := bdb.QueryContext(ctx, fmt.Sprintf(`SELECT CAST("PlotNumber" AS TEXT) FROM %s WHERE typeof("PlotNumber")='text'`, quotePGIdent(bp+"_Env")))
 		if pErr == nil {
-			for pRows.Next() {
-				var p string
-				if pRows.Scan(&p) == nil && p != "" {
-					plotSet[p] = true
+			func() {
+				defer pRows.Close()
+
+				for pRows.Next() {
+					var p string
+					if pRows.Scan(&p) == nil && p != "" {
+						plotSet[p] = true
+					}
 				}
-			}
-			pRows.Close()
+
+			}()
 		}
 		_ = bdb.Close()
 	}
@@ -375,7 +380,7 @@ func validateCloudMergeCell(suffix string, col ColumnSpec, cell cloudCell) error
 		return nil
 	}
 	if cell.kind == "text" {
-		if err := ValidateUTF16Bound(suffix+"."+col.Name, cell.textVal, col.UTF16MaxLength); err != nil {
+		if err := sqlutil.ValidateUTF16Bound(suffix+"."+col.Name, cell.textVal, col.UTF16MaxLength); err != nil {
 			return err
 		}
 	}
@@ -384,8 +389,8 @@ func validateCloudMergeCell(suffix string, col ColumnSpec, cell cloudCell) error
 		if cell.kind == "int" {
 			v = float64(cell.intVal)
 		}
-		if _, ok := NarrowSingleCover(v); !ok {
-			return fmt.Errorf("%s.%s cover=%v must be >= 0 and < 100 in IEEE-754 SINGLE", suffix, col.Name, v)
+		if _, ok := sqlutil.NarrowSingleCover(v); !ok {
+			return fmt.Errorf("%s.%s cover=%v must be from 0 to under 100%% (e.g. 99.9%%)", suffix, col.Name, v)
 		}
 	}
 	return nil

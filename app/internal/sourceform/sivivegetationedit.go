@@ -1,13 +1,11 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"fmt"
 	"reflect"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SIVIHeightEdit struct {
@@ -36,7 +34,7 @@ type SiviHeightAssignment struct {
 	Value         any
 }
 
-// Planning does not authorize a write or enable the unfinished SIVI editor.
+// PlanSIVIHeightEdits — Planning does not authorize a write or enable the unfinished SIVI editor.
 func PlanSIVIHeightEdits(ctx context.Context, plot string, extended bool, veg vprocore.ProjectMetadataTable, edits []SiviHeightEdit) ([]SiviHeightAssignment, error) {
 	return PlanSIVIChildEdits(ctx, plot, extended, veg, edits, "height",
 		func(group int, column string) bool {
@@ -53,10 +51,10 @@ func validateSIVIHeightCell(column string, cell vprocore.ProjectMetadataCell) er
 		}
 		return vprocore.ValidateChildPhysicalText("Veg.HeightB", value, 255)
 	}
-	return ValidateSIVIChildSingle(column, cell)
+	return ValidateSourceChildSingle(column, cell)
 }
 
-func ValidateSIVIChildSingle(column string, cell vprocore.ProjectMetadataCell) error {
+func ValidateSourceChildSingle(column string, cell vprocore.ProjectMetadataCell) error {
 	if cell.Storage != "null" && cell.Storage != "real" {
 		return fmt.Errorf("Veg.%s requires nullable numeric real storage", column)
 	}

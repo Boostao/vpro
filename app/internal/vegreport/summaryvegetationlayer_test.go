@@ -1,12 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
@@ -14,6 +8,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func summaryLayerFixture() (raw, su, stage, master, personal, layers vprocore.ProjectMetadataTable) {
@@ -271,6 +269,7 @@ func TestSummaryVegetationLayerRawBoundaryAndCancellation(t *testing.T) {
 			t.Fatal("cancelled raw preparation or origin association leaked data", point, result, err)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := prepareSummaryVegetationLayer(nil, "Project", "Selected", raw, su, master, personal, layers, 1); err == nil {
 		t.Fatal("nil preparation context accepted")
 	}
@@ -337,14 +336,15 @@ func TestSummaryVegetationLayerStrictErrorsAndCancellation(t *testing.T) {
 			t.Fatal("unsupported mode guessed")
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := planSummaryVegetationLayer(nil, raw, su, stage, master, personal, layers, 1); err == nil {
 		t.Fatal("nil context accepted")
 	}
 }
 
 func TestSummaryVegetationLayerUnionNullFallbackAndOwnership(t *testing.T) {
-	raw, su, stage, master, personal, layers := summaryLayerFixture()
-	personal = sftest.LifeformReferenceFixture(master.Rows[0].Cells)
+	raw, su, stage, master, _, layers := summaryLayerFixture()
+	personal := sftest.LifeformReferenceFixture(master.Rows[0].Cells)
 	result, err := planSummaryVegetationLayer(context.Background(), raw, su, stage, master, personal, layers, 1)
 	if err != nil || len(result.Rows[0].Witnesses) != 4 || len(result.Rows[0].Witnesses[0].ReferenceOrigins) != 2 {
 		t.Fatal("exact UNION duplicate should retain origins without multiplying cover", result, err)

@@ -1,11 +1,6 @@
 package pictures
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -23,6 +18,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func pictureImageFixture(t *testing.T, format string, width, height int) (*ownedPictureDirectory, []byte) {
@@ -74,6 +72,7 @@ func TestPictureImageDecoderExactByteLimitAndCancellation(t *testing.T) {
 	if got, err := decodePictureImageBytes(ctx, encoded); !errors.Is(err, context.Canceled) || got != (pictureImage{}) {
 		t.Fatal("cancelled decoder returned preview data", got, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if got, err := decodePictureImageBytes(nil, encoded); err == nil || got != (pictureImage{}) {
 		t.Fatal("decoder accepted a missing request context", got, err)
 	}

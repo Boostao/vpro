@@ -1,15 +1,13 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"bytes"
 	"encoding/json"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 func TestPlotLabelPDFStrictClientWireRoundTrip(t *testing.T) {

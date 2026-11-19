@@ -1,11 +1,6 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/references"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -14,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -365,7 +363,7 @@ func (s *PlotService) BeginImmediateActiveTx() (*sql.Tx, string, func(), error) 
 	return tx, project, cleanup, nil
 }
 
-// Callers release the borrow, not the context-owned pool.
+// GetActiveReadDB — Callers release the borrow, not the context-owned pool.
 func (s *PlotService) GetActiveReadDB() (*sql.DB, string, func(), error) {
 	return s.openActiveDB(true)
 }
@@ -465,7 +463,7 @@ func (s *PlotService) ListAuditEntries(plotNumber string) ([]AuditEntry, error) 
 	}
 	for _, entry := range entries {
 		if entry.Project != project {
-			return nil, fmt.Errorf("audit rowId %s has foreign project ownership", entry.RowID)
+			return nil, fmt.Errorf("audit entry %s has foreign project ownership", entry.RowID)
 		}
 	}
 	return entries, nil
@@ -567,6 +565,32 @@ func (s *PlotService) OperationContext() context.Context {
 	return context.Background()
 }
 
+// WithRequestContext returns a shallow request-scoped view bound to ctx under the PlotService read lease.
+func (s *PlotService) WithRequestContext(ctx context.Context) (*PlotService, error) {
+	if s == nil {
+		return nil, errors.New("plot service is unavailable")
+	}
+	if ctx == nil {
+		return nil, errors.New("plot operation requires a context")
+	}
+	if err := sqlutil.AcquireReadLease(ctx, &s.Mu); err != nil {
+		return nil, err
+	}
+	scoped := &PlotService{
+		Projects:         s.Projects,
+		AuditStrength:    s.AuditStrength,
+		CurrentUser:      s.CurrentUser,
+		SiteCodes:        s.SiteCodes,
+		SiteCodesError:   s.SiteCodesError,
+		ParentCodes:      s.ParentCodes,
+		ParentCodesError: s.ParentCodesError,
+		ContextScoped:    s.ContextScoped,
+		requestContext:   ctx,
+	}
+	s.Mu.RUnlock()
+	return scoped, nil
+}
+
 func (s *PlotService) ReadDB(db *sql.DB) sqlutil.HeaderDB {
-	return sqlutil.ContextPlotDB{Db: db, Ctx: s.OperationContext()}
+	return sqlutil.ContextPlotDB{DB: db, Ctx: s.OperationContext()}
 }

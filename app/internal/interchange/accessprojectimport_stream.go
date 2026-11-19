@@ -107,7 +107,7 @@ func streamAccessTableIntoSQLite(
 	db *accessreader.DB,
 	tx *sql.Tx,
 	quarantineStmt *sql.Stmt,
-	childIdStmt *sql.Stmt,
+	childIDStmt *sql.Stmt,
 	sourceTable string,
 	validEnvPlots map[string]struct{},
 	specs []streamInsertSpec,
@@ -117,7 +117,7 @@ func streamAccessTableIntoSQLite(
 		return streamTableMetrics{}, fmt.Errorf("open %s: %w", sourceTable, err)
 	}
 	defer reader.Close()
-	return streamAccessSourceIntoSQLite(ctx, accessReaderAdapter{reader}, tx, quarantineStmt, childIdStmt, sourceTable, validEnvPlots, specs)
+	return streamAccessSourceIntoSQLite(ctx, accessReaderAdapter{reader}, tx, quarantineStmt, childIDStmt, sourceTable, validEnvPlots, specs)
 }
 
 func streamAccessSourceIntoSQLite(
@@ -125,7 +125,7 @@ func streamAccessSourceIntoSQLite(
 	reader accessRowSource,
 	tx *sql.Tx,
 	quarantineStmt *sql.Stmt,
-	childIdStmt *sql.Stmt,
+	childIDStmt *sql.Stmt,
 	sourceTable string,
 	validEnvPlots map[string]struct{},
 	specs []streamInsertSpec,
@@ -277,11 +277,11 @@ func streamAccessSourceIntoSQLite(
 	}
 
 	reserveQuarantinedID := func(tg *preparedTarget, row []any) {
-		if childIdStmt == nil || tg.spec.childIdentityTable == "" || idIdx < 0 || idIdx >= len(row) {
+		if childIDStmt == nil || tg.spec.childIdentityTable == "" || idIdx < 0 || idIdx >= len(row) {
 			return
 		}
 		if idVal, ok := row[idIdx].(int64); ok && idVal > 0 {
-			_, _ = childIdStmt.ExecContext(ctx, tg.spec.childIdentityTable, idVal)
+			_, _ = childIDStmt.ExecContext(ctx, tg.spec.childIdentityTable, idVal)
 		}
 	}
 
@@ -374,7 +374,7 @@ func streamAccessSourceIntoSQLite(
 					}
 					if s, ok := args[i].(string); ok {
 						if !utf8.ValidString(s) || strings.ContainsRune(s, 0) || len(utf16.Encode([]rune(s))) > limit {
-							utf16Violation = fmt.Sprintf("%s.%s exceeds %d UTF-16 code units or invalid UTF-8", tg.spec.targetTable, tg.targetColNames[i], limit)
+							utf16Violation = fmt.Sprintf("%s.%s exceeds %d characters or contains invalid UTF-8", tg.spec.targetTable, tg.targetColNames[i], limit)
 							break
 						}
 					}
@@ -501,16 +501,18 @@ func seedImportedChildIdentities(ctx context.Context, tx *sql.Tx, sourceProject,
 		id  int64
 	}
 	var pairs []auditIDPair
-	for rows.Next() {
-		var tbl string
-		var id int64
-		if err := rows.Scan(&tbl, &id); err != nil {
-			rows.Close()
-			return err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var tbl string
+			var id int64
+			if err := rows.Scan(&tbl, &id); err != nil {
+				return err
+			}
+			pairs = append(pairs, auditIDPair{tbl: tbl, id: id})
 		}
-		pairs = append(pairs, auditIDPair{tbl: tbl, id: id})
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return err
 	}
 

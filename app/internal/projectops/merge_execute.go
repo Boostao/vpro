@@ -506,7 +506,7 @@ func (e *sqliteMergeExecutor) reserveAndDeletePlotChildren(suffix, plot string) 
 }
 
 func (e *sqliteMergeExecutor) insertWholePlotFromSource(plot string) error {
-	if err := validateUTF16Max("PlotNumber", plot, 7); err != nil {
+	if err := sqlutil.ValidateUTF16Bound("PlotNumber", plot, 7); err != nil {
 		return err
 	}
 	for _, suffix := range []string{"Env", "Admin"} {

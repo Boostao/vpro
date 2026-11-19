@@ -3,10 +3,11 @@ package spatial
 import (
 	"context"
 	"errors"
-	"github.com/boostao/vpro/app/internal/vprocore"
 	"math"
 	"sort"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 // FlatGeobufMagicV3 is the canonical 8-byte OGC FlatGeobuf v3.0.1 signature: "fgb\x03fgb\x01".

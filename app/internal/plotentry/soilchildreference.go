@@ -1,14 +1,12 @@
 package plotentry
 
 import (
-	"database/sql"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SoilSuggestion struct {

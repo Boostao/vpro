@@ -1,11 +1,6 @@
 package plotentry
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -14,6 +9,9 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type PersonalSpeciesDefinitionRequest struct {
@@ -62,7 +60,7 @@ func preparePersonalSpecies(request PersonalSpeciesDefinitionRequest) (vprocore.
 		}
 	}
 	if request.Lifeform != nil && (*request.Lifeform < -32768 || *request.Lifeform > 32767) {
-		return vprocore.VegetationSpeciesOption{}, errors.New("personal species LifeForm is outside the source signed16 INTEGER domain")
+		return vprocore.VegetationSpeciesOption{}, errors.New("personal species LifeForm is outside the valid LifeForm number range")
 	}
 	return vprocore.VegetationSpeciesOption{Code: &code, ScientificName: request.ScientificName,
 		Lifeform: request.Lifeform, EnglishName: request.EnglishName}, nil
@@ -124,7 +122,7 @@ func (err *personalSpeciesCommittedError) Error() string {
 
 func (err *personalSpeciesCommittedError) Unwrap() error { return err.cause }
 
-// This saves only a user definition; assigning it to a plot is a separate draft Save.
+// CreatePersonalSpeciesDefinition — This saves only a user definition; assigning it to a plot is a separate draft Save.
 func CreatePersonalSpeciesDefinition(s *vprocore.ContextService, ctx context.Context, contextID string, request PersonalSpeciesDefinitionRequest) (vprocore.VegetationSpeciesOption, error) {
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (vprocore.VegetationSpeciesOption, error) {
 		return PlotCreatePersonalSpeciesDefinition(plots, request)

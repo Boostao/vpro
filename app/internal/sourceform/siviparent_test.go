@@ -1,13 +1,6 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/fs882layout"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -19,6 +12,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/fs882layout"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIParentRawBindingsPairsAndCloneSafety(t *testing.T) {
@@ -41,10 +39,10 @@ func TestSIVIParentRawBindingsPairsAndCloneSafety(t *testing.T) {
 		t.Fatal("implicit source target was presented as a directly bound control", implicit)
 	}
 	if !reflect.DeepEqual(got.EnvColumns, env.Columns) || !reflect.DeepEqual(got.AdminColumns, admin.Columns) ||
-		!reflect.DeepEqual(got.Rows[0], SiviParentRow{env.Rows[0], admin.Rows[0]}) ||
-		!reflect.DeepEqual(got.Rows[1], SiviParentRow{env.Rows[0], admin.Rows[1]}) ||
-		!reflect.DeepEqual(got.Rows[2], SiviParentRow{env.Rows[1], admin.Rows[0]}) ||
-		!reflect.DeepEqual(got.Rows[3], SiviParentRow{env.Rows[1], admin.Rows[1]}) {
+		!reflect.DeepEqual(got.Rows[0], SourceParentRow{env.Rows[0], admin.Rows[0]}) ||
+		!reflect.DeepEqual(got.Rows[1], SourceParentRow{env.Rows[0], admin.Rows[1]}) ||
+		!reflect.DeepEqual(got.Rows[2], SourceParentRow{env.Rows[1], admin.Rows[0]}) ||
+		!reflect.DeepEqual(got.Rows[3], SourceParentRow{env.Rows[1], admin.Rows[1]}) {
 		t.Fatal("raw columns/types/row identities or deterministic pair order changed", got)
 	}
 	*got.Rows[0].Env.Cells[0].Text = "changed"
@@ -346,7 +344,7 @@ func TestSourceParentProjectionStorageEqualityMatchesExactRealBits(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var cloned SiviParentProjection
+	var cloned SourceParentProjection
 	if err := json.Unmarshal(data, &cloned); err != nil {
 		t.Fatal(err)
 	}
@@ -362,7 +360,7 @@ func TestSourceParentProjectionStorageEqualityMatchesExactRealBits(t *testing.T)
 		t.Fatal("signed-zero bit difference compared equal")
 	}
 	cloned = *original
-	cloned.Rows = append([]SiviParentRow{}, original.Rows...)
+	cloned.Rows = append([]SourceParentRow{}, original.Rows...)
 	cloned.Rows[0].Env.RowID = "different"
 	if SourceParentProjectionStorageEqual(original, &cloned) || SourceParentProjectionStorageEqual(original, nil) {
 		t.Fatal("different source owner compared equal")

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/boostao/vpro/app/internal/sqlutil"
+
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -113,7 +115,7 @@ func writeVenusToVP08Tx(
 	var nextVegID, nextHumusID, nextMineralID int64 = 1, 1, 1
 	seenPlots := map[string]bool{}
 	nowStr := time.Now().Format("2006-01-02 15:04:05")
-	projIDVal := truncateUTF16Units(sourceProject, 20)
+	projIDVal := sqlutil.TruncateUTF16(sourceProject, 20)
 
 	if err := vprocore.EnsureChildIdentityTable(ctx, tx); err != nil {
 		return 0, 0, 0, err
@@ -156,7 +158,7 @@ func writeVenusToVP08Tx(
 	}
 
 	for _, pl := range plots {
-		pNum := truncateUTF16Units(strings.TrimSpace(pl.PlotNumber), 7)
+		pNum := sqlutil.TruncateUTF16(strings.TrimSpace(pl.PlotNumber), 7)
 		if pNum == "" || seenPlots[pNum] {
 			continue
 		}
@@ -166,7 +168,7 @@ func writeVenusToVP08Tx(
 		lat := parseVenusCoordDMSOrDD(f, "latitude", "latitudedegree", "latitudeminute", "latitudesecond", false)
 		lon := parseVenusCoordDMSOrDD(f, "longitude", "longitudedegree", "longitudeminute", "longitudesecond", true)
 
-		rzps := truncateUTF16Units(firstNonEmpty(f, "rootzoneparticlesize"), 6)
+		rzps := sqlutil.TruncateUTF16(firstNonEmpty(f, "rootzoneparticlesize"), 6)
 		if orgTex := venusOrgSoilTexture(firstNonEmpty(f, "organicsoiltexture")); orgTex != "" && rzps == "" {
 			rzps = orgTex
 		}
@@ -333,7 +335,7 @@ func writeVenusToVP08Tx(
 		bySpp := map[string]*wideVeg{}
 		var sppOrder []string
 		for _, vo := range pl.VegObservations {
-			code := truncateUTF16Units(strings.ToUpper(strings.TrimSpace(vo.Species)), 8)
+			code := sqlutil.TruncateUTF16(strings.ToUpper(strings.TrimSpace(vo.Species)), 8)
 			if code == "" || vo.Cover == 0 {
 				continue
 			}
@@ -344,7 +346,7 @@ func writeVenusToVP08Tx(
 				sppOrder = append(sppOrder, code)
 			}
 			if wv.collected == "" && strings.TrimSpace(vo.Collected) != "" {
-				wv.collected = truncateUTF16Units(strings.TrimSpace(vo.Collected), 1)
+				wv.collected = sqlutil.TruncateUTF16(strings.TrimSpace(vo.Collected), 1)
 			}
 			cCol, hCol := resolveIncomingVenusLayer(vo.Layer)
 			if err := accumulateImportedSingleCover(wv.covers, cCol, vo.Cover, pNum, code); err != nil {

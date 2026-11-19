@@ -1,15 +1,13 @@
 package integration
 
 import (
-	referencespkg "github.com/boostao/vpro/app/internal/references"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"testing"
 	"time"
+
+	referencespkg "github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestBrowseAndReferenceReadsObserveCancellationAndRecover(t *testing.T) {

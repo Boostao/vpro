@@ -38,7 +38,7 @@ func DeleteTwoPageVegetationRow(s *vprocore.ContextService, ctx context.Context,
 		return DeleteTwoPageVegetationResult{}, err
 	}
 	if req.ID < -2147483648 || req.ID > 2147483647 {
-		return DeleteTwoPageVegetationResult{}, errors.New("two-page vegetation deletion requires a signed32 child ID")
+		return DeleteTwoPageVegetationResult{}, errors.New("two-page vegetation deletion requires a record ID")
 	}
 	requestID, err := normalizeTwoPageVegRequestID(req.RequestID)
 	if err != nil {
@@ -58,7 +58,7 @@ func DeleteTwoPageVegetationRow(s *vprocore.ContextService, ctx context.Context,
 
 		var out DeleteTwoPageVegetationResult
 		wErr := owner.WithMetadataWriter(ctx, func(conn *sql.Conn) (txErr error) {
-			suAlias, err := sourceform.SiviParentWriterSU(ctx, conn, owner)
+			suAlias, err := sourceform.SourceParentWriterSU(ctx, conn, owner)
 			if err != nil {
 				return err
 			}
@@ -134,7 +134,7 @@ func DeleteTwoPageVegetationRow(s *vprocore.ContextService, ctx context.Context,
 			targetIdx := -1
 			idText := strconv.FormatInt(req.ID, 10)
 			for i, r := range beforeRecords.Rows {
-				if sourceform.SiviIdentityCellMatches(r.Cells[colMap["ID"]], idText) {
+				if sourceform.SourceIdentityCellMatches(r.Cells[colMap["ID"]], idText) {
 					if targetIdx >= 0 {
 						return fmt.Errorf("ambiguous Veg ID %d in plot %s; deletion refused", req.ID, req.PlotNumber)
 					}
@@ -146,7 +146,7 @@ func DeleteTwoPageVegetationRow(s *vprocore.ContextService, ctx context.Context,
 			}
 			deletedRow := beforeRecords.Rows[targetIdx]
 			if strings.TrimSpace(req.RowID) != "" && deletedRow.RowID != strings.TrimSpace(req.RowID) {
-				return fmt.Errorf("Veg physical rowId changed (expected %s, found %s); reload before deleting", req.RowID, deletedRow.RowID)
+				return fmt.Errorf("Veg record changed on disk (expected %s, found %s); reload before deleting", req.RowID, deletedRow.RowID)
 			}
 
 			if err := reserveTwoPageVegChildIDs(ctx, tx, quotedTbl, tableName, &req.ID); err != nil {
@@ -320,7 +320,7 @@ func RestoreTwoPageVegetationRow(s *vprocore.ContextService, ctx context.Context
 
 		var out RestoreTwoPageVegetationResult
 		wErr := owner.WithMetadataWriter(ctx, func(conn *sql.Conn) (txErr error) {
-			suAlias, err := sourceform.SiviParentWriterSU(ctx, conn, owner)
+			suAlias, err := sourceform.SourceParentWriterSU(ctx, conn, owner)
 			if err != nil {
 				return err
 			}
@@ -365,34 +365,37 @@ func RestoreTwoPageVegetationRow(s *vprocore.ContextService, ctx context.Context
 			}
 			var targetDeletion, replayRestore *twoPageVegLifecycleHistory
 			alreadyConsumed := false
-			for hRows.Next() {
-				var rID, rawProp string
-				if err := hRows.Scan(&rID, &rawProp); err != nil {
-					hRows.Close()
-					return err
-				}
-				var parsed twoPageVegLifecycleHistory
-				if uErr := json.Unmarshal([]byte(rawProp), &parsed); uErr != nil {
-					hRows.Close()
-					return uErr
-				}
-				if rID == requestID {
-					if parsed.Action != "restore" || parsed.RestoreOfRequestID == nil || *parsed.RestoreOfRequestID != deleteReqID {
-						hRows.Close()
-						return errors.New("requestId already belongs to another vegetation history operation")
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, hRows.Close()) }()
+				for hRows.Next() {
+					var rID, rawProp string
+					if err := hRows.Scan(&rID, &rawProp); err != nil {
+
+						return err
 					}
-					cp := parsed
-					replayRestore = &cp
+					var parsed twoPageVegLifecycleHistory
+					if uErr := json.Unmarshal([]byte(rawProp), &parsed); uErr != nil {
+
+						return uErr
+					}
+					if rID == requestID {
+						if parsed.Action != "restore" || parsed.RestoreOfRequestID == nil || *parsed.RestoreOfRequestID != deleteReqID {
+
+							return errors.New("requestId already belongs to another vegetation history operation")
+						}
+						cp := parsed
+						replayRestore = &cp
+					}
+					if rID == deleteReqID && parsed.Action == "delete" {
+						cp := parsed
+						targetDeletion = &cp
+					}
+					if parsed.Action == "restore" && parsed.RestoreOfRequestID != nil && *parsed.RestoreOfRequestID == deleteReqID && rID != requestID {
+						alreadyConsumed = true
+					}
 				}
-				if rID == deleteReqID && parsed.Action == "delete" {
-					cp := parsed
-					targetDeletion = &cp
-				}
-				if parsed.Action == "restore" && parsed.RestoreOfRequestID != nil && *parsed.RestoreOfRequestID == deleteReqID && rID != requestID {
-					alreadyConsumed = true
-				}
-			}
-			if err := errors.Join(hRows.Err(), hRows.Close()); err != nil {
+				return hRows.Err()
+			}(); err != nil {
 				return err
 			}
 
@@ -580,25 +583,28 @@ func ListTwoPageVegetationDeletedRows(s *vprocore.ContextService, ctx context.Co
 			}
 			restoredSet := make(map[string]bool)
 			var parsedList []twoPageVegLifecycleHistory
-			for rows.Next() {
-				var raw string
-				if err := rows.Scan(&raw); err != nil {
-					rows.Close()
-					return nil, err
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+				for rows.Next() {
+					var raw string
+					if err := rows.Scan(&raw); err != nil {
+
+						return err
+					}
+					var h twoPageVegLifecycleHistory
+					if uErr := json.Unmarshal([]byte(raw), &h); uErr != nil {
+
+						return uErr
+					}
+					if h.Action == "restore" && h.RestoreOfRequestID != nil {
+						restoredSet[*h.RestoreOfRequestID] = true
+					}
+					if h.Action == "delete" && h.Project == project && h.PlotNumber == plotNumber && h.Form == form {
+						parsedList = append(parsedList, h)
+					}
 				}
-				var h twoPageVegLifecycleHistory
-				if uErr := json.Unmarshal([]byte(raw), &h); uErr != nil {
-					rows.Close()
-					return nil, uErr
-				}
-				if h.Action == "restore" && h.RestoreOfRequestID != nil {
-					restoredSet[*h.RestoreOfRequestID] = true
-				}
-				if h.Action == "delete" && h.Project == project && h.PlotNumber == plotNumber && h.Form == form {
-					parsedList = append(parsedList, h)
-				}
-			}
-			if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+				return rows.Err()
+			}(); err != nil {
 				return nil, err
 			}
 			entries := make([]DeletedTwoPageVegetationEntry, 0, len(parsedList))

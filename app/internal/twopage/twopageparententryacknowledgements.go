@@ -1,12 +1,6 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -14,15 +8,19 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type TwoPageEntryCodeAcknowledgementInternal struct {
 	ContextID, Project, Plot, Form, Table, RowID, Column string
 	Expected, Value                                      vprocore.ProjectMetadataCell
-	Reference                                            sourceform.SIVIParentSharedReference
+	Reference                                            sourceform.SourceParentSharedReference
 }
 
-type TwoPageEntryCodeReader func(context.Context, *sql.Tx, TwoPageEntryReferenceField) (sourceform.SIVIParentSharedReference, error)
+type TwoPageEntryCodeReader func(context.Context, *sql.Tx, TwoPageEntryReferenceField) (sourceform.SourceParentSharedReference, error)
 
 func TwoPageEntryReferenceCode(field TwoPageEntryReferenceField, cell vprocore.ProjectMetadataCell) (string, error) {
 	if cell.Storage != field.storage {
@@ -32,7 +30,7 @@ func TwoPageEntryReferenceCode(field TwoPageEntryReferenceField, cell vprocore.P
 		return "", err
 	}
 	if field.storage == "integer" {
-		if err := sourceform.ValidateSIVIParentSharedNumber(field.Column, "integer", cell); err != nil {
+		if err := sourceform.ValidateSourceParentSharedNumber(field.Column, "integer", cell); err != nil {
 			return "", err
 		}
 		value, err := strconv.ParseInt(*cell.Integer, 10, 64)
@@ -50,7 +48,7 @@ func TwoPageEntryReferenceCode(field TwoPageEntryReferenceField, cell vprocore.P
 	return *cell.Text, nil
 }
 
-func twoPageEntryOptionalReferenceMatch(field TwoPageEntryReferenceField, value string, choice sourceform.SIVIParentSharedReferenceChoice) bool {
+func twoPageEntryOptionalReferenceMatch(field TwoPageEntryReferenceField, value string, choice sourceform.SourceParentSharedReferenceChoice) bool {
 	if !choice.Selectable || choice.Code == nil {
 		return false
 	}
@@ -73,8 +71,8 @@ func twoPageEntryOptionalReferenceMatch(field TwoPageEntryReferenceField, value 
 	return fold(value) == fold(*choice.Code)
 }
 
-func ApproveTwoPageEntryOptionalReferences(ctx context.Context, tx *sql.Tx, original *sourceform.SiviParentProjection,
-	assignments []sourceform.SiviParentScalarAssignment, acknowledgements []TwoPageEntryCodeAcknowledgementInternal, read TwoPageEntryCodeReader) error {
+func ApproveTwoPageEntryOptionalReferences(ctx context.Context, tx *sql.Tx, original *sourceform.SourceParentProjection,
+	assignments []sourceform.SourceParentScalarAssignment, acknowledgements []TwoPageEntryCodeAcknowledgementInternal, read TwoPageEntryCodeReader) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

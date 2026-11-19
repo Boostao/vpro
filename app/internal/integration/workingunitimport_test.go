@@ -1,13 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
@@ -16,6 +9,11 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func workingUnitProvenanceFixture(t *testing.T) vprocore.WorkingUnitProvenance {

@@ -37,6 +37,10 @@ export function GetMetadata(contextID: string, plot: string): $CancellablePromis
     return $Call.ByID(2102712636, contextID, plot);
 }
 
+export function GetPictureOptions(): $CancellablePromise<$models.PictureOptions | null> {
+    return $Call.ByID(1332532573);
+}
+
 export function GetSelectedCreationImage(token: string, requestJSON: string): $CancellablePromise<$models.PictureImage | null> {
     return $Call.ByID(2383290342, token, requestJSON);
 }
@@ -53,8 +57,8 @@ export function LookupDeletionRestorationReceipt(contextID: string, requestJSON:
     return $Call.ByID(3136361895, contextID, requestJSON);
 }
 
-export function LookupMetadataReceipt(contextID: string, plot: string, requestJSON: string): $CancellablePromise<$models.PictureMetadataWriteResult | null> {
-    return $Call.ByID(2353764976, contextID, plot, requestJSON);
+export function LookupMetadataReceipt(contextID: string, plot: string, request: $models.PictureMetadataEdit): $CancellablePromise<$models.PictureMetadataWriteResult | null> {
+    return $Call.ByID(2353764976, contextID, plot, request);
 }
 
 export function RecoverCreationSelection(contextID: string, project: string, plot: string): $CancellablePromise<$models.PictureCreationSelection | null> {
@@ -73,6 +77,10 @@ export function ReviewDeletionRestoration(contextID: string, plot: string, histo
     return $Call.ByID(138086475, contextID, plot, historyID);
 }
 
-export function SaveMetadata(contextID: string, plot: string, requestJSON: string): $CancellablePromise<$models.PictureMetadataWriteResult | null> {
-    return $Call.ByID(3697269487, contextID, plot, requestJSON);
+export function SaveMetadata(contextID: string, plot: string, request: $models.PictureMetadataEdit): $CancellablePromise<$models.PictureMetadataWriteResult | null> {
+    return $Call.ByID(3697269487, contextID, plot, request);
+}
+
+export function SavePictureOptions(update: $models.PictureOptionsUpdate): $CancellablePromise<$models.PictureOptions | null> {
+    return $Call.ByID(1461048654, update);
 }

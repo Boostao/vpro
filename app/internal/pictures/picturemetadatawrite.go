@@ -1,12 +1,6 @@
 package pictures
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -18,12 +12,16 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const pictureMetadataHistoryTable = "__VPRO_PictureMetadataHistory"
 const pictureMetadataHistorySQL = `CREATE TABLE "__VPRO_PictureMetadataHistory"(ID INTEGER PRIMARY KEY,Created TEXT NOT NULL,Proposal TEXT NOT NULL,Restored TEXT)`
 
-type pictureMetadataEdit struct {
+type PictureMetadataEdit struct {
 	RequestID string                           `json:"requestId"`
 	ID        int64                            `json:"id"`
 	Columns   []vprocore.ProjectMetadataColumn `json:"columns"`
@@ -31,7 +29,9 @@ type pictureMetadataEdit struct {
 	Changes   []vprocore.ProjectMetadataChange `json:"changes"`
 }
 
-func (request *pictureMetadataEdit) UnmarshalJSON(data []byte) error {
+type pictureMetadataEdit = PictureMetadataEdit
+
+func (request *PictureMetadataEdit) UnmarshalJSON(data []byte) error {
 	const operation = "picture metadata edit"
 	properties, err := sourceform.SourceChildJSONObject(data, operation, []string{"requestId", "id", "columns", "original", "changes"}, nil)
 	if err != nil {
@@ -170,11 +170,11 @@ func preparePictureMetadataEdit(request pictureMetadataEdit) (int64, []vprocore.
 		return 0, nil, err
 	}
 	if request.ID < -2147483648 || request.ID > 2147483647 {
-		return 0, nil, errors.New("picture edit requires an exact signed32 ID")
+		return 0, nil, errors.New("picture edit requires an exact record ID")
 	}
 	rowID, err := strconv.ParseInt(request.Original.RowID, 10, 64)
 	if err != nil || strconv.FormatInt(rowID, 10) != request.Original.RowID {
-		return 0, nil, errors.New("picture edit requires an exact signed64 physical rowid")
+		return 0, nil, errors.New("picture edit requires an exact record reference")
 	}
 	names := []string{"ID", "PicDir", "PicName", "PlotNumber", "PicComment"}
 	if len(request.Columns) != len(names) || len(request.Original.Cells) != len(names) || len(request.Changes) == 0 {
@@ -190,7 +190,7 @@ func preparePictureMetadataEdit(request pictureMetadataEdit) (int64, []vprocore.
 	}
 	id := request.Original.Cells[0]
 	if id.Storage != "integer" || id.Integer == nil || *id.Integer != strconv.FormatInt(request.ID, 10) {
-		return 0, nil, errors.New("picture selected ID must be the reviewed signed32 integer, not a repaired historical value")
+		return 0, nil, errors.New("picture selected ID must be the reviewed whole-number ID, not a repaired historical value")
 	}
 	seen := map[string]bool{}
 	changes := []vprocore.ProjectMetadataChange{}
@@ -301,12 +301,15 @@ func pictureMetadataWriterSchema(ctx context.Context, tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
-	hasForeignKeys := rows.Next()
-	err = errors.Join(rows.Err(), rows.Close())
-	if hasForeignKeys {
-		err = errors.Join(err, errors.New("picture writer refuses unreviewed source foreign keys"))
-	}
-	return err
+	return func() (fkErr error) {
+		defer func() { fkErr = errors.Join(fkErr, rows.Close()) }()
+		hasForeignKeys := rows.Next()
+		fkErr = rows.Err()
+		if hasForeignKeys {
+			fkErr = errors.Join(fkErr, errors.New("picture writer refuses unreviewed source foreign keys"))
+		}
+		return fkErr
+	}()
 }
 
 type pictureMetadataParentGuard struct {
@@ -459,7 +462,7 @@ func EditPictureMetadata(s *vprocore.ContextService, ctx context.Context, contex
 	return result, errors.Join(err, ctx.Err())
 }
 
-// A nil receipt means no matching durable event was found, not proof that a
+// LookupPictureMetadataReceipt — A nil receipt means no matching durable event was found, not proof that a
 // save failed. Callers must retain their draft and unknown barrier in that case.
 func LookupPictureMetadataReceipt(s *vprocore.ContextService, ctx context.Context, contextID, plot string, source *ownedPictureLibrary,
 	request pictureMetadataEdit) (*pictureMetadataWriteResult, error) {
@@ -647,46 +650,49 @@ func replayPictureMetadata(ctx context.Context, tx *sql.Tx, request pictureMetad
 		return nil, err
 	}
 	var found *pictureMetadataWriteResult
-	for rows.Next() {
-		var id int64
-		var proposal string
-		var restored sql.NullString
-		if err := rows.Scan(&id, &proposal, &restored); err != nil {
-			return nil, errors.Join(err, rows.Close())
-		}
-		var history pictureMetadataHistory
-		if err := json.Unmarshal([]byte(proposal), &history); err != nil {
-			return nil, errors.Join(errors.New("picture history is malformed; no receipt inferred"), err, rows.Close())
-		}
-		if history.Request.RequestID != request.RequestID {
-			continue
-		}
-		result := history.Result
-		_, changes, planErr := preparePictureMetadataEdit(history.Request)
-		planned := vprocore.ProjectMetadataRow{RowID: request.Original.RowID, Cells: append([]vprocore.ProjectMetadataCell{}, request.Original.Cells...)}
-		for _, change := range changes {
-			i, ok := pictureWritableColumnIndex(change.Column)
-			if !ok {
-				planErr = errors.Join(planErr, fmt.Errorf("picture field %q is not writable", change.Column))
-				break
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var id int64
+			var proposal string
+			var restored sql.NullString
+			if err := rows.Scan(&id, &proposal, &restored); err != nil {
+				return err
 			}
-			planned.Cells[i] = change.Value
+			var history pictureMetadataHistory
+			if err := json.Unmarshal([]byte(proposal), &history); err != nil {
+				return errors.Join(errors.New("picture history is malformed; no receipt inferred"), err, rows.Close())
+			}
+			if history.Request.RequestID != request.RequestID {
+				continue
+			}
+			result := history.Result
+			_, changes, planErr := preparePictureMetadataEdit(history.Request)
+			planned := vprocore.ProjectMetadataRow{RowID: request.Original.RowID, Cells: append([]vprocore.ProjectMetadataCell{}, request.Original.Cells...)}
+			for _, change := range changes {
+				i, ok := pictureWritableColumnIndex(change.Column)
+				if !ok {
+					planErr = errors.Join(planErr, fmt.Errorf("picture field %q is not writable", change.Column))
+					break
+				}
+				planned.Cells[i] = change.Value
+			}
+			_, whenErr := time.Parse(time.RFC3339Nano, result.EditWhen)
+			if found != nil || restored.Valid || !reflect.DeepEqual(history.Request, request) || result.RequestID != request.RequestID ||
+				result.ContextID != authority.ContextID || result.Project != authority.Project || result.PlotNumber != authority.PlotNumber ||
+				result.Source != authority.Source || result.RequestedSource != authority.RequestedSource ||
+				result.Actor != authority.Actor || result.AuditStrength != authority.AuditStrength ||
+				!reflect.DeepEqual(result.OwnedFiles, authority.OwnedFiles) || !result.DidCommit || result.Replayed ||
+				result.HistoryID != "" || planErr != nil || whenErr != nil || len(changes) == 0 ||
+				!reflect.DeepEqual(result.Changes, changes) || !reflect.DeepEqual(result.Committed, planned) ||
+				result.ID != request.ID || !reflect.DeepEqual(result.Original, request.Original) || !reflect.DeepEqual(result.Columns, request.Columns) {
+				return errors.New("picture request identity collides with different or unavailable committed provenance")
+			}
+			result.HistoryID, result.Replayed = strconv.FormatInt(id, 10), true
+			found = &result
 		}
-		_, whenErr := time.Parse(time.RFC3339Nano, result.EditWhen)
-		if found != nil || restored.Valid || !reflect.DeepEqual(history.Request, request) || result.RequestID != request.RequestID ||
-			result.ContextID != authority.ContextID || result.Project != authority.Project || result.PlotNumber != authority.PlotNumber ||
-			result.Source != authority.Source || result.RequestedSource != authority.RequestedSource ||
-			result.Actor != authority.Actor || result.AuditStrength != authority.AuditStrength ||
-			!reflect.DeepEqual(result.OwnedFiles, authority.OwnedFiles) || !result.DidCommit || result.Replayed ||
-			result.HistoryID != "" || planErr != nil || whenErr != nil || len(changes) == 0 ||
-			!reflect.DeepEqual(result.Changes, changes) || !reflect.DeepEqual(result.Committed, planned) ||
-			result.ID != request.ID || !reflect.DeepEqual(result.Original, request.Original) || !reflect.DeepEqual(result.Columns, request.Columns) {
-			return nil, errors.Join(errors.New("picture request identity collides with different or unavailable committed provenance"), rows.Close())
-		}
-		result.HistoryID, result.Replayed = strconv.FormatInt(id, 10), true
-		found = &result
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 	if found != nil {

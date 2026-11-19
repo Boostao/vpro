@@ -70,13 +70,6 @@ func buildDatasheetService(contexts *ContextService) (*DatasheetService, error) 
 	return NewDatasheetService(envTable, vegTable), nil
 }
 
-func (s *DatasheetService) setContext(contexts *ContextService) {
-	if s == nil {
-		return
-	}
-	s.contexts = unwrapContextService(contexts)
-}
-
 func (s *DatasheetService) datasheetContext() (*vprocorepkg.ContextService, error) {
 	if s == nil {
 		return nil, errors.New("datasheet service is unavailable")

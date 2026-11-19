@@ -1,16 +1,14 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"os"
 	"reflect"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type ProfileSUProjectReview struct {

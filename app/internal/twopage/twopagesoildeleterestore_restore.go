@@ -59,7 +59,7 @@ func RestoreTwoPageSoilHorizon(s *vprocore.ContextService, ctx context.Context, 
 
 		var out RestoreTwoPageSoilHorizonResult
 		wErr := owner.WithMetadataWriter(ctx, func(conn *sql.Conn) (txErr error) {
-			suAlias, err := sourceform.SiviParentWriterSU(ctx, conn, owner)
+			suAlias, err := sourceform.SourceParentWriterSU(ctx, conn, owner)
 			if err != nil {
 				return err
 			}
@@ -108,34 +108,37 @@ func RestoreTwoPageSoilHorizon(s *vprocore.ContextService, ctx context.Context, 
 			alreadyConsumed := false
 			var replayRestore *twoPageSoilHistory
 
-			for hRows.Next() {
-				var rID, rawProp string
-				if err := hRows.Scan(&rID, &rawProp); err != nil {
-					hRows.Close()
-					return err
-				}
-				parsed, pErr := unmarshalAnyTwoPageSoilHistory(rawProp)
-				if pErr != nil {
-					hRows.Close()
-					return pErr
-				}
-				if rID == requestID {
-					if parsed.Action != "restore" || parsed.RestoreOfRequestID == nil || *parsed.RestoreOfRequestID != deleteReqID {
-						hRows.Close()
-						return errors.New("requestId already belongs to another soil history operation")
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, hRows.Close()) }()
+				for hRows.Next() {
+					var rID, rawProp string
+					if err := hRows.Scan(&rID, &rawProp); err != nil {
+
+						return err
 					}
-					cp := parsed
-					replayRestore = &cp
+					parsed, pErr := unmarshalAnyTwoPageSoilHistory(rawProp)
+					if pErr != nil {
+
+						return pErr
+					}
+					if rID == requestID {
+						if parsed.Action != "restore" || parsed.RestoreOfRequestID == nil || *parsed.RestoreOfRequestID != deleteReqID {
+
+							return errors.New("requestId already belongs to another soil history operation")
+						}
+						cp := parsed
+						replayRestore = &cp
+					}
+					if rID == deleteReqID && parsed.Action == "delete" {
+						cp := parsed
+						targetDeletion = &cp
+					}
+					if parsed.Action == "restore" && parsed.RestoreOfRequestID != nil && *parsed.RestoreOfRequestID == deleteReqID && rID != requestID {
+						alreadyConsumed = true
+					}
 				}
-				if rID == deleteReqID && parsed.Action == "delete" {
-					cp := parsed
-					targetDeletion = &cp
-				}
-				if parsed.Action == "restore" && parsed.RestoreOfRequestID != nil && *parsed.RestoreOfRequestID == deleteReqID && rID != requestID {
-					alreadyConsumed = true
-				}
-			}
-			if err := errors.Join(hRows.Err(), hRows.Close()); err != nil {
+				return hRows.Err()
+			}(); err != nil {
 				return err
 			}
 
@@ -371,28 +374,31 @@ func ListTwoPageSoilDeletedHorizons(s *vprocore.ContextService, ctx context.Cont
 			}
 			var parsedList []twoPageSoilHistory
 			restoredSet := map[string]bool{}
-			for rows.Next() {
-				var reqID, raw string
-				if err := rows.Scan(&reqID, &raw); err != nil {
-					rows.Close()
-					return nil, err
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+				for rows.Next() {
+					var reqID, raw string
+					if err := rows.Scan(&reqID, &raw); err != nil {
+
+						return err
+					}
+					h, pErr := unmarshalAnyTwoPageSoilHistory(raw)
+					if pErr != nil {
+
+						return pErr
+					}
+					if h.Action == "restore" && h.RestoreOfRequestID != nil {
+						restoredSet[*h.RestoreOfRequestID] = true
+					}
+					if h.Action == "delete" && h.Request.Original != nil &&
+						h.Request.Original.Project == owner.Selection.Project &&
+						h.Request.Original.Plot == plotNumber &&
+						h.Request.Original.Form == form {
+						parsedList = append(parsedList, h)
+					}
 				}
-				h, pErr := unmarshalAnyTwoPageSoilHistory(raw)
-				if pErr != nil {
-					rows.Close()
-					return nil, pErr
-				}
-				if h.Action == "restore" && h.RestoreOfRequestID != nil {
-					restoredSet[*h.RestoreOfRequestID] = true
-				}
-				if h.Action == "delete" && h.Request.Original != nil &&
-					h.Request.Original.Project == owner.Selection.Project &&
-					h.Request.Original.Plot == plotNumber &&
-					h.Request.Original.Form == form {
-					parsedList = append(parsedList, h)
-				}
-			}
-			if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+				return rows.Err()
+			}(); err != nil {
 				return nil, err
 			}
 

@@ -6,24 +6,27 @@ import (
 	"fmt"
 )
 
-func ProfileMetadataColumns(ctx context.Context, db ProjectMetadataQueryer, role string) ([]ProjectMetadataColumn, error) {
+func ProfileMetadataColumns(ctx context.Context, db ProjectMetadataQueryer, role string) (_ []ProjectMetadataColumn, resultErr error) {
 	rows, err := db.QueryContext(ctx, `SELECT type FROM `+QuoteHeaderIdentifier(role)+
 		`.sqlite_master WHERE name COLLATE NOCASE='_table_metadata' AND type IN ('table','view')`)
 	if err != nil {
 		return nil, err
 	}
 	present := false
-	for rows.Next() {
-		var kind string
-		if err := rows.Scan(&kind); err != nil {
-			return nil, errors.Join(err, rows.Close())
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var kind string
+			if err := rows.Scan(&kind); err != nil {
+				return err
+			}
+			if present || kind != "table" {
+				return errors.New("profile description metadata must be an original physical table, not a view or ambiguous definition")
+			}
+			present = true
 		}
-		if present || kind != "table" {
-			return nil, errors.Join(errors.New("profile description metadata must be an original physical table, not a view or ambiguous definition"), rows.Close())
-		}
-		present = true
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 	if !present {

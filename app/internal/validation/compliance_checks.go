@@ -4,9 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/boostao/vpro/app/internal/vprocore"
 	"slices"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func checkDuplicateVegSpecies(ctx context.Context, tx *sql.Tx, project string, useSU bool, suTextPlots map[string]struct{}, suPlotList []string, report *ComplianceValidationReport) error {
@@ -48,27 +49,30 @@ func checkDuplicateVegSpecies(ctx context.Context, tx *sql.Tx, project string, u
 	var candidatePlots []string
 	seenCandPlot := map[string]struct{}{}
 	anyNonTextCandidate := false
-	for dupPlotRows.Next() {
-		var p string
-		var nonText int
-		if err := dupPlotRows.Scan(&p, &nonText); err != nil {
-			dupPlotRows.Close()
-			return err
-		}
-		if useSU {
-			if _, inSU := suTextPlots[p]; !inSU {
-				continue
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, dupPlotRows.Close()) }()
+		for dupPlotRows.Next() {
+			var p string
+			var nonText int
+			if err := dupPlotRows.Scan(&p, &nonText); err != nil {
+
+				return err
+			}
+			if useSU {
+				if _, inSU := suTextPlots[p]; !inSU {
+					continue
+				}
+			}
+			if nonText != 0 {
+				anyNonTextCandidate = true
+			}
+			if _, exists := seenCandPlot[p]; !exists {
+				seenCandPlot[p] = struct{}{}
+				candidatePlots = append(candidatePlots, p)
 			}
 		}
-		if nonText != 0 {
-			anyNonTextCandidate = true
-		}
-		if _, exists := seenCandPlot[p]; !exists {
-			seenCandPlot[p] = struct{}{}
-			candidatePlots = append(candidatePlots, p)
-		}
-	}
-	if err := errors.Join(dupPlotRows.Err(), dupPlotRows.Close()); err != nil {
+		return dupPlotRows.Err()
+	}(); err != nil {
 		return err
 	}
 	if len(candidatePlots) == 0 {
@@ -202,22 +206,25 @@ func checkTaxonomyCompliance(
 	if err != nil {
 		return err
 	}
-	for specRows.Next() {
-		var code, oldCode, codeType string
-		if err := specRows.Scan(&code, &oldCode, &codeType); err != nil {
-			specRows.Close()
-			return err
-		}
-		if code != "" && codeType != "s" {
-			acceptedMaster[code] = true
-		}
-		if oldCode != "" && code != "" && oldCode != code {
-			if _, exists := synonymToAccepted[oldCode]; !exists {
-				synonymToAccepted[oldCode] = code
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, specRows.Close()) }()
+		for specRows.Next() {
+			var code, oldCode, codeType string
+			if err := specRows.Scan(&code, &oldCode, &codeType); err != nil {
+
+				return err
+			}
+			if code != "" && codeType != "s" {
+				acceptedMaster[code] = true
+			}
+			if oldCode != "" && code != "" && oldCode != code {
+				if _, exists := synonymToAccepted[oldCode]; !exists {
+					synonymToAccepted[oldCode] = code
+				}
 			}
 		}
-	}
-	if err := errors.Join(specRows.Err(), specRows.Close()); err != nil {
+		return specRows.Err()
+	}(); err != nil {
 		return err
 	}
 
@@ -226,17 +233,20 @@ func checkTaxonomyCompliance(
 	if err != nil {
 		return err
 	}
-	for uRows.Next() {
-		var code string
-		if err := uRows.Scan(&code); err != nil {
-			uRows.Close()
-			return err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, uRows.Close()) }()
+		for uRows.Next() {
+			var code string
+			if err := uRows.Scan(&code); err != nil {
+
+				return err
+			}
+			if code != "" {
+				userSpecies[code] = true
+			}
 		}
-		if code != "" {
-			userSpecies[code] = true
-		}
-	}
-	if err := errors.Join(uRows.Err(), uRows.Close()); err != nil {
+		return uRows.Err()
+	}(); err != nil {
 		return err
 	}
 

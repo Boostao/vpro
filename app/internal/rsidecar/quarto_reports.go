@@ -161,10 +161,10 @@ func validateQuartoGuideRequest(ctx context.Context, contexts *vprocore.ContextS
 		return "", 0, errors.New("guide text fields must be valid UTF-8")
 	}
 	if len(utf16.Encode([]rune(req.Title))) > 200 {
-		return "", 0, errors.New("guide title exceeds 200 UTF-16 code units")
+		return "", 0, errors.New("guide title cannot exceed 200 characters")
 	}
 	if len(utf16.Encode([]rune(req.ConceptNotes))) > 16000 {
-		return "", 0, errors.New("concept notes exceed 16000 UTF-16 code units")
+		return "", 0, errors.New("concept notes cannot exceed 16,000 characters")
 	}
 	minConstancy := req.MinConstancyPct
 	if minConstancy <= 0 {

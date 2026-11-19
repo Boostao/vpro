@@ -1,11 +1,6 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -16,6 +11,9 @@ import (
 	"strconv"
 	"time"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const twoPageSoilHistoryTable = "__VPRO_TwoPageSoilHistory"
@@ -169,7 +167,7 @@ func validateTwoPageSoilHistory(ctx context.Context, history twoPageSoilHistory)
 		audited++
 		rowID, err := strconv.ParseInt(audit.RowID, 10, 64)
 		if err != nil || strconv.FormatInt(rowID, 10) != audit.RowID || seen[audit.RowID] {
-			return errors.New("two-page soil history requires distinct canonical audit rowids")
+			return errors.New("two-page soil history requires distinct audit log entries")
 		}
 		seen[audit.RowID] = true
 		original := history.Request.Original
@@ -366,7 +364,7 @@ func WriteTwoPageSoilObserved(s *vprocore.ContextService, ctx context.Context, c
 			if original.Project != owner.Selection.Project {
 				return errors.New("two-page soil request belongs to another current project")
 			}
-			suAlias, err := sourceform.SiviParentWriterSU(ctx, conn, owner)
+			suAlias, err := sourceform.SourceParentWriterSU(ctx, conn, owner)
 			if err != nil {
 				return fmt.Errorf("two-page soil selected SU attachment: %w", err)
 			}
@@ -476,7 +474,7 @@ func WriteTwoPageSoilObserved(s *vprocore.ContextService, ctx context.Context, c
 			}
 			for _, assignment := range plan {
 				for _, peer := range soil.Rows {
-					if peer.RowID != assignment.RowID && sourceform.SiviIdentityCellMatches(peer.Cells[columns["ID"]], strconv.FormatInt(assignment.ID, 10)) {
+					if peer.RowID != assignment.RowID && sourceform.SourceIdentityCellMatches(peer.Cells[columns["ID"]], strconv.FormatInt(assignment.ID, 10)) {
 						return errors.New("two-page soil edited ID belongs to another global physical row")
 					}
 				}
@@ -515,13 +513,13 @@ func WriteTwoPageSoilObserved(s *vprocore.ContextService, ctx context.Context, c
 					history.Audits = append(history.Audits, records[0])
 				}
 			}
-			auditPlan, err := sourceform.AppendSIVIPlannedAudits(before[original.Project+"_Audit"], history.Audits)
+			auditPlan, err := sourceform.AppendSourcePlannedAudits(before[original.Project+"_Audit"], history.Audits)
 			if err != nil {
 				return err
 			}
 			expected := map[string]vprocore.ProjectMetadataTable{original.Table: twoPageSoilPlannedTable(soil, plan), original.Project + "_Audit": auditPlan}
 			if creation != nil {
-				expected[sourceform.SiviIdentityLedger] = creation.Ledger
+				expected[sourceform.SourceIdentityLedger] = creation.Ledger
 			}
 			after, err := vprocore.EnvironmentSiteUnitTables(ctx, tx)
 			if err != nil {
@@ -559,7 +557,7 @@ func WriteTwoPageSoilObserved(s *vprocore.ContextService, ctx context.Context, c
 			}
 			historyPlan.Rows = append(append([]vprocore.ProjectMetadataRow{}, historyPlan.Rows...), vprocore.ProjectMetadataRow{
 				RowID: strconv.FormatInt(rowID, 10), Cells: []vprocore.ProjectMetadataCell{
-					sourceform.SiviCreationText(request.RequestID), sourceform.SiviCreationText(history.EditWhen), sourceform.SiviCreationText(string(proposal))}})
+					sourceform.SourceCreationText(request.RequestID), sourceform.SourceCreationText(history.EditWhen), sourceform.SourceCreationText(string(proposal))}})
 			after, err = vprocore.EnvironmentSiteUnitTables(ctx, tx)
 			if err != nil {
 				return err

@@ -90,23 +90,23 @@ func buildSpatialService(
 	}, nil
 }
 
-func (s *SpatialService) GetCoordinateMode() (CoordinateMode, error) {
+func (s *SpatialService) GetCoordinateMode(ctx context.Context) (CoordinateMode, error) {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.coordinates == nil {
 		return "", errors.New("coordinate service is unavailable")
 	}
-	m, err := s.coordinates.GetCoordinateMode()
+	m, err := s.coordinates.GetCoordinateModeContext(ctx)
 	return CoordinateMode(m), err
 }
 
-func (s *SpatialService) SetCoordinateMode(mode CoordinateMode) error {
+func (s *SpatialService) SetCoordinateMode(ctx context.Context, mode CoordinateMode) error {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.coordinates == nil {
 		return errors.New("coordinate service is unavailable")
 	}
-	return s.coordinates.SetCoordinateMode(vprocorepkg.CoordinateMode(mode))
+	return s.coordinates.SetCoordinateModeContext(ctx, vprocorepkg.CoordinateMode(mode))
 }
 
 func (s *SpatialService) DecomposeCoordinate(value *float64, mode CoordinateMode) (CoordinateParts, error) {

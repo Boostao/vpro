@@ -76,7 +76,7 @@ func copyHeightNumber(value *float64) *float64 {
 	return &number
 }
 
-// Finite historical values outside the domain may be retained or cleared.
+// ValidateHeightNumericChange — Finite historical values outside the domain may be retained or cleared.
 // Every new value keeps float64 precision within the native storage range.
 func ValidateHeightNumericChange(property string, before, after *float64) error {
 	if err := ValidateSingleRangeChange(property, before, after); err != nil {

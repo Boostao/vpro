@@ -1,17 +1,15 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"strconv"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func summaryEnvironmentalLifeformFixture(t *testing.T) (vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable) {
@@ -131,6 +129,7 @@ func TestSummaryEnvironmentalLifeformRefusalsAndSourceImmutability(t *testing.T)
 	if _, err := prepareSummaryVegetationEnvironmentalLifeform(ctx, "1", &unit, quick, master, su); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := prepareSummaryVegetationEnvironmentalLifeform(nil, "1", &unit, quick, master, su); err == nil {
 		t.Fatal("nil context")
 	}

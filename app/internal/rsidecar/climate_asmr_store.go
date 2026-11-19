@@ -78,13 +78,17 @@ func readScopedEnvPlots(
 				suSchema, suTable,
 			))
 			if qErr == nil {
-				for sRows.Next() {
-					var p, u string
-					if err := sRows.Scan(&p, &u); err == nil {
-						suMap[p] = u
+				func() {
+					defer sRows.Close()
+
+					for sRows.Next() {
+						var p, u string
+						if err := sRows.Scan(&p, &u); err == nil {
+							suMap[p] = u
+						}
 					}
-				}
-				sRows.Close()
+
+				}()
 			}
 		}
 	}
@@ -109,13 +113,17 @@ func readScopedEnvPlots(
 			envSchema, vprocore.QuoteHeaderIdentifier(adminTableName),
 		))
 		if aErr == nil {
-			for aRows.Next() {
-				var p, g string
-				if err := aRows.Scan(&p, &g); err == nil && g != "" {
-					gisMap[p] = strings.ReplaceAll(g, " ", "")
+			func() {
+				defer aRows.Close()
+
+				for aRows.Next() {
+					var p, g string
+					if err := aRows.Scan(&p, &g); err == nil && g != "" {
+						gisMap[p] = strings.ReplaceAll(g, " ", "")
+					}
 				}
-			}
-			aRows.Close()
+
+			}()
 		}
 	}
 

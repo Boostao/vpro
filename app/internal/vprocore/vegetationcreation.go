@@ -1,15 +1,13 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type VegetationCreationRequest struct {

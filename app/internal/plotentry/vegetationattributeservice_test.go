@@ -1,15 +1,13 @@
 package plotentry
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestVegetationAttributesAtomicExpectedPatchesAndPhysicalDomains(t *testing.T) {

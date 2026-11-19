@@ -7,11 +7,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
-	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/boostao/vpro/app/internal/sqlutil"
@@ -36,32 +34,6 @@ func ValidateProjectName(raw string) (string, error) {
 		return "", fmt.Errorf("project name %q is reserved (None, Sample, and master names are not permitted)", trimmed)
 	}
 	return trimmed, nil
-}
-
-func utf16Len(s string) int {
-	return len(utf16.Encode([]rune(s)))
-}
-
-func validateUTF16Max(label, val string, maxUnits int) error {
-	if !utf8.ValidString(val) || strings.ContainsRune(val, 0) {
-		return fmt.Errorf("%s contains invalid UTF-8 or NUL bytes", label)
-	}
-	if maxUnits > 0 && utf16Len(val) > maxUnits {
-		return fmt.Errorf("%s exceeds %d UTF-16 code units", label, maxUnits)
-	}
-	return nil
-}
-
-// NarrowSingleCover narrows a float64 cover input to IEEE-754 float32 BEFORE evaluating < 100.
-func NarrowSingleCover(value float64) (float32, bool) {
-	if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || math.Abs(value) > math.MaxFloat32 {
-		return 0, false
-	}
-	narrowed := float32(value)
-	if narrowed < 0 || narrowed >= 100 {
-		return narrowed, false
-	}
-	return narrowed, true
 }
 
 func resolveNewProjectDestination(projectsRoot, projectName, requestedDest string, label string) (string, os.FileInfo, error) {
@@ -121,24 +93,6 @@ func inspectContextSnapshot(ctx context.Context, s *vprocore.ContextService, con
 	})
 }
 
-func truncateUTF16(s string, maxUnits int) string {
-	if maxUnits <= 0 {
-		return ""
-	}
-	units := 0
-	for idx, r := range s {
-		cost := 1
-		if r > 0xFFFF {
-			cost = 2
-		}
-		if units+cost > maxUnits {
-			return s[:idx]
-		}
-		units += cost
-	}
-	return s
-}
-
 func computeFileSHA256(path string) (string, error) {
 	h := sha256.New()
 	raw, err := os.ReadFile(path)
@@ -191,10 +145,10 @@ func readVListsVersionStamps(ctx context.Context, vlistsPath string) (allSpecsSt
 		allSpecsStamp = allSpecsBase
 		tableOfListsStamp = listsBase
 	}
-	if utf16Len(allSpecsStamp) > 255 {
+	if sqlutil.UTF16Len(allSpecsStamp) > 255 {
 		allSpecsStamp = allSpecsBase
 	}
-	if utf16Len(tableOfListsStamp) > 255 {
+	if sqlutil.UTF16Len(tableOfListsStamp) > 255 {
 		tableOfListsStamp = listsBase
 	}
 	return allSpecsStamp, tableOfListsStamp, shortDigest, nil
@@ -233,8 +187,8 @@ func readExactTableRows(ctx context.Context, db sqliteQueryer, qualifiedTable st
 	if err != nil {
 		return nil, nil, err
 	}
+	defer colRows.Close()
 	cols, colErr := colRows.Columns()
-	_ = colRows.Close()
 	if colErr != nil {
 		return nil, nil, colErr
 	}

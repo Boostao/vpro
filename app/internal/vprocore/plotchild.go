@@ -1,10 +1,6 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -15,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type ChildField struct {
@@ -22,7 +20,7 @@ type ChildField struct {
 	Column string `json:"-" yaml:"-"`
 }
 
-// Verified against packaged XL ControlSource bindings and Sample SQLite/Access
+// ChildFields — Verified against packaged XL ControlSource bindings and Sample SQLite/Access
 // definitions. PH aliases HumusFormpH; VonPost matches stored lowercase vonPost.
 // Cultural/Other and abundance flags in Veg are integers, not booleans.
 var ChildFields = map[string][]ChildField{
@@ -69,7 +67,7 @@ var ChildFields = map[string][]ChildField{
 
 var ChildLegacyFields = map[string]int{"Veg": 18, "Humus": 5, "Mineral": 6, "Other": 2}
 
-// Existing properties retain replacement semantics. For newly mapped fields,
+// ChildPresence — Existing properties retain replacement semantics. For newly mapped fields,
 // omitted legacy JSON/Go payloads preserve stored values; explicit JSON null or
 // nil on a loaded record clears them. Non-nil Go values are always supplied.
 func ChildPresence(record any) map[string]bool {
@@ -349,7 +347,7 @@ func RequireChildIdentity(tx *sql.Tx, table, kind, plot string, id int64) error 
 		return err
 	}
 	if count != 1 {
-		return fmt.Errorf("%s identity (%q, %d) requires one existing row, found %d; reload before saving", kind, plot, id, count)
+		return fmt.Errorf("%s record in Plot %s was modified or removed (found %d matching rows); reload the plot before saving", kind, plot, count)
 	}
 	return nil
 }
@@ -390,7 +388,7 @@ func AuditChildFieldsTracked(tx *sql.Tx, project, kind, plot string, id int64, f
 	return identities, nil
 }
 
-// Veg.ID is not a primary key. Allocate an unused positive ID without changing
+// AllocateChildID — Veg.ID is not a primary key. Allocate an unused positive ID without changing
 // imported signed IDs or relying on SQLite rowid/autoincrement/MAX arithmetic.
 // The reservation ledger also prevents a deleted identity being reassigned
 // to a new row that a stale caller could subsequently overwrite.
@@ -611,7 +609,7 @@ func validateVegChildNumericChanges(value reflect.Value, plot string, id int64, 
 			newNumber = &number
 		}
 		if err := ValidateHeightNumericChange(property, oldNumber, newNumber); err != nil {
-			return fmt.Errorf("Veg identity (%q, %d): %w", plot, id, err)
+			return fmt.Errorf("Vegetation record (Plot %s): %w", plot, err)
 		}
 	}
 	return nil
@@ -643,7 +641,7 @@ func validateSoilHorizonDepthChange(kind, plot string, id int64, creating bool, 
 		effLower = &v
 	}
 	if err := ValidateSoilHorizonDepthSign(kind, effHorizon, effUpper, effLower); err != nil {
-		return fmt.Errorf("%s identity (%q, %d): %w", kind, plot, id, err)
+		return fmt.Errorf("%s layer (Plot %s): %w", kind, plot, err)
 	}
 	return nil
 }
@@ -707,7 +705,7 @@ func validateMineralCoarseFragsChange(tx *sql.Tx, table, plot string, id int64, 
 		effCF["PercentCoarseFragsStones"],
 		effCF["PercentCoarseFragsTotal"],
 	); err != nil {
-		return fmt.Errorf("Mineral identity (%q, %d): %w", plot, id, err)
+		return fmt.Errorf("Mineral layer (Plot %s): %w", plot, err)
 	}
 	return nil
 }

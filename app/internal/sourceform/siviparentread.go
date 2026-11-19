@@ -1,29 +1,27 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-func ReadSIVIParent(s *vprocore.ContextService, ctx context.Context, contextID, plot string) (*SiviParentProjection, error) {
-	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (*SiviParentProjection, error) {
+func ReadSIVIParent(s *vprocore.ContextService, ctx context.Context, contextID, plot string) (*SourceParentProjection, error) {
+	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (*SourceParentProjection, error) {
 		return readOwnedSIVIParent(ctx, plots, contextID, plot)
 	})
 }
 
-func readOwnedSIVIParent(ctx context.Context, plots *vprocore.PlotService, contextID, plot string) (*SiviParentProjection, error) {
-	return WithOwnedSIVIParentRead(ctx, plots, contextID, plot, func(parent *SiviParentProjection) (*SiviParentProjection, error) {
+func readOwnedSIVIParent(ctx context.Context, plots *vprocore.PlotService, contextID, plot string) (*SourceParentProjection, error) {
+	return WithOwnedSIVIParentRead(ctx, plots, contextID, plot, func(parent *SourceParentProjection) (*SourceParentProjection, error) {
 		return parent, nil
 	})
 }
 
-func WithOwnedSIVIParentRead[T any](ctx context.Context, plots *vprocore.PlotService, contextID, plot string, project func(*SiviParentProjection) (T, error)) (T, error) {
+func WithOwnedSIVIParentRead[T any](ctx context.Context, plots *vprocore.PlotService, contextID, plot string, project func(*SourceParentProjection) (T, error)) (T, error) {
 	return vprocore.WithOwnedSIVISnapshot(ctx, plots, func(owner *vprocore.SqliteContext, tx *sql.Tx) (T, error) {
 		var zero T
 		parent, err := readSIVIParentSnapshot(ctx, owner, tx, contextID, plot)
@@ -34,7 +32,7 @@ func WithOwnedSIVIParentRead[T any](ctx context.Context, plots *vprocore.PlotSer
 	})
 }
 
-func readSIVIParentSnapshot(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx, contextID, plot string) (*SiviParentProjection, error) {
+func readSIVIParentSnapshot(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx, contextID, plot string) (*SourceParentProjection, error) {
 	tables, err := ReadSourceParentTables(ctx, owner, tx, plot)
 	if err != nil {
 		return nil, err
@@ -70,26 +68,26 @@ func ReadSourceParentTables(ctx context.Context, owner *vprocore.SqliteContext, 
 }
 
 type SiviParentProposal struct {
-	Original         *SiviParentProjection
-	Scalars, Options []SiviParentScalarAssignment
+	Original         *SourceParentProjection
+	Scalars, Options []SourceParentScalarAssignment
 }
 
 type SiviParentStorageProposal struct {
 	SiviParentProposal
-	Text []SiviParentScalarAssignment
+	Text []SourceParentScalarAssignment
 }
 
 type SiviParentCategoricalProposal struct {
 	SiviParentStorageProposal
-	Categorical []SiviParentScalarAssignment
+	Categorical []SourceParentScalarAssignment
 }
 
 type SiviParentActionProposal struct {
 	SiviParentCategoricalProposal
-	Actions []SiviParentScalarAssignment
+	Actions []SourceParentScalarAssignment
 }
 
-func PrepareSIVIParentProposal(s *vprocore.ContextService, ctx context.Context, contextID, plot string, scalarEdits, optionEdits []SiviParentScalarEdit) (*SiviParentProposal, error) {
+func PrepareSIVIParentProposal(s *vprocore.ContextService, ctx context.Context, contextID, plot string, scalarEdits, optionEdits []SourceParentScalarEdit) (*SiviParentProposal, error) {
 	result, err := PrepareSIVIParentStorageProposal(s, ctx, contextID, plot, scalarEdits, optionEdits, nil)
 	if err != nil {
 		return nil, err
@@ -97,7 +95,7 @@ func PrepareSIVIParentProposal(s *vprocore.ContextService, ctx context.Context, 
 	return &result.SiviParentProposal, nil
 }
 
-func PrepareSIVIParentStorageProposal(s *vprocore.ContextService, ctx context.Context, contextID, plot string, scalarEdits, optionEdits, textEdits []SiviParentScalarEdit) (*SiviParentStorageProposal, error) {
+func PrepareSIVIParentStorageProposal(s *vprocore.ContextService, ctx context.Context, contextID, plot string, scalarEdits, optionEdits, textEdits []SourceParentScalarEdit) (*SiviParentStorageProposal, error) {
 	result, err := PrepareSIVIParentCategoricalProposal(s, ctx, contextID, plot, scalarEdits, optionEdits, textEdits, nil)
 	if err != nil {
 		return nil, err
@@ -105,7 +103,7 @@ func PrepareSIVIParentStorageProposal(s *vprocore.ContextService, ctx context.Co
 	return &result.SiviParentStorageProposal, nil
 }
 
-func PrepareSIVIParentCategoricalProposal(s *vprocore.ContextService, ctx context.Context, contextID, plot string, scalarEdits, optionEdits, textEdits, categoricalEdits []SiviParentScalarEdit) (*SiviParentCategoricalProposal, error) {
+func PrepareSIVIParentCategoricalProposal(s *vprocore.ContextService, ctx context.Context, contextID, plot string, scalarEdits, optionEdits, textEdits, categoricalEdits []SourceParentScalarEdit) (*SiviParentCategoricalProposal, error) {
 	result, err := PrepareSIVIParentActionProposal(s, ctx, contextID, plot, scalarEdits, optionEdits, textEdits, categoricalEdits, nil)
 	if err != nil {
 		return nil, err
@@ -113,9 +111,9 @@ func PrepareSIVIParentCategoricalProposal(s *vprocore.ContextService, ctx contex
 	return &result.SiviParentCategoricalProposal, nil
 }
 
-func PrepareSIVIParentActionProposal(s *vprocore.ContextService, ctx context.Context, contextID, plot string, scalarEdits, optionEdits, textEdits, categoricalEdits []SiviParentScalarEdit, actionEdits []SiviParentActionEdit) (*SiviParentActionProposal, error) {
+func PrepareSIVIParentActionProposal(s *vprocore.ContextService, ctx context.Context, contextID, plot string, scalarEdits, optionEdits, textEdits, categoricalEdits []SourceParentScalarEdit, actionEdits []SiviParentActionEdit) (*SiviParentActionProposal, error) {
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (*SiviParentActionProposal, error) {
-		return WithOwnedSIVIParentRead(ctx, plots, contextID, plot, func(original *SiviParentProjection) (*SiviParentActionProposal, error) {
+		return WithOwnedSIVIParentRead(ctx, plots, contextID, plot, func(original *SourceParentProjection) (*SiviParentActionProposal, error) {
 			if len(original.Rows) != 1 || len(scalarEdits)+len(optionEdits)+len(textEdits)+len(categoricalEdits)+len(actionEdits) == 0 {
 				return nil, errors.New("SIVI parent proposal requires one physical pair and explicit domain edits")
 			}
@@ -124,16 +122,16 @@ func PrepareSIVIParentActionProposal(s *vprocore.ContextService, ctx context.Con
 			result := &SiviParentActionProposal{
 				SiviParentCategoricalProposal: SiviParentCategoricalProposal{
 					SiviParentStorageProposal: SiviParentStorageProposal{
-						SiviParentProposal: SiviParentProposal{Original: original, Scalars: []SiviParentScalarAssignment{}, Options: []SiviParentScalarAssignment{}},
-						Text:               []SiviParentScalarAssignment{},
+						SiviParentProposal: SiviParentProposal{Original: original, Scalars: []SourceParentScalarAssignment{}, Options: []SourceParentScalarAssignment{}},
+						Text:               []SourceParentScalarAssignment{},
 					},
-					Categorical: []SiviParentScalarAssignment{},
+					Categorical: []SourceParentScalarAssignment{},
 				},
-				Actions: []SiviParentScalarAssignment{},
+				Actions: []SourceParentScalarAssignment{},
 			}
 			var err error
 			if len(scalarEdits) > 0 {
-				result.Scalars, err = PlanSIVIParentScalars(ctx, contextID, original.Project, plot, env, admin, scalarEdits)
+				result.Scalars, err = PlanSourceParentScalars(ctx, contextID, original.Project, plot, env, admin, scalarEdits)
 				if err != nil {
 					return nil, err
 				}

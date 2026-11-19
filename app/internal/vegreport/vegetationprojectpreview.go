@@ -1,23 +1,23 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-type vegetationProjectReadRequest struct {
+type LongVegetationProjectReadRequest struct {
 	Revision     string `json:"revision"`
 	ApprovalHash string `json:"approvalHash"`
 }
 
-func (request *vegetationProjectReadRequest) UnmarshalJSON(data []byte) error {
+type vegetationProjectReadRequest = LongVegetationProjectReadRequest
+
+func (request *LongVegetationProjectReadRequest) UnmarshalJSON(data []byte) error {
 	type plain vegetationProjectReadRequest
 	var decoded plain
 	if err := vprocore.DecodeStrictRequiredJSON(data, &decoded, "project report read", "revision", "approvalHash"); err != nil {

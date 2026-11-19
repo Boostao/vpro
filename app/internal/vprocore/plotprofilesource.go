@@ -1,10 +1,6 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type PlotProfileSource struct {
@@ -173,8 +171,8 @@ func (c *SqliteContext) attachProfile(ctx context.Context, requested *PlotProfil
 	return c.RequireColumns(ctx, c.profileRole, "_table_metadata", []string{"table_name", "description"})
 }
 
-func (store *DesktopConfig) PlotProfileSelection() (*PlotProfileSource, error) {
-	values, err := store.Snapshot()
+func (s *DesktopConfig) PlotProfileSelection() (*PlotProfileSource, error) {
+	values, err := s.Snapshot()
 	if err != nil {
 		return nil, err
 	}
@@ -269,16 +267,19 @@ func inspectPlotProfileSources(ctx context.Context, owner *SqliteContext, path s
 		return nil, err
 	}
 	names := []string{}
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, errors.Join(err, rows.Close())
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var name string
+			if err := rows.Scan(&name); err != nil {
+				return err
+			}
+			if strings.HasSuffix(name, "_Profile") && name != "_Profile" {
+				names = append(names, name)
+			}
 		}
-		if strings.HasSuffix(name, "_Profile") && name != "_Profile" {
-			names = append(names, name)
-		}
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 	result := []PlotProfileSourceInfo{}

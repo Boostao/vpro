@@ -1,21 +1,19 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/twopage"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/twopage"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestTwoPageEntryContextReferenceProjectSourcesAndRawMetadata(t *testing.T) {
@@ -236,9 +234,9 @@ func TestTwoPageEntryContextReferenceMalformedWorkingUnitTextStopsAndRetries(t *
 				`UPDATE Report_SU SET SiteUnit='  Repaired literal  ' WHERE PlotNumber='108050'`
 		}
 		vprotest.MutateContextFixture(t, path, broken)
-		read := func() (sourceform.SIVIParentSharedReference, error) {
-			return vprocore.WithContextPlotRequest(context.Background(), contexts, state.ContextID, func(plots *vprocore.PlotService) (sourceform.SIVIParentSharedReference, error) {
-				return vprocore.WithOwnedSIVISnapshot(context.Background(), plots, func(owner *vprocore.SqliteContext, tx *sql.Tx) (sourceform.SIVIParentSharedReference, error) {
+		read := func() (sourceform.SourceParentSharedReference, error) {
+			return vprocore.WithContextPlotRequest(context.Background(), contexts, state.ContextID, func(plots *vprocore.PlotService) (sourceform.SourceParentSharedReference, error) {
+				return vprocore.WithOwnedSIVISnapshot(context.Background(), plots, func(owner *vprocore.SqliteContext, tx *sql.Tx) (sourceform.SourceParentSharedReference, error) {
 					return twopage.ReadTwoPageEntryContextReference(context.Background(), tx, owner, state.ContextID, "FS882-8x6XL",
 						twopage.TwoPageEntryReferenceSelection{ProjectSource: 1, WorkingSource: source}, twopage.TwoPageEntryReferenceAliases{Project: "project", Lists: "VLists", Su: "su"}, provider.Fields["UserSiteUnit"])
 				})
@@ -285,7 +283,7 @@ func TestTwoPageEntryContextReferenceWriterAliasesAndHistoricalRestoration(t *te
 				return func() {}, nil
 			},
 		}
-		approve := func(tx *sql.Tx, observed *sourceform.SiviParentProjection, _ []sourceform.SiviParentScalarAssignment) error {
+		approve := func(tx *sql.Tx, observed *sourceform.SourceParentProjection, _ []sourceform.SourceParentScalarAssignment) error {
 			alias := "main"
 			if external {
 				alias = "sivi_su"
@@ -306,7 +304,7 @@ func TestTwoPageEntryContextReferenceWriterAliasesAndHistoricalRestoration(t *te
 			"VLists": contexts.Projects.Sqlite.Attachments["VLists"], "VMetaData": contexts.Projects.Sqlite.Attachments["VMetaData"],
 		})
 		result, err := twopage.WriteTwoPageEntryWithLifecycle(contexts, context.Background(), state.ContextID, original.Plot, original.Form,
-			original, []sourceform.SiviParentScalarEdit{sftest.SiviParentEdit(t, original, "FieldNumber", vprotest.MetadataText("  reference reviewed  "))}, false, approve, lifecycle)
+			original, []sourceform.SourceParentScalarEdit{sftest.SiviParentEdit(t, original, "FieldNumber", vprotest.MetadataText("  reference reviewed  "))}, false, approve, lifecycle)
 		if err != nil || result == nil || result.ChangedCells != 1 {
 			t.Fatal("owned writer aliases could not read context sources", external, result, err)
 		}

@@ -1,11 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"encoding/hex"
 	"errors"
@@ -14,6 +9,9 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type longVegetationSelectedFieldProjection struct {

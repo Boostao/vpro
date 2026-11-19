@@ -5,12 +5,12 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
 	"sync/atomic"
 	"time"
-	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/boostao/vpro/app/internal/sqlutil"
@@ -44,28 +44,10 @@ func newTurboVegUUID() string {
 	return string(out[:])
 }
 
-func truncateUTF16Units(s string, maxUnits int) string {
-	if maxUnits <= 0 || s == "" {
-		return s
-	}
-	units := utf16.Encode([]rune(s))
-	if len(units) <= maxUnits {
-		return s
-	}
-	cut := maxUnits
-	if cut > 0 && units[cut-1] >= 0xD800 && units[cut-1] <= 0xDBFF {
-		cut--
-	}
-	if cut == 0 {
-		return ""
-	}
-	return string(utf16.Decode(units[:cut]))
-}
-
 func nullTruncatedUTF16(s string, maxUnits int) any {
 	trimmed := strings.TrimSpace(s)
 	if maxUnits > 0 {
-		trimmed = truncateUTF16Units(trimmed, maxUnits)
+		trimmed = sqlutil.TruncateUTF16(trimmed, maxUnits)
 	}
 	if trimmed == "" {
 		return nil
@@ -75,7 +57,7 @@ func nullTruncatedUTF16(s string, maxUnits int) any {
 
 func validateFiniteSingleFloat(v float64, label string, nonNegative bool) (float64, error) {
 	if math.IsNaN(v) || math.IsInf(v, 0) || math.Abs(v) > math.MaxFloat32 || (nonNegative && v < 0) {
-		return 0, fmt.Errorf("%s %v violates IEEE-754 SINGLE bounds", label, v)
+		return 0, fmt.Errorf("%s %v is out of numeric range", label, v)
 	}
 	return float64(float32(v)), nil
 }
@@ -95,7 +77,7 @@ func nullEmpty(s string) any {
 
 func accumulateImportedSingleCover(covers map[string]float64, col string, obsCov float64, plotNum, species string) error {
 	if math.IsNaN(obsCov) || math.IsInf(obsCov, 0) || obsCov < 0 || math.Abs(obsCov) > math.MaxFloat32 || float32(obsCov) >= 100 {
-		return fmt.Errorf("plot %s species %s cover %v violates IEEE-754 SINGLE [0, 100) bounds", plotNum, species, obsCov)
+		return fmt.Errorf("plot %s species %s cover %v must be from 0 to under 100%% (e.g. 99.9%%)", plotNum, species, obsCov)
 	}
 	obsSingle := float64(float32(obsCov))
 	prev, hasPrev := covers[col]
@@ -481,52 +463,50 @@ func loadSpeciesImportResolver(ctx context.Context, tx *sql.Tx) (*speciesImportR
 	if err != nil {
 		return nil, err
 	}
-	for rows.Next() {
-		var code, oldCode, sci, ctype string
-		var lf sql.NullInt64
-		if err := rows.Scan(&code, &oldCode, &sci, &lf, &ctype); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		uCode := strings.ToUpper(strings.TrimSpace(code))
-		if uCode == "" {
-			continue
-		}
-		var lfPtr *int
-		if lf.Valid {
-			v := int(lf.Int64)
-			lfPtr = &v
-		}
-		info := speciesResolvedInfo{Code: uCode, Lifeform: lfPtr}
-		isSyn := strings.EqualFold(strings.TrimSpace(ctype), "S")
-		if !isSyn {
-			if _, exists := r.byActiveCode[uCode]; !exists {
-				r.byActiveCode[uCode] = info
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var code, oldCode, sci, ctype string
+			var lf sql.NullInt64
+			if err := rows.Scan(&code, &oldCode, &sci, &lf, &ctype); err != nil {
+				return err
 			}
-		} else {
-			uOld := strings.ToUpper(strings.TrimSpace(oldCode))
-			if uOld != "" {
-				if _, exists := r.bySynonymCode[uOld]; !exists {
-					r.bySynonymCode[uOld] = info
+			uCode := strings.ToUpper(strings.TrimSpace(code))
+			if uCode == "" {
+				continue
+			}
+			var lfPtr *int
+			if lf.Valid {
+				v := int(lf.Int64)
+				lfPtr = &v
+			}
+			info := speciesResolvedInfo{Code: uCode, Lifeform: lfPtr}
+			isSyn := strings.EqualFold(strings.TrimSpace(ctype), "S")
+			if !isSyn {
+				if _, exists := r.byActiveCode[uCode]; !exists {
+					r.byActiveCode[uCode] = info
+				}
+			} else {
+				uOld := strings.ToUpper(strings.TrimSpace(oldCode))
+				if uOld != "" {
+					if _, exists := r.bySynonymCode[uOld]; !exists {
+						r.bySynonymCode[uOld] = info
+					}
+				}
+			}
+			if full := normalizeScientificFull(sci); full != "" {
+				if _, exists := r.bySciFull[full]; !exists {
+					r.bySciFull[full] = info
+				}
+			}
+			if canon := canonicalScientificTaxon(sci); canon != "" {
+				if _, exists := r.bySciCanon[canon]; !exists {
+					r.bySciCanon[canon] = info
 				}
 			}
 		}
-		if full := normalizeScientificFull(sci); full != "" {
-			if _, exists := r.bySciFull[full]; !exists {
-				r.bySciFull[full] = info
-			}
-		}
-		if canon := canonicalScientificTaxon(sci); canon != "" {
-			if _, exists := r.bySciCanon[canon]; !exists {
-				r.bySciCanon[canon] = info
-			}
-		}
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return nil, err
-	}
-	if err := rows.Close(); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 
@@ -537,45 +517,46 @@ func loadSpeciesImportResolver(ctx context.Context, tx *sql.Tx) (*speciesImportR
 	if err != nil {
 		return nil, err
 	}
-	for uRows.Next() {
-		var code, sci, ctype string
-		var lf sql.NullInt64
-		if err := uRows.Scan(&code, &sci, &lf, &ctype); err != nil {
-			uRows.Close()
-			return nil, err
-		}
-		if strings.EqualFold(strings.TrimSpace(ctype), "S") {
-			continue
-		}
-		uCode := strings.ToUpper(strings.TrimSpace(code))
-		if uCode == "" {
-			continue
-		}
-		var lfPtr *int
-		if lf.Valid {
-			v := int(lf.Int64)
-			lfPtr = &v
-		}
-		info := speciesResolvedInfo{Code: uCode, Lifeform: lfPtr}
-		if _, exists := r.byUserCode[uCode]; !exists {
-			r.byUserCode[uCode] = info
-		}
-		if full := normalizeScientificFull(sci); full != "" {
-			if _, exists := r.bySciFull[full]; !exists {
-				r.bySciFull[full] = info
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, uRows.Close()) }()
+		for uRows.Next() {
+			var code, sci, ctype string
+			var lf sql.NullInt64
+			if err := uRows.Scan(&code, &sci, &lf, &ctype); err != nil {
+				return err
+			}
+			if strings.EqualFold(strings.TrimSpace(ctype), "S") {
+				continue
+			}
+			uCode := strings.ToUpper(strings.TrimSpace(code))
+			if uCode == "" {
+				continue
+			}
+			var lfPtr *int
+			if lf.Valid {
+				v := int(lf.Int64)
+				lfPtr = &v
+			}
+			info := speciesResolvedInfo{Code: uCode, Lifeform: lfPtr}
+			if _, exists := r.byUserCode[uCode]; !exists {
+				r.byUserCode[uCode] = info
+			}
+			if full := normalizeScientificFull(sci); full != "" {
+				if _, exists := r.bySciFull[full]; !exists {
+					r.bySciFull[full] = info
+				}
+			}
+			if canon := canonicalScientificTaxon(sci); canon != "" {
+				if _, exists := r.bySciCanon[canon]; !exists {
+					r.bySciCanon[canon] = info
+				}
 			}
 		}
-		if canon := canonicalScientificTaxon(sci); canon != "" {
-			if _, exists := r.bySciCanon[canon]; !exists {
-				r.bySciCanon[canon] = info
-			}
-		}
-	}
-	if err := uRows.Err(); err != nil {
-		uRows.Close()
+		return uRows.Err()
+	}(); err != nil {
 		return nil, err
 	}
-	return r, uRows.Close()
+	return r, nil
 }
 
 func (r *speciesImportResolver) resolveTaxon(explicitVProCode, sciName, validSciName, letterCode string) (code string, lifeform *int) {

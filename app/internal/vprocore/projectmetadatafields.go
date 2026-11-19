@@ -102,7 +102,7 @@ func MetadataCellValue(cell ProjectMetadataCell) (any, error) {
 		}
 		number, err := strconv.ParseInt(*cell.Integer, 10, 64)
 		if err != nil {
-			return nil, errors.New("metadata integer requires an exact signed64 decimal value")
+			return nil, errors.New("metadata integer requires an exact whole-number value")
 		}
 		value = number
 	case "real":

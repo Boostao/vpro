@@ -74,7 +74,7 @@ func NegateLocationLongitude(cell ProjectMetadataCell) (ProjectMetadataCell, err
 	case "integer":
 		value, err := strconv.ParseInt(*cell.Integer, 10, 64)
 		if err != nil || value == math.MinInt64 {
-			return ProjectMetadataCell{}, errors.New("location longitude negation exceeds exact signed64 representation; original storage unchanged")
+			return ProjectMetadataCell{}, errors.New("location longitude negation exceeds exact numeric range; original storage unchanged")
 		}
 		if value >= int64(-WesternBCMaxLon) && value <= int64(-WesternBCMinLon) {
 			text := strconv.FormatInt(-value, 10)

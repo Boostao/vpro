@@ -102,34 +102,6 @@ type classifiedPlotRecord struct {
 	totalCover     float64
 }
 
-// SorensenSimilarity computes the BEC Diagnostic10.xla / Sorensen / Bray-Curtis quantitative similarity
-// 2 * sum(min(u1, u2)) / sum(u1 + u2) in [0, 1].
-func SorensenSimilarity(u1, u2 map[string]float64) float64 {
-	sumMin := 0.0
-	sumTot := 0.0
-	for sp, v1 := range u1 {
-		if v1 > 0 {
-			sumTot += v1
-			if v2 := u2[sp]; v2 > 0 {
-				if v1 < v2 {
-					sumMin += v1
-				} else {
-					sumMin += v2
-				}
-			}
-		}
-	}
-	for _, v2 := range u2 {
-		if v2 > 0 {
-			sumTot += v2
-		}
-	}
-	if sumTot <= 0 {
-		return 0
-	}
-	return (2.0 * sumMin) / sumTot
-}
-
 func computePairwiseDPoints(constSelf, constOther, meanSelf float64, p PairwiseParams) float64 {
 	constDiff := constSelf - constOther
 	if constDiff < 20.0 || constSelf < p.MinConstancy {

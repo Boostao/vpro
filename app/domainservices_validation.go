@@ -47,13 +47,13 @@ func (s *ValidationService) LookupSpeciesCodeCheckTarget(ctx context.Context, co
 	return s.contexts.LookupSpeciesCodeCheckTarget(ctx, contextID, lookup)
 }
 
-func (s *ValidationService) ApplySpeciesCodeCheck(contextID string, updates []SpeciesCodeCheckUpdate) error {
+func (s *ValidationService) ApplySpeciesCodeCheck(ctx context.Context, contextID string, updates []SpeciesCodeCheckUpdate) error {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.contexts == nil {
 		return errors.New("validation context is unavailable")
 	}
-	return s.contexts.SaveSpeciesCodeCheck(contextID, updates)
+	return s.contexts.SaveSpeciesCodeCheck(ctx, contextID, updates)
 }
 
 func (s *ValidationService) RunComplianceValidation(ctx context.Context, contextID string, opts validationpkg.ComplianceOptions) (validationpkg.ComplianceValidationReport, error) {

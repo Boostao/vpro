@@ -1,13 +1,6 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/accessreader"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"math"
@@ -15,6 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/accessreader"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func firstExistingPath(paths ...string) string {

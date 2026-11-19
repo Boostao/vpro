@@ -1,12 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -18,6 +12,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func lifeformWorkbookServiceFixture(t *testing.T, external bool) (*LifeformWorkbookService, vprocore.ProjectState) {
@@ -130,6 +128,7 @@ func TestLifeformWorkbookServiceRawShapeRefusal(t *testing.T) {
 			t.Fatal("invalid raw approval/options/destination published", outcome, err)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := service.GetReview(nil, state.ContextID, `{"details":`+valid+`}`); err == nil {
 		t.Fatal("nil context accepted")
 	}

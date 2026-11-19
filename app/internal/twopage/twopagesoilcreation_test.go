@@ -1,12 +1,6 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -16,6 +10,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestTwoPageSoilCreationWire(t *testing.T) {
@@ -464,6 +462,7 @@ func TestTwoPageSoilCreationScopeAndCompleteSchema(t *testing.T) {
 			})
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := planTwoPageSoilCreation(nil, soilCreationOriginal("SoilHumusXL"), 42, "Oh"); err == nil {
 		t.Fatal("nil context accepted")
 	}

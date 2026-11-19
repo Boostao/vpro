@@ -122,19 +122,6 @@ func formatScaledDecimalBytes(dst []byte, scaled uint64, negative bool, decimals
 	return dst
 }
 
-// NarrowSingleCover narrows a float64 cover input to IEEE-754 SINGLE (float32)
-// prior to evaluating Access's `<100 Or Is Null` cover rule (§4 invariant).
-func NarrowSingleCover(value float64) (float32, bool) {
-	if math.IsNaN(value) || math.IsInf(value, 0) {
-		return 0, false
-	}
-	narrowed := float32(value)
-	if math.IsNaN(float64(narrowed)) || math.IsInf(float64(narrowed), 0) || narrowed < 0 || narrowed >= 100 {
-		return narrowed, false
-	}
-	return narrowed, true
-}
-
 // FormatACE15 formats a float64 via Access/DAO 15-significant-digit half-away rounding.
 func FormatACE15(value float64, decimals int) string {
 	if scaled, neg, ok := ace15ScaledUint64(value, decimals); ok {

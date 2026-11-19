@@ -5,13 +5,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
 	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func queryDatasheetWindowRows(
@@ -58,30 +59,33 @@ func queryDatasheetWindowRows(
 		for i := range columns {
 			dest = append(dest, &storages[i], &values[i])
 		}
-		for rows.Next() {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			for i := range values {
-				values[i] = nil
-			}
-			if err := rows.Scan(dest...); err != nil {
-				return nil, err
-			}
-			cells := make([]vprocore.ProjectMetadataCell, len(columns))
-			for i, val := range values {
-				cell, err := vprocore.ProjectMetadataCellInternal(storages[i], val)
-				if err != nil {
-					return nil, fmt.Errorf("row %d column %s: %w", rowID, columns[i].Name, err)
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+			for rows.Next() {
+				if err := ctx.Err(); err != nil {
+					return err
 				}
-				cells[i] = cell
+				for i := range values {
+					values[i] = nil
+				}
+				if err := rows.Scan(dest...); err != nil {
+					return err
+				}
+				cells := make([]vprocore.ProjectMetadataCell, len(columns))
+				for i, val := range values {
+					cell, err := vprocore.ProjectMetadataCellInternal(storages[i], val)
+					if err != nil {
+						return fmt.Errorf("row %d column %s: %w", rowID, columns[i].Name, err)
+					}
+					cells[i] = cell
+				}
+				result = append(result, DatasheetRow{
+					RowID: strconv.FormatInt(rowID, 10),
+					Cells: cells,
+				})
 			}
-			result = append(result, DatasheetRow{
-				RowID: strconv.FormatInt(rowID, 10),
-				Cells: cells,
-			})
-		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return rows.Err()
+		}(); err != nil {
 			return nil, err
 		}
 		return result, nil
@@ -95,15 +99,18 @@ func queryDatasheetWindowRows(
 		return nil, err
 	}
 	var winRowIDs []int64
-	for idRows.Next() {
-		var rid int64
-		if err := idRows.Scan(&rid); err != nil {
-			idRows.Close()
-			return nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, idRows.Close()) }()
+		for idRows.Next() {
+			var rid int64
+			if err := idRows.Scan(&rid); err != nil {
+
+				return err
+			}
+			winRowIDs = append(winRowIDs, rid)
 		}
-		winRowIDs = append(winRowIDs, rid)
-	}
-	if err := errors.Join(idRows.Err(), idRows.Close()); err != nil {
+		return idRows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 	return fetchDatasheetRowsByRowIDs(ctx, tx, relation, selectFields, columns, winRowIDs)
@@ -199,16 +206,19 @@ func queryFilteredDatasheetWindowAndCount(
 	}
 	var winRowIDs []int64
 	var totalRows int64
-	for idRows.Next() {
-		var rid, cnt int64
-		if err := idRows.Scan(&rid, &cnt); err != nil {
-			idRows.Close()
-			return nil, 0, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, idRows.Close()) }()
+		for idRows.Next() {
+			var rid, cnt int64
+			if err := idRows.Scan(&rid, &cnt); err != nil {
+
+				return err
+			}
+			winRowIDs = append(winRowIDs, rid)
+			totalRows = cnt
 		}
-		winRowIDs = append(winRowIDs, rid)
-		totalRows = cnt
-	}
-	if err := errors.Join(idRows.Err(), idRows.Close()); err != nil {
+		return idRows.Err()
+	}(); err != nil {
 		return nil, 0, err
 	}
 	rows, err := fetchDatasheetRowsByRowIDs(ctx, tx, relation, selectFields, columns, winRowIDs)
@@ -280,17 +290,21 @@ func parallelRangeScanDatasheetWindow(
 			}
 			var ids []int64
 			var cnt int64
-			for rRows.Next() {
-				var rid, c int64
-				if sErr := rRows.Scan(&rid, &c); sErr != nil {
-					rRows.Close()
-					results[idx].err = sErr
-					return
+			results[idx].err = func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, rRows.Close()) }()
+				for rRows.Next() {
+					var rid, c int64
+					if sErr := rRows.Scan(&rid, &c); sErr != nil {
+						return sErr
+					}
+					ids = append(ids, rid)
+					cnt = c
 				}
-				ids = append(ids, rid)
-				cnt = c
+				return rRows.Err()
+			}()
+			if results[idx].err != nil {
+				return
 			}
-			results[idx].err = errors.Join(rRows.Err(), rRows.Close())
 			results[idx].ids = ids
 			results[idx].count = cnt
 		}(w, lo, hi)
@@ -332,15 +346,18 @@ func parallelRangeScanDatasheetWindow(
 		return nil, 0, false, err
 	}
 	var winRowIDs []int64
-	for mRows.Next() {
-		var rid int64
-		if err := mRows.Scan(&rid); err != nil {
-			mRows.Close()
-			return nil, 0, false, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, mRows.Close()) }()
+		for mRows.Next() {
+			var rid int64
+			if err := mRows.Scan(&rid); err != nil {
+
+				return err
+			}
+			winRowIDs = append(winRowIDs, rid)
 		}
-		winRowIDs = append(winRowIDs, rid)
-	}
-	if err := errors.Join(mRows.Err(), mRows.Close()); err != nil {
+		return mRows.Err()
+	}(); err != nil {
 		return nil, 0, false, err
 	}
 	rows, err := fetchDatasheetRowsByRowIDs(ctx, tx, relation, selectFields, columns, winRowIDs)
@@ -386,33 +403,36 @@ func fetchDatasheetRowsByRowIDs(
 	}
 
 	seen := 0
-	for rows.Next() {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		for i := range values {
-			values[i] = nil
-		}
-		if err := rows.Scan(dest...); err != nil {
-			return nil, err
-		}
-		cells := make([]vprocore.ProjectMetadataCell, len(columns))
-		for i, val := range values {
-			cell, err := vprocore.ProjectMetadataCellInternal(storages[i], val)
-			if err != nil {
-				return nil, fmt.Errorf("row %d column %s: %w", rowID, columns[i].Name, err)
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			if err := ctx.Err(); err != nil {
+				return err
 			}
-			cells[i] = cell
-		}
-		if idx, ok := posByRowID[rowID]; ok {
-			result[idx] = DatasheetRow{
-				RowID: strconv.FormatInt(rowID, 10),
-				Cells: cells,
+			for i := range values {
+				values[i] = nil
 			}
-			seen++
+			if err := rows.Scan(dest...); err != nil {
+				return err
+			}
+			cells := make([]vprocore.ProjectMetadataCell, len(columns))
+			for i, val := range values {
+				cell, err := vprocore.ProjectMetadataCellInternal(storages[i], val)
+				if err != nil {
+					return fmt.Errorf("row %d column %s: %w", rowID, columns[i].Name, err)
+				}
+				cells[i] = cell
+			}
+			if idx, ok := posByRowID[rowID]; ok {
+				result[idx] = DatasheetRow{
+					RowID: strconv.FormatInt(rowID, 10),
+					Cells: cells,
+				}
+				seen++
+			}
 		}
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 	if seen != len(winRowIDs) {

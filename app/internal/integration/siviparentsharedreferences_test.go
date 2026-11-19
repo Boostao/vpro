@@ -1,6 +1,14 @@
 package integration
 
 import (
+	"context"
+	"database/sql"
+	"errors"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
 	referencespkg "github.com/boostao/vpro/app/internal/references"
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/sourceform/sftest"
@@ -9,24 +17,14 @@ import (
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-import (
-	"context"
-	"database/sql"
-	"errors"
-	"reflect"
-	"strings"
-	"testing"
-	"time"
-)
-
-func sharedReferenceEdits(t *testing.T, service *sourceform.SIVIParentSharedService, state vprocore.ProjectState, original *sourceform.SIVIParentProjection) []sourceform.SIVIParentCellEdit {
+func sharedReferenceEdits(t *testing.T, service *sourceform.SourceParentSharedService, state vprocore.ProjectState, original *sourceform.SourceParentProjection) []sourceform.SourceParentCellEdit {
 	t.Helper()
 	references, err := service.GetReferences(context.Background(), state.ContextID, "108050", vprocore.ProjectMetadataCell{Storage: "null"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	edits := []sourceform.SIVIParentCellEdit{}
-	for i, field := range sourceform.SiviParentSharedReferenceFields {
+	edits := []sourceform.SourceParentCellEdit{}
+	for i, field := range sourceform.SourceParentSharedReferenceFields {
 		value := strings.Repeat("X", field.Maximum)
 		if field.Required {
 			found := false
@@ -48,15 +46,15 @@ func sharedReferenceEdits(t *testing.T, service *sourceform.SIVIParentSharedServ
 
 func TestSIVIParentSharedReferencePhysicalPolicies(t *testing.T) {
 	service, _, original := sftest.SharedReferenceFixture(t)
-	if len(sourceform.SiviParentSharedReferenceFields) != 28 || len(sourceform.SiviParentSharedOwners) != 32 {
+	if len(sourceform.SourceParentSharedReferenceFields) != 28 || len(sourceform.SiviParentSharedOwners) != 32 {
 		t.Fatal("scope count changed")
 	}
 	ctx := context.Background()
-	for _, field := range sourceform.SiviParentSharedReferenceFields {
+	for _, field := range sourceform.SourceParentSharedReferenceFields {
 		bound := strings.Repeat("\U0001f600", field.Maximum/2) + strings.Repeat("x", field.Maximum%2)
 		for _, value := range []vprocore.ProjectMetadataCell{{Storage: "null"}, {Storage: "text", Text: &bound}} {
 			edit := sftest.SiviParentEdit(t, original, field.Column, value)
-			if _, err := sourceform.PlanSIVIParentSharedScope(ctx, original, []sourceform.SIVIParentCellEdit{edit}, true); err != nil {
+			if _, err := sourceform.PlanSIVIParentSharedScope(ctx, original, []sourceform.SourceParentCellEdit{edit}, true); err != nil {
 				t.Fatal("valid reference text/null rejected", field.Column, err)
 			}
 		}
@@ -66,7 +64,7 @@ func TestSIVIParentSharedReferencePhysicalPolicies(t *testing.T) {
 			{Storage: "text", Text: vprotest.SiviSharedTestPointer(string([]byte{0xff}))},
 			{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("1")},
 		} {
-			if _, err := sourceform.PlanSIVIParentSharedScope(ctx, original, []sourceform.SIVIParentCellEdit{sftest.SiviParentEdit(t, original, field.Column, value)}, true); err == nil {
+			if _, err := sourceform.PlanSIVIParentSharedScope(ctx, original, []sourceform.SourceParentCellEdit{sftest.SiviParentEdit(t, original, field.Column, value)}, true); err == nil {
 				t.Fatal("invalid physical reference accepted", field.Column)
 			}
 		}
@@ -86,7 +84,7 @@ func TestSIVIParentSharedSixRawReferenceDefinitionsOwnershipAndRetry(t *testing.
 	counts := map[string]int{"MoistureRegime": 10, "NutrientRegime": 7, "MesoSlopePosition": 9, "SurfaceShape": 4, "StructuralStage": 21, "SuccessionalStatus": 10}
 	for _, field := range references.Fields {
 		if count, raw := counts[field.Column]; raw {
-			if !field.Available || len(field.Definitions.Rows) != count || !reflect.DeepEqual(field.Definitions.Columns, sourceform.SiviParentReferenceColumns) ||
+			if !field.Available || len(field.Definitions.Rows) != count || !reflect.DeepEqual(field.Definitions.Columns, sourceform.SourceParentReferenceColumns) ||
 				!strings.Contains(field.Source, "not frozen DAO") {
 				t.Fatal("six-list raw/provenance boundary changed", field)
 			}
@@ -117,7 +115,7 @@ func TestSIVIParentSharedSixRawReferenceDefinitionsOwnershipAndRetry(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	var raw sourceform.SIVIParentSharedReference
+	var raw sourceform.SourceParentSharedReference
 	for _, field := range references.Fields {
 		if field.Column == "MoistureRegime" {
 			raw = field
@@ -182,13 +180,13 @@ func TestSIVIParentSharedTwentyEightReferencesAtomicMembershipAndAuthoritativeRe
 			edits := sharedReferenceEdits(t, service, state, original)
 			before := vprotest.DatabaseBytes(t, service.Contexts.Projects.Sqlite.Attachments)
 			required := 0
-			for i, field := range sourceform.SiviParentSharedReferenceFields {
+			for i, field := range sourceform.SourceParentSharedReferenceFields {
 				if !field.Required {
 					continue
 				}
 
 				required++
-				bad := append([]sourceform.SIVIParentCellEdit(nil), edits...)
+				bad := append([]sourceform.SourceParentCellEdit(nil), edits...)
 				bad[i].Value = vprocore.ProjectMetadataCell{Storage: "text", Text: vprotest.SiviSharedTestPointer("?")}
 				if _, err := service.Save(ctx, state.ContextID, "108050", sourceform.SIVIParentSharedWrite{Original: original, Edits: bad}); err == nil {
 					t.Fatal("nonmember required field accepted", field.Column)
@@ -222,7 +220,7 @@ func TestSIVIParentSharedTwentyEightReferencesAtomicMembershipAndAuthoritativeRe
 			if _, err := service.Save(ctx, state.ContextID, "108050", sourceform.SIVIParentSharedWrite{Original: original, Edits: edits}); err == nil {
 				t.Fatal("reference stale collision accepted")
 			}
-			service.References = sourceform.SiviParentSharedReferenceReaders{}
+			service.References = sourceform.SourceParentSharedReferenceReaders{}
 			if _, err := service.Restore(ctx, state.ContextID, "108050", result.HistoryID, action); err != nil {
 				t.Fatal("historical restore required current catalogues/gate", err)
 			}
@@ -259,7 +257,7 @@ func TestSIVIParentSharedBorrowedValidityAndEmptyAvailability(t *testing.T) {
 		}
 	}
 	edit := sftest.SiviParentEdit(t, original, list, vprocore.ProjectMetadataCell{Storage: "text", Text: &code})
-	if _, err := service.Save(context.Background(), state.ContextID, "108050", sourceform.SIVIParentSharedWrite{Original: original, Edits: []sourceform.SIVIParentCellEdit{edit}}); err == nil {
+	if _, err := service.Save(context.Background(), state.ContextID, "108050", sourceform.SIVIParentSharedWrite{Original: original, Edits: []sourceform.SourceParentCellEdit{edit}}); err == nil {
 		t.Fatal("unselectable borrowed Item authorized a write")
 	}
 	service.References.Parent = sharedReferenceParentStub{}
@@ -301,7 +299,7 @@ func TestSIVIParentSharedAllSixtyMixedAtomicAndRestoration(t *testing.T) {
 	request := sourceform.SIVIParentSharedWrite{Original: original, Edits: edits}
 	before := vprotest.DatabaseBytes(t, service.Contexts.Projects.Sqlite.Attachments)
 	for _, column := range []string{"HumusThickness", "Exposure1"} {
-		wrong := append([]sourceform.SIVIParentCellEdit(nil), edits...)
+		wrong := append([]sourceform.SourceParentCellEdit(nil), edits...)
 		for i := range wrong {
 			if wrong[i].Column == column {
 				wrong[i].RowID = original.Rows[0].Env.RowID
@@ -340,13 +338,13 @@ func TestSIVIParentSharedReferenceHistoricalNoOpNullableAndMissingCatalogues(t *
 			if _, err := db.Exec(`UPDATE Sample_Env SET Exposure1=X'00FF',Exposure2='',SoilDrainage='LONG-HISTORICAL',SuccessionalStatus='???' WHERE PlotNumber='108050'`); err != nil {
 				t.Fatal(err)
 			}
-			service.References = sourceform.SiviParentSharedReferenceReaders{}
+			service.References = sourceform.SourceParentSharedReferenceReaders{}
 			original, err := service.GetOriginal(context.Background(), state.ContextID, "108050")
 			if err != nil {
 				t.Fatal(err)
 			}
-			unchanged, nullable := []sourceform.SIVIParentCellEdit{}, []sourceform.SIVIParentCellEdit{}
-			for _, field := range sourceform.SiviParentSharedReferenceFields {
+			unchanged, nullable := []sourceform.SourceParentCellEdit{}, []sourceform.SourceParentCellEdit{}
+			for _, field := range sourceform.SourceParentSharedReferenceFields {
 				if field.Required {
 					edit := sftest.SiviParentEdit(t, original, field.Column, vprocore.ProjectMetadataCell{Storage: "null"})
 					if edit.Expected.Storage != "blob" {
@@ -363,7 +361,7 @@ func TestSIVIParentSharedReferenceHistoricalNoOpNullableAndMissingCatalogues(t *
 			}
 			vprotest.AssertProfileSUFiles(t, service.Contexts, before)
 			blob := sftest.SiviParentEdit(t, original, "Exposure1", vprocore.ProjectMetadataCell{Storage: "null"})
-			if _, err := service.Save(context.Background(), state.ContextID, "108050", sourceform.SIVIParentSharedWrite{Original: original, Edits: []sourceform.SIVIParentCellEdit{blob}}); err == nil {
+			if _, err := service.Save(context.Background(), state.ContextID, "108050", sourceform.SIVIParentSharedWrite{Original: original, Edits: []sourceform.SourceParentCellEdit{blob}}); err == nil {
 				t.Fatal("historical BLOB replacement bypassed lossless audit guard")
 			}
 			vprotest.AssertProfileSUFiles(t, service.Contexts, before)
@@ -390,7 +388,7 @@ func TestSIVIParentSharedReferencePreservesAcceptedThirtyTwo(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(original, fresh) {
 		t.Fatal("reference support changed full physical originals", err)
 	}
-	for _, field := range sourceform.SiviParentSharedReferenceFields {
+	for _, field := range sourceform.SourceParentSharedReferenceFields {
 		_ = sftest.SiviParentEdit(t, fresh, field.Column, vprocore.ProjectMetadataCell{Storage: "null"})
 	}
 	references, err := service.GetReferences(ctx, state.ContextID, "108050", vprocore.ProjectMetadataCell{Storage: "null"})
@@ -435,7 +433,7 @@ func TestSIVIParentSharedRawReferenceSchemaGuards(t *testing.T) {
 		}
 		unavailable := 0
 		for i, field := range references.Fields {
-			if sourceform.SiviParentSharedReferenceFields[i].Reader == "family" {
+			if sourceform.SourceParentSharedReferenceFields[i].Reader == "family" {
 				if field.Available || field.Diagnostic == "" || len(field.Choices) != 0 {
 					t.Fatal("raw schema was silently repaired or replaced by legacy Lists", mutation.change, field)
 				}

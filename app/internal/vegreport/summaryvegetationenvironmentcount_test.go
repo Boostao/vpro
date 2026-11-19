@@ -1,11 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +9,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestSummaryVegetationEnvironmentalCountOriginalSourceCases(t *testing.T) {

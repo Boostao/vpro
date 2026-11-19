@@ -1,11 +1,6 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -18,7 +13,9 @@ import (
 	"strconv"
 	"unicode/utf8"
 
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
 	"github.com/boostao/vpro/app/internal/reports/subzonematrix"
+	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/xuri/excelize/v2"
 )
 

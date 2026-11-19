@@ -5,11 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 func TestSummaryDraftWorkbookClientWire(t *testing.T) {

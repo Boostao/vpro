@@ -1,17 +1,14 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
-
 	"encoding/json"
 	"os"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestProjectMetadataReadonlyReviewPreservesShapesTypesAndDuplicateCandidates(t *testing.T) {

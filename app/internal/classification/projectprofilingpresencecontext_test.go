@@ -1,11 +1,6 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -17,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/mattn/go-sqlite3"
 )
 

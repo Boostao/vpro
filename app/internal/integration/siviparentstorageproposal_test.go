@@ -1,13 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -15,6 +8,11 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIParentStorageProposalElevenFieldsAndLegacyCompatibility(t *testing.T) {
@@ -61,7 +59,7 @@ func TestSIVIParentStorageProposalElevenFieldsAndLegacyCompatibility(t *testing.
 				t.Fatal(err)
 			}
 			for _, domain := range []string{"all", "text", "scalar-text", "option-text", "unchanged"} {
-				a, b, c := scalars, options, append([]sourceform.SiviParentScalarEdit(nil), text...)
+				a, b, c := scalars, options, append([]sourceform.SourceParentScalarEdit(nil), text...)
 				switch domain {
 				case "text":
 					a, b = nil, nil
@@ -90,12 +88,12 @@ func TestSIVIParentStorageProposalElevenFieldsAndLegacyCompatibility(t *testing.
 				} else if len(got.Options) != 0 {
 					t.Fatal("absent option domain invented assignments", got)
 				}
-				want := []sourceform.SiviParentScalarAssignment{
+				want := []sourceform.SourceParentScalarAssignment{
 					{ContextID: state.ContextID, Table: "Sample_Env", RowID: parent.Rows[0].Env.RowID, Column: "SV_PolygonNumber", Before: vprotest.MetadataText("original polygon"), After: vprotest.MetadataText("  New Polygon  "), Value: "  New Polygon  "},
 					{ContextID: state.ContextID, Table: "Sample_Env", RowID: parent.Rows[0].Env.RowID, Column: "SV_CanopyComposition", Before: vprotest.MetadataText("original canopy"), After: vprotest.MetadataText("Literal canopy"), Value: "Literal canopy"},
 				}
 				if domain == "unchanged" {
-					want = []sourceform.SiviParentScalarAssignment{}
+					want = []sourceform.SourceParentScalarAssignment{}
 				}
 				if !reflect.DeepEqual(got.Text, want) {
 					t.Fatal("literal two-field storage payload changed", domain, got.Text, want)
@@ -141,7 +139,7 @@ func TestSIVIParentStorageProposalThirdDomainFailuresReturnNoPartialResult(t *te
 	files := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
 	for _, kind := range []string{"empty", "empty-text", "domain", "duplicate", "expected", "row", "context", "missing-pair", "stale-context"} {
 		t.Run(kind, func(t *testing.T) {
-			a, b, c := scalars, options, append([]sourceform.SiviParentScalarEdit(nil), text...)
+			a, b, c := scalars, options, append([]sourceform.SourceParentScalarEdit(nil), text...)
 			id, plot := state.ContextID, "108050"
 			switch kind {
 			case "empty":

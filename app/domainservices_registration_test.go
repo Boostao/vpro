@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	picturespkg "github.com/boostao/vpro/app/internal/pictures"
+
 	lifecyclepkg "github.com/boostao/vpro/app/internal/lifecycle"
 	"github.com/boostao/vpro/app/internal/projectops"
 	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
@@ -160,7 +162,7 @@ func TestMainRegistersStrictlyTwelveCohesiveDomainServices(t *testing.T) {
 	if _, err := envReportSvc.GetLongEnvironmentOptions(ctx, state.ContextID); err != nil {
 		t.Fatalf("EnvironmentReportService.GetLongEnvironmentOptions failed: %v", err)
 	}
-	if _, err := spatialSvc.GetCoordinateMode(); err != nil {
+	if _, err := spatialSvc.GetCoordinateMode(ctx); err != nil {
 		t.Fatalf("SpatialService.GetCoordinateMode failed: %v", err)
 	}
 	if picMeta, err := pictureSvc.GetMetadata(ctx, state.ContextID, "108050"); err != nil || picMeta == nil {
@@ -335,13 +337,13 @@ func TestImportAccessProjectRenamedAuditAndChildLoadingViaPlotEntryService(t *te
 		t.Fatal(err)
 	}
 	firstPlot := "108050"
-	hdr, err := plotEntrySvc.GetPlot(firstPlot)
+	hdr, err := plotEntrySvc.GetPlot(ctx, firstPlot)
 	if err != nil {
 		t.Fatalf("PlotEntryService.GetPlot(%s): %v", firstPlot, err)
 	}
 	seedNote := "Hermetic pre-rename audit seed"
 	hdr.OfficeNotes = &seedNote
-	if err := contextSvc.UpdatePlot(initState.ContextID, *hdr); err != nil {
+	if err := contextSvc.UpdatePlot(ctx, initState.ContextID, *hdr); err != nil {
 		t.Fatalf("UpdatePlot(%s) seed failed: %v", firstPlot, err)
 	}
 
@@ -356,7 +358,7 @@ func TestImportAccessProjectRenamedAuditAndChildLoadingViaPlotEntryService(t *te
 		t.Fatalf("SaveProjectAs(%s) failed: res=%+v err=%v", renamedProject, savedRes, err)
 	}
 	renamedCID := savedRes.State.ContextID
-	auditEntries, err := plotEntrySvc.ListAuditReadEntries(firstPlot)
+	auditEntries, err := plotEntrySvc.ListAuditReadEntries(ctx, firstPlot)
 	if err != nil || len(auditEntries) == 0 {
 		t.Fatalf("ListAuditReadEntries on %s failed: len=%d err=%v", renamedProject, len(auditEntries), err)
 	}
@@ -365,13 +367,13 @@ func TestImportAccessProjectRenamedAuditAndChildLoadingViaPlotEntryService(t *te
 			t.Fatalf("audit row %s retained foreign Project=%q instead of %q", entry.RowID, entry.Project, renamedProject)
 		}
 	}
-	postRenameHdr, err := plotEntrySvc.GetPlot(firstPlot)
+	postRenameHdr, err := plotEntrySvc.GetPlot(ctx, firstPlot)
 	if err != nil {
 		t.Fatal(err)
 	}
 	afterNote := "Hermetic post-rename audit edit"
 	postRenameHdr.OfficeNotes = &afterNote
-	if err := contextSvc.UpdatePlot(renamedCID, *postRenameHdr); err != nil {
+	if err := contextSvc.UpdatePlot(ctx, renamedCID, *postRenameHdr); err != nil {
 		t.Fatalf("UpdatePlot on renamed project failed: %v", err)
 	}
 	afterAudits, err := contextSvc.ListAuditReadEntries(ctx, renamedCID, firstPlot)
@@ -440,22 +442,22 @@ func TestImportAccessProjectRenamedAuditAndChildLoadingViaPlotEntryService(t *te
 		totalAuditRows := 0
 		for _, summary := range page.Plots {
 			pNum := summary.PlotNumber
-			if _, err := plotEntrySvc.GetPlot(pNum); err != nil {
+			if _, err := plotEntrySvc.GetPlot(ctx, pNum); err != nil {
 				t.Fatalf("PlotEntryService.GetPlot(%s) failed: %v", pNum, err)
 			}
-			if _, err := plotEntrySvc.ListVegRecords(pNum); err != nil {
+			if _, err := plotEntrySvc.ListVegRecords(ctx, pNum); err != nil {
 				t.Fatalf("PlotEntryService.ListVegRecords(%s) failed: %v", pNum, err)
 			}
-			if _, err := plotEntrySvc.ListHumusRecords(pNum); err != nil {
+			if _, err := plotEntrySvc.ListHumusRecords(ctx, pNum); err != nil {
 				t.Fatalf("PlotEntryService.ListHumusRecords(%s) failed: %v", pNum, err)
 			}
-			if _, err := plotEntrySvc.ListMineralRecords(pNum); err != nil {
+			if _, err := plotEntrySvc.ListMineralRecords(ctx, pNum); err != nil {
 				t.Fatalf("PlotEntryService.ListMineralRecords(%s) failed: %v", pNum, err)
 			}
-			if _, err := plotEntrySvc.ListOtherRecords(pNum); err != nil {
+			if _, err := plotEntrySvc.ListOtherRecords(ctx, pNum); err != nil {
 				t.Fatalf("PlotEntryService.ListOtherRecords(%s) failed: %v", pNum, err)
 			}
-			entries, err := plotEntrySvc.ListAuditReadEntries(pNum)
+			entries, err := plotEntrySvc.ListAuditReadEntries(ctx, pNum)
 			if err != nil {
 				t.Fatalf("PlotEntryService.ListAuditReadEntries(%s) failed: %v", pNum, err)
 			}
@@ -464,7 +466,7 @@ func TestImportAccessProjectRenamedAuditAndChildLoadingViaPlotEntryService(t *te
 					t.Fatalf("audit row %s for plot %s retained foreign Project=%q instead of %q", entry.RowID, pNum, entry.Project, targetProject)
 				}
 			}
-			trail, err := plotEntrySvc.ListAuditEntries(pNum)
+			trail, err := plotEntrySvc.ListAuditEntries(ctx, pNum)
 			if err != nil {
 				t.Fatalf("PlotEntryService.ListAuditEntries(%s) failed: %v", pNum, err)
 			}
@@ -536,9 +538,9 @@ func TestColdBootPictureLibraryWiringAndNilPictureServiceGuards(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPictureDeletionService failed on cold boot: %v", err)
 	}
-	picSvc.Metadata = picMeta
-	picSvc.Creation = picCreate
-	picSvc.Deletion = picDelete
+	picSvc.core.Metadata = picMeta
+	picSvc.core.Creation = picCreate
+	picSvc.core.Deletion = picDelete
 
 	review, err := picSvc.GetMetadata(ctx, state.ContextID, "00337")
 	if err != nil {
@@ -582,6 +584,7 @@ func TestContextServiceOmitsFuncParametersAndForwardsAllVProCoreRPCs(t *testing.
 		}
 	}
 
+	ctxType := reflect.TypeOf((*context.Context)(nil)).Elem()
 	for i := 0; i < coreType.NumMethod(); i++ {
 		cm := coreType.Method(i)
 		if cm.Name == "Edit" {
@@ -591,9 +594,16 @@ func TestContextServiceOmitsFuncParametersAndForwardsAllVProCoreRPCs(t *testing.
 		if !ok {
 			t.Fatalf("main.ContextService is missing forwarded RPC method %s from vprocore.ContextService", cm.Name)
 		}
-		if mm.Type.NumIn() != cm.Type.NumIn() || mm.Type.NumOut() != cm.Type.NumOut() {
-			t.Fatalf("main.ContextService.%s arity (%d in, %d out) differs from vprocore.ContextService.%s (%d in, %d out)",
-				cm.Name, mm.Type.NumIn(), mm.Type.NumOut(), cm.Name, cm.Type.NumIn(), cm.Type.NumOut())
+		if mm.Type.NumIn() < 2 || mm.Type.In(1) != ctxType {
+			t.Fatalf("main.ContextService.%s must accept context.Context as its first argument", cm.Name)
+		}
+		expectedIn := cm.Type.NumIn()
+		if cm.Type.NumIn() < 2 || cm.Type.In(1) != ctxType {
+			expectedIn++
+		}
+		if mm.Type.NumIn() != expectedIn || mm.Type.NumOut() != cm.Type.NumOut() {
+			t.Fatalf("main.ContextService.%s arity (%d in, %d out) differs from expected (%d in, %d out)",
+				cm.Name, mm.Type.NumIn(), mm.Type.NumOut(), expectedIn, cm.Type.NumOut())
 		}
 	}
 }
@@ -627,4 +637,33 @@ func TestSpatialExtraDirsBehavioralResolutionAndDeduplication(t *testing.T) {
 	if seen[missingDir] != 0 {
 		t.Fatalf("resolveSpatialExtraDirs must omit non-existent directory %q", missingDir)
 	}
+}
+
+func newDefaultPictureEnvLookup(base func(string) (string, bool), defaultVPicsPath, defaultImagesDir string) func(string) (string, bool) {
+	return func(key string) (string, bool) {
+		if base != nil {
+			if val, ok := base(key); ok {
+				return val, true
+			}
+		}
+		switch key {
+		case "VPRO_PICTURE_LIBRARY_PATH":
+			if defaultVPicsPath != "" {
+				return defaultVPicsPath, true
+			}
+		case "VPRO_PICTURE_CHILD_DIRECTORY", "VPRO_PICTURE_MANAGER_DIRECTORY":
+			if defaultImagesDir != "" {
+				return defaultImagesDir, true
+			}
+		}
+		return "", false
+	}
+}
+
+func NewPictureService(contexts *ContextService, lookup func(string) (string, bool)) (*PictureService, error) {
+	core, err := picturespkg.NewPictureService(unwrapContextService(contexts), lookup)
+	if err != nil {
+		return nil, err
+	}
+	return &PictureService{core: core}, nil
 }

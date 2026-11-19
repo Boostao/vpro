@@ -1,11 +1,6 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -16,6 +11,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SubzoneMatrixRow struct {
@@ -258,32 +255,16 @@ func (s *SubzoneMatrixService) exportReviewed(ctx context.Context, contextID, re
 			}
 			return nil
 		}
-		result, publishErr := vprocore.PublishArtifactChecked(ctx, request.Destination, vprocore.ArtifactPublicationFormat{
-			Label: "Subzone Matrix workbook", Artifact: "XLSX", CommitLabel: "workbook",
-			StagePattern: ".vpro-subzone-matrix-*",
-			Encode: func(ctx context.Context) ([]byte, error) {
-				if err := ctx.Err(); err != nil {
-					return nil, err
-				}
-				return bytes.Clone(workbook.Bytes), nil
-			},
-			Validate: func(ctx context.Context, actual []byte) error {
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				if !bytes.Equal(actual, workbook.Bytes) {
-					return errors.New("staged Subzone Matrix workbook differs from reviewed bytes")
-				}
-				return nil
-			},
-		}, validateSource, hooks.publication)
-		if result.Published {
-			publishErr = errors.Join(publishErr, validateSource())
-			if publishErr != nil {
-				publishErr = fmt.Errorf("Workbook published; do not replay: %w", publishErr)
-			}
-		}
-		receipt := vprocore.ArtifactPublicationOutcome(request.Destination, result, publishErr, "Subzone Matrix workbook")
+		receipt := vprocore.PublishReviewedWorkbookBytes(
+			ctx,
+			request.Destination,
+			"Subzone Matrix workbook",
+			".vpro-subzone-matrix-*",
+			"staged Subzone Matrix workbook differs from reviewed bytes",
+			workbook.Bytes,
+			validateSource,
+			hooks.publication,
+		)
 		return &SubzoneMatrixWorkbookOutcome{receipt.Status, receipt.RequestedDestination, receipt.Path, receipt.SHA256, receipt.ErrorMessage}, nil
 	})
 }

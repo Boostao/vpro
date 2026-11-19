@@ -1,6 +1,12 @@
 package integration
 
 import (
+	"context"
+	"errors"
+	"reflect"
+	"strings"
+	"testing"
+
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/sourceform/sftest"
 	"github.com/boostao/vpro/app/internal/twopage"
@@ -8,17 +14,9 @@ import (
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-import (
-	"context"
-	"errors"
-	"reflect"
-	"strings"
-	"testing"
-)
-
-func twoPageEntryProjectChoice(t *testing.T, original *sourceform.SiviParentProjection, source int, value vprocore.ProjectMetadataCell) (sourceform.SIVIProjectChoices, sourceform.SiviProjectSelection) {
+func twoPageEntryProjectChoice(t *testing.T, original *sourceform.SourceParentProjection, source int, value vprocore.ProjectMetadataCell) (sourceform.SourceProjectChoices, sourceform.SourceProjectSelectionInternal) {
 	t.Helper()
-	choices := sourceform.SIVIProjectChoices{ContextID: original.ContextID, Project: original.Project,
+	choices := sourceform.SourceProjectChoices{ContextID: original.ContextID, Project: original.Project,
 		SourceOption: source, Source: "Env", Alias: "project", Table: original.Project + "_Metadata",
 		Choices: vprocore.ProjectMetadataTable{Columns: []vprocore.ProjectMetadataColumn{{Name: "ProjectID", DeclaredType: "TEXT"}, {Name: "ProjectTitle", DeclaredType: "TEXT"}},
 			Rows: []vprocore.ProjectMetadataRow{
@@ -29,7 +27,7 @@ func twoPageEntryProjectChoice(t *testing.T, original *sourceform.SiviParentProj
 		choices.Source, choices.Alias, choices.Table = "Master", "VMetaData", "ProjectMetaData"
 	}
 	target := sftest.SiviParentEdit(t, original, "ProjectID", value)
-	selection := sourceform.SiviProjectSelection{ContextID: original.ContextID, ControlID: "form:" + original.Form + "/ProjectID",
+	selection := sourceform.SourceProjectSelectionInternal{ContextID: original.ContextID, ControlID: "form:" + original.Form + "/ProjectID",
 		Table: target.Table, RowID: target.RowID, Expected: target.Expected,
 		SourceOption: source, MetadataAlias: choices.Alias, MetadataTable: choices.Table,
 		MetadataColumns:  append([]vprocore.ProjectMetadataColumn{}, choices.Choices.Columns...),
@@ -44,7 +42,7 @@ func TestTwoPageEntryProjectAssignmentExactSourcePhysicalChoiceAndBounds(t *test
 			for _, value := range []string{"  Literal MiXeD  ", strings.Repeat("\U0001f331", 15), strings.Repeat("x", 30)} {
 				choices, selection := twoPageEntryProjectChoice(t, original, source, vprotest.MetadataText(value))
 				plan, err := twopage.PlanTwoPageEntryProjectAssignment(context.Background(), original, choices, selection)
-				expected := []sourceform.SiviParentScalarAssignment{{ContextID: original.ContextID, Table: original.EnvTable, RowID: original.Rows[0].Env.RowID,
+				expected := []sourceform.SourceParentScalarAssignment{{ContextID: original.ContextID, Table: original.EnvTable, RowID: original.Rows[0].Env.RowID,
 					Column: "ProjectID", Before: sftest.SiviParentCell(t, original, "ProjectID"), After: vprotest.MetadataText(value), Value: value}}
 				if err != nil || plan == nil || !reflect.DeepEqual(plan.Assignments, expected) ||
 					plan.SourceOption != source || plan.MetadataOriginal.RowID != "9007199254740993" ||
@@ -101,7 +99,7 @@ func TestTwoPageEntryProjectAssignmentOmitsUnchangedHistoricalInvalidValues(t *t
 
 func TestTwoPageEntryProjectAssignmentRejectsSourceIdentityAndMetadataDrift(t *testing.T) {
 	for _, form := range []string{"FS882-8x6XL", "FS882-8x6XL-CHARS"} {
-		contexts, state, _, original, _ := twoPageWriteFixture(t, form, false)
+		contexts, state, _, _, _ := twoPageWriteFixture(t, form, false)
 		vprotest.MutateContextFixture(t, state.ProjectPath, `UPDATE Sample_Env SET ProjectID='old' WHERE PlotNumber='108050'`)
 		original, err := twopage.ReadTwoPageParent(contexts, context.Background(), state.ContextID, "108050", form)
 		if err != nil {
@@ -162,12 +160,12 @@ func TestTwoPageEntryProjectAssignmentRejectsSourceIdentityAndMetadataDrift(t *t
 		}
 	}
 	if plan, err := sourceform.PlanSourceProjectAssignment(context.Background(), "", "", "", "", vprocore.ProjectMetadataTable{}, vprocore.ProjectMetadataTable{},
-		sourceform.SIVIProjectChoices{}, sourceform.SiviProjectSelection{}); err == nil || plan != nil {
+		sourceform.SourceProjectChoices{}, sourceform.SourceProjectSelectionInternal{}); err == nil || plan != nil {
 		t.Fatal("generic shared planner accepted absent expected source control")
 	}
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
-	if plan, err := twopage.PlanTwoPageEntryProjectAssignment(cancelled, nil, sourceform.SIVIProjectChoices{}, sourceform.SiviProjectSelection{}); !errors.Is(err, context.Canceled) || plan != nil {
+	if plan, err := twopage.PlanTwoPageEntryProjectAssignment(cancelled, nil, sourceform.SourceProjectChoices{}, sourceform.SourceProjectSelectionInternal{}); !errors.Is(err, context.Canceled) || plan != nil {
 		t.Fatal("cancellation became absent-original failure", plan, err)
 	}
 }

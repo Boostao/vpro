@@ -1,18 +1,16 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"fmt"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type siviProjectAssignmentProposal struct {
-	Original *SiviParentProjection
-	Plan     *SiviProjectAssignmentPlan
+	Original *SourceParentProjection
+	Plan     *SourceProjectAssignmentPlan
 }
 
 func readSIVIProjectAssignmentSnapshot(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx, contextID, plot string, source int) (*SIVIProjectAssignmentOriginal, error) {
@@ -24,7 +22,7 @@ func readSIVIProjectAssignmentSnapshot(ctx context.Context, owner *vprocore.Sqli
 	if err != nil {
 		return nil, err
 	}
-	available, diagnostic, err := SiviProjectAssignmentAvailability(ctx, tx, source)
+	available, diagnostic, err := SourceProjectAssignmentAvailability(ctx, tx, source)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +31,7 @@ func readSIVIProjectAssignmentSnapshot(ctx context.Context, owner *vprocore.Sqli
 	}, nil
 }
 
-func PrepareSIVIProjectAssignment(s *vprocore.ContextService, ctx context.Context, contextID, plot string, selection SiviProjectSelection) (*siviProjectAssignmentProposal, error) {
+func PrepareSIVIProjectAssignment(s *vprocore.ContextService, ctx context.Context, contextID, plot string, selection SourceProjectSelectionInternal) (*siviProjectAssignmentProposal, error) {
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (*siviProjectAssignmentProposal, error) {
 		values, err := plots.Projects.Preferences.Snapshot()
 		if err != nil {

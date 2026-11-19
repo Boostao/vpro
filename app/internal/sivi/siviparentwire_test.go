@@ -1,17 +1,15 @@
 package sivi
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIParentOriginalWireRoundTrip(t *testing.T) {
@@ -32,7 +30,7 @@ func TestSIVIParentOriginalWireRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var decoded sourceform.SiviParentProjection
+	var decoded sourceform.SourceParentProjection
 	if err := json.Unmarshal(wire, &decoded); err != nil || !reflect.DeepEqual(original, &decoded) {
 		t.Fatal("parent wire normalized raw physical identities or cells", err)
 	}

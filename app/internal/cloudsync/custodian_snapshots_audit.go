@@ -7,13 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // RejectStagingSubmission marks a pending staging submission as rejected with reviewer notes.

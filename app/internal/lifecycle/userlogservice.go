@@ -1,12 +1,10 @@
 package lifecycle
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type UserLogService struct {

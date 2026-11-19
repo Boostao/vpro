@@ -1,21 +1,19 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/references"
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/twopage"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/twopage"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestTwoPageEntryReferenceProviderActualCataloguesAndSourceScope(t *testing.T) {
@@ -135,7 +133,7 @@ func TestTwoPageEntryReferenceProviderBECFiltersAndCompleteDefinitions(t *testin
 				{RowID: "3"}},
 		}
 		provider, err := twopage.NewTwoPageEntryReferenceProvider(form, twopage.TwoPageEntryReferenceReaders{
-			Shared: sourceform.SiviParentSharedReferenceReaders{Bec: probe}, Series: probe,
+			Shared: sourceform.SourceParentSharedReferenceReaders{Bec: probe}, Series: probe,
 		})
 		if err != nil {
 			t.Fatal(err)

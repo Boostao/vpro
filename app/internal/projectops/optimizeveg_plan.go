@@ -33,8 +33,8 @@ func buildOptimizeVegPlan(ctx context.Context, db sqliteQueryer, project string,
 	if err != nil {
 		return OptimizeVegPreview{}, nil, nil, err
 	}
+	defer colRows.Close()
 	cols, colErr := colRows.Columns()
-	_ = colRows.Close()
 	if colErr != nil {
 		return OptimizeVegPreview{}, nil, nil, colErr
 	}
@@ -44,14 +44,17 @@ func buildOptimizeVegPlan(ctx context.Context, db sqliteQueryer, project string,
 		return OptimizeVegPreview{}, nil, nil, err
 	}
 	var beforeRowCount int
-	if cntRows.Next() {
-		if err := cntRows.Scan(&beforeRowCount); err != nil {
-			_ = cntRows.Close()
-			return OptimizeVegPreview{}, nil, nil, err
+	if scanErr := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, cntRows.Close()) }()
+		if cntRows.Next() {
+			if err := cntRows.Scan(&beforeRowCount); err != nil {
+
+				return err
+			}
 		}
-	}
-	if err := errors.Join(cntRows.Err(), cntRows.Close()); err != nil {
-		return OptimizeVegPreview{}, nil, nil, err
+		return cntRows.Err()
+	}(); scanErr != nil {
+		return OptimizeVegPreview{}, nil, nil, scanErr
 	}
 
 	plotFilter := map[string]bool{}
@@ -78,32 +81,35 @@ func buildOptimizeVegPlan(ctx context.Context, db sqliteQueryer, project string,
 	if err != nil {
 		return OptimizeVegPreview{}, nil, nil, err
 	}
-	for dupKeyRows.Next() {
-		if err := ctx.Err(); err != nil {
-			_ = dupKeyRows.Close()
-			return OptimizeVegPreview{}, nil, nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, dupKeyRows.Close()) }()
+		for dupKeyRows.Next() {
+			if err := ctx.Err(); err != nil {
+
+				return err
+			}
+			var plotBytes, sppBytes []byte
+			if err := dupKeyRows.Scan(&plotBytes, &sppBytes); err != nil {
+
+				return err
+			}
+			plot := string(plotBytes)
+			spp := string(sppBytes)
+			if len(plotFilter) > 0 && !plotFilter[plot] {
+				continue
+			}
+			gk := vegGroupKey{plot: plot, species: spp}
+			if !dupKeys[gk] {
+				dupKeys[gk] = true
+				groupOrder = append(groupOrder, gk)
+			}
+			if !dupPlotsSet[plot] {
+				dupPlotsSet[plot] = true
+				dupPlots = append(dupPlots, plot)
+			}
 		}
-		var plotBytes, sppBytes []byte
-		if err := dupKeyRows.Scan(&plotBytes, &sppBytes); err != nil {
-			_ = dupKeyRows.Close()
-			return OptimizeVegPreview{}, nil, nil, err
-		}
-		plot := string(plotBytes)
-		spp := string(sppBytes)
-		if len(plotFilter) > 0 && !plotFilter[plot] {
-			continue
-		}
-		gk := vegGroupKey{plot: plot, species: spp}
-		if !dupKeys[gk] {
-			dupKeys[gk] = true
-			groupOrder = append(groupOrder, gk)
-		}
-		if !dupPlotsSet[plot] {
-			dupPlotsSet[plot] = true
-			dupPlots = append(dupPlots, plot)
-		}
-	}
-	if err := errors.Join(dupKeyRows.Err(), dupKeyRows.Close()); err != nil {
+		return dupKeyRows.Err()
+	}(); err != nil {
 		return OptimizeVegPreview{}, nil, nil, err
 	}
 
@@ -134,20 +140,23 @@ func buildOptimizeVegPlan(ctx context.Context, db sqliteQueryer, project string,
 			if eErr != nil {
 				return OptimizeVegPreview{}, nil, nil, eErr
 			}
-			for eRows.Next() {
-				var pb []byte
-				var flagVal int64
-				if err := eRows.Scan(&pb, &flagVal); err != nil {
-					_ = eRows.Close()
-					return OptimizeVegPreview{}, nil, nil, err
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, eRows.Close()) }()
+				for eRows.Next() {
+					var pb []byte
+					var flagVal int64
+					if err := eRows.Scan(&pb, &flagVal); err != nil {
+
+						return err
+					}
+					p := string(pb)
+					envFound[p] = true
+					if flagVal != 0 {
+						envLocked[p] = true
+					}
 				}
-				p := string(pb)
-				envFound[p] = true
-				if flagVal != 0 {
-					envLocked[p] = true
-				}
-			}
-			if err := errors.Join(eRows.Err(), eRows.Close()); err != nil {
+				return eRows.Err()
+			}(); err != nil {
 				return OptimizeVegPreview{}, nil, nil, err
 			}
 		}
@@ -200,60 +209,63 @@ func buildOptimizeVegPlan(ctx context.Context, db sqliteQueryer, project string,
 			if qErr != nil {
 				return OptimizeVegPreview{}, nil, nil, qErr
 			}
-			for rows.Next() {
-				if err := ctx.Err(); err != nil {
-					_ = rows.Close()
-					return OptimizeVegPreview{}, nil, nil, err
-				}
-				if err := rows.Scan(dest...); err != nil {
-					_ = rows.Close()
-					return OptimizeVegPreview{}, nil, nil, err
-				}
-				if storages[plotColIdx] != "text" || storages[sppColIdx] != "text" {
-					continue
-				}
-				var plot, spp string
-				switch b := vals[plotColIdx].(type) {
-				case []byte:
-					plot = string(b)
-				case string:
-					plot = b
-				}
-				switch b := vals[sppColIdx].(type) {
-				case []byte:
-					spp = string(b)
-				case string:
-					spp = b
-				}
-				if !dupKeys[vegGroupKey{plot: plot, species: spp}] {
-					continue
-				}
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+				for rows.Next() {
+					if err := ctx.Err(); err != nil {
 
-				cellMap := make(map[string]rawSQLiteCell, len(cols))
-				for i, col := range cols {
-					c := rawSQLiteCell{storage: storages[i]}
-					switch storages[i] {
-					case "integer":
-						if v, ok := vals[i].(int64); ok {
-							c.intVal = v
-						}
-					case "real":
-						if v, ok := vals[i].(float64); ok {
-							c.realVal = v
-						}
-					case "text", "blob":
-						switch b := vals[i].(type) {
-						case []byte:
-							c.bytes = append([]byte(nil), b...)
-						case string:
-							c.bytes = []byte(b)
-						}
+						return err
 					}
-					cellMap[col] = c
+					if err := rows.Scan(dest...); err != nil {
+
+						return err
+					}
+					if storages[plotColIdx] != "text" || storages[sppColIdx] != "text" {
+						continue
+					}
+					var plot, spp string
+					switch b := vals[plotColIdx].(type) {
+					case []byte:
+						plot = string(b)
+					case string:
+						plot = b
+					}
+					switch b := vals[sppColIdx].(type) {
+					case []byte:
+						spp = string(b)
+					case string:
+						spp = b
+					}
+					if !dupKeys[vegGroupKey{plot: plot, species: spp}] {
+						continue
+					}
+
+					cellMap := make(map[string]rawSQLiteCell, len(cols))
+					for i, col := range cols {
+						c := rawSQLiteCell{storage: storages[i]}
+						switch storages[i] {
+						case "integer":
+							if v, ok := vals[i].(int64); ok {
+								c.intVal = v
+							}
+						case "real":
+							if v, ok := vals[i].(float64); ok {
+								c.realVal = v
+							}
+						case "text", "blob":
+							switch b := vals[i].(type) {
+							case []byte:
+								c.bytes = append([]byte(nil), b...)
+							case string:
+								c.bytes = []byte(b)
+							}
+						}
+						cellMap[col] = c
+					}
+					dupRows = append(dupRows, vegRowWithRowID{rowID: rid, cells: cellMap})
 				}
-				dupRows = append(dupRows, vegRowWithRowID{rowID: rid, cells: cellMap})
-			}
-			if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+				return rows.Err()
+			}(); err != nil {
 				return OptimizeVegPreview{}, nil, nil, err
 			}
 		}
@@ -355,30 +367,33 @@ func buildOptimizeVegPlan(ctx context.Context, db sqliteQueryer, project string,
 			if aErr != nil {
 				return OptimizeVegPreview{}, nil, nil, aErr
 			}
-			for aRows.Next() {
-				var aPlot, aTable, aField, aWhen string
-				var aID int64
-				if err := aRows.Scan(&aPlot, &aTable, &aField, &aWhen, &aID); err != nil {
-					_ = aRows.Close()
-					return OptimizeVegPreview{}, nil, nil, err
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, aRows.Close()) }()
+				for aRows.Next() {
+					var aPlot, aTable, aField, aWhen string
+					var aID int64
+					if err := aRows.Scan(&aPlot, &aTable, &aField, &aWhen, &aID); err != nil {
+
+						return err
+					}
+					tgt, ok := retiredTargetByID[aID]
+					if !ok {
+						continue
+					}
+					_, _ = fmt.Fprintf(digestHasher, "audit:%d:%s:%s:%s|", aID, aTable, aField, aWhen)
+					ref := OptimizeVegAuditRef{
+						PlotNumber: tgt.plot,
+						Species:    tgt.species,
+						RetiredID:  aID,
+						Table:      aTable,
+						EditField:  aField,
+						EditWhen:   aWhen,
+					}
+					gk := vegGroupKey{plot: tgt.plot, species: tgt.species}
+					auditRefsByKey[gk] = append(auditRefsByKey[gk], ref)
 				}
-				tgt, ok := retiredTargetByID[aID]
-				if !ok {
-					continue
-				}
-				_, _ = fmt.Fprintf(digestHasher, "audit:%d:%s:%s:%s|", aID, aTable, aField, aWhen)
-				ref := OptimizeVegAuditRef{
-					PlotNumber: tgt.plot,
-					Species:    tgt.species,
-					RetiredID:  aID,
-					Table:      aTable,
-					EditField:  aField,
-					EditWhen:   aWhen,
-				}
-				gk := vegGroupKey{plot: tgt.plot, species: tgt.species}
-				auditRefsByKey[gk] = append(auditRefsByKey[gk], ref)
-			}
-			if err := errors.Join(aRows.Err(), aRows.Close()); err != nil {
+				return aRows.Err()
+			}(); err != nil {
 				return OptimizeVegPreview{}, nil, nil, err
 			}
 		}

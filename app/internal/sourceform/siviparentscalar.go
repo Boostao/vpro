@@ -1,14 +1,12 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"reflect"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SIVIParentCellEdit struct {
@@ -20,9 +18,10 @@ type SIVIParentCellEdit struct {
 	Value     vprocore.ProjectMetadataCell `json:"value"`
 }
 
-type SiviParentScalarEdit = SIVIParentCellEdit
+type SourceParentCellEdit = SIVIParentCellEdit
+type SourceParentScalarEdit = SourceParentCellEdit
 
-type SiviParentScalarAssignment struct {
+type SourceParentScalarAssignment struct {
 	ContextID, Table, RowID, Column string
 	Before, After                   vprocore.ProjectMetadataCell
 	Value                           any
@@ -38,13 +37,13 @@ var SiviParentScalarOwners = map[string]string{
 	"SV_FloodPlain":         "Env",
 }
 
-// Planning preserves the labelled literal membership adaptation. It does not
+// PlanSourceParentScalars — Planning preserves the labelled literal membership adaptation. It does not
 // authorize a write or resolve the still-unverified full parent lifecycle.
-func PlanSIVIParentScalars(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable, edits []SiviParentScalarEdit) ([]SiviParentScalarAssignment, error) {
-	return planSIVIParentCells(ctx, contextID, project, plot, env, admin, edits, SiviParentScalarOwners, ValidateSIVIParentScalar)
+func PlanSourceParentScalars(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable, edits []SourceParentScalarEdit) ([]SourceParentScalarAssignment, error) {
+	return planSIVIParentCells(ctx, contextID, project, plot, env, admin, edits, SiviParentScalarOwners, ValidateSourceParentScalar)
 }
 
-func ValidateSIVIParentScalar(column string, value vprocore.ProjectMetadataCell) error {
+func ValidateSourceParentScalar(column string, value vprocore.ProjectMetadataCell) error {
 	if column == "SV_FloodPlain" {
 		if value.Storage != "null" &&
 			(value.Storage != "integer" || value.Integer == nil || (*value.Integer != "0" && *value.Integer != "-1")) {
@@ -58,11 +57,11 @@ func ValidateSIVIParentScalar(column string, value vprocore.ProjectMetadataCell)
 	return vprocore.ValidateParentSoilSingle(column, nil, value.Real)
 }
 
-func planSIVIParentCells(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable, edits []SiviParentScalarEdit, owners map[string]string, validate func(string, vprocore.ProjectMetadataCell) error) ([]SiviParentScalarAssignment, error) {
+func planSIVIParentCells(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable, edits []SourceParentScalarEdit, owners map[string]string, validate func(string, vprocore.ProjectMetadataCell) error) ([]SourceParentScalarAssignment, error) {
 	return planSIVIParentSourceCells(ctx, contextID, project, plot, env, admin, edits, owners, nil, validate)
 }
 
-func planSIVIParentSourceCells(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable, edits []SiviParentScalarEdit, owners map[string]string, implicit map[string]bool, validate func(string, vprocore.ProjectMetadataCell) error) ([]SiviParentScalarAssignment, error) {
+func planSIVIParentSourceCells(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable, edits []SourceParentScalarEdit, owners map[string]string, implicit map[string]bool, validate func(string, vprocore.ProjectMetadataCell) error) ([]SourceParentScalarAssignment, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -76,22 +75,22 @@ func planSIVIParentSourceCells(ctx context.Context, contextID, project, plot str
 	return PlanProjectedParentCells(ctx, contextID, project, parent, edits, owners, implicit, validate)
 }
 
-func PlanProjectedParentCells(ctx context.Context, contextID, project string, parent *SiviParentProjection, edits []SiviParentScalarEdit, owners map[string]string, implicit map[string]bool, validate func(string, vprocore.ProjectMetadataCell) error) ([]SiviParentScalarAssignment, error) {
+func PlanProjectedParentCells(ctx context.Context, contextID, project string, parent *SourceParentProjection, edits []SourceParentScalarEdit, owners map[string]string, implicit map[string]bool, validate func(string, vprocore.ProjectMetadataCell) error) ([]SourceParentScalarAssignment, error) {
 	return PlanPreparedParentCells(ctx, contextID, project, parent, edits, owners, implicit, nil,
 		func(left, right vprocore.ProjectMetadataCell) bool { return reflect.DeepEqual(left, right) }, validate)
 }
 
-func PlanPreparedParentCells(ctx context.Context, contextID, project string, parent *SiviParentProjection, edits []SiviParentScalarEdit, owners map[string]string, implicit map[string]bool,
+func PlanPreparedParentCells(ctx context.Context, contextID, project string, parent *SourceParentProjection, edits []SourceParentScalarEdit, owners map[string]string, implicit map[string]bool,
 	prepare func(string, vprocore.ProjectMetadataCell) (vprocore.ProjectMetadataCell, error), equal func(vprocore.ProjectMetadataCell, vprocore.ProjectMetadataCell) bool,
-	validate func(string, vprocore.ProjectMetadataCell) error) ([]SiviParentScalarAssignment, error) {
+	validate func(string, vprocore.ProjectMetadataCell) error) ([]SourceParentScalarAssignment, error) {
 	if len(parent.Rows) != 1 {
 		return nil, errors.New("SIVI parent planning requires one unambiguous physical Env/Admin pair")
 	}
-	bindings := map[string]SiviParentBinding{}
+	bindings := map[string]SourceParentBinding{}
 	for _, binding := range parent.Bindings {
 		bindings[binding.Binding] = binding
 	}
-	assignments := []SiviParentScalarAssignment{}
+	assignments := []SourceParentScalarAssignment{}
 	seen := map[[2]string]bool{}
 	for _, edit := range edits {
 		if err := ctx.Err(); err != nil {
@@ -143,7 +142,7 @@ func PlanPreparedParentCells(ctx context.Context, contextID, project string, par
 		if err := validate(edit.Column, after); err != nil {
 			return nil, err
 		}
-		assignments = append(assignments, SiviParentScalarAssignment{
+		assignments = append(assignments, SourceParentScalarAssignment{
 			ContextID: contextID, Table: edit.Table, RowID: row.RowID, Column: edit.Column,
 			Before: vprocore.CloneSiteUnitCell(before), After: vprocore.CloneSiteUnitCell(after), Value: value,
 		})
@@ -154,12 +153,12 @@ func PlanPreparedParentCells(ctx context.Context, contextID, project string, par
 	return assignments, nil
 }
 
-func PlanSIVIParentOptions(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable, edits []SiviParentScalarEdit) ([]SiviParentScalarAssignment, error) {
+func PlanSIVIParentOptions(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable, edits []SourceParentScalarEdit) ([]SourceParentScalarAssignment, error) {
 	owners := map[string]string{"SV_StandAgeEstMeas": "Env", "SV_StandHeightEstMeas": "Env"}
-	return planSIVIParentCells(ctx, contextID, project, plot, env, admin, edits, owners, ValidateSIVIParentOption)
+	return planSIVIParentCells(ctx, contextID, project, plot, env, admin, edits, owners, ValidateSourceParentOption)
 }
 
-func ValidateSIVIParentOption(column string, value vprocore.ProjectMetadataCell) error {
+func ValidateSourceParentOption(column string, value vprocore.ProjectMetadataCell) error {
 	if value.Storage != "null" && (value.Storage != "text" || value.Text == nil || (*value.Text != "1" && *value.Text != "2")) {
 		return fmt.Errorf("SIVI %s requires explicit NULL or source option TEXT1/2", column)
 	}

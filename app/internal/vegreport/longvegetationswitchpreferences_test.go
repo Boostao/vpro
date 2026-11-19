@@ -1,12 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -18,6 +12,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -270,17 +267,17 @@ func TestLongVegetationSwitchPreferencesOwnershipCleanupReplacementCancellationA
 		{CommitRead: func(*sql.Tx) error { return errors.New("read commit failure") }},
 		{RollbackRead: func(*sql.Tx) error { return errors.New("cleanup failure") }},
 	} {
-		service.snapshot = hooks
+		service.Snapshot = hooks
 		if got := service.SaveLongVegetationSwitchPreferences(context.Background(), state.ContextID, request); got.Committed || got.ErrorMessage == "" {
 			t.Fatal(got)
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	service.snapshot = vprocore.PublicationReadSnapshotHooks{CommitRead: func(*sql.Tx) error { cancel(); return nil }}
+	service.Snapshot = vprocore.PublicationReadSnapshotHooks{CommitRead: func(*sql.Tx) error { cancel(); return nil }}
 	if got := service.SaveLongVegetationSwitchPreferences(ctx, state.ContextID, request); got.Committed || got.ErrorMessage == "" {
 		t.Fatal(got)
 	}
-	service.snapshot = vprocore.PublicationReadSnapshotHooks{}
+	service.Snapshot = vprocore.PublicationReadSnapshotHooks{}
 	owner := contexts.Projects.Sqlite
 	path := owner.Attachments["project"]
 	owner.Attachments["project"] = path + ".unowned"

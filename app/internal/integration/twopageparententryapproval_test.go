@@ -1,21 +1,19 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/twopage"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/twopage"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestTwoPageEntryFixedApprovalAtomicWriterRollbackRetryAndRestoration(t *testing.T) {
@@ -51,10 +49,10 @@ func TestTwoPageEntryFixedApprovalAtomicWriterRollbackRetryAndRestoration(t *tes
 			},
 			Verify: func(_ *vprocore.PlotService, _ *sql.Tx) error { return vprocore.ProfileOwnedFiles(owner) },
 		}
-		write := func(acks []twopage.TwoPageEntryCodeAcknowledgementInternal) (*sourceform.SiviParentWriteResult, error) {
+		write := func(acks []twopage.TwoPageEntryCodeAcknowledgementInternal) (*sourceform.SourceParentWriteResult, error) {
 			return twopage.WriteTwoPageEntryWithLifecycle(contexts, context.Background(), state.ContextID, "108050", form,
 				snapshot.Original, edits, false,
-				func(tx *sql.Tx, original *sourceform.SiviParentProjection, assignments []sourceform.SiviParentScalarAssignment) error {
+				func(tx *sql.Tx, original *sourceform.SourceParentProjection, assignments []sourceform.SourceParentScalarAssignment) error {
 					return twopage.ApproveTwoPageEntryReferences(context.Background(), tx, owner, provider, state.ContextID, original,
 						assignments, acks, twopage.TwoPageEntryReferenceSelection{ProjectSource: 2, WorkingSource: 1}, twopage.TwoPageEntryReferenceAliases{Project: "main", Lists: "two_page_entry_refs", Su: ""})
 				}, lifecycle)
@@ -111,7 +109,7 @@ func TestTwoPageEntryFixedApprovalCurrentPlannedFiltersMembershipAndAcknowledgem
 		if err != nil {
 			t.Fatal(err)
 		}
-		var currentSeries sourceform.SIVIParentSharedReference
+		var currentSeries sourceform.SourceParentSharedReference
 		for _, acknowledgement := range acknowledgements {
 			if acknowledgement.Column == "SiteSeries" {
 				currentSeries = acknowledgement.Reference
@@ -138,7 +136,7 @@ func TestTwoPageEntryFixedApprovalCurrentPlannedFiltersMembershipAndAcknowledgem
 				}
 				for _, failure := range []string{"missing acknowledgement", "old BEC pair", "mandatory nonmember", "forged assignment",
 					"foreign context", "foreign form", "foreign aliases", "bad source", "unused acknowledgement", "project mutation", "cancelled"} {
-					current := append([]sourceform.SiviParentScalarAssignment{}, assignments...)
+					current := append([]sourceform.SourceParentScalarAssignment{}, assignments...)
 					acks := append([]twopage.TwoPageEntryCodeAcknowledgementInternal{}, acknowledgements...)
 					original := *fresh.Original
 					contextID := state.ContextID
@@ -155,7 +153,7 @@ func TestTwoPageEntryFixedApprovalCurrentPlannedFiltersMembershipAndAcknowledgem
 							}
 						}
 					case "mandatory nonmember":
-						bad := append([]sourceform.SiviParentScalarEdit{}, edits...)
+						bad := append([]sourceform.SourceParentScalarEdit{}, edits...)
 						for index := range bad {
 							if bad[index].Column == "MesoSlopePosition" {
 								bad[index].Value = vprotest.MetadataText("ZZ")
@@ -179,7 +177,7 @@ func TestTwoPageEntryFixedApprovalCurrentPlannedFiltersMembershipAndAcknowledgem
 						current = nil
 					case "project mutation":
 						projectEdit := sftest.SiviParentEdit(t, &original, "ProjectID", vprotest.MetadataText("new"))
-						current = append(current, sourceform.SiviParentScalarAssignment{ContextID: projectEdit.ContextID, Table: projectEdit.Table,
+						current = append(current, sourceform.SourceParentScalarAssignment{ContextID: projectEdit.ContextID, Table: projectEdit.Table,
 							RowID: projectEdit.RowID, Column: "ProjectID", Before: projectEdit.Expected, After: projectEdit.Value, Value: "new"})
 					case "cancelled":
 						cancelled, cancel := context.WithCancel(ctx)

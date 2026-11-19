@@ -1,16 +1,13 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
-
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 func QualityHeaderFields(h FS882Header) []BecHeaderField {
@@ -99,7 +96,7 @@ func validateQualityHeaderBeforeTransaction(db *sql.DB, project string, h FS882H
 	return validateQualityHeaderValues(h, &old)
 }
 
-// A token pass preserves each occurrence, including duplicate/case-folded keys,
+// UnmarshalJSON — A token pass preserves each occurrence, including duplicate/case-folded keys,
 // before encoding/json replaces malformed Unicode in string values.
 func (h *FS882Header) UnmarshalJSON(data []byte) error {
 	type headerAlias FS882Header

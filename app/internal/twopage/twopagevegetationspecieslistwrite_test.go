@@ -1,11 +1,6 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -14,6 +9,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func twoPageSpeciesListWriteFixture(t *testing.T, external bool, form string, strength int) (*vprocore.ContextService, vprocore.ProjectState, *sql.DB, twoPageVegetationRequest) {

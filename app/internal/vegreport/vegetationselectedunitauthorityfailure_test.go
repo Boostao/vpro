@@ -1,14 +1,12 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func TestSelectedUnitAuthorityHistorical2CannotInferSessionFields(t *testing.T) {

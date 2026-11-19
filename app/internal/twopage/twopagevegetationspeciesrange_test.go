@@ -1,15 +1,13 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"fmt"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestTwoPageVegetationSpeciesReferencesMasterLONGConsumer(t *testing.T) {

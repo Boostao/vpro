@@ -1,13 +1,6 @@
 package sivi
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +9,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func siviCombinedServiceFixture(t *testing.T, contexts *vprocore.ContextService) *SIVICombinedService {
@@ -84,7 +82,7 @@ func TestSIVICombinedServiceMixedTransactionHistoryAndTypedRecovery(t *testing.T
 	for _, extended := range []bool{false, true} {
 		for _, action := range []vprocore.AuditRestoreAction{vprocore.AuditRestoreRetain, vprocore.AuditRestorePrune} {
 			t.Run(strconv.FormatBool(extended)+"/"+string(action), func(t *testing.T) {
-				contexts, state, db, original, heights := sftest.SiviWriteFixture(t, extended, 3)
+				contexts, state, db, _, heights := sftest.SiviWriteFixture(t, extended, 3)
 				service := siviCombinedServiceFixture(t, contexts)
 				original, err := service.GetOriginal(context.Background(), state.ContextID, "108050", extended)
 				if err != nil {

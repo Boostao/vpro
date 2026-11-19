@@ -1,17 +1,15 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"math"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSummarySpeciesListLifeformPhysicalWeightsAndNullableNames(t *testing.T) {
@@ -147,6 +145,7 @@ func TestSummarySpeciesListOptionsRefusalCancellationAndRetry(t *testing.T) {
 			t.Fatal("malformed/foreign preparation returned partial output", got, err)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if got, err := planSiteUnitSpeciesList(nil, input, options); err == nil || got != nil {
 		t.Fatal("missing context accepted", got, err)
 	}

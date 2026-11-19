@@ -1,17 +1,15 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"math"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIIdentityPlanningNullableSigned32AndSharedPhysicalRows(t *testing.T) {
@@ -158,7 +156,7 @@ func TestSIVIIdentityReturnOccupantsPreserveHistoricalDuplicates(t *testing.T) {
 	if *veg.Rows[1].Cells[0].Integer != "0" {
 		t.Fatal("return occupancy aliases physical source")
 	}
-	if err := ValidateSIVIIdentityCell("ID", vprotest.MetadataInteger(strings.Repeat("1", 30))); err == nil {
+	if err := ValidateSourceIdentityCell("ID", vprotest.MetadataInteger(strings.Repeat("1", 30))); err == nil {
 		t.Fatal("overlong ID text parsed as an integer")
 	}
 }

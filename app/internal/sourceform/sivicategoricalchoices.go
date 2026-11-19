@@ -1,14 +1,12 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type siviCategoricalChoices struct {

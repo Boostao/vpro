@@ -23,7 +23,7 @@ func aggregateSummaryVegetationCovers(ctx context.Context, covers []vprocore.Pro
 		return fail(err)
 	}
 	if numPlots < 1 || numPlots > math.MaxInt32 {
-		return fail(errors.New("summary vegetation aggregation requires positive signed32 original plot count"))
+		return fail(errors.New("summary vegetation aggregation requires positive plot count"))
 	}
 	count := int64(0)
 	sum, absolute := new(big.Rat), new(big.Rat)
@@ -45,7 +45,7 @@ func aggregateSummaryVegetationCovers(ctx context.Context, covers []vprocore.Pro
 			return fail(fmt.Errorf("summary vegetation joined cover %d lacks exact original SINGLE staging", i+1))
 		}
 		if count == math.MaxInt32 {
-			return fail(errors.New("summary vegetation non-NULL cover count exceeds original signed32 range"))
+			return fail(errors.New("summary vegetation non-NULL cover count exceeds original valid count range"))
 		}
 		count++
 		sum.Add(sum, number)
@@ -97,22 +97,6 @@ type summaryVegetationCellInput struct {
 	Average  *float64
 }
 
-// The caller owns the joined aggregates. This preserves the source Variant
-// before the crosstab infers/coerces its column type.
-func calculateSummaryVegetationCover(ctx context.Context, input summaryVegetationCellInput, average int) (vprocore.ProjectMetadataCell, error) {
-	fail := func(err error) (vprocore.ProjectMetadataCell, error) { return vprocore.ProjectMetadataCell{}, err }
-	if err := validateSummaryVegetationCellInput(ctx, input, average); err != nil {
-		return fail(err)
-	}
-	if input.Count == 0 {
-		return vprocore.ProjectMetadataCell{Storage: "null"}, nil
-	}
-	if reportcore.SiteUnitFixedNumber(float64(input.Count)/float64(input.NumPlots), 4, 1) == "0.0000" {
-		return fail(errors.New("summary vegetation formatted cover count is empty; original numeric criteria comparison is unavailable"))
-	}
-	return formatSummaryVegetationCover(ctx, input, average)
-}
-
 func validateSummaryVegetationCellInput(ctx context.Context, input summaryVegetationCellInput, average int) error {
 	if ctx == nil {
 		return errors.New("summary vegetation cover calculation requires a context")
@@ -124,7 +108,7 @@ func validateSummaryVegetationCellInput(ctx context.Context, input summaryVegeta
 		return errors.New("summary vegetation cover requires original Average1 or2")
 	}
 	if input.NumPlots < 1 || input.NumPlots > math.MaxInt32 || input.Count < 0 || input.Count > math.MaxInt32 {
-		return errors.New("summary vegetation cover requires positive original plot count and nonnegative signed32 cover count")
+		return errors.New("summary vegetation cover requires positive original plot count and nonnegative cover count")
 	}
 	for _, value := range []*float64{input.Sum, input.Average} {
 		if value != nil && (math.IsNaN(*value) || math.IsInf(*value, 0)) {

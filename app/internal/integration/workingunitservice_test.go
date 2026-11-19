@@ -1,11 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -16,6 +11,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func workingUnitCodes(rows []vprocore.WorkingUnitChoice) []string {
@@ -82,7 +80,7 @@ func TestWorkingUnitFrozenMasterChoicesAndReadOnly(t *testing.T) {
 	if !first || !last || !foundV13 || !negative || !positive || duplicates != 34 {
 		t.Fatalf("source identities/duplicates lost: first=%v last=%v v13=%v signs=%v/%v duplicates=%d", first, last, foundV13, negative, positive, duplicates)
 	}
-	if _, err := service.Db.Exec(`DELETE FROM WorkingUnits`); err == nil {
+	if _, err := service.DB.Exec(`DELETE FROM WorkingUnits`); err == nil {
 		t.Fatal("frozen connection permits reference writes")
 	}
 	encoded, err := json.Marshal(rows[0])
@@ -120,7 +118,7 @@ func TestWorkingUnitMasterNullableDuplicateAndLevelShape(t *testing.T) {
  ('user','1','-2','USER ONLY',NULL,NULL,11);`); err != nil {
 		t.Fatal(err)
 	}
-	service := &vprocore.WorkingUnitService{Db: db}
+	service := &vprocore.WorkingUnitService{DB: db}
 	rows, err := service.GetMasterWorkingUnitChoices(context.Background())
 	if err != nil || len(rows) != 4 {
 		t.Fatalf("raw Level11 shape: %#v %v", rows, err)

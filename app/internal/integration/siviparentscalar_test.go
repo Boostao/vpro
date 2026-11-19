@@ -1,18 +1,16 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"math"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIParentScalarPlanAllSourceFieldsAndBounds(t *testing.T) {
@@ -32,14 +30,14 @@ func TestSIVIParentScalarPlanAllSourceFieldsAndBounds(t *testing.T) {
 			}
 			for _, number := range validNumbers {
 				edit.Value = vprotest.SiviReal(number)
-				got, err := sourceform.PlanSIVIParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit})
+				got, err := sourceform.PlanSourceParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit})
 				if err != nil || len(got) != 1 || got[0].Value != number || got[0].Column != column ||
 					got[0].ContextID != "owned" || got[0].RowID != edit.RowID || got[0].Table != edit.Table {
 					t.Fatal("SINGLE range/precision or physical ownership changed", got, err)
 				}
 			}
 			edit.Value = vprocore.ProjectMetadataCell{Storage: "null"}
-			got, err := sourceform.PlanSIVIParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit})
+			got, err := sourceform.PlanSourceParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit})
 			if err != nil || len(got) != 1 || got[0].Value != nil {
 				t.Fatal("explicit nullable numeric change lost", got, err)
 			}
@@ -49,7 +47,7 @@ func TestSIVIParentScalarPlanAllSourceFieldsAndBounds(t *testing.T) {
 				vprotest.SiviReal(math.NaN()), vprotest.SiviReal(math.Inf(1)), vprotest.MetadataText("3"), vprotest.MetadataInteger("3"),
 			}, extraInvalid...) {
 				edit.Value = invalid
-				if got, err := sourceform.PlanSIVIParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit}); err == nil || got != nil {
+				if got, err := sourceform.PlanSourceParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit}); err == nil || got != nil {
 					t.Fatal("invalid new numeric value returned a plan", got, err)
 				}
 			}
@@ -61,7 +59,7 @@ func TestSIVIParentScalarFloodplainStorageAndHistoricalOmission(t *testing.T) {
 	env, admin, edit := sftest.SiviScalarFixture(t, "SV_FloodPlain", vprotest.MetadataInteger("2"))
 	for _, cell := range []vprocore.ProjectMetadataCell{vprotest.MetadataInteger("-1"), vprotest.MetadataInteger("0"), {Storage: "null"}} {
 		edit.Value = cell
-		got, err := sourceform.PlanSIVIParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit})
+		got, err := sourceform.PlanSourceParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit})
 		if err != nil || len(got) != 1 || !reflect.DeepEqual(got[0].Before, vprotest.MetadataInteger("2")) || !reflect.DeepEqual(got[0].After, cell) {
 			t.Fatal("BOOLEAN normalization rewrote original history or new storage", got, err)
 		}
@@ -71,7 +69,7 @@ func TestSIVIParentScalarFloodplainStorageAndHistoricalOmission(t *testing.T) {
 	}
 	for _, cell := range []vprocore.ProjectMetadataCell{vprotest.MetadataInteger("1"), vprotest.MetadataInteger("3"), vprotest.SiviReal(-1), vprotest.MetadataText("true")} {
 		edit.Value = cell
-		if got, err := sourceform.PlanSIVIParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit}); err == nil || got != nil {
+		if got, err := sourceform.PlanSourceParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit}); err == nil || got != nil {
 			t.Fatal("non-Access BOOLEAN accepted as a new assignment", got, err)
 		}
 	}
@@ -83,7 +81,7 @@ func TestSIVIParentScalarFloodplainStorageAndHistoricalOmission(t *testing.T) {
 		} {
 			env, admin, edit := sftest.SiviScalarFixture(t, column, historical)
 			edit.Value = historical
-			got, err := sourceform.PlanSIVIParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit})
+			got, err := sourceform.PlanSourceParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit})
 			if err != nil || got == nil || len(got) != 0 {
 				t.Fatal("unchanged invalid historical cell became an assignment", column, got, err)
 			}
@@ -119,7 +117,7 @@ func TestSIVIParentScalarPlanRejectsForeignRepeatedStaleAndExcludedTargets(t *te
 			case "implicit":
 				invalid.Column = "SpeciesListComplete"
 			}
-			if got, err := sourceform.PlanSIVIParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{valid, invalid}); err == nil || got != nil {
+			if got, err := sourceform.PlanSourceParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{valid, invalid}); err == nil || got != nil {
 				t.Fatal("invalid tail leaked partial plan", kind, got, err)
 			}
 		})
@@ -133,19 +131,19 @@ func TestSIVIParentScalarPlanRejectsForeignRepeatedStaleAndExcludedTargets(t *te
 			admin.Rows = append(admin.Rows, admin.Rows[0])
 			admin.Rows[1].RowID = "-900"
 		}
-		if got, err := sourceform.PlanSIVIParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit}); err == nil || got != nil {
+		if got, err := sourceform.PlanSourceParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit}); err == nil || got != nil {
 			t.Fatal("ambiguous joined parents authorized a scalar plan", got, err)
 		}
 	}
 	for _, plot := range []string{"missing", "108050 "} {
-		if got, err := sourceform.PlanSIVIParentScalars(context.Background(), "owned", "Sample", plot, env, admin, []sourceform.SiviParentScalarEdit{valid}); err == nil || got != nil {
+		if got, err := sourceform.PlanSourceParentScalars(context.Background(), "owned", "Sample", plot, env, admin, []sourceform.SourceParentScalarEdit{valid}); err == nil || got != nil {
 			t.Fatal("foreign/orphan literal parent accepted", got, err)
 		}
 	}
-	if got, err := sourceform.PlanSIVIParentScalars(context.Background(), "", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{valid}); err == nil || got != nil {
+	if got, err := sourceform.PlanSourceParentScalars(context.Background(), "", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{valid}); err == nil || got != nil {
 		t.Fatal("unowned context accepted", got, err)
 	}
-	if got, err := sourceform.PlanSIVIParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, nil); err == nil || got != nil {
+	if got, err := sourceform.PlanSourceParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, nil); err == nil || got != nil {
 		t.Fatal("implicit empty edit request accepted", got, err)
 	}
 }
@@ -153,7 +151,7 @@ func TestSIVIParentScalarPlanRejectsForeignRepeatedStaleAndExcludedTargets(t *te
 func TestSIVIParentScalarPlanCloneIsolationAndInFlightCancellation(t *testing.T) {
 	env, admin, edit := sftest.SiviScalarFixture(t, "SV_StandHeight", vprotest.SiviReal(2))
 	edit.Value = vprotest.SiviReal(3)
-	got, err := sourceform.PlanSIVIParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit})
+	got, err := sourceform.PlanSourceParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit})
 	if err != nil || len(got) != 1 {
 		t.Fatal(got, err)
 	}
@@ -168,7 +166,7 @@ func TestSIVIParentScalarPlanCloneIsolationAndInFlightCancellation(t *testing.T)
 	}
 	for _, remaining := range []int{1, 10000 - probe.Remaining + 2} {
 		ctx := &vprotest.VegetationCancelContext{Context: context.Background(), Remaining: remaining}
-		got, err := sourceform.PlanSIVIParentScalars(ctx, "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit})
+		got, err := sourceform.PlanSourceParentScalars(ctx, "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit})
 		if !errors.Is(err, context.Canceled) || got != nil {
 			t.Fatal("cancelled scalar planning returned output", got, err)
 		}
@@ -178,17 +176,17 @@ func TestSIVIParentScalarPlanCloneIsolationAndInFlightCancellation(t *testing.T)
 func TestSIVIParentScalarMixedEnvAdminPlanRetainsSeparateOwners(t *testing.T) {
 	env, admin, height := sftest.SiviScalarFixture(t, "SV_StandHeight", vprotest.SiviReal(2))
 	height.Value = vprotest.SiviReal(0.1)
-	var total sourceform.SiviParentScalarEdit
+	var total sourceform.SourceParentScalarEdit
 	for i, column := range admin.Columns {
 		if column.Name == "StrataCoverTotal" {
 			admin.Rows[0].Cells[i] = vprotest.SiviReal(-7)
-			total = sourceform.SiviParentScalarEdit{
+			total = sourceform.SourceParentScalarEdit{
 				ContextID: "owned", Table: "Sample_Admin", RowID: admin.Rows[0].RowID,
 				Column: column.Name, Expected: vprotest.SiviReal(-7), Value: vprotest.SiviReal(125),
 			}
 		}
 	}
-	got, err := sourceform.PlanSIVIParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{height, total})
+	got, err := sourceform.PlanSourceParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{height, total})
 	if err != nil || len(got) != 2 || got[0].Table != "Sample_Env" || got[1].Table != "Sample_Admin" ||
 		got[0].RowID != env.Rows[0].RowID || got[1].RowID != admin.Rows[0].RowID ||
 		got[0].Value != 0.1 || got[1].Value != float64(125) {

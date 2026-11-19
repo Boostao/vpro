@@ -1,11 +1,11 @@
 package integration
 
 import (
+	"testing"
+
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
-
-import "testing"
 
 func TestPlotChild_AccessBooleanRoundtrip(t *testing.T) {
 	s, db := vprotest.ChildFixture(t)

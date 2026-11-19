@@ -2,7 +2,6 @@ package vegreport
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"math"
@@ -238,24 +237,4 @@ func reduceLongVegetationEntries(ctx context.Context, veg, layers vprocore.Proje
 		return fail(err)
 	}
 	return result, nil
-}
-
-func PreviewLongVegetationLayers(s *vprocore.ContextService, ctx context.Context, contextID string) (vegetationLayerReport, error) {
-	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (vegetationLayerReport, error) {
-		return vprocore.WithOwnedPreferenceSnapshot(ctx, plots, vprocore.PublicationReadSnapshotHooks{}, func(owner *vprocore.SqliteContext, tx *sql.Tx) (vegetationLayerReport, error) {
-			values, err := plots.Projects.Preferences.Snapshot()
-			if err != nil {
-				return vegetationLayerReport{}, err
-			}
-			options, err := DecodeOwnedLongVegetationOptions(s, ctx, plots, tx, values)
-			if err != nil {
-				return vegetationLayerReport{}, err
-			}
-			if err := CheckLongVegetationGrouping(s, options); err != nil {
-				return vegetationLayerReport{}, err
-			}
-			source, err := readLongVegetationReportSource(ctx, owner, tx, options)
-			return source.Report, err
-		})
-	})
 }

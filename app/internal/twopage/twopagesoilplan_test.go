@@ -1,11 +1,6 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +8,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 var soilPlanSourceFields = map[string][]string{
@@ -268,6 +266,7 @@ func TestTwoPageSoilPlanOwnershipSchemaAndIdentityRefusals(t *testing.T) {
 	if got, err := planTwoPageSoilEdits(ctx, original, []twoPageSoilEdit{edit}); !errors.Is(err, context.Canceled) || got != nil {
 		t.Fatal("cancelled planning succeeded")
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if got, err := planTwoPageSoilEdits(nil, original, []twoPageSoilEdit{edit}); err == nil || got != nil {
 		t.Fatal("nil planning context accepted")
 	}

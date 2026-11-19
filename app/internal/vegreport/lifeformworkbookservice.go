@@ -23,26 +23,6 @@ type lifeformWorkbookInput struct {
 	Tables     []vprocore.ProjectMetadataTable
 }
 
-func ReadLifeformWorkbookInput(c *vprocore.ContextService, ctx context.Context, contextID string, hooks vprocore.PublicationReadSnapshotHooks) (lifeformWorkbookInput, error) {
-	if ctx == nil {
-		return lifeformWorkbookInput{}, errors.New("Lifeform workbook requires a context")
-	}
-	if err := ctx.Err(); err != nil {
-		return lifeformWorkbookInput{}, err
-	}
-	if c == nil || c.Projects == nil || c.Projects.Sqlite == nil || c.Plots == nil {
-		return lifeformWorkbookInput{}, errors.New("Lifeform workbook context service is unavailable")
-	}
-	if err := vprocore.ValidateGoogleEarthReviewStrings(contextID); err != nil {
-		return lifeformWorkbookInput{}, err
-	}
-	return vprocore.WithContextPlotRequest(ctx, c, contextID, func(plots *vprocore.PlotService) (lifeformWorkbookInput, error) {
-		return vprocore.WithOwnedPreferenceSnapshot(ctx, plots, hooks, func(owner *vprocore.SqliteContext, tx *sql.Tx) (lifeformWorkbookInput, error) {
-			return readLifeformWorkbookSource(ctx, owner, tx, contextID)
-		})
-	})
-}
-
 func readLifeformWorkbookSource(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx, contextID string) (lifeformWorkbookInput, error) {
 	if owner.Selection.SU == "None" {
 		return lifeformWorkbookInput{}, errors.New("Lifeform workbook requires a selected normal SU or USysSuTableDynamic; None scope is unavailable")
@@ -228,7 +208,7 @@ func (s *LifeformWorkbookService) GetReview(ctx context.Context, contextID, requ
 			if err != nil {
 				return nil, err
 			}
-			layout := lifeformWorkbookLayout{Details: request.Details}
+			layout := lifeformWorkbookLayout(request)
 			workbook, err := prepareLifeformSummaryWorkbook(ctx, input.Lifeform, input.Attributes, layout)
 			if err != nil {
 				return nil, err
@@ -311,32 +291,16 @@ func (s *LifeformWorkbookService) exportReviewed(ctx context.Context, contextID,
 			}
 			return nil
 		}
-		result, publishErr := vprocore.PublishArtifactChecked(ctx, request.Destination, vprocore.ArtifactPublicationFormat{
-			Label: "Lifeform Summary workbook", Artifact: "XLSX", CommitLabel: "workbook",
-			StagePattern: ".vpro-lifeform-workbook-*",
-			Encode: func(ctx context.Context) ([]byte, error) {
-				if err := ctx.Err(); err != nil {
-					return nil, err
-				}
-				return bytes.Clone(workbook.Bytes), nil
-			},
-			Validate: func(ctx context.Context, actual []byte) error {
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				if !bytes.Equal(actual, workbook.Bytes) {
-					return errors.New("staged Lifeform workbook differs from reviewed bytes")
-				}
-				return nil
-			},
-		}, validateSource, hooks.publication)
-		if result.Published {
-			publishErr = errors.Join(publishErr, validateSource())
-			if publishErr != nil {
-				publishErr = fmt.Errorf("Workbook published; do not replay: %w", publishErr)
-			}
-		}
-		receipt := vprocore.ArtifactPublicationOutcome(request.Destination, result, publishErr, "Lifeform Summary workbook")
+		receipt := vprocore.PublishReviewedWorkbookBytes(
+			ctx,
+			request.Destination,
+			"Lifeform Summary workbook",
+			".vpro-lifeform-workbook-*",
+			"staged Lifeform workbook differs from reviewed bytes",
+			workbook.Bytes,
+			validateSource,
+			hooks.publication,
+		)
 		return &LifeformWorkbookOutcome{receipt.Status, receipt.RequestedDestination, receipt.Path, receipt.SHA256, receipt.ErrorMessage}, nil
 	})
 }

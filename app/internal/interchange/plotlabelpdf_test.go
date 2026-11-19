@@ -113,8 +113,8 @@ func TestPlotLabelPDFRefusesUnsupportedProjection(t *testing.T) {
 	}{
 		{"owner", "matching saved-plot owner", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { p.ContextID = "" }},
 		{"identity", "matching saved-plot owner", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { p.Header.PlotNumber = "P02" }},
-		{"long-zone", "UTF-16 bound", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { s := "ABCDE"; p.Header.Zone = &s }},
-		{"long-project", "UTF-16 bound", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { s := strings.Repeat("x", 51); p.Header.ProjectID = &s }},
+		{"long-zone", "maximum character length", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { s := "ABCDE"; p.Header.Zone = &s }},
+		{"long-project", "maximum character length", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { s := strings.Repeat("x", 51); p.Header.ProjectID = &s }},
 		{"combined-zone", "Zone1", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { s := strings.Repeat("x", 46); p.Header.SiteSeries = &s }},
 		{"invalid-utf8", "repairing source text", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { s := string([]byte{0xff}); p.Header.ProjectID = &s }},
 		{"nul", "repairing source text", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { s := "a\x00"; p.Header.PlotRepresenting = &s }},
@@ -181,6 +181,7 @@ func TestPlotLabelPDFNullZoneNonUSLocaleAndAccentedGlyphs(t *testing.T) {
 
 func TestPlotLabelPDFContextAndMissingFonts(t *testing.T) {
 	preview := plotLabelPDFTestPreview()
+	//lint:ignore SA1012 intentional nil-context guard test
 	if output, err := renderPlotLabelPDF(nil, preview, plotLabelPDFFonts{}); err == nil || output != nil {
 		t.Fatalf("nil context: %q, %v", output, err)
 	}

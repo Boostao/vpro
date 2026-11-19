@@ -1,21 +1,18 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/boostao/vpro/app/internal/fs882layout"
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type TwoPageEntryReferenceField struct {
-	sourceform.SiviParentSharedReferencePolicy
+	sourceform.SourceParentSharedReferencePolicy
 	storage string
 }
 
@@ -77,27 +74,27 @@ func twoPageEntryReferenceFields(form string) ([]TwoPageEntryReferenceField, err
 	if err != nil {
 		return nil, err
 	}
-	policies := map[string]sourceform.SiviParentSharedReferencePolicy{}
-	for _, field := range sourceform.SiviParentSharedReferenceFields {
+	policies := map[string]sourceform.SourceParentSharedReferencePolicy{}
+	for _, field := range sourceform.SourceParentSharedReferenceFields {
 		policies[field.Column] = field
 	}
 	for _, field := range vprocore.ParentCodeDescriptors {
-		policies[field.Name] = sourceform.SiviParentSharedReferencePolicy{Column: field.Name, List: field.List, Reader: "parent", Maximum: field.Maximum, Required: false}
+		policies[field.Name] = sourceform.SourceParentSharedReferencePolicy{Column: field.Name, List: field.List, Reader: "parent", Maximum: field.Maximum, Required: false}
 	}
 	for _, field := range vprocore.GeologyHeaderFields(vprocore.FS882Header{}) {
-		policies[field.Name] = sourceform.SiviParentSharedReferencePolicy{Column: field.Name, List: "BedrockType", Reader: "geology", Maximum: field.Maximum, Required: false}
+		policies[field.Name] = sourceform.SourceParentSharedReferencePolicy{Column: field.Name, List: "BedrockType", Reader: "geology", Maximum: field.Maximum, Required: false}
 	}
 	for _, field := range vprocore.QualityHeaderFields(vprocore.FS882Header{}) {
-		policies[field.Name] = sourceform.SiviParentSharedReferencePolicy{Column: field.Name, List: "PlotQualitySite", Reader: "quality", Maximum: field.Maximum, Required: false}
+		policies[field.Name] = sourceform.SourceParentSharedReferencePolicy{Column: field.Name, List: "PlotQualitySite", Reader: "quality", Maximum: field.Maximum, Required: false}
 	}
 	for _, field := range vprocore.SoilHeaderFields(vprocore.FS882Header{}) {
 		list := "SoilClassGroup"
 		if field.Name == "SoilClassSubGroup" {
 			list = "SoilClassSubgroup"
 		}
-		policies[field.Name] = sourceform.SiviParentSharedReferencePolicy{Column: field.Name, List: list, Reader: "soil", Maximum: field.Maximum, Required: false}
+		policies[field.Name] = sourceform.SourceParentSharedReferencePolicy{Column: field.Name, List: list, Reader: "soil", Maximum: field.Maximum, Required: false}
 	}
-	for _, field := range []sourceform.SiviParentSharedReferencePolicy{
+	for _, field := range []sourceform.SourceParentSharedReferencePolicy{
 		{Column: "ProjectID", List: "ProjectID", Reader: "project", Maximum: 30, Required: false},
 		{Column: "PlotType", List: "PlotType", Reader: "family", Maximum: 10, Required: false},
 		{Column: "LocationAccuracy", List: "accuracy", Reader: "family", Maximum: 6, Required: false},

@@ -1,14 +1,12 @@
 package reportcore
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"math"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func siteUnitNumericCells(values ...float64) []vprocore.ProjectMetadataCell {
@@ -34,7 +32,7 @@ func TestSiteUnitNumericMean(t *testing.T) {
 		{"SeepageDepth", []float64{-3.125, -1.125}, 0, "-3.13----2.1----1.13"},
 		{"RootingDepth", []float64{1000, 1234.5, 999}, 0, "1---1077.8---999"},
 		{"StrataCoverTree", []float64{-1234, -999}, 0, "-999----1116.5----1"},
-		{"Elevation", []float64{-0.0, 0, 0}, 0, "0---00---0"},
+		{"Elevation", []float64{math.Copysign(0, -1), 0, 0}, 0, "0---00---0"},
 		{"StandAge", []float64{-3, -2}, 0, "-3----03----2"},
 		{"SlopeGradient", []float64{2, 3}, 0, "2---3---3"},
 		{"SlopeGradient", []float64{3, 4}, 0, "3---4---4"},

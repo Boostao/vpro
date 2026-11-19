@@ -1,11 +1,6 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"archive/zip"
 	"bytes"
 	"context"
@@ -23,6 +18,8 @@ import (
 	"testing"
 
 	"github.com/boostao/vpro/app/internal/reports/subzonematrix"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -405,6 +402,7 @@ func TestSubzoneMatrixWorkbookRefusalsAndLiteralFormulaText(t *testing.T) {
 
 func TestSubzoneMatrixWorkbookCancellationAndNoLabels(t *testing.T) {
 	source := subzoneMatrixWorkbookFixture(t)
+	//lint:ignore SA1012 intentional nil-context guard test
 	if result, err := prepareSubzoneMatrixWorkbook(nil, source); err == nil || !reflect.DeepEqual(result, subzoneMatrixWorkbook{}) {
 		t.Fatal("nil workbook context accepted")
 	}

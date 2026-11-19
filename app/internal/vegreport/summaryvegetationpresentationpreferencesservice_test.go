@@ -1,10 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -14,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func summaryPresentationRequest(t *testing.T, expected, proposed SummaryVegetationPresentationPreferenceValues, applied bool) string {
@@ -101,6 +99,7 @@ func TestSummaryPresentationFacadeIndependentGateAndOwner(t *testing.T) {
 			t.Fatal(got)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if got, err := service.GetSummaryVegetationPresentationPreferences(nil, state.ContextID); got != nil || err == nil {
 		t.Fatal(got, err)
 	}

@@ -514,7 +514,7 @@ func buildSynthJet4DatabaseBytes(
 		{Name: "Name", Type: synthColText, IsFixed: false, Size: 255},
 		{Name: "LvProp", Type: synthColOLE, IsFixed: false, Size: 0},
 	}
-	page2 := buildSynthJet4TableDefPage(1, (1<<8)|0, (1<<8)|1, msysCols)
+	page2 := buildSynthJet4TableDefPage(1, 1<<8, (1<<8)|1, msysCols)
 	msysRow := packSynthJet4Row(msysCols, []synthCell{
 		synthInt32Cell(4),
 		synthInt16Cell(1),
@@ -563,7 +563,7 @@ func buildSynthJet3DatabaseBytes(
 		{Name: "Name", Type: synthColText, IsFixed: false, Size: 255},
 		{Name: "LvProp", Type: synthColOLE, IsFixed: false, Size: 0},
 	}
-	page2 := buildSynthJet3TableDefPage(1, (1<<8)|0, (1<<8)|1, msysCols)
+	page2 := buildSynthJet3TableDefPage(1, 1<<8, (1<<8)|1, msysCols)
 	msysRow := packSynthJet3Row(msysCols, []synthCell{
 		synthInt32Cell(4),
 		synthInt16Cell(1),

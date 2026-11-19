@@ -162,22 +162,22 @@ func (s *ClassificationService) SearchBECSiteSeries(ctx context.Context, zone, s
 	return s.bec.SearchBECSiteSeries(ctx, zone, subZone, query, limit)
 }
 
-func (s *ClassificationService) GetWorkingUnitMode() (WorkingUnitModeState, error) {
+func (s *ClassificationService) GetWorkingUnitMode(ctx context.Context) (WorkingUnitModeState, error) {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.workingUnits == nil {
 		return WorkingUnitModeState{}, errors.New("working unit service is unavailable")
 	}
-	return s.workingUnits.GetWorkingUnitMode()
+	return s.workingUnits.GetWorkingUnitModeContext(ctx)
 }
 
-func (s *ClassificationService) SetWorkingUnitMode(mode string) (WorkingUnitModeState, error) {
+func (s *ClassificationService) SetWorkingUnitMode(ctx context.Context, mode string) (WorkingUnitModeState, error) {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.workingUnits == nil {
 		return WorkingUnitModeState{}, errors.New("working unit service is unavailable")
 	}
-	return s.workingUnits.SetWorkingUnitMode(mode)
+	return s.workingUnits.SetWorkingUnitModeContext(ctx, mode)
 }
 
 func (s *ClassificationService) GetWorkingUnitChoices(ctx context.Context, mode string) ([]WorkingUnitChoice, error) {
@@ -261,13 +261,13 @@ func (s *ClassificationService) ListPlotProfileSources(ctx context.Context, cont
 	return s.contexts.ListPlotProfileSources(ctx, contextID, path)
 }
 
-func (s *ClassificationService) SelectPlotProfile(expectedID string, requested PlotProfileSource) (ProjectState, error) {
+func (s *ClassificationService) SelectPlotProfile(ctx context.Context, expectedID string, requested PlotProfileSource) (ProjectState, error) {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.contexts == nil {
 		return ProjectState{}, errors.New("classification context is unavailable")
 	}
-	return s.contexts.SelectPlotProfile(expectedID, requested)
+	return s.contexts.SelectPlotProfile(ctx, expectedID, requested)
 }
 
 func (s *ClassificationService) SetPlotProfileEditing(ctx context.Context, expectedID string, request PlotProfileWriteRequest) (ProjectState, error) {

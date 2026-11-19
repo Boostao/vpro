@@ -32,7 +32,7 @@ func ParentProfile() Profile {
 	}
 }
 
-// The 15-list capture and the earlier Bedrock capture have separate immutable seals.
+// ParentSnapshotRows — The 15-list capture and the earlier Bedrock capture have separate immutable seals.
 func ParentSnapshotRows(data, captureProvenance, manifest, bedrock []byte, p Provenance) ([]Choice, error) {
 	if err := ValidateProvenanceFor(p, ParentProfile()); err != nil {
 		return nil, err

@@ -1,25 +1,23 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func summaryStrataReferenceFixture(t *testing.T, options SummaryVegetationReferenceOptions) (
 	veg, su, master, personal, layers vprocore.ProjectMetadataTable, plan summaryVegetationReferencePlan) {
 	t.Helper()
-	veg, su, master, personal, layers = summaryGroupedRawTables(t)
+	veg, su, master, _, layers = summaryGroupedRawTables(t)
 	master.Columns = append(master.Columns, vprocore.ProjectMetadataColumn{Name: "IsAttribute"},
 		vprocore.ProjectMetadataColumn{Name: "CombinedEnglishName"})
 	for i := range master.Rows {

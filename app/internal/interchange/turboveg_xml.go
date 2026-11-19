@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/boostao/vpro/app/internal/sqlutil"
+
 	"golang.org/x/text/encoding/charmap"
 )
 
@@ -60,7 +62,7 @@ func formatTVStandardDateAttr(raw string) string {
 	if len(s) <= 8 {
 		return s
 	}
-	return truncateUTF16Units(s, 8)
+	return sqlutil.TruncateUTF16(s, 8)
 }
 
 func defaultBraunBlanquetMidpoint(code string) (float64, bool) {
@@ -360,7 +362,7 @@ func allocateUniqueLookupCode(fullValue, baseSeed string, maxUnits int, codeByVa
 	if existing, ok := codeByValue[normFull]; ok {
 		return existing
 	}
-	cand := truncateUTF16Units(strings.TrimSpace(baseSeed), maxUnits)
+	cand := sqlutil.TruncateUTF16(strings.TrimSpace(baseSeed), maxUnits)
 	if cand != "" {
 		if prevDesc, used := descByCode[cand]; !used || prevDesc == normFull {
 			codeByValue[normFull] = cand
@@ -373,10 +375,10 @@ func allocateUniqueLookupCode(fullValue, baseSeed string, maxUnits int, codeByVa
 		suffix = strings.ToUpper(suffix)
 		var disambig string
 		if maxPrefix := maxUnits - len(suffix); maxPrefix > 0 {
-			prefix := truncateUTF16Units(strings.TrimSpace(baseSeed), maxPrefix)
+			prefix := sqlutil.TruncateUTF16(strings.TrimSpace(baseSeed), maxPrefix)
 			disambig = prefix + suffix
 		} else {
-			disambig = truncateUTF16Units(strings.Repeat("0", max(0, maxUnits-len(suffix)))+suffix, maxUnits)
+			disambig = sqlutil.TruncateUTF16(strings.Repeat("0", max(0, maxUnits-len(suffix)))+suffix, maxUnits)
 		}
 		if disambig == "" {
 			continue
@@ -398,7 +400,7 @@ func encodeTurboVegXML(ctx context.Context, ds tvDataset) ([]byte, error) {
 		projName = "VProExport"
 	}
 	todayStr := time.Now().UTC().Format("02/01/2006")
-	projCode := strings.ToUpper(truncateUTF16Units(projName, 3))
+	projCode := strings.ToUpper(sqlutil.TruncateUTF16(projName, 3))
 	if projCode == "" {
 		projCode = "VPR"
 	}
@@ -480,7 +482,7 @@ func encodeTurboVegXML(ctx context.Context, ds tvDataset) ([]byte, error) {
 			std.Syntaxon = allocateUniqueLookupCode(su, seed, 7, syntaxonCodeByFull, syntaxonSet)
 		}
 		if strings.TrimSpace(h.SiteNotes) != "" {
-			std.Remarks = truncateUTF16Units(strings.TrimSpace(h.SiteNotes), 56)
+			std.Remarks = sqlutil.TruncateUTF16(strings.TrimSpace(h.SiteNotes), 56)
 		}
 
 		udfs := make([]xmlPkgUDF, 0, 20)
@@ -627,9 +629,9 @@ func encodeTurboVegXML(ctx context.Context, ds tvDataset) ([]byte, error) {
 		if sci == "" {
 			sci = sp.SpeciesCode
 		}
-		letter := truncateUTF16Units(strings.TrimSpace(sp.LetterCode), 7)
+		letter := sqlutil.TruncateUTF16(strings.TrimSpace(sp.LetterCode), 7)
 		if letter == "" {
-			letter = truncateUTF16Units(strings.TrimSpace(sp.SpeciesCode), 7)
+			letter = sqlutil.TruncateUTF16(strings.TrimSpace(sp.SpeciesCode), 7)
 		}
 		doc.LookupTables.SpeciesList[i] = xmlSpeciesRecord{
 			NR:         sp.SpeciesNR,

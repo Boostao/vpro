@@ -1,12 +1,6 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -19,6 +13,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func summaryExtendedJSON(t *testing.T, request SiteUnitSummaryExtendedWorkbookOptions) string {
@@ -110,6 +108,7 @@ func TestSummaryExtendedPublicationStrictTransportAndScope(t *testing.T) {
 			t.Fatal("malformed extended transport accepted", malformed, err)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if value, err := reviewSiteUnitSummaryExtendedWorkbook(nil, service, state.ContextID, raw); err == nil || value != nil {
 		t.Fatal("nil context accepted", err)
 	}

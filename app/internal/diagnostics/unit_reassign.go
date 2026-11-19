@@ -201,7 +201,7 @@ func ReassignSynthesisPlotUnit(
 		return nil, errors.New("plotNumber must be valid non-empty UTF-8 without NUL")
 	}
 	if len(utf16.Encode([]rune(req.PlotNumber))) > 7 {
-		return nil, fmt.Errorf("plotNumber %q exceeds 7 UTF-16 code units", req.PlotNumber)
+		return nil, fmt.Errorf("plotNumber %q cannot exceed 7 characters", req.PlotNumber)
 	}
 
 	targetUnit := strings.TrimSpace(req.TargetSiteUnit)
@@ -209,7 +209,7 @@ func ReassignSynthesisPlotUnit(
 		return nil, errors.New("targetSiteUnit must be valid UTF-8 without NUL")
 	}
 	if len(utf16.Encode([]rune(targetUnit))) > 255 {
-		return nil, errors.New("targetSiteUnit exceeds 255 UTF-16 code units")
+		return nil, errors.New("targetSiteUnit cannot exceed 255 characters")
 	}
 	if targetUnit == "" {
 		return nil, errors.New("targetSiteUnit must not be empty")
@@ -408,27 +408,30 @@ func UndoSynthesisReassignment(
 			}
 			var items []histRow
 			undoneSet := map[int64]bool{}
-			for rows.Next() {
-				var id int64
-				var prop string
-				if sErr := rows.Scan(&id, &prop); sErr != nil {
-					rows.Close()
-					return sErr
-				}
-				var rec synthesisSUHistoryReceipt
-				if err := json.Unmarshal([]byte(prop), &rec); err != nil || !strings.EqualFold(rec.SU, suName) {
-					continue
-				}
-				switch rec.Kind {
-				case "synthesis_su_reassignment":
-					items = append(items, histRow{id: id, rec: rec})
-				case "synthesis_su_reassignment_undo":
-					if rec.UndoneHistoryID > 0 {
-						undoneSet[rec.UndoneHistoryID] = true
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+				for rows.Next() {
+					var id int64
+					var prop string
+					if sErr := rows.Scan(&id, &prop); sErr != nil {
+
+						return sErr
+					}
+					var rec synthesisSUHistoryReceipt
+					if err := json.Unmarshal([]byte(prop), &rec); err != nil || !strings.EqualFold(rec.SU, suName) {
+						continue
+					}
+					switch rec.Kind {
+					case "synthesis_su_reassignment":
+						items = append(items, histRow{id: id, rec: rec})
+					case "synthesis_su_reassignment_undo":
+						if rec.UndoneHistoryID > 0 {
+							undoneSet[rec.UndoneHistoryID] = true
+						}
 					}
 				}
-			}
-			if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+				return rows.Err()
+			}(); err != nil {
 				return err
 			}
 

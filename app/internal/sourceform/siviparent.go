@@ -1,12 +1,7 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
-
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,32 +10,29 @@ import (
 	"unicode/utf8"
 
 	"github.com/boostao/vpro/app/internal/fs882layout"
+	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/resources"
 )
 
 var siviParentLayoutJSON = resources.FS1333SIVILayoutJSON
 
-type SIVIParentBinding struct {
+type SourceParentBinding struct {
 	ControlID, Binding, Table string
 	Column                    int
 	Implicit                  bool
 }
 
-type SIVIParentRow struct {
+type SourceParentRow struct {
 	Env, Admin vprocore.ProjectMetadataRow
 }
 
-type SIVIParentProjection struct {
+type SourceParentProjection struct {
 	ContextID, Project, Plot, Form, Query, Membership string
 	EnvTable, AdminTable                              string
 	EnvColumns, AdminColumns                          []vprocore.ProjectMetadataColumn
-	Bindings                                          []SIVIParentBinding
-	Rows                                              []SIVIParentRow
+	Bindings                                          []SourceParentBinding
+	Rows                                              []SourceParentRow
 }
-
-type SiviParentBinding = SIVIParentBinding
-type SiviParentRow = SIVIParentRow
-type SiviParentProjection = SIVIParentProjection
 
 var SiviParentSourceLayout = sync.OnceValues(func() (*fs882layout.Layout, error) {
 	var layout fs882layout.Layout
@@ -53,7 +45,7 @@ var SiviParentSourceLayout = sync.OnceValues(func() (*fs882layout.Layout, error)
 	return &layout, nil
 })
 
-var SiviParentSourceBindings = sync.OnceValues(func() ([]SiviParentBinding, error) {
+var SiviParentSourceBindings = sync.OnceValues(func() ([]SourceParentBinding, error) {
 	layout, err := SiviParentSourceLayout()
 	if err != nil {
 		return nil, err
@@ -61,8 +53,8 @@ var SiviParentSourceBindings = sync.OnceValues(func() ([]SiviParentBinding, erro
 	return SourceSIVIParentBindings(layout.Forms[0].Fields, 77)
 })
 
-func SourceSIVIParentBindings(fields []fs882layout.Field, directCount int) ([]SiviParentBinding, error) {
-	bindings := []SiviParentBinding{}
+func SourceSIVIParentBindings(fields []fs882layout.Field, directCount int) ([]SourceParentBinding, error) {
+	bindings := []SourceParentBinding{}
 	seen := map[string]bool{}
 	for _, field := range fields {
 		if field.Binding == "" {
@@ -73,17 +65,17 @@ func SourceSIVIParentBindings(fields []fs882layout.Field, directCount int) ([]Si
 			return nil, errors.New("SIVI parent requires distinct read-only source bindings")
 		}
 		seen[key] = true
-		bindings = append(bindings, SiviParentBinding{ControlID: field.ControlID, Binding: field.Binding})
+		bindings = append(bindings, SourceParentBinding{ControlID: field.ControlID, Binding: field.Binding})
 	}
 	if len(bindings) != directCount || seen["specieslistcomplete"] {
 		return nil, fmt.Errorf("SIVI requires%d direct bindings and a distinct implicit species-list target", directCount)
 	}
-	return append(bindings, SiviParentBinding{Binding: "SpeciesListComplete", Implicit: true}), nil
+	return append(bindings, SourceParentBinding{Binding: "SpeciesListComplete", Implicit: true}), nil
 }
 
-// Literal BINARY membership is a SQLite adaptation, not proof of Access
+// ProjectSIVIParent — Literal BINARY membership is a SQLite adaptation, not proof of Access
 // Unicode collation/DISTINCTROW behavior. Every matching physical pair survives.
-func ProjectSIVIParent(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable) (*SiviParentProjection, error) {
+func ProjectSIVIParent(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable) (*SourceParentProjection, error) {
 	source, err := SiviParentSourceBindings()
 	if err != nil {
 		return nil, err
@@ -91,7 +83,7 @@ func ProjectSIVIParent(ctx context.Context, contextID, project, plot string, env
 	return ProjectSourceParent(ctx, contextID, project, plot, "frmSIVIsite", source, env, admin)
 }
 
-func ProjectSourceParent(ctx context.Context, contextID, project, plot, form string, source []SiviParentBinding, env, admin vprocore.ProjectMetadataTable) (*SiviParentProjection, error) {
+func ProjectSourceParent(ctx context.Context, contextID, project, plot, form string, source []SourceParentBinding, env, admin vprocore.ProjectMetadataTable) (*SourceParentProjection, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -126,12 +118,12 @@ func ProjectSourceParent(ctx context.Context, contextID, project, plot, form str
 		}
 		indexes[i] = index
 	}
-	result := &SiviParentProjection{
+	result := &SourceParentProjection{
 		ContextID: contextID, Project: project, Plot: plot, Form: form, Query: "USysEnv",
 		Membership: "literal-binary-inner-pairs", EnvTable: project + "_Env", AdminTable: project + "_Admin",
 		EnvColumns:   append([]vprocore.ProjectMetadataColumn(nil), env.Columns...),
 		AdminColumns: append([]vprocore.ProjectMetadataColumn(nil), admin.Columns...),
-		Bindings:     make([]SiviParentBinding, 0, len(source)), Rows: []SiviParentRow{},
+		Bindings:     make([]SourceParentBinding, 0, len(source)), Rows: []SourceParentRow{},
 	}
 	for _, binding := range source {
 		matches := 0
@@ -170,7 +162,7 @@ func ProjectSourceParent(ctx context.Context, contextID, project, plot, form str
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			pair := SiviParentRow{}
+			pair := SourceParentRow{}
 			for i, row := range []vprocore.ProjectMetadataRow{envRow, adminRow} {
 				cloned := vprocore.ProjectMetadataRow{RowID: row.RowID, Cells: make([]vprocore.ProjectMetadataCell, len(row.Cells))}
 				for j, cell := range row.Cells {

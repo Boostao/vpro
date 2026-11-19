@@ -1,16 +1,14 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func twoPageSpeciesListFixture() *twoPageVegetationSpeciesReferences {
@@ -119,6 +117,7 @@ func TestTwoPageSpeciesListRefusesIncompleteReferencesAndOwners(t *testing.T) {
 	if got, err := qualifyTwoPageVegetationSpeciesListSelection(canceled, twoPageSpeciesListFixture(), "A"); !errors.Is(err, context.Canceled) || got != nil {
 		t.Fatal("cancelled qualification returned a partial selection", got, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if got, err := qualifyTwoPageVegetationSpeciesListSelection(nil, twoPageSpeciesListFixture(), "A"); err == nil || got != nil {
 		t.Fatal("nil context accepted", got, err)
 	}

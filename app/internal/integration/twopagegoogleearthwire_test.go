@@ -1,16 +1,14 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/spatial"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/spatial"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 func TestTwoPageGoogleEarthProductionWireFixture(t *testing.T) {

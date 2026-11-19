@@ -290,15 +290,18 @@ func compileLumpSpecTx(ctx context.Context, tx *sql.Tx, project, projectPath str
 	if err != nil {
 		return LumpSpec{}, nil, nil, err
 	}
-	for pRows.Next() {
-		var s string
-		if err := pRows.Scan(&s); err != nil {
-			pRows.Close()
-			return LumpSpec{}, nil, nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, pRows.Close()) }()
+		for pRows.Next() {
+			var s string
+			if err := pRows.Scan(&s); err != nil {
+
+				return err
+			}
+			projectSpp[strings.ToUpper(strings.TrimSpace(s))] = true
 		}
-		projectSpp[strings.ToUpper(strings.TrimSpace(s))] = true
-	}
-	if err := pRows.Close(); err != nil {
+		return pRows.Err()
+	}(); err != nil {
 		return LumpSpec{}, nil, nil, err
 	}
 

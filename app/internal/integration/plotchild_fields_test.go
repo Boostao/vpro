@@ -1,18 +1,16 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
 	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func loadedChildRecord(t *testing.T, s *vprocore.PlotService, kind, plot string) reflect.Value {

@@ -1,12 +1,6 @@
 package pictures
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -18,6 +12,10 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const pictureDeletionHistoryTable = "__VPRO_PictureDeletionHistory"
@@ -25,7 +23,7 @@ const pictureDeletionHistorySQL = `CREATE TABLE "__VPRO_PictureDeletionHistory"(
 const pictureDeletionIdentityTable = "__VPRO_PictureDeletionIdentity"
 const pictureDeletionIdentitySQL = `CREATE TABLE "__VPRO_PictureDeletionIdentity"(ID INTEGER PRIMARY KEY,RequestID TEXT NOT NULL)`
 
-type pictureDeletionRequest struct {
+type PictureDeletionRequest struct {
 	RequestID  string                           `json:"requestId"`
 	ContextID  string                           `json:"contextId"`
 	Project    string                           `json:"project"`
@@ -34,7 +32,9 @@ type pictureDeletionRequest struct {
 	Original   vprocore.ProjectMetadataRow      `json:"original"`
 }
 
-func (request *pictureDeletionRequest) UnmarshalJSON(data []byte) error {
+type pictureDeletionRequest = PictureDeletionRequest
+
+func (request *PictureDeletionRequest) UnmarshalJSON(data []byte) error {
 	const operation = "picture deletion"
 	names := []string{"requestId", "contextId", "project", "plotNumber", "columns", "original"}
 	properties, err := sourceform.SourceChildJSONObject(data, operation, names, nil)
@@ -92,7 +92,7 @@ func preparePictureDeletion(request pictureDeletionRequest) (int64, int64, error
 	}
 	rowID, err := strconv.ParseInt(request.Original.RowID, 10, 64)
 	if err != nil || strconv.FormatInt(rowID, 10) != request.Original.RowID {
-		return 0, 0, errors.New("picture deletion requires an exact signed64 physical rowid")
+		return 0, 0, errors.New("picture deletion requires an exact record reference")
 	}
 	names := []string{"ID", "PicDir", "PicName", "PlotNumber", "PicComment"}
 	if len(request.Columns) != len(names) || len(request.Original.Cells) != len(names) {
@@ -112,7 +112,7 @@ func preparePictureDeletion(request pictureDeletionRequest) (int64, int64, error
 	}
 	number, err := strconv.ParseInt(*id.Integer, 10, 32)
 	if err != nil || strconv.FormatInt(number, 10) != *id.Integer {
-		return 0, 0, errors.New("picture deletion requires an exact existing signed32 identity")
+		return 0, 0, errors.New("picture deletion requires an exact existing record ID")
 	}
 	if parent.Storage != "text" || parent.Text == nil || *parent.Text != request.PlotNumber {
 		return 0, 0, errors.New("picture deletion original is outside the literal parent")

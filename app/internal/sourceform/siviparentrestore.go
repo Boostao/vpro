@@ -1,10 +1,6 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -13,13 +9,15 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-func ValidateSIVIParentHistoryOriginal(ctx context.Context, event SiviParentHistory, project, plot string) (*SiviParentProjection, error) {
+func ValidateSIVIParentHistoryOriginal(ctx context.Context, event SourceParentHistory, project, plot string) (*SourceParentProjection, error) {
 	return ValidateSourceParentHistoryOriginal(ctx, event, project, plot, ProjectSIVIParent)
 }
 
-func ValidateSourceParentHistoryOriginal(ctx context.Context, event SiviParentHistory, project, plot string, projectParent SourceParentProjector) (*SiviParentProjection, error) {
+func ValidateSourceParentHistoryOriginal(ctx context.Context, event SourceParentHistory, project, plot string, projectParent SourceParentProjector) (*SourceParentProjection, error) {
 	if event.Original == nil || event.Committed == nil || len(event.Changes) == 0 ||
 		event.Original.ContextID == "" || event.Original.ContextID != event.Committed.ContextID ||
 		event.Original.Project != project || event.Original.Plot != plot ||
@@ -43,7 +41,7 @@ func ValidateSourceParentHistoryOriginal(ctx context.Context, event SiviParentHi
 	return original, nil
 }
 
-func SiviParentHistoryAssignments(ctx context.Context, event SiviParentHistory, project, plot string) ([]SiviParentScalarAssignment, error) {
+func SiviParentHistoryAssignments(ctx context.Context, event SourceParentHistory, project, plot string) ([]SourceParentScalarAssignment, error) {
 	if event.ProjectAssignment != nil || event.EntryPlan != nil {
 		return nil, errors.New("ProjectID assignment history is not direct parent history")
 	}
@@ -53,7 +51,7 @@ func SiviParentHistoryAssignments(ctx context.Context, event SiviParentHistory, 
 	}
 	edits := SiviParentDirectEdits{}
 	for _, change := range event.Changes {
-		edit := SiviParentScalarEdit{original.ContextID, change.Table, change.RowID, change.Column, change.Before, change.After}
+		edit := SourceParentScalarEdit{original.ContextID, change.Table, change.RowID, change.Column, change.Before, change.After}
 		if _, scalar := SiviParentScalarOwners[change.Column]; scalar {
 			edits.Scalars = append(edits.Scalars, edit)
 			continue
@@ -80,20 +78,20 @@ func CtxRestoreSIVIParentDirect(s *vprocore.ContextService, ctx context.Context,
 	return RestoreSIVIParentHistory(s, ctx, contextID, plot, historyID, action, SiviParentDirectHistory)
 }
 
-func RestoreSIVIParentHistory(s *vprocore.ContextService, ctx context.Context, contextID, plot, historyID string, action vprocore.AuditRestoreAction, historyDomain SiviParentHistoryDomain) (*vprocore.AuditRestoreResult, error) {
+func RestoreSIVIParentHistory(s *vprocore.ContextService, ctx context.Context, contextID, plot, historyID string, action vprocore.AuditRestoreAction, historyDomain SourceParentHistoryDomain) (*vprocore.AuditRestoreResult, error) {
 	return RestoreSourceParentHistory(s, ctx, contextID, plot, historyID, action, historyDomain, ReadSIVIParentForWrite)
 }
 
-func RestoreSourceParentHistory(s *vprocore.ContextService, ctx context.Context, contextID, plot, historyID string, action vprocore.AuditRestoreAction, historyDomain SiviParentHistoryDomain, read func(context.Context, *sql.Tx, *vprocore.SqliteContext, string, string, string) (*SiviParentProjection, error)) (*vprocore.AuditRestoreResult, error) {
+func RestoreSourceParentHistory(s *vprocore.ContextService, ctx context.Context, contextID, plot, historyID string, action vprocore.AuditRestoreAction, historyDomain SourceParentHistoryDomain, read func(context.Context, *sql.Tx, *vprocore.SqliteContext, string, string, string) (*SourceParentProjection, error)) (*vprocore.AuditRestoreResult, error) {
 	return RestoreSourceParentHistoryAuthorized(s, ctx, contextID, plot, historyID, action, historyDomain, read, nil)
 }
 
-func RestoreSourceParentHistoryAuthorized(s *vprocore.ContextService, ctx context.Context, contextID, plot, historyID string, action vprocore.AuditRestoreAction, historyDomain SiviParentHistoryDomain, read func(context.Context, *sql.Tx, *vprocore.SqliteContext, string, string, string) (*SiviParentProjection, error), authorize func(*vprocore.PlotService) error) (*vprocore.AuditRestoreResult, error) {
+func RestoreSourceParentHistoryAuthorized(s *vprocore.ContextService, ctx context.Context, contextID, plot, historyID string, action vprocore.AuditRestoreAction, historyDomain SourceParentHistoryDomain, read func(context.Context, *sql.Tx, *vprocore.SqliteContext, string, string, string) (*SourceParentProjection, error), authorize func(*vprocore.PlotService) error) (*vprocore.AuditRestoreResult, error) {
 	return RestoreSourceParentHistoryCompared(s, ctx, contextID, plot, historyID, action, historyDomain, read, authorize,
-		func(left, right *SiviParentProjection) bool { return reflect.DeepEqual(left, right) })
+		func(left, right *SourceParentProjection) bool { return reflect.DeepEqual(left, right) })
 }
 
-func RestoreSourceParentHistoryCompared(s *vprocore.ContextService, ctx context.Context, contextID, plot, historyID string, action vprocore.AuditRestoreAction, historyDomain SiviParentHistoryDomain, read func(context.Context, *sql.Tx, *vprocore.SqliteContext, string, string, string) (*SiviParentProjection, error), authorize func(*vprocore.PlotService) error, equal func(*SiviParentProjection, *SiviParentProjection) bool) (*vprocore.AuditRestoreResult, error) {
+func RestoreSourceParentHistoryCompared(s *vprocore.ContextService, ctx context.Context, contextID, plot, historyID string, action vprocore.AuditRestoreAction, historyDomain SourceParentHistoryDomain, read func(context.Context, *sql.Tx, *vprocore.SqliteContext, string, string, string) (*SourceParentProjection, error), authorize func(*vprocore.PlotService) error, equal func(*SourceParentProjection, *SourceParentProjection) bool) (*vprocore.AuditRestoreResult, error) {
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (*vprocore.AuditRestoreResult, error) {
 		if action != vprocore.AuditRestoreCancel && action != vprocore.AuditRestoreRetain && action != vprocore.AuditRestorePrune {
 			return nil, errors.New("SIVI parent restoration requires cancel, retain or prune")
@@ -115,7 +113,7 @@ func RestoreSourceParentHistoryCompared(s *vprocore.ContextService, ctx context.
 		}
 		owner := plots.Projects.Sqlite
 		result := &vprocore.AuditRestoreResult{}
-		err = WithSIVIParentWriteTransaction(ctx, owner, "parent restoration", func(tx *sql.Tx, suAlias string) error {
+		err = WithSourceParentWriteTransaction(ctx, owner, "parent restoration", func(tx *sql.Tx, suAlias string) error {
 			if err := vprocore.VerifyTechnicalProvenance(ctx, tx, historyDomain.Table, historyDomain.Schema, historyDomain.Label); err != nil {
 				return err
 			}
@@ -136,7 +134,7 @@ func RestoreSourceParentHistoryCompared(s *vprocore.ContextService, ctx context.
 			}
 			decoder := json.NewDecoder(strings.NewReader(proposal))
 			decoder.DisallowUnknownFields()
-			var event SiviParentHistory
+			var event SourceParentHistory
 			if err := decoder.Decode(&event); err != nil {
 				return err
 			}

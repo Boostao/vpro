@@ -3,11 +3,12 @@ package spatial
 import (
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/resources"
 	"math"
 	"strings"
 	"sync"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/resources"
 )
 
 // ZoneElevationBounds returns BEC v13 / LMH25 expected elevation bounds (m) for BC biogeoclimatic zones.

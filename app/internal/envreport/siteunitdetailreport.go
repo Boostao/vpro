@@ -1,17 +1,15 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"math"
 	"sort"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SiteUnitSummaryField struct {
@@ -100,11 +98,6 @@ func siteUnitSummaryFields() []SiteUnitSummaryField {
 	}
 }
 
-func planSiteUnitSummary(ctx context.Context, project, suName string, method, maxJoinedRows int,
-	env, admin, su, master vprocore.ProjectMetadataTable) (SiteUnitSummaryReport, error) {
-	return planSiteUnitSummaryWithSource(ctx, project, suName, siteUnitDetailSelectedSU, method, maxJoinedRows, env, admin, su, master)
-}
-
 func planSiteUnitSummaryWithSource(ctx context.Context, project, suName string, source siteUnitDetailQuerySource, method, maxJoinedRows int,
 	env, admin, su, master vprocore.ProjectMetadataTable) (SiteUnitSummaryReport, error) {
 	fail := func(err error) (SiteUnitSummaryReport, error) { return SiteUnitSummaryReport{}, err }
@@ -154,7 +147,7 @@ func planSiteUnitSummaryWithSource(ctx context.Context, project, suName string, 
 		unit := SiteUnitSummaryUnit{Code: scopeUnit.Code, LongName: names.LongName, NameStatus: names.Status,
 			NameCandidates: names.Candidates, Plots: []SiteUnitSummaryPlot{}, Values: []string{}}
 		for _, plot := range scopeUnit.Plots {
-			unit.Plots = append(unit.Plots, SiteUnitSummaryPlot{plot.PlotNumber, plot.SURowID, plot.EnvRowID, plot.AdminRowID})
+			unit.Plots = append(unit.Plots, SiteUnitSummaryPlot(plot))
 		}
 		for _, field := range report.Fields {
 			if err := ctx.Err(); err != nil {

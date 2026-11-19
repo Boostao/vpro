@@ -1,10 +1,10 @@
 package classification
 
 import (
+	"context"
+
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
-
-import "context"
 
 func CreateProjectPlotProfileRule(s *vprocore.ContextService, ctx context.Context, contextID string, request ProjectPlotProfileCreation) (vprocore.ProjectMetadataRow, error) {
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (vprocore.ProjectMetadataRow, error) {

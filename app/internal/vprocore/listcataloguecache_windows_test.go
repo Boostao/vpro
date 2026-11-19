@@ -1,14 +1,12 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/references"
-)
-
-import (
 	"context"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/references"
 )
 
 func TestCatalogueCacheWindowsChangeTimeDetectsSameSizePreservedModTime(t *testing.T) {

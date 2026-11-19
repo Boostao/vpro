@@ -36,7 +36,7 @@ func collectedSIVIDrafts(ctx context.Context, edits []SIVICollectedEdit) ([]sour
 		}
 		id, err := strconv.ParseInt(edit.RowID, 10, 64)
 		if err != nil || strconv.FormatInt(id, 10) != edit.RowID {
-			return nil, errors.New("SIVI Collected requires the original signed64 physical row identity")
+			return nil, errors.New("SIVI Collected requires the original record reference")
 		}
 		if edit.Clicks < 1 || edit.Clicks > 3 {
 			return nil, errors.New("SIVI Collected requires exactly one to three clicks")

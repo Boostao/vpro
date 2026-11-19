@@ -1,10 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -14,6 +10,8 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type LongVegetationReportScope struct {
@@ -29,12 +27,14 @@ type LongVegetationReportScope struct {
 	BuildCurrent bool                                 `json:"buildCurrent"`
 }
 
-type vegetationScopeRequest struct {
+type LongVegetationScopeRequest struct {
 	Revision   string `json:"revision"`
 	SourceKind string `json:"sourceKind"`
 }
 
-func (request *vegetationScopeRequest) UnmarshalJSON(data []byte) error {
+type vegetationScopeRequest = LongVegetationScopeRequest
+
+func (request *LongVegetationScopeRequest) UnmarshalJSON(data []byte) error {
 	type plain vegetationScopeRequest
 	var decoded plain
 	if err := vprocore.DecodeStrictRequiredJSON(data, &decoded, "Long Vegetation report scope", "revision", "sourceKind"); err != nil {

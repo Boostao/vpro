@@ -1,30 +1,28 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"reflect"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-// Role authorization and preference leases remain the owned writer's responsibility.
+// ApproveTwoPageEntryReferences — Role authorization and preference leases remain the owned writer's responsibility.
 func ApproveTwoPageEntryReferences(ctx context.Context, tx *sql.Tx, owner *vprocore.SqliteContext,
-	provider *TwoPageEntryReferenceProvider, contextID string, original *sourceform.SiviParentProjection,
-	assignments []sourceform.SiviParentScalarAssignment, acknowledgements []TwoPageEntryCodeAcknowledgementInternal,
+	provider *TwoPageEntryReferenceProvider, contextID string, original *sourceform.SourceParentProjection,
+	assignments []sourceform.SourceParentScalarAssignment, acknowledgements []TwoPageEntryCodeAcknowledgementInternal,
 	selection TwoPageEntryReferenceSelection, aliases TwoPageEntryReferenceAliases) error {
 	return approveTwoPageEntryReferencesWithProject(ctx, tx, owner, provider, contextID, original,
 		assignments, acknowledgements, selection, aliases, nil)
 }
 
 func approveTwoPageEntryReferencesWithProject(ctx context.Context, tx *sql.Tx, owner *vprocore.SqliteContext,
-	provider *TwoPageEntryReferenceProvider, contextID string, original *sourceform.SiviParentProjection,
-	assignments []sourceform.SiviParentScalarAssignment, acknowledgements []TwoPageEntryCodeAcknowledgementInternal,
-	selection TwoPageEntryReferenceSelection, aliases TwoPageEntryReferenceAliases, projectPlan *sourceform.SiviProjectAssignmentPlan) error {
+	provider *TwoPageEntryReferenceProvider, contextID string, original *sourceform.SourceParentProjection,
+	assignments []sourceform.SourceParentScalarAssignment, acknowledgements []TwoPageEntryCodeAcknowledgementInternal,
+	selection TwoPageEntryReferenceSelection, aliases TwoPageEntryReferenceAliases, projectPlan *sourceform.SourceProjectAssignmentPlan) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -66,7 +64,7 @@ func approveTwoPageEntryReferencesWithProject(ctx context.Context, tx *sql.Tx, o
 	if err := verifyTwoPageEntryReferenceAliases(ctx, tx, owner, map[string]string{aliases.Project: "project", aliases.Lists: "VLists"}); err != nil {
 		return err
 	}
-	edits := []sourceform.SiviParentScalarEdit{}
+	edits := []sourceform.SourceParentScalarEdit{}
 	projectAssigned := false
 	for _, assignment := range assignments {
 		if assignment.Column == "ProjectID" {
@@ -76,7 +74,7 @@ func approveTwoPageEntryReferencesWithProject(ctx context.Context, tx *sql.Tx, o
 			}
 			projectAssigned = true
 		}
-		edits = append(edits, sourceform.SiviParentScalarEdit{ContextID: assignment.ContextID, Table: assignment.Table, RowID: assignment.RowID,
+		edits = append(edits, sourceform.SourceParentScalarEdit{ContextID: assignment.ContextID, Table: assignment.Table, RowID: assignment.RowID,
 			Column: assignment.Column, Expected: assignment.Before, Value: assignment.After})
 	}
 	if !projectAssigned && projectPlan != nil && len(projectPlan.Assignments) != 0 {
@@ -103,7 +101,7 @@ func approveTwoPageEntryReferencesWithProject(ctx context.Context, tx *sql.Tx, o
 	if len(filters) != 2 {
 		return errors.New("complete-entry reference approval requires both original BEC filter fields")
 	}
-	read := func(ctx context.Context, tx *sql.Tx, field TwoPageEntryReferenceField) (sourceform.SIVIParentSharedReference, error) {
+	read := func(ctx context.Context, tx *sql.Tx, field TwoPageEntryReferenceField) (sourceform.SourceParentSharedReference, error) {
 		switch field.Reader {
 		case "project", "master-unit", "working-unit":
 			return ReadTwoPageEntryContextReference(ctx, tx, owner, contextID, original.Form, selection, aliases, field)
@@ -112,16 +110,16 @@ func approveTwoPageEntryReferencesWithProject(ctx context.Context, tx *sql.Tx, o
 		}
 	}
 	if err := ApproveTwoPageEntryRequiredReferences(ctx, tx, original, assignments,
-		func(ctx context.Context, tx *sql.Tx, policy sourceform.SiviParentSharedReferencePolicy) (sourceform.SIVIParentSharedReference, error) {
+		func(ctx context.Context, tx *sql.Tx, policy sourceform.SourceParentSharedReferencePolicy) (sourceform.SourceParentSharedReference, error) {
 			field, exists := provider.Fields[policy.Column]
-			if !exists || field.SiviParentSharedReferencePolicy != policy {
-				return sourceform.SIVIParentSharedReference{}, errors.New("complete-entry required reference changed its source policy")
+			if !exists || field.SourceParentSharedReferencePolicy != policy {
+				return sourceform.SourceParentSharedReference{}, errors.New("complete-entry required reference changed its source policy")
 			}
 			return read(ctx, tx, field)
 		}); err != nil {
 		return err
 	}
-	optional := make([]sourceform.SiviParentScalarAssignment, 0, len(assignments))
+	optional := make([]sourceform.SourceParentScalarAssignment, 0, len(assignments))
 	for _, assignment := range assignments {
 		if assignment.Column != "ProjectID" {
 			optional = append(optional, assignment)

@@ -1,11 +1,6 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -15,6 +10,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const originalProfileTemplateSQL = `CREATE TABLE "USysProfileTable" (

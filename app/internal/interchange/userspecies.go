@@ -447,7 +447,7 @@ func validateAndNormalizeUserSpeciesRecords(records []UserSpeciesRecord) ([]User
 			return nil, errors.New("every user species entry must have a non-empty valid UTF-8 Code")
 		}
 		if len(utf16.Encode([]rune(code))) > 8 {
-			return nil, fmt.Errorf("user species code %q exceeds 8 UTF-16 code units", code)
+			return nil, fmt.Errorf("user species code %q cannot exceed 8 characters", code)
 		}
 		if seen[code] {
 			return nil, fmt.Errorf("duplicate species code %q in import payload", code)
@@ -461,7 +461,7 @@ func validateAndNormalizeUserSpeciesRecords(records []UserSpeciesRecord) ([]User
 		for label, ptr := range map[string]*string{"ScientificName": r.ScientificName, "EnglishName": r.EnglishName, "Codetype": r.Codetype} {
 			if ptr != nil {
 				if !utf8.ValidString(*ptr) || strings.ContainsRune(*ptr, 0) || len(utf16.Encode([]rune(*ptr))) > 255 {
-					return nil, fmt.Errorf("user species %s %s must be valid UTF-8 of at most 255 UTF-16 units", code, label)
+					return nil, fmt.Errorf("user species %s %s must be valid UTF-8 of at most 255 characters", code, label)
 				}
 			}
 		}
@@ -488,24 +488,27 @@ func buildUserSpeciesPreview(ctx context.Context, tx *sql.Tx, records []UserSpec
 	if err != nil {
 		return UserSpeciesImportPreview{}, err
 	}
-	for mRows.Next() {
-		var code, oldCode sql.NullString
-		var sci string
-		if err := mRows.Scan(&code, &oldCode, &sci); err != nil {
-			mRows.Close()
-			return UserSpeciesImportPreview{}, err
-		}
-		if code.Valid && strings.TrimSpace(code.String) != "" {
-			masterCodes[strings.ToUpper(strings.TrimSpace(code.String))] = sci
-		}
-		if oldCode.Valid && strings.TrimSpace(oldCode.String) != "" && code.Valid && strings.TrimSpace(code.String) != "" {
-			u := strings.ToUpper(strings.TrimSpace(oldCode.String))
-			if _, exists := masterCodes[u]; !exists {
-				masterCodes[u] = "synonym of " + strings.ToUpper(strings.TrimSpace(code.String))
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, mRows.Close()) }()
+		for mRows.Next() {
+			var code, oldCode sql.NullString
+			var sci string
+			if err := mRows.Scan(&code, &oldCode, &sci); err != nil {
+
+				return err
+			}
+			if code.Valid && strings.TrimSpace(code.String) != "" {
+				masterCodes[strings.ToUpper(strings.TrimSpace(code.String))] = sci
+			}
+			if oldCode.Valid && strings.TrimSpace(oldCode.String) != "" && code.Valid && strings.TrimSpace(code.String) != "" {
+				u := strings.ToUpper(strings.TrimSpace(oldCode.String))
+				if _, exists := masterCodes[u]; !exists {
+					masterCodes[u] = "synonym of " + strings.ToUpper(strings.TrimSpace(code.String))
+				}
 			}
 		}
-	}
-	if err := mRows.Close(); err != nil {
+		return mRows.Err()
+	}(); err != nil {
 		return UserSpeciesImportPreview{}, err
 	}
 
@@ -514,15 +517,18 @@ func buildUserSpeciesPreview(ctx context.Context, tx *sql.Tx, records []UserSpec
 	if err != nil {
 		return UserSpeciesImportPreview{}, err
 	}
-	for uRows.Next() {
-		var code, sci string
-		if err := uRows.Scan(&code, &sci); err != nil {
-			uRows.Close()
-			return UserSpeciesImportPreview{}, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, uRows.Close()) }()
+		for uRows.Next() {
+			var code, sci string
+			if err := uRows.Scan(&code, &sci); err != nil {
+
+				return err
+			}
+			userCodes[strings.ToUpper(strings.TrimSpace(code))] = sci
 		}
-		userCodes[strings.ToUpper(strings.TrimSpace(code))] = sci
-	}
-	if err := uRows.Close(); err != nil {
+		return uRows.Err()
+	}(); err != nil {
 		return UserSpeciesImportPreview{}, err
 	}
 

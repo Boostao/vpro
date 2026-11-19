@@ -1,11 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -14,6 +9,9 @@ import (
 	"reflect"
 	"sort"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type summaryVegetationAncillaryTables struct {
@@ -46,11 +44,6 @@ type summaryVegetationAncillaryPlan struct {
 	VersionStatus             string
 	Memberships               []summaryVegetationAncillaryMembership
 	Units                     []summaryVegetationAncillaryUnit
-}
-
-func readSummaryVegetationAncillaryTables(ctx context.Context, owner *vprocore.SqliteContext,
-	tx *sql.Tx) (summaryVegetationAncillaryTables, error) {
-	return readSummaryVegetationAncillaryTablesWithEnv(ctx, owner, tx, nil)
 }
 
 func readSummaryVegetationAncillaryTablesWithEnv(ctx context.Context, owner *vprocore.SqliteContext,
@@ -199,7 +192,7 @@ func prepareSummaryVegetationAncillary(ctx context.Context,
 			return fail(fmt.Errorf("Summary ancillary unit %q has ambiguous source First long names; no representative inferred", *code))
 		}
 		if counts[*code] > math.MaxInt64-unit.NumPlots {
-			return fail(errors.New("Summary ancillary joined plot count exceeds signed64"))
+			return fail(errors.New("Summary ancillary joined plot count exceeds maximum supported count"))
 		}
 		units[*code] = summaryVegetationAncillaryUnit{*code, unit.NumPlots + counts[*code], vprocore.CloneSiteUnitCell(longName)}
 	}

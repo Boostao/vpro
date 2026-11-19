@@ -1,12 +1,6 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -15,6 +9,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/mattn/go-sqlite3"
 )
 
@@ -261,4 +258,14 @@ func TestExternalSUEnvironmentReservationsAndCancellation(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TransferExternalSUEnvironment(s *vprocore.ContextService, ctx context.Context, contextID string,
+	approved *externalSUEnvironmentSource) (*SiteUnitEnvironmentResult, error) {
+	return TransferExternalSUEnvironmentWithHooks(s, ctx, contextID, approved, externalSUEnvironmentWriteHooks{})
+}
+
+func TransferExternalSUEnvironmentWithHooks(s *vprocore.ContextService, ctx context.Context, contextID string,
+	approved *externalSUEnvironmentSource, hooks externalSUEnvironmentWriteHooks) (*SiteUnitEnvironmentResult, error) {
+	return TransferExternalSUEnvironmentOwned(s, ctx, contextID, approved, nil, hooks)
 }

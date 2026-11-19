@@ -1,16 +1,14 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/references"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"errors"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 func catalogueReadFixture(t *testing.T) []struct {

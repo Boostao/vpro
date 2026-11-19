@@ -1,14 +1,9 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,6 +17,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/resources"
 	"go.yaml.in/yaml/v3"
 )

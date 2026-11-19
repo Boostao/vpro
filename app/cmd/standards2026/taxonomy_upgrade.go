@@ -165,11 +165,7 @@ func upgradeVListsFamilyAndReadModel(
 		}
 		var added any
 		if s.AddedDate != nil {
-			d := *s.AddedDate
-			if strings.HasSuffix(d, "T00:00:00") {
-				d = strings.TrimSuffix(d, "T00:00:00")
-			}
-			added = d
+			added = strings.TrimSuffix(*s.AddedDate, "T00:00:00")
 		}
 		var flagVal any
 		if s.Flag != nil {

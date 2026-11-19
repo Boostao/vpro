@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/jackc/pgx/v5"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/jackc/pgx/v5"
 )
 
 // SeedBECMasterBaseline streams a VP08 SQLite project (e.g. 71,567-plot BECMaster_fixing.db)
@@ -490,13 +491,15 @@ func copySQLiteRetiredChildIdentities(ctx context.Context, tx pgx.Tx, sqliteDB *
 		if err != nil {
 			continue
 		}
-		for rows.Next() {
-			var id int64
-			if rows.Scan(&id) == nil {
-				pairs = append(pairs, [2]any{sp.pgName, id})
+		func() {
+			defer rows.Close()
+			for rows.Next() {
+				var id int64
+				if rows.Scan(&id) == nil {
+					pairs = append(pairs, [2]any{sp.pgName, id})
+				}
 			}
-		}
-		rows.Close()
+		}()
 	}
 	if len(pairs) == 0 {
 		return nil

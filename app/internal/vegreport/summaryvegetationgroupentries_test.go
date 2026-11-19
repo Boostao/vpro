@@ -1,13 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -19,6 +12,11 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 type summaryGroupRawFixture struct {
@@ -231,6 +229,7 @@ func TestSummaryVegetationGroupedRawOwnershipGuardsAndCancellation(t *testing.T)
 	}
 	fixture, prepared := summaryRawGroupFixture(t)
 	union := summaryRawGroupReferences(t, fixture.References["ordinary"])
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := prepareSummaryVegetationGroupedEntries(nil, prepared, union, 12); err == nil {
 		t.Fatal("nil context accepted")
 	}

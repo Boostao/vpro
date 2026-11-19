@@ -265,29 +265,32 @@ func scanEnvPlotConcatRows(
 	}
 	var envComputed []envPlotConcat
 	seenEnvPlot := map[string]bool{}
-	for rows.Next() {
-		vals := make([]string, len(request.Fields)+1)
-		ptrs := make([]any, len(vals))
-		for i := range vals {
-			ptrs[i] = &vals[i]
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			vals := make([]string, len(request.Fields)+1)
+			ptrs := make([]any, len(vals))
+			for i := range vals {
+				ptrs[i] = &vals[i]
+			}
+			if sErr := rows.Scan(ptrs...); sErr != nil {
+
+				return sErr
+			}
+			plotNum := vals[0]
+			if seenEnvPlot[plotNum] || len(utf16.Encode([]rune(plotNum))) > 7 {
+				continue
+			}
+			seenEnvPlot[plotNum] = true
+			unitStr, complete := concatenateEnvFieldValues(vals[1:], canonicalFields, request.Separator, request.FieldSeparators, request.UseBECSlashFormat)
+			if len(utf16.Encode([]rune(unitStr))) > 255 {
+
+				return fmt.Errorf("concatenated SiteUnit for plot %q cannot exceed 255 characters (%q)", plotNum, unitStr)
+			}
+			envComputed = append(envComputed, envPlotConcat{plot: plotNum, computed: unitStr, complete: complete})
 		}
-		if sErr := rows.Scan(ptrs...); sErr != nil {
-			rows.Close()
-			return nil, sErr
-		}
-		plotNum := vals[0]
-		if seenEnvPlot[plotNum] || len(utf16.Encode([]rune(plotNum))) > 7 {
-			continue
-		}
-		seenEnvPlot[plotNum] = true
-		unitStr, complete := concatenateEnvFieldValues(vals[1:], canonicalFields, request.Separator, request.FieldSeparators, request.UseBECSlashFormat)
-		if len(utf16.Encode([]rune(unitStr))) > 255 {
-			rows.Close()
-			return nil, fmt.Errorf("concatenated SiteUnit for plot %q exceeds 255 UTF-16 code units (%q)", plotNum, unitStr)
-		}
-		envComputed = append(envComputed, envPlotConcat{plot: plotNum, computed: unitStr, complete: complete})
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 	return envComputed, nil
@@ -308,23 +311,26 @@ func readExistingSURowMap(ctx context.Context, rtx *sql.Tx, targetRole, suTableN
 		return nil, err
 	}
 	existingSU := map[string]*string{}
-	for sRows.Next() {
-		var p, u sql.NullString
-		if err := sRows.Scan(&p, &u); err != nil {
-			sRows.Close()
-			return nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, sRows.Close()) }()
+		for sRows.Next() {
+			var p, u sql.NullString
+			if err := sRows.Scan(&p, &u); err != nil {
+
+				return err
+			}
+			if !p.Valid || strings.TrimSpace(p.String) == "" {
+				continue
+			}
+			if u.Valid && strings.TrimSpace(u.String) != "" {
+				val := strings.TrimSpace(u.String)
+				existingSU[p.String] = &val
+			} else {
+				existingSU[p.String] = nil
+			}
 		}
-		if !p.Valid || strings.TrimSpace(p.String) == "" {
-			continue
-		}
-		if u.Valid && strings.TrimSpace(u.String) != "" {
-			val := strings.TrimSpace(u.String)
-			existingSU[p.String] = &val
-		} else {
-			existingSU[p.String] = nil
-		}
-	}
-	if err := errors.Join(sRows.Err(), sRows.Close()); err != nil {
+		return sRows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 	return existingSU, nil

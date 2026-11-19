@@ -1,14 +1,12 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"path/filepath"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 func TestTwoPageSpeciesListClientSharedActualReceipts(t *testing.T) {

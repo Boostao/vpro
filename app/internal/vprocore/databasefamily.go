@@ -1,19 +1,17 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/resources"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/resources"
 )
 
 var DatabaseFamilyFiles = resources.DatabaseFamilyFS

@@ -514,8 +514,8 @@ func DeriveProjectMetadataFromPlots(s *vprocore.ContextService, ctx context.Cont
 	slices.Sort(codes)
 	out.RegionCodesMatched = codes
 	joinedRegions := strings.Join(codes, "; ")
-	if utf16Len(joinedRegions) > 255 {
-		for len(codes) > 0 && utf16Len(strings.Join(codes, "; ")) > 255 {
+	if sqlutil.UTF16Len(joinedRegions) > 255 {
+		for len(codes) > 0 && sqlutil.UTF16Len(strings.Join(codes, "; ")) > 255 {
 			codes = codes[:len(codes)-1]
 		}
 		joinedRegions = strings.Join(codes, "; ")
@@ -591,10 +591,10 @@ func ApplyProjectMetadataAutomation(s *vprocore.ContextService, ctx context.Cont
 	if targetPID == "" || strings.EqualFold(targetPID, derived.Project) {
 		targetPID = derived.ProjectID
 	}
-	if utf16Len(targetPID) > 20 {
-		targetPID = truncateUTF16(targetPID, 20)
+	if sqlutil.UTF16Len(targetPID) > 20 {
+		targetPID = sqlutil.TruncateUTF16(targetPID, 20)
 	}
-	if err := validateUTF16Max("Metadata.ProjectID", targetPID, 20); err != nil {
+	if err := sqlutil.ValidateUTF16Bound("Metadata.ProjectID", targetPID, 20); err != nil {
 		return ApplyProjectMetadataAutomationResult{}, err
 	}
 
@@ -624,10 +624,10 @@ func ApplyProjectMetadataAutomation(s *vprocore.ContextService, ctx context.Cont
 			if rErr != nil {
 				return rErr
 			}
-			if utf16Len(effectivePID) > 20 {
-				effectivePID = truncateUTF16(effectivePID, 20)
+			if sqlutil.UTF16Len(effectivePID) > 20 {
+				effectivePID = sqlutil.TruncateUTF16(effectivePID, 20)
 			}
-			if vErr := validateUTF16Max("Metadata.ProjectID", effectivePID, 20); vErr != nil {
+			if vErr := sqlutil.ValidateUTF16Bound("Metadata.ProjectID", effectivePID, 20); vErr != nil {
 				return vErr
 			}
 			targetPID = effectivePID

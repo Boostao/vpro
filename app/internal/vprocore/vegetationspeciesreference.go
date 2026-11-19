@@ -1,13 +1,11 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type VegetationSpeciesOption struct {

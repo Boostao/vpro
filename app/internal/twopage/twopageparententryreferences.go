@@ -1,23 +1,21 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-type TwoPageEntryReferenceReader func(context.Context, *sql.Tx, sourceform.SiviParentSharedReferencePolicy) (sourceform.SIVIParentSharedReference, error)
+type TwoPageEntryReferenceReader func(context.Context, *sql.Tx, sourceform.SourceParentSharedReferencePolicy) (sourceform.SourceParentSharedReference, error)
 
-func TwoPageEntryRequiredReferenceFields(form string) ([]sourceform.SiviParentSharedReferencePolicy, error) {
+func TwoPageEntryRequiredReferenceFields(form string) ([]sourceform.SourceParentSharedReferencePolicy, error) {
 	sources, err := twoPageParentSources()
 	if err != nil {
 		return nil, err
@@ -26,7 +24,7 @@ func TwoPageEntryRequiredReferenceFields(form string) ([]sourceform.SiviParentSh
 	if !exists {
 		return nil, errors.New("complete-entry references require an exact normal or CHARS source variant")
 	}
-	fields := []sourceform.SiviParentSharedReferencePolicy{}
+	fields := []sourceform.SourceParentSharedReferencePolicy{}
 	seen := map[string]bool{}
 	for _, control := range source.Forms[0].Fields {
 		limit, present := control.Properties["LimitToList"]
@@ -36,7 +34,7 @@ func TwoPageEntryRequiredReferenceFields(form string) ([]sourceform.SiviParentSh
 		if limit.Value != "NotDefault" || seen[control.Binding] {
 			return nil, errors.New("complete-entry required references contain an unreviewed source property or duplicate owner")
 		}
-		field, exists := sourceform.SiviParentSharedReferenceField(control.Binding)
+		field, exists := sourceform.SourceParentSharedReferenceField(control.Binding)
 		if !exists {
 			return nil, fmt.Errorf("complete-entry %s has no verified reference reader", control.Binding)
 		}
@@ -53,15 +51,15 @@ func TwoPageEntryRequiredReferenceFields(form string) ([]sourceform.SiviParentSh
 			return nil, fmt.Errorf("complete-entry required reference %s is missing", column)
 		}
 	}
-	slices.SortFunc(fields, func(left, right sourceform.SiviParentSharedReferencePolicy) int {
+	slices.SortFunc(fields, func(left, right sourceform.SourceParentSharedReferencePolicy) int {
 		return strings.Compare(left.Column, right.Column)
 	})
 	return fields, nil
 }
 
-// This checks mandatory membership only, not optional-code acknowledgements or publication.
-func ApproveTwoPageEntryRequiredReferences(ctx context.Context, tx *sql.Tx, original *sourceform.SiviParentProjection,
-	assignments []sourceform.SiviParentScalarAssignment, read TwoPageEntryReferenceReader) error {
+// ApproveTwoPageEntryRequiredReferences — This checks mandatory membership only, not optional-code acknowledgements or publication.
+func ApproveTwoPageEntryRequiredReferences(ctx context.Context, tx *sql.Tx, original *sourceform.SourceParentProjection,
+	assignments []sourceform.SourceParentScalarAssignment, read TwoPageEntryReferenceReader) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -76,7 +74,9 @@ func ApproveTwoPageEntryRequiredReferences(ctx context.Context, tx *sql.Tx, orig
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		index := slices.IndexFunc(fields, func(field sourceform.SiviParentSharedReferencePolicy) bool { return field.Column == assignment.Column })
+		index := slices.IndexFunc(fields, func(field sourceform.SourceParentSharedReferencePolicy) bool {
+			return field.Column == assignment.Column
+		})
 		if index < 0 || assignment.Value == nil {
 			continue
 		}

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"unicode/utf16"
 
+	"github.com/boostao/vpro/app/internal/sqlutil"
+
 	"github.com/go-ole/go-ole"
 )
 
@@ -41,12 +43,12 @@ func TestPictureNativeHRESULTAndShowCancellationAreDistinct(t *testing.T) {
 
 func TestPictureNativeUTF16PathIsLiteralAndRejectsRepair(t *testing.T) {
 	literal := `Q:\  Literal #100% 😀\Case.JpG`
-	got, err := pictureNativePathUTF16(utf16.Encode([]rune(literal)))
+	got, err := sqlutil.DecodeStrictUTF16Slice(utf16.Encode([]rune(literal, "native picture path")))
 	if got != literal || err != nil {
 		t.Fatal("native path was changed", got, err)
 	}
 	for _, units := range [][]uint16{{0}, {0xd800}, {0xdc00}, {0xd800, 'x'}, {'x', 0xdc00}, {0xd800, 0xd800}} {
-		if got, err := pictureNativePathUTF16(units); err == nil || got != "" {
+		if got, err := sqlutil.DecodeStrictUTF16Slice(units, "native picture path"); err == nil || got != "" {
 			t.Fatal("malformed native path was repaired", units, got, err)
 		}
 	}

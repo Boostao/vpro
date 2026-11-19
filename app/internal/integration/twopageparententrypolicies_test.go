@@ -1,17 +1,15 @@
 package integration
 
 import (
+	"context"
+	"strings"
+	"testing"
+
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/sourceform/sftest"
 	"github.com/boostao/vpro/app/internal/twopage"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
-	"context"
-	"strings"
-	"testing"
 )
 
 func TestTwoPageEntryFieldPoliciesExactPlannerDomains(t *testing.T) {
@@ -51,16 +49,16 @@ func TestTwoPageEntryFieldPoliciesExactPlannerDomains(t *testing.T) {
 				t.Fatal("unreviewed published parser domain", policy)
 			}
 			edit.Value = value
-			if _, err := twopage.PlanTwoPageEntryProjection(context.Background(), original, []sourceform.SiviParentScalarEdit{edit}, true); err != nil {
+			if _, err := twopage.PlanTwoPageEntryProjection(context.Background(), original, []sourceform.SourceParentScalarEdit{edit}, true); err != nil {
 				t.Fatal("advertised parser domain disagrees with actual planner", policy, err)
 			}
 			if policy.Maximum > 0 {
 				edit.Value = vprotest.MetadataText(strings.Repeat("x", policy.Maximum))
-				if _, err := twopage.PlanTwoPageEntryProjection(context.Background(), original, []sourceform.SiviParentScalarEdit{edit}, true); err != nil {
+				if _, err := twopage.PlanTwoPageEntryProjection(context.Background(), original, []sourceform.SourceParentScalarEdit{edit}, true); err != nil {
 					t.Fatal("advertised exact UTF-16 bound rejected by planner", policy, err)
 				}
 				edit.Value = vprotest.MetadataText(strings.Repeat("x", policy.Maximum+1))
-				if _, err := twopage.PlanTwoPageEntryProjection(context.Background(), original, []sourceform.SiviParentScalarEdit{edit}, true); err == nil {
+				if _, err := twopage.PlanTwoPageEntryProjection(context.Background(), original, []sourceform.SourceParentScalarEdit{edit}, true); err == nil {
 					t.Fatal("advertised overlength threshold accepted by planner", policy)
 				}
 			}

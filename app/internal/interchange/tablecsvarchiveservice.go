@@ -1,10 +1,6 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -13,6 +9,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type TableCSVArchiveService struct {

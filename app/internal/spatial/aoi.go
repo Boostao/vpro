@@ -337,7 +337,7 @@ func AssignSpatialAOIToSU(ctx context.Context, contexts *vprocore.ContextService
 		return nil, errors.New("siteUnit must be a non-empty UTF-8 string")
 	}
 	if len(utf16.Encode([]rune(siteUnit))) > 255 {
-		return nil, errors.New("siteUnit exceeds 255 UTF-16 code units")
+		return nil, errors.New("siteUnit cannot exceed 255 characters")
 	}
 
 	mode := strings.ToLower(strings.TrimSpace(req.Mode))

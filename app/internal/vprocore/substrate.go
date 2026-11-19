@@ -6,7 +6,7 @@ import (
 	"math"
 )
 
-// Retain finite imported overflow only when it equals the actual stored value.
+// ValidateSingleRangeChange — Retain finite imported overflow only when it equals the actual stored value.
 // New values preserve float64 precision within the native SINGLE range.
 func ValidateSingleRangeChange(property string, before, after *float64) error {
 	if after == nil {

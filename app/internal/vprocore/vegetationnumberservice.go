@@ -51,7 +51,7 @@ func (s *PlotService) UpdateVegetationNumbers(plot string, updates []VegetationN
 			return errors.New("vegetation numbers require nonempty matching values/expected/forms keys")
 		}
 		predicates := map[string]string{}
-		patch := ChildRecordPatch{Kind: "Veg", Id: update.ID, Cells: map[string]ChildExpectedValue{}}
+		patch := ChildRecordPatch{Kind: "Veg", ID: update.ID, Cells: map[string]ChildExpectedValue{}}
 		for property, value := range update.Values {
 			expected, present := update.Expected[property]
 			form := update.Forms[property]

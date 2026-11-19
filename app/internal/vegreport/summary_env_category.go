@@ -114,13 +114,6 @@ func summaryVegetationEnvironmentalCategoryField(function string) (string, bool)
 	}
 }
 
-func summaryVegetationEnvironmentalTextField(function string) (string, bool) {
-	if function == "SVSmr" || function == "SVBioGeoClimaticUnit" || function == "SVAspect" {
-		return "", false
-	}
-	return summaryVegetationEnvironmentalCategoryField(function)
-}
-
 func prepareSummaryVegetationEnvironmentalCategories(ctx context.Context, function string, siteUnit *string,
 	env, su vprocore.ProjectMetadataTable) (vprocore.ProjectMetadataCell, error) {
 	fail := func(err error) (vprocore.ProjectMetadataCell, error) {

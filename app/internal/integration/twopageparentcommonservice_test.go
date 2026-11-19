@@ -1,12 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/twopage"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +8,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/twopage"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestTwoPageParentCommonServiceOwnedReadsAndCancellation(t *testing.T) {

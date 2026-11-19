@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"runtime"
 	"syscall"
-	"unicode/utf16"
 	"unsafe"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 
 	"github.com/go-ole/go-ole"
 )
@@ -93,7 +94,7 @@ func (dialog *pictureWindowsFileDialog) ShowAndGetResult() (string, error) {
 	units := unsafe.Slice(path, 32768)
 	for end, value := range units {
 		if value == 0 {
-			return pictureNativePathUTF16(units[:end])
+			return sqlutil.DecodeStrictUTF16Slice(units[:end], "native picture path")
 		}
 	}
 	return "", errors.New("native picture filesystem path exceeds the Windows path bound")
@@ -120,19 +121,4 @@ func pictureNativeShowResult(result uintptr) error {
 		return fmt.Errorf("show native picture selection: %w", err)
 	}
 	return nil
-}
-
-func pictureNativePathUTF16(units []uint16) (string, error) {
-	for index := 0; index < len(units); index++ {
-		value := units[index]
-		if value >= 0xd800 && value <= 0xdbff {
-			if index+1 >= len(units) || units[index+1] < 0xdc00 || units[index+1] > 0xdfff {
-				return "", errors.New("native picture filesystem path contains invalid UTF-16")
-			}
-			index++
-		} else if value >= 0xdc00 && value <= 0xdfff || value == 0 {
-			return "", errors.New("native picture filesystem path contains invalid UTF-16")
-		}
-	}
-	return string(utf16.Decode(units)), nil
 }

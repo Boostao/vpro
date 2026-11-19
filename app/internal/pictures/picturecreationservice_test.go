@@ -1,10 +1,6 @@
 package pictures
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -21,6 +17,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 

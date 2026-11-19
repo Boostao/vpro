@@ -1,12 +1,10 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/references"
-)
-
-import (
 	"database/sql"
 	"fmt"
+
+	"github.com/boostao/vpro/app/internal/references"
 )
 
 type BecHeaderField struct {

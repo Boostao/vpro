@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -58,27 +59,10 @@ type LongVegetationSelectedFieldPreferencesReview struct {
 	Definitions []vprocore.ProjectMetadataColumn            `json:"definitions"`
 }
 
-type LongVegetationSelectedFieldPreferencesOutcome struct {
-	ContextID    string `json:"contextId"`
-	Changed      bool   `json:"changed"`
-	Committed    bool   `json:"committed"`
-	ErrorMessage string `json:"errorMessage"`
-}
+type LongVegetationSelectedFieldPreferencesOutcome = vprocore.ReportPreferenceOutcome
 
 type LongVegetationSelectedFieldPreferencesService struct {
-	contexts *vprocore.ContextService
-	snapshot vprocore.PublicationReadSnapshotHooks
-}
-
-func NewLongVegetationSelectedFieldPreferencesService(contexts *vprocore.ContextService) *LongVegetationSelectedFieldPreferencesService {
-	return &LongVegetationSelectedFieldPreferencesService{contexts: contexts}
-}
-
-func (s *LongVegetationSelectedFieldPreferencesService) helper() vprocore.ReportPreferenceHelper {
-	if s == nil {
-		return vprocore.ReportPreferenceHelper{}
-	}
-	return vprocore.ReportPreferenceHelper{Contexts: s.contexts, Snapshot: s.snapshot}
+	reportcore.PreferencesService[LongVegetationSelectedFieldPreferencesRequest, LongVegetationSelectedFieldPreferencesReview]
 }
 
 func readLongVegetationSelectedFieldDefinitions(ctx context.Context, tx *sql.Tx) ([]vprocore.ProjectMetadataColumn, error) {
@@ -96,30 +80,46 @@ func readLongVegetationSelectedFieldDefinitions(ctx context.Context, tx *sql.Tx)
 	return vprocore.ReadSQLiteStorageColumns(ctx, tx, "VLists", "USysAllSpecs")
 }
 
+func NewLongVegetationSelectedFieldPreferencesService(contexts *vprocore.ContextService) *LongVegetationSelectedFieldPreferencesService {
+	return &LongVegetationSelectedFieldPreferencesService{
+		PreferencesService: reportcore.PreferencesService[LongVegetationSelectedFieldPreferencesRequest, LongVegetationSelectedFieldPreferencesReview]{
+			Contexts: contexts,
+			Label:    "Long Vegetation selected field",
+			ReadFn: func(ctx context.Context, contextID string, plots *vprocore.PlotService, owner *vprocore.SqliteContext, tx *sql.Tx) (*LongVegetationSelectedFieldPreferencesReview, error) {
+				definitions, err := readLongVegetationSelectedFieldDefinitions(ctx, tx)
+				if err != nil {
+					return nil, err
+				}
+				values, err := ReadLongVegetationSelectedFieldPreferences(plots.Projects.Preferences, ctx)
+				if err != nil {
+					return nil, err
+				}
+				return &LongVegetationSelectedFieldPreferencesReview{
+					ContextID: contextID, Project: owner.Selection.Project, ProjectPath: owner.Selection.ProjectPath,
+					SU: owner.Selection.SU, SUPath: owner.Selection.SUPath,
+					Values: values, Source: longVegetationSelectedFieldDefinitionsSource, Definitions: definitions,
+				}, nil
+			},
+			WriteFn: func(ctx context.Context, _ string, plots *vprocore.PlotService, request LongVegetationSelectedFieldPreferencesRequest) (vprocore.ReportPreferenceUpdate, error) {
+				return CompareAndSetLongVegetationSelectedFieldPreferences(plots.Projects.Preferences, ctx, request.Expected, request.Proposed)
+			},
+		},
+	}
+}
+
 func (s *LongVegetationSelectedFieldPreferencesService) GetLongVegetationSelectedFieldPreferences(ctx context.Context, contextID string) (*LongVegetationSelectedFieldPreferencesReview, error) {
-	return vprocore.GetOwnedReportPreferences(ctx, s.helper(), contextID, "Long Vegetation selected field",
-		func(plots *vprocore.PlotService, owner *vprocore.SqliteContext, tx *sql.Tx) (*LongVegetationSelectedFieldPreferencesReview, error) {
-			definitions, err := readLongVegetationSelectedFieldDefinitions(ctx, tx)
-			if err != nil {
-				return nil, err
-			}
-			values, err := ReadLongVegetationSelectedFieldPreferences(plots.Projects.Preferences, ctx)
-			if err != nil {
-				return nil, err
-			}
-			return &LongVegetationSelectedFieldPreferencesReview{
-				ContextID: contextID, Project: owner.Selection.Project, ProjectPath: owner.Selection.ProjectPath,
-				SU: owner.Selection.SU, SUPath: owner.Selection.SUPath,
-				Values: values, Source: longVegetationSelectedFieldDefinitionsSource, Definitions: definitions,
-			}, nil
-		})
+	if s == nil {
+		return nil, errors.New("Long Vegetation selected field preferences are unavailable")
+	}
+	return s.Get(ctx, contextID)
 }
 
 func (s *LongVegetationSelectedFieldPreferencesService) SaveLongVegetationSelectedFieldPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationSelectedFieldPreferencesOutcome {
-	out := LongVegetationSelectedFieldPreferencesOutcome(vprocore.SaveOwnedReportPreferences(ctx, s.helper(), contextID, requestJSON, "Long Vegetation selected field", nil,
-		func(plots *vprocore.PlotService, request LongVegetationSelectedFieldPreferencesRequest) (vprocore.ReportPreferenceUpdate, error) {
-			return CompareAndSetLongVegetationSelectedFieldPreferences(plots.Projects.Preferences, ctx, request.Expected, request.Proposed)
-		}))
+	if s == nil {
+		out := vprocore.ReportPreferenceOutcome{ContextID: contextID, ErrorMessage: "Long Vegetation selected field preferences are unavailable"}
+		return &out
+	}
+	out := s.SaveJSON(ctx, contextID, requestJSON)
 	return &out
 }
 

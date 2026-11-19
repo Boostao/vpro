@@ -1,10 +1,6 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
@@ -15,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf16"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type WorkingUnitSourceCopy struct {
@@ -177,7 +175,7 @@ func ValidateWorkingUnitSnapshot(data []byte, p WorkingUnitProvenance) (*Working
 			}
 			id, err := strconv.ParseInt(*row.ID, 10, 32)
 			if err != nil || strconv.FormatInt(id, 10) != *row.ID || ids[*row.ID] {
-				return nil, fmt.Errorf("Working Unit signed32 identity invalid/duplicate at %s/%s", table, row.SourceOrdinal)
+				return nil, fmt.Errorf("Working Unit record ID invalid/duplicate at %s/%s", table, row.SourceOrdinal)
 			}
 			ids[*row.ID] = true
 			for j, text := range []*string{row.SiteSeries, row.SiteSeriesLongName, row.SiteSeriesScientificName} {
@@ -186,7 +184,7 @@ func ValidateWorkingUnitSnapshot(data []byte, p WorkingUnitProvenance) (*Working
 				}
 			}
 			if row.Level != nil && (*row.Level < -32768 || *row.Level > 32767) {
-				return nil, errors.New("Working Unit source Level is not signed16")
+				return nil, errors.New("Working Unit Level is not a valid whole number")
 			}
 		}
 	}
@@ -213,7 +211,7 @@ type workingUnitDB interface {
 	QueryRow(string, ...any) *sql.Row
 }
 
-// The import boundary accepts the evidenced typed DAO snapshot, never an Access file.
+// ImportWorkingUnitSnapshot — The import boundary accepts the evidenced typed DAO snapshot, never an Access file.
 func ImportWorkingUnitSnapshot(db *sql.DB, data []byte, p WorkingUnitProvenance) error {
 	snapshot, err := ValidateWorkingUnitSnapshot(data, p)
 	if err != nil {
@@ -259,22 +257,23 @@ func ImportWorkingUnitSnapshot(db *sql.DB, data []byte, p WorkingUnitProvenance)
 			return err
 		}
 		i := 0
-		for rows.Next() {
-			var actual WorkingUnitSourceRow
-			if err := rows.Scan(&actual.SourceOrdinal, &actual.ID, &actual.SiteSeries, &actual.SiteSeriesLongName, &actual.SiteSeriesScientificName, &actual.Level); err != nil {
-				rows.Close()
-				return err
+		if scanErr := func() error {
+			defer rows.Close()
+			for rows.Next() {
+				var actual WorkingUnitSourceRow
+				if err := rows.Scan(&actual.SourceOrdinal, &actual.ID, &actual.SiteSeries, &actual.SiteSeriesLongName, &actual.SiteSeriesScientificName, &actual.Level); err != nil {
+
+					return err
+				}
+				if i >= len(snapshot.Tables[table]) || !reflect.DeepEqual(actual, snapshot.Tables[table][i]) {
+
+					return fmt.Errorf("Working Unit source cell preservation failure at %s/%d", table, i+1)
+				}
+				i++
 			}
-			if i >= len(snapshot.Tables[table]) || !reflect.DeepEqual(actual, snapshot.Tables[table][i]) {
-				rows.Close()
-				return fmt.Errorf("Working Unit source cell preservation failure at %s/%d", table, i+1)
-			}
-			i++
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return err
+			return rows.Err()
+		}(); scanErr != nil {
+			return scanErr
 		}
 		if i != len(snapshot.Tables[table]) {
 			return errors.New("Working Unit import lost source rows")
@@ -330,18 +329,19 @@ func WorkingUnitSourceTables(db workingUnitDB) (map[string][]WorkingUnitSourceRo
 			return nil, err
 		}
 		table := []WorkingUnitSourceRow{}
-		for rows.Next() {
-			var row WorkingUnitSourceRow
-			if err := rows.Scan(&row.SourceOrdinal, &row.ID, &row.SiteSeries, &row.SiteSeriesLongName, &row.SiteSeriesScientificName, &row.Level); err != nil {
-				rows.Close()
-				return nil, err
+		if scanErr := func() error {
+			defer rows.Close()
+			for rows.Next() {
+				var row WorkingUnitSourceRow
+				if err := rows.Scan(&row.SourceOrdinal, &row.ID, &row.SiteSeries, &row.SiteSeriesLongName, &row.SiteSeriesScientificName, &row.Level); err != nil {
+
+					return err
+				}
+				table = append(table, row)
 			}
-			table = append(table, row)
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return nil, err
+			return rows.Err()
+		}(); scanErr != nil {
+			return nil, scanErr
 		}
 		tables[item.table] = table
 	}

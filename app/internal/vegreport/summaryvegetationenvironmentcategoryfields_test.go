@@ -1,16 +1,14 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
 	"encoding/json"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestSummaryEnvironmentalCategoryIndependentSixteenFieldBindings(t *testing.T) {

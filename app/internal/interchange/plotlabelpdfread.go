@@ -1,10 +1,6 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -12,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type plotLabelPDFRuntime struct {

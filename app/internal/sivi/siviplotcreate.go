@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/boostao/vpro/app/internal/sqlutil"
@@ -143,16 +142,6 @@ func normalizeSIVIPlotType(raw string) (string, error) {
 	}
 }
 
-func validateSIVIUTF16(label, val string, maxUnits int) error {
-	if !utf8.ValidString(val) || strings.ContainsRune(val, 0) {
-		return fmt.Errorf("%s contains malformed UTF-8 or NUL bytes", label)
-	}
-	if maxUnits > 0 && len(utf16.Encode([]rune(val))) > maxUnits {
-		return fmt.Errorf("%s exceeds %d UTF-16 code units", label, maxUnits)
-	}
-	return nil
-}
-
 func parseYearFromDate(raw string) *int64 {
 	trimmed := strings.TrimSpace(raw)
 	if len(trimmed) >= 4 {
@@ -176,7 +165,7 @@ func CreateSIVIPlot(s *vprocore.ContextService, ctx context.Context, contextID s
 	if req.PlotNumber != strings.TrimSpace(req.PlotNumber) {
 		return CreateSIVIPlotResult{}, errors.New("PlotNumber must not have leading or trailing whitespace")
 	}
-	if err := validateSIVIUTF16("PlotNumber", req.PlotNumber, 7); err != nil {
+	if err := sqlutil.ValidateUTF16Bound("PlotNumber", req.PlotNumber, 7); err != nil {
 		return CreateSIVIPlotResult{}, err
 	}
 	if req.Date != "" {
@@ -204,7 +193,7 @@ func CreateSIVIPlot(s *vprocore.ContextService, ctx context.Context, contextID s
 		{"SiteSeries", req.SiteSeries, 5},
 		{"UserSiteUnit", req.UserSiteUnit, 100},
 	} {
-		if err := validateSIVIUTF16(fld.name, fld.val, fld.max); err != nil {
+		if err := sqlutil.ValidateUTF16Bound(fld.name, fld.val, fld.max); err != nil {
 			return CreateSIVIPlotResult{}, err
 		}
 	}
@@ -300,7 +289,7 @@ func CreateSIVIPlot(s *vprocore.ContextService, ctx context.Context, contextID s
 			envAudits := [][2]string{{"PlotNumber", req.PlotNumber}}
 
 			effectivePID := strings.TrimSpace(req.ProjectID)
-			if effectivePID == "" && len(utf16.Encode([]rune(project))) <= 30 {
+			if effectivePID == "" && sqlutil.UTF16Len(project) <= 30 {
 				effectivePID = project
 			}
 			for _, opt := range []struct {
@@ -703,34 +692,37 @@ func ListCreatedSIVIPlots(s *vprocore.ContextService, ctx context.Context, conte
 			return nil, err
 		}
 		entries = []SIVICreatedPlotEntry{}
-		for rows.Next() {
-			var rID, plot, pType, created, actor, undoneAt, rawProp string
-			var undone int64
-			var inEnv, hasChildren bool
-			if err := rows.Scan(&rID, &plot, &pType, &created, &actor, &undone, &undoneAt, &rawProp, &inEnv, &hasChildren); err != nil {
-				rows.Close()
-				return nil, err
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+			for rows.Next() {
+				var rID, plot, pType, created, actor, undoneAt, rawProp string
+				var undone int64
+				var inEnv, hasChildren bool
+				if err := rows.Scan(&rID, &plot, &pType, &created, &actor, &undone, &undoneAt, &rawProp, &inEnv, &hasChildren); err != nil {
+
+					return err
+				}
+				var prop siviPlotCreationProposal
+				if err := json.Unmarshal([]byte(rawProp), &prop); err != nil {
+
+					return fmt.Errorf("decode SIVI plot creation proposal for %s: %w", rID, err)
+				}
+				isUndone := undone != 0
+				entries = append(entries, SIVICreatedPlotEntry{
+					RequestID:       rID,
+					PlotNumber:      plot,
+					PlotType:        pType,
+					ProjectID:       prop.Request.ProjectID,
+					SVPolygonNumber: prop.Request.SVPolygonNumber,
+					CreatedAt:       created,
+					Actor:           actor,
+					Undone:          isUndone,
+					UndoneAt:        undoneAt,
+					CanUndo:         !isUndone && inEnv && !hasChildren,
+				})
 			}
-			var prop siviPlotCreationProposal
-			if err := json.Unmarshal([]byte(rawProp), &prop); err != nil {
-				rows.Close()
-				return nil, fmt.Errorf("decode SIVI plot creation proposal for %s: %w", rID, err)
-			}
-			isUndone := undone != 0
-			entries = append(entries, SIVICreatedPlotEntry{
-				RequestID:       rID,
-				PlotNumber:      plot,
-				PlotType:        pType,
-				ProjectID:       prop.Request.ProjectID,
-				SVPolygonNumber: prop.Request.SVPolygonNumber,
-				CreatedAt:       created,
-				Actor:           actor,
-				Undone:          isUndone,
-				UndoneAt:        undoneAt,
-				CanUndo:         !isUndone && inEnv && !hasChildren,
-			})
-		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return rows.Err()
+		}(); err != nil {
 			return nil, err
 		}
 		if err := ctx.Err(); err != nil {

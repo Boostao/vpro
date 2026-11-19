@@ -1,11 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"bytes"
 	"context"
 	"encoding/hex"
@@ -15,6 +10,8 @@ import (
 	"reflect"
 	"strconv"
 
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -38,30 +35,6 @@ type summaryWorkbookLayout struct {
 	RealOrderFromRow, RealOrderColumn int
 	HeaderRows                        []int
 	Cells                             []summaryEnvironmentalHeaderCell
-}
-
-// This private inspection preserves typed values, not Excel automation coercion.
-func prepareSummaryEnvironmentalWorkbook(ctx context.Context, input summaryEnvironmentalWorkbookInput) (summaryEnvironmentalWorkbook, error) {
-	if ctx == nil {
-		return summaryEnvironmentalWorkbook{}, errors.New("Summary environmental workbook requires a context")
-	}
-	plan, err := prepareSummaryEnvironmentalHeader(ctx, input.FirstRow, input.English, input.FieldList, input.Units, input.Rows)
-	if err != nil {
-		return summaryEnvironmentalWorkbook{}, err
-	}
-	data, err := renderSummaryWorkbook(ctx, input, summaryWorkbookLayout{
-		Sheet: "Summary Environment", Title: "Summary environmental inspection",
-		LastRow: max(input.FirstRow-1, plan.LastDataRow), LastColumn: plan.LastValueColumn,
-		HeaderRows: []int{input.FirstRow - 1}, Cells: plan.Cells,
-	})
-	if err != nil {
-		return summaryEnvironmentalWorkbook{}, err
-	}
-	return summaryEnvironmentalWorkbook{Bytes: data, Header: plan}, nil
-}
-
-func renderSummaryWorkbook[T any](ctx context.Context, input T, layout summaryWorkbookLayout) (result []byte, resultErr error) {
-	return renderSummaryWorkbookWithSheets(ctx, input, layout, nil)
 }
 
 func renderSummaryWorkbookWithSheets(ctx context.Context, input any, layout summaryWorkbookLayout,

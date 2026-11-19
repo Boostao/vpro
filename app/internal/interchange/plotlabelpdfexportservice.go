@@ -1,10 +1,6 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -13,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type PlotLabelPDFExportService struct {

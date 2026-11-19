@@ -1,14 +1,11 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"go.yaml.in/yaml/v3"
 )
 

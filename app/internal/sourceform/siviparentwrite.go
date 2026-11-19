@@ -1,11 +1,6 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -14,72 +9,73 @@ import (
 	"reflect"
 	"strconv"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const siviParentHistoryTable = "__VPRO_SIVIParentHistory"
 const siviParentHistorySQL = `CREATE TABLE "__VPRO_SIVIParentHistory"(ID INTEGER PRIMARY KEY,Created TEXT NOT NULL,Proposal TEXT NOT NULL,Restored TEXT)`
 
 type SiviParentDirectEdits struct {
-	Scalars, Options, Text, Categorical []SiviParentScalarEdit
+	Scalars, Options, Text, Categorical []SourceParentScalarEdit
 }
 
-type SIVIParentWriteResult struct {
+type SourceParentWriteResult struct {
 	ChangedCells int
 	HistoryID    string
 }
 
-type SiviParentWriteResult = SIVIParentWriteResult
-
-type SiviParentHistoryChange struct {
+type SourceParentHistoryChange struct {
 	Table, RowID, Column string
 	Before, After        vprocore.ProjectMetadataCell
 	Audit                vprocore.AuditEntry
 }
 
-type SiviParentHistory struct {
-	Original, Committed *SiviParentProjection
-	Changes             []SiviParentHistoryChange
-	ProjectAssignment   *SiviProjectAssignmentHistory `json:",omitempty"`
-	EntryPlan           []SiviParentScalarEdit        `json:",omitempty"`
+type SourceParentHistory struct {
+	Original, Committed *SourceParentProjection
+	Changes             []SourceParentHistoryChange
+	ProjectAssignment   *SourceProjectAssignmentHistory `json:",omitempty"`
+	EntryPlan           []SourceParentScalarEdit        `json:",omitempty"`
 }
 
 type SourceParentEntryLifecycle struct {
 	Prepare  func(*vprocore.PlotService, *sql.Conn) (func(), error) `json:"-" yaml:"-"`
 	Verify   func(*vprocore.PlotService, *sql.Tx) error             `json:"-" yaml:"-"`
-	Decorate func(*SiviParentHistory)                               `json:"-" yaml:"-"`
+	Decorate func(*SourceParentHistory)                             `json:"-" yaml:"-"`
 }
 
-type SiviParentWriteHooks struct {
-	Authorize func(*vprocore.PlotService) error                                                                              `json:"-" yaml:"-"`
-	Read      func(context.Context, *sql.Tx, *vprocore.SqliteContext, string, string, string) (*SiviParentProjection, error) `json:"-" yaml:"-"`
-	Prepare   func(*sql.Conn) (func(), error)                                                                                `json:"-" yaml:"-"`
-	Verify    func(*sql.Tx) error                                                                                            `json:"-" yaml:"-"`
-	Plan      func(*sql.Tx, *SiviParentProjection) ([]SiviParentScalarAssignment, error)                                     `json:"-" yaml:"-"`
-	Decorate  func(*SiviParentHistory)                                                                                       `json:"-" yaml:"-"`
+type SourceParentWriteHooks struct {
+	Authorize func(*vprocore.PlotService) error                                                                                `json:"-" yaml:"-"`
+	Read      func(context.Context, *sql.Tx, *vprocore.SqliteContext, string, string, string) (*SourceParentProjection, error) `json:"-" yaml:"-"`
+	Prepare   func(*sql.Conn) (func(), error)                                                                                  `json:"-" yaml:"-"`
+	Verify    func(*sql.Tx) error                                                                                              `json:"-" yaml:"-"`
+	Plan      func(*sql.Tx, *SourceParentProjection) ([]SourceParentScalarAssignment, error)                                   `json:"-" yaml:"-"`
+	Decorate  func(*SourceParentHistory)                                                                                       `json:"-" yaml:"-"`
 }
 
-type SiviParentHistoryDomain struct {
-	Table, Schema, Label string                                                                                         `json:"-" yaml:"-"`
-	Assignments          func(context.Context, SiviParentHistory, string, string) ([]SiviParentScalarAssignment, error) `json:"-" yaml:"-"`
+type SourceParentHistoryDomain struct {
+	Table, Schema, Label string                                                                                             `json:"-" yaml:"-"`
+	Assignments          func(context.Context, SourceParentHistory, string, string) ([]SourceParentScalarAssignment, error) `json:"-" yaml:"-"`
 }
 
-var SiviParentDirectHistory = SiviParentHistoryDomain{
+var SiviParentDirectHistory = SourceParentHistoryDomain{
 	siviParentHistoryTable, siviParentHistorySQL, "SIVI parent", SiviParentHistoryAssignments,
 }
 
-func PlanSIVIParentDirectEdits(ctx context.Context, original *SiviParentProjection, edits SiviParentDirectEdits) ([]SiviParentScalarAssignment, error) {
+func PlanSIVIParentDirectEdits(ctx context.Context, original *SourceParentProjection, edits SiviParentDirectEdits) ([]SourceParentScalarAssignment, error) {
 	if original == nil || len(original.Rows) != 1 ||
 		len(edits.Scalars)+len(edits.Options)+len(edits.Text)+len(edits.Categorical) == 0 {
 		return nil, errors.New("SIVI parent writing requires one physical pair and explicit direct-field edits")
 	}
 	env := vprocore.ProjectMetadataTable{Columns: original.EnvColumns, Rows: []vprocore.ProjectMetadataRow{original.Rows[0].Env}}
 	admin := vprocore.ProjectMetadataTable{Columns: original.AdminColumns, Rows: []vprocore.ProjectMetadataRow{original.Rows[0].Admin}}
-	assignments := []SiviParentScalarAssignment{}
+	assignments := []SourceParentScalarAssignment{}
 	for _, domain := range []struct {
-		edits []SiviParentScalarEdit
-		plan  func(context.Context, string, string, string, vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, []SiviParentScalarEdit) ([]SiviParentScalarAssignment, error)
+		edits []SourceParentScalarEdit
+		plan  func(context.Context, string, string, string, vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, []SourceParentScalarEdit) ([]SourceParentScalarAssignment, error)
 	}{
-		{edits.Scalars, PlanSIVIParentScalars}, {edits.Options, PlanSIVIParentOptions},
+		{edits.Scalars, PlanSourceParentScalars}, {edits.Options, PlanSIVIParentOptions},
 		{edits.Text, PlanSIVIParentText}, {edits.Categorical, PlanSIVIParentCategorical},
 	} {
 		if len(domain.edits) == 0 {
@@ -104,7 +100,7 @@ func SourceParentWriterSUAlias(owner *vprocore.SqliteContext) string {
 	return "sivi_su"
 }
 
-func SiviParentWriterSU(ctx context.Context, conn *sql.Conn, owner *vprocore.SqliteContext) (string, error) {
+func SourceParentWriterSU(ctx context.Context, conn *sql.Conn, owner *vprocore.SqliteContext) (string, error) {
 	alias := SourceParentWriterSUAlias(owner)
 	if alias != "sivi_su" {
 		return alias, nil
@@ -115,13 +111,13 @@ func SiviParentWriterSU(ctx context.Context, conn *sql.Conn, owner *vprocore.Sql
 	return "sivi_su", nil
 }
 
-type SourceParentProjector func(context.Context, string, string, string, vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable) (*SiviParentProjection, error)
+type SourceParentProjector func(context.Context, string, string, string, vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable) (*SourceParentProjection, error)
 
-func ReadSIVIParentForWrite(ctx context.Context, tx *sql.Tx, owner *vprocore.SqliteContext, suAlias, contextID, plot string) (*SiviParentProjection, error) {
+func ReadSIVIParentForWrite(ctx context.Context, tx *sql.Tx, owner *vprocore.SqliteContext, suAlias, contextID, plot string) (*SourceParentProjection, error) {
 	return ReadSourceParentForWrite(ctx, tx, owner, suAlias, contextID, plot, ProjectSIVIParent)
 }
 
-func ReadSourceParentForWrite(ctx context.Context, tx *sql.Tx, owner *vprocore.SqliteContext, suAlias, contextID, plot string, projectParent SourceParentProjector) (*SiviParentProjection, error) {
+func ReadSourceParentForWrite(ctx context.Context, tx *sql.Tx, owner *vprocore.SqliteContext, suAlias, contextID, plot string, projectParent SourceParentProjector) (*SourceParentProjection, error) {
 	project := owner.Selection.Project
 	join, err := readSIVIParentWriteJoin(ctx, tx, "main", contextID, project, plot)
 	if err != nil {
@@ -171,7 +167,7 @@ func ReadSourceParentForWrite(ctx context.Context, tx *sql.Tx, owner *vprocore.S
 	return parent, nil
 }
 
-func WithSIVIParentWriteTransaction(ctx context.Context, owner *vprocore.SqliteContext, purpose string, operation func(*sql.Tx, string) error, hooks ...SiviParentWriteHooks) error {
+func WithSourceParentWriteTransaction(ctx context.Context, owner *vprocore.SqliteContext, purpose string, operation func(*sql.Tx, string) error, hooks ...SourceParentWriteHooks) error {
 	committed := false
 	err := owner.WithMetadataWriter(ctx, func(conn *sql.Conn) (resultErr error) {
 		for _, hook := range hooks {
@@ -183,7 +179,7 @@ func WithSIVIParentWriteTransaction(ctx context.Context, owner *vprocore.SqliteC
 				defer release()
 			}
 		}
-		suAlias, err := SiviParentWriterSU(ctx, conn, owner)
+		suAlias, err := SourceParentWriterSU(ctx, conn, owner)
 		if err != nil {
 			return err
 		}
@@ -227,8 +223,8 @@ func WithSIVIParentWriteTransaction(ctx context.Context, owner *vprocore.SqliteC
 	return nil
 }
 
-func WriteSIVIParentDirect(s *vprocore.ContextService, ctx context.Context, contextID, plot string, original *SiviParentProjection, edits SiviParentDirectEdits) (*SiviParentWriteResult, error) {
-	return WriteSIVIParentPlanned(s, ctx, contextID, plot, original, SiviParentDirectHistory, func(observed *SiviParentProjection) ([]SiviParentScalarAssignment, error) {
+func WriteSIVIParentDirect(s *vprocore.ContextService, ctx context.Context, contextID, plot string, original *SourceParentProjection, edits SiviParentDirectEdits) (*SourceParentWriteResult, error) {
+	return WriteSIVIParentPlanned(s, ctx, contextID, plot, original, SiviParentDirectHistory, func(observed *SourceParentProjection) ([]SourceParentScalarAssignment, error) {
 		assignments, err := PlanSIVIParentDirectEdits(ctx, observed, edits)
 		if err != nil {
 			return nil, err
@@ -240,16 +236,16 @@ func WriteSIVIParentDirect(s *vprocore.ContextService, ctx context.Context, cont
 	})
 }
 
-func WriteSIVIParentPlanned(s *vprocore.ContextService, ctx context.Context, contextID, plot string, original *SiviParentProjection, history SiviParentHistoryDomain, plan func(*SiviParentProjection) ([]SiviParentScalarAssignment, error)) (*SiviParentWriteResult, error) {
-	return WriteSIVIParentPlannedWithHooks(s, ctx, contextID, plot, original, history, plan, SiviParentWriteHooks{})
+func WriteSIVIParentPlanned(s *vprocore.ContextService, ctx context.Context, contextID, plot string, original *SourceParentProjection, history SourceParentHistoryDomain, plan func(*SourceParentProjection) ([]SourceParentScalarAssignment, error)) (*SourceParentWriteResult, error) {
+	return WriteSourceParentPlannedWithHooks(s, ctx, contextID, plot, original, history, plan, SourceParentWriteHooks{})
 }
 
-func WriteSIVIParentPlannedWithHooks(s *vprocore.ContextService, ctx context.Context, contextID, plot string, original *SiviParentProjection, history SiviParentHistoryDomain, plan func(*SiviParentProjection) ([]SiviParentScalarAssignment, error), hooks SiviParentWriteHooks) (*SiviParentWriteResult, error) {
+func WriteSourceParentPlannedWithHooks(s *vprocore.ContextService, ctx context.Context, contextID, plot string, original *SourceParentProjection, history SourceParentHistoryDomain, plan func(*SourceParentProjection) ([]SourceParentScalarAssignment, error), hooks SourceParentWriteHooks) (*SourceParentWriteResult, error) {
 	read := ReadSIVIParentForWrite
 	if hooks.Read != nil {
 		read = hooks.Read
 	}
-	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (*SiviParentWriteResult, error) {
+	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (*SourceParentWriteResult, error) {
 		if err := plots.RequireContextEdit(); err != nil {
 			return nil, err
 		}
@@ -265,8 +261,8 @@ func WriteSIVIParentPlannedWithHooks(s *vprocore.ContextService, ctx context.Con
 			return nil, err
 		}
 		owner := plots.Projects.Sqlite
-		result := &SiviParentWriteResult{}
-		err := WithSIVIParentWriteTransaction(ctx, owner, "parent edit", func(tx *sql.Tx, suAlias string) error {
+		result := &SourceParentWriteResult{}
+		err := WithSourceParentWriteTransaction(ctx, owner, "parent edit", func(tx *sql.Tx, suAlias string) error {
 			observed, err := read(ctx, tx, owner, suAlias, contextID, plot)
 			if err != nil {
 				return err
@@ -274,7 +270,7 @@ func WriteSIVIParentPlannedWithHooks(s *vprocore.ContextService, ctx context.Con
 			if !reflect.DeepEqual(original, observed) {
 				return errors.New("SIVI original physical parents changed; undo and reload before writing")
 			}
-			var assignments []SiviParentScalarAssignment
+			var assignments []SourceParentScalarAssignment
 			if hooks.Plan != nil {
 				assignments, err = hooks.Plan(tx, observed)
 			} else {
@@ -297,7 +293,7 @@ func WriteSIVIParentPlannedWithHooks(s *vprocore.ContextService, ctx context.Con
 			if err != nil {
 				return err
 			}
-			expected[observed.Project+"_Audit"], err = AppendSIVIPlannedAudits(before[observed.Project+"_Audit"], records)
+			expected[observed.Project+"_Audit"], err = AppendSourcePlannedAudits(before[observed.Project+"_Audit"], records)
 			if err != nil {
 				return err
 			}
@@ -313,7 +309,7 @@ func WriteSIVIParentPlannedWithHooks(s *vprocore.ContextService, ctx context.Con
 				return err
 			}
 			if len(changes) != 0 {
-				event := SiviParentHistory{Original: observed, Committed: fresh, Changes: changes}
+				event := SourceParentHistory{Original: observed, Committed: fresh, Changes: changes}
 				if hooks.Decorate != nil {
 					hooks.Decorate(&event)
 				}
@@ -347,9 +343,9 @@ func WriteSIVIParentPlannedWithHooks(s *vprocore.ContextService, ctx context.Con
 	})
 }
 
-func ApplySIVIParentAssignments(ctx context.Context, tx *sql.Tx, original *SiviParentProjection, before map[string]vprocore.ProjectMetadataTable, assignments []SiviParentScalarAssignment, user string, strength int) (map[string]vprocore.ProjectMetadataTable, []SiviParentHistoryChange, []vprocore.AuditEntry, error) {
+func ApplySIVIParentAssignments(ctx context.Context, tx *sql.Tx, original *SourceParentProjection, before map[string]vprocore.ProjectMetadataTable, assignments []SourceParentScalarAssignment, user string, strength int) (map[string]vprocore.ProjectMetadataTable, []SourceParentHistoryChange, []vprocore.AuditEntry, error) {
 	expected := map[string]vprocore.ProjectMetadataTable{}
-	changes, records := []SiviParentHistoryChange{}, []vprocore.AuditEntry{}
+	changes, records := []SourceParentHistoryChange{}, []vprocore.AuditEntry{}
 	when := time.Now().Format("2006-01-02 15:04:05")
 	for _, assignment := range assignments {
 		suffix, identity := "Env", "PlotNumber"
@@ -416,7 +412,7 @@ func ApplySIVIParentAssignments(ctx context.Context, tx *sql.Tx, original *SiviP
 			!vprocore.MetadataAuditTextEqual(record.BeforeEdit, prior) || !vprocore.MetadataAuditTextEqual(record.AfterEdit, assignment.Value) {
 			return nil, nil, nil, errors.New("SIVI parent inserted audit differs from its typed assignment")
 		}
-		changes = append(changes, SiviParentHistoryChange{assignment.Table, assignment.RowID, assignment.Column,
+		changes = append(changes, SourceParentHistoryChange{assignment.Table, assignment.RowID, assignment.Column,
 			vprocore.CloneSiteUnitCell(assignment.Before), vprocore.CloneSiteUnitCell(assignment.After), record})
 		records = append(records, record)
 	}

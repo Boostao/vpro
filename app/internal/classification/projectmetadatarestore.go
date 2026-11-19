@@ -1,10 +1,6 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -15,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type ProjectMetadataRestoreReview struct {
@@ -319,7 +317,7 @@ func RestoreProjectMetadata(s *vprocore.ContextService, ctx context.Context, con
 			}
 			rowID, err := strconv.ParseInt(current.Current.RowID, 10, 64)
 			if err != nil || strconv.FormatInt(rowID, 10) != current.Current.RowID || len(sets) == 0 {
-				return errors.New("metadata restoration requires an exact physical rowid and actual audited changes")
+				return errors.New("metadata restoration requires a valid audit entry with recorded field changes")
 			}
 			updated, err := tx.ExecContext(ctx, `UPDATE `+vprocore.QuoteHeaderIdentifier(current.Project+"_Metadata")+
 				` SET `+strings.Join(sets, ",")+` WHERE rowid=? AND ID=? AND ProjectID COLLATE BINARY IS ?`,

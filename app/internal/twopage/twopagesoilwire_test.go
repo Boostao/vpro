@@ -1,18 +1,16 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestTwoPageSoilClientStrictGoSharedWire(t *testing.T) {
@@ -93,7 +91,7 @@ func TestTwoPageSoilClientStrictGoSharedWire(t *testing.T) {
 			default:
 				t.Fatal("unknown peer fixture storage")
 			}
-			if sourceform.SiviIdentityCellMatches(cell, peer.ID) != peer.Collides {
+			if sourceform.SourceIdentityCellMatches(cell, peer.ID) != peer.Collides {
 				t.Fatal("independent expected peer collision differs from Go identity ownership")
 			}
 			var candidate twoPageSoilRequest

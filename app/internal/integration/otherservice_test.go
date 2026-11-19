@@ -1,15 +1,13 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func otherPatch(id int, property string, before, after *string) vprocore.OtherRecordUpdate {
@@ -19,11 +17,10 @@ func otherPatch(id int, property string, before, after *string) vprocore.OtherRe
 func TestOtherPhysicalTextSaveRoutesAndRawJSON(t *testing.T) {
 	s, db := vprotest.ChildFixture(t)
 	for column, maximum := range vprocore.OtherTextMaximum {
-		member := reflect.ValueOf(&vprocore.OtherRecord{}).Elem().FieldByName(column)
 		property := vprocore.ChildJSONKey(reflect.ValueOf(vprocore.OtherRecord{}), vprocore.ChildField{Member: column, Column: column})
 		for _, invalid := range []string{strings.Repeat("x", maximum+1), strings.Repeat("x", maximum-1) + "\U0001F332", string([]byte{255})} {
 			record := vprocore.OtherRecord{PlotNumber: "CHILD1"}
-			member = reflect.ValueOf(&record).Elem().FieldByName(column)
+			member := reflect.ValueOf(&record).Elem().FieldByName(column)
 			member.Set(reflect.ValueOf(&invalid))
 			before := vprotest.SubstrateSnapshot(t, db)
 			if err := s.SaveOtherRecord(record); err == nil {

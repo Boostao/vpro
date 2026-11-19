@@ -1,14 +1,12 @@
 package lifecycle
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestUserLogServiceReadOnlyReview(t *testing.T) {
@@ -38,6 +36,7 @@ func TestUserLogServiceInvalidOwnerRequestAndCancellation(t *testing.T) {
 			t.Fatal("absent service accepted", result, err)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := enabled.GetReview(nil, state.ContextID, 2, 0, 50); err == nil {
 		t.Fatal("nil request context accepted")
 	}

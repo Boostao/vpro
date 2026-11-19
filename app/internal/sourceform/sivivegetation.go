@@ -1,15 +1,13 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SIVIVegetationProjection struct {
@@ -30,7 +28,7 @@ func (projection *SIVIVegetationProjection) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// This private read model preserves source query membership, not editor
+// ProjectSIVIVegetation — This private read model preserves source query membership, not editor
 // authorization. Historical aggregate-height cells remain typed and unmodified.
 func ProjectSIVIVegetation(ctx context.Context, plot string, extended bool, veg vprocore.ProjectMetadataTable) ([]SiviVegetationProjection, error) {
 	if err := ctx.Err(); err != nil {

@@ -1,11 +1,6 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -14,6 +9,9 @@ import (
 	"reflect"
 	"strconv"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func twoPageVegetationHistoryObject(ctx context.Context, tx *sql.Tx, alias string) (bool, error) {
@@ -97,7 +95,7 @@ func WriteTwoPageVegetationObserved(s *vprocore.ContextService, ctx context.Cont
 			if err := prepareTwoPageVegetationSpeciesListWriter(ctx, conn, owner, request); err != nil {
 				return err
 			}
-			suAlias, err := sourceform.SiviParentWriterSU(ctx, conn, owner)
+			suAlias, err := sourceform.SourceParentWriterSU(ctx, conn, owner)
 			if err != nil {
 				return fmt.Errorf("two-page vegetation selected SU attachment: %w", err)
 			}
@@ -223,7 +221,7 @@ func WriteTwoPageVegetationObserved(s *vprocore.ContextService, ctx context.Cont
 					history.Audits = append(history.Audits, records[0])
 				}
 			}
-			auditPlan, err := sourceform.AppendSIVIPlannedAudits(before[original.Project+"_Audit"], history.Audits)
+			auditPlan, err := sourceform.AppendSourcePlannedAudits(before[original.Project+"_Audit"], history.Audits)
 			if err != nil {
 				return err
 			}
@@ -267,7 +265,7 @@ func WriteTwoPageVegetationObserved(s *vprocore.ContextService, ctx context.Cont
 			}
 			historyPlan.Rows = append(append([]vprocore.ProjectMetadataRow{}, historyPlan.Rows...), vprocore.ProjectMetadataRow{
 				RowID: strconv.FormatInt(rowID, 10), Cells: []vprocore.ProjectMetadataCell{
-					sourceform.SiviCreationText(request.RequestID), sourceform.SiviCreationText(history.EditWhen), sourceform.SiviCreationText(string(proposal))}})
+					sourceform.SourceCreationText(request.RequestID), sourceform.SourceCreationText(history.EditWhen), sourceform.SourceCreationText(string(proposal))}})
 			after, err = vprocore.EnvironmentSiteUnitTables(ctx, tx)
 			if err != nil {
 				return err

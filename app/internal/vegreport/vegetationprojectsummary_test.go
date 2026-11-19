@@ -1,16 +1,14 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func projectSummaryFixture(t *testing.T, none bool) (vegetationLayerReport, LongVegetationReportScope, vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable) {

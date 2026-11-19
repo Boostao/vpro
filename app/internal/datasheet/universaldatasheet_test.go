@@ -12,15 +12,8 @@ import (
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-func strPtr(s string) *string    { return &s }
-func realPtr(f float64) *float64 { return &f }
-
 func textCell(s string) vprocore.ProjectMetadataCell {
 	return vprocore.ProjectMetadataCell{Storage: "text", Text: &s}
-}
-
-func intCell(s string) vprocore.ProjectMetadataCell {
-	return vprocore.ProjectMetadataCell{Storage: "integer", Integer: &s}
 }
 
 func realCell(f float64) vprocore.ProjectMetadataCell {
@@ -232,7 +225,7 @@ func TestApplyDatasheetEditsValidationAuditAndAtomicity(t *testing.T) {
 	}
 
 	// Valid narrowed cover 99.999996 must pass and store float64(float32(99.999996)) = 99.99999237060547!
-	res, err = ApplyDatasheetEdits(ctx, service, state.ContextID, DatasheetEditRequest{
+	_, err = ApplyDatasheetEdits(ctx, service, state.ContextID, DatasheetEditRequest{
 		TableKey: "Veg",
 		Edits: []DatasheetCellEdit{
 			{RowID: vegRow.RowID, Column: "Cover1", Before: vegRow.Cells[c1Idx], After: realCell(99.999996)},
@@ -265,7 +258,7 @@ func TestApplyDatasheetEditsValidationAuditAndAtomicity(t *testing.T) {
 			{RowID: vegRow.RowID, Column: "Species", Before: vegRow.Cells[sppIdx], After: textCell("ABCDEFGHI")},
 		},
 	})
-	if err == nil || !strings.Contains(err.Error(), "UTF-16") {
+	if err == nil || !strings.Contains(err.Error(), "8 characters") {
 		t.Fatalf("expected UTF-16 Species > 8 error, got %v", err)
 	}
 	var cover6AfterRollback float64

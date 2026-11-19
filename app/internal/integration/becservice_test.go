@@ -1,12 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/references"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -15,6 +9,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestBECFrozenCatalogueAndLookups(t *testing.T) {
@@ -154,7 +152,7 @@ func TestBECFrozenCatalogueAndLookups(t *testing.T) {
 			t.Fatalf("invalid SubZone %q accepted", code)
 		}
 	}
-	if _, err := s.Db.Exec(`DELETE FROM BECZoneList`); err == nil {
+	if _, err := s.DB.Exec(`DELETE FROM BECZoneList`); err == nil {
 		t.Fatal("catalogue connection is writable")
 	}
 }
@@ -216,7 +214,7 @@ func becRoundTripSnapshot(t *testing.T) (references.BecSnapshot, references.BecP
 	zones, series := references.BecExpectedSchema()
 	snapshot := references.BecSnapshot{Version: provenance.Version, Exporter: provenance.Exporter,
 		SourceAccessSHA256: provenance.SourceSHA256, ZoneSchema: zones, SeriesSchema: series}
-	rows, err := s.Db.Query(`SELECT RowID,Zone,SubZone,ZoneDescription,Description FROM BECZoneList ORDER BY CAST(RowID AS INTEGER)`)
+	rows, err := s.DB.Query(`SELECT RowID,Zone,SubZone,ZoneDescription,Description FROM BECZoneList ORDER BY CAST(RowID AS INTEGER)`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +229,7 @@ func becRoundTripSnapshot(t *testing.T) (references.BecSnapshot, references.BecP
 		t.Fatal(err)
 	}
 	rows.Close()
-	rows, err = s.Db.Query(`SELECT ` + references.BecSeriesColumns + ` FROM BECSiteSeries ORDER BY CAST(RowID AS INTEGER)`)
+	rows, err = s.DB.Query(`SELECT ` + references.BecSeriesColumns + ` FROM BECSiteSeries ORDER BY CAST(RowID AS INTEGER)`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,7 +308,7 @@ func TestBECImportAllMetadataAndNullableSignedIdentities(t *testing.T) {
  UPDATE BECSiteSeries SET SiteSeries='' WHERE RowID=?`, targetFirst.RowID, lastRow.RowID); err != nil {
 		t.Fatal(err)
 	}
-	service := &references.BECService{Db: db}
+	service := &references.BECService{DB: db}
 	for _, pair := range [][2]string{{*targetFirst.Zone, *targetFirst.SubZone}, {*lastRow.Zone, *lastRow.SubZone}} {
 		rows, err := service.ListBECSiteSeries(context.Background(), &pair[0], &pair[1])
 		if err != nil {

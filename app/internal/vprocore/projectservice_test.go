@@ -1,16 +1,14 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"database/sql"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 func TestSampleProjectStartupAndPlots(t *testing.T) {

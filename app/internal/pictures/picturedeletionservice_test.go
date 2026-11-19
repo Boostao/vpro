@@ -1,11 +1,6 @@
 package pictures
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,6 +8,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func pictureDeletionServiceFixture(t *testing.T) (*PictureDeletionService, pictureDeletionRequest) {

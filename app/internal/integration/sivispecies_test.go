@@ -1,19 +1,17 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVISpeciesListedDecisionsUnicodeAndDomains(t *testing.T) {
@@ -74,14 +72,14 @@ func TestSIVISpeciesDefinitionProjectionRetainsDuplicatesNullsAndRecasing(t *tes
 	raw := sftest.SiviSpeciesTestReferences(t).Master
 	raw.Columns[2].Name = "LIFEFORM"
 	raw.Rows = append(raw.Rows, vprocore.ProjectMetadataRow{RowID: "9223372036854775807", Cells: raw.Rows[0].Cells})
-	projected, err := sourceform.ProjectSIVISpeciesDefinitions(ctx, raw, false)
+	projected, err := sourceform.ProjectSourceSpeciesDefinitions(ctx, raw, false)
 	if err != nil || !reflect.DeepEqual(projected, raw) {
 		t.Fatal("projection normalized/deduplicated physical metadata", projected, err)
 	}
 	for _, cell := range []vprocore.ProjectMetadataCell{vprotest.MetadataText("3"), vprotest.SiviReal(3), vprotest.MetadataInteger("32768")} {
 		bad := sftest.SiviSpeciesTestReferences(t).Master
 		bad.Rows[0].Cells[2] = cell
-		if _, err := sourceform.ProjectSIVISpeciesDefinitions(ctx, bad, false); err == nil {
+		if _, err := sourceform.ProjectSourceSpeciesDefinitions(ctx, bad, false); err == nil {
 			t.Fatal("coerced malformed Lifeform", cell)
 		}
 	}
@@ -94,13 +92,13 @@ func TestSIVISpeciesDefinitionProjectionRetainsDuplicatesNullsAndRecasing(t *tes
 	} {
 		bad := sftest.SiviSpeciesTestReferences(t).Master
 		mutate(&bad)
-		if _, err := sourceform.ProjectSIVISpeciesDefinitions(ctx, bad, false); err == nil {
+		if _, err := sourceform.ProjectSourceSpeciesDefinitions(ctx, bad, false); err == nil {
 			t.Fatal("malformed physical definition accepted")
 		}
 	}
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	if _, err := sourceform.ProjectSIVISpeciesDefinitions(canceled, raw, false); err == nil {
+	if _, err := sourceform.ProjectSourceSpeciesDefinitions(canceled, raw, false); err == nil {
 		t.Fatal("canceled projection accepted")
 	}
 }

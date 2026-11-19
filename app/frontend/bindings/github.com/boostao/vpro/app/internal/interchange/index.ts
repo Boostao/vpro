@@ -7,6 +7,7 @@ export {
 
 export type {
     AccessDatabaseInspection,
+    AccessImportProgress,
     AccessImportTableSummary,
     AccessProjectCandidate,
     AccessProjectImportRequest,

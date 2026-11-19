@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
+
 	classificationpkg "github.com/boostao/vpro/app/internal/classification"
 	"github.com/boostao/vpro/app/internal/plotentry"
 	referencespkg "github.com/boostao/vpro/app/internal/references"
@@ -10,7 +12,6 @@ import (
 	sourceformpkg "github.com/boostao/vpro/app/internal/sourceform"
 	twopagepkg "github.com/boostao/vpro/app/internal/twopage"
 	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
-	"log"
 )
 
 type CreateTwoPageVegetationRequest = twopagepkg.CreateTwoPageVegetationRequest
@@ -105,7 +106,7 @@ type PlotEntryService struct {
 	runtime                      *runtimeShutdownTracker
 	contexts                     *ContextService
 	plots                        *vprocorepkg.PlotService
-	siviParentShared             *sourceformpkg.SIVIParentSharedService
+	siviParentShared             *sourceformpkg.SourceParentSharedService
 	siviCovers                   *sivipkg.SIVICoverService
 	siviCombined                 *sivipkg.SIVICombinedService
 	siviCollected                *sivipkg.SIVICollectedService
@@ -145,7 +146,7 @@ func (s *PlotEntryService) acquire() (*PlotEntryService, func()) {
 
 func buildPlotEntryService(contexts *ContextService, plots *vprocorepkg.PlotService, refs *referenceCatalogBundle) (PlotEntryService, error) {
 	core := unwrapContextService(contexts)
-	siviParentShared, err := sourceformpkg.NewSIVIParentSharedService(core)
+	siviParentShared, err := sourceformpkg.NewSourceParentSharedService(core)
 	if err != nil {
 		return PlotEntryService{}, err
 	}
@@ -186,7 +187,7 @@ func buildPlotEntryService(contexts *ContextService, plots *vprocorepkg.PlotServ
 	if refs != nil {
 		refBundle = *refs
 	}
-	siviParentShared.References = sourceformpkg.SiviParentSharedReferenceReaders{
+	siviParentShared.References = sourceformpkg.SourceParentSharedReferenceReaders{
 		Site:    refBundle.siteCodes,
 		Region:  refBundle.regionCodes,
 		Parent:  refBundle.parentCodes,
@@ -283,13 +284,27 @@ func buildPlotEntryService(contexts *ContextService, plots *vprocorepkg.PlotServ
 
 // PlotService delegates
 
-func (s *PlotEntryService) CanEditMasterBEC() bool {
+func (s *PlotEntryService) withPlots(ctx context.Context) (*vprocorepkg.PlotService, func(), error) {
 	s, release := s.acquire()
-	defer release()
 	if s == nil || s.plots == nil {
+		release()
+		return nil, noopRelease, errors.New("plot service is unavailable")
+	}
+	plots, err := s.plots.WithRequestContext(ctx)
+	if err != nil {
+		release()
+		return nil, noopRelease, err
+	}
+	return plots, release, nil
+}
+
+func (s *PlotEntryService) CanEditMasterBEC(ctx context.Context) bool {
+	plots, release, err := s.withPlots(ctx)
+	defer release()
+	if err != nil {
 		return false
 	}
-	return s.plots.CanEditMasterBEC()
+	return plots.CanEditMasterBEC()
 }
 
 func (s *PlotEntryService) UserAccreditationStatus(ctx context.Context) (UserAccreditation, error) {
@@ -301,223 +316,226 @@ func (s *PlotEntryService) UserAccreditationStatus(ctx context.Context) (UserAcc
 	return s.plots.UserAccreditationStatus(ctx)
 }
 
-func (s *PlotEntryService) CreatePlot(h FS882Header) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) CreatePlot(ctx context.Context, h FS882Header) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.CreatePlot(h)
+	return plots.CreatePlot(h)
 }
 
-func (s *PlotEntryService) CreateSourceVegetation(plot string, request VegetationCreationRequest) (int64, error) {
-	s, release := s.acquire()
+func (s *PlotEntryService) CreateSourceVegetation(ctx context.Context, plot string, request VegetationCreationRequest) (int64, error) {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return 0, errors.New("plot service is unavailable")
+	if err != nil {
+		return 0, err
 	}
-	return s.plots.CreateSourceVegetation(plot, request)
+	return plots.CreateSourceVegetation(plot, request)
 }
 
-func (s *PlotEntryService) DeleteHumusRecord(plotNumber string, id int64) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) DeleteHumusRecord(ctx context.Context, plotNumber string, id int64) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.DeleteHumusRecord(plotNumber, id)
+	return plots.DeleteHumusRecord(plotNumber, id)
 }
 
-func (s *PlotEntryService) DeleteMineralRecord(plotNumber string, id int64) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) DeleteMineralRecord(ctx context.Context, plotNumber string, id int64) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.DeleteMineralRecord(plotNumber, id)
+	return plots.DeleteMineralRecord(plotNumber, id)
 }
 
-func (s *PlotEntryService) DeleteOtherRecord(plotNumber string, id int64) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) DeleteOtherRecord(ctx context.Context, plotNumber string, id int64) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.DeleteOtherRecord(plotNumber, id)
+	return plots.DeleteOtherRecord(plotNumber, id)
 }
 
-func (s *PlotEntryService) DeleteReviewedVegetation(plot string, request VegetationDeletionRequest) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) DeleteReviewedVegetation(ctx context.Context, plot string, request VegetationDeletionRequest) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return plotentry.DeleteReviewedVegetation(s.plots, plot, request)
+	return plotentry.DeleteReviewedVegetation(plots, plot, request)
 }
 
-func (s *PlotEntryService) DeleteVegRecord(plotNumber string, id int64) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) DeleteVegRecord(ctx context.Context, plotNumber string, id int64) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.DeleteVegRecord(plotNumber, id)
+	return plots.DeleteVegRecord(plotNumber, id)
 }
 
-func (s *PlotEntryService) GetChildCapabilities(kind string) (map[string]bool, error) {
-	s, release := s.acquire()
+func (s *PlotEntryService) GetChildCapabilities(ctx context.Context, kind string) (map[string]bool, error) {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return nil, errors.New("plot service is unavailable")
+	if err != nil {
+		return nil, err
 	}
-	return s.plots.GetChildCapabilities(kind)
+	return plots.GetChildCapabilities(kind)
 }
 
-func (s *PlotEntryService) GetHeaderCapabilities() (map[string]bool, error) {
-	s, release := s.acquire()
+func (s *PlotEntryService) GetHeaderCapabilities(ctx context.Context) (map[string]bool, error) {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return nil, errors.New("plot service is unavailable")
+	if err != nil {
+		return nil, err
 	}
-	return s.plots.GetHeaderCapabilities()
+	return plots.GetHeaderCapabilities()
 }
 
-func (s *PlotEntryService) GetPlot(plotNumber string) (*FS882Header, error) {
-	s, release := s.acquire()
+func (s *PlotEntryService) GetPlot(ctx context.Context, plotNumber string) (*FS882Header, error) {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return nil, errors.New("plot service is unavailable")
+	if err != nil {
+		return nil, err
 	}
-	return s.plots.GetPlot(plotNumber)
+	return plots.GetPlot(plotNumber)
 }
 
-func (s *PlotEntryService) ListAuditEntries(plotNumber string) ([]AuditEntry, error) {
-	s, release := s.acquire()
+func (s *PlotEntryService) ListAuditEntries(ctx context.Context, plotNumber string) ([]AuditEntry, error) {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return nil, errors.New("plot service is unavailable")
+	if err != nil {
+		return nil, err
 	}
-	return s.plots.ListAuditEntries(plotNumber)
+	return plots.ListAuditEntries(plotNumber)
 }
 
-func (s *PlotEntryService) ListAuditReadEntries(plot string) ([]OrdinaryAuditReadEntry, error) {
-	s, release := s.acquire()
+func (s *PlotEntryService) ListAuditReadEntries(ctx context.Context, plot string) ([]OrdinaryAuditReadEntry, error) {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return nil, errors.New("plot service is unavailable")
+	if err != nil {
+		return nil, err
 	}
-	return s.plots.ListAuditReadEntries(plot)
+	return plots.ListAuditReadEntries(plot)
 }
 
-func (s *PlotEntryService) ListHumusRecords(plotNumber string) ([]HumusRecord, error) {
-	s, release := s.acquire()
+func (s *PlotEntryService) ListHumusRecords(ctx context.Context, plotNumber string) ([]HumusRecord, error) {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return nil, errors.New("plot service is unavailable")
+	if err != nil {
+		return nil, err
 	}
-	return s.plots.ListHumusRecords(plotNumber)
+	return plots.ListHumusRecords(plotNumber)
 }
 
-func (s *PlotEntryService) ListMineralRecords(plotNumber string) ([]MineralRecord, error) {
-	s, release := s.acquire()
+func (s *PlotEntryService) ListMineralRecords(ctx context.Context, plotNumber string) ([]MineralRecord, error) {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return nil, errors.New("plot service is unavailable")
+	if err != nil {
+		return nil, err
 	}
-	return s.plots.ListMineralRecords(plotNumber)
+	return plots.ListMineralRecords(plotNumber)
 }
 
-func (s *PlotEntryService) ListOtherRecords(plotNumber string) ([]OtherRecord, error) {
-	s, release := s.acquire()
+func (s *PlotEntryService) ListOtherRecords(ctx context.Context, plotNumber string) ([]OtherRecord, error) {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return nil, errors.New("plot service is unavailable")
+	if err != nil {
+		return nil, err
 	}
-	return s.plots.ListOtherRecords(plotNumber)
+	return plots.ListOtherRecords(plotNumber)
 }
 
-func (s *PlotEntryService) ListVegRecords(plotNumber string) ([]VegRecord, error) {
-	s, release := s.acquire()
+func (s *PlotEntryService) ListVegRecords(ctx context.Context, plotNumber string) ([]VegRecord, error) {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return nil, errors.New("plot service is unavailable")
+	if err != nil {
+		return nil, err
 	}
-	return s.plots.ListVegRecords(plotNumber)
+	return plots.ListVegRecords(plotNumber)
 }
 
-func (s *PlotEntryService) RestoreAuditRecords(plotNumber string, removeAuditRows bool) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) RestoreAuditRecords(ctx context.Context, plotNumber string, removeAuditRows bool) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.RestoreAuditRecords(plotNumber, removeAuditRows)
+	return plots.RestoreAuditRecords(plotNumber, removeAuditRows)
 }
 
-func (s *PlotEntryService) RestoreSelectedAuditRecords(plotNumber string, rowIDs []string, action AuditRestoreAction) (*AuditRestoreResult, error) {
-	s, release := s.acquire()
+func (s *PlotEntryService) RestoreSelectedAuditRecords(ctx context.Context, plotNumber string, rowIDs []string, action AuditRestoreAction) (*AuditRestoreResult, error) {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return nil, errors.New("plot service is unavailable")
+	if err != nil {
+		return nil, err
 	}
-	return s.plots.RestoreSelectedAuditRecords(plotNumber, rowIDs, vprocorepkg.AuditRestoreAction(action))
+	return plots.RestoreSelectedAuditRecords(plotNumber, rowIDs, vprocorepkg.AuditRestoreAction(action))
 }
 
-func (s *PlotEntryService) SaveHumusRecord(r HumusRecord) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) SaveHumusRecord(ctx context.Context, r HumusRecord) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.SaveHumusRecord(r)
+	return plots.SaveHumusRecord(r)
 }
 
-func (s *PlotEntryService) SaveMineralRecord(r MineralRecord) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) SaveMineralRecord(ctx context.Context, r MineralRecord) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.SaveMineralRecord(r)
+	return plots.SaveMineralRecord(r)
 }
 
-func (s *PlotEntryService) SaveOtherRecord(r OtherRecord) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) SaveOtherRecord(ctx context.Context, r OtherRecord) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.SaveOtherRecord(r)
+	return plots.SaveOtherRecord(r)
 }
 
-func (s *PlotEntryService) SavePlot(h FS882Header) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) SavePlot(ctx context.Context, h FS882Header) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.SavePlot(h)
+	return plots.SavePlot(h)
 }
 
-func (s *PlotEntryService) SaveVegRecord(r VegRecord) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) SaveVegRecord(ctx context.Context, r VegRecord) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.SaveVegRecord(r)
+	return plots.SaveVegRecord(r)
 }
 
-func (s *PlotEntryService) SetAuditRestoreSelection(plotNumber string, rowIDs []string) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) SetAuditRestoreSelection(ctx context.Context, plotNumber string, rowIDs []string) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.SetAuditRestoreSelection(plotNumber, rowIDs)
+	return plots.SetAuditRestoreSelection(plotNumber, rowIDs)
 }
 
-func (s *PlotEntryService) SetAuditStrength(strength int) error {
+func (s *PlotEntryService) SetAuditStrength(ctx context.Context, strength int) error {
+	if err := requireContextArg(ctx); err != nil {
+		return err
+	}
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.plots == nil {
@@ -526,7 +544,10 @@ func (s *PlotEntryService) SetAuditStrength(strength int) error {
 	return s.plots.SetAuditStrength(strength)
 }
 
-func (s *PlotEntryService) SetCurrentUser(user string) error {
+func (s *PlotEntryService) SetCurrentUser(ctx context.Context, user string) error {
+	if err := requireContextArg(ctx); err != nil {
+		return err
+	}
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.plots == nil {
@@ -535,110 +556,110 @@ func (s *PlotEntryService) SetCurrentUser(user string) error {
 	return s.plots.SetCurrentUser(user)
 }
 
-func (s *PlotEntryService) UpdateCollectedRecords(plot string, updates []CollectedRecordUpdate) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) UpdateCollectedRecords(ctx context.Context, plot string, updates []CollectedRecordUpdate) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.UpdateCollectedRecords(plot, updates)
+	return plots.UpdateCollectedRecords(plot, updates)
 }
 
-func (s *PlotEntryService) UpdateHeightRecords(plotNumber string, updates []HeightRecordUpdate) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) UpdateHeightRecords(ctx context.Context, plotNumber string, updates []HeightRecordUpdate) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.UpdateHeightRecords(plotNumber, updates)
+	return plots.UpdateHeightRecords(plotNumber, updates)
 }
 
-func (s *PlotEntryService) UpdateHumusRecord(r HumusRecord) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) UpdateHumusRecord(ctx context.Context, r HumusRecord) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.UpdateHumusRecord(r)
+	return plots.UpdateHumusRecord(r)
 }
 
-func (s *PlotEntryService) UpdateMineralRecord(r MineralRecord) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) UpdateMineralRecord(ctx context.Context, r MineralRecord) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.UpdateMineralRecord(r)
+	return plots.UpdateMineralRecord(r)
 }
 
-func (s *PlotEntryService) UpdateOtherRecord(r OtherRecord) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) UpdateOtherRecord(ctx context.Context, r OtherRecord) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.UpdateOtherRecord(r)
+	return plots.UpdateOtherRecord(r)
 }
 
-func (s *PlotEntryService) UpdateOtherRecords(plot string, updates []OtherRecordUpdate) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) UpdateOtherRecords(ctx context.Context, plot string, updates []OtherRecordUpdate) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.UpdateOtherRecords(plot, updates)
+	return plots.UpdateOtherRecords(plot, updates)
 }
 
-func (s *PlotEntryService) UpdatePlot(h FS882Header) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) UpdatePlot(ctx context.Context, h FS882Header) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.UpdatePlot(h)
+	return plots.UpdatePlot(h)
 }
 
-func (s *PlotEntryService) UpdateSoilRecords(plot string, updates []SoilRecordUpdate) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) UpdateSoilRecords(ctx context.Context, plot string, updates []SoilRecordUpdate) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.UpdateSoilRecords(plot, updates)
+	return plots.UpdateSoilRecords(plot, updates)
 }
 
-func (s *PlotEntryService) UpdateVegRecord(r VegRecord) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) UpdateVegRecord(ctx context.Context, r VegRecord) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.UpdateVegRecord(r)
+	return plots.UpdateVegRecord(r)
 }
 
-func (s *PlotEntryService) UpdateVegetationAttributes(plot string, updates []VegetationAttributeUpdate) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) UpdateVegetationAttributes(ctx context.Context, plot string, updates []VegetationAttributeUpdate) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return plotentry.UpdateVegetationAttributes(s.plots, plot, updates)
+	return plotentry.UpdateVegetationAttributes(plots, plot, updates)
 }
 
-func (s *PlotEntryService) UpdateVegetationNumbers(plot string, updates []VegetationNumberUpdate) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) UpdateVegetationNumbers(ctx context.Context, plot string, updates []VegetationNumberUpdate) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.UpdateVegetationNumbers(plot, updates)
+	return plots.UpdateVegetationNumbers(plot, updates)
 }
 
-func (s *PlotEntryService) UpdateVegetationSpecies(plot string, updates []VegetationSpeciesUpdate) error {
-	s, release := s.acquire()
+func (s *PlotEntryService) UpdateVegetationSpecies(ctx context.Context, plot string, updates []VegetationSpeciesUpdate) error {
+	plots, release, err := s.withPlots(ctx)
 	defer release()
-	if s == nil || s.plots == nil {
-		return errors.New("plot service is unavailable")
+	if err != nil {
+		return err
 	}
-	return s.plots.UpdateVegetationSpecies(plot, updates)
+	return plots.UpdateVegetationSpecies(plot, updates)
 }

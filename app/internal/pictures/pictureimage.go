@@ -1,10 +1,6 @@
 package pictures
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -13,7 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"image"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+
 	_ "image/jpeg"
+
 	_ "image/png"
 	"io"
 	"os"

@@ -1,17 +1,15 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"strconv"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func summaryEnvironmentalQuickVegFixture(t *testing.T) (vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable) {
@@ -126,6 +124,7 @@ func TestSummaryEnvironmentalQuickVegRefusalsAndDetachedSource(t *testing.T) {
 	if _, err := prepareSummaryEnvironmentalQuickVeg(ctx, "Sample", "SU", veg, su); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := prepareSummaryEnvironmentalQuickVeg(nil, "Sample", "SU", veg, su); err == nil {
 		t.Fatal("nil context")
 	}

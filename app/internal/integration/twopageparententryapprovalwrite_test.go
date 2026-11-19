@@ -1,16 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/references"
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/twopage"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -18,6 +8,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/twopage"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestTwoPageEntryOwnedReferenceWriterModesAliasesAtomicRetryAndRestore(t *testing.T) {
@@ -189,7 +187,7 @@ func TestTwoPageEntryOwnedReferenceWriterCollisionCommitsOneAuditedHistory(t *te
 		t.Fatal(err)
 	}
 	type outcome struct {
-		result *sourceform.SiviParentWriteResult
+		result *sourceform.SourceParentWriteResult
 		err    error
 	}
 	outcomes := make(chan outcome, 2)
@@ -262,7 +260,7 @@ func TestTwoPageEntryOwnedReferenceWriterExternalSUWALDeniedAndCorrectionRetry(t
 	before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 	selection := twopage.TwoPageEntryReferenceSelection{ProjectSource: snapshot.ProjectSource, WorkingSource: 3}
 	result, err := twopage.WriteTwoPageEntryWithOwnedReferences(contexts, context.Background(), state.ContextID, "108050", snapshot.Original.Form,
-		snapshot.Original, []sourceform.SiviParentScalarEdit{edit}, false, provider.Readers, selection, acknowledgements)
+		snapshot.Original, []sourceform.SourceParentScalarEdit{edit}, false, provider.Readers, selection, acknowledgements)
 	if err == nil || result != nil || !strings.Contains(err.Error(), "sivi_su references require rollback-journal") {
 		t.Fatal("external SU WAL snapshot became a stable Working Unit read lock", result, err)
 	}
@@ -271,7 +269,7 @@ func TestTwoPageEntryOwnedReferenceWriterExternalSUWALDeniedAndCorrectionRetry(t
 		t.Fatal("disposable external SU journal correction failed", journal, err)
 	}
 	result, err = twopage.WriteTwoPageEntryWithOwnedReferences(contexts, context.Background(), state.ContextID, "108050", snapshot.Original.Form,
-		snapshot.Original, []sourceform.SiviParentScalarEdit{edit}, false, provider.Readers, selection, acknowledgements)
+		snapshot.Original, []sourceform.SourceParentScalarEdit{edit}, false, provider.Readers, selection, acknowledgements)
 	if err != nil || result == nil || result.ChangedCells != 1 || result.HistoryID == "" {
 		t.Fatal("external SU journal correction could not retry Working Unit assignment", result, err)
 	}
@@ -297,7 +295,7 @@ func TestTwoPageEntryOwnedReferenceWriterWALDeniedAndJournalCorrectionRetry(t *t
 	}
 	before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 	noop, err := twopage.WriteTwoPageEntryWithOwnedReferences(contexts, context.Background(), state.ContextID, "108050", snapshot.Original.Form,
-		snapshot.Original, []sourceform.SiviParentScalarEdit{sftest.SiviParentEdit(t, snapshot.Original, "FieldNumber",
+		snapshot.Original, []sourceform.SourceParentScalarEdit{sftest.SiviParentEdit(t, snapshot.Original, "FieldNumber",
 			sftest.SiviParentCell(t, snapshot.Original, "FieldNumber"))}, false, provider.Readers, selection, nil)
 	if err != nil || noop == nil || noop.ChangedCells != 0 || noop.HistoryID != "" {
 		t.Fatal("untouched references imposed mutation-only restrictions on a historical noop", noop, err)

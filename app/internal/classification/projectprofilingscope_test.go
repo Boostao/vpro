@@ -1,16 +1,14 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestProjectProfilingExternalProjectAndSelectedSUScopePreserveFiles(t *testing.T) {

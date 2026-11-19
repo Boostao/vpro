@@ -322,7 +322,7 @@ func TestEngGo007ExactTextPlotPredicatesAndUSysEnvUnderCollateNocaseAndNumericSU
 	if err := svc.Edit(state.ContextID, func(plots *vprocore.PlotService) error {
 		return plots.UpdateChildPatches("00337a", []vprocore.ChildRecordPatch{{
 			Kind: "Veg",
-			Id:   9103,
+			ID:   9103,
 			Cells: map[string]vprocore.ChildExpectedValue{
 				"ll": {Expected: 3, Value: 7, Scalar: reflect.Int},
 			},

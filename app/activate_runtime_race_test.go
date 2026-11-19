@@ -160,8 +160,8 @@ func TestReproActivateRuntimeHotSwapDataRace(t *testing.T) {
 	})
 	// 3. PlotEntryService (FS882 + SIVI + Two-Page + picklists)
 	spawn(func() {
-		_, _ = graph.plotEntry.GetHeaderCapabilities()
-		_, _ = graph.plotEntry.GetPlot("00337")
+		_, _ = graph.plotEntry.GetHeaderCapabilities(ctx)
+		_, _ = graph.plotEntry.GetPlot(ctx, "00337")
 		_, _ = graph.plotEntry.GetSIVICoverOriginal(ctx, currentCID(), "00337", false)
 		_, _ = graph.plotEntry.ListPlotQualityChoices(ctx)
 	})
@@ -173,7 +173,7 @@ func TestReproActivateRuntimeHotSwapDataRace(t *testing.T) {
 	// 5. ClassificationService
 	spawn(func() {
 		_, _ = graph.classification.GetBECCatalogueStatus(ctx)
-		_, _ = graph.classification.GetWorkingUnitMode()
+		_, _ = graph.classification.GetWorkingUnitMode(ctx)
 		_, _ = graph.classification.GetSUPlotTree(ctx, currentCID(), "")
 	})
 	// 6. ValidationService
@@ -198,7 +198,7 @@ func TestReproActivateRuntimeHotSwapDataRace(t *testing.T) {
 	})
 	// 10. SpatialService (including PMTilesAttributor intersection)
 	spawn(func() {
-		_, _ = graph.spatial.GetCoordinateMode()
+		_, _ = graph.spatial.GetCoordinateMode(ctx)
 		_, _ = graph.spatial.GetPMTilesManifest(ctx)
 		_, _ = graph.spatial.SuggestSpatialAttributes(ctx, 54.0, -125.0)
 		_, _ = graph.spatial.GetPlotLocationReview(ctx, currentCID())
@@ -216,13 +216,13 @@ func TestReproActivateRuntimeHotSwapDataRace(t *testing.T) {
 	// Cross-service atomic publication observer: once ContextService is live, downstream services must never be uninitialized.
 	spawn(func() {
 		if _, sErr := graph.context.GetState(ctx); sErr == nil {
-			if _, cErr := graph.spatial.GetCoordinateMode(); cErr != nil && strings.Contains(cErr.Error(), "unavailable") {
+			if _, cErr := graph.spatial.GetCoordinateMode(ctx); cErr != nil && strings.Contains(cErr.Error(), "unavailable") {
 				recordFailure("partial service swap observed: ContextService ready while SpatialService.GetCoordinateMode returned: " + cErr.Error())
 			}
 			if _, hErr := graph.help.GetAboutInfo(ctx); hErr != nil && strings.Contains(hErr.Error(), "unavailable") {
 				recordFailure("partial service swap observed: ContextService ready while HelpService.GetAboutInfo returned: " + hErr.Error())
 			}
-			if _, pErr := graph.plotEntry.GetHeaderCapabilities(); pErr != nil && strings.Contains(pErr.Error(), "unavailable") {
+			if _, pErr := graph.plotEntry.GetHeaderCapabilities(ctx); pErr != nil && strings.Contains(pErr.Error(), "unavailable") {
 				recordFailure("partial service swap observed: ContextService ready while PlotEntryService.GetHeaderCapabilities returned: " + pErr.Error())
 			}
 		}

@@ -24,7 +24,7 @@ func pictureDeletionWriterSchema(ctx context.Context, tx *sql.Tx) error {
 	}
 	upper := strings.ToUpper(definition)
 	if strings.Contains(upper, "VIRTUAL TABLE") || strings.Contains(upper, "WITHOUT ROWID") {
-		return errors.New("picture deletion requires an ordinary rowid table")
+		return errors.New("picture deletion requires a standard VPro table")
 	}
 	var incoming int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master AS source

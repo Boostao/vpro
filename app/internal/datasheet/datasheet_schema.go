@@ -2,9 +2,10 @@ package datasheet
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
-	"strings"
 )
 
 const (

@@ -11,7 +11,7 @@ type PublicationReadSnapshotHooks struct {
 	RollbackRead func(*sql.Tx) error `json:"-" yaml:"-"`
 }
 
-// Only read observations belong here; cleanup errors must never zero a committed file.
+// WithPublicationReadSnapshot — Only read observations belong here; cleanup errors must never zero a committed file.
 func WithPublicationReadSnapshot[T any](ctx context.Context, owner *SqliteContext, hooks PublicationReadSnapshotHooks, read func(*sql.Tx) (T, error)) (result T, resultErr error) {
 	var zero T
 	if err := ProfileOwnedFiles(owner); err != nil {

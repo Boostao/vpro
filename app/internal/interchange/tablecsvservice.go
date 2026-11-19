@@ -1,12 +1,10 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type ProjectTableCSVReview struct {

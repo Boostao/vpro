@@ -1,12 +1,6 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -15,6 +9,10 @@ import (
 	"reflect"
 	"strconv"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type TwoPageEntryReferenceSelection struct {
@@ -31,16 +29,19 @@ func verifyTwoPageEntryReferenceAliases(ctx context.Context, tx *sql.Tx, owner *
 		return err
 	}
 	observed := map[string]string{}
-	for rows.Next() {
-		var index int
-		var alias, path string
-		if err := rows.Scan(&index, &alias, &path); err != nil {
-			rows.Close()
-			return err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var index int
+			var alias, path string
+			if err := rows.Scan(&index, &alias, &path); err != nil {
+
+				return err
+			}
+			observed[alias] = path
 		}
-		observed[alias] = path
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return err
 	}
 	for alias, role := range expected {
@@ -73,10 +74,10 @@ func TwoPageEntryReferenceSelectionFromConfig(values map[string]any) (TwoPageEnt
 
 func ReadTwoPageEntryContextReference(ctx context.Context, tx *sql.Tx, owner *vprocore.SqliteContext, contextID, form string,
 	selection TwoPageEntryReferenceSelection, aliases TwoPageEntryReferenceAliases,
-	field TwoPageEntryReferenceField) (sourceform.SIVIParentSharedReference, error) {
-	result := sourceform.SIVIParentSharedReference{Column: field.Column, ListName: field.List, Required: field.Required,
+	field TwoPageEntryReferenceField) (sourceform.SourceParentSharedReference, error) {
+	result := sourceform.SourceParentSharedReference{Column: field.Column, ListName: field.List, Required: field.Required,
 		Definitions: vprocore.ProjectMetadataTable{Columns: []vprocore.ProjectMetadataColumn{}, Rows: []vprocore.ProjectMetadataRow{}},
-		Choices:     []sourceform.SIVIParentSharedReferenceChoice{}}
+		Choices:     []sourceform.SourceParentSharedReferenceChoice{}}
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
@@ -119,7 +120,7 @@ func ReadTwoPageEntryContextReference(ctx context.Context, tx *sql.Tx, owner *vp
 	}
 	switch field.Reader {
 	case "project":
-		choices, err := sourceform.ReadSIVIProjectChoicesAtAlias(ctx, owner, tx, contextID, selection.ProjectSource, aliases.Project)
+		choices, err := sourceform.ReadSourceProjectChoicesAtAlias(ctx, owner, tx, contextID, selection.ProjectSource, aliases.Project)
 		if err != nil {
 			return result, err
 		}
@@ -128,7 +129,7 @@ func ReadTwoPageEntryContextReference(ctx context.Context, tx *sql.Tx, owner *vp
 		result.Definitions = choices.Choices
 		for _, row := range choices.Choices.Rows {
 			cell, title := row.Cells[0], row.Cells[1]
-			choice := sourceform.SIVIParentSharedReferenceChoice{RowID: row.RowID, Code: cell.Text, Description: title.Text}
+			choice := sourceform.SourceParentSharedReferenceChoice{RowID: row.RowID, Code: cell.Text, Description: title.Text}
 			if cell.Storage != "text" || cell.Text == nil {
 				choice.Diagnostic = "ProjectID is not nonempty TEXT"
 			} else if err := sqlutil.ValidateSiteCodeText(field.Column, cell.Text, field.Maximum); err != nil {
@@ -157,7 +158,7 @@ func ReadTwoPageEntryContextReference(ctx context.Context, tx *sql.Tx, owner *vp
 			result.Definitions = table
 			for _, row := range table.Rows {
 				code, description := row.Cells[1], row.Cells[2]
-				choice := sourceform.SIVIParentSharedReferenceChoice{RowID: row.RowID, Code: code.Text, Description: description.Text}
+				choice := sourceform.SourceParentSharedReferenceChoice{RowID: row.RowID, Code: code.Text, Description: description.Text}
 				if code.Storage != "text" || code.Text == nil {
 					choice.Diagnostic = "SiteSeries is not nonempty TEXT"
 				} else if err := sqlutil.ValidateSiteCodeText(field.Column, code.Text, field.Maximum); err != nil {
@@ -200,33 +201,36 @@ func ReadTwoPageEntryContextReference(ctx context.Context, tx *sql.Tx, owner *vp
 				return result, err
 			}
 			result.Definitions.Columns = []vprocore.ProjectMetadataColumn{{Name: "Item", DeclaredType: "TEXT"}}
-			for rows.Next() {
-				var code any
-				if err := rows.Scan(&code); err != nil {
-					rows.Close()
-					return result, err
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+				for rows.Next() {
+					var code any
+					if err := rows.Scan(&code); err != nil {
+
+						return err
+					}
+					value, text := code.(string)
+					if !text {
+
+						return errors.New("complete-entry Working Unit source requires literal TEXT values")
+					}
+					if !utf8.ValidString(value) {
+
+						return errors.New("complete-entry Working Unit source contains malformed UTF-8")
+					}
+					id := strconv.Itoa(len(result.Choices) + 1)
+					choice := sourceform.SourceParentSharedReferenceChoice{RowID: id, Code: &value}
+					if err := sqlutil.ValidateSiteCodeText(field.Column, &value, field.Maximum); err != nil {
+						choice.Diagnostic = err.Error()
+					} else {
+						choice.Selectable = true
+					}
+					result.Choices = append(result.Choices, choice)
+					result.Definitions.Rows = append(result.Definitions.Rows, vprocore.ProjectMetadataRow{RowID: id,
+						Cells: []vprocore.ProjectMetadataCell{sourceform.SourceReferenceText(&value)}})
 				}
-				value, text := code.(string)
-				if !text {
-					rows.Close()
-					return result, errors.New("complete-entry Working Unit source requires literal TEXT values")
-				}
-				if !utf8.ValidString(value) {
-					rows.Close()
-					return result, errors.New("complete-entry Working Unit source contains malformed UTF-8")
-				}
-				id := strconv.Itoa(len(result.Choices) + 1)
-				choice := sourceform.SIVIParentSharedReferenceChoice{RowID: id, Code: &value}
-				if err := sqlutil.ValidateSiteCodeText(field.Column, &value, field.Maximum); err != nil {
-					choice.Diagnostic = err.Error()
-				} else {
-					choice.Selectable = true
-				}
-				result.Choices = append(result.Choices, choice)
-				result.Definitions.Rows = append(result.Definitions.Rows, vprocore.ProjectMetadataRow{RowID: id,
-					Cells: []vprocore.ProjectMetadataCell{sourceform.SiviReferenceText(&value)}})
-			}
-			if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+				return rows.Err()
+			}(); err != nil {
 				return result, err
 			}
 		}

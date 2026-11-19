@@ -1,13 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,6 +8,11 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func summaryGroupedLayers() vprocore.ProjectMetadataTable {
@@ -168,6 +166,7 @@ func TestSummaryVegetationGroupedStageGuardsCancellationAndOwnership(t *testing.
 			t.Fatal("unsupported grouping/calculation accepted", got, err)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := planSummaryVegetationGroupedStage(nil, raw, su, stage, master, personal, summaryGroupedLayers(), 1, 12); err == nil {
 		t.Fatal("nil context accepted")
 	}

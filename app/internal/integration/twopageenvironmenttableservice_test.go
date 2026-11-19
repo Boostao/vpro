@@ -1,14 +1,7 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/datasheet"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
-
 	"errors"
 	"os"
 	"reflect"
@@ -17,6 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/boostao/vpro/app/internal/datasheet"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/mattn/go-sqlite3"
 	"go.yaml.in/yaml/v3"
 )
@@ -295,6 +291,7 @@ func TestTwoPageEnvironmentTableGateCancellationAndOpeningScope(t *testing.T) {
 	if err != nil || got == nil {
 		t.Fatal("cancelled coordinator cannot retry", got, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if got, err := service.GetReview(nil, state.ContextID, "108050", 0, 1); err == nil || got != nil {
 		t.Fatal("nil context returned review", got, err)
 	}

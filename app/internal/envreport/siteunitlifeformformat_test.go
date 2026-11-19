@@ -1,12 +1,10 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-)
-
-import (
 	"math"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
 )
 
 func TestSummaryLifeformSourceOneDecimalDAOFormat(t *testing.T) {

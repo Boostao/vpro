@@ -1,15 +1,13 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSummaryEnvironmentalNumericReadSnapshotAndContextValidation(t *testing.T) {
@@ -26,6 +24,7 @@ func TestSummaryEnvironmentalNumericReadSnapshotAndContextValidation(t *testing.
 		t.Fatal("numeric read mutated source")
 	}
 	empty := &SummaryVegetationEnvironmentalService{}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if result, err := empty.PreviewEnvironmentalNumeric(nil, "owned", 1, 6, 0); result != nil || err == nil {
 		t.Fatal("nil request context accepted", result, err)
 	}

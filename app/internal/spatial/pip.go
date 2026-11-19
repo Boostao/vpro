@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/resources"
 	"io"
 	"math"
 	"os"
@@ -14,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/boostao/vpro/app/resources"
 )
 
 const (

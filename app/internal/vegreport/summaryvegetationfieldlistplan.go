@@ -1,15 +1,13 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type summaryVegetationFieldListAction struct {
@@ -46,7 +44,7 @@ func validateSummaryVegetationFieldListWitness(ctx context.Context, table vproco
 		}
 		id, err := strconv.ParseInt(row.RowID, 10, 64)
 		if err != nil || strconv.FormatInt(id, 10) != row.RowID || i > 0 && id <= last {
-			return errors.New("Summary field-list witness requires unique canonical physical rowids in physical order")
+			return errors.New("Summary field-list witness requires unique field-list entries in table order")
 		}
 		last = id
 		if len(row.Cells) != len(summaryVegetationFieldListColumns) {
@@ -107,7 +105,7 @@ func planSummaryVegetationFieldList(ctx context.Context, current, expected vproc
 		case "row":
 			id, err := strconv.ParseInt(action.RowID, 10, 64)
 			if err != nil || strconv.FormatInt(id, 10) != action.RowID {
-				return nil, errors.New("Summary field-list row selection requires a canonical physical rowid")
+				return nil, errors.New("Summary field-list row selection requires a valid field-list entry")
 			}
 		default:
 			return nil, fmt.Errorf("Summary field-list action %q is unavailable", action.Kind)

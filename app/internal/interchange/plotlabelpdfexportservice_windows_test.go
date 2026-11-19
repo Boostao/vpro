@@ -1,17 +1,15 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func plotLabelPDFExportFixture(t *testing.T) (*PlotLabelPDFExportService, vprocore.ProjectState, PlotLabelPDFExportRequest) {

@@ -1,10 +1,6 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"encoding/json"
@@ -14,6 +10,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestProfileNavigationRevalidatesExactScopedPreviewAndPreservesEveryFile(t *testing.T) {

@@ -79,15 +79,18 @@ func loadLockedPlotsForFindReplace(ctx context.Context, tx *sql.Tx, project stri
 	if err != nil {
 		return nil, err
 	}
-	for lockRows.Next() {
-		var p string
-		if scanErr := lockRows.Scan(&p); scanErr != nil {
-			lockRows.Close()
-			return nil, scanErr
+	if closeErr := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, lockRows.Close()) }()
+		for lockRows.Next() {
+			var p string
+			if scanErr := lockRows.Scan(&p); scanErr != nil {
+
+				return scanErr
+			}
+			lockedPlots[p] = true
 		}
-		lockedPlots[p] = true
-	}
-	if closeErr := errors.Join(lockRows.Err(), lockRows.Close()); closeErr != nil {
+		return lockRows.Err()
+	}(); closeErr != nil {
 		return nil, closeErr
 	}
 	return lockedPlots, nil

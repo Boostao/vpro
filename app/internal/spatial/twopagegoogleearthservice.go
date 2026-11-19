@@ -1,17 +1,15 @@
 package spatial
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type TwoPageGoogleEarthReview struct {

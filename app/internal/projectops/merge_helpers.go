@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/boostao/vpro/app/internal/sqlutil"
+
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -314,29 +316,29 @@ func validateMergedCell(suffix, col string, cell rawSQLiteCell) error {
 	}
 	if cell.storage == "text" {
 		txt := string(cell.bytes)
-		if err := validateUTF16Max(suffix+"."+col, txt, 0); err != nil {
+		if err := sqlutil.ValidateUTF16Bound(suffix+"."+col, txt, 0); err != nil {
 			return err
 		}
 		switch suffix {
 		case "Env":
 			if maxLen, ok := mergedEnvTextMax[col]; ok {
-				return validateUTF16Max("Env."+col, txt, maxLen)
+				return sqlutil.ValidateUTF16Bound("Env."+col, txt, maxLen)
 			}
 		case "Admin":
 			if maxLen, ok := mergedAdminTextMax[col]; ok {
-				return validateUTF16Max("Admin."+col, txt, maxLen)
+				return sqlutil.ValidateUTF16Bound("Admin."+col, txt, maxLen)
 			}
 		case "Veg":
 			if maxLen, ok := vprocore.VegetationTextMaximum[col]; ok {
-				return validateUTF16Max("Veg."+col, txt, maxLen)
+				return sqlutil.ValidateUTF16Bound("Veg."+col, txt, maxLen)
 			}
 		case "Humus", "Mineral":
 			if maxLen, ok := vprocore.SoilChildTextMaximum[suffix][col]; ok && maxLen > 0 {
-				return validateUTF16Max(suffix+"."+col, txt, maxLen)
+				return sqlutil.ValidateUTF16Bound(suffix+"."+col, txt, maxLen)
 			}
 		case "Other":
 			if maxLen, ok := vprocore.OtherTextMaximum[col]; ok {
-				return validateUTF16Max("Other."+col, txt, maxLen)
+				return sqlutil.ValidateUTF16Bound("Other."+col, txt, maxLen)
 			}
 		}
 	}
@@ -348,8 +350,8 @@ func validateMergedCell(suffix, col string, cell rawSQLiteCell) error {
 		if cell.storage == "integer" {
 			val = float64(cell.intVal)
 		}
-		if _, ok := NarrowSingleCover(val); !ok {
-			return fmt.Errorf("cover %s.%s=%v must be >= 0 and < 100 in IEEE-754 SINGLE", suffix, col, val)
+		if _, ok := sqlutil.NarrowSingleCover(val); !ok {
+			return fmt.Errorf("cover %s.%s=%v must be from 0 to under 100%% (e.g. 99.9%%)", suffix, col, val)
 		}
 	}
 	return nil

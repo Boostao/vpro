@@ -1,15 +1,13 @@
 package plotentry
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestReviewedVegetationDeletionHiddenValuesRollbackAndReservation(t *testing.T) {

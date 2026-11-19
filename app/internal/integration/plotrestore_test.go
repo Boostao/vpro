@@ -1,11 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"database/sql"
 	"fmt"
 	"math"
@@ -13,6 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func restoreAuditFixture(t *testing.T, db *sql.DB, plot, table, field string, id *int64, before, after any) string {

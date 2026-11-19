@@ -1,11 +1,6 @@
 package spatial
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/xml"
 	"errors"
@@ -14,6 +9,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func kmlTestText(value string) vprocore.ProjectMetadataCell {
@@ -143,6 +141,7 @@ func TestGoogleEarthKMLPointsSnapshotsBeforeCallbacksAndCancellation(t *testing.
 		}
 	}
 
+	//lint:ignore SA1012 intentional nil-context guard test
 	if points, err := planGoogleEarthKMLPoints(nil, kmlTestRows()); err == nil || points != nil {
 		t.Fatal("nil context replaced silently")
 	}

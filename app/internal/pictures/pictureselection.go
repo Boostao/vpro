@@ -1,10 +1,6 @@
 package pictures
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
@@ -12,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 // A selection owns one physical file, never its containing directory. Construction

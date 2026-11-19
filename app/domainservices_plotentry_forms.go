@@ -3,9 +3,13 @@ package main
 import (
 	"context"
 	"errors"
+
 	"github.com/boostao/vpro/app/internal/lmh25rules"
+	sivipkg "github.com/boostao/vpro/app/internal/sivi"
 	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
 )
+
+type SIVICreationUndoRequest = sivipkg.SIVICreationUndoRequest
 
 // SIVI entry/cover/height/species/collected/combined/identity/creation/deletion/undo delegates
 
@@ -225,13 +229,17 @@ func (s *PlotEntryService) GetSIVICreationUndoHistory(ctx context.Context, conte
 	return s.siviCreationUndo.GetHistory(ctx, contextID, plot)
 }
 
-func (s *PlotEntryService) LookupSIVICreationUndoReceipt(ctx context.Context, contextID, requestJSON string) (*SIVICreationUndoResult, error) {
+func (s *PlotEntryService) LookupSIVICreationUndoReceipt(ctx context.Context, contextID string, request SIVICreationUndoRequest) (*SIVICreationUndoResult, error) {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.siviCreationUndo == nil {
 		return nil, errors.New("SIVI creation undo service is unavailable")
 	}
-	return s.siviCreationUndo.LookupReceipt(ctx, contextID, requestJSON)
+	raw, err := marshalTypedRPCRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	return s.siviCreationUndo.LookupReceipt(ctx, contextID, raw)
 }
 
 func (s *PlotEntryService) ReviewSIVICreationUndo(ctx context.Context, contextID, plot, historyID string) (*SIVICreationUndoReview, error) {
@@ -243,13 +251,17 @@ func (s *PlotEntryService) ReviewSIVICreationUndo(ctx context.Context, contextID
 	return s.siviCreationUndo.Review(ctx, contextID, plot, historyID)
 }
 
-func (s *PlotEntryService) UndoSIVICreation(ctx context.Context, contextID, requestJSON string) (*SIVICreationUndoResult, error) {
+func (s *PlotEntryService) UndoSIVICreation(ctx context.Context, contextID string, request SIVICreationUndoRequest) (*SIVICreationUndoResult, error) {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.siviCreationUndo == nil {
 		return nil, errors.New("SIVI creation undo service is unavailable")
 	}
-	return s.siviCreationUndo.Undo(ctx, contextID, requestJSON)
+	raw, err := marshalTypedRPCRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	return s.siviCreationUndo.Undo(ctx, contextID, raw)
 }
 
 func (s *PlotEntryService) DeleteSIVIVegetation(ctx context.Context, contextID, requestJSON string) (*SIVIDeletionResult, error) {
@@ -452,15 +464,6 @@ func (s *PlotEntryService) RecoverTwoPageSoilOutcome(ctx context.Context, contex
 	return s.twoPageSoil.RecoverOutcome(ctx, contextID, requestJSON)
 }
 
-func (s *PlotEntryService) RecoverTwoPageSoilReceipt(ctx context.Context, contextID, requestJSON string) (*TwoPageSoilWriteResult, error) {
-	s, release := s.acquire()
-	defer release()
-	if s == nil || s.twoPageSoil == nil {
-		return nil, errors.New("two-page soil service is unavailable")
-	}
-	return s.twoPageSoil.RecoverReceipt(ctx, contextID, requestJSON)
-}
-
 func (s *PlotEntryService) SaveTwoPageSoil(ctx context.Context, contextID, requestJSON string) (*TwoPageSoilWriteResult, error) {
 	s, release := s.acquire()
 	defer release()
@@ -495,15 +498,6 @@ func (s *PlotEntryService) RecoverTwoPageVegetationOutcome(ctx context.Context, 
 		return nil, errors.New("two-page vegetation service is unavailable")
 	}
 	return s.twoPageVegetation.RecoverOutcome(ctx, contextID, requestJSON)
-}
-
-func (s *PlotEntryService) RecoverTwoPageVegetationReceipt(ctx context.Context, contextID, requestJSON string) (*TwoPageVegetationWriteResult, error) {
-	s, release := s.acquire()
-	defer release()
-	if s == nil || s.twoPageVegetation == nil {
-		return nil, errors.New("two-page vegetation service is unavailable")
-	}
-	return s.twoPageVegetation.RecoverReceipt(ctx, contextID, requestJSON)
 }
 
 func (s *PlotEntryService) SaveTwoPageVegetation(ctx context.Context, contextID, requestJSON string) (*TwoPageVegetationWriteResult, error) {

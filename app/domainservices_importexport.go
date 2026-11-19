@@ -15,12 +15,8 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-func registerImportExportEvent(eventName string) {
-	application.RegisterEvent[interchange.AccessImportProgress](eventName)
-}
-
 func init() {
-	registerImportExportEvent(interchange.AccessImportProgressEvent)
+	application.RegisterEvent[interchange.AccessImportProgress](interchange.AccessImportProgressEvent)
 }
 
 func emitWailsAccessImportProgress(progress interchange.AccessImportProgress) {

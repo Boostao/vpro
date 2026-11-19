@@ -1,10 +1,6 @@
 package reportcore
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
@@ -12,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SiteUnitQuickVegetationEntry struct {
@@ -38,7 +36,7 @@ type SiteUnitQuickVegetation struct {
 	Groups      []SiteUnitQuickVegetationGroup
 }
 
-// QuickVegRecords inserts nine raw covers per physical SU join; unlike
+// PrepareSiteUnitQuickVegetation — QuickVegRecords inserts nine raw covers per physical SU join; unlike
 // CreateTempVeg, it never MAX-reduces duplicate Veg rows before insertion.
 func PrepareSiteUnitQuickVegetation(ctx context.Context, project, suName string, orderBy int, veg, su vprocore.ProjectMetadataTable) (SiteUnitQuickVegetation, error) {
 	fail := func(err error) (SiteUnitQuickVegetation, error) { return SiteUnitQuickVegetation{}, err }

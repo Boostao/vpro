@@ -1,11 +1,6 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type twoPageVegetationEdit struct {
@@ -165,11 +163,11 @@ func planTwoPageVegetationQualifiedEdits(ctx context.Context, original *twoPageV
 		seen[key] = true
 		identity := row.Cells[columns["ID"]]
 		if identity.Storage != "integer" || identity.Integer == nil {
-			return nil, errors.New("two-page vegetation edited row requires an original signed32 integer ID")
+			return nil, errors.New("two-page vegetation edited row requires an original 32-bit integer ID")
 		}
 		id, err := strconv.ParseInt(*identity.Integer, 10, 32)
 		if err != nil {
-			return nil, errors.New("two-page vegetation edited row requires an original signed32 integer ID")
+			return nil, errors.New("two-page vegetation edited row requires an original 32-bit integer ID")
 		}
 		before := row.Cells[column]
 		if _, err := vprocore.MetadataCellValue(edit.Expected); err != nil {
@@ -197,7 +195,7 @@ func planTwoPageVegetationQualifiedEdits(ctx context.Context, original *twoPageV
 		} else if edit.Column == "Collected" {
 			err = vprocore.ValidateChildPhysicalText("Veg.Collected", value, 1)
 		} else {
-			err = sourceform.ValidateSIVIChildSingle(edit.Column, edit.Value)
+			err = sourceform.ValidateSourceChildSingle(edit.Column, edit.Value)
 			if err == nil && edit.Value.Real != nil {
 				narrowed := float64(float32(*edit.Value.Real))
 				cover := *edit.Value.Real

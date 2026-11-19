@@ -1,22 +1,19 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/twopage"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
-
 	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/twopage"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestTwoPageParentExtraOwnedAtomicAuditsAndRestorationAliases(t *testing.T) {
@@ -37,7 +34,7 @@ func TestTwoPageParentExtraOwnedAtomicAuditsAndRestorationAliases(t *testing.T) 
 				if err := db.QueryRow(`SELECT Proposal FROM `+vprocore.QuoteHeaderIdentifier(history.Table)+` WHERE ID=?`, written.HistoryID).Scan(&proposal); err != nil {
 					t.Fatal(err)
 				}
-				var event sourceform.SiviParentHistory
+				var event sourceform.SourceParentHistory
 				if err := json.Unmarshal([]byte(proposal), &event); err != nil ||
 					len(event.Changes) != len(edits) || !reflect.DeepEqual(event.Original, parent) || event.Committed.Form != form {
 					t.Fatal("history lost source variant/original identity", event, err)
@@ -136,7 +133,7 @@ func TestTwoPageParentExtraOwnedAtomicAuditsAndRestorationAliases(t *testing.T) 
 func TestTwoPageParentExtraWriterCollisionRollbackAndRetry(t *testing.T) {
 	service, state, db, parent, edits := twoPageWriteFixture(t, "FS882-8x6XL", false)
 	for _, kind := range []string{"context", "form", "expected", "duplicate", "bad-tail", "original"} {
-		drafts := append([]sourceform.SiviParentScalarEdit(nil), edits...)
+		drafts := append([]sourceform.SourceParentScalarEdit(nil), edits...)
 		contextID, form, original := state.ContextID, "FS882-8x6XL", parent
 		switch kind {
 		case "context":
@@ -190,7 +187,7 @@ func TestTwoPageParentExtraWriterCollisionRollbackAndRetry(t *testing.T) {
 
 func TestTwoPageParentExtraOwnedBlockedCancellationNoopAndRetry(t *testing.T) {
 	service, state, _, parent, edits := twoPageWriteFixture(t, "FS882-8x6XL-CHARS", true)
-	noops := append([]sourceform.SiviParentScalarEdit(nil), edits...)
+	noops := append([]sourceform.SourceParentScalarEdit(nil), edits...)
 	for i := range noops {
 		noops[i].Value = noops[i].Expected
 	}
@@ -231,7 +228,7 @@ func TestTwoPageParentExtraRestorationRejectsTamperedHistoryAndCollision(t *test
 		t.Fatal(err)
 	}
 	for _, kind := range []string{"foreign-form", "foreign-field", "duplicate", "committed-form"} {
-		var event sourceform.SiviParentHistory
+		var event sourceform.SourceParentHistory
 		if err := json.Unmarshal([]byte(proposal), &event); err != nil {
 			t.Fatal(err)
 		}

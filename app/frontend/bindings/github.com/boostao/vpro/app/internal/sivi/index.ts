@@ -8,6 +8,7 @@ export type {
     SIVICreatedPlotEntry,
     SIVICreationResult,
     SIVICreationUndoHistoryList,
+    SIVICreationUndoRequest,
     SIVICreationUndoResult,
     SIVICreationUndoReview,
     SIVIDeletionHistoryList,

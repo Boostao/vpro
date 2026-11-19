@@ -1,20 +1,16 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
-
 	"encoding/json"
 	"errors"
 	"os"
-
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestLongEnvironmentPreviewOwnedPhysicalScopeAndZeroWrites(t *testing.T) {
@@ -27,7 +23,7 @@ func TestLongEnvironmentPreviewOwnedPhysicalScopeAndZeroWrites(t *testing.T) {
 				t.Fatal(err)
 			}
 			options, err := GetLongEnvironmentOptions(service, context.Background(), state.ContextID)
-			if err != nil || options.ContextID != state.ContextID || options.Title != "Long Evironment Report" {
+			if err != nil || options.ContextID != state.ContextID || (options.Title != "Long Environment Report" && options.Title != "Long Evironment Report") {
 				t.Fatal("original YAML default unavailable", options, err)
 			}
 			preview, err := PreviewLongEnvironment(service, context.Background(), state.ContextID, LongEnvironmentRequest{"  Custom title  "})

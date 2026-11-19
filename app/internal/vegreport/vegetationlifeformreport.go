@@ -1,17 +1,15 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"math/big"
 	"sort"
 	"strconv"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type vegetationLifeformObservation struct {
@@ -23,10 +21,6 @@ type vegetationLifeformObservation struct {
 
 type vegetationLifeformPreparation struct {
 	Observations []vegetationLifeformObservation
-}
-
-func vegetationLifeformInsertionLayer(cell vprocore.ProjectMetadataCell) (vprocore.ProjectMetadataCell, error) {
-	return vegetationLifeformInsertionLayerWithInteger(cell, vprocore.VegetationLifeformInteger)
 }
 
 func vegetationLifeformInsertionLayerWithInteger(cell vprocore.ProjectMetadataCell,

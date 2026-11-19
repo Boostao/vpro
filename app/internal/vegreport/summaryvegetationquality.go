@@ -37,12 +37,12 @@ type SummaryVegetationQualityRemovedPlot struct {
 
 // SummaryVegetationQualityFilterResult summarizes QC + BEC_Use plot filtering on a Summary Vegetation preview.
 type SummaryVegetationQualityFilterResult struct {
-	Enforced     bool                                   `json:"enforced"`
-	TotalBefore  int                                    `json:"totalBefore"`
-	Retained     int                                    `json:"retained"`
-	RemovedCount int                                    `json:"removedCount"`
-	Removed      []SummaryVegetationQualityRemovedPlot  `json:"removed"`
-	Thresholds   SummaryVegetationQualityThresholds     `json:"thresholds"`
+	Enforced     bool                                  `json:"enforced"`
+	TotalBefore  int                                   `json:"totalBefore"`
+	Retained     int                                   `json:"retained"`
+	RemovedCount int                                   `json:"removedCount"`
+	Removed      []SummaryVegetationQualityRemovedPlot `json:"removed"`
+	Thresholds   SummaryVegetationQualityThresholds    `json:"thresholds"`
 }
 
 // filterSummaryVegetationQuality filters an SU table per okf/02_present_state/oracles/REPORT_QUALITY_FILTER.md

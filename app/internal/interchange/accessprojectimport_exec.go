@@ -371,7 +371,7 @@ func stageAccessTablesIntoTempSQLite(
 	if err != nil {
 		return metrics, err
 	}
-		tx, err := sqlutil.BeginStagedTx(ctx, sqlDB)
+	tx, err := sqlutil.BeginStagedTx(ctx, sqlDB)
 	if err != nil {
 		sqlDB.Close()
 		return metrics, err
@@ -411,13 +411,13 @@ func executeStagedAccessImportTx(
 	}
 	defer quarantineStmt.Close()
 
-	childIdStmt, err := vprocore.PrepareChildIdentityInsertStmt(ctx, tx)
+	childIDStmt, err := vprocore.PrepareChildIdentityInsertStmt(ctx, tx)
 	if err != nil {
 		return err
 	}
-	defer childIdStmt.Close()
+	defer childIDStmt.Close()
 
-	validEnvPlots, err := streamAccessCoreVersionTables(ctx, db, tx, quarantineStmt, childIdStmt, targetProject, inv, metrics)
+	validEnvPlots, err := streamAccessCoreVersionTables(ctx, db, tx, quarantineStmt, childIDStmt, targetProject, inv, metrics)
 	if err != nil {
 		return err
 	}
@@ -489,7 +489,7 @@ func streamAccessCoreVersionTables(
 	ctx context.Context,
 	db *accessreader.DB,
 	tx *sql.Tx,
-	quarantineStmt, childIdStmt *sql.Stmt,
+	quarantineStmt, childIDStmt *sql.Stmt,
 	targetProject string,
 	inv accessSourceInventory,
 	metrics *accessStagedMetrics,
@@ -498,13 +498,13 @@ func streamAccessCoreVersionTables(
 	auditComputed, auditOverrides := buildAuditStreamTransforms(targetProject)
 
 	if inv.version == "VP08" {
-		err := streamVP08CoreTables(ctx, db, tx, quarantineStmt, childIdStmt, targetProject, inv, validEnvPlots, auditComputed, auditOverrides, metrics)
+		err := streamVP08CoreTables(ctx, db, tx, quarantineStmt, childIDStmt, targetProject, inv, validEnvPlots, auditComputed, auditOverrides, metrics)
 		return validEnvPlots, err
 	}
-	if err := streamLegacyEnvAndAdmin(ctx, db, tx, quarantineStmt, childIdStmt, targetProject, inv, validEnvPlots, metrics); err != nil {
+	if err := streamLegacyEnvAndAdmin(ctx, db, tx, quarantineStmt, childIDStmt, targetProject, inv, validEnvPlots, metrics); err != nil {
 		return nil, err
 	}
-	err := streamLegacyChildAndAuditTables(ctx, db, tx, quarantineStmt, childIdStmt, targetProject, inv, validEnvPlots, auditComputed, auditOverrides, metrics)
+	err := streamLegacyChildAndAuditTables(ctx, db, tx, quarantineStmt, childIDStmt, targetProject, inv, validEnvPlots, auditComputed, auditOverrides, metrics)
 	return validEnvPlots, err
 }
 
@@ -512,7 +512,7 @@ func streamVP08CoreTables(
 	ctx context.Context,
 	db *accessreader.DB,
 	tx *sql.Tx,
-	quarantineStmt, childIdStmt *sql.Stmt,
+	quarantineStmt, childIDStmt *sql.Stmt,
 	targetProject string,
 	inv accessSourceInventory,
 	validEnvPlots map[string]struct{},
@@ -536,7 +536,7 @@ func streamVP08CoreTables(
 		{inv.adminActualName, validEnvPlots, streamInsertSpec{targetTable: targetProject + "_Admin", requireEnvPlot: true, plotSourceCol: "Plot", dedupePlotKey: true}, &metrics.adminM},
 	}
 	for _, st := range steps {
-		m, err := streamAccessTableIntoSQLite(ctx, db, tx, quarantineStmt, childIdStmt, st.src, st.env, []streamInsertSpec{st.spec})
+		m, err := streamAccessTableIntoSQLite(ctx, db, tx, quarantineStmt, childIDStmt, st.src, st.env, []streamInsertSpec{st.spec})
 		if err != nil {
 			return err
 		}
@@ -550,7 +550,7 @@ func streamLegacyEnvAndAdmin(
 	ctx context.Context,
 	db *accessreader.DB,
 	tx *sql.Tx,
-	quarantineStmt, childIdStmt *sql.Stmt,
+	quarantineStmt, childIDStmt *sql.Stmt,
 	targetProject string,
 	inv accessSourceInventory,
 	validEnvPlots map[string]struct{},
@@ -572,7 +572,7 @@ func streamLegacyEnvAndAdmin(
 		envMap, adminMap = vp05EnvMapping, vp05AdminFromEnvMapping
 	}
 
-	envM, err := streamAccessTableIntoSQLite(ctx, db, tx, quarantineStmt, childIdStmt, inv.envActualName, nil, []streamInsertSpec{
+	envM, err := streamAccessTableIntoSQLite(ctx, db, tx, quarantineStmt, childIDStmt, inv.envActualName, nil, []streamInsertSpec{
 		{targetTable: targetProject + "_Env", targetToSource: envMap, computed: computed, dedupePlotKey: true, recordEnvPlots: validEnvPlots},
 		{targetTable: targetProject + "_Admin", targetToSource: adminMap},
 	})
@@ -622,7 +622,7 @@ func streamLegacyChildAndAuditTables(
 	ctx context.Context,
 	db *accessreader.DB,
 	tx *sql.Tx,
-	quarantineStmt, childIdStmt *sql.Stmt,
+	quarantineStmt, childIDStmt *sql.Stmt,
 	targetProject string,
 	inv accessSourceInventory,
 	validEnvPlots map[string]struct{},
@@ -662,7 +662,7 @@ func streamLegacyChildAndAuditTables(
 			spec.computed = auditComputed
 			spec.columnOverrides = auditOverrides
 		}
-		m, err := streamAccessTableIntoSQLite(ctx, db, tx, quarantineStmt, childIdStmt, item.src, envSet, []streamInsertSpec{spec})
+		m, err := streamAccessTableIntoSQLite(ctx, db, tx, quarantineStmt, childIDStmt, item.src, envSet, []streamInsertSpec{spec})
 		if err != nil {
 			return err
 		}

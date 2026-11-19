@@ -68,8 +68,8 @@ func TestWave2S45VP06StartDateAndAccessUTF16Quarantine(t *testing.T) {
 	envSrc := &fakeAccessRowSource{
 		cols: adminCols,
 		rows: []accessreader.Row{
-			{"🌲🌲🌲", "2015-07-04", "Good", "Good", "Good", false, "tester", "SU1", "CWH", "short", "long", "note", 4.5},      // 6 UTF-16 units <= 7 -> pass
-			{"🌲🌲🌲🌲", "2015-07-05", "Good", "Good", "Good", false, "tester", "SU1", "CWH", "short", "long", "note", 4.5},     // 8 UTF-16 units > 7 -> quarantine
+			{"🌲🌲🌲", "2015-07-04", "Good", "Good", "Good", false, "tester", "SU1", "CWH", "short", "long", "note", 4.5},  // 6 UTF-16 units <= 7 -> pass
+			{"🌲🌲🌲🌲", "2015-07-05", "Good", "Good", "Good", false, "tester", "SU1", "CWH", "short", "long", "note", 4.5}, // 8 UTF-16 units > 7 -> quarantine
 		},
 	}
 	mAdmin, err := streamAccessSourceIntoSQLite(ctx, envSrc, tx, qStmt, cStmt, "VP06_Env", nil, []streamInsertSpec{

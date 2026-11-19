@@ -1,23 +1,21 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 // New identities are deliberately collision-free; Access's nonunique ID index
 // is not treated as permission to invalidate other desktop editors' identities.
 func planSIVIIdentityEdits(ctx context.Context, plot string, extended bool, veg vprocore.ProjectMetadataTable, edits []SiviHeightEdit, reserved map[string]bool) ([]SiviHeightAssignment, error) {
 	assignments, err := PlanSIVIChildEdits(ctx, plot, extended, veg, edits, "identity",
-		func(_ int, column string) bool { return column == "ID" }, ValidateSIVIIdentityCell)
+		func(_ int, column string) bool { return column == "ID" }, ValidateSourceIdentityCell)
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +28,7 @@ func planSIVIIdentityEdits(ctx context.Context, plot string, extended bool, veg 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if err := ValidateSIVIIdentityCell("ID", assignment.Before); err != nil {
+		if err := ValidateSourceIdentityCell("ID", assignment.Before); err != nil {
 			return nil, fmt.Errorf("historical SIVI ID is read-only until independently repaired: %w", err)
 		}
 		if assignment.After.Storage == "null" {
@@ -41,7 +39,7 @@ func planSIVIIdentityEdits(ctx context.Context, plot string, extended bool, veg 
 			return nil, errors.New("SIVI ID is deleted, reserved or repeated in this edit; no identity is reassigned")
 		}
 		for _, row := range veg.Rows {
-			if row.RowID != assignment.RowID && SiviIdentityCellMatches(row.Cells[columns["ID"]], id) {
+			if row.RowID != assignment.RowID && SourceIdentityCellMatches(row.Cells[columns["ID"]], id) {
 				return nil, errors.New("SIVI ID already belongs to another physical row; identity swaps are unavailable")
 			}
 		}
@@ -50,7 +48,7 @@ func planSIVIIdentityEdits(ctx context.Context, plot string, extended bool, veg 
 	return assignments, ctx.Err()
 }
 
-func ValidateSIVIIdentityCell(_ string, cell vprocore.ProjectMetadataCell) error {
+func ValidateSourceIdentityCell(_ string, cell vprocore.ProjectMetadataCell) error {
 	if _, err := vprocore.MetadataCellValue(cell); err != nil {
 		return err
 	}
@@ -58,16 +56,16 @@ func ValidateSIVIIdentityCell(_ string, cell vprocore.ProjectMetadataCell) error
 		return nil
 	}
 	if cell.Storage != "integer" || cell.Integer == nil {
-		return errors.New("Veg.ID requires nullable signed32 integer storage")
+		return errors.New("Veg.ID requires nullable whole-number ID storage")
 	}
 	value, err := strconv.ParseInt(*cell.Integer, 10, 32)
 	if err != nil || strconv.FormatInt(value, 10) != *cell.Integer {
-		return errors.New("Veg.ID requires an exact signed32 integer")
+		return errors.New("Veg.ID requires an exact whole-number ID")
 	}
 	return nil
 }
 
-func SiviIdentityCellMatches(cell vprocore.ProjectMetadataCell, id string) bool {
+func SourceIdentityCellMatches(cell vprocore.ProjectMetadataCell, id string) bool {
 	if cell.Storage == "integer" {
 		return cell.Integer != nil && *cell.Integer == id
 	}
@@ -118,8 +116,8 @@ func SourceChildIdentityReservedIDs(project, kind, operation string, tables map[
 			if id.Storage == "null" && source.ownerColumn == "Table" {
 				continue
 			}
-			if err := ValidateSIVIIdentityCell("ID", id); err != nil || id.Integer == nil {
-				return nil, errors.Join(err, fmt.Errorf("%s reservation is not an exact signed32 ID", operation))
+			if err := ValidateSourceIdentityCell("ID", id); err != nil || id.Integer == nil {
+				return nil, errors.Join(err, fmt.Errorf("%s reservation is not an exact record ID", operation))
 			}
 			reserved[*id.Integer] = true
 		}
@@ -148,7 +146,7 @@ func siviIdentityReturnOccupants(veg vprocore.ProjectMetadataTable, assignments 
 		}
 		cell := row.Cells[columns["ID"]]
 		for id := range returning {
-			if SiviIdentityCellMatches(cell, id) {
+			if SourceIdentityCellMatches(cell, id) {
 				peer := vprocore.ProjectMetadataRow{RowID: row.RowID, Cells: make([]vprocore.ProjectMetadataCell, len(row.Cells))}
 				for i, cell := range row.Cells {
 					peer.Cells[i] = vprocore.CloneSiteUnitCell(cell)

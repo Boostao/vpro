@@ -1,12 +1,6 @@
 package pictures
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -17,17 +11,23 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-type pictureRestorationRequest struct {
+type PictureRestorationRequest struct {
 	RequestID string                        `json:"requestId"`
 	ContextID string                        `json:"contextId"`
 	HistoryID string                        `json:"historyId"`
-	Deletion  pictureDeletionRequest        `json:"deletion"`
+	Deletion  PictureDeletionRequest        `json:"deletion"`
 	Peers     []vprocore.ProjectMetadataRow `json:"peers"`
 }
 
-func (request *pictureRestorationRequest) UnmarshalJSON(data []byte) error {
+type pictureRestorationRequest = PictureRestorationRequest
+
+func (request *PictureRestorationRequest) UnmarshalJSON(data []byte) error {
 	const operation = "picture restoration"
 	names := []string{"requestId", "contextId", "historyId", "deletion", "peers"}
 	properties, err := sourceform.SourceChildJSONObject(data, operation, names, nil)
@@ -74,7 +74,7 @@ func validatePictureRestoration(request pictureRestorationRequest) error {
 		rowID, err := strconv.ParseInt(peer.RowID, 10, 64)
 		if err != nil || strconv.FormatInt(rowID, 10) != peer.RowID || seen[peer.RowID] ||
 			peer.RowID == request.Deletion.Original.RowID || len(peer.Cells) != len(request.Deletion.Columns) {
-			return errors.New("picture restoration requires complete distinct physical peers excluding the deleted rowid")
+			return errors.New("picture restoration requires complete distinct physical peers excluding the deleted record")
 		}
 		seen[peer.RowID] = true
 		for _, cell := range peer.Cells {
@@ -304,7 +304,7 @@ func writePictureRestoration(ctx context.Context, source *ownedPictureLibrary, r
 		return result, err
 	}
 	if collisions != 0 {
-		return result, errors.New("picture restoration rowid or identity is occupied; no replacement or identity repair")
+		return result, errors.New("picture restoration record ID is already in use; no replacement or identity repair")
 	}
 	values := []any{rowID}
 	for _, cell := range request.Deletion.Original.Cells {

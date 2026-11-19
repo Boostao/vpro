@@ -362,14 +362,3 @@ func (s *TwoPageVegetationService) saveTwoPageVegetationQualifiedObserved(ctx co
 	defer FinishTwoPageVegetationAttempt(s.contexts, request.RequestID)
 	return WriteTwoPageVegetationObserved(s.contexts, ctx, contextID, request, beforeCommit, afterCommit)
 }
-
-func (s *TwoPageVegetationService) RecoverReceipt(ctx context.Context, contextID, requestJSON string) (*TwoPageVegetationWriteResult, error) {
-	if err := s.require(ctx, false); err != nil {
-		return nil, err
-	}
-	var request twoPageVegetationRequest
-	if err := json.Unmarshal([]byte(requestJSON), &request); err != nil {
-		return nil, err
-	}
-	return LookupTwoPageVegetationReceipt(s.contexts, ctx, contextID, request)
-}

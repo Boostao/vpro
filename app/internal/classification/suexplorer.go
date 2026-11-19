@@ -149,19 +149,22 @@ func GetSUPlotTree(ctx context.Context, contexts *vprocore.ContextService, conte
 		if err != nil {
 			return nil, err
 		}
-		for adminRows.Next() {
-			var rawPlot []byte
-			var userUnit string
-			if err := adminRows.Scan(&rawPlot, &userUnit); err != nil {
-				adminRows.Close()
-				return nil, err
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, adminRows.Close()) }()
+			for adminRows.Next() {
+				var rawPlot []byte
+				var userUnit string
+				if err := adminRows.Scan(&rawPlot, &userUnit); err != nil {
+
+					return err
+				}
+				key := string(rawPlot)
+				if _, exists := adminUserUnits[key]; !exists {
+					adminUserUnits[key] = userUnit
+				}
 			}
-			key := string(rawPlot)
-			if _, exists := adminUserUnits[key]; !exists {
-				adminUserUnits[key] = userUnit
-			}
-		}
-		if err := errors.Join(adminRows.Err(), adminRows.Close()); err != nil {
+			return adminRows.Err()
+		}(); err != nil {
 			return nil, err
 		}
 
@@ -186,37 +189,40 @@ func GetSUPlotTree(ctx context.Context, contexts *vprocore.ContextService, conte
 		if err != nil {
 			return nil, err
 		}
-		for envRows.Next() {
-			var plotType string
-			var rawPlot []byte
-			var leaf SUPlotLeaf
-			var elev sql.NullInt64
-			var flagInt int64
-			if err := envRows.Scan(
-				&plotType, &rawPlot, &leaf.PlotNumber, &leaf.FieldNumber, &leaf.Zone, &leaf.SubZone, &leaf.SiteSeries,
-				&leaf.MoistureRegime, &leaf.NutrientRegime, &elev, &flagInt,
-			); err != nil {
-				envRows.Close()
-				return nil, err
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, envRows.Close()) }()
+			for envRows.Next() {
+				var plotType string
+				var rawPlot []byte
+				var leaf SUPlotLeaf
+				var elev sql.NullInt64
+				var flagInt int64
+				if err := envRows.Scan(
+					&plotType, &rawPlot, &leaf.PlotNumber, &leaf.FieldNumber, &leaf.Zone, &leaf.SubZone, &leaf.SiteSeries,
+					&leaf.MoistureRegime, &leaf.NutrientRegime, &elev, &flagInt,
+				); err != nil {
+
+					return err
+				}
+				if elev.Valid {
+					v := elev.Int64
+					leaf.Elevation = &v
+				}
+				leaf.InProjectEnv = true
+				leaf.Locked = flagInt != 0
+				typedKey := plotType + ":" + leaf.PlotNumber
+				if plotType == "text" {
+					rawKey := string(rawPlot)
+					typedKey = "text:" + rawKey
+					leaf.UserSiteUnit = adminUserUnits[rawKey]
+				}
+				if _, exists := envMap[typedKey]; !exists {
+					envOrder = append(envOrder, typedKey)
+				}
+				envMap[typedKey] = leaf
 			}
-			if elev.Valid {
-				v := elev.Int64
-				leaf.Elevation = &v
-			}
-			leaf.InProjectEnv = true
-			leaf.Locked = flagInt != 0
-			typedKey := plotType + ":" + leaf.PlotNumber
-			if plotType == "text" {
-				rawKey := string(rawPlot)
-				typedKey = "text:" + rawKey
-				leaf.UserSiteUnit = adminUserUnits[rawKey]
-			}
-			if _, exists := envMap[typedKey]; !exists {
-				envOrder = append(envOrder, typedKey)
-			}
-			envMap[typedKey] = leaf
-		}
-		if err := errors.Join(envRows.Err(), envRows.Close()); err != nil {
+			return envRows.Err()
+		}(); err != nil {
 			return nil, err
 		}
 
@@ -236,20 +242,24 @@ func GetSUPlotTree(ctx context.Context, contexts *vprocore.ContextService, conte
 				`SELECT COALESCE(CAST("SiteSeries" AS TEXT), ''), COALESCE(CAST("SiteSeriesLongName" AS TEXT), '')
 				 FROM `+vprocore.QuoteHeaderIdentifier(src.role)+`.`+vprocore.QuoteHeaderIdentifier(src.table))
 			if uErr == nil {
-				for uRows.Next() {
-					var code, lname string
-					if err := uRows.Scan(&code, &lname); err == nil && strings.TrimSpace(code) != "" {
-						trimmed := strings.TrimSpace(code)
-						meta := unitCatalogMeta{longName: lname, origin: src.origin}
-						unitNames[trimmed] = meta
-						if compact := compactBECUnitCode(trimmed); compact != "" {
-							if _, exists := unitNames[compact]; !exists {
-								unitNames[compact] = meta
+				func() {
+					defer uRows.Close()
+
+					for uRows.Next() {
+						var code, lname string
+						if err := uRows.Scan(&code, &lname); err == nil && strings.TrimSpace(code) != "" {
+							trimmed := strings.TrimSpace(code)
+							meta := unitCatalogMeta{longName: lname, origin: src.origin}
+							unitNames[trimmed] = meta
+							if compact := compactBECUnitCode(trimmed); compact != "" {
+								if _, exists := unitNames[compact]; !exists {
+									unitNames[compact] = meta
+								}
 							}
 						}
 					}
-				}
-				uRows.Close()
+
+				}()
 			}
 		}
 
@@ -295,83 +305,86 @@ func GetSUPlotTree(ctx context.Context, contexts *vprocore.ContextService, conte
 			seenSUPlot := map[string]bool{}
 			bucketMap := map[string]*SUUnitBucket{}
 
-			for suRows.Next() {
-				var plotType string
-				var rawPlot []byte
-				var p, u sql.NullString
-				if err := suRows.Scan(&plotType, &rawPlot, &p, &u); err != nil {
-					suRows.Close()
-					return nil, err
-				}
-				if plotType == "null" || !p.Valid || strings.TrimSpace(p.String) == "" {
-					continue
-				}
-				plotNum := p.String
-				unitCode := ""
-				if u.Valid {
-					unitCode = strings.TrimSpace(u.String)
-				}
-				if plotType != "text" {
-					orphan := SUPlotLeaf{
-						PlotNumber:   plotNum,
-						SiteUnit:     unitCode,
-						PresentInSU:  true,
-						InProjectEnv: false,
-					}
-					if matchesFilter(orphan, unitNames[unitCode].longName) {
-						tree.OrphanPlots = append(tree.OrphanPlots, orphan)
-					}
-					continue
-				}
-				typedKey := "text:" + string(rawPlot)
-				seenSUPlot[typedKey] = true
-				baseLeaf, inEnv := envMap[typedKey]
-				if !inEnv {
-					orphan := SUPlotLeaf{
-						PlotNumber:   plotNum,
-						SiteUnit:     unitCode,
-						PresentInSU:  true,
-						InProjectEnv: false,
-					}
-					if matchesFilter(orphan, unitNames[unitCode].longName) {
-						tree.OrphanPlots = append(tree.OrphanPlots, orphan)
-					}
-					continue
-				}
-				baseLeaf.PresentInSU = true
-				baseLeaf.SiteUnit = unitCode
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, suRows.Close()) }()
+				for suRows.Next() {
+					var plotType string
+					var rawPlot []byte
+					var p, u sql.NullString
+					if err := suRows.Scan(&plotType, &rawPlot, &p, &u); err != nil {
 
-				if unitCode == "" {
-					tree.TotalUnassigned++
-					if matchesFilter(baseLeaf, "") {
-						tree.UnassignedPlots = append(tree.UnassignedPlots, baseLeaf)
+						return err
 					}
-					continue
-				}
+					if plotType == "null" || !p.Valid || strings.TrimSpace(p.String) == "" {
+						continue
+					}
+					plotNum := p.String
+					unitCode := ""
+					if u.Valid {
+						unitCode = strings.TrimSpace(u.String)
+					}
+					if plotType != "text" {
+						orphan := SUPlotLeaf{
+							PlotNumber:   plotNum,
+							SiteUnit:     unitCode,
+							PresentInSU:  true,
+							InProjectEnv: false,
+						}
+						if matchesFilter(orphan, unitNames[unitCode].longName) {
+							tree.OrphanPlots = append(tree.OrphanPlots, orphan)
+						}
+						continue
+					}
+					typedKey := "text:" + string(rawPlot)
+					seenSUPlot[typedKey] = true
+					baseLeaf, inEnv := envMap[typedKey]
+					if !inEnv {
+						orphan := SUPlotLeaf{
+							PlotNumber:   plotNum,
+							SiteUnit:     unitCode,
+							PresentInSU:  true,
+							InProjectEnv: false,
+						}
+						if matchesFilter(orphan, unitNames[unitCode].longName) {
+							tree.OrphanPlots = append(tree.OrphanPlots, orphan)
+						}
+						continue
+					}
+					baseLeaf.PresentInSU = true
+					baseLeaf.SiteUnit = unitCode
 
-				tree.TotalAssigned++
-				meta, ok := unitNames[unitCode]
-				if !ok {
-					meta = unitNames[compactBECUnitCode(unitCode)]
-				}
-				if !matchesFilter(baseLeaf, meta.longName) {
-					continue
-				}
-				bucket := bucketMap[unitCode]
-				if bucket == nil {
-					bucket = &SUUnitBucket{
-						SiteUnit:  unitCode,
-						LongName:  meta.longName,
-						Origin:    meta.origin,
-						MaskValid: BECUnitMaskValid(unitCode),
-						Plots:     []SUPlotLeaf{},
+					if unitCode == "" {
+						tree.TotalUnassigned++
+						if matchesFilter(baseLeaf, "") {
+							tree.UnassignedPlots = append(tree.UnassignedPlots, baseLeaf)
+						}
+						continue
 					}
-					bucketMap[unitCode] = bucket
+
+					tree.TotalAssigned++
+					meta, ok := unitNames[unitCode]
+					if !ok {
+						meta = unitNames[compactBECUnitCode(unitCode)]
+					}
+					if !matchesFilter(baseLeaf, meta.longName) {
+						continue
+					}
+					bucket := bucketMap[unitCode]
+					if bucket == nil {
+						bucket = &SUUnitBucket{
+							SiteUnit:  unitCode,
+							LongName:  meta.longName,
+							Origin:    meta.origin,
+							MaskValid: BECUnitMaskValid(unitCode),
+							Plots:     []SUPlotLeaf{},
+						}
+						bucketMap[unitCode] = bucket
+					}
+					bucket.Plots = append(bucket.Plots, baseLeaf)
+					bucket.PlotCount = len(bucket.Plots)
 				}
-				bucket.Plots = append(bucket.Plots, baseLeaf)
-				bucket.PlotCount = len(bucket.Plots)
-			}
-			if err := errors.Join(suRows.Err(), suRows.Close()); err != nil {
+				return suRows.Err()
+			}(); err != nil {
 				return nil, err
 			}
 
@@ -561,34 +574,37 @@ func GetPlotInspectorSummary(ctx context.Context, contexts *vprocore.ContextServ
 			}
 			return float64(sum)
 		}
-		for vegRows.Next() {
-			var sp string
-			var totalA, c1, c2, c3 sql.NullFloat64
-			var totalB, c4, c5, c5a, c5b, c5c sql.NullFloat64
-			var c6, c7, c8, c9, c10 sql.NullFloat64
-			if err := vegRows.Scan(&sp, &totalA, &c1, &c2, &c3, &totalB, &c4, &c5, &c5a, &c5b, &c5c, &c6, &c7, &c8, &c9, &c10); err != nil {
-				vegRows.Close()
-				return nil, err
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, vegRows.Close()) }()
+			for vegRows.Next() {
+				var sp string
+				var totalA, c1, c2, c3 sql.NullFloat64
+				var totalB, c4, c5, c5a, c5b, c5c sql.NullFloat64
+				var c6, c7, c8, c9, c10 sql.NullFloat64
+				if err := vegRows.Scan(&sp, &totalA, &c1, &c2, &c3, &totalB, &c4, &c5, &c5a, &c5b, &c5c, &c6, &c7, &c8, &c9, &c10); err != nil {
+
+					return err
+				}
+				ca := stratumWithFallback(totalA, c1, c2, c3)
+				cb := stratumWithFallback(totalB, c4, c5, c5a, c5b, c5c)
+				cc := float64(float32(c6.Float64))
+				cd := float64(float32(c7.Float64) + float32(c8.Float64) + float32(c9.Float64) + float32(c10.Float64))
+				upper := strings.ToUpper(strings.TrimSpace(sp))
+				if upper == "" {
+					continue
+				}
+				item := aggMap[upper]
+				if item == nil {
+					item = &aggSp{code: strings.TrimSpace(sp)}
+					aggMap[upper] = item
+				}
+				item.a += ca
+				item.b += cb
+				item.c += cc
+				item.d += cd
 			}
-			ca := stratumWithFallback(totalA, c1, c2, c3)
-			cb := stratumWithFallback(totalB, c4, c5, c5a, c5b, c5c)
-			cc := float64(float32(c6.Float64))
-			cd := float64(float32(c7.Float64) + float32(c8.Float64) + float32(c9.Float64) + float32(c10.Float64))
-			upper := strings.ToUpper(strings.TrimSpace(sp))
-			if upper == "" {
-				continue
-			}
-			item := aggMap[upper]
-			if item == nil {
-				item = &aggSp{code: strings.TrimSpace(sp)}
-				aggMap[upper] = item
-			}
-			item.a += ca
-			item.b += cb
-			item.c += cc
-			item.d += cd
-		}
-		if err := errors.Join(vegRows.Err(), vegRows.Close()); err != nil {
+			return vegRows.Err()
+		}(); err != nil {
 			return nil, err
 		}
 

@@ -1,11 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -15,6 +10,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func summaryEnvironmentalLifeformServiceFixture(t *testing.T, external bool) (*SummaryVegetationEnvironmentalLifeformService, vprocore.ProjectState) {
@@ -134,6 +132,7 @@ func TestSummaryEnvironmentalLifeformSnapshotGatesAndCleanup(t *testing.T) {
 		t.Fatal("unavailable lifeform service succeeded", got, err)
 	}
 	service, state := summaryEnvironmentalLifeformServiceFixture(t, true)
+	//lint:ignore SA1012 intentional nil-context guard test
 	if got, err := service.PreviewEnvironmentalLifeform(nil, state.ContextID, 1, 6, 0); err == nil || got != nil {
 		t.Fatal("nil request context accepted", got, err)
 	}

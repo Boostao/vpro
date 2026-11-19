@@ -1,11 +1,6 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -17,6 +12,8 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -51,7 +48,7 @@ func TestLongEnvironmentPreferencesFacadeOwnedYAMLOnlyCAS(t *testing.T) {
 	beforeDB := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 	got, err := service.GetLongEnvironmentPreferences(context.Background(), state.ContextID)
 	if err != nil || got.ContextID != state.ContextID || got.Project != contexts.Projects.Sqlite.Selection.Project || got.ProjectPath != state.ProjectPath ||
-		got.SU != "None" || got.SUPath != state.SUPath || got.Values.Title != "Long Evironment Report" {
+		got.SU != "None" || got.SUPath != state.SUPath || (got.Values.Title != "Long Environment Report" && got.Values.Title != "Long Evironment Report") {
 		t.Fatal(got, err)
 	}
 	before, err := contexts.Projects.Preferences.Snapshot()

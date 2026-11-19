@@ -1,10 +1,6 @@
 package pictures
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -14,6 +10,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -371,7 +368,7 @@ func (s *PictureCreationService) Create(ctx context.Context, token, requestJSON 
 	return nil, errors.New("picture creation returned without a durable commit receipt")
 }
 
-// Recovery never requires a capability, a native window, or a surviving image.
+// LookupReceipt — Recovery never requires a capability, a native window, or a surviving image.
 // It is strictly read-only and never alters capability lifecycle. A matching
 // Create before/during observation is unresolved, never a successful null.
 func (s *PictureCreationService) LookupReceipt(ctx context.Context, requestJSON string) (*PictureCreationResult, error) {

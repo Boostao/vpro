@@ -1,19 +1,17 @@
 package reportcore
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"fmt"
 	"math"
 	"math/big"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-// summarizeSiteUnitNumeric consumes already joined, duplicate-weighted cells.
+// SummarizeSiteUnitNumeric — summarizeSiteUnitNumeric consumes already joined, duplicate-weighted cells.
 // Historical text/blob conversion is deliberately outside this numeric boundary.
 func SummarizeSiteUnitNumeric(cells []vprocore.ProjectMetadataCell, field string, method int) (string, error) {
 	ground := false

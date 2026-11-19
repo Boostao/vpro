@@ -18,18 +18,6 @@ func normalizeOutlierThreshold(threshold float64) float64 {
 	return threshold
 }
 
-// ComputeOutlierQueue evaluates every classified plot against its Leave-One-Out (LOO) assigned SiteUnit
-// centroid and its nearest rival SiteUnit centroid, sorting descending by RivalSimilarity - OwnSimilarity.
-func ComputeOutlierQueue(
-	units []string,
-	plots []classifiedPlotRecord,
-	unitCoverSums map[string]map[string]float64,
-	unitTotalSums map[string]float64,
-	unitPlotCounts map[string]int,
-) []OutlierPlotCandidate {
-	return ComputeOutlierQueueWithThreshold(units, plots, unitCoverSums, unitTotalSums, unitPlotCounts, defaultOutlierThreshold)
-}
-
 // ComputeOutlierQueueWithThreshold evaluates classified plots with an explicit own-similarity threshold (default 0.45 matching R vpro_outliers).
 func ComputeOutlierQueueWithThreshold(
 	units []string,

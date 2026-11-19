@@ -1,22 +1,19 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/references"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"database/sql"
-
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/resources"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/resources"
 )
 
 var WorkingUnitDatabase = resources.WorkingUnitDB
@@ -43,7 +40,7 @@ type WorkingUnitModeState struct {
 type WorkingUnitService struct {
 	Mu           sync.RWMutex `json:"-" yaml:"-"`
 	projects     *ProjectService
-	Db           *sql.DB                    `json:"-" yaml:"-"`
+	DB           *sql.DB                    `json:"-" yaml:"-"`
 	SettingsPath string                     `json:"-" yaml:"-"`
 	ReplaceFile  func(string, string) error `json:"-" yaml:"-"`
 }
@@ -104,7 +101,7 @@ func NewWorkingUnitService(projects *ProjectService, configDir string) (*Working
 		db.Close()
 		return nil, err
 	}
-	service := &WorkingUnitService{projects: projects, Db: db,
+	service := &WorkingUnitService{projects: projects, DB: db,
 		SettingsPath: filepath.Join(configDir, "working-unit-settings.json"), ReplaceFile: os.Rename}
 	if _, err := service.GetWorkingUnitMode(); err != nil {
 		db.Close()
@@ -116,11 +113,11 @@ func NewWorkingUnitService(projects *ProjectService, configDir string) (*Working
 func (s *WorkingUnitService) Close() error {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
-	if s.Db == nil {
+	if s.DB == nil {
 		return nil
 	}
-	err := s.Db.Close()
-	s.Db = nil
+	err := s.DB.Close()
+	s.DB = nil
 	return err
 }
 
@@ -142,7 +139,7 @@ func workingUnitChoiceStatus(row *WorkingUnitChoice) {
 }
 
 func (s *WorkingUnitService) masterChoices(ctx context.Context) ([]WorkingUnitChoice, error) {
-	rows, err := s.Db.QueryContext(ctx, `SELECT RowID,Origin,SourceID,Code,Description,ScientificName,Level
+	rows, err := s.DB.QueryContext(ctx, `SELECT RowID,Origin,SourceID,Code,Description,ScientificName,Level
  FROM WorkingUnits WHERE Origin='master' AND Level=11
  ORDER BY Code COLLATE NOCASE,Code,CAST(RowID AS INTEGER)`)
 	if err != nil {
@@ -169,7 +166,7 @@ func (s *WorkingUnitService) GetMasterWorkingUnitChoices(ctx context.Context) ([
 		return nil, err
 	}
 	defer s.Mu.RUnlock()
-	if s.Db == nil {
+	if s.DB == nil {
 		return nil, errors.New("Working Unit catalogue is closed")
 	}
 	return s.masterChoices(ctx)
@@ -274,7 +271,7 @@ func (s *WorkingUnitService) GetWorkingUnitChoices(ctx context.Context, mode str
 		return nil, err
 	}
 	defer s.Mu.RUnlock()
-	if s.Db == nil {
+	if s.DB == nil {
 		return nil, errors.New("Working Unit catalogue is closed")
 	}
 	if mode == "master" {
@@ -308,7 +305,7 @@ func (s *WorkingUnitService) GetWorkingUnitChoices(ctx context.Context, mode str
 		return nil, err
 	}
 	defer tx.Rollback()
-	reader := sqlutil.ContextPlotDB{Db: tx, Ctx: ctx}
+	reader := sqlutil.ContextPlotDB{DB: tx, Ctx: ctx}
 	query := ""
 	if mode == "env" {
 		if err := workingUnitTextColumns(reader, project.Name+"_Env", "PlotNumber"); err != nil {

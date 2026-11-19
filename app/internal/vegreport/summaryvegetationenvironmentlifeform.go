@@ -1,23 +1,15 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"math"
 	"math/big"
-)
 
-func prepareSummaryVegetationEnvironmentalLifeform(ctx context.Context, argument string, siteUnit *string,
-	quick, master, su vprocore.ProjectMetadataTable) (vprocore.ProjectMetadataCell, error) {
-	return prepareSummaryEnvironmentalLifeformWithMasterInteger(ctx, argument, siteUnit, quick, master, su,
-		vprocore.VegetationLifeformInteger)
-}
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
+)
 
 func prepareSummaryEnvironmentalLifeformWithMasterInteger(ctx context.Context, argument string, siteUnit *string,
 	quick, master, su vprocore.ProjectMetadataTable, readInteger func(vprocore.ProjectMetadataCell) (*int, error)) (vprocore.ProjectMetadataCell, error) {

@@ -1,15 +1,13 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const siviSpeciesHistoryTable = "__VPRO_SIVISpeciesHistory"
@@ -37,7 +35,7 @@ func speciesSIVIDrafts(ctx context.Context, edits []SIVISpeciesEdit) ([]SiviHeig
 		}
 		id, err := strconv.ParseInt(edit.RowID, 10, 64)
 		if err != nil || strconv.FormatInt(id, 10) != edit.RowID {
-			return nil, errors.New("SIVI Species requires the original signed64 physical row identity")
+			return nil, errors.New("SIVI Species requires the original record reference")
 		}
 		if _, err := vprocore.MetadataCellValue(edit.Expected); err != nil {
 			return nil, err
@@ -65,14 +63,14 @@ func planSIVISpeciesCells(ctx context.Context, plot string, extended bool, veg v
 var SiviSpeciesMasterColumns = []string{"Code", "ScientificName", "Lifeform", "EnglishName", "Codetype", "OldCode"}
 var SiviSpeciesPersonalColumns = []string{"Code", "ScientificName", "LifeForm", "EnglishName", "Codetype"}
 
-func ProjectSIVISpeciesDefinitions(ctx context.Context, source vprocore.ProjectMetadataTable, personal bool) (vprocore.ProjectMetadataTable, error) {
+func ProjectSourceSpeciesDefinitions(ctx context.Context, source vprocore.ProjectMetadataTable, personal bool) (vprocore.ProjectMetadataTable, error) {
 	return ProjectPhysicalSpeciesDefinitions(ctx, source, personal, func(cell vprocore.ProjectMetadataCell) error {
 		_, err := vprocore.VegetationLifeformInteger(cell)
 		return err
 	})
 }
 
-// Only identifier recasing is allowed. Physical definitions, including duplicate
+// ProjectPhysicalSpeciesDefinitions — Only identifier recasing is allowed. Physical definitions, including duplicate
 // codes, NULLs and empty metadata, retain their original typed cells and rowids.
 func ProjectPhysicalSpeciesDefinitions(ctx context.Context, source vprocore.ProjectMetadataTable, personal bool,
 	validateLifeform func(vprocore.ProjectMetadataCell) error) (vprocore.ProjectMetadataTable, error) {

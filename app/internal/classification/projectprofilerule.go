@@ -1,16 +1,14 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"errors"
 	"fmt"
 	"reflect"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type ProjectPlotProfileRuleDraft struct {
@@ -83,7 +81,7 @@ func prepareProfileRuleDrafts(original vprocore.ProjectMetadataTable, drafts []p
 				if value != nil {
 					number, valid := value.(int64)
 					if !valid || number < -32768 || number > 32767 {
-						return vprocore.ProjectMetadataTable{}, nil, errors.New("profile Order requires signed16 integer storage or explicit NULL")
+						return vprocore.ProjectMetadataTable{}, nil, errors.New("profile Order requires a whole-number Order value or blank")
 					}
 				}
 			default:

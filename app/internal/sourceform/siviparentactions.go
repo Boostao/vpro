@@ -1,15 +1,13 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"sync"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SiviParentActionEdit struct {
@@ -65,7 +63,7 @@ var SiviParentActionSources = sync.OnceValues(func() (map[string]siviParentActio
 	return result, nil
 })
 
-func PlanSIVIParentActions(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable, edits []SiviParentActionEdit) ([]SiviParentScalarAssignment, error) {
+func PlanSIVIParentActions(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable, edits []SiviParentActionEdit) ([]SourceParentScalarAssignment, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -73,7 +71,7 @@ func PlanSIVIParentActions(ctx context.Context, contextID, project, plot string,
 	if err != nil {
 		return nil, err
 	}
-	targets := make([]SiviParentScalarEdit, 0, len(edits))
+	targets := make([]SourceParentScalarEdit, 0, len(edits))
 	for _, edit := range edits {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -104,7 +102,7 @@ func PlanSIVIParentActions(ctx context.Context, contextID, project, plot string,
 		default:
 			return nil, errors.New("SIVI action source target is unsupported")
 		}
-		targets = append(targets, SiviParentScalarEdit{
+		targets = append(targets, SourceParentScalarEdit{
 			ContextID: edit.ContextID, Table: edit.Table, RowID: edit.RowID,
 			Column: source.Binding, Expected: edit.Expected, Value: value,
 		})
@@ -119,6 +117,6 @@ func PlanSIVIParentActions(ctx context.Context, contextID, project, plot string,
 		if column == "PlotType" {
 			return sqlutil.ValidateSiteCodeText(column, value.Text, 10)
 		}
-		return ValidateSIVIParentScalar("SV_FloodPlain", value)
+		return ValidateSourceParentScalar("SV_FloodPlain", value)
 	})
 }

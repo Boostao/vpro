@@ -1,17 +1,15 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"reflect"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func requireTwoPageEntryReferenceReadLock(ctx context.Context, tx *sql.Tx, alias string) error {
@@ -19,17 +17,17 @@ func requireTwoPageEntryReferenceReadLock(ctx context.Context, tx *sql.Tx, alias
 }
 
 func WriteTwoPageEntryWithOwnedReferences(s *vprocore.ContextService, ctx context.Context, contextID, plot, form string,
-	original *sourceform.SiviParentProjection, edits []sourceform.SiviParentScalarEdit, masterAllowed bool,
+	original *sourceform.SourceParentProjection, edits []sourceform.SourceParentScalarEdit, masterAllowed bool,
 	readers TwoPageEntryReferenceReaders, expected TwoPageEntryReferenceSelection,
-	acknowledgements []TwoPageEntryCodeAcknowledgementInternal) (*sourceform.SiviParentWriteResult, error) {
+	acknowledgements []TwoPageEntryCodeAcknowledgementInternal) (*sourceform.SourceParentWriteResult, error) {
 	return WriteTwoPageEntryWithOwnedReferencesAndProject(s, ctx, contextID, plot, form, original, edits,
 		masterAllowed, readers, expected, acknowledgements, nil)
 }
 
 func WriteTwoPageEntryWithOwnedReferencesAndProject(s *vprocore.ContextService, ctx context.Context, contextID, plot, form string,
-	original *sourceform.SiviParentProjection, edits []sourceform.SiviParentScalarEdit, masterAllowed bool,
+	original *sourceform.SourceParentProjection, edits []sourceform.SourceParentScalarEdit, masterAllowed bool,
 	readers TwoPageEntryReferenceReaders, expected TwoPageEntryReferenceSelection,
-	acknowledgements []TwoPageEntryCodeAcknowledgementInternal, projectSelection *sourceform.SiviProjectSelection) (*sourceform.SiviParentWriteResult, error) {
+	acknowledgements []TwoPageEntryCodeAcknowledgementInternal, projectSelection *sourceform.SourceProjectSelectionInternal) (*sourceform.SourceParentWriteResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -45,8 +43,8 @@ func WriteTwoPageEntryWithOwnedReferencesAndProject(s *vprocore.ContextService, 
 	}
 	var owner *vprocore.SqliteContext
 	var preferences *vprocore.DesktopConfig
-	var evidence *sourceform.SiviProjectAssignmentHistory
-	var projectPlan *sourceform.SiviProjectAssignmentPlan
+	var evidence *sourceform.SourceProjectAssignmentHistory
+	var projectPlan *sourceform.SourceProjectAssignmentPlan
 	aliases := TwoPageEntryReferenceAliases{"main", "two_page_entry_refs", ""}
 	checkSources := func() error {
 		values, err := preferences.ReadLocked()
@@ -99,7 +97,7 @@ func WriteTwoPageEntryWithOwnedReferencesAndProject(s *vprocore.ContextService, 
 				return err
 			}
 			if evidence != nil {
-				fresh, err := sourceform.ReadSIVIProjectAssignmentEvidence(ctx, owner, tx, contextID, *projectSelection)
+				fresh, err := sourceform.ReadSourceProjectAssignmentEvidence(ctx, owner, tx, contextID, *projectSelection)
 				if err != nil {
 					return err
 				}
@@ -109,20 +107,20 @@ func WriteTwoPageEntryWithOwnedReferencesAndProject(s *vprocore.ContextService, 
 			}
 			return vprocore.ProfileOwnedFiles(owner)
 		},
-		Decorate: func(event *sourceform.SiviParentHistory) {
+		Decorate: func(event *sourceform.SourceParentHistory) {
 			if projectPlan != nil && len(projectPlan.Assignments) == 1 {
 				event.ProjectAssignment = evidence
 			}
 		},
 	}
 	return WriteTwoPageEntryWithLifecycle(s, ctx, contextID, plot, form, original, edits, masterAllowed,
-		func(tx *sql.Tx, observed *sourceform.SiviParentProjection, assignments []sourceform.SiviParentScalarAssignment) error {
+		func(tx *sql.Tx, observed *sourceform.SourceParentProjection, assignments []sourceform.SourceParentScalarAssignment) error {
 			if err := checkSources(); err != nil {
 				return err
 			}
 			if projectSelection != nil {
 				var err error
-				evidence, err = sourceform.ReadSIVIProjectAssignmentEvidence(ctx, owner, tx, contextID, *projectSelection)
+				evidence, err = sourceform.ReadSourceProjectAssignmentEvidence(ctx, owner, tx, contextID, *projectSelection)
 				if err != nil {
 					return err
 				}

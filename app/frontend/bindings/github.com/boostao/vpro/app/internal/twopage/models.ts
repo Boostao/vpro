@@ -162,7 +162,7 @@ export interface TwoPageEntryCodeAcknowledgement {
     "column": string;
     "expected": vprocore$0.ProjectMetadataCell;
     "value": vprocore$0.ProjectMetadataCell;
-    "reference": sourceform$0.SIVIParentSharedReference;
+    "reference": sourceform$0.SourceParentSharedReference;
 }
 
 export interface TwoPageEntryFieldPolicy {
@@ -178,36 +178,36 @@ export interface TwoPageEntryReferenceFilters {
 }
 
 export interface TwoPageEntryReferenceSnapshot {
-    "Original": sourceform$0.SiviParentProjection | null;
+    "Original": sourceform$0.SourceParentProjection | null;
     "ProjectSource": number;
     "WorkingSource": number;
     "Zone": vprocore$0.ProjectMetadataCell;
     "SubZone": vprocore$0.ProjectMetadataCell;
-    "Fields": sourceform$0.SIVIParentSharedReference[] | null;
+    "Fields": sourceform$0.SourceParentSharedReference[] | null;
     "Policies": TwoPageEntryFieldPolicy[] | null;
     "MasterEditingAvailable": boolean;
-    "ProjectChoices": sourceform$0.SIVIProjectChoices | null;
+    "ProjectChoices": sourceform$0.SourceProjectChoices | null;
     "ProjectAssignmentAvailable": boolean;
     "ProjectAssignmentDiagnostic": string;
 }
 
 export interface TwoPageParentCommonWrite {
-    "original": sourceform$0.SIVIParentProjection | null;
-    "edits": sourceform$0.SIVIParentCellEdit[] | null;
+    "original": sourceform$0.SourceParentProjection | null;
+    "edits": sourceform$0.SourceParentCellEdit[] | null;
 }
 
 export interface TwoPageParentEntryWrite {
-    "original": sourceform$0.SIVIParentProjection | null;
-    "edits": sourceform$0.SIVIParentCellEdit[] | null;
+    "original": sourceform$0.SourceParentProjection | null;
+    "edits": sourceform$0.SourceParentCellEdit[] | null;
     "projectSource": number;
     "workingSource": number;
     "acknowledgements": TwoPageEntryCodeAcknowledgement[] | null;
-    "projectSelection": sourceform$0.SIVIProjectSelection | null;
+    "projectSelection": sourceform$0.SourceProjectSelection | null;
 }
 
 export interface TwoPageParentExtraWrite {
-    "original": sourceform$0.SIVIParentProjection | null;
-    "edits": sourceform$0.SIVIParentCellEdit[] | null;
+    "original": sourceform$0.SourceParentProjection | null;
+    "edits": sourceform$0.SourceParentCellEdit[] | null;
 }
 
 export interface TwoPageSoilAttemptOutcome {

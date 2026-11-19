@@ -1,12 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -17,6 +11,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestLongVegetationSelectedFieldPhysicalDefinitionsAndOwnedCleanup(t *testing.T) {
@@ -74,7 +72,7 @@ func TestLongVegetationSelectedFieldPhysicalDefinitionsAndOwnedCleanup(t *testin
 		{CommitRead: func(*sql.Tx) error { return errors.New("read commit failure") }},
 		{RollbackRead: func(*sql.Tx) error { return errors.New("cleanup failure") }},
 	} {
-		service.snapshot = hooks
+		service.Snapshot = hooks
 		if got, err := service.GetLongVegetationSelectedFieldPreferences(context.Background(), state.ContextID); got != nil || err == nil {
 			t.Fatal(got, err)
 		}
@@ -83,11 +81,11 @@ func TestLongVegetationSelectedFieldPhysicalDefinitionsAndOwnedCleanup(t *testin
 		}
 	}
 	ctx, cancel = context.WithCancel(context.Background())
-	service.snapshot = vprocore.PublicationReadSnapshotHooks{CommitRead: func(*sql.Tx) error { cancel(); return nil }}
+	service.Snapshot = vprocore.PublicationReadSnapshotHooks{CommitRead: func(*sql.Tx) error { cancel(); return nil }}
 	if got := service.SaveLongVegetationSelectedFieldPreferences(ctx, state.ContextID, request); got.Committed || got.Changed || got.ErrorMessage == "" {
 		t.Fatal(got)
 	}
-	service.snapshot = vprocore.PublicationReadSnapshotHooks{}
+	service.Snapshot = vprocore.PublicationReadSnapshotHooks{}
 	path := owner.Attachments["project"]
 	owner.Attachments["project"] = path + ".unowned"
 	got := service.SaveLongVegetationSelectedFieldPreferences(context.Background(), state.ContextID, request)

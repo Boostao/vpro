@@ -113,13 +113,6 @@ func PrepareChildIdentityInsertStmt(ctx context.Context, prep AuditSQLPreparer) 
 	return prep.PrepareContext(ctx, `INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") VALUES (?, ?)`)
 }
 
-// ExecPreparedChildIDReservation executes a prepared reservation statement with the canonical quoted ChildTable key.
-func ExecPreparedChildIDReservation(ctx context.Context, stmt *sql.Stmt, childTable string, id int64) error {
-	quoted, _ := CanonicalChildIdentityTableKey(childTable)
-	_, err := stmt.ExecContext(ctx, quoted, id)
-	return err
-}
-
 // AllocateAndReserveChildID ensures __VPRO_ChildIdentity exists, allocates the next unused positive
 // signed32 child ID for childTable, and reserves it atomically in tx.
 func AllocateAndReserveChildID(ctx context.Context, tx *sql.Tx, childTable string) (int64, error) {
@@ -274,17 +267,6 @@ type AuditWriteEntry struct {
 
 // AuditString returns a pointer to s for AuditWriteEntry fields.
 func AuditString(s string) *string { return &s }
-
-// AuditOptionalPlot returns nil when plot is empty/whitespace, or &plot otherwise.
-func AuditOptionalPlot(plot string) *string {
-	if strings.TrimSpace(plot) == "" {
-		return nil
-	}
-	return &plot
-}
-
-// AuditInt64 returns a pointer to id for AuditWriteEntry.ID.
-func AuditInt64(id int64) *int64 { return &id }
 
 func normalizeAuditValueParam(value any) any {
 	if value == nil {

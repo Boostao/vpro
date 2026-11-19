@@ -1,12 +1,6 @@
 package sourceform
 
 import (
-	referencespkg "github.com/boostao/vpro/app/internal/references"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -14,15 +8,18 @@ import (
 	"reflect"
 
 	"github.com/boostao/vpro/app/internal/listcatalog"
+	referencespkg "github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-type SiviParentSharedReferencePolicy struct {
+type SourceParentSharedReferencePolicy struct {
 	Column, List, Reader string `json:"-" yaml:"-"`
 	Maximum              int    `json:"-" yaml:"-"`
 	Required             bool   `json:"-" yaml:"-"`
 }
 
-var SiviParentSharedReferenceFields = []SiviParentSharedReferencePolicy{
+var SourceParentSharedReferenceFields = []SourceParentSharedReferencePolicy{
 	{"FSRegionDistrict", "Region", "region", 7, false},
 	{"Zone", "Zone", "bec", 4, false}, {"SubZone", "SubZone", "bec", 8, false},
 	{"RealmClass", "RealmClass", "parent", 5, false},
@@ -51,17 +48,17 @@ var SiviParentSharedReferenceFields = []SiviParentSharedReferencePolicy{
 	{"RootRestrictingType", "RootRestrictingType", "parent", 1, false},
 }
 
-func SiviParentSharedReferenceField(column string) (SiviParentSharedReferencePolicy, bool) {
-	for _, field := range SiviParentSharedReferenceFields {
+func SourceParentSharedReferenceField(column string) (SourceParentSharedReferencePolicy, bool) {
+	for _, field := range SourceParentSharedReferenceFields {
 		if field.Column == column {
 			return field, true
 		}
 	}
-	return SiviParentSharedReferencePolicy{}, false
+	return SourceParentSharedReferencePolicy{}, false
 }
 
-// Borrowed readers must be injected before publication; their owner closes them.
-type SiviParentSharedReferenceReaders struct {
+// SourceParentSharedReferenceReaders — Borrowed readers must be injected before publication; their owner closes them.
+type SourceParentSharedReferenceReaders struct {
 	Region interface {
 		ListRegionChoices(context.Context) ([]referencespkg.RegionCodeChoice, error)
 	} `json:"-" yaml:"-"`
@@ -81,7 +78,7 @@ type SiviParentSharedReferenceReaders struct {
 	} `json:"-" yaml:"-"`
 }
 
-type SIVIParentSharedReferenceChoice struct {
+type SourceParentSharedReferenceChoice struct {
 	RowID       string  `json:"rowId"`
 	Code        *string `json:"code"`
 	Description *string `json:"description"`
@@ -90,31 +87,33 @@ type SIVIParentSharedReferenceChoice struct {
 }
 
 type SIVIParentSharedReference struct {
-	Column      string                            `json:"column"`
-	ListName    string                            `json:"listName"`
-	Required    bool                              `json:"required"`
-	Source      string                            `json:"source"`
-	Available   bool                              `json:"available"`
-	Diagnostic  string                            `json:"diagnostic"`
-	Definitions vprocore.ProjectMetadataTable     `json:"definitions"`
-	Choices     []SIVIParentSharedReferenceChoice `json:"choices"`
+	Column      string                              `json:"column"`
+	ListName    string                              `json:"listName"`
+	Required    bool                                `json:"required"`
+	Source      string                              `json:"source"`
+	Available   bool                                `json:"available"`
+	Diagnostic  string                              `json:"diagnostic"`
+	Definitions vprocore.ProjectMetadataTable       `json:"definitions"`
+	Choices     []SourceParentSharedReferenceChoice `json:"choices"`
 }
+
+type SourceParentSharedReference = SIVIParentSharedReference
 
 type SIVIParentSharedReferences struct {
-	ContextID string                       `json:"contextId"`
-	Project   string                       `json:"project"`
-	Plot      string                       `json:"plot"`
-	Zone      vprocore.ProjectMetadataCell `json:"zone"`
-	Fields    []SIVIParentSharedReference  `json:"fields"`
+	ContextID string                        `json:"contextId"`
+	Project   string                        `json:"project"`
+	Plot      string                        `json:"plot"`
+	Zone      vprocore.ProjectMetadataCell  `json:"zone"`
+	Fields    []SourceParentSharedReference `json:"fields"`
 }
 
-var SiviParentReferenceColumns = []vprocore.ProjectMetadataColumn{
+var SourceParentReferenceColumns = []vprocore.ProjectMetadataColumn{
 	{Name: "ListName", DeclaredType: "TEXT"}, {Name: "ListFilter", DeclaredType: "TEXT"}, {Name: "ItemOrder", DeclaredType: "REAL"},
 	{Name: "Item", DeclaredType: "TEXT"}, {Name: "ItemDescription", DeclaredType: "TEXT"}, {Name: "FieldUsedIn", DeclaredType: "TEXT"},
 	{Name: "ValidateLoops", DeclaredType: "TEXT"}, {Name: "Validate", DeclaredType: "BOOLEAN"}, {Name: "Note", DeclaredType: "TEXT"}, {Name: "Flag", DeclaredType: "BOOLEAN"},
 }
 
-func SiviReferenceText(value *string) vprocore.ProjectMetadataCell {
+func SourceReferenceText(value *string) vprocore.ProjectMetadataCell {
 	if value == nil {
 		return vprocore.ProjectMetadataCell{Storage: "null"}
 	}
@@ -122,7 +121,7 @@ func SiviReferenceText(value *string) vprocore.ProjectMetadataCell {
 	return vprocore.ProjectMetadataCell{Storage: "text", Text: &copy}
 }
 
-func SiviReferenceBool(value *bool) vprocore.ProjectMetadataCell {
+func SourceReferenceBool(value *bool) vprocore.ProjectMetadataCell {
 	if value == nil {
 		return vprocore.ProjectMetadataCell{Storage: "null"}
 	}
@@ -134,7 +133,7 @@ func SiviReferenceBool(value *bool) vprocore.ProjectMetadataCell {
 }
 
 func siviReferenceDefinitions(rows []listcatalog.Choice) vprocore.ProjectMetadataTable {
-	result := vprocore.ProjectMetadataTable{Columns: append([]vprocore.ProjectMetadataColumn(nil), SiviParentReferenceColumns...), Rows: []vprocore.ProjectMetadataRow{}}
+	result := vprocore.ProjectMetadataTable{Columns: append([]vprocore.ProjectMetadataColumn(nil), SourceParentReferenceColumns...), Rows: []vprocore.ProjectMetadataRow{}}
 	for _, row := range rows {
 		order := vprocore.ProjectMetadataCell{Storage: "null"}
 		if row.ItemOrder != nil {
@@ -142,15 +141,15 @@ func siviReferenceDefinitions(rows []listcatalog.Choice) vprocore.ProjectMetadat
 			order = vprocore.ProjectMetadataCell{Storage: "real", Real: &value}
 		}
 		result.Rows = append(result.Rows, vprocore.ProjectMetadataRow{RowID: row.RowID, Cells: []vprocore.ProjectMetadataCell{
-			SiviReferenceText(row.ListName), SiviReferenceText(row.ListFilter), order, SiviReferenceText(row.Code),
-			SiviReferenceText(row.Description), SiviReferenceText(row.FieldUsedIn), SiviReferenceText(row.ValidateLoops),
-			SiviReferenceBool(row.Validate), SiviReferenceText(row.Note), SiviReferenceBool(row.Flag),
+			SourceReferenceText(row.ListName), SourceReferenceText(row.ListFilter), order, SourceReferenceText(row.Code),
+			SourceReferenceText(row.Description), SourceReferenceText(row.FieldUsedIn), SourceReferenceText(row.ValidateLoops),
+			SourceReferenceBool(row.Validate), SourceReferenceText(row.Note), SourceReferenceBool(row.Flag),
 		}})
 	}
 	return result
 }
 
-func ReadSIVISharedFamilyReference(ctx context.Context, tx *sql.Tx, alias, list string) (vprocore.ProjectMetadataTable, error) {
+func ReadSourceSharedFamilyReference(ctx context.Context, tx *sql.Tx, alias, list string) (vprocore.ProjectMetadataTable, error) {
 	if err := vprocore.ValidateSIVIPhysicalSchema(ctx, tx, alias, "USysTableOfLists", "shared reference definitions"); err != nil {
 		return vprocore.ProjectMetadataTable{}, err
 	}
@@ -158,7 +157,7 @@ func ReadSIVISharedFamilyReference(ctx context.Context, tx *sql.Tx, alias, list 
 	if err != nil {
 		return result, err
 	}
-	if !reflect.DeepEqual(result.Columns, SiviParentReferenceColumns) {
+	if !reflect.DeepEqual(result.Columns, SourceParentReferenceColumns) {
 		return vprocore.ProjectMetadataTable{}, errors.New("SIVI shared reference definitions require the exact ten-column imported schema")
 	}
 	if len(result.Rows) == 0 {
@@ -167,13 +166,13 @@ func ReadSIVISharedFamilyReference(ctx context.Context, tx *sql.Tx, alias, list 
 	return result, nil
 }
 
-func ProjectSIVIReferenceCatalogue(result *SIVIParentSharedReference, field SiviParentSharedReferencePolicy, rows []listcatalog.Choice) error {
+func ProjectSourceReferenceCatalogue(result *SourceParentSharedReference, field SourceParentSharedReferencePolicy, rows []listcatalog.Choice) error {
 	if len(rows) == 0 {
 		return fmt.Errorf("borrowed %s catalogue is empty", field.List)
 	}
 	result.Definitions = siviReferenceDefinitions(rows)
 	for _, row := range rows {
-		choice := SIVIParentSharedReferenceChoice{RowID: row.RowID, Code: row.Code, Description: row.Description}
+		choice := SourceParentSharedReferenceChoice{RowID: row.RowID, Code: row.Code, Description: row.Description}
 		if row.ListName == nil || *row.ListName != field.List || row.Code == nil {
 			choice.Diagnostic = "Item is NULL or belongs to another list"
 		} else if !row.Selectable {
@@ -191,22 +190,22 @@ func ProjectSIVIReferenceCatalogue(result *SIVIParentSharedReference, field Sivi
 	return nil
 }
 
-func (s *SIVIParentSharedService) ReadReference(ctx context.Context, tx *sql.Tx, alias string, field SiviParentSharedReferencePolicy, zone vprocore.ProjectMetadataCell) (SIVIParentSharedReference, error) {
-	result := SIVIParentSharedReference{Column: field.Column, ListName: field.List, Required: field.Required,
+func (s *SourceParentSharedService) ReadReference(ctx context.Context, tx *sql.Tx, alias string, field SourceParentSharedReferencePolicy, zone vprocore.ProjectMetadataCell) (SourceParentSharedReference, error) {
+	result := SourceParentSharedReference{Column: field.Column, ListName: field.List, Required: field.Required,
 		Source: "frozen-DAO-catalogue; source-ordinal identities", Definitions: vprocore.ProjectMetadataTable{Columns: []vprocore.ProjectMetadataColumn{}, Rows: []vprocore.ProjectMetadataRow{}},
-		Choices: []SIVIParentSharedReferenceChoice{}}
+		Choices: []SourceParentSharedReferenceChoice{}}
 	var rows []listcatalog.Choice
 	switch field.Reader {
 	case "family":
 		result.Source = "configured-owned-imported-SQLite VLists.USysTableOfLists; physical rowid; not frozen DAO provenance"
-		table, err := ReadSIVISharedFamilyReference(ctx, tx, alias, field.List)
+		table, err := ReadSourceSharedFamilyReference(ctx, tx, alias, field.List)
 		if err != nil {
 			return result, err
 		}
 		result.Definitions = table
 		for _, row := range table.Rows {
 			code, description := row.Cells[3], row.Cells[4]
-			choice := SIVIParentSharedReferenceChoice{RowID: row.RowID, Code: code.Text, Description: description.Text}
+			choice := SourceParentSharedReferenceChoice{RowID: row.RowID, Code: code.Text, Description: description.Text}
 			if code.Storage != "text" || code.Text == nil {
 				choice.Diagnostic = "Item is not nonempty TEXT"
 			} else if err := sqlutil.ValidateSiteCodeText(field.Column, code.Text, field.Maximum); err != nil {
@@ -280,7 +279,7 @@ func (s *SIVIParentSharedService) ReadReference(ctx context.Context, tx *sql.Tx,
 				return result, errors.New("borrowed BEC Zone catalogue is empty")
 			}
 			for _, row := range values {
-				result.Choices = append(result.Choices, SIVIParentSharedReferenceChoice{Code: row.Zone, Description: row.Description})
+				result.Choices = append(result.Choices, SourceParentSharedReferenceChoice{Code: row.Zone, Description: row.Description})
 			}
 		} else if zone.Storage == "text" && zone.Text != nil {
 			if err := sqlutil.ValidateSiteCodeText("Zone", zone.Text, 4); err != nil {
@@ -294,10 +293,10 @@ func (s *SIVIParentSharedService) ReadReference(ctx context.Context, tx *sql.Tx,
 				{Name: "Zone", DeclaredType: "TEXT"}, {Name: "SubZone", DeclaredType: "TEXT"}, {Name: "ZoneDescription", DeclaredType: "TEXT"}, {Name: "Description", DeclaredType: "TEXT"},
 			}
 			for _, row := range values {
-				result.Choices = append(result.Choices, SIVIParentSharedReferenceChoice{RowID: row.RowID, Code: row.SubZone, Description: row.Description})
+				result.Choices = append(result.Choices, SourceParentSharedReferenceChoice{RowID: row.RowID, Code: row.SubZone, Description: row.Description})
 				result.Definitions.Rows = append(result.Definitions.Rows, vprocore.ProjectMetadataRow{RowID: row.RowID,
-					Cells: []vprocore.ProjectMetadataCell{SiviReferenceText(row.Zone), SiviReferenceText(row.SubZone),
-						SiviReferenceText(row.ZoneDescription), SiviReferenceText(row.Description)}})
+					Cells: []vprocore.ProjectMetadataCell{SourceReferenceText(row.Zone), SourceReferenceText(row.SubZone),
+						SourceReferenceText(row.ZoneDescription), SourceReferenceText(row.Description)}})
 			}
 		} else if zone.Storage != "null" {
 			return result, errors.New("historical nontext Zone cannot filter SubZone choices")
@@ -316,7 +315,7 @@ func (s *SIVIParentSharedService) ReadReference(ctx context.Context, tx *sql.Tx,
 		return result, errors.New("unknown SIVI reference reader")
 	}
 	if field.Reader != "family" && field.Reader != "bec" {
-		if err := ProjectSIVIReferenceCatalogue(&result, field, rows); err != nil {
+		if err := ProjectSourceReferenceCatalogue(&result, field, rows); err != nil {
 			return result, err
 		}
 	}
@@ -324,7 +323,7 @@ func (s *SIVIParentSharedService) ReadReference(ctx context.Context, tx *sql.Tx,
 	return result, ctx.Err()
 }
 
-func (s *SIVIParentSharedService) GetReferences(ctx context.Context, contextID, plot string, zone vprocore.ProjectMetadataCell) (*SIVIParentSharedReferences, error) {
+func (s *SourceParentSharedService) GetReferences(ctx context.Context, contextID, plot string, zone vprocore.ProjectMetadataCell) (*SIVIParentSharedReferences, error) {
 	if err := s.require(ctx); err != nil {
 		return nil, err
 	}
@@ -357,8 +356,8 @@ func (s *SIVIParentSharedService) GetReferences(ctx context.Context, contextID, 
 		if err != nil {
 			return nil, err
 		}
-		result = &SIVIParentSharedReferences{ContextID: contextID, Project: fresh.Project, Plot: plot, Zone: vprocore.CloneSiteUnitCell(zone), Fields: []SIVIParentSharedReference{}}
-		for _, field := range SiviParentSharedReferenceFields {
+		result = &SIVIParentSharedReferences{ContextID: contextID, Project: fresh.Project, Plot: plot, Zone: vprocore.CloneSiteUnitCell(zone), Fields: []SourceParentSharedReference{}}
+		for _, field := range SourceParentSharedReferenceFields {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
@@ -384,9 +383,9 @@ func (s *SIVIParentSharedService) GetReferences(ctx context.Context, contextID, 
 	})
 }
 
-func (s *SIVIParentSharedService) saveWithReferences(ctx context.Context, contextID, plot string, request SIVIParentSharedWrite) (*SIVIParentWriteResult, error) {
+func (s *SourceParentSharedService) saveWithReferences(ctx context.Context, contextID, plot string, request SIVIParentSharedWrite) (*SourceParentWriteResult, error) {
 	var owner *vprocore.SqliteContext
-	hooks := SiviParentWriteHooks{
+	hooks := SourceParentWriteHooks{
 		Prepare: func(conn *sql.Conn) (func(), error) {
 			s.Contexts.Projects.Mu.RLock()
 			owner = s.Contexts.Projects.Sqlite
@@ -397,13 +396,13 @@ func (s *SIVIParentSharedService) saveWithReferences(ctx context.Context, contex
 			_, err := conn.ExecContext(ctx, `ATTACH DATABASE ? AS sivi_refs`, sqlutil.SqliteFileURI(owner.Attachments["VLists"], "ro"))
 			return func() {}, err
 		},
-		Plan: func(tx *sql.Tx, original *SiviParentProjection) ([]SiviParentScalarAssignment, error) {
+		Plan: func(tx *sql.Tx, original *SourceParentProjection) ([]SourceParentScalarAssignment, error) {
 			assignments, err := PlanSIVIParentSharedScope(ctx, original, request.Edits, true)
 			if err != nil {
 				return nil, err
 			}
 			for _, assignment := range assignments {
-				field, reference := SiviParentSharedReferenceField(assignment.Column)
+				field, reference := SourceParentSharedReferenceField(assignment.Column)
 				if !reference || !field.Required || assignment.Value == nil {
 					continue
 				}
@@ -429,5 +428,5 @@ func (s *SIVIParentSharedService) saveWithReferences(ctx context.Context, contex
 		},
 		Verify: func(*sql.Tx) error { return vprocore.ProfileOwnedFiles(owner) },
 	}
-	return WriteSIVIParentPlannedWithHooks(s.Contexts, ctx, contextID, plot, request.Original, siviParentSharedHistory, nil, hooks)
+	return WriteSourceParentPlannedWithHooks(s.Contexts, ctx, contextID, plot, request.Original, siviParentSharedHistory, nil, hooks)
 }

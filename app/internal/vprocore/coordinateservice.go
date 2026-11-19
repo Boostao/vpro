@@ -2,6 +2,7 @@ package vprocore
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -108,6 +109,16 @@ func (s *CoordinateService) GetCoordinateMode() (CoordinateMode, error) {
 	return readCoordinateSettings(s.settingsPath)
 }
 
+func (s *CoordinateService) GetCoordinateModeContext(ctx context.Context) (CoordinateMode, error) {
+	if ctx == nil {
+		return "", errors.New("coordinate mode requires a context")
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return s.GetCoordinateMode()
+}
+
 func (s *CoordinateService) SetCoordinateMode(mode CoordinateMode) error {
 	if err := validateCoordinateMode(mode); err != nil {
 		return err
@@ -118,6 +129,16 @@ func (s *CoordinateService) SetCoordinateMode(mode CoordinateMode) error {
 		return s.preferences.Update("Current", map[string]any{"CoordMethod": coordinatePreferenceNumber(mode)})
 	}
 	return writeCoordinateSettings(s.settingsPath, mode, s.replaceFile)
+}
+
+func (s *CoordinateService) SetCoordinateModeContext(ctx context.Context, mode CoordinateMode) error {
+	if ctx == nil {
+		return errors.New("coordinate mode requires a context")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.SetCoordinateMode(mode)
 }
 
 func writeCoordinateSettings(path string, mode CoordinateMode, replace func(string, string) error) (err error) {
@@ -163,7 +184,7 @@ func writeCoordinateSettings(path string, mode CoordinateMode, replace func(stri
 	return nil
 }
 
-// Conversion is independent of preferences and never edits either plot axis.
+// ConvertCoordinate — Conversion is independent of preferences and never edits either plot axis.
 func (s *CoordinateService) ConvertCoordinate(axis string, mode CoordinateMode, parts CoordinateParts) (*float64, error) {
 	return ConvertCoordinate(axis, mode, parts)
 }

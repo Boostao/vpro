@@ -224,7 +224,7 @@ func DeleteTwoPageSoilHorizon(s *vprocore.ContextService, ctx context.Context, c
 		return DeleteTwoPageSoilHorizonResult{}, err
 	}
 	if req.ID < -2147483648 || req.ID > 2147483647 {
-		return DeleteTwoPageSoilHorizonResult{}, errors.New("soil horizon deletion requires a signed32 child ID")
+		return DeleteTwoPageSoilHorizonResult{}, errors.New("soil horizon deletion requires a record ID")
 	}
 	requestID := strings.TrimSpace(req.RequestID)
 	if requestID == "" {
@@ -249,7 +249,7 @@ func DeleteTwoPageSoilHorizon(s *vprocore.ContextService, ctx context.Context, c
 
 		var out DeleteTwoPageSoilHorizonResult
 		wErr := owner.WithMetadataWriter(ctx, func(conn *sql.Conn) (txErr error) {
-			suAlias, err := sourceform.SiviParentWriterSU(ctx, conn, owner)
+			suAlias, err := sourceform.SourceParentWriterSU(ctx, conn, owner)
 			if err != nil {
 				return err
 			}
@@ -332,7 +332,7 @@ func DeleteTwoPageSoilHorizon(s *vprocore.ContextService, ctx context.Context, c
 			targetIdx := -1
 			idText := strconv.FormatInt(req.ID, 10)
 			for i, r := range beforeRecords.Rows {
-				if sourceform.SiviIdentityCellMatches(r.Cells[colMap["ID"]], idText) {
+				if sourceform.SourceIdentityCellMatches(r.Cells[colMap["ID"]], idText) {
 					if targetIdx >= 0 {
 						return fmt.Errorf("ambiguous %s ID %d in plot %s; deletion refused", kind, req.ID, req.PlotNumber)
 					}
@@ -344,7 +344,7 @@ func DeleteTwoPageSoilHorizon(s *vprocore.ContextService, ctx context.Context, c
 			}
 			deletedRow := beforeRecords.Rows[targetIdx]
 			if strings.TrimSpace(req.RowID) != "" && deletedRow.RowID != strings.TrimSpace(req.RowID) {
-				return fmt.Errorf("%s horizon physical rowId changed (expected %s, found %s); reload before deleting", kind, req.RowID, deletedRow.RowID)
+				return fmt.Errorf("%s horizon record changed on disk (expected %s, found %s); reload before deleting", kind, req.RowID, deletedRow.RowID)
 			}
 
 			// Ensure __VPRO_ChildIdentity exists and permanently reserve all existing + deleted IDs!

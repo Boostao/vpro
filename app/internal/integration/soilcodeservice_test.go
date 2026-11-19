@@ -1,13 +1,8 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/references"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -17,8 +12,10 @@ import (
 	"sync"
 	"testing"
 
-	"context"
 	"github.com/boostao/vpro/app/internal/listcatalog"
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestSoilCatalogueAll1010CellsAndExact13FieldShape(t *testing.T) {

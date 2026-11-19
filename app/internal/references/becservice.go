@@ -1,20 +1,18 @@
 package references
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/resources"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/resources"
 )
 
 var BecDatabase = resources.BECDB
@@ -78,7 +76,7 @@ type BECCatalogueStatus struct {
 
 type BECService struct {
 	Mu     sync.RWMutex `json:"-" yaml:"-"`
-	Db     *sql.DB      `json:"-" yaml:"-"`
+	DB     *sql.DB      `json:"-" yaml:"-"`
 	status BECCatalogueStatus
 }
 
@@ -137,17 +135,17 @@ func NewBECService(dataDir string) (*BECService, error) {
 		db.Close()
 		return nil, err
 	}
-	return &BECService{Db: db, status: status}, nil
+	return &BECService{DB: db, status: status}, nil
 }
 
 func (s *BECService) Close() error {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
-	if s.Db == nil {
+	if s.DB == nil {
 		return nil
 	}
-	err := s.Db.Close()
-	s.Db = nil
+	err := s.DB.Close()
+	s.DB = nil
 	return err
 }
 
@@ -156,7 +154,7 @@ func (s *BECService) GetBECCatalogueStatus(ctx context.Context) (BECCatalogueSta
 		return BECCatalogueStatus{}, err
 	}
 	defer s.Mu.RUnlock()
-	if s.Db == nil {
+	if s.DB == nil {
 		return BECCatalogueStatus{}, errors.New("BEC catalogue is closed")
 	}
 	return s.status, nil
@@ -168,10 +166,10 @@ func (s *BECService) ListBECZones(ctx context.Context) ([]BECZone, error) {
 	}
 	defer s.Mu.RUnlock()
 	result := []BECZone{}
-	if s.Db == nil {
+	if s.DB == nil {
 		return nil, errors.New("BEC catalogue is closed")
 	}
-	rows, err := s.Db.QueryContext(ctx, `SELECT DISTINCT Zone, ZoneDescription FROM BECZoneList ORDER BY Zone COLLATE NOCASE, Zone, ZoneDescription`)
+	rows, err := s.DB.QueryContext(ctx, `SELECT DISTINCT Zone, ZoneDescription FROM BECZoneList ORDER BY Zone COLLATE NOCASE, Zone, ZoneDescription`)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +195,7 @@ func (s *BECService) ListBECSubZones(ctx context.Context, zone *string) ([]BECSu
 		return nil, err
 	}
 	defer s.Mu.RUnlock()
-	if s.Db == nil {
+	if s.DB == nil {
 		return nil, errors.New("BEC catalogue is closed")
 	}
 	query := `SELECT RowID, Zone, SubZone, ZoneDescription, Description FROM BECZoneList`
@@ -207,7 +205,7 @@ func (s *BECService) ListBECSubZones(ctx context.Context, zone *string) ([]BECSu
 		args = append(args, *zone)
 	}
 	query += ` ORDER BY Zone COLLATE NOCASE, Zone, SubZone COLLATE NOCASE, SubZone, CAST(RowID AS INTEGER)`
-	rows, err := s.Db.QueryContext(ctx, query, args...)
+	rows, err := s.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +247,7 @@ func (s *BECService) ListBECSiteSeries(ctx context.Context, zone, subZone *strin
 		return nil, err
 	}
 	defer s.Mu.RUnlock()
-	if s.Db == nil {
+	if s.DB == nil {
 		return nil, errors.New("BEC catalogue is closed")
 	}
 	result := []BECSiteSeries{}
@@ -272,7 +270,7 @@ func (s *BECService) ListBECSiteSeries(ctx context.Context, zone, subZone *strin
 	} else {
 		query += ` ORDER BY Zone COLLATE NOCASE, Zone, SubZone COLLATE NOCASE, SubZone, SiteSeries COLLATE NOCASE, SiteSeries, CAST(RowID AS INTEGER)`
 	}
-	rows, err := s.Db.QueryContext(ctx, query, args...)
+	rows, err := s.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

@@ -27,3 +27,18 @@ func loadPlotLabelPDFFonts(ctx context.Context) (plotLabelPDFFonts, error) {
 	}
 	return plotLabelPDFFonts{}, err
 }
+
+func readPlotLabelPDFFonts(ctx context.Context, directory string, open func(string) (plotLabelPDFFontHandle, error)) (plotLabelPDFFonts, error) {
+	if directory == "" || !filepath.IsAbs(directory) {
+		return plotLabelPDFFonts{}, errors.New("runtime label fonts require an absolute system font directory")
+	}
+	regular, err := readPlotLabelPDFFont(ctx, filepath.Join(directory, "arial.ttf"), "ArialMT", open)
+	if err != nil {
+		return plotLabelPDFFonts{}, err
+	}
+	bold, err := readPlotLabelPDFFont(ctx, filepath.Join(directory, "arialbd.ttf"), "Arial-BoldMT", open)
+	if err != nil {
+		return plotLabelPDFFonts{}, err
+	}
+	return plotLabelPDFFonts{regular: regular, bold: bold, regularName: "ArialMT", boldName: "Arial-BoldMT"}, nil
+}

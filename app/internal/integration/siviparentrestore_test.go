@@ -1,13 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +9,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIParentDirectWriterAllDomainSubsetsAndRestorationAliases(t *testing.T) {
@@ -48,7 +46,7 @@ func TestSIVIParentDirectWriterAllDomainSubsetsAndRestorationAliases(t *testing.
 			if err := db.QueryRow(`SELECT Proposal FROM "__VPRO_SIVIParentHistory" WHERE ID=?`, written.HistoryID).Scan(&proposal); err != nil {
 				t.Fatal(err)
 			}
-			var event sourceform.SiviParentHistory
+			var event sourceform.SourceParentHistory
 			if err := json.Unmarshal([]byte(proposal), &event); err != nil {
 				t.Fatal(err)
 			}
@@ -110,9 +108,9 @@ func TestSIVIParentDirectWriterAuditStrengthRestoresOnlyAuditedCells(t *testing.
 				t.Fatal(err)
 			}
 			drafts := sourceform.SiviParentDirectEdits{
-				Scalars:     []sourceform.SiviParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_StandHeight", vprotest.SiviReal(-3.25))},
-				Text:        []sourceform.SiviParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_PolygonNumber", vprocore.ProjectMetadataCell{Storage: "null"})},
-				Categorical: []sourceform.SiviParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_AhorizonType", vprotest.MetadataText(""))},
+				Scalars:     []sourceform.SourceParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_StandHeight", vprotest.SiviReal(-3.25))},
+				Text:        []sourceform.SourceParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_PolygonNumber", vprocore.ProjectMetadataCell{Storage: "null"})},
+				Categorical: []sourceform.SourceParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_AhorizonType", vprotest.MetadataText(""))},
 			}
 			written, err := sourceform.WriteSIVIParentDirect(service, context.Background(), state.ContextID, "108050", parent, drafts)
 			if err != nil || written == nil || written.ChangedCells != 3 || (written.HistoryID == "") != (strength == 0) {
@@ -156,19 +154,19 @@ func TestSIVIParentDirectWriterExactUTF16BooleanOptionAndNullWrites(t *testing.T
 	polygon, canopy := strings.Repeat("\U0001f600", 12)+"a", strings.Repeat("\U0001f600", 25)
 	root, horizon := strings.Repeat("\U0001f600", 50), strings.Repeat("\U0001f600", 2)+"a"
 	drafts := sourceform.SiviParentDirectEdits{
-		Scalars: []sourceform.SiviParentScalarEdit{
+		Scalars: []sourceform.SourceParentScalarEdit{
 			sftest.SiviParentEdit(t, parent, "SV_FloodPlain", vprotest.MetadataInteger("-1")),
 			sftest.SiviParentEdit(t, parent, "SV_StandHeight", vprocore.ProjectMetadataCell{Storage: "null"}),
 		},
-		Options: []sourceform.SiviParentScalarEdit{
+		Options: []sourceform.SourceParentScalarEdit{
 			sftest.SiviParentEdit(t, parent, "SV_StandAgeEstMeas", vprocore.ProjectMetadataCell{Storage: "null"}),
 			sftest.SiviParentEdit(t, parent, "SV_StandHeightEstMeas", vprotest.MetadataText("2")),
 		},
-		Text: []sourceform.SiviParentScalarEdit{
+		Text: []sourceform.SourceParentScalarEdit{
 			sftest.SiviParentEdit(t, parent, "SV_PolygonNumber", vprotest.MetadataText(polygon)),
 			sftest.SiviParentEdit(t, parent, "SV_CanopyComposition", vprotest.MetadataText(canopy)),
 		},
-		Categorical: []sourceform.SiviParentScalarEdit{
+		Categorical: []sourceform.SourceParentScalarEdit{
 			sftest.SiviParentEdit(t, parent, "SnowCoverregime", vprotest.MetadataText(" ")),
 			sftest.SiviParentEdit(t, parent, "SV_RootZoneTexture", vprotest.MetadataText(root)),
 			sftest.SiviParentEdit(t, parent, "SV_AhorizonType", vprotest.MetadataText(horizon)),
@@ -182,7 +180,7 @@ func TestSIVIParentDirectWriterExactUTF16BooleanOptionAndNullWrites(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, domain := range [][]sourceform.SiviParentScalarEdit{drafts.Scalars, drafts.Options, drafts.Text, drafts.Categorical} {
+	for _, domain := range [][]sourceform.SourceParentScalarEdit{drafts.Scalars, drafts.Options, drafts.Text, drafts.Categorical} {
 		for _, edit := range domain {
 			if !reflect.DeepEqual(sftest.SiviParentCell(t, fresh, edit.Column), edit.Value) {
 				t.Fatal("boundary write changed literal storage", edit.Column)
@@ -204,7 +202,7 @@ func TestSIVIParentDirectRestorationRejectsDriftCorruptHistoryAndTriggers(t *tes
 	if err := db.QueryRow(`SELECT Proposal FROM "__VPRO_SIVIParentHistory" WHERE ID=?`, written.HistoryID).Scan(&proposal); err != nil {
 		t.Fatal(err)
 	}
-	var event sourceform.SiviParentHistory
+	var event sourceform.SourceParentHistory
 	if err := json.Unmarshal([]byte(proposal), &event); err != nil {
 		t.Fatal(err)
 	}

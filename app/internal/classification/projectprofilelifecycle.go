@@ -1,19 +1,16 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
-
 	"errors"
 	"fmt"
 	"math"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type ProjectPlotProfileCreation struct {
@@ -136,7 +133,7 @@ func DeleteProfileRule(c *vprocore.SqliteContext, ctx context.Context, request P
 	}
 	id, err := strconv.ParseInt(request.RowID, 10, 64)
 	if err != nil || strconv.FormatInt(id, 10) != request.RowID {
-		return errors.New("profile deletion requires one literal signed64 physical identity")
+		return errors.New("profile deletion requires one literal record reference")
 	}
 	var reservations vprocore.ProjectMetadataTable
 	return MutateProfileRules(c, ctx, request.OriginalRules, user, func(tx *sql.Tx, table string, fresh vprocore.ProjectMetadataTable) (*vprocore.ProjectMetadataTable, error) {

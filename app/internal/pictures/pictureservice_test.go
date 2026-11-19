@@ -1,17 +1,15 @@
 package pictures
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func pictureServiceLookup(values map[string]string) func(string) (string, bool) {
@@ -38,6 +36,7 @@ func TestPictureServiceExplicitSourcesAndGuards(t *testing.T) {
 	if got, err := missing.GetMetadata(context.Background(), "owned", "P"); err == nil || got != nil {
 		t.Fatal("nil service produced metadata", got, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if err := missing.require(nil); err == nil {
 		t.Fatal("nil request context was accepted")
 	}

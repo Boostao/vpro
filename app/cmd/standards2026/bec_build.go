@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf16"
 
 	"github.com/boostao/vpro/app/internal/accessreader"
 	"github.com/boostao/vpro/app/internal/sqlutil"
@@ -105,19 +104,6 @@ func strVal(p *string) string {
 	return *p
 }
 
-func truncateUTF16(p *string, maxUnits int) *string {
-	if p == nil {
-		return nil
-	}
-	units := utf16.Encode([]rune(*p))
-	if len(units) <= maxUnits {
-		return p
-	}
-	runes := utf16.Decode(units[:maxUnits])
-	s := string(runes)
-	return &s
-}
-
 func formatSubZoneDesc(subName, varName, phaseName *string) *string {
 	parts := []string{}
 	if varName != nil && strings.TrimSpace(*varName) != "" {
@@ -137,7 +123,7 @@ func formatSubZoneDesc(subName, varName, phaseName *string) *string {
 	if desc == "" {
 		return nil
 	}
-	return truncateUTF16(&desc, 80)
+	return sqlutil.TruncateUTF16Ptr(&desc, 80)
 }
 
 func buildBECSchemas() ([]becSourceCol, []becSourceCol) {
@@ -251,9 +237,9 @@ func buildBECv13Data(becAccdb *accessreader.DB, becAccdbSHA, existingBECPath str
 		if zDesc == "" {
 			zDesc = strings.Join(strings.Fields(strVal(optStr(r[5]))), " ")
 		}
-		zPtr := truncateUTF16(&z, 4)
-		subPtr := truncateUTF16(&sub, 10)
-		zDescPtr := truncateUTF16(&zDesc, 50)
+		zPtr := sqlutil.TruncateUTF16Ptr(&z, 4)
+		subPtr := sqlutil.TruncateUTF16Ptr(&sub, 10)
+		zDescPtr := sqlutil.TruncateUTF16Ptr(&zDesc, 50)
 		descPtr := formatSubZoneDesc(optStr(r[6]), optStr(r[7]), optStr(r[8]))
 		k := strings.ToUpper(z) + "|" + strings.ToLower(sub)
 		zoneMap[k] = becZoneRow{
@@ -283,9 +269,9 @@ func buildBECv13Data(becAccdb *accessreader.DB, becAccdbSHA, existingBECPath str
 			}
 			zCopy, subCopy, zDescCopy := matchedZ, matchedSub, zDesc
 			zoneMap[k] = becZoneRow{
-				Zone:            truncateUTF16(&zCopy, 4),
-				SubZone:         truncateUTF16(&subCopy, 10),
-				ZoneDescription: truncateUTF16(&zDescCopy, 50),
+				Zone:            sqlutil.TruncateUTF16Ptr(&zCopy, 4),
+				SubZone:         sqlutil.TruncateUTF16Ptr(&subCopy, 10),
+				ZoneDescription: sqlutil.TruncateUTF16Ptr(&zDescCopy, 50),
 				Description:     formatSubZoneDesc(optStr(r[4]), optStr(r[5]), optStr(r[6])),
 			}
 		}
@@ -295,7 +281,7 @@ func buildBECv13Data(becAccdb *accessreader.DB, becAccdbSHA, existingBECPath str
 	for _, zr := range zoneMap {
 		if canon, ok := zoneNames[strings.ToUpper(strVal(zr.Zone))]; ok && canon != "" {
 			canonCopy := canon
-			zr.ZoneDescription = truncateUTF16(&canonCopy, 50)
+			zr.ZoneDescription = sqlutil.TruncateUTF16Ptr(&canonCopy, 50)
 		}
 		mergedZones = append(mergedZones, zr)
 	}
@@ -430,24 +416,24 @@ func buildBECv13Data(becAccdb *accessreader.DB, becAccdbSHA, existingBECPath str
 
 		row := becSeriesRow{
 			SourceID:         &srcCopy,
-			SSCode:           truncateUTF16(ssCodePtr, 255),
-			Name:             truncateUTF16(bgcNamePtr, 255),
-			Region:           truncateUTF16(optStr(r[7]), 255),
-			Zone:             truncateUTF16(zPtr, 255),
-			SubZone:          truncateUTF16(subCombinedPtr, 255),
-			BaseSubZone:      truncateUTF16(baseSubPtr, 255),
-			Variant:          truncateUTF16(varPtr, 255),
-			Phase:            truncateUTF16(phasePtr, 255),
-			SiteSeries:       truncateUTF16(optStr(r[12]), 255),
-			SiteSeriesPhase:  truncateUTF16(optStr(r[13]), 255),
+			SSCode:           sqlutil.TruncateUTF16Ptr(ssCodePtr, 255),
+			Name:             sqlutil.TruncateUTF16Ptr(bgcNamePtr, 255),
+			Region:           sqlutil.TruncateUTF16Ptr(optStr(r[7]), 255),
+			Zone:             sqlutil.TruncateUTF16Ptr(zPtr, 255),
+			SubZone:          sqlutil.TruncateUTF16Ptr(subCombinedPtr, 255),
+			BaseSubZone:      sqlutil.TruncateUTF16Ptr(baseSubPtr, 255),
+			Variant:          sqlutil.TruncateUTF16Ptr(varPtr, 255),
+			Phase:            sqlutil.TruncateUTF16Ptr(phasePtr, 255),
+			SiteSeries:       sqlutil.TruncateUTF16Ptr(optStr(r[12]), 255),
+			SiteSeriesPhase:  sqlutil.TruncateUTF16Ptr(optStr(r[13]), 255),
 			Variation:        variationPtr,
-			Seral:            truncateUTF16(optStr(r[15]), 255),
-			Description:      truncateUTF16(optStr(r[4]), 255),
-			PlantAssociation: truncateUTF16(optStr(r[5]), 255),
+			Seral:            sqlutil.TruncateUTF16Ptr(optStr(r[15]), 255),
+			Description:      sqlutil.TruncateUTF16Ptr(optStr(r[4]), 255),
+			PlantAssociation: sqlutil.TruncateUTF16Ptr(optStr(r[5]), 255),
 			ReferenceID:      refIDPtr,
 			AddedDate:        addedPtr,
 			OriginalSourceID: &srcCopy,
-			MergedBGC:        truncateUTF16(mergedPtr, 255),
+			MergedBGC:        sqlutil.TruncateUTF16Ptr(mergedPtr, 255),
 			Flag:             &flagFalse,
 		}
 		if prev, hasPrev := histBySourceID[srcID]; hasPrev {

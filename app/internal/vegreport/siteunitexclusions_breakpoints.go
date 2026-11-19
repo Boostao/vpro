@@ -188,7 +188,7 @@ func resolveHierarchyBreakpointsOnSU(
 				effective, _ = cleanBreakNodeName(effective)
 			}
 			if len(utf16.Encode([]rune(effective))) > 255 {
-				return vprocore.ProjectMetadataTable{}, HierarchyBreakpointResolution{}, fmt.Errorf("breakpoint unit %q exceeds 255 UTF-16 code units", effective)
+				return vprocore.ProjectMetadataTable{}, HierarchyBreakpointResolution{}, fmt.Errorf("breakpoint unit %q cannot exceed 255 characters", effective)
 			}
 			m := HierarchyBreakpointUnitMapping{
 				OriginalUnit:  orig,

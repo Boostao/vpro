@@ -1,11 +1,6 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -18,6 +13,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func subzoneMatrixServiceFixture(t *testing.T) (*SubzoneMatrixService, vprocore.ProjectState) {
@@ -152,6 +150,7 @@ func TestSubzoneMatrixServiceStrictRequestsAndCancellation(t *testing.T) {
 			t.Fatal("raw export request repaired/published", request, outcome, err)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := service.GetReview(nil, state.ContextID); err == nil {
 		t.Fatal("nil context accepted")
 	}

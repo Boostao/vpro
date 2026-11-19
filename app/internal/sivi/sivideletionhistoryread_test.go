@@ -1,13 +1,6 @@
 package sivi
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +9,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func assertSIVIDeletionHistoryRefused(t *testing.T, contexts *vprocore.ContextService, contextID, plot string) {
@@ -98,7 +96,7 @@ func TestSIVIDeletionHistoryDurableReopenSelectionAndConsumption(t *testing.T) {
 		if err != nil || list == nil || !list.HistoryPresent || list.ContextID != reopened.ContextID || len(list.Events) != 1 {
 			t.Fatal("fresh facade/reopened owner could not discover persisted history without a UUID", list, err)
 		}
-		var event SIVIDeletionHistoryEvent = list.Events[0]
+		event := list.Events[0]
 		if event.HistoryID != deleted.HistoryID || event.Form != deleted.Form || event.RowID != deleted.RowID ||
 			event.ID != deleted.ID || event.Species == nil || *event.Species != "RAW" || event.Actor != deleted.Actor ||
 			event.EditWhen != deleted.EditWhen || event.Restored || event.Consumed {

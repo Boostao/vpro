@@ -585,7 +585,7 @@ func mergeLifeformSpeciesSources(master, personal vprocore.ProjectMetadataTable)
 	for _, row := range personal.Rows {
 		rowID, err := strconv.ParseInt(row.RowID, 10, 64)
 		if err != nil || rowID <= 0 {
-			return out, fmt.Errorf("USysUserSpp row %s requires a positive rowid", row.RowID)
+			return out, fmt.Errorf("USysUserSpp row %s requires a valid record number", row.RowID)
 		}
 		out.Rows = append(out.Rows, vprocore.ProjectMetadataRow{RowID: strconv.FormatInt(-rowID, 10), Cells: []vprocore.ProjectMetadataCell{
 			row.Cells[personalColumns["Code"]], row.Cells[personalColumns[lifeformColumn]], row.Cells[personalColumns["Codetype"]]}})

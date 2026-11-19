@@ -1,15 +1,13 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"path/filepath"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSummaryExtendedWorkbookServiceMethodsAndGuards(t *testing.T) {
@@ -37,12 +35,14 @@ func TestSummaryExtendedWorkbookServiceMethodsAndGuards(t *testing.T) {
 	if value, err := service.GetReview(ctx, state.ContextID, request); !errors.Is(err, context.Canceled) || value != nil {
 		t.Fatal("cancelled facade returned review", value, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if value, err := service.GetReview(nil, state.ContextID, request); err == nil || value != nil {
 		t.Fatal("nil context facade returned review", value, err)
 	}
 	if value, err := service.ExportReviewed(ctx, state.ContextID, "{}"); !errors.Is(err, context.Canceled) || value != nil {
 		t.Fatal("cancelled publication facade returned receipt", value, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if value, err := service.ExportReviewed(nil, state.ContextID, "{}"); err == nil || value != nil {
 		t.Fatal("nil publication context returned receipt", value, err)
 	}

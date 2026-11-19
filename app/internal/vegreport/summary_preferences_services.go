@@ -202,7 +202,7 @@ func readSummaryVegetationBECSuggestions(ctx context.Context, tx *sql.Tx) (vproc
 	if err != nil {
 		return vprocore.ProjectMetadataTable{}, err
 	}
-	if !reflect.DeepEqual(table.Columns, sourceform.SiviParentReferenceColumns) {
+	if !reflect.DeepEqual(table.Columns, sourceform.SourceParentReferenceColumns) {
 		return vprocore.ProjectMetadataTable{}, errors.New("Summary Vegetation BEC minimum suggestions require the exact ten-column imported schema")
 	}
 	return table, nil

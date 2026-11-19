@@ -1,11 +1,6 @@
 package datasheet
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -15,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/mattn/go-sqlite3"
 )
 
@@ -257,6 +254,7 @@ func TestTwoPageVegetationTableGatesAndRequestGuards(t *testing.T) {
 		if got, err := service.GetReview(context.Background(), state.ContextID, test.plot, test.form, 0, 1); err == nil || got != nil {
 			t.Fatal("unsupported literal request returned source", got, err)
 		}
+		//lint:ignore SA1012 intentional nil-context guard test
 		if got, err := service.GetReview(nil, state.ContextID, "108050", "FS882-8x6XL", 0, 1); err == nil || got != nil {
 			t.Fatal("nil request context returned source", got, err)
 		}

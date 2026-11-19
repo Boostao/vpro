@@ -1,17 +1,15 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIProjectAssignmentOwnedSingleSnapshotAndZeroWrites(t *testing.T) {
@@ -65,7 +63,7 @@ func TestSIVIProjectAssignmentOwnedSingleSnapshotAndZeroWrites(t *testing.T) {
 						expected = original.Rows[0].Env.Cells[binding.Column]
 					}
 				}
-				selection := SiviProjectSelection{ContextID: state.ContextID, ControlID: "form:frmSIVIsite/ProjectID",
+				selection := SourceProjectSelectionInternal{ContextID: state.ContextID, ControlID: "form:frmSIVIsite/ProjectID",
 					Table: original.EnvTable, RowID: original.Rows[0].Env.RowID, Expected: expected,
 					SourceOption: source, MetadataAlias: choices.Alias, MetadataTable: choices.Table, MetadataOriginal: metadata}
 				selection.MetadataColumns = append([]vprocore.ProjectMetadataColumn{}, choices.Choices.Columns...)

@@ -2,7 +2,6 @@ package cloudsync
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"math"
@@ -158,24 +157,6 @@ func readSensitiveSpeciesFromSQLiteVLists(ctx context.Context, vlistsPath string
 	return out, true, rows.Err()
 }
 
-func loadSensitiveSpeciesFromSQLiteVLists(ctx context.Context, vlistsPath string) (map[string]struct{}, error) {
-	trimmed := strings.TrimSpace(vlistsPath)
-	if trimmed == "" {
-		return nil, errors.New("VLists database path is required for rare-plant Red/Blue coordinate redaction")
-	}
-	out, hasTbl, err := readSensitiveSpeciesFromSQLiteVLists(ctx, trimmed)
-	if err != nil {
-		return nil, err
-	}
-	if !hasTbl {
-		return nil, fmt.Errorf("conservation status table USysSppAttributes is missing in %s; refusing to export unredacted plot coordinates without BC CDC Red/Blue status metadata", trimmed)
-	}
-	if len(out) == 0 {
-		return nil, fmt.Errorf("USysSppAttributes.RedBlueList contains 0 Red/Blue-listed species rows in %s; refusing to export unredacted plot coordinates when sensitive-species redaction is required (populate BC CDC Red/Blue status codes first)", trimmed)
-	}
-	return out, nil
-}
-
 func readSensitiveSpeciesFromPG(ctx context.Context, q pgxQueryRowOrQuery) (map[string]struct{}, bool, error) {
 	out := map[string]struct{}{}
 	if q == nil {
@@ -209,20 +190,6 @@ func readSensitiveSpeciesFromPG(ctx context.Context, q pgxQueryRowOrQuery) (map[
 		}
 	}
 	return out, true, rows.Err()
-}
-
-func loadSensitiveSpeciesFromPG(ctx context.Context, q pgxQueryRowOrQuery) (map[string]struct{}, error) {
-	out, hasTbl, err := readSensitiveSpeciesFromPG(ctx, q)
-	if err != nil {
-		return nil, err
-	}
-	if !hasTbl {
-		return nil, errors.New("conservation status table standards.usys_spp_attributes is missing in PostgreSQL; refusing to export unredacted plot coordinates without BC CDC Red/Blue status metadata")
-	}
-	if len(out) == 0 {
-		return nil, errors.New("standards.usys_spp_attributes contains 0 Red/Blue-listed species rows in PostgreSQL; refusing to export unredacted plot coordinates when sensitive-species redaction is required (populate BC CDC Red/Blue status codes first)")
-	}
-	return out, nil
 }
 
 type pgxQueryRowOrQuery interface {
@@ -279,142 +246,4 @@ func findSensitivePlotsForSubsetPG(ctx context.Context, q pgxQueryRowOrQuery, pl
 		}
 	}
 	return sensitivePlots, rows.Err()
-}
-
-// RedactSensitiveSQLiteProjectCoordinates joins <Project>_Veg against USysSppAttributes.RedBlueList
-// (from vlistsPath) and truncates Longitude/Latitude (0.1 deg) and UTM/XY (10 km) in <Project>_Env
-// for all plots containing Red/Blue-listed species. Fails closed when USysSppAttributes is missing
-// or contains zero Red/Blue-listed species rows.
-func RedactSensitiveSQLiteProjectCoordinates(ctx context.Context, sqlitePath, project, vlistsPath string) (int, error) {
-	if _, err := validateSplinterProjectName(project); err != nil {
-		return 0, err
-	}
-	speciesSet, err := loadSensitiveSpeciesFromSQLiteVLists(ctx, vlistsPath)
-	if err != nil {
-		return 0, err
-	}
-
-	db, err := sqlutil.OpenImmediateWriteSQLite(sqlitePath)
-	if err != nil {
-		return 0, err
-	}
-	defer db.Close()
-
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	vegTbl := quotePGIdent(project + "_Veg")
-	envTbl := quotePGIdent(project + "_Env")
-
-	vegRows, err := tx.QueryContext(ctx, fmt.Sprintf(`
-		SELECT DISTINCT CAST("PlotNumber" AS TEXT), UPPER(TRIM(CAST("Species" AS TEXT)))
-		FROM %s
-		WHERE "PlotNumber" IS NOT NULL AND "Species" IS NOT NULL
-	`, vegTbl))
-	if err != nil {
-		return 0, err
-	}
-	sensitivePlots := map[string]struct{}{}
-	for vegRows.Next() {
-		var plot, sp string
-		if err := vegRows.Scan(&plot, &sp); err != nil {
-			vegRows.Close()
-			return 0, err
-		}
-		if _, sensitive := speciesSet[sp]; sensitive && plot != "" {
-			sensitivePlots[plot] = struct{}{}
-		}
-	}
-	if err := vegRows.Close(); err != nil {
-		return 0, err
-	}
-	if err := vegRows.Err(); err != nil {
-		return 0, err
-	}
-	if len(sensitivePlots) == 0 {
-		return 0, tx.Rollback()
-	}
-
-	selRows, err := tx.QueryContext(ctx, fmt.Sprintf(`
-		SELECT "PlotNumber", "Longitude", "Latitude", "UTMEasting", "UTMNorthing", "XCoord", "YCoord"
-		FROM %s
-		WHERE typeof("PlotNumber") = 'text'
-	`, envTbl))
-	if err != nil {
-		return 0, err
-	}
-	type envCoordUpdate struct {
-		plot     string
-		lon, lat sql.NullFloat64
-		e, n     sql.NullFloat64
-		x, y     sql.NullFloat64
-	}
-	var updates []envCoordUpdate
-	for selRows.Next() {
-		var rec envCoordUpdate
-		if err := selRows.Scan(&rec.plot, &rec.lon, &rec.lat, &rec.e, &rec.n, &rec.x, &rec.y); err != nil {
-			selRows.Close()
-			return 0, err
-		}
-		if _, sensitive := sensitivePlots[rec.plot]; !sensitive {
-			continue
-		}
-		if rec.lon.Valid {
-			rec.lon.Float64 = TruncateSensitiveLatLon(rec.lon.Float64)
-		}
-		if rec.lat.Valid {
-			rec.lat.Float64 = TruncateSensitiveLatLon(rec.lat.Float64)
-		}
-		if rec.e.Valid {
-			rec.e.Float64 = TruncateSensitiveUTM(rec.e.Float64)
-		}
-		if rec.n.Valid {
-			rec.n.Float64 = TruncateSensitiveUTM(rec.n.Float64)
-		}
-		isDeg := (!rec.x.Valid || math.Abs(rec.x.Float64) <= 180.0) && (!rec.y.Valid || math.Abs(rec.y.Float64) <= 90.0)
-		if rec.x.Valid {
-			if isDeg {
-				rec.x.Float64 = TruncateSensitiveLatLon(rec.x.Float64)
-			} else {
-				rec.x.Float64 = TruncateSensitiveUTM(rec.x.Float64)
-			}
-		}
-		if rec.y.Valid {
-			if isDeg {
-				rec.y.Float64 = TruncateSensitiveLatLon(rec.y.Float64)
-			} else {
-				rec.y.Float64 = TruncateSensitiveUTM(rec.y.Float64)
-			}
-		}
-		updates = append(updates, rec)
-	}
-	if err := selRows.Close(); err != nil {
-		return 0, err
-	}
-	if err := selRows.Err(); err != nil {
-		return 0, err
-	}
-
-	updStmt, err := tx.PrepareContext(ctx, fmt.Sprintf(`
-		UPDATE %s
-		SET "Longitude" = ?, "Latitude" = ?, "UTMEasting" = ?, "UTMNorthing" = ?, "XCoord" = ?, "YCoord" = ?
-		WHERE typeof("PlotNumber") = 'text' AND CAST("PlotNumber" AS BLOB) = CAST(? AS BLOB)
-	`, envTbl))
-	if err != nil {
-		return 0, err
-	}
-	defer updStmt.Close()
-
-	for _, u := range updates {
-		if _, err := updStmt.ExecContext(ctx, u.lon, u.lat, u.e, u.n, u.x, u.y, u.plot); err != nil {
-			return 0, err
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return 0, err
-	}
-	return len(updates), nil
 }

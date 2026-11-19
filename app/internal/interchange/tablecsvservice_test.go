@@ -1,11 +1,6 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +11,9 @@ import (
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func assertTableCSVFacadeReadOnly(t *testing.T, service *vprocore.ContextService) func() {

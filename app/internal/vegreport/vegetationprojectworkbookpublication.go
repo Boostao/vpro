@@ -29,11 +29,6 @@ type vegetationProjectWorkbookEvidence struct {
 	Summary *vegetationProjectWorkbookSummary
 }
 
-func prepareLongVegetationProjectWorkbook(ctx context.Context, source vegetationLayerReport,
-	scope LongVegetationReportScope, settings LongVegetationSettings, layout vegetationWorkbookLayout) (vegetationProjectWorkbook, error) {
-	return prepareLongVegetationProjectWorkbookWithSummary(ctx, source, scope, settings, layout, nil)
-}
-
 func prepareLongVegetationProjectWorkbookWithSummary(ctx context.Context, source vegetationLayerReport,
 	scope LongVegetationReportScope, settings LongVegetationSettings, layout vegetationWorkbookLayout,
 	summary *vegetationProjectWorkbookSummary) (vegetationProjectWorkbook, error) {
@@ -130,11 +125,13 @@ func prepareLongVegetationProjectWorkbookWithSummary(ctx context.Context, source
 	return vegetationProjectWorkbook{Preview: LongVegetationProjectPreview{Scope: scope, Preview: preview}, Workbook: workbook}, nil
 }
 
-type vegetationProjectWorkbookReadRequest struct {
+type LongVegetationProjectWorkbookReadRequest struct {
 	Revision          string `json:"revision"`
 	BuildApprovalHash string `json:"buildApprovalHash"`
 	Scope             string `json:"scope"`
 }
+
+type vegetationProjectWorkbookReadRequest = LongVegetationProjectWorkbookReadRequest
 
 func validateProjectWorkbookReadRequest(revision, hash, scope string) error {
 	if _, err := resolveLongVegetationWorkbookScope(scope); err != nil {
@@ -143,8 +140,8 @@ func validateProjectWorkbookReadRequest(revision, hash, scope string) error {
 	return validateProjectReadRequest(vegetationProjectReadRequest{Revision: revision, ApprovalHash: hash})
 }
 
-func (request *vegetationProjectWorkbookReadRequest) UnmarshalJSON(data []byte) error {
-	type plain vegetationProjectWorkbookReadRequest
+func (request *LongVegetationProjectWorkbookReadRequest) UnmarshalJSON(data []byte) error {
+	type plain LongVegetationProjectWorkbookReadRequest
 	var decoded plain
 	if err := vprocore.DecodeStrictRequiredJSON(data, &decoded, "project workbook review", "revision", "buildApprovalHash", "scope"); err != nil {
 		return err
@@ -152,11 +149,11 @@ func (request *vegetationProjectWorkbookReadRequest) UnmarshalJSON(data []byte) 
 	if err := validateProjectWorkbookReadRequest(decoded.Revision, decoded.BuildApprovalHash, decoded.Scope); err != nil {
 		return err
 	}
-	*request = vegetationProjectWorkbookReadRequest(decoded)
+	*request = LongVegetationProjectWorkbookReadRequest(decoded)
 	return nil
 }
 
-type vegetationProjectWorkbookExportRequest struct {
+type LongVegetationProjectWorkbookExportRequest struct {
 	Revision          string `json:"revision"`
 	BuildApprovalHash string `json:"buildApprovalHash"`
 	Scope             string `json:"scope"`
@@ -165,7 +162,9 @@ type vegetationProjectWorkbookExportRequest struct {
 	Destination       string `json:"destination"`
 }
 
-func (request *vegetationProjectWorkbookExportRequest) UnmarshalJSON(data []byte) error {
+type vegetationProjectWorkbookExportRequest = LongVegetationProjectWorkbookExportRequest
+
+func (request *LongVegetationProjectWorkbookExportRequest) UnmarshalJSON(data []byte) error {
 	type plain vegetationProjectWorkbookExportRequest
 	var decoded plain
 	if err := vprocore.DecodeStrictRequiredJSON(data, &decoded, "project workbook publication",
@@ -350,10 +349,10 @@ func (s *LongVegetationProjectWorkbookService) GetReview(ctx context.Context, co
 					summary.Header.VersionStatus, summary.Header.VersionDefinitions}
 			}
 			for _, sheet := range prepared.Workbook.Sheets {
-				result.Sheets = append(result.Sheets, reportcore.VegetationWorkbookSheet{Unit: sheet.Unit, Name: sheet.Name})
+				result.Sheets = append(result.Sheets, reportcore.VegetationWorkbookSheet(sheet))
 			}
 			for _, skipped := range prepared.Workbook.SkippedUnits {
-				result.SkippedUnits = append(result.SkippedUnits, VegetationWorkbookSkippedUnit{skipped.Unit, skipped.Reason})
+				result.SkippedUnits = append(result.SkippedUnits, VegetationWorkbookSkippedUnit(skipped))
 			}
 			return result, nil
 		})

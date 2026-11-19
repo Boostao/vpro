@@ -1,11 +1,6 @@
 package spatial
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -16,6 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestGoogleEarthKMLExportUnavailableAuthorization(t *testing.T) {
@@ -28,6 +26,7 @@ func TestGoogleEarthKMLExportUnavailableAuthorization(t *testing.T) {
 		}
 	}
 	service := NewGoogleEarthKMLExportService(nil)
+	//lint:ignore SA1012 intentional nil-context guard test
 	if value, err := service.GetGoogleEarthKMLExportReview(nil, "", "{}"); value != nil || err == nil {
 		t.Fatal("nil request context", value, err)
 	}

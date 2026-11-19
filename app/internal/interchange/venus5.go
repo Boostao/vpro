@@ -454,7 +454,7 @@ func assembleRelationalVenusArchive(
 		if rawPlotNum == "" {
 			rawPlotNum = fmt.Sprintf("VP%05d", i+1)
 		}
-		plotNum := truncateUTF16Units(rawPlotNum, 7)
+		plotNum := sqlutil.TruncateUTF16(rawPlotNum, 7)
 		if plotID == "" {
 			plotID = plotNum
 		}
@@ -517,7 +517,7 @@ func assembleRelationalVenusArchive(
 			if idx, ok := plotIdxByKey["PN:"+pn]; ok {
 				return idx, true
 			}
-			if idx, ok := plotIdxByKey["PN:"+truncateUTF16Units(pn, 7)]; ok {
+			if idx, ok := plotIdxByKey["PN:"+sqlutil.TruncateUTF16(pn, 7)]; ok {
 				return idx, true
 			}
 			if idx, ok := plotIdxByKey[pn]; ok {

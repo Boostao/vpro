@@ -1,15 +1,13 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestLongVegetationNoneUnitsPhysicalJoinsAndNulls(t *testing.T) {
@@ -151,6 +149,7 @@ func TestLongVegetationNoneUnitsOwnershipMalformedAndCancellation(t *testing.T) 
 	if got, err := planLongVegetationNoneUnits(ctx, env, su, nil); got != nil || !errors.Is(err, context.Canceled) {
 		t.Fatal("cancelled plan returned partial units", got, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if got, err := planLongVegetationNoneUnits(nil, env, su, nil); got != nil || err == nil {
 		t.Fatal("nil context authorized plan", got, err)
 	}

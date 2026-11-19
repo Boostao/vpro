@@ -1,10 +1,6 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -13,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/boostao/vpro/app/internal/reports/subzonematrix"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type subzoneMatrixReview struct {

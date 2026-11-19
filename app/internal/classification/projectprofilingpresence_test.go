@@ -1,11 +1,6 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -15,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 type profilePresenceNative struct {

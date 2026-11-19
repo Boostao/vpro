@@ -1,12 +1,6 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -18,6 +12,10 @@ import (
 	"strings"
 	"time"
 	"unicode/utf16"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SiteUnitEnvironmentChange struct {
@@ -162,7 +160,7 @@ func planSiteUnitEnvironment(env, admin, su, master, personal vprocore.ProjectMe
 				return nil, fmt.Errorf("SU/environment transfer cannot assign unsupported historical %s storage", field)
 			}
 			if after.Text != nil && (strings.ContainsRune(*after.Text, 0) || len(utf16.Encode([]rune(*after.Text))) > bound) {
-				return nil, fmt.Errorf("SU/environment %s requires new text within %d UTF-16 units and without NUL", field, bound)
+				return nil, fmt.Errorf("SU/environment %s requires new text within %d characters and without NUL", field, bound)
 			}
 			changes = append(changes, SiteUnitEnvironmentChange{plot, envRows[0].RowID, adminRows[0].RowID,
 				source.RowID, field, origins[field], vprocore.CloneSiteUnitCell(before), vprocore.CloneSiteUnitCell(after)})
@@ -405,7 +403,7 @@ func TransferSiteUnitEnvironment(s *vprocore.ContextService, ctx context.Context
 			}
 			expectedTables := map[string]vprocore.ProjectMetadataTable{fresh.Project + "_Admin": expected}
 			if len(auditRecords) > 0 {
-				plannedAudit, err := sourceform.AppendSIVIPlannedAudits(original[fresh.Project+"_Audit"], auditRecords)
+				plannedAudit, err := sourceform.AppendSourcePlannedAudits(original[fresh.Project+"_Audit"], auditRecords)
 				if err != nil {
 					return err
 				}

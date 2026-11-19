@@ -211,10 +211,10 @@ func TestPresenceDominKrajinaFloat32AndACERounding(t *testing.T) {
 	}
 
 	// IEEE-754 SINGLE float32 narrowing (<100 Or Is Null invariant)
-	if s, ok := NarrowSingleCover(99.999996); !ok || s >= 100 {
+	if s, ok := sqlutil.NarrowSingleCover(99.999996); !ok || s >= 100 {
 		t.Fatalf("expected 99.999996 to narrow below 100 and pass, got (%v, %v)", s, ok)
 	}
-	if s, ok := NarrowSingleCover(99.999999); ok || s != 100 {
+	if s, ok := sqlutil.NarrowSingleCover(99.999999); ok || s != 100 {
 		t.Fatalf("expected 99.999999 to narrow to 100 and reject, got (%v, %v)", s, ok)
 	}
 

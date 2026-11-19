@@ -1,14 +1,12 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-)
-
-import (
 	"math"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
 )
 
 func TestSiteUnitDecimalFormatSourceMasksAndConversion(t *testing.T) {

@@ -1,11 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"encoding/json"
@@ -13,6 +8,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestVegetationSpeciesCanonicalContextUsesReadonlyFamilyNotProjectWriter(t *testing.T) {

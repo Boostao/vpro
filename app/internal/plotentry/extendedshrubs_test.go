@@ -1,12 +1,6 @@
 package plotentry
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"os"
@@ -16,6 +10,9 @@ import (
 	"testing"
 
 	"github.com/boostao/vpro/app/internal/fs882layout"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestExtendedShrubsPackagedSourceAndAuthorizedNumericFields(t *testing.T) {

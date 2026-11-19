@@ -1,12 +1,6 @@
 package plotentry
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -18,6 +12,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func personalSpeciesFixture(t *testing.T) (*vprocore.ContextService, vprocore.ProjectState, *sql.DB) {

@@ -1,16 +1,13 @@
 package reportcore
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"errors"
 	"fmt"
 	"math"
 	"reflect"
 	"strings"
 
+	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/xuri/excelize/v2"
 )
 

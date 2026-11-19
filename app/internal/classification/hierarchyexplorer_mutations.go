@@ -97,7 +97,7 @@ func validateHierarchyNodeName(rawName string, isBreak bool) (string, error) {
 		final = "~" + clean
 	}
 	if len(utf16.Encode([]rune(final))) > 255 {
-		return "", errors.New("hierarchy node name exceeds 255 UTF-16 code units")
+		return "", errors.New("hierarchy node name cannot exceed 255 characters")
 	}
 	return final, nil
 }
@@ -575,18 +575,23 @@ func DeleteHierarchyNode(ctx context.Context, contexts *vprocore.ContextService,
 				if err != nil {
 					return nil, nil, err
 				}
-				for rows.Next() {
-					var cid int64
-					if err := rows.Scan(&cid); err != nil {
-						rows.Close()
-						return nil, nil, err
+				if scanErr := func() error {
+					defer rows.Close()
+					for rows.Next() {
+						var cid int64
+						if err := rows.Scan(&cid); err != nil {
+
+							return err
+						}
+						if !seen[cid] {
+							seen[cid] = true
+							toDelete = append(toDelete, cid)
+						}
 					}
-					if !seen[cid] {
-						seen[cid] = true
-						toDelete = append(toDelete, cid)
-					}
+					return nil
+				}(); scanErr != nil {
+					return nil, nil, scanErr
 				}
-				rows.Close()
 			}
 			for i := len(toDelete) - 1; i >= 0; i-- {
 				res, err := tx.ExecContext(ctx, `DELETE FROM main.`+qTable+` WHERE "ID" = ?`, toDelete[i])
@@ -644,21 +649,24 @@ func SaveFlatHierarchyRows(ctx context.Context, contexts *vprocore.ContextServic
 		}
 		var existingRecords []rawHierarchyRecord
 		existingIDs := map[int64]bool{}
-		for rows.Next() {
-			var rec rawHierarchyRecord
-			var parent sql.NullInt64
-			if err := rows.Scan(&rec.id, &rec.name, &parent, &rec.level, &rec.tag); err != nil {
-				rows.Close()
-				return nil, nil, err
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+			for rows.Next() {
+				var rec rawHierarchyRecord
+				var parent sql.NullInt64
+				if err := rows.Scan(&rec.id, &rec.name, &parent, &rec.level, &rec.tag); err != nil {
+
+					return err
+				}
+				if parent.Valid {
+					v := parent.Int64
+					rec.parent = &v
+				}
+				existingRecords = append(existingRecords, rec)
+				existingIDs[rec.id] = true
 			}
-			if parent.Valid {
-				v := parent.Int64
-				rec.parent = &v
-			}
-			existingRecords = append(existingRecords, rec)
-			existingIDs[rec.id] = true
-		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return rows.Err()
+		}(); err != nil {
 			return nil, nil, err
 		}
 

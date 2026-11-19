@@ -1,11 +1,6 @@
 package sivi
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -18,6 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const siviDeletionRestorationTable = "__VPRO_SIVIDeletionRestorationHistory"
@@ -231,7 +229,7 @@ func validateSIVIDeletionRestorationHistory(ctx context.Context, history siviDel
 		return errors.New("SIVI deletion restoration time provenance differs")
 	}
 	before := vprocore.ProjectMetadataTable{Columns: history.AuditColumns, Rows: history.AuditsBefore}
-	if _, err := sourceform.AppendSIVIPlannedAudits(vprocore.ProjectMetadataTable{Columns: history.AuditColumns}, nil); err != nil {
+	if _, err := sourceform.AppendSourcePlannedAudits(vprocore.ProjectMetadataTable{Columns: history.AuditColumns}, nil); err != nil {
 		return err
 	}
 	if _, err := vprocore.SiteUnitTransferColumns(before, "Restore"); err != nil || len(history.AuditsBefore) != len(deletion.Audits) {
@@ -344,14 +342,14 @@ func verifySIVIDeletionRestorationIdentity(ctx context.Context, deletion sourcef
 			}
 			physical = true
 		}
-		if sourceform.SiviIdentityCellMatches(row.Cells[columns["ID"]], strconv.FormatInt(deletion.Result.ID, 10)) {
+		if sourceform.SourceIdentityCellMatches(row.Cells[columns["ID"]], strconv.FormatInt(deletion.Result.ID, 10)) {
 			occupants++
 		}
 	}
 	if (!restored && occupants != 0) || (restored && (!physical || occupants != 1)) {
 		return errors.New("SIVI deletion restoration requires a vacant logical ID or its sole exact restored occupant")
 	}
-	ledger := tables[sourceform.SiviIdentityLedger]
+	ledger := tables[sourceform.SourceIdentityLedger]
 	if _, err := vprocore.SiteUnitTransferColumns(ledger, "ChildTable", "ID"); err != nil ||
 		!reflect.DeepEqual(ledger.Columns, []vprocore.ProjectMetadataColumn{{Name: "ChildTable", DeclaredType: "TEXT"}, {Name: "ID", DeclaredType: "INTEGER"}}) {
 		return errors.Join(err, errors.New("SIVI deletion restoration permanent reservation schema differs"))
@@ -396,7 +394,7 @@ func siviDeletionRestorationReviewFromTables(ctx context.Context, contextID, pro
 		return nil, sourceform.SiviDeletionHistory{}, err
 	}
 	audit := tables[project+"_Audit"]
-	if _, err := sourceform.AppendSIVIPlannedAudits(vprocore.ProjectMetadataTable{Columns: audit.Columns}, nil); err != nil {
+	if _, err := sourceform.AppendSourcePlannedAudits(vprocore.ProjectMetadataTable{Columns: audit.Columns}, nil); err != nil {
 		return nil, sourceform.SiviDeletionHistory{}, err
 	}
 	rows := []vprocore.ProjectMetadataRow{}
@@ -473,7 +471,7 @@ func readSIVIDeletionRestorationTables(ctx context.Context, tx *sql.Tx, project 
 		}
 	}
 	tables := map[string]vprocore.ProjectMetadataTable{"sqlite_master": schema}
-	for _, name := range []string{sourceform.SiviDeletionHistoryTable, siviDeletionRestorationTable, sourceform.SiviIdentityLedger, project + "_Veg", project + "_Audit"} {
+	for _, name := range []string{sourceform.SiviDeletionHistoryTable, siviDeletionRestorationTable, sourceform.SourceIdentityLedger, project + "_Veg", project + "_Audit"} {
 		if !present[name] {
 			continue
 		}
@@ -565,7 +563,7 @@ func LookupSIVIDeletionRestorationReceipt(s *vprocore.ContextService, ctx contex
 	})
 }
 
-// This exact-row undelete is a desktop adaptation, not V7mdlAudit restoration.
+// RestoreSIVIDeletion — This exact-row undelete is a desktop adaptation, not V7mdlAudit restoration.
 func RestoreSIVIDeletion(s *vprocore.ContextService, ctx context.Context, contextID string, request siviDeletionRestorationRequest) (*siviDeletionRestorationResult, error) {
 	if ctx == nil || s == nil {
 		return nil, errors.New("SIVI deletion restoration requires an owned context")
@@ -723,7 +721,7 @@ func RestoreSIVIDeletion(s *vprocore.ContextService, ctx context.Context, contex
 				historyPlan.Columns = []vprocore.ProjectMetadataColumn{{Name: "RequestID", DeclaredType: "TEXT"}, {Name: "DeletionID", DeclaredType: "TEXT"}, {Name: "Created", DeclaredType: "TEXT"}, {Name: "Proposal", DeclaredType: "TEXT"}}
 			}
 			historyPlan.Rows = append(append([]vprocore.ProjectMetadataRow{}, historyPlan.Rows...), vprocore.ProjectMetadataRow{RowID: strconv.FormatInt(rowID, 10),
-				Cells: []vprocore.ProjectMetadataCell{sourceform.SiviCreationText(request.RequestID), sourceform.SiviCreationText(request.HistoryID), sourceform.SiviCreationText(history.When), sourceform.SiviCreationText(string(raw))}})
+				Cells: []vprocore.ProjectMetadataCell{sourceform.SourceCreationText(request.RequestID), sourceform.SourceCreationText(request.HistoryID), sourceform.SourceCreationText(history.When), sourceform.SourceCreationText(string(raw))}})
 			observed, err = vprocore.EnvironmentSiteUnitTables(ctx, tx)
 			if err != nil {
 				return nil, false, err

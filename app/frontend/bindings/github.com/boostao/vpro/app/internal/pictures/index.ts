@@ -6,10 +6,15 @@ export type {
     PictureCreationSelection,
     PictureDeletionHistoryEvent,
     PictureDeletionHistoryList,
+    PictureDeletionRequest,
     PictureDeletionResult,
     PictureImage,
+    PictureMetadataEdit,
     PictureMetadataReview,
     PictureMetadataWriteResult,
+    PictureOptions,
+    PictureOptionsUpdate,
+    PictureRestorationRequest,
     PictureRestorationResult,
     PictureRestorationReview
 } from "./models.js";

@@ -1,13 +1,6 @@
 package sivi
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -20,6 +13,11 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func siviDeletionRestorationFixture(t *testing.T, external bool, strength int) (*vprocore.ContextService, vprocore.ProjectState, *sql.DB, siviDeletionRestorationRequest, *sourceform.SiviDeletionResult) {

@@ -1,15 +1,13 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func siviActionFixture(t *testing.T, column string, before vprocore.ProjectMetadataCell) (vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, SiviParentActionEdit) {
@@ -51,14 +49,14 @@ func TestSIVIParentActionSourceIdentitiesAndLiteralMappings(t *testing.T) {
 		env, admin, edit := siviActionFixture(t, "PlotType", vprotest.MetadataText("historical"))
 		edit.Option = &action.option
 		got, err := PlanSIVIParentActions(context.Background(), "owned", "Sample", "108050", env, admin, []SiviParentActionEdit{edit})
-		want := []SiviParentScalarAssignment{{"owned", "Sample_Admin", edit.RowID, "PlotType", vprotest.MetadataText("historical"), vprotest.MetadataText(action.text), action.text}}
+		want := []SourceParentScalarAssignment{{"owned", "Sample_Admin", edit.RowID, "PlotType", vprotest.MetadataText("historical"), vprotest.MetadataText(action.text), action.text}}
 		if err != nil || !reflect.DeepEqual(got, want) {
 			t.Fatal("selected option/caption replaced literal PlotType storage", action.option, got, want, err)
 		}
 	}
 	env, admin, clear := siviActionFixture(t, "SpeciesListComplete", vprotest.MetadataInteger("2"))
 	got, err := PlanSIVIParentActions(context.Background(), "owned", "Sample", "108050", env, admin, []SiviParentActionEdit{clear})
-	want := []SiviParentScalarAssignment{{"owned", "Sample_Env", clear.RowID, "SpeciesListComplete", vprotest.MetadataInteger("2"), vprocore.ProjectMetadataCell{Storage: "null"}, nil}}
+	want := []SourceParentScalarAssignment{{"owned", "Sample_Env", clear.RowID, "SpeciesListComplete", vprotest.MetadataInteger("2"), vprocore.ProjectMetadataCell{Storage: "null"}, nil}}
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatal("explicit nullable implicit target changed", got, want, err)
 	}
@@ -70,7 +68,7 @@ func TestSIVIParentActionSourceIdentitiesAndLiteralMappings(t *testing.T) {
 		env, admin, edit := siviActionFixture(t, "SpeciesListComplete", vprotest.MetadataInteger("2"))
 		edit.Option = &action.option
 		got, err := PlanSIVIParentActions(context.Background(), "owned", "Sample", "108050", env, admin, []SiviParentActionEdit{edit})
-		want := []SiviParentScalarAssignment{{"owned", "Sample_Env", edit.RowID, "SpeciesListComplete", vprotest.MetadataInteger("2"), vprotest.MetadataInteger(action.stored), action.exec}}
+		want := []SourceParentScalarAssignment{{"owned", "Sample_Env", edit.RowID, "SpeciesListComplete", vprotest.MetadataInteger("2"), vprotest.MetadataInteger(action.stored), action.exec}}
 		if err != nil || !reflect.DeepEqual(got, want) {
 			t.Fatal("source BOOLEAN was not exact Access-1/0", got, want, err)
 		}
@@ -100,7 +98,7 @@ func TestSIVIParentActionsUnchangedAndHistoricalCorrectionClones(t *testing.T) {
 			if column == "SpeciesListComplete" {
 				execution = int64(-1)
 			}
-			want := []SiviParentScalarAssignment{{"owned", edit.Table, edit.RowID, column, history, valid, execution}}
+			want := []SourceParentScalarAssignment{{"owned", edit.Table, edit.RowID, column, history, valid, execution}}
 			if err != nil || !reflect.DeepEqual(got, want) {
 				t.Fatal("selected correction changed literal historical payload", got, want, err)
 			}
@@ -166,7 +164,7 @@ func TestSIVIParentActionsCompletePayloadOwnershipAndCancellation(t *testing.T) 
 		}
 	}
 	edits := []SiviParentActionEdit{plot, species}
-	want := []SiviParentScalarAssignment{
+	want := []SourceParentScalarAssignment{
 		{"owned", "Sample_Admin", plot.RowID, "PlotType", vprotest.MetadataText("old"), vprotest.MetadataText("Ground"), "Ground"},
 		{"owned", "Sample_Env", species.RowID, "SpeciesListComplete", vprotest.MetadataInteger("2"), vprotest.MetadataInteger("0"), int64(0)},
 	}
@@ -199,13 +197,13 @@ func TestSIVIParentActionsCompletePayloadOwnershipAndCancellation(t *testing.T) 
 			}
 		})
 	}
-	direct := []SiviParentScalarEdit{{"owned", "Sample_Env", species.RowID, "SpeciesListComplete", vprotest.MetadataInteger("2"), vprotest.MetadataInteger("0")}}
+	direct := []SourceParentScalarEdit{{"owned", "Sample_Env", species.RowID, "SpeciesListComplete", vprotest.MetadataInteger("2"), vprotest.MetadataInteger("0")}}
 	owners := map[string]string{"SpeciesListComplete": "Env"}
 	if got, err := planSIVIParentCells(context.Background(), "owned", "Sample", "108050", env, admin, direct, owners, func(string, vprocore.ProjectMetadataCell) error { return nil }); err == nil || got != nil {
 		t.Fatal("ordinary shared guard admitted an implicit action target", got, err)
 	}
-	for _, planner := range []func(context.Context, string, string, string, vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, []SiviParentScalarEdit) ([]SiviParentScalarAssignment, error){
-		PlanSIVIParentScalars, PlanSIVIParentOptions, PlanSIVIParentText, PlanSIVIParentCategorical,
+	for _, planner := range []func(context.Context, string, string, string, vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, []SourceParentScalarEdit) ([]SourceParentScalarAssignment, error){
+		PlanSourceParentScalars, PlanSIVIParentOptions, PlanSIVIParentText, PlanSIVIParentCategorical,
 	} {
 		if got, err := planner(context.Background(), "owned", "Sample", "108050", env, admin, direct); err == nil || got != nil {
 			t.Fatal("action extraction widened an ordinary domain", got, err)

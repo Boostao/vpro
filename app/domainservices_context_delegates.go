@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+
 	classificationpkg "github.com/boostao/vpro/app/internal/classification"
 	envreportpkg "github.com/boostao/vpro/app/internal/envreport"
 	interchangepkg "github.com/boostao/vpro/app/internal/interchange"
@@ -80,13 +81,13 @@ func (s *ContextService) DeleteProjectPlotProfileRule(p0 context.Context, p1 str
 	return classificationpkg.DeleteProjectPlotProfileRule(unwrapContextService(s), p0, p1, p2)
 }
 
-func (s *ContextService) DeleteReviewedVegetation(p0 string, p1 string, p2 VegetationDeletionRequest) error {
+func (s *ContextService) DeleteReviewedVegetation(ctx context.Context, p0 string, p1 string, p2 VegetationDeletionRequest) error {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
-	return plotentrypkg.CtxDeleteReviewedVegetation(unwrapContextService(s), p0, p1, p2)
+	return plotentrypkg.CtxDeleteReviewedVegetationContext(unwrapContextService(s), ctx, p0, p1, p2)
 }
 
 func (s *ContextService) GetLongEnvironmentOptions(p0 context.Context, p1 string) (LongEnvironmentOptions, error) {
@@ -539,13 +540,13 @@ func (s *ContextService) SaveSIVIProjectAssignment(p0 context.Context, p1 string
 	return sourceformpkg.SaveSIVIProjectAssignment(unwrapContextService(s), p0, p1, p2, p3)
 }
 
-func (s *ContextService) SaveSpeciesCodeCheck(p0 string, p1 []SpeciesCodeCheckUpdate) error {
+func (s *ContextService) SaveSpeciesCodeCheck(ctx context.Context, p0 string, p1 []SpeciesCodeCheckUpdate) error {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
-	return validationpkg.SaveSpeciesCodeCheck(unwrapContextService(s), p0, p1)
+	return validationpkg.SaveSpeciesCodeCheckContext(unwrapContextService(s), ctx, p0, p1)
 }
 
 func (s *ContextService) SetPlotProfileEditing(p0 context.Context, p1 string, p2 PlotProfileWriteRequest) (ProjectState, error) {
@@ -584,22 +585,24 @@ func (s *ContextService) TransferSiteUnitEnvironment(p0 context.Context, p1 stri
 	return classificationpkg.TransferSiteUnitEnvironment(unwrapContextService(s), p0, p1, p2)
 }
 
-func (s *ContextService) UpdateVegetationAttributes(p0 string, p1 string, p2 []VegetationAttributeUpdate) error {
+func (s *ContextService) UpdateVegetationAttributes(ctx context.Context, p0 string, p1 string, p2 []VegetationAttributeUpdate) error {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
-	return plotentrypkg.CtxUpdateVegetationAttributes(unwrapContextService(s), p0, p1, p2)
+	return plotentrypkg.CtxUpdateVegetationAttributesContext(unwrapContextService(s), ctx, p0, p1, p2)
 }
 
-func (s *ContextService) RestoreSelectedAuditRecords(contextID, plot string, rowIDs []string, action AuditRestoreAction) (*AuditRestoreResult, error) {
+func (s *ContextService) RestoreSelectedAuditRecords(ctx context.Context, contextID, plot string, rowIDs []string, action AuditRestoreAction) (*AuditRestoreResult, error) {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
-	return s.core.RestoreSelectedAuditRecords(contextID, plot, rowIDs, vprocorepkg.AuditRestoreAction(action))
+	return vprocorepkg.WithContextPlotRequest(ctx, s.core, contextID, func(plots *vprocorepkg.PlotService) (*AuditRestoreResult, error) {
+		return plots.RestoreSelectedAuditRecords(plot, rowIDs, vprocorepkg.AuditRestoreAction(action))
+	})
 }
 
 func (s *ContextService) CreateNewProject(ctx context.Context, contextID string, req projectopspkg.NewProjectRequest) (projectopspkg.NewProjectResult, error) {

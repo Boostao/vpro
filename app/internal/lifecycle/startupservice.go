@@ -320,20 +320,18 @@ func inspectSupportDatabaseFile(ctx context.Context, spec supportDatabaseSpec, p
 	if qErr != nil {
 		return false, qErr
 	}
+	defer checkRows.Close()
 	var checkResults []string
 	for checkRows.Next() {
 		var line string
 		if sErr := checkRows.Scan(&line); sErr != nil {
-			_ = checkRows.Close()
 			return false, sErr
 		}
 		checkResults = append(checkResults, strings.TrimSpace(line))
 	}
 	if rErr := checkRows.Err(); rErr != nil {
-		_ = checkRows.Close()
 		return false, rErr
 	}
-	_ = checkRows.Close()
 	if len(checkResults) == 0 {
 		return false, errors.New("integrity check returned no result")
 	}
@@ -352,13 +350,12 @@ func inspectSupportDatabaseFile(ctx context.Context, spec supportDatabaseSpec, p
 		if mQueryErr != nil {
 			return false, mQueryErr
 		}
+		defer metaRows.Close()
 		metaCols, colErr := metaRows.Columns()
 		if colErr != nil {
-			_ = metaRows.Close()
 			return false, colErr
 		}
 		if !slices.Contains(metaCols, "table_name") || !slices.Contains(metaCols, "description") {
-			_ = metaRows.Close()
 			return false, errors.New("_table_metadata must contain table_name and description")
 		}
 		vals := make([]any, len(metaCols))
@@ -368,15 +365,12 @@ func inspectSupportDatabaseFile(ctx context.Context, spec supportDatabaseSpec, p
 		}
 		for metaRows.Next() {
 			if sErr := metaRows.Scan(ptrs...); sErr != nil {
-				_ = metaRows.Close()
 				return false, sErr
 			}
 		}
 		if rErr := metaRows.Err(); rErr != nil {
-			_ = metaRows.Close()
 			return false, rErr
 		}
-		_ = metaRows.Close()
 	}
 
 	for _, tbl := range spec.RequiredTables {
@@ -395,21 +389,23 @@ func inspectSupportDatabaseFile(ctx context.Context, spec supportDatabaseSpec, p
 			return false, cErr
 		}
 		var haveCols []string
-		for colRows.Next() {
-			var cid, notNull, pk int
-			var cName, cType string
-			var dflt sql.NullString
-			if sErr := colRows.Scan(&cid, &cName, &cType, &notNull, &dflt, &pk); sErr != nil {
-				_ = colRows.Close()
-				return false, sErr
+		if rErr := func() error {
+			defer colRows.Close()
+			for colRows.Next() {
+				var cid, notNull, pk int
+				var cName, cType string
+				var dflt sql.NullString
+				if sErr := colRows.Scan(&cid, &cName, &cType, &notNull, &dflt, &pk); sErr != nil {
+
+					return sErr
+				}
+				haveCols = append(haveCols, cName)
 			}
-			haveCols = append(haveCols, cName)
-		}
-		if rErr := colRows.Err(); rErr != nil {
-			_ = colRows.Close()
+			return colRows.Err()
+		}(); rErr != nil {
+
 			return false, rErr
 		}
-		_ = colRows.Close()
 		for _, wantCol := range reqCols {
 			if !slices.Contains(haveCols, wantCol) {
 				return false, fmt.Errorf("%s.%s is missing required column %s", spec.Role, tbl, wantCol)

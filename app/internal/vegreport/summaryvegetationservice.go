@@ -1,16 +1,14 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SummaryVegetationReferenceOrigin struct {
@@ -92,7 +90,7 @@ func NewSummaryVegetationService(contexts *vprocore.ContextService) (*SummaryVeg
 	return &SummaryVegetationService{contexts: contexts}, nil
 }
 
-// Explicit read-only draft options do not invoke the mutating Access Form_Load
+// Preview — Explicit read-only draft options do not invoke the mutating Access Form_Load
 // or its saved setters, and never borrow Long Vegetation quality/preferences.
 func (s *SummaryVegetationService) Preview(ctx context.Context, contextID string, average, display int) (SummaryVegetationPreview, error) {
 	return s.preview(ctx, contextID, average, display, 0, 11)

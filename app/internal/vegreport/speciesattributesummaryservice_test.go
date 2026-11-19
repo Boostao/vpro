@@ -1,12 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -15,6 +9,10 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func enabledAttributeSummary(t *testing.T, contexts *vprocore.ContextService) *SpeciesAttributeSummaryService {
@@ -110,6 +108,7 @@ func TestSpeciesAttributeSummaryServiceCancellationOwnershipAndSnapshotRefusal(t
 	if _, err := service.Preview(context.Background(), next.ContextID); err != nil {
 		t.Fatal("fresh context retry failed", err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := service.Preview(nil, next.ContextID); err == nil {
 		t.Fatal("nil context published")
 	}

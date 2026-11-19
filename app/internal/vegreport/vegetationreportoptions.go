@@ -1,14 +1,12 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"fmt"
 	"math"
 	"math/big"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type longVegetationOptions struct {

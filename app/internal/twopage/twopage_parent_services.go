@@ -13,8 +13,8 @@ import (
 )
 
 type TwoPageParentExtraWrite struct {
-	Original *sourceform.SIVIParentProjection `json:"original"`
-	Edits    []sourceform.SIVIParentCellEdit  `json:"edits"`
+	Original *sourceform.SourceParentProjection `json:"original"`
+	Edits    []sourceform.SourceParentCellEdit  `json:"edits"`
 }
 
 func (request *TwoPageParentExtraWrite) UnmarshalJSON(data []byte) error {
@@ -51,14 +51,14 @@ func (s *TwoPageParentExtraService) require(ctx context.Context, _ bool) error {
 	return nil
 }
 
-func (s *TwoPageParentExtraService) GetOriginal(ctx context.Context, contextID, plot, form string) (*sourceform.SIVIParentProjection, error) {
+func (s *TwoPageParentExtraService) GetOriginal(ctx context.Context, contextID, plot, form string) (*sourceform.SourceParentProjection, error) {
 	if err := s.require(ctx, false); err != nil {
 		return nil, err
 	}
 	return ReadTwoPageParent(s.contexts, ctx, contextID, plot, form)
 }
 
-func (s *TwoPageParentExtraService) Save(ctx context.Context, contextID, plot, form string, request TwoPageParentExtraWrite) (*sourceform.SIVIParentWriteResult, error) {
+func (s *TwoPageParentExtraService) Save(ctx context.Context, contextID, plot, form string, request TwoPageParentExtraWrite) (*sourceform.SourceParentWriteResult, error) {
 	if err := s.require(ctx, true); err != nil {
 		return nil, err
 	}
@@ -100,13 +100,13 @@ func validateTwoPageParentCommonField(column string, value vprocore.ProjectMetad
 	}
 	switch field.Domain {
 	case "scalar":
-		return sourceform.ValidateSIVIParentScalar(column, value)
+		return sourceform.ValidateSourceParentScalar(column, value)
 	case "option":
-		return sourceform.ValidateSIVIParentOption(column, value)
+		return sourceform.ValidateSourceParentOption(column, value)
 	case "text":
-		return sourceform.ValidateSIVIParentText(column, value)
+		return sourceform.ValidateSourceParentText(column, value)
 	case "categorical":
-		return sourceform.ValidateSIVIParentCategorical(column, value)
+		return sourceform.ValidateSourceParentCategorical(column, value)
 	case "plot-type":
 		if value.Storage != "null" && value.Storage != "text" {
 			return errors.New("two-page PlotType requires nullable TEXT storage")
@@ -117,7 +117,7 @@ func validateTwoPageParentCommonField(column string, value vprocore.ProjectMetad
 	}
 }
 
-func PlanTwoPageParentCommonProjection(ctx context.Context, original *sourceform.SiviParentProjection, edits []sourceform.SiviParentScalarEdit) ([]sourceform.SiviParentScalarAssignment, error) {
+func PlanTwoPageParentCommonProjection(ctx context.Context, original *sourceform.SourceParentProjection, edits []sourceform.SourceParentScalarEdit) ([]sourceform.SourceParentScalarAssignment, error) {
 	if original == nil || len(original.Rows) != 1 || len(edits) == 0 {
 		return nil, errors.New("two-page common-field editing requires one owned physical pair and explicit edits")
 	}
@@ -138,11 +138,11 @@ func PlanTwoPageParentCommonProjection(ctx context.Context, original *sourceform
 	return result, nil
 }
 
-func TwoPageParentCommonHistory(form string) (sourceform.SiviParentHistoryDomain, error) {
+func TwoPageParentCommonHistory(form string) (sourceform.SourceParentHistoryDomain, error) {
 	return twoPageParentHistory(form, "Common", "two-page common fields", PlanTwoPageParentCommonProjection)
 }
 
-func WriteTwoPageParentCommon(s *vprocore.ContextService, ctx context.Context, contextID, plot, form string, original *sourceform.SiviParentProjection, edits []sourceform.SiviParentScalarEdit) (*sourceform.SiviParentWriteResult, error) {
+func WriteTwoPageParentCommon(s *vprocore.ContextService, ctx context.Context, contextID, plot, form string, original *sourceform.SourceParentProjection, edits []sourceform.SourceParentScalarEdit) (*sourceform.SourceParentWriteResult, error) {
 	history, err := TwoPageParentCommonHistory(form)
 	if err != nil {
 		return nil, err
@@ -151,8 +151,8 @@ func WriteTwoPageParentCommon(s *vprocore.ContextService, ctx context.Context, c
 	if err != nil {
 		return nil, err
 	}
-	result, err := sourceform.WriteSIVIParentPlannedWithHooks(s, ctx, contextID, plot, original, history,
-		func(observed *sourceform.SiviParentProjection) ([]sourceform.SiviParentScalarAssignment, error) {
+	result, err := sourceform.WriteSourceParentPlannedWithHooks(s, ctx, contextID, plot, original, history,
+		func(observed *sourceform.SourceParentProjection) ([]sourceform.SourceParentScalarAssignment, error) {
 			assignments, err := PlanTwoPageParentCommonProjection(ctx, observed, edits)
 			if err != nil {
 				return nil, err
@@ -161,7 +161,7 @@ func WriteTwoPageParentCommon(s *vprocore.ContextService, ctx context.Context, c
 				return nil, err
 			}
 			return assignments, nil
-		}, sourceform.SiviParentWriteHooks{Read: read})
+		}, sourceform.SourceParentWriteHooks{Read: read})
 	if err != nil {
 		return nil, fmt.Errorf("two-page common-field writing: %w", err)
 	}
@@ -185,8 +185,8 @@ func RestoreTwoPageParentCommon(s *vprocore.ContextService, ctx context.Context,
 }
 
 type TwoPageParentCommonWrite struct {
-	Original *sourceform.SIVIParentProjection `json:"original"`
-	Edits    []sourceform.SIVIParentCellEdit  `json:"edits"`
+	Original *sourceform.SourceParentProjection `json:"original"`
+	Edits    []sourceform.SourceParentCellEdit  `json:"edits"`
 }
 
 func (request *TwoPageParentCommonWrite) UnmarshalJSON(data []byte) error {
@@ -223,14 +223,14 @@ func (s *TwoPageParentCommonService) require(ctx context.Context, _ bool) error 
 	return nil
 }
 
-func (s *TwoPageParentCommonService) GetOriginal(ctx context.Context, contextID, plot, form string) (*sourceform.SIVIParentProjection, error) {
+func (s *TwoPageParentCommonService) GetOriginal(ctx context.Context, contextID, plot, form string) (*sourceform.SourceParentProjection, error) {
 	if err := s.require(ctx, false); err != nil {
 		return nil, err
 	}
 	return ReadTwoPageParent(s.contexts, ctx, contextID, plot, form)
 }
 
-func (s *TwoPageParentCommonService) Save(ctx context.Context, contextID, plot, form string, request TwoPageParentCommonWrite) (*sourceform.SIVIParentWriteResult, error) {
+func (s *TwoPageParentCommonService) Save(ctx context.Context, contextID, plot, form string, request TwoPageParentCommonWrite) (*sourceform.SourceParentWriteResult, error) {
 	if err := s.require(ctx, true); err != nil {
 		return nil, err
 	}

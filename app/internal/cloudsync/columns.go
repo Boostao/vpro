@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/boostao/vpro/app/internal/vprocore"
@@ -67,32 +66,6 @@ func sqliteSelectColumnsCSV(cols []ColumnSpec) string {
 		}
 	}
 	return strings.Join(parts, ", ")
-}
-
-// NarrowSingleCover narrows float64 to IEEE-754 float32 BEFORE evaluating < 100.
-func NarrowSingleCover(value float64) (float32, bool) {
-	if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || math.Abs(value) > math.MaxFloat32 {
-		return 0, false
-	}
-	narrowed := float32(value)
-	if narrowed < 0 || narrowed >= 100 {
-		return narrowed, false
-	}
-	return narrowed, true
-}
-
-func utf16CodeUnits(s string) int {
-	return len(utf16.Encode([]rune(s)))
-}
-
-func ValidateUTF16Bound(label, s string, maxUnits int) error {
-	if !utf8.ValidString(s) || strings.ContainsRune(s, 0) {
-		return fmt.Errorf("%s contains malformed UTF-8 or NUL byte", label)
-	}
-	if maxUnits > 0 && utf16CodeUnits(s) > maxUnits {
-		return fmt.Errorf("%s exceeds %d UTF-16 code units", label, maxUnits)
-	}
-	return nil
 }
 
 // ValidateLMH25HorizonDepth enforces LMH25 directional soil horizon depth rules

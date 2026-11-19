@@ -1,15 +1,13 @@
 package pictures
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"reflect"
 	"strconv"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type PictureDeletionHistoryEvent struct {
@@ -129,7 +127,7 @@ func ReviewPictureRestoration(s *vprocore.ContextService, ctx context.Context, c
 						return nil, err
 					}
 					if collisions != 0 {
-						return nil, errors.New("picture restoration review refuses an occupied rowid or identity; no replacement")
+						return nil, errors.New("picture restoration review refuses an existing record ID; no replacement")
 					}
 					return &PictureRestorationReview{ContextID: contextID, Project: list.Project, PlotNumber: plot,
 						HistoryID: historyID, Deletion: event.Deletion, Peers: records.Rows}, nil

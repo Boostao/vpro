@@ -1,10 +1,6 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"database/sql"
 	"errors"
 	"fmt"
@@ -14,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type AuditRestoreAction string
@@ -46,10 +44,10 @@ func AuditRowIDs(rowIDs []string) ([]int64, error) {
 	for _, raw := range rowIDs {
 		id, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil || strconv.FormatInt(id, 10) != raw {
-			return nil, fmt.Errorf("invalid exact audit rowId %q", raw)
+			return nil, fmt.Errorf("invalid exact audit entry %q", raw)
 		}
 		if seen[id] {
-			return nil, fmt.Errorf("duplicate audit rowId %q", raw)
+			return nil, fmt.Errorf("duplicate audit entry %q", raw)
 		}
 		seen[id] = true
 		ids = append(ids, id)
@@ -108,19 +106,18 @@ func queryAuditEntries(db sqlutil.HeaderDB, project, predicate string, args ...a
 	if err != nil {
 		return nil, err
 	}
+	defer schema.Close()
 	columns := map[string]bool{}
 	for schema.Next() {
 		var cid, required, pk int
 		var name, typ string
 		var defaultValue sql.NullString
 		if err := schema.Scan(&cid, &name, &typ, &required, &defaultValue, &pk); err != nil {
-			schema.Close()
 			return nil, err
 		}
 		columns[strings.ToLower(name)] = true
 	}
 	err = schema.Err()
-	schema.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -167,11 +164,11 @@ func SelectedAuditEntries(tx *sql.Tx, project, plot string, ids []int64) ([]Audi
 			return nil, err
 		}
 		if len(rows) != 1 {
-			return nil, fmt.Errorf("audit rowId %d no longer exists", id)
+			return nil, fmt.Errorf("audit entry %d no longer exists", id)
 		}
 		entry := rows[0]
 		if entry.Project != project || entry.PlotNumber != plot {
-			return nil, fmt.Errorf("audit rowId %d does not belong to project %q plot %q", id, project, plot)
+			return nil, fmt.Errorf("audit entry %d does not belong to project %q plot %q", id, project, plot)
 		}
 		entries = append(entries, entry)
 	}
@@ -196,7 +193,7 @@ func (s *PlotService) restorePlans(tx *sql.Tx, project, plot string, entries []A
 	childSchemas := map[string]map[string]bool{}
 	for _, entry := range entries {
 		if entry.Project != project || entry.PlotNumber != plot {
-			return nil, fmt.Errorf("audit rowId %s has foreign project/plot ownership", entry.RowID)
+			return nil, fmt.Errorf("audit entry %s has foreign project/plot ownership", entry.RowID)
 		}
 		plan := auditRestorePlan{entry: entry}
 		plan.rowID, err = strconv.ParseInt(entry.RowID, 10, 64)
@@ -211,7 +208,7 @@ func (s *PlotService) restorePlans(tx *sql.Tx, project, plot string, entries []A
 		}
 		if plan.table == "Env" || plan.table == "Admin" {
 			if entry.ID != nil {
-				return nil, fmt.Errorf("parent audit rowId %s must not have a child ID", entry.RowID)
+				return nil, fmt.Errorf("parent audit entry %s must not have a child ID", entry.RowID)
 			}
 			for _, field := range HeaderFields {
 				if field.Table == plan.table && field.Property != "plotNumber" &&
@@ -223,7 +220,7 @@ func (s *PlotService) restorePlans(tx *sql.Tx, project, plot string, entries []A
 			}
 		} else if fields, exists := ChildFields[plan.table]; exists {
 			if entry.ID == nil || *entry.ID < math.MinInt32 || *entry.ID > math.MaxInt32 {
-				return nil, fmt.Errorf("child audit rowId %s requires an exact signed32 child ID", entry.RowID)
+				return nil, fmt.Errorf("child audit entry %s requires an exact record ID", entry.RowID)
 			}
 			schema := childSchemas[plan.table]
 			if schema == nil {
@@ -255,63 +252,63 @@ func (s *PlotService) restorePlans(tx *sql.Tx, project, plot string, entries []A
 				// V7mdlAudit.RestoreAuditRecords jumps over every Cover* audit.
 				// Reject the selection instead of silently pruning skipped history.
 				if strings.HasPrefix(strings.ToLower(entry.EditField), "cover") {
-					return nil, fmt.Errorf("Veg Cover* audit restoration is unsupported (rowId %s)", entry.RowID)
+					return nil, fmt.Errorf("Veg Cover* audit restoration is unsupported (audit entry %s)", entry.RowID)
 				}
 			}
 		}
 		if plan.column == "" {
-			return nil, fmt.Errorf("unsupported audit restore field %q.%q (rowId %s)", entry.Table, entry.EditField, entry.RowID)
+			return nil, fmt.Errorf("unsupported audit restore field %q.%q (audit entry %s)", entry.Table, entry.EditField, entry.RowID)
 		}
 		plan.when, err = time.Parse("2006-01-02 15:04:05", entry.EditWhen)
 		if err != nil {
 			plan.when, err = time.Parse(time.RFC3339Nano, entry.EditWhen)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("invalid audit EditWhen %q (rowId %s)", entry.EditWhen, entry.RowID)
+			return nil, fmt.Errorf("invalid audit EditWhen %q (audit entry %s)", entry.EditWhen, entry.RowID)
 		}
 		plan.before, err = auditRestoreValue(entry.BeforeEdit, plan.member)
 		if err == nil {
 			plan.after, err = auditRestoreValue(entry.AfterEdit, plan.member)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("audit rowId %s: %w", entry.RowID, err)
+			return nil, fmt.Errorf("audit entry %s: %w", entry.RowID, err)
 		}
 		if reflect.DeepEqual(plan.before, plan.after) {
-			return nil, fmt.Errorf("audit rowId %s does not describe a value change", entry.RowID)
+			return nil, fmt.Errorf("audit entry %s does not describe a value change", entry.RowID)
 		}
 		if err := validateQualityRestoreValue(plan.table, plan.column, plan.before); err != nil {
-			return nil, fmt.Errorf("audit rowId %s: %w", entry.RowID, err)
+			return nil, fmt.Errorf("audit entry %s: %w", entry.RowID, err)
 		}
 		if err := validateSubstrateRestoreValue(plan.table, plan.column, plan.before); err != nil {
-			return nil, fmt.Errorf("audit rowId %s: %w", entry.RowID, err)
+			return nil, fmt.Errorf("audit entry %s: %w", entry.RowID, err)
 		}
 		if err := s.validateSiteCodeRestoreValue(plan.table, plan.column, plan.before); err != nil {
-			return nil, fmt.Errorf("audit rowId %s: %w", entry.RowID, err)
+			return nil, fmt.Errorf("audit entry %s: %w", entry.RowID, err)
 		}
 		if err := ValidateRegionRestoreValue(plan.table, plan.column, plan.before); err != nil {
-			return nil, fmt.Errorf("audit rowId %s: %w", entry.RowID, err)
+			return nil, fmt.Errorf("audit entry %s: %w", entry.RowID, err)
 		}
 		if err := ValidateSoilRestoreValue(plan.table, plan.column, plan.before); err != nil {
-			return nil, fmt.Errorf("audit rowId %s: %w", entry.RowID, err)
+			return nil, fmt.Errorf("audit entry %s: %w", entry.RowID, err)
 		}
 		if err := ValidateGeologyRestoreValue(plan.table, plan.column, plan.before); err != nil {
-			return nil, fmt.Errorf("audit rowId %s: %w", entry.RowID, err)
+			return nil, fmt.Errorf("audit entry %s: %w", entry.RowID, err)
 		}
 		if err := ValidateParentCodeRestoreValue(plan.table, plan.column, plan.before); err != nil {
-			return nil, fmt.Errorf("audit rowId %s: %w", entry.RowID, err)
+			return nil, fmt.Errorf("audit entry %s: %w", entry.RowID, err)
 		}
 		if err := ValidateOrdinaryRestoreValue(plan.table, plan.column, plan.before); err != nil {
-			return nil, fmt.Errorf("audit rowId %s: %w", entry.RowID, err)
+			return nil, fmt.Errorf("audit entry %s: %w", entry.RowID, err)
 		}
 		if err := s.validateSoilDrainageRestoreValue(plan.table, plan.column, plan.before); err != nil {
-			return nil, fmt.Errorf("audit rowId %s: %w", entry.RowID, err)
+			return nil, fmt.Errorf("audit entry %s: %w", entry.RowID, err)
 		}
 		if err := s.validateMasterBECRestoreValue(plan.table, plan.column, plan.before); err != nil {
-			return nil, fmt.Errorf("audit rowId %s: %w", entry.RowID, err)
+			return nil, fmt.Errorf("audit entry %s: %w", entry.RowID, err)
 		}
 		if plan.table == "Veg" || plan.table == "Other" || plan.table == "Humus" || plan.table == "Mineral" {
 			if err := validateChildField(plan.table, plan.column, plan.before); err != nil {
-				return nil, fmt.Errorf("audit rowId %s: %w", entry.RowID, err)
+				return nil, fmt.Errorf("audit entry %s: %w", entry.RowID, err)
 			}
 		}
 		if _, err := restoreCurrentValue(tx, project, plot, plan); err != nil {
@@ -348,7 +345,7 @@ func (s *PlotService) restorePlans(tx *sql.Tx, project, plot string, entries []A
 			}
 		}
 		if !reflect.DeepEqual(current, plan.after) {
-			return nil, fmt.Errorf("stale audit rowId %s: selected history does not match current %s.%s", plan.entry.RowID, plan.table, plan.column)
+			return nil, fmt.Errorf("stale audit entry %s: selected history does not match current %s.%s", plan.entry.RowID, plan.table, plan.column)
 		}
 		states[key] = plan.before
 	}
@@ -373,7 +370,7 @@ func restoreCurrentValue(tx *sql.Tx, project, plot string, plan auditRestorePlan
 		return nil, err
 	}
 	if count != 1 {
-		return nil, fmt.Errorf("audit rowId %s target requires one existing %s identity, found %d", plan.entry.RowID, plan.table, count)
+		return nil, fmt.Errorf("audit entry %s target requires one existing %s identity, found %d", plan.entry.RowID, plan.table, count)
 	}
 	column := headerReadColumn(QuoteHeaderIdentifier(plan.column), plan.member)
 	if plan.member.Kind() == reflect.Pointer && plan.member.Type().Elem().Kind() == reflect.Bool {
@@ -442,7 +439,7 @@ func (s *PlotService) SetAuditRestoreSelection(plotNumber string, rowIDs []strin
 			return err
 		}
 		if count, err := result.RowsAffected(); err != nil || count != 1 {
-			return fmt.Errorf("audit selection lost rowId %d", id)
+			return fmt.Errorf("audit selection lost audit entry %d", id)
 		}
 	}
 	return tx.Commit()
@@ -506,7 +503,7 @@ func (s *PlotService) restoreAuditSelection(plot string, rowIDs []string, action
 			return nil, err
 		}
 		if !reflect.DeepEqual(current, plan.after) {
-			return nil, fmt.Errorf("stale audit rowId %s: current %s.%s differs from AfterEdit", plan.entry.RowID, plan.table, plan.column)
+			return nil, fmt.Errorf("stale audit entry %s: current %s.%s differs from AfterEdit", plan.entry.RowID, plan.table, plan.column)
 		}
 		predicate, args := restoreTarget(plan, plot)
 		args = append([]any{HeaderStorageValue(plan.before)}, args...)
@@ -516,7 +513,7 @@ func (s *PlotService) restoreAuditSelection(plot string, rowIDs []string, action
 			return nil, err
 		}
 		if count, err := update.RowsAffected(); err != nil || count != 1 {
-			return nil, fmt.Errorf("audit restore lost target for rowId %s", plan.entry.RowID)
+			return nil, fmt.Errorf("audit restore lost target for audit entry %s", plan.entry.RowID)
 		}
 		result.RestoredRows++
 	}
@@ -528,7 +525,7 @@ func (s *PlotService) restoreAuditSelection(plot string, rowIDs []string, action
 				return nil, err
 			}
 			if count, err := deleted.RowsAffected(); err != nil || count != 1 {
-				return nil, fmt.Errorf("audit prune lost rowId %s", plan.entry.RowID)
+				return nil, fmt.Errorf("audit prune lost audit entry %s", plan.entry.RowID)
 			}
 			result.PrunedAuditRows++
 		}

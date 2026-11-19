@@ -22,6 +22,15 @@ type SummaryVegetationExclusionRequest = vegreportpkg.SummaryVegetationExclusion
 type SummaryVegetationExclusionPreview = vegreportpkg.SummaryVegetationExclusionPreview
 type LongVegetationExclusionRequest = vegreportpkg.LongVegetationExclusionRequest
 type LongVegetationExclusionPreview = vegreportpkg.LongVegetationExclusionPreview
+type SummaryVegetationFieldListRequest = vegreportpkg.SummaryVegetationFieldListRequest
+type LongVegetationProjectReadRequest = vegreportpkg.LongVegetationProjectReadRequest
+type LongVegetationScopeRequest = vegreportpkg.LongVegetationScopeRequest
+type LongVegetationSelectedUnitFieldsRequest = vegreportpkg.LongVegetationSelectedUnitFieldsRequest
+type LongVegetationProjectUnitRequest = vegreportpkg.LongVegetationProjectUnitRequest
+type LongVegetationProjectWorkbookReadRequest = vegreportpkg.LongVegetationProjectWorkbookReadRequest
+type LongVegetationProjectWorkbookExportRequest = vegreportpkg.LongVegetationProjectWorkbookExportRequest
+type LongVegetationTabPreferencesBundle = vegreportpkg.LongVegetationTabPreferencesBundle
+type LongVegetationTabPreferencesSaveRequest = vegreportpkg.LongVegetationTabPreferencesSaveRequest
 
 type VegetationReportService struct {
 	runtime                        *runtimeShutdownTracker
@@ -34,17 +43,7 @@ type VegetationReportService struct {
 	summaryQualityPreferences      *vegreportpkg.SummaryVegetationQualityPreferencesService
 	summaryPresentationPreferences *vegreportpkg.SummaryVegetationPresentationPreferencesService
 	summaryFieldList               *vegreportpkg.SummaryVegetationFieldListService
-	longPreferences                *vegreportpkg.LongVegetationPreferencesService
-	longStatisticsPreferences      *vegreportpkg.LongVegetationStatisticsPreferencesService
-	longSwitchPreferences          *vegreportpkg.LongVegetationSwitchPreferencesService
-	longThresholdPreferences       *vegreportpkg.LongVegetationThresholdPreferencesService
-	longGroupPreferences           *vegreportpkg.LongVegetationGroupPreferencesService
-	longQualityNullPreferences     *vegreportpkg.LongVegetationQualityNullPreferencesService
-	longQualityMinimumPreferences  *vegreportpkg.LongVegetationQualityMinimumPreferencesService
-	longNamingPreferences          *vegreportpkg.LongVegetationNamingPreferencesService
-	longSelectedFieldPreferences   *vegreportpkg.LongVegetationSelectedFieldPreferencesService
-	longEnforcementPreferences     *vegreportpkg.LongVegetationEnforcementPreferencesService
-	longUnitPreferences            *vegreportpkg.LongVegetationUnitPreferencesService
+	longPreferences                *vegreportpkg.LongVegetationAllPreferencesService
 	longSelectedUnitSelection      *vegreportpkg.LongVegetationSelectedUnitSelectionService
 	longReportScope                *vegreportpkg.LongVegetationReportScopeService
 	longProjectWorkbook            *vegreportpkg.LongVegetationProjectWorkbookService
@@ -110,17 +109,7 @@ func buildVegetationReportService(contexts *ContextService) (VegetationReportSer
 		summaryQualityPreferences:      vegreportpkg.NewSummaryVegetationQualityPreferencesService(core),
 		summaryPresentationPreferences: vegreportpkg.NewSummaryVegetationPresentationPreferencesService(core),
 		summaryFieldList:               vegreportpkg.NewSummaryVegetationFieldListService(core),
-		longPreferences:                vegreportpkg.NewLongVegetationPreferencesService(core),
-		longStatisticsPreferences:      vegreportpkg.NewLongVegetationStatisticsPreferencesService(core),
-		longSwitchPreferences:          vegreportpkg.NewLongVegetationSwitchPreferencesService(core),
-		longThresholdPreferences:       vegreportpkg.NewLongVegetationThresholdPreferencesService(core),
-		longGroupPreferences:           vegreportpkg.NewLongVegetationGroupPreferencesService(core),
-		longQualityNullPreferences:     vegreportpkg.NewLongVegetationQualityNullPreferencesService(core),
-		longQualityMinimumPreferences:  vegreportpkg.NewLongVegetationQualityMinimumPreferencesService(core),
-		longNamingPreferences:          vegreportpkg.NewLongVegetationNamingPreferencesService(core),
-		longSelectedFieldPreferences:   vegreportpkg.NewLongVegetationSelectedFieldPreferencesService(core),
-		longEnforcementPreferences:     vegreportpkg.NewLongVegetationEnforcementPreferencesService(core),
-		longUnitPreferences:            vegreportpkg.NewLongVegetationUnitPreferencesService(core),
+		longPreferences:                vegreportpkg.NewLongVegetationAllPreferencesService(core),
 		longSelectedUnitSelection:      vegreportpkg.NewLongVegetationSelectedUnitSelectionService(core),
 		longReportScope:                vegreportpkg.NewLongVegetationReportScopeService(core),
 		longProjectWorkbook:            vegreportpkg.NewLongVegetationProjectWorkbookService(core),
@@ -313,13 +302,17 @@ func (s *VegetationReportService) GetSummaryVegetationFieldListIndex(ctx context
 	return s.summaryFieldList.GetSummaryVegetationFieldListIndex(ctx, contextID)
 }
 
-func (s *VegetationReportService) SaveSummaryVegetationFieldList(ctx context.Context, contextID, requestJSON string) *SummaryVegetationFieldListOutcome {
+func (s *VegetationReportService) SaveSummaryVegetationFieldList(ctx context.Context, contextID string, request SummaryVegetationFieldListRequest) *SummaryVegetationFieldListOutcome {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.summaryFieldList == nil {
 		return &SummaryVegetationFieldListOutcome{ContextID: contextID, ErrorMessage: "summary vegetation field list service is unavailable"}
 	}
-	return s.summaryFieldList.SaveSummaryVegetationFieldList(ctx, contextID, requestJSON)
+	raw, err := marshalTypedRPCRequest(request)
+	if err != nil {
+		return &SummaryVegetationFieldListOutcome{ContextID: contextID, RequestID: request.RequestID, ErrorMessage: err.Error()}
+	}
+	return s.summaryFieldList.SaveSummaryVegetationFieldList(ctx, contextID, raw)
 }
 
 // Long Vegetation report, preferences, scope & workbook delegates
@@ -342,202 +335,220 @@ func (s *VegetationReportService) PreviewLongVegetation(ctx context.Context, con
 	return s.contexts.PreviewLongVegetation(ctx, contextID)
 }
 
-func (s *VegetationReportService) GetLongVegetationPreferences(ctx context.Context, contextID string) (*LongVegetationPreferencesReview, error) {
+func (s *VegetationReportService) GetLongVegetationTabPreferences(ctx context.Context, contextID string) (*LongVegetationTabPreferencesBundle, error) {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.longPreferences == nil {
 		return nil, errors.New("long vegetation preferences service is unavailable")
 	}
-	return s.longPreferences.GetLongVegetationPreferences(ctx, contextID)
+	return s.longPreferences.GetAll(ctx, contextID)
 }
 
-func (s *VegetationReportService) SaveLongVegetationPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationPreferencesOutcome {
+func (s *VegetationReportService) SaveLongVegetationTabPreferences(ctx context.Context, contextID string, request LongVegetationTabPreferencesSaveRequest) *LongVegetationPreferencesOutcome {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.longPreferences == nil {
 		return &LongVegetationPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation preferences service is unavailable"}
 	}
-	return s.longPreferences.SaveLongVegetationPreferences(ctx, contextID, requestJSON)
+	return s.longPreferences.SaveTab(ctx, contextID, request)
+}
+
+func (s *VegetationReportService) GetLongVegetationPreferences(ctx context.Context, contextID string) (*LongVegetationPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.longPreferences == nil || s.longPreferences.Title == nil {
+		return nil, errors.New("long vegetation preferences service is unavailable")
+	}
+	return s.longPreferences.Title.GetLongVegetationPreferences(ctx, contextID)
+}
+
+func (s *VegetationReportService) SaveLongVegetationPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.longPreferences == nil || s.longPreferences.Title == nil {
+		return &LongVegetationPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation preferences service is unavailable"}
+	}
+	return s.longPreferences.Title.SaveLongVegetationPreferences(ctx, contextID, requestJSON)
 }
 
 func (s *VegetationReportService) GetLongVegetationStatisticsPreferences(ctx context.Context, contextID string) (*LongVegetationStatisticsPreferencesReview, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longStatisticsPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.Statistics == nil {
 		return nil, errors.New("long vegetation statistics preferences service is unavailable")
 	}
-	return s.longStatisticsPreferences.GetLongVegetationStatisticsPreferences(ctx, contextID)
+	return s.longPreferences.Statistics.GetLongVegetationStatisticsPreferences(ctx, contextID)
 }
 
 func (s *VegetationReportService) SaveLongVegetationStatisticsPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationStatisticsPreferencesOutcome {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longStatisticsPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.Statistics == nil {
 		return &LongVegetationStatisticsPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation statistics preferences service is unavailable"}
 	}
-	return s.longStatisticsPreferences.SaveLongVegetationStatisticsPreferences(ctx, contextID, requestJSON)
+	return s.longPreferences.Statistics.SaveLongVegetationStatisticsPreferences(ctx, contextID, requestJSON)
 }
 
 func (s *VegetationReportService) GetLongVegetationSwitchPreferences(ctx context.Context, contextID string) (*LongVegetationSwitchPreferencesReview, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longSwitchPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.Switch == nil {
 		return nil, errors.New("long vegetation switch preferences service is unavailable")
 	}
-	return s.longSwitchPreferences.GetLongVegetationSwitchPreferences(ctx, contextID)
+	return s.longPreferences.Switch.GetLongVegetationSwitchPreferences(ctx, contextID)
 }
 
 func (s *VegetationReportService) SaveLongVegetationSwitchPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationSwitchPreferencesOutcome {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longSwitchPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.Switch == nil {
 		return &LongVegetationSwitchPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation switch preferences service is unavailable"}
 	}
-	return s.longSwitchPreferences.SaveLongVegetationSwitchPreferences(ctx, contextID, requestJSON)
+	return s.longPreferences.Switch.SaveLongVegetationSwitchPreferences(ctx, contextID, requestJSON)
 }
 
 func (s *VegetationReportService) GetLongVegetationThresholdPreferences(ctx context.Context, contextID string) (*LongVegetationThresholdPreferencesReview, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longThresholdPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.Threshold == nil {
 		return nil, errors.New("long vegetation threshold preferences service is unavailable")
 	}
-	return s.longThresholdPreferences.GetLongVegetationThresholdPreferences(ctx, contextID)
+	return s.longPreferences.Threshold.GetLongVegetationThresholdPreferences(ctx, contextID)
 }
 
 func (s *VegetationReportService) SaveLongVegetationThresholdPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationThresholdPreferencesOutcome {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longThresholdPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.Threshold == nil {
 		return &LongVegetationThresholdPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation threshold preferences service is unavailable"}
 	}
-	return s.longThresholdPreferences.SaveLongVegetationThresholdPreferences(ctx, contextID, requestJSON)
+	return s.longPreferences.Threshold.SaveLongVegetationThresholdPreferences(ctx, contextID, requestJSON)
 }
 
 func (s *VegetationReportService) GetLongVegetationGroupPreferences(ctx context.Context, contextID string) (*LongVegetationGroupPreferencesReview, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longGroupPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.Group == nil {
 		return nil, errors.New("long vegetation group preferences service is unavailable")
 	}
-	return s.longGroupPreferences.GetLongVegetationGroupPreferences(ctx, contextID)
+	return s.longPreferences.Group.GetLongVegetationGroupPreferences(ctx, contextID)
 }
 
 func (s *VegetationReportService) SaveLongVegetationGroupPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationGroupPreferencesOutcome {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longGroupPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.Group == nil {
 		return &LongVegetationGroupPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation group preferences service is unavailable"}
 	}
-	return s.longGroupPreferences.SaveLongVegetationGroupPreferences(ctx, contextID, requestJSON)
+	return s.longPreferences.Group.SaveLongVegetationGroupPreferences(ctx, contextID, requestJSON)
 }
 
 func (s *VegetationReportService) GetLongVegetationQualityNullPreferences(ctx context.Context, contextID string) (*LongVegetationQualityNullPreferencesReview, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longQualityNullPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.QualityNull == nil {
 		return nil, errors.New("long vegetation quality null preferences service is unavailable")
 	}
-	return s.longQualityNullPreferences.GetLongVegetationQualityNullPreferences(ctx, contextID)
+	return s.longPreferences.QualityNull.GetLongVegetationQualityNullPreferences(ctx, contextID)
 }
 
 func (s *VegetationReportService) SaveLongVegetationQualityNullPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationQualityNullPreferencesOutcome {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longQualityNullPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.QualityNull == nil {
 		return &LongVegetationQualityNullPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation quality null preferences service is unavailable"}
 	}
-	return s.longQualityNullPreferences.SaveLongVegetationQualityNullPreferences(ctx, contextID, requestJSON)
+	return s.longPreferences.QualityNull.SaveLongVegetationQualityNullPreferences(ctx, contextID, requestJSON)
 }
 
 func (s *VegetationReportService) GetLongVegetationQualityMinimumPreferences(ctx context.Context, contextID string) (*LongVegetationQualityMinimumPreferencesReview, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longQualityMinimumPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.QualityMin == nil {
 		return nil, errors.New("long vegetation quality minimum preferences service is unavailable")
 	}
-	return s.longQualityMinimumPreferences.GetLongVegetationQualityMinimumPreferences(ctx, contextID)
+	return s.longPreferences.QualityMin.GetLongVegetationQualityMinimumPreferences(ctx, contextID)
 }
 
 func (s *VegetationReportService) SaveLongVegetationQualityMinimumPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationQualityMinimumPreferencesOutcome {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longQualityMinimumPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.QualityMin == nil {
 		return &LongVegetationQualityMinimumPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation quality minimum preferences service is unavailable"}
 	}
-	return s.longQualityMinimumPreferences.SaveLongVegetationQualityMinimumPreferences(ctx, contextID, requestJSON)
+	return s.longPreferences.QualityMin.SaveLongVegetationQualityMinimumPreferences(ctx, contextID, requestJSON)
 }
 
 func (s *VegetationReportService) GetLongVegetationNamingPreferences(ctx context.Context, contextID string) (*LongVegetationNamingPreferencesReview, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longNamingPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.Naming == nil {
 		return nil, errors.New("long vegetation naming preferences service is unavailable")
 	}
-	return s.longNamingPreferences.GetLongVegetationNamingPreferences(ctx, contextID)
+	return s.longPreferences.Naming.GetLongVegetationNamingPreferences(ctx, contextID)
 }
 
 func (s *VegetationReportService) SaveLongVegetationNamingPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationNamingPreferencesOutcome {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longNamingPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.Naming == nil {
 		return &LongVegetationNamingPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation naming preferences service is unavailable"}
 	}
-	return s.longNamingPreferences.SaveLongVegetationNamingPreferences(ctx, contextID, requestJSON)
+	return s.longPreferences.Naming.SaveLongVegetationNamingPreferences(ctx, contextID, requestJSON)
 }
 
 func (s *VegetationReportService) GetLongVegetationSelectedFieldPreferences(ctx context.Context, contextID string) (*LongVegetationSelectedFieldPreferencesReview, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longSelectedFieldPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.SelectedField == nil {
 		return nil, errors.New("long vegetation selected field preferences service is unavailable")
 	}
-	return s.longSelectedFieldPreferences.GetLongVegetationSelectedFieldPreferences(ctx, contextID)
+	return s.longPreferences.SelectedField.GetLongVegetationSelectedFieldPreferences(ctx, contextID)
 }
 
 func (s *VegetationReportService) SaveLongVegetationSelectedFieldPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationSelectedFieldPreferencesOutcome {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longSelectedFieldPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.SelectedField == nil {
 		return &LongVegetationSelectedFieldPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation selected field preferences service is unavailable"}
 	}
-	return s.longSelectedFieldPreferences.SaveLongVegetationSelectedFieldPreferences(ctx, contextID, requestJSON)
+	return s.longPreferences.SelectedField.SaveLongVegetationSelectedFieldPreferences(ctx, contextID, requestJSON)
 }
 
 func (s *VegetationReportService) GetLongVegetationEnforcementPreferences(ctx context.Context, contextID string) (*LongVegetationEnforcementPreferencesReview, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longEnforcementPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.Enforcement == nil {
 		return nil, errors.New("long vegetation enforcement preferences service is unavailable")
 	}
-	return s.longEnforcementPreferences.GetLongVegetationEnforcementPreferences(ctx, contextID)
+	return s.longPreferences.Enforcement.GetLongVegetationEnforcementPreferences(ctx, contextID)
 }
 
 func (s *VegetationReportService) SaveLongVegetationEnforcementPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationEnforcementPreferencesOutcome {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longEnforcementPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.Enforcement == nil {
 		return &LongVegetationEnforcementPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation enforcement preferences service is unavailable"}
 	}
-	return s.longEnforcementPreferences.SaveLongVegetationEnforcementPreferences(ctx, contextID, requestJSON)
+	return s.longPreferences.Enforcement.SaveLongVegetationEnforcementPreferences(ctx, contextID, requestJSON)
 }
 
 func (s *VegetationReportService) GetLongVegetationUnitPreferences(ctx context.Context, contextID string) (*LongVegetationUnitPreferencesReview, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longUnitPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.Unit == nil {
 		return nil, errors.New("long vegetation unit preferences service is unavailable")
 	}
-	return s.longUnitPreferences.GetLongVegetationUnitPreferences(ctx, contextID)
+	return s.longPreferences.Unit.GetLongVegetationUnitPreferences(ctx, contextID)
 }
 
 func (s *VegetationReportService) SaveLongVegetationUnitPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationUnitPreferencesOutcome {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.longUnitPreferences == nil {
+	if s == nil || s.longPreferences == nil || s.longPreferences.Unit == nil {
 		return &LongVegetationUnitPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation unit preferences service is unavailable"}
 	}
-	return s.longUnitPreferences.SaveLongVegetationUnitPreferences(ctx, contextID, requestJSON)
+	return s.longPreferences.Unit.SaveLongVegetationUnitPreferences(ctx, contextID, requestJSON)
 }
 
 func (s *VegetationReportService) BuildLongVegetationSelectedUnitSelection(ctx context.Context, contextID, revision string) (*LongVegetationSelectedUnitSelection, error) {
@@ -585,22 +596,30 @@ func (s *VegetationReportService) GetLongVegetationProjectFieldDefinitions(ctx c
 	return s.longReportScope.GetLongVegetationProjectFieldDefinitions(ctx, contextID)
 }
 
-func (s *VegetationReportService) GetLongVegetationProjectOptions(ctx context.Context, contextID, requestJSON string) (LongVegetationProjectOptions, error) {
+func (s *VegetationReportService) GetLongVegetationProjectOptions(ctx context.Context, contextID string, request LongVegetationProjectReadRequest) (LongVegetationProjectOptions, error) {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.longReportScope == nil {
 		return LongVegetationProjectOptions{}, errors.New("long vegetation report scope service is unavailable")
 	}
-	return s.longReportScope.GetLongVegetationProjectOptions(ctx, contextID, requestJSON)
+	raw, err := marshalTypedRPCRequest(request)
+	if err != nil {
+		return LongVegetationProjectOptions{}, err
+	}
+	return s.longReportScope.GetLongVegetationProjectOptions(ctx, contextID, raw)
 }
 
-func (s *VegetationReportService) GetLongVegetationProjectUnitPreferences(ctx context.Context, contextID, requestJSON string) (LongVegetationProjectUnitPreferences, error) {
+func (s *VegetationReportService) GetLongVegetationProjectUnitPreferences(ctx context.Context, contextID string, request LongVegetationProjectReadRequest) (LongVegetationProjectUnitPreferences, error) {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.longReportScope == nil {
 		return LongVegetationProjectUnitPreferences{}, errors.New("long vegetation report scope service is unavailable")
 	}
-	return s.longReportScope.GetLongVegetationProjectUnitPreferences(ctx, contextID, requestJSON)
+	raw, err := marshalTypedRPCRequest(request)
+	if err != nil {
+		return LongVegetationProjectUnitPreferences{}, err
+	}
+	return s.longReportScope.GetLongVegetationProjectUnitPreferences(ctx, contextID, raw)
 }
 
 func (s *VegetationReportService) GetLongVegetationReportScope(ctx context.Context, contextID string) (*LongVegetationReportScope, error) {
@@ -612,16 +631,20 @@ func (s *VegetationReportService) GetLongVegetationReportScope(ctx context.Conte
 	return s.longReportScope.GetLongVegetationReportScope(ctx, contextID)
 }
 
-func (s *VegetationReportService) PreviewLongVegetationProject(ctx context.Context, contextID, requestJSON string) (LongVegetationProjectPreview, error) {
+func (s *VegetationReportService) PreviewLongVegetationProject(ctx context.Context, contextID string, request LongVegetationProjectReadRequest) (LongVegetationProjectPreview, error) {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.longReportScope == nil {
 		return LongVegetationProjectPreview{}, errors.New("long vegetation report scope service is unavailable")
 	}
-	return s.longReportScope.PreviewLongVegetationProject(ctx, contextID, requestJSON)
+	raw, err := marshalTypedRPCRequest(request)
+	if err != nil {
+		return LongVegetationProjectPreview{}, err
+	}
+	return s.longReportScope.PreviewLongVegetationProject(ctx, contextID, raw)
 }
 
-func (s *VegetationReportService) SaveLongVegetationProjectUnits(ctx context.Context, contextID, requestJSON string) LongVegetationProjectUnitOutcome {
+func (s *VegetationReportService) SaveLongVegetationProjectUnits(ctx context.Context, contextID string, request LongVegetationProjectUnitRequest) LongVegetationProjectUnitOutcome {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.longReportScope == nil {
@@ -632,43 +655,72 @@ func (s *VegetationReportService) SaveLongVegetationProjectUnits(ctx context.Con
 			},
 		}
 	}
-	return s.longReportScope.SaveLongVegetationProjectUnits(ctx, contextID, requestJSON)
+	raw, err := marshalTypedRPCRequest(request)
+	if err != nil {
+		return LongVegetationProjectUnitOutcome{
+			Revision: request.Revision,
+			Outcome: LongVegetationUnitPreferencesOutcome{
+				ContextID:    contextID,
+				ErrorMessage: err.Error(),
+			},
+		}
+	}
+	return s.longReportScope.SaveLongVegetationProjectUnits(ctx, contextID, raw)
 }
 
-func (s *VegetationReportService) SetLongVegetationProjectFields(ctx context.Context, contextID, requestJSON string) (*LongVegetationReportScope, error) {
+func (s *VegetationReportService) SetLongVegetationProjectFields(ctx context.Context, contextID string, request LongVegetationSelectedUnitFieldsRequest) (*LongVegetationReportScope, error) {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.longReportScope == nil {
 		return nil, errors.New("long vegetation report scope service is unavailable")
 	}
-	return s.longReportScope.SetLongVegetationProjectFields(ctx, contextID, requestJSON)
+	if request.Fields == nil {
+		request.Fields = []string{}
+	}
+	raw, err := marshalTypedRPCRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	return s.longReportScope.SetLongVegetationProjectFields(ctx, contextID, raw)
 }
 
-func (s *VegetationReportService) SetLongVegetationReportScope(ctx context.Context, contextID, requestJSON string) (*LongVegetationReportScope, error) {
+func (s *VegetationReportService) SetLongVegetationReportScope(ctx context.Context, contextID string, request LongVegetationScopeRequest) (*LongVegetationReportScope, error) {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.longReportScope == nil {
 		return nil, errors.New("long vegetation report scope service is unavailable")
 	}
-	return s.longReportScope.SetLongVegetationReportScope(ctx, contextID, requestJSON)
+	raw, err := marshalTypedRPCRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	return s.longReportScope.SetLongVegetationReportScope(ctx, contextID, raw)
 }
 
-func (s *VegetationReportService) GetLongVegetationProjectWorkbookReview(ctx context.Context, contextID, requestJSON string) (*LongVegetationProjectWorkbookReview, error) {
+func (s *VegetationReportService) GetLongVegetationProjectWorkbookReview(ctx context.Context, contextID string, request LongVegetationProjectWorkbookReadRequest) (*LongVegetationProjectWorkbookReview, error) {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.longProjectWorkbook == nil {
 		return nil, errors.New("long vegetation project workbook service is unavailable")
 	}
-	return s.longProjectWorkbook.GetReview(ctx, contextID, requestJSON)
+	raw, err := marshalTypedRPCRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	return s.longProjectWorkbook.GetReview(ctx, contextID, raw)
 }
 
-func (s *VegetationReportService) ExportReviewedLongVegetationProjectWorkbook(ctx context.Context, contextID, requestJSON string) (*VegetationWorkbookOutcome, error) {
+func (s *VegetationReportService) ExportReviewedLongVegetationProjectWorkbook(ctx context.Context, contextID string, request LongVegetationProjectWorkbookExportRequest) (*VegetationWorkbookOutcome, error) {
 	s, release := s.acquire()
 	defer release()
 	if s == nil || s.longProjectWorkbook == nil {
 		return nil, errors.New("long vegetation project workbook service is unavailable")
 	}
-	return s.longProjectWorkbook.ExportReviewed(ctx, contextID, requestJSON)
+	raw, err := marshalTypedRPCRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	return s.longProjectWorkbook.ExportReviewed(ctx, contextID, raw)
 }
 
 func (s *VegetationReportService) GetVegetationWorkbookReview(ctx context.Context, contextID, requestJSON string) (*VegetationWorkbookReview, error) {

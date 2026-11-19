@@ -175,6 +175,7 @@ export interface PMTilesArchiveStatus {
     "minZoom": number;
     "maxZoom": number;
     "sizeBytes": number;
+    "warning"?: string;
 }
 
 /**

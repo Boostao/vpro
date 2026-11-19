@@ -21,8 +21,8 @@ export function ExportReviewedLifeformWorkbook(contextID: string, requestJSON: s
     return $Call.ByID(711076992, contextID, requestJSON);
 }
 
-export function ExportReviewedLongVegetationProjectWorkbook(contextID: string, requestJSON: string): $CancellablePromise<$models.VegetationWorkbookOutcome | null> {
-    return $Call.ByID(2827762951, contextID, requestJSON);
+export function ExportReviewedLongVegetationProjectWorkbook(contextID: string, request: $models.LongVegetationProjectWorkbookExportRequest): $CancellablePromise<$models.VegetationWorkbookOutcome | null> {
+    return $Call.ByID(2827762951, contextID, request);
 }
 
 export function ExportReviewedSummaryVegetationWorkbook(contextID: string, requestJSON: string): $CancellablePromise<$models.VegetationWorkbookOutcome | null> {
@@ -65,16 +65,16 @@ export function GetLongVegetationProjectFieldDefinitions(contextID: string): $Ca
     return $Call.ByID(3632592818, contextID);
 }
 
-export function GetLongVegetationProjectOptions(contextID: string, requestJSON: string): $CancellablePromise<$models.LongVegetationProjectOptions> {
-    return $Call.ByID(2277238206, contextID, requestJSON);
+export function GetLongVegetationProjectOptions(contextID: string, request: $models.LongVegetationProjectReadRequest): $CancellablePromise<$models.LongVegetationProjectOptions> {
+    return $Call.ByID(2277238206, contextID, request);
 }
 
-export function GetLongVegetationProjectUnitPreferences(contextID: string, requestJSON: string): $CancellablePromise<$models.LongVegetationProjectUnitPreferences> {
-    return $Call.ByID(3427754068, contextID, requestJSON);
+export function GetLongVegetationProjectUnitPreferences(contextID: string, request: $models.LongVegetationProjectReadRequest): $CancellablePromise<$models.LongVegetationProjectUnitPreferences> {
+    return $Call.ByID(3427754068, contextID, request);
 }
 
-export function GetLongVegetationProjectWorkbookReview(contextID: string, requestJSON: string): $CancellablePromise<$models.LongVegetationProjectWorkbookReview | null> {
-    return $Call.ByID(915787940, contextID, requestJSON);
+export function GetLongVegetationProjectWorkbookReview(contextID: string, request: $models.LongVegetationProjectWorkbookReadRequest): $CancellablePromise<$models.LongVegetationProjectWorkbookReview | null> {
+    return $Call.ByID(915787940, contextID, request);
 }
 
 export function GetLongVegetationQualityMinimumPreferences(contextID: string): $CancellablePromise<$models.LongVegetationQualityMinimumPreferencesReview | null> {
@@ -103,6 +103,10 @@ export function GetLongVegetationStatisticsPreferences(contextID: string): $Canc
 
 export function GetLongVegetationSwitchPreferences(contextID: string): $CancellablePromise<$models.LongVegetationSwitchPreferencesReview | null> {
     return $Call.ByID(3420261535, contextID);
+}
+
+export function GetLongVegetationTabPreferences(contextID: string): $CancellablePromise<$models.LongVegetationTabPreferencesBundle | null> {
+    return $Call.ByID(917569352, contextID);
 }
 
 export function GetLongVegetationThresholdPreferences(contextID: string): $CancellablePromise<$models.LongVegetationThresholdPreferencesReview | null> {
@@ -157,8 +161,8 @@ export function PreviewLongVegetation(contextID: string): $CancellablePromise<$m
     return $Call.ByID(2248960779, contextID);
 }
 
-export function PreviewLongVegetationProject(contextID: string, requestJSON: string): $CancellablePromise<$models.LongVegetationProjectPreview> {
-    return $Call.ByID(3716680152, contextID, requestJSON);
+export function PreviewLongVegetationProject(contextID: string, request: $models.LongVegetationProjectReadRequest): $CancellablePromise<$models.LongVegetationProjectPreview> {
+    return $Call.ByID(3716680152, contextID, request);
 }
 
 export function PreviewLongVegetationWithExclusions(contextID: string, request: $models.LongVegetationExclusionRequest): $CancellablePromise<$models.LongVegetationExclusionPreview | null> {
@@ -237,8 +241,8 @@ export function SaveLongVegetationPreferences(contextID: string, requestJSON: st
     return $Call.ByID(609617110, contextID, requestJSON);
 }
 
-export function SaveLongVegetationProjectUnits(contextID: string, requestJSON: string): $CancellablePromise<$models.LongVegetationProjectUnitOutcome> {
-    return $Call.ByID(1658206624, contextID, requestJSON);
+export function SaveLongVegetationProjectUnits(contextID: string, request: $models.LongVegetationProjectUnitRequest): $CancellablePromise<$models.LongVegetationProjectUnitOutcome> {
+    return $Call.ByID(1658206624, contextID, request);
 }
 
 export function SaveLongVegetationQualityMinimumPreferences(contextID: string, requestJSON: string): $CancellablePromise<$models.LongVegetationQualityMinimumPreferencesOutcome | null> {
@@ -261,6 +265,10 @@ export function SaveLongVegetationSwitchPreferences(contextID: string, requestJS
     return $Call.ByID(77225146, contextID, requestJSON);
 }
 
+export function SaveLongVegetationTabPreferences(contextID: string, request: $models.LongVegetationTabPreferencesSaveRequest): $CancellablePromise<$models.LongVegetationPreferencesOutcome | null> {
+    return $Call.ByID(3453021679, contextID, request);
+}
+
 export function SaveLongVegetationThresholdPreferences(contextID: string, requestJSON: string): $CancellablePromise<$models.LongVegetationThresholdPreferencesOutcome | null> {
     return $Call.ByID(869881819, contextID, requestJSON);
 }
@@ -269,8 +277,8 @@ export function SaveLongVegetationUnitPreferences(contextID: string, requestJSON
     return $Call.ByID(4249297704, contextID, requestJSON);
 }
 
-export function SaveSummaryVegetationFieldList(contextID: string, requestJSON: string): $CancellablePromise<$models.SummaryVegetationFieldListOutcome | null> {
-    return $Call.ByID(3572037582, contextID, requestJSON);
+export function SaveSummaryVegetationFieldList(contextID: string, request: $models.SummaryVegetationFieldListRequest): $CancellablePromise<$models.SummaryVegetationFieldListOutcome | null> {
+    return $Call.ByID(3572037582, contextID, request);
 }
 
 export function SaveSummaryVegetationPreferences(contextID: string, requestJSON: string): $CancellablePromise<$models.SummaryVegetationPreferencesOutcome | null> {
@@ -285,12 +293,12 @@ export function SaveSummaryVegetationQualityPreferences(contextID: string, reque
     return $Call.ByID(1107542079, contextID, requestJSON);
 }
 
-export function SetLongVegetationProjectFields(contextID: string, requestJSON: string): $CancellablePromise<$models.LongVegetationReportScope | null> {
-    return $Call.ByID(141044305, contextID, requestJSON);
+export function SetLongVegetationProjectFields(contextID: string, request: $models.LongVegetationSelectedUnitFieldsRequest): $CancellablePromise<$models.LongVegetationReportScope | null> {
+    return $Call.ByID(141044305, contextID, request);
 }
 
-export function SetLongVegetationReportScope(contextID: string, requestJSON: string): $CancellablePromise<$models.LongVegetationReportScope | null> {
-    return $Call.ByID(841696151, contextID, requestJSON);
+export function SetLongVegetationReportScope(contextID: string, request: $models.LongVegetationScopeRequest): $CancellablePromise<$models.LongVegetationReportScope | null> {
+    return $Call.ByID(841696151, contextID, request);
 }
 
 export function SetLongVegetationSelectedUnitFields(contextID: string, requestJSON: string): $CancellablePromise<$models.LongVegetationSelectedUnitSelection | null> {

@@ -1,14 +1,12 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"reflect"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type projectPlotProfilePresencePreview struct {

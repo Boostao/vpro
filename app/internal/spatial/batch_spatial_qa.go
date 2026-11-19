@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
 	"math"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 // --- Batch Spatial QA Audit & Transactional Auto-1 Stamp ---
@@ -142,16 +143,20 @@ func queryScopedSpatialPlotRows(ctx context.Context, owner *vprocore.SqliteConte
 		COALESCE(CAST("ProvinceStateTerritory" AS TEXT), '')
 	FROM `+qAdmin+` WHERE typeof("Plot")='text'`)
 	if aErr == nil {
-		for adminRows.Next() {
-			var pKey string
-			var info adminInfo
-			if sErr := adminRows.Scan(&pKey, &info.gisBGC, &info.gisVer, &info.province); sErr == nil {
-				if _, exists := adminByPlot[pKey]; !exists {
-					adminByPlot[pKey] = info
+		func() {
+			defer adminRows.Close()
+
+			for adminRows.Next() {
+				var pKey string
+				var info adminInfo
+				if sErr := adminRows.Scan(&pKey, &info.gisBGC, &info.gisVer, &info.province); sErr == nil {
+					if _, exists := adminByPlot[pKey]; !exists {
+						adminByPlot[pKey] = info
+					}
 				}
 			}
-		}
-		_ = adminRows.Close()
+
+		}()
 	}
 
 	hasActiveSU := owner.Selection.SU != "" && owner.Selection.SU != "None"
@@ -166,10 +171,10 @@ func queryScopedSpatialPlotRows(ctx context.Context, owner *vprocore.SqliteConte
 		if sErr != nil {
 			return nil, sErr
 		}
+		defer suRows.Close()
 		for suRows.Next() {
 			var pKey, suVal string
 			if err := suRows.Scan(&pKey, &suVal); err != nil {
-				_ = suRows.Close()
 				return nil, err
 			}
 			if _, exists := suByPlot[pKey]; !exists {
@@ -177,10 +182,8 @@ func queryScopedSpatialPlotRows(ctx context.Context, owner *vprocore.SqliteConte
 			}
 		}
 		if err := suRows.Err(); err != nil {
-			_ = suRows.Close()
 			return nil, err
 		}
-		_ = suRows.Close()
 	}
 
 	query := `SELECT

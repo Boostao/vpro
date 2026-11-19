@@ -85,15 +85,17 @@ func SaveProjectAs(s *vprocore.ContextService, ctx context.Context, contextID st
 	if err != nil {
 		return SaveProjectAsResult{}, err
 	}
-	for masterRows.Next() {
-		var name, ddl string
-		if err := masterRows.Scan(&name, &ddl); err != nil {
-			masterRows.Close()
-			return SaveProjectAsResult{}, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, masterRows.Close()) }()
+		for masterRows.Next() {
+			var name, ddl string
+			if err := masterRows.Scan(&name, &ddl); err != nil {
+				return err
+			}
+			existingTables[name] = ddl
 		}
-		existingTables[name] = ddl
-	}
-	if err := errors.Join(masterRows.Err(), masterRows.Close()); err != nil {
+		return masterRows.Err()
+	}(); err != nil {
 		return SaveProjectAsResult{}, err
 	}
 
@@ -103,15 +105,17 @@ func SaveProjectAs(s *vprocore.ContextService, ctx context.Context, contextID st
 		if mErr != nil {
 			return SaveProjectAsResult{}, mErr
 		}
-		for mRows.Next() {
-			var tName, desc string
-			if err := mRows.Scan(&tName, &desc); err != nil {
-				mRows.Close()
-				return SaveProjectAsResult{}, err
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, mRows.Close()) }()
+			for mRows.Next() {
+				var tName, desc string
+				if err := mRows.Scan(&tName, &desc); err != nil {
+					return err
+				}
+				metaTags[tName] = desc
 			}
-			metaTags[tName] = desc
-		}
-		if err := errors.Join(mRows.Err(), mRows.Close()); err != nil {
+			return mRows.Err()
+		}(); err != nil {
 			return SaveProjectAsResult{}, err
 		}
 	}
@@ -159,16 +163,18 @@ func SaveProjectAs(s *vprocore.ContextService, ctx context.Context, contextID st
 			return SaveProjectAsResult{}, idxErr
 		}
 		var idxSQLs []string
-		for idxRows.Next() {
-			var idxName, idxSQL string
-			if err := idxRows.Scan(&idxName, &idxSQL); err != nil {
-				idxRows.Close()
-				return SaveProjectAsResult{}, err
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, idxRows.Close()) }()
+			for idxRows.Next() {
+				var idxName, idxSQL string
+				if err := idxRows.Scan(&idxName, &idxSQL); err != nil {
+					return err
+				}
+				rewrittenIdx := rewriteProjectIndexSQL(idxSQL, idxName, oldName, newName, oldTbl, newTbl)
+				idxSQLs = append(idxSQLs, rewrittenIdx)
 			}
-			rewrittenIdx := rewriteProjectIndexSQL(idxSQL, idxName, oldName, newName, oldTbl, newTbl)
-			idxSQLs = append(idxSQLs, rewrittenIdx)
-		}
-		if err := errors.Join(idxRows.Err(), idxRows.Close()); err != nil {
+			return idxRows.Err()
+		}(); err != nil {
 			return SaveProjectAsResult{}, err
 		}
 
@@ -209,30 +215,32 @@ func SaveProjectAs(s *vprocore.ContextService, ctx context.Context, contextID st
 	}
 
 	// Capture __VPRO_ChildIdentity reservations if present.
-	type childIdEntry struct {
+	type childIDEntry struct {
 		childTable string
 		id         int64
 	}
-	var childIds []childIdEntry
+	var childIds []childIDEntry
 	if _, ok := existingTables["__VPRO_ChildIdentity"]; ok {
 		cRows, cErr := srcTx.QueryContext(ctx, `SELECT "ChildTable", "ID" FROM "__VPRO_ChildIdentity"`)
 		if cErr != nil {
 			return SaveProjectAsResult{}, cErr
 		}
-		for cRows.Next() {
-			var ct string
-			var cid int64
-			if err := cRows.Scan(&ct, &cid); err != nil {
-				cRows.Close()
-				return SaveProjectAsResult{}, err
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, cRows.Close()) }()
+			for cRows.Next() {
+				var ct string
+				var cid int64
+				if err := cRows.Scan(&ct, &cid); err != nil {
+					return err
+				}
+				unquoted := strings.Trim(ct, `"`)
+				if after, matched := strings.CutPrefix(unquoted, oldName+"_"); matched {
+					ct = vprocore.QuoteHeaderIdentifier(newName + "_" + after)
+				}
+				childIds = append(childIds, childIDEntry{ct, cid})
 			}
-			unquoted := strings.Trim(ct, `"`)
-			if after, matched := strings.CutPrefix(unquoted, oldName+"_"); matched {
-				ct = vprocore.QuoteHeaderIdentifier(newName + "_" + after)
-			}
-			childIds = append(childIds, childIdEntry{ct, cid})
-		}
-		if err := errors.Join(cRows.Err(), cRows.Close()); err != nil {
+			return cRows.Err()
+		}(); err != nil {
 			return SaveProjectAsResult{}, err
 		}
 	}
@@ -249,19 +257,21 @@ func SaveProjectAs(s *vprocore.ContextService, ctx context.Context, contextID st
 		if hErr != nil {
 			return SaveProjectAsResult{}, hErr
 		}
-		for hRows.Next() {
-			var ht string
-			var hid int64
-			if err := hRows.Scan(&ht, &hid); err != nil {
-				hRows.Close()
-				return SaveProjectAsResult{}, err
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, hRows.Close()) }()
+			for hRows.Next() {
+				var ht string
+				var hid int64
+				if err := hRows.Scan(&ht, &hid); err != nil {
+					return err
+				}
+				if after, matched := strings.CutPrefix(ht, oldName+"_"); matched {
+					ht = newName + "_" + after
+				}
+				hierarchyIDs = append(hierarchyIDs, hierarchyIDEntry{ht, hid})
 			}
-			if after, matched := strings.CutPrefix(ht, oldName+"_"); matched {
-				ht = newName + "_" + after
-			}
-			hierarchyIDs = append(hierarchyIDs, hierarchyIDEntry{ht, hid})
-		}
-		if err := errors.Join(hRows.Err(), hRows.Close()); err != nil {
+			return hRows.Err()
+		}(); err != nil {
 			return SaveProjectAsResult{}, err
 		}
 	}

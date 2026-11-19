@@ -1,10 +1,6 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
@@ -12,6 +8,8 @@ import (
 	"time"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SavedPlotLabelHeader struct {
@@ -103,7 +101,7 @@ func (s *PlotLabelRegionalService) GetPreview(ctx context.Context, contextID, pl
 
 func plotLabelText(value, name string, limit int) error {
 	if !utf8.ValidString(value) || strings.ContainsRune(value, 0) || len(utf16.Encode([]rune(value))) > limit {
-		return fmt.Errorf("%s cannot be assigned to a plot label without repairing source text or exceeding its UTF-16 bound", name)
+		return fmt.Errorf("%s cannot be assigned to a plot label without repairing source text or exceeding its maximum character length", name)
 	}
 	return nil
 }

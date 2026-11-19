@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/internal/vprocore"
 	"math"
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func checkSingleCoverColumns(
@@ -110,7 +112,7 @@ func checkSingleCoverColumns(
 					RowID:      rid,
 					Field:      col,
 					Value:      colTexts[i],
-					Rule:       "IEEE-754 SINGLE cover must be >= 0 and < 100",
+					Rule:       "Percent cover must be from 0 to under 100% (e.g. 99.9%)",
 				})
 			}
 		}
@@ -226,49 +228,52 @@ func checkProjectBounds(
 			dest[4+i] = &rawCells[i]
 		}
 
-		for rows.Next() {
-			if err := rows.Scan(dest...); err != nil {
-				rows.Close()
-				return err
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+			for rows.Next() {
+				if err := rows.Scan(dest...); err != nil {
+
+					return err
+				}
+				if useSU {
+					if plotType != "text" {
+						continue
+					}
+					if _, ok := suTextPlots[string(rawPlot)]; !ok {
+						continue
+					}
+				}
+				for i, r := range grp.rules {
+					raw := rawCells[i]
+					if raw == nil {
+						continue
+					}
+					if !utf8.Valid(raw) {
+						perRuleFindings[i] = append(perRuleFindings[i], BoundsFinding{
+							Table:      grp.suffix,
+							PlotNumber: plotStr,
+							RowID:      rid,
+							Field:      r.col,
+							Value:      fmt.Sprintf("0x%x", raw),
+							Rule:       "Malformed UTF-8 byte sequence",
+						})
+						continue
+					}
+					s := string(raw)
+					if sqlutil.UTF16Len(s) > r.maxUTF {
+						perRuleFindings[i] = append(perRuleFindings[i], BoundsFinding{
+							Table:      grp.suffix,
+							PlotNumber: plotStr,
+							RowID:      rid,
+							Field:      r.col,
+							Value:      s,
+							Rule:       fmt.Sprintf("Exceeds %d characters", r.maxUTF),
+						})
+					}
+				}
 			}
-			if useSU {
-				if plotType != "text" {
-					continue
-				}
-				if _, ok := suTextPlots[string(rawPlot)]; !ok {
-					continue
-				}
-			}
-			for i, r := range grp.rules {
-				raw := rawCells[i]
-				if raw == nil {
-					continue
-				}
-				if !utf8.Valid(raw) {
-					perRuleFindings[i] = append(perRuleFindings[i], BoundsFinding{
-						Table:      grp.suffix,
-						PlotNumber: plotStr,
-						RowID:      rid,
-						Field:      r.col,
-						Value:      fmt.Sprintf("0x%x", raw),
-						Rule:       "Malformed UTF-8 byte sequence",
-					})
-					continue
-				}
-				s := string(raw)
-				if utf16CodeUnitLen(s) > r.maxUTF {
-					perRuleFindings[i] = append(perRuleFindings[i], BoundsFinding{
-						Table:      grp.suffix,
-						PlotNumber: plotStr,
-						RowID:      rid,
-						Field:      r.col,
-						Value:      s,
-						Rule:       fmt.Sprintf("Exceeds %d UTF-16 code units", r.maxUTF),
-					})
-				}
-			}
-		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return rows.Err()
+		}(); err != nil {
 			return err
 		}
 		for _, list := range perRuleFindings {
@@ -320,50 +325,53 @@ func checkProjectBounds(
 	if err != nil {
 		return err
 	}
-	for envNumRows.Next() {
-		var rid int64
-		var plotType, plot string
-		var rawPlot []byte
-		var lat, lon, slope sql.NullFloat64
-		var aspect sql.NullInt64
-		if err := envNumRows.Scan(&rid, &plotType, &rawPlot, &plot, &lat, &lon, &aspect, &slope); err != nil {
-			envNumRows.Close()
-			return err
-		}
-		if useSU {
-			if plotType != "text" {
-				continue
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, envNumRows.Close()) }()
+		for envNumRows.Next() {
+			var rid int64
+			var plotType, plot string
+			var rawPlot []byte
+			var lat, lon, slope sql.NullFloat64
+			var aspect sql.NullInt64
+			if err := envNumRows.Scan(&rid, &plotType, &rawPlot, &plot, &lat, &lon, &aspect, &slope); err != nil {
+
+				return err
 			}
-			if _, ok := suTextPlots[string(rawPlot)]; !ok {
-				continue
+			if useSU {
+				if plotType != "text" {
+					continue
+				}
+				if _, ok := suTextPlots[string(rawPlot)]; !ok {
+					continue
+				}
+			}
+			if lat.Valid && (lat.Float64 < -90 || lat.Float64 > 90) {
+				report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
+					Table: "Env", PlotNumber: plot, RowID: rid, Field: "Latitude",
+					Value: vprocore.SourceDoubleDecimalString(lat.Float64), Rule: "Latitude must be between -90 and 90",
+				})
+			}
+			if lon.Valid && (lon.Float64 < -180 || lon.Float64 > 180) {
+				report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
+					Table: "Env", PlotNumber: plot, RowID: rid, Field: "Longitude",
+					Value: vprocore.SourceDoubleDecimalString(lon.Float64), Rule: "Longitude must be between -180 and 180",
+				})
+			}
+			if aspect.Valid && aspect.Int64 != 999 && (aspect.Int64 < 0 || aspect.Int64 > 359) {
+				report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
+					Table: "Env", PlotNumber: plot, RowID: rid, Field: "Aspect",
+					Value: strconv.FormatInt(aspect.Int64, 10), Rule: "Aspect must be 0..359 or 999 (level)",
+				})
+			}
+			if slope.Valid && slope.Float64 < 0 {
+				report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
+					Table: "Env", PlotNumber: plot, RowID: rid, Field: "SlopeGradient",
+					Value: vprocore.SourceDoubleDecimalString(slope.Float64), Rule: "SlopeGradient must be >= 0",
+				})
 			}
 		}
-		if lat.Valid && (lat.Float64 < -90 || lat.Float64 > 90) {
-			report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
-				Table: "Env", PlotNumber: plot, RowID: rid, Field: "Latitude",
-				Value: vprocore.SourceDoubleDecimalString(lat.Float64), Rule: "Latitude must be between -90 and 90",
-			})
-		}
-		if lon.Valid && (lon.Float64 < -180 || lon.Float64 > 180) {
-			report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
-				Table: "Env", PlotNumber: plot, RowID: rid, Field: "Longitude",
-				Value: vprocore.SourceDoubleDecimalString(lon.Float64), Rule: "Longitude must be between -180 and 180",
-			})
-		}
-		if aspect.Valid && aspect.Int64 != 999 && (aspect.Int64 < 0 || aspect.Int64 > 359) {
-			report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
-				Table: "Env", PlotNumber: plot, RowID: rid, Field: "Aspect",
-				Value: strconv.FormatInt(aspect.Int64, 10), Rule: "Aspect must be 0..359 or 999 (level)",
-			})
-		}
-		if slope.Valid && slope.Float64 < 0 {
-			report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
-				Table: "Env", PlotNumber: plot, RowID: rid, Field: "SlopeGradient",
-				Value: vprocore.SourceDoubleDecimalString(slope.Float64), Rule: "SlopeGradient must be >= 0",
-			})
-		}
-	}
-	if err := errors.Join(envNumRows.Err(), envNumRows.Close()); err != nil {
+		return envNumRows.Err()
+	}(); err != nil {
 		return err
 	}
 
@@ -381,31 +389,34 @@ func checkProjectBounds(
 	if err != nil {
 		return err
 	}
-	for adminNumRows.Next() {
-		var rid int64
-		var plotType, plot string
-		var rawPlot []byte
-		var sd sql.NullInt64
-		if err := adminNumRows.Scan(&rid, &plotType, &rawPlot, &plot, &sd); err != nil {
-			adminNumRows.Close()
-			return err
-		}
-		if useSU {
-			if plotType != "text" {
-				continue
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, adminNumRows.Close()) }()
+		for adminNumRows.Next() {
+			var rid int64
+			var plotType, plot string
+			var rawPlot []byte
+			var sd sql.NullInt64
+			if err := adminNumRows.Scan(&rid, &plotType, &rawPlot, &plot, &sd); err != nil {
+
+				return err
 			}
-			if _, ok := suTextPlots[string(rawPlot)]; !ok {
-				continue
+			if useSU {
+				if plotType != "text" {
+					continue
+				}
+				if _, ok := suTextPlots[string(rawPlot)]; !ok {
+					continue
+				}
+			}
+			if sd.Valid && (sd.Int64 < 1900 || sd.Int64 > 2500) {
+				report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
+					Table: "Admin", PlotNumber: plot, RowID: rid, Field: "StartDate",
+					Value: strconv.FormatInt(sd.Int64, 10), Rule: "StartDate must be between 1900 and 2500",
+				})
 			}
 		}
-		if sd.Valid && (sd.Int64 < 1900 || sd.Int64 > 2500) {
-			report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
-				Table: "Admin", PlotNumber: plot, RowID: rid, Field: "StartDate",
-				Value: strconv.FormatInt(sd.Int64, 10), Rule: "StartDate must be between 1900 and 2500",
-			})
-		}
-	}
-	if err := errors.Join(adminNumRows.Err(), adminNumRows.Close()); err != nil {
+		return adminNumRows.Err()
+	}(); err != nil {
 		return err
 	}
 
@@ -434,46 +445,49 @@ func checkProjectBounds(
 		if err != nil {
 			return err
 		}
-		for sRows.Next() {
-			var rid int64
-			var plotType, plot string
-			var rawPlot []byte
-			var hz sql.NullString
-			var rawUpper, rawLower any
-			if err := sRows.Scan(&rid, &plotType, &rawPlot, &plot, &hz, &rawUpper, &rawLower); err != nil {
-				sRows.Close()
-				return err
-			}
-			if useSU {
-				if plotType != "text" {
-					continue
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, sRows.Close()) }()
+			for sRows.Next() {
+				var rid int64
+				var plotType, plot string
+				var rawPlot []byte
+				var hz sql.NullString
+				var rawUpper, rawLower any
+				if err := sRows.Scan(&rid, &plotType, &rawPlot, &plot, &hz, &rawUpper, &rawLower); err != nil {
+
+					return err
 				}
-				if _, ok := suTextPlots[string(rawPlot)]; !ok {
-					continue
+				if useSU {
+					if plotType != "text" {
+						continue
+					}
+					if _, ok := suTextPlots[string(rawPlot)]; !ok {
+						continue
+					}
+				}
+				var hzPtr *string
+				hzLabel := ""
+				if hz.Valid {
+					hzText := hz.String
+					hzPtr = &hzText
+					hzLabel = strings.TrimSpace(hzText)
+				}
+				upPtr, upDisplay := parseComplianceDepthValue(rawUpper)
+				loPtr, loDisplay := parseComplianceDepthValue(rawLower)
+				if err := vprocore.ValidateSoilHorizonDepthSign(soilTbl.kind, hzPtr, upPtr, loPtr); err != nil {
+					field := "UpperDepth"
+					if upPtr == nil && loPtr != nil {
+						field = "LowerDepth"
+					}
+					report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
+						Table: soilTbl.kind, PlotNumber: plot, RowID: rid, Field: field,
+						Value: fmt.Sprintf("%s..%s (%s)", upDisplay, loDisplay, hzLabel),
+						Rule:  err.Error(),
+					})
 				}
 			}
-			var hzPtr *string
-			hzLabel := ""
-			if hz.Valid {
-				hzText := hz.String
-				hzPtr = &hzText
-				hzLabel = strings.TrimSpace(hzText)
-			}
-			upPtr, upDisplay := parseComplianceDepthValue(rawUpper)
-			loPtr, loDisplay := parseComplianceDepthValue(rawLower)
-			if err := vprocore.ValidateSoilHorizonDepthSign(soilTbl.kind, hzPtr, upPtr, loPtr); err != nil {
-				field := "UpperDepth"
-				if upPtr == nil && loPtr != nil {
-					field = "LowerDepth"
-				}
-				report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
-					Table: soilTbl.kind, PlotNumber: plot, RowID: rid, Field: field,
-					Value: fmt.Sprintf("%s..%s (%s)", upDisplay, loDisplay, hzLabel),
-					Rule:  err.Error(),
-				})
-			}
-		}
-		if err := errors.Join(sRows.Err(), sRows.Close()); err != nil {
+			return sRows.Err()
+		}(); err != nil {
 			return err
 		}
 	}

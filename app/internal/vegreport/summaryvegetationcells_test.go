@@ -1,15 +1,13 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"math"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func summaryCellNumber(value float64) *float64 {
@@ -163,6 +161,7 @@ func TestSummaryVegetationCoverCancellationAndIndependentValues(t *testing.T) {
 			t.Fatal("cancelled scalar returned an output", point, cell, err)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if cell, err := calculateSummaryVegetationCover(nil, input, 1); err == nil || !reflect.DeepEqual(cell, vprocore.ProjectMetadataCell{}) {
 		t.Fatal("nil context accepted", cell, err)
 	}

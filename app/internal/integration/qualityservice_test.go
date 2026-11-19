@@ -1,12 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/references"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -19,6 +13,10 @@ import (
 	"sync"
 	"testing"
 	"unicode/utf16"
+
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func qualityTestProvenance(t *testing.T) references.QualityProvenance {
@@ -68,7 +66,7 @@ func TestQualityCatalogueAll50CellsAndProvenance(t *testing.T) {
 	if err != nil || hash != p.TypedCellsSHA256 || p.Cells != 50 {
 		t.Fatalf("all typed cells mismatch: %s %v", hash, err)
 	}
-	if _, err := service.Db.Exec(`UPDATE PlotQualityChoices SET Item='changed'`); err == nil {
+	if _, err := service.DB.Exec(`UPDATE PlotQualityChoices SET Item='changed'`); err == nil {
 		t.Fatal("catalogue is writable")
 	}
 	if err := service.Close(); err != nil {

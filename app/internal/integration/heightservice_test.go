@@ -1,17 +1,15 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"encoding/json"
 	"math"
 	"reflect"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func heightUpdate(id int, field string, before, after *float64) vprocore.HeightRecordUpdate {

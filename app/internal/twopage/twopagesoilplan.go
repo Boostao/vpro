@@ -1,11 +1,6 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +8,9 @@ import (
 	"reflect"
 	"strconv"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type twoPageSoilEdit struct {
@@ -144,14 +142,14 @@ func planTwoPageSoilEdits(ctx context.Context, original *twoPageSoilOriginal, ed
 		seen[key] = true
 		identity := row.Cells[columns["ID"]]
 		if identity.Storage != "integer" || identity.Integer == nil {
-			return nil, errors.New("two-page soil edited row requires an original signed32 integer ID")
+			return nil, errors.New("two-page soil edited row requires an original record ID")
 		}
 		id, err := strconv.ParseInt(*identity.Integer, 10, 32)
 		if err != nil {
-			return nil, errors.New("two-page soil edited row requires an original signed32 integer ID")
+			return nil, errors.New("two-page soil edited row requires an original record ID")
 		}
 		for _, peer := range original.Records.Rows {
-			if peer.RowID != row.RowID && sourceform.SiviIdentityCellMatches(peer.Cells[columns["ID"]], *identity.Integer) {
+			if peer.RowID != row.RowID && sourceform.SourceIdentityCellMatches(peer.Cells[columns["ID"]], *identity.Integer) {
 				return nil, errors.New("two-page soil edited ID belongs to another original physical row")
 			}
 		}

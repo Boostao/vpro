@@ -1,16 +1,14 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"reflect"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type twoPageXLField struct {
@@ -23,8 +21,8 @@ func twoPageXLFields(form string) (map[string]twoPageXLField, error) {
 	if err != nil {
 		return nil, err
 	}
-	texts := make(map[string]int, len(sourceform.SiviParentSharedTextBounds))
-	for column, maximum := range sourceform.SiviParentSharedTextBounds {
+	texts := make(map[string]int, len(sourceform.SourceParentSharedTextBounds))
+	for column, maximum := range sourceform.SourceParentSharedTextBounds {
 		texts[column] = maximum
 	}
 	for column, maximum := range map[string]int{
@@ -33,7 +31,7 @@ func twoPageXLFields(form string) (map[string]twoPageXLField, error) {
 	} {
 		texts[column] = maximum
 	}
-	for _, field := range sourceform.SiviParentSharedReferenceFields {
+	for _, field := range sourceform.SourceParentSharedReferenceFields {
 		texts[field.Column] = field.Maximum
 	}
 	for _, fields := range [][]vprocore.BecHeaderField{
@@ -116,11 +114,11 @@ func validateTwoPageXLField(column string, field twoPageXLField, value vprocore.
 			return fmt.Errorf("two-page XL %s requires nullable literal TEXT without NUL", column)
 		}
 		if field.kind == "date" {
-			return sourceform.ValidateSIVIParentDateTimestamp(value.Text)
+			return sourceform.ValidateSourceParentDateTimestamp(value.Text)
 		}
 		return vprocore.ValidateOrdinaryText(vprocore.BecHeaderField{Name: column, Table: field.owner, Maximum: field.maximum, Value: value.Text})
 	case "integer", "single", "latitude", "longitude":
-		return sourceform.ValidateSIVIParentSharedNumber(column, field.kind, value)
+		return sourceform.ValidateSourceParentSharedNumber(column, field.kind, value)
 	case "boolean":
 		if value.Storage != "integer" || value.Integer == nil || (*value.Integer != "0" && *value.Integer != "-1") {
 			return fmt.Errorf("two-page XL %s requires Access BOOLEAN INTEGER0/-1 or NULL", column)
@@ -132,7 +130,7 @@ func validateTwoPageXLField(column string, field twoPageXLField, value vprocore.
 }
 
 // Physical planning is not reference-membership approval or write authorization.
-func planTwoPageXLProjection(ctx context.Context, original *sourceform.SiviParentProjection, edits []sourceform.SiviParentScalarEdit, masterAllowed bool) ([]sourceform.SiviParentScalarAssignment, error) {
+func planTwoPageXLProjection(ctx context.Context, original *sourceform.SourceParentProjection, edits []sourceform.SourceParentScalarEdit, masterAllowed bool) ([]sourceform.SourceParentScalarAssignment, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

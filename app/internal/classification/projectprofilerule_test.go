@@ -1,13 +1,11 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func TestProfileRuleDraftPhysicalBoundsAndSourceDependentAssignments(t *testing.T) {

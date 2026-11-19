@@ -1,16 +1,14 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func summaryEnvironmentalHeaderFixture(t *testing.T, selected bool) (vprocore.ProjectMetadataTable, []summaryVegetationUnit, []SummaryVegetationEnvironmentalNumericRow) {

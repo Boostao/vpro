@@ -1,14 +1,12 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"errors"
 	"reflect"
 	"sync"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type ContextSelection struct {
@@ -99,6 +97,13 @@ func WithContextPlotRequest[T any](ctx context.Context, s *ContextService, expec
 
 func (s *ContextService) Edit(expectedID string, operation func(*PlotService) error) error {
 	_, err := WithContextPlot(s, expectedID, func(plots *PlotService) (struct{}, error) {
+		return struct{}{}, operation(plots)
+	})
+	return err
+}
+
+func EditContext(ctx context.Context, s *ContextService, expectedID string, operation func(*PlotService) error) error {
+	_, err := WithContextPlotRequest(ctx, s, expectedID, func(plots *PlotService) (struct{}, error) {
 		return struct{}{}, operation(plots)
 	})
 	return err

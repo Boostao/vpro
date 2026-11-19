@@ -1,18 +1,16 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIParentTextPhysicalBoundsAndLiteralStorage(t *testing.T) {
@@ -28,12 +26,12 @@ func TestSIVIParentTextPhysicalBoundsAndLiteralStorage(t *testing.T) {
 				vprotest.MetadataText("  Mixed é \t "), vprotest.MetadataText(" "), {Storage: "null"},
 			} {
 				edit.Value = value
-				got, err := sourceform.PlanSIVIParentText(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit})
+				got, err := sourceform.PlanSIVIParentText(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit})
 				var execution any
 				if value.Text != nil {
 					execution = *value.Text
 				}
-				want := []sourceform.SiviParentScalarAssignment{{
+				want := []sourceform.SourceParentScalarAssignment{{
 					ContextID: "owned", Table: "Sample_Env", RowID: edit.RowID, Column: field.column,
 					Before: vprotest.MetadataText("original"), After: value, Value: execution,
 				}}
@@ -47,7 +45,7 @@ func TestSIVIParentTextPhysicalBoundsAndLiteralStorage(t *testing.T) {
 				vprotest.MetadataInteger("1"), vprotest.SiviReal(1), {Storage: "text"}, {Storage: "blob"},
 			} {
 				edit.Value = value
-				if got, err := sourceform.PlanSIVIParentText(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit}); err == nil || got != nil {
+				if got, err := sourceform.PlanSIVIParentText(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit}); err == nil || got != nil {
 					t.Fatal("new empty/overlength/malformed/nontext value returned a plan", got, err)
 				}
 			}
@@ -64,12 +62,12 @@ func TestSIVIParentTextHistoricalOmissionAndClone(t *testing.T) {
 		} {
 			env, admin, edit := sftest.SiviScalarFixture(t, column, history)
 			edit.Value = vprocore.CloneSiteUnitCell(history)
-			got, err := sourceform.PlanSIVIParentText(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit})
+			got, err := sourceform.PlanSIVIParentText(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit})
 			if err != nil || got == nil || len(got) != 0 {
 				t.Fatal("unchanged historical storage became an assignment", column, got, err)
 			}
 			edit.Value = vprotest.MetadataText("  New literal  ")
-			got, err = sourceform.PlanSIVIParentText(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit})
+			got, err = sourceform.PlanSIVIParentText(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit})
 			if err != nil || len(got) != 1 || !reflect.DeepEqual(got[0].Before, history) ||
 				!reflect.DeepEqual(got[0].After, vprotest.MetadataText("  New literal  ")) || got[0].Value != "  New literal  " {
 				t.Fatal("correction changed history or new literal", got, err)
@@ -125,19 +123,19 @@ func TestSIVIParentTextInvalidTailOwnershipAndDomainIsolation(t *testing.T) {
 				}
 				tail.Value = vprotest.MetadataText("")
 			}
-			if got, err := sourceform.PlanSIVIParentText(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit, tail}); err == nil || got != nil {
+			if got, err := sourceform.PlanSIVIParentText(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit, tail}); err == nil || got != nil {
 				t.Fatal("invalid tail/foreign/domain target returned partial output", kind, got, err)
 			}
 		})
 	}
-	if got, err := sourceform.PlanSIVIParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit}); err == nil || got != nil {
+	if got, err := sourceform.PlanSourceParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit}); err == nil || got != nil {
 		t.Fatal("ordinary TEXT widened scalar planning", got, err)
 	}
-	if got, err := sourceform.PlanSIVIParentOptions(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit}); err == nil || got != nil {
+	if got, err := sourceform.PlanSIVIParentOptions(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit}); err == nil || got != nil {
 		t.Fatal("ordinary TEXT widened option planning", got, err)
 	}
 	for _, empty := range []string{"context", "project", "edits"} {
-		id, project, edits := "owned", "Sample", []sourceform.SiviParentScalarEdit{edit}
+		id, project, edits := "owned", "Sample", []sourceform.SourceParentScalarEdit{edit}
 		switch empty {
 		case "context":
 			id = ""
@@ -152,7 +150,7 @@ func TestSIVIParentTextInvalidTailOwnershipAndDomainIsolation(t *testing.T) {
 	}
 	admin.Rows = append(admin.Rows, admin.Rows[0])
 	admin.Rows[1].RowID = "-8"
-	if got, err := sourceform.PlanSIVIParentText(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit}); err == nil || got != nil {
+	if got, err := sourceform.PlanSIVIParentText(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit}); err == nil || got != nil {
 		t.Fatal("ambiguous physical pair returned a TEXT plan", got, err)
 	}
 }
@@ -160,7 +158,7 @@ func TestSIVIParentTextInvalidTailOwnershipAndDomainIsolation(t *testing.T) {
 func TestSIVIParentTextCombinedFieldsAndInFlightCancellation(t *testing.T) {
 	env, admin, polygon := sftest.SiviScalarFixture(t, "SV_PolygonNumber", vprotest.MetadataText("original"))
 	polygon.Value = vprotest.MetadataText("new")
-	canopy := sourceform.SiviParentScalarEdit{
+	canopy := sourceform.SourceParentScalarEdit{
 		ContextID: "owned", Table: "Sample_Env", RowID: polygon.RowID, Column: "SV_CanopyComposition",
 		Expected: vprotest.MetadataText("original canopy"), Value: vprotest.MetadataText("literal canopy"),
 	}
@@ -169,8 +167,8 @@ func TestSIVIParentTextCombinedFieldsAndInFlightCancellation(t *testing.T) {
 			env.Rows[0].Cells[index] = canopy.Expected
 		}
 	}
-	got, err := sourceform.PlanSIVIParentText(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{polygon, canopy})
-	want := []sourceform.SiviParentScalarAssignment{
+	got, err := sourceform.PlanSIVIParentText(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{polygon, canopy})
+	want := []sourceform.SourceParentScalarAssignment{
 		{ContextID: "owned", Table: "Sample_Env", RowID: polygon.RowID, Column: "SV_PolygonNumber", Before: vprotest.MetadataText("original"), After: vprotest.MetadataText("new"), Value: "new"},
 		{ContextID: "owned", Table: "Sample_Env", RowID: polygon.RowID, Column: "SV_CanopyComposition", Before: vprotest.MetadataText("original canopy"), After: vprotest.MetadataText("literal canopy"), Value: "literal canopy"},
 	}
@@ -182,7 +180,7 @@ func TestSIVIParentTextCombinedFieldsAndInFlightCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := &vprotest.VegetationCancelContext{Context: context.Background(), Remaining: 10000 - probe.Remaining + 2}
-	if got, err := sourceform.PlanSIVIParentText(ctx, "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{polygon, canopy}); !errors.Is(err, context.Canceled) || got != nil {
+	if got, err := sourceform.PlanSIVIParentText(ctx, "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{polygon, canopy}); !errors.Is(err, context.Canceled) || got != nil {
 		t.Fatal("in-flight TEXT cancellation returned a partial plan", got, err)
 	}
 }
@@ -192,10 +190,10 @@ func TestSIVIParentTextCancellationAndRetry(t *testing.T) {
 	edit.Value = vprotest.MetadataText("new")
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if got, err := sourceform.PlanSIVIParentText(ctx, "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit}); !errors.Is(err, context.Canceled) || got != nil {
+	if got, err := sourceform.PlanSIVIParentText(ctx, "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit}); !errors.Is(err, context.Canceled) || got != nil {
 		t.Fatal("cancelled TEXT plan returned assignments", got, err)
 	}
-	got, err := sourceform.PlanSIVIParentText(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit})
+	got, err := sourceform.PlanSIVIParentText(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit})
 	if err != nil || len(got) != 1 || got[0].Value != "new" {
 		t.Fatal("rejected TEXT plan changed original or retry", got, err)
 	}

@@ -1,28 +1,22 @@
 package sftest
 
 import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
 	referencespkg "github.com/boostao/vpro/app/internal/references"
 	"github.com/boostao/vpro/app/internal/reports/reportcore"
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
-	"context"
-	"database/sql"
-
-	"errors"
-	"fmt"
-
-	"os"
-	"path/filepath"
-	"reflect"
-
-	"strings"
-
-	"testing"
 )
 
 func EnvironmentReportFixture() (vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable) {
@@ -104,7 +98,7 @@ func SiviDeletionFixture(t *testing.T, external bool, strength int) (*vprocore.C
 		Columns: original.Columns, Original: original.Original}
 }
 
-func SiviActionProposalEdits(parent *sourceform.SiviParentProjection) []sourceform.SiviParentActionEdit {
+func SiviActionProposalEdits(parent *sourceform.SourceParentProjection) []sourceform.SiviParentActionEdit {
 	edits := []sourceform.SiviParentActionEdit{}
 	for _, source := range []struct {
 		control, column, table string
@@ -127,14 +121,14 @@ func SiviActionProposalEdits(parent *sourceform.SiviParentProjection) []sourcefo
 	return edits
 }
 
-func SiviCategoricalProposalEdits(parent *sourceform.SiviParentProjection) []sourceform.SiviParentScalarEdit {
-	edits := []sourceform.SiviParentScalarEdit{}
+func SiviCategoricalProposalEdits(parent *sourceform.SourceParentProjection) []sourceform.SourceParentScalarEdit {
+	edits := []sourceform.SourceParentScalarEdit{}
 	for _, field := range []struct{ column, value string }{
 		{"SnowCoverregime", "Z"}, {"SV_RootZoneTexture", "  MiXeD \t "}, {"SV_AhorizonType", ""},
 	} {
 		for index, column := range parent.EnvColumns {
 			if column.Name == field.column {
-				edits = append(edits, sourceform.SiviParentScalarEdit{
+				edits = append(edits, sourceform.SourceParentScalarEdit{
 					ContextID: parent.ContextID, Table: parent.EnvTable, RowID: parent.Rows[0].Env.RowID,
 					Column: field.column, Expected: vprocore.CloneSiteUnitCell(parent.Rows[0].Env.Cells[index]), Value: vprotest.MetadataText(field.value),
 				})
@@ -144,8 +138,8 @@ func SiviCategoricalProposalEdits(parent *sourceform.SiviParentProjection) []sou
 	return edits
 }
 
-func SiviProposalEdits(parent *sourceform.SiviParentProjection) ([]sourceform.SiviParentScalarEdit, []sourceform.SiviParentScalarEdit) {
-	scalars, options := []sourceform.SiviParentScalarEdit{}, []sourceform.SiviParentScalarEdit{}
+func SiviProposalEdits(parent *sourceform.SourceParentProjection) ([]sourceform.SourceParentScalarEdit, []sourceform.SourceParentScalarEdit) {
+	scalars, options := []sourceform.SourceParentScalarEdit{}, []sourceform.SourceParentScalarEdit{}
 	for _, binding := range parent.Bindings {
 		_, scalar := sourceform.SiviParentScalarOwners[binding.Binding]
 		option := binding.Binding == "SV_StandAgeEstMeas" || binding.Binding == "SV_StandHeightEstMeas"
@@ -170,7 +164,7 @@ func SiviProposalEdits(parent *sourceform.SiviParentProjection) ([]sourceform.Si
 		if reflect.DeepEqual(value, before) {
 			value = vprocore.ProjectMetadataCell{Storage: "null"}
 		}
-		edit := sourceform.SiviParentScalarEdit{
+		edit := sourceform.SourceParentScalarEdit{
 			ContextID: parent.ContextID, Table: binding.Table, RowID: row.RowID,
 			Column: binding.Binding, Expected: vprocore.CloneSiteUnitCell(before), Value: value,
 		}
@@ -183,7 +177,7 @@ func SiviProposalEdits(parent *sourceform.SiviParentProjection) ([]sourceform.Si
 	return scalars, options
 }
 
-func SiviScalarFixture(t *testing.T, column string, before vprocore.ProjectMetadataCell) (vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, sourceform.SiviParentScalarEdit) {
+func SiviScalarFixture(t *testing.T, column string, before vprocore.ProjectMetadataCell) (vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, sourceform.SourceParentScalarEdit) {
 	t.Helper()
 	env, admin := vprotest.SiviParentTables(t)
 	table := &env
@@ -201,13 +195,13 @@ func SiviScalarFixture(t *testing.T, column string, before vprocore.ProjectMetad
 	if !found {
 		t.Fatal("scalar fixture missing source field", column)
 	}
-	return env, admin, sourceform.SiviParentScalarEdit{
+	return env, admin, sourceform.SourceParentScalarEdit{
 		ContextID: "owned", Table: "Sample_" + suffix, RowID: table.Rows[0].RowID,
 		Column: column, Expected: before, Value: vprocore.ProjectMetadataCell{Storage: "null"},
 	}
 }
 
-func SharedReferenceFixture(t *testing.T) (*sourceform.SIVIParentSharedService, vprocore.ProjectState, *sourceform.SIVIParentProjection) {
+func SharedReferenceFixture(t *testing.T) (*sourceform.SourceParentSharedService, vprocore.ProjectState, *sourceform.SourceParentProjection) {
 	t.Helper()
 	service, state, original, _ := SharedServiceFixture(t)
 	dir := t.TempDir()
@@ -231,7 +225,7 @@ func SharedReferenceFixture(t *testing.T) (*sourceform.SIVIParentSharedService, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	service.References = sourceform.SiviParentSharedReferenceReaders{Region: region, Site: site, Parent: parent, Geology: geology, Bec: bec}
+	service.References = sourceform.SourceParentSharedReferenceReaders{Region: region, Site: site, Parent: parent, Geology: geology, Bec: bec}
 	t.Cleanup(func() {
 		for _, close := range []func() error{region.Close, site.Close, parent.Close, geology.Close, bec.Close} {
 			if err := close(); err != nil {
@@ -242,21 +236,21 @@ func SharedReferenceFixture(t *testing.T) (*sourceform.SIVIParentSharedService, 
 	return service, state, original
 }
 
-func SharedServiceFixture(t *testing.T) (*sourceform.SIVIParentSharedService, vprocore.ProjectState, *sourceform.SIVIParentProjection, sourceform.SIVIParentSharedWrite) {
+func SharedServiceFixture(t *testing.T) (*sourceform.SourceParentSharedService, vprocore.ProjectState, *sourceform.SourceParentProjection, sourceform.SIVIParentSharedWrite) {
 	t.Helper()
-	contexts, state, db, original, _ := SiviParentWriteFixture(t, true, 3)
-	service, err := sourceform.NewSIVIParentSharedService(contexts)
+	contexts, state, db, _, _ := SiviParentWriteFixture(t, true, 3)
+	service, err := sourceform.NewSourceParentSharedService(contexts)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(`UPDATE Sample_Admin SET rowid=901 WHERE Plot='108050'`); err != nil {
 		t.Fatal(err)
 	}
-	original, err = sourceform.ReadSIVIParent(contexts, context.Background(), state.ContextID, "108050")
+	original, err := sourceform.ReadSIVIParent(contexts, context.Background(), state.ContextID, "108050")
 	if err != nil {
 		t.Fatal(err)
 	}
-	edits := []sourceform.SIVIParentCellEdit{}
+	edits := []sourceform.SourceParentCellEdit{}
 	for _, column := range []string{"AirPhotoNum", "XCoord", "YCoord", "StrataCoverTree", "StrataCoverShrub", "StrataCoverHerb", "StrataCoverMoss", "VegNotes"} {
 		value := vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(3.25)}
 		if column == "AirPhotoNum" || column == "VegNotes" {
@@ -267,14 +261,14 @@ func SharedServiceFixture(t *testing.T) (*sourceform.SIVIParentSharedService, vp
 	return service, state, original, sourceform.SIVIParentSharedWrite{Original: original, Edits: edits}
 }
 
-func SiviStorageTextEdits(parent *sourceform.SiviParentProjection) []sourceform.SiviParentScalarEdit {
-	edits := []sourceform.SiviParentScalarEdit{}
+func SiviStorageTextEdits(parent *sourceform.SourceParentProjection) []sourceform.SourceParentScalarEdit {
+	edits := []sourceform.SourceParentScalarEdit{}
 	for _, field := range []struct{ column, value string }{
 		{"SV_PolygonNumber", "  New Polygon  "}, {"SV_CanopyComposition", "Literal canopy"},
 	} {
 		for index, column := range parent.EnvColumns {
 			if column.Name == field.column {
-				edits = append(edits, sourceform.SiviParentScalarEdit{
+				edits = append(edits, sourceform.SourceParentScalarEdit{
 					ContextID: parent.ContextID, Table: parent.EnvTable, RowID: parent.Rows[0].Env.RowID,
 					Column: field.column, Expected: vprocore.CloneSiteUnitCell(parent.Rows[0].Env.Cells[index]), Value: vprotest.MetadataText(field.value),
 				})
@@ -284,7 +278,7 @@ func SiviStorageTextEdits(parent *sourceform.SiviParentProjection) []sourceform.
 	return edits
 }
 
-func SiviParentWriteFixture(t *testing.T, external bool, strength int) (*vprocore.ContextService, vprocore.ProjectState, *sql.DB, *sourceform.SiviParentProjection, sourceform.SiviParentDirectEdits) {
+func SiviParentWriteFixture(t *testing.T, external bool, strength int) (*vprocore.ContextService, vprocore.ProjectState, *sql.DB, *sourceform.SourceParentProjection, sourceform.SiviParentDirectEdits) {
 	t.Helper()
 	service, state := vprotest.ReportServiceFixture(t, external)
 	if err := service.Plots.SetAuditStrength(strength); err != nil {
@@ -316,7 +310,7 @@ func SiviParentWriteFixture(t *testing.T, external bool, strength int) (*vprocor
 	return service, state, db, parent, sourceform.SiviParentDirectEdits{Scalars: scalars, Options: options, Text: SiviStorageTextEdits(parent), Categorical: SiviCategoricalProposalEdits(parent)}
 }
 
-func SiviParentEdit(t *testing.T, parent *sourceform.SiviParentProjection, column string, value vprocore.ProjectMetadataCell) sourceform.SiviParentScalarEdit {
+func SiviParentEdit(t *testing.T, parent *sourceform.SourceParentProjection, column string, value vprocore.ProjectMetadataCell) sourceform.SourceParentScalarEdit {
 	t.Helper()
 	for _, binding := range parent.Bindings {
 		if binding.Binding != column {
@@ -326,18 +320,18 @@ func SiviParentEdit(t *testing.T, parent *sourceform.SiviParentProjection, colum
 		if binding.Table == parent.AdminTable {
 			row = parent.Rows[0].Admin
 		}
-		return sourceform.SiviParentScalarEdit{ContextID: parent.ContextID, Table: binding.Table, RowID: row.RowID, Column: column, Expected: vprocore.CloneSiteUnitCell(row.Cells[binding.Column]), Value: value}
+		return sourceform.SourceParentScalarEdit{ContextID: parent.ContextID, Table: binding.Table, RowID: row.RowID, Column: column, Expected: vprocore.CloneSiteUnitCell(row.Cells[binding.Column]), Value: value}
 	}
 	t.Fatal("controlled parent target missing", column)
-	return sourceform.SiviParentScalarEdit{}
+	return sourceform.SourceParentScalarEdit{}
 }
 
-func SiviParentCell(t *testing.T, parent *sourceform.SiviParentProjection, column string) vprocore.ProjectMetadataCell {
+func SiviParentCell(t *testing.T, parent *sourceform.SourceParentProjection, column string) vprocore.ProjectMetadataCell {
 	t.Helper()
 	return SiviParentEdit(t, parent, column, vprocore.ProjectMetadataCell{Storage: "null"}).Expected
 }
 
-func SiviProjectAssignmentWriteFixture(t *testing.T, external bool, source, strength int, before any) (*vprocore.ContextService, vprocore.ProjectState, *sql.DB, *sourceform.SiviParentProjection, sourceform.SiviProjectSelection) {
+func SiviProjectAssignmentWriteFixture(t *testing.T, external bool, source, strength int, before any) (*vprocore.ContextService, vprocore.ProjectState, *sql.DB, *sourceform.SourceParentProjection, sourceform.SourceProjectSelectionInternal) {
 	t.Helper()
 	service, state := vprotest.ContextServiceFixture(t)
 	if external {
@@ -382,7 +376,7 @@ func SiviProjectAssignmentWriteFixture(t *testing.T, external bool, source, stre
 	return service, state, db, parent, selection
 }
 
-func SiviProjectAssignmentWriteSelection(t *testing.T, service *vprocore.ContextService, state vprocore.ProjectState) (*sourceform.SiviParentProjection, sourceform.SiviProjectSelection) {
+func SiviProjectAssignmentWriteSelection(t *testing.T, service *vprocore.ContextService, state vprocore.ProjectState) (*sourceform.SourceParentProjection, sourceform.SourceProjectSelectionInternal) {
 	t.Helper()
 	parent, err := sourceform.ReadSIVIParent(service, context.Background(), state.ContextID, "108050")
 	if err != nil {
@@ -392,7 +386,7 @@ func SiviProjectAssignmentWriteSelection(t *testing.T, service *vprocore.Context
 	if err != nil {
 		t.Fatal(err)
 	}
-	return parent, sourceform.SiviProjectSelection{
+	return parent, sourceform.SourceProjectSelectionInternal{
 		ContextID: state.ContextID, ControlID: "form:frmSIVIsite/ProjectID", Table: parent.EnvTable,
 		RowID: parent.Rows[0].Env.RowID, Expected: SiviParentCell(t, parent, "ProjectID"),
 		SourceOption: choices.SourceOption, MetadataAlias: choices.Alias, MetadataTable: choices.Table,
@@ -474,11 +468,11 @@ func SiviWriteFixture(t *testing.T, external bool, strength int) (*vprocore.Cont
 	}
 }
 
-func TwoPageEntryReferenceChoice(value string) sourceform.SIVIParentSharedReferenceChoice {
-	return sourceform.SIVIParentSharedReferenceChoice{Code: &value, Selectable: true}
+func TwoPageEntryReferenceChoice(value string) sourceform.SourceParentSharedReferenceChoice {
+	return sourceform.SourceParentSharedReferenceChoice{Code: &value, Selectable: true}
 }
 
-func TwoPageEntryBorrowedReferenceReaders(t *testing.T) sourceform.SiviParentSharedReferenceReaders {
+func TwoPageEntryBorrowedReferenceReaders(t *testing.T) sourceform.SourceParentSharedReferenceReaders {
 	t.Helper()
 	dir := t.TempDir()
 	site, err := referencespkg.NewSiteCodeService(dir)
@@ -494,7 +488,7 @@ func TwoPageEntryBorrowedReferenceReaders(t *testing.T) sourceform.SiviParentSha
 			t.Error(err)
 		}
 	})
-	return sourceform.SiviParentSharedReferenceReaders{Site: site, Parent: parent}
+	return sourceform.SourceParentSharedReferenceReaders{Site: site, Parent: parent}
 }
 
 func LifeformReferenceFixture(rows ...[]vprocore.ProjectMetadataCell) vprocore.ProjectMetadataTable {

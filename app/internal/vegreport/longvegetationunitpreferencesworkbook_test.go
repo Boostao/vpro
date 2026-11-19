@@ -1,16 +1,13 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/xuri/excelize/v2"
 )
 

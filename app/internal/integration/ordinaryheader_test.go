@@ -1,17 +1,14 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"encoding/json"
-	"fmt"
 	"math"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func setOrdinaryTestValue(h *vprocore.FS882Header, member string, value any) {
@@ -223,7 +220,7 @@ func TestOrdinaryAtomicAuditRollbackRetryAndRestoreGuards(t *testing.T) {
 	}
 	for _, held := range []string{"becSiteUnit", "soilDrainage", "speciesListComplete", "updatedFromCards"} {
 		if vprocore.IsOrdinaryProperty(held) {
-			t.Fatal(fmt.Sprintf("unavailable distinct workflow enabled: %s", held))
+			t.Fatalf("unavailable distinct workflow enabled: %s", held)
 		}
 	}
 

@@ -1,6 +1,13 @@
 package integration
 
 import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"reflect"
+	"testing"
+
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/sourceform/sftest"
 	"github.com/boostao/vpro/app/internal/twopage"
@@ -8,25 +15,16 @@ import (
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-import (
-	"context"
-	"database/sql"
-	"encoding/json"
-	"errors"
-	"reflect"
-	"testing"
-)
-
-func twoPageEntryApprovePhysical(tx *sql.Tx, original *sourceform.SiviParentProjection, assignments []sourceform.SiviParentScalarAssignment) error {
+func twoPageEntryApprovePhysical(tx *sql.Tx, original *sourceform.SourceParentProjection, assignments []sourceform.SourceParentScalarAssignment) error {
 	if tx == nil || original == nil {
 		return errors.New("missing owned transaction/original")
 	}
 	return nil
 }
 
-func twoPageEntryWriteEdits(t *testing.T, parent *sourceform.SiviParentProjection) []sourceform.SiviParentScalarEdit {
+func twoPageEntryWriteEdits(t *testing.T, parent *sourceform.SourceParentProjection) []sourceform.SourceParentScalarEdit {
 	t.Helper()
-	return []sourceform.SiviParentScalarEdit{
+	return []sourceform.SourceParentScalarEdit{
 		sftest.SiviParentEdit(t, parent, "FieldNumber", vprotest.MetadataText("  Literal field  ")),
 		sftest.SiviParentEdit(t, parent, "PlotType", vprotest.MetadataText("  Type  ")),
 		sftest.SiviParentEdit(t, parent, "GIS_BGC_VER", vprotest.MetadataInteger("-32768")),
@@ -52,7 +50,7 @@ func TestTwoPageEntryOneAtomicWriteHistoryAndRestoration(t *testing.T) {
 			if err := db.QueryRow(`SELECT Proposal FROM `+vprocore.QuoteHeaderIdentifier(history.Table)+` WHERE ID=?`, written.HistoryID).Scan(&proposal); err != nil {
 				t.Fatal(err)
 			}
-			var event sourceform.SiviParentHistory
+			var event sourceform.SourceParentHistory
 			if err := json.Unmarshal([]byte(proposal), &event); err != nil || len(event.Changes) != 3 || !reflect.DeepEqual(event.Original, parent) {
 				t.Fatal("whole-entry history split or lost source identity", event, err)
 			}
@@ -94,7 +92,7 @@ func TestTwoPageEntryOneAtomicWriteHistoryAndRestoration(t *testing.T) {
 					t.Fatal("complete-entry restoration changed physical parents", table)
 				}
 			}
-			for _, domain := range []func(string) (sourceform.SiviParentHistoryDomain, error){twopage.TwoPageParentExtraHistory, twopage.TwoPageParentCommonHistory} {
+			for _, domain := range []func(string) (sourceform.SourceParentHistoryDomain, error){twopage.TwoPageParentExtraHistory, twopage.TwoPageParentCommonHistory} {
 				separate, err := domain(form)
 				if err != nil {
 					t.Fatal(err)
@@ -115,7 +113,7 @@ func TestTwoPageEntryCancellationAndVariantHistoryIsolation(t *testing.T) {
 	before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 	ctx, cancel := context.WithCancel(context.Background())
 	if got, err := twopage.WriteTwoPageEntry(contexts, ctx, state.ContextID, parent.Plot, parent.Form, parent, edits, false,
-		func(*sql.Tx, *sourceform.SiviParentProjection, []sourceform.SiviParentScalarAssignment) error {
+		func(*sql.Tx, *sourceform.SourceParentProjection, []sourceform.SourceParentScalarAssignment) error {
 			cancel()
 			return ctx.Err()
 		}); !errors.Is(err, context.Canceled) || got != nil {
@@ -157,7 +155,7 @@ func TestTwoPageEntryMasterAuthorityUsesCurrentOwnedUserForWriteAndRestore(t *te
 	}
 	vprotest.AssertProfileSUFiles(t, contexts, before)
 	written, err := twopage.WriteTwoPageEntry(contexts, context.Background(), state.ContextID, parent.Plot, parent.Form,
-		parent, edits, true, func(tx *sql.Tx, original *sourceform.SiviParentProjection, assignments []sourceform.SiviParentScalarAssignment) error {
+		parent, edits, true, func(tx *sql.Tx, original *sourceform.SourceParentProjection, assignments []sourceform.SourceParentScalarAssignment) error {
 			setUser("ordinary user")
 			return twoPageEntryApprovePhysical(tx, original, assignments)
 		})
@@ -216,7 +214,7 @@ func TestTwoPageEntryApprovalStalenessRollbackAndNoPhantomHistory(t *testing.T) 
 	}
 	denied := errors.New("reference decision denied")
 	if got, err := twopage.WriteTwoPageEntry(contexts, context.Background(), state.ContextID, parent.Plot, parent.Form,
-		parent, edits, false, func(*sql.Tx, *sourceform.SiviParentProjection, []sourceform.SiviParentScalarAssignment) error {
+		parent, edits, false, func(*sql.Tx, *sourceform.SourceParentProjection, []sourceform.SourceParentScalarAssignment) error {
 			return denied
 		}); !errors.Is(err, denied) || got != nil {
 		t.Fatal("rejected source approval committed or hid its error", got, err)
@@ -248,7 +246,7 @@ func TestTwoPageEntryApprovalStalenessRollbackAndNoPhantomHistory(t *testing.T) 
 	before = vprotest.TwoPageWriteTables(t, db)
 	calls := 0
 	if got, err := twopage.WriteTwoPageEntry(contexts, context.Background(), state.ContextID, parent.Plot, parent.Form,
-		parent, edits, false, func(*sql.Tx, *sourceform.SiviParentProjection, []sourceform.SiviParentScalarAssignment) error {
+		parent, edits, false, func(*sql.Tx, *sourceform.SourceParentProjection, []sourceform.SourceParentScalarAssignment) error {
 			calls++
 			return nil
 		}); err == nil || got != nil || calls != 0 {

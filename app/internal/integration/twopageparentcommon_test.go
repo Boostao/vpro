@@ -1,14 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/twopage"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,12 +8,18 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/twopage"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-func twoPageCommonEdits(t *testing.T, parent *sourceform.SiviParentProjection) []sourceform.SiviParentScalarEdit {
+func twoPageCommonEdits(t *testing.T, parent *sourceform.SourceParentProjection) []sourceform.SourceParentScalarEdit {
 	t.Helper()
 	values := vprotest.TwoPageCommonValues()
-	edits := []sourceform.SiviParentScalarEdit{}
+	edits := []sourceform.SourceParentScalarEdit{}
 	for _, binding := range parent.Bindings {
 		if _, exists := values[binding.Binding]; !exists {
 			continue
@@ -127,14 +125,14 @@ func TestTwoPageParentCommonTypedThresholdsAndHistoricalOmission(t *testing.T) {
 		}
 		for _, value := range valid {
 			edit.Value = value
-			got, err := twopage.PlanTwoPageParentCommonProjection(context.Background(), parent, []sourceform.SiviParentScalarEdit{edit})
+			got, err := twopage.PlanTwoPageParentCommonProjection(context.Background(), parent, []sourceform.SourceParentScalarEdit{edit})
 			if err != nil || got == nil {
 				t.Fatal("valid common domain rejected", column, value, got, err)
 			}
 		}
 		for _, value := range invalid {
 			edit.Value = value
-			if got, err := twopage.PlanTwoPageParentCommonProjection(context.Background(), parent, []sourceform.SiviParentScalarEdit{edit}); err == nil || got != nil {
+			if got, err := twopage.PlanTwoPageParentCommonProjection(context.Background(), parent, []sourceform.SourceParentScalarEdit{edit}); err == nil || got != nil {
 				t.Fatal("invalid common value became a plan", column, value, got, err)
 			}
 		}
@@ -146,7 +144,7 @@ func TestTwoPageParentCommonTypedThresholdsAndHistoricalOmission(t *testing.T) {
 			}
 		}
 		binding.Expected = historical
-		got, err := twopage.PlanTwoPageParentCommonProjection(context.Background(), parent, []sourceform.SiviParentScalarEdit{binding})
+		got, err := twopage.PlanTwoPageParentCommonProjection(context.Background(), parent, []sourceform.SourceParentScalarEdit{binding})
 		if err != nil || got == nil || len(got) != 0 {
 			t.Fatal("historical invalid common storage reassigned", column, got, err)
 		}
@@ -171,7 +169,7 @@ func TestTwoPageParentCommonOwnedAuditsRestorationAndScopeIsolation(t *testing.T
 			if err := db.QueryRow(`SELECT Proposal FROM `+vprocore.QuoteHeaderIdentifier(history.Table)+` WHERE ID=?`, written.HistoryID).Scan(&proposal); err != nil {
 				t.Fatal(err)
 			}
-			var event sourceform.SiviParentHistory
+			var event sourceform.SourceParentHistory
 			if err := json.Unmarshal([]byte(proposal), &event); err != nil || len(event.Changes) != len(edits) || !reflect.DeepEqual(event.Original, parent) {
 				t.Fatal("common history lost exact original or assignment scope", err)
 			}

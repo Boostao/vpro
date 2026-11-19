@@ -1,14 +1,7 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/spatial"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
-
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -19,6 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/boostao/vpro/app/internal/spatial"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/mattn/go-sqlite3"
 	"go.yaml.in/yaml/v3"
 )
@@ -88,6 +84,7 @@ func TestTwoPageGoogleEarthOptionsPersistenceErrorAndRetry(t *testing.T) {
 	if got, err := service.GetOptions(context.Background(), state.ContextID, "108050", "FS882-8x6XL"); err != nil || got == nil {
 		t.Fatal("corrected saved options could not retry", err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if got, err := service.GetOptions(nil, state.ContextID, "108050", "FS882-8x6XL"); err == nil || got != nil {
 		t.Fatal("nil source-options context accepted", got, err)
 	}

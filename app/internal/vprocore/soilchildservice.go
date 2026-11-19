@@ -1,16 +1,14 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"reflect"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type SoilTextUpdate struct {
@@ -65,7 +63,7 @@ func (update *SoilRecordUpdate) UnmarshalJSON(data []byte) error {
 	}
 	for _, name := range []string{"id", "kind"} {
 		if value, present := properties[name]; !present || string(value) == "null" {
-			return errors.New("soil draft requires an explicit kind and signed32 identity")
+			return errors.New("soil draft requires an explicit layer type and record ID")
 		}
 	}
 	return json.Unmarshal(data, (*plain)(update))
@@ -97,7 +95,7 @@ func (s *PlotService) UpdateSoilRecords(plot string, updates []SoilRecordUpdate)
 		if update.Kind != "Humus" && update.Kind != "Mineral" {
 			return fmt.Errorf("unsupported soil draft kind %q", update.Kind)
 		}
-		patch := ChildRecordPatch{Kind: update.Kind, Id: update.ID, Cells: map[string]ChildExpectedValue{}}
+		patch := ChildRecordPatch{Kind: update.Kind, ID: update.ID, Cells: map[string]ChildExpectedValue{}}
 		for property, change := range update.Text {
 			patch.Cells[property] = ChildExpectedValue{OtherNullable(change.Expected), OtherNullable(change.Value), reflect.String}
 		}
@@ -187,7 +185,7 @@ func (s *PlotService) UpdateSoilRecords(plot string, updates []SoilRecordUpdate)
 						}
 					}
 					if err := ValidateSoilHorizonDepthSign(kind, effHorizon, effUpper, effLower); err != nil {
-						return fmt.Errorf("%s identity (%q, %d): %w", kind, plot, id, err)
+						return fmt.Errorf("%s layer (Plot %s): %w", kind, plot, err)
 					}
 				}
 				if checkCF {
@@ -216,7 +214,7 @@ func (s *PlotService) UpdateSoilRecords(plot string, updates []SoilRecordUpdate)
 					effS := resolveInt(curS, "percentCoarseFragsStones")
 					effTot := resolveInt(curTot, "percentCoarseFragsTotal")
 					if err := ValidateMineralCoarseFragments(effG, effC, effS, effTot); err != nil {
-						return fmt.Errorf("%s identity (%q, %d): %w", kind, plot, id, err)
+						return fmt.Errorf("%s layer (Plot %s): %w", kind, plot, err)
 					}
 				}
 				return nil

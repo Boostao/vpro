@@ -1,11 +1,6 @@
 package sivi
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -18,12 +13,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const siviCreationUndoTable = "__VPRO_SIVICreationUndoHistory"
 const siviCreationUndoSQL = `CREATE TABLE "__VPRO_SIVICreationUndoHistory"(RequestID TEXT NOT NULL PRIMARY KEY,CreationID TEXT NOT NULL UNIQUE,Created TEXT NOT NULL,Proposal TEXT NOT NULL)`
 
-type siviCreationUndoRequest struct {
+type SIVICreationUndoRequest struct {
 	RequestID string                      `json:"requestId"`
 	ContextID string                      `json:"contextId"`
 	Project   string                      `json:"project"`
@@ -33,7 +31,9 @@ type siviCreationUndoRequest struct {
 	Expected  string                      `json:"expected"`
 }
 
-func (request *siviCreationUndoRequest) UnmarshalJSON(data []byte) error {
+type siviCreationUndoRequest = SIVICreationUndoRequest
+
+func (request *SIVICreationUndoRequest) UnmarshalJSON(data []byte) error {
 	keys := []string{"requestId", "contextId", "project", "plot", "historyId", "action", "expected"}
 	properties, err := sourceform.SourceChildJSONObject(data, "SIVI creation Undo", keys, nil)
 	if err != nil {
@@ -150,7 +150,7 @@ func validateSIVICreationUndoCreation(ctx context.Context, history sourceform.Si
 		{Name: "BeforeEdit", DeclaredType: "MEMO"}, {Name: "AfterEdit", DeclaredType: "MEMO"},
 		{Name: "Restore", DeclaredType: "BOOLEAN"}, {Name: "Flag", DeclaredType: "BOOLEAN"}, {Name: "ID", DeclaredType: "LONG"},
 	}
-	audit, err := sourceform.AppendSIVIPlannedAudits(vprocore.ProjectMetadataTable{Columns: auditColumns}, history.Audits)
+	audit, err := sourceform.AppendSourcePlannedAudits(vprocore.ProjectMetadataTable{Columns: auditColumns}, history.Audits)
 	if err != nil {
 		return err
 	}
@@ -165,12 +165,12 @@ func validateSIVICreationUndoCreation(ctx context.Context, history sourceform.Si
 	ledger := vprocore.ProjectMetadataTable{
 		Columns: []vprocore.ProjectMetadataColumn{{Name: "ChildTable", DeclaredType: "TEXT"}, {Name: "ID", DeclaredType: "INTEGER"}},
 		Rows: []vprocore.ProjectMetadataRow{{RowID: "1", Cells: []vprocore.ProjectMetadataCell{
-			sourceform.SiviCreationText(vprocore.QuoteHeaderIdentifier(request.Project + "_Veg")), sourceform.SiviCreationInteger(strconv.FormatInt(history.Result.ID, 10)),
+			sourceform.SourceCreationText(vprocore.QuoteHeaderIdentifier(request.Project + "_Veg")), sourceform.SiviCreationInteger(strconv.FormatInt(history.Result.ID, 10)),
 		}}},
 	}
 	if len(request.Covers) != 0 {
 		return sourceform.VerifySIVICreationHistory(ctx, request, history, map[string]vprocore.ProjectMetadataTable{
-			request.Project + "_Veg": veg, request.Project + "_Audit": audit, sourceform.SiviIdentityLedger: ledger,
+			request.Project + "_Veg": veg, request.Project + "_Audit": audit, sourceform.SourceIdentityLedger: ledger,
 		})
 	}
 	// An all-NULL historical creation must itself own complete canonical all44
@@ -197,8 +197,8 @@ func validateSIVICreationUndoCreation(ctx context.Context, history sourceform.Si
 	}
 	original.Cells[columns["Flag"]] = sourceform.SiviCreationInteger("0")
 	committed := vprocore.ProjectMetadataRow{RowID: history.Result.RowID, Cells: append([]vprocore.ProjectMetadataCell{}, original.Cells...)}
-	committed.Cells[columns["PlotNumber"]] = sourceform.SiviCreationText(request.Plot)
-	committed.Cells[columns["Species"]] = sourceform.SiviCreationText(request.Species)
+	committed.Cells[columns["PlotNumber"]] = sourceform.SourceCreationText(request.Plot)
+	committed.Cells[columns["Species"]] = sourceform.SourceCreationText(request.Species)
 	committed.Cells[columns["ID"]] = sourceform.SiviCreationInteger(strconv.FormatInt(history.Result.ID, 10))
 	if !reflect.DeepEqual(original, history.Original) || !reflect.DeepEqual(committed, history.Committed) {
 		return errors.New("SIVI creation Undo historical NULL creation is not its complete typed buffer")
@@ -318,7 +318,7 @@ func validateSIVICreationUndoHistory(ctx context.Context, history siviCreationUn
 		return errors.New("SIVI creation Undo timestamp differs")
 	}
 	before := vprocore.ProjectMetadataTable{Columns: history.AuditColumns, Rows: history.AuditsBefore}
-	if _, err := sourceform.AppendSIVIPlannedAudits(vprocore.ProjectMetadataTable{Columns: history.AuditColumns}, nil); err != nil {
+	if _, err := sourceform.AppendSourcePlannedAudits(vprocore.ProjectMetadataTable{Columns: history.AuditColumns}, nil); err != nil {
 		return err
 	}
 	if len(before.Rows) != len(creation.Audits) {
@@ -425,7 +425,7 @@ func siviCreationUndoReviewFromTables(ctx context.Context, contextID, project, p
 		return nil, sourceform.SiviCreationHistory{}, err
 	}
 	audit := tables[project+"_Audit"]
-	if _, err := sourceform.AppendSIVIPlannedAudits(vprocore.ProjectMetadataTable{Columns: audit.Columns}, nil); err != nil {
+	if _, err := sourceform.AppendSourcePlannedAudits(vprocore.ProjectMetadataTable{Columns: audit.Columns}, nil); err != nil {
 		return nil, sourceform.SiviCreationHistory{}, err
 	}
 	rows := []vprocore.ProjectMetadataRow{}
@@ -501,7 +501,7 @@ func verifySIVICreationUndoReplay(ctx context.Context, request siviCreationUndoR
 		for _, actual := range audit.Rows {
 			if actual.RowID == original.RowID {
 				if !retained || !reflect.DeepEqual(actual, expected) {
-					return errors.New("SIVI creation Undo retained/pruned source audit changed or rowID was reused")
+					return errors.New("SIVI creation Undo retained/pruned source audit changed or record reference changed")
 				}
 				found = true
 			}
@@ -610,7 +610,7 @@ func LookupSIVICreationUndoReceipt(s *vprocore.ContextService, ctx context.Conte
 	})
 }
 
-// Exact owned creation Undo is a desktop safety adaptation. It never inherits
+// UndoSIVICreation — Exact owned creation Undo is a desktop safety adaptation. It never inherits
 // Access's absent-row/Cover skips or destructive whole-plot CleanVegPlot.
 func UndoSIVICreation(s *vprocore.ContextService, ctx context.Context, contextID string, request siviCreationUndoRequest) (*siviCreationUndoResult, error) {
 	if s == nil || ctx == nil {
@@ -756,7 +756,7 @@ func UndoSIVICreation(s *vprocore.ContextService, ctx context.Context, contextID
 					{Name: "Created", DeclaredType: "TEXT"}, {Name: "Proposal", DeclaredType: "TEXT"}}
 			}
 			historyPlan.Rows = append(append([]vprocore.ProjectMetadataRow{}, historyPlan.Rows...), vprocore.ProjectMetadataRow{RowID: strconv.FormatInt(rowID, 10),
-				Cells: []vprocore.ProjectMetadataCell{sourceform.SiviCreationText(request.RequestID), sourceform.SiviCreationText(request.HistoryID), sourceform.SiviCreationText(history.When), sourceform.SiviCreationText(string(raw))}})
+				Cells: []vprocore.ProjectMetadataCell{sourceform.SourceCreationText(request.RequestID), sourceform.SourceCreationText(request.HistoryID), sourceform.SourceCreationText(history.When), sourceform.SourceCreationText(string(raw))}})
 			observed, err = vprocore.EnvironmentSiteUnitTables(ctx, tx)
 			if err != nil {
 				return nil, false, err

@@ -1,20 +1,18 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/classification"
-	"github.com/boostao/vpro/app/internal/plotentry"
-	"github.com/boostao/vpro/app/internal/validation"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/classification"
+	"github.com/boostao/vpro/app/internal/plotentry"
+	"github.com/boostao/vpro/app/internal/validation"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestContextServiceRejectsStaleReadsEveryMutationAndLegacyBypass(t *testing.T) {

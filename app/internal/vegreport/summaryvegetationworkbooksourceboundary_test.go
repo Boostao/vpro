@@ -1,15 +1,13 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"database/sql"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSummaryWorkbookOwnedSourceOptionalTables(t *testing.T) {
@@ -57,6 +55,7 @@ func TestSummaryWorkbookOwnedSourceMalformedPeerAndReadErrorRetry(t *testing.T) 
 func TestSummaryWorkbookOwnedSourceContextAndOptionAdmission(t *testing.T) {
 	service, state := summaryEnvironmentalLifeformServiceFixture(t, false)
 	options := summaryVegetationWorkbookOptions{Average: 1, Display: 6}
+	//lint:ignore SA1012 intentional nil-context guard test
 	got, err := readSummaryVegetationWorkbookSource(nil, service, nil, nil, nil, state.ContextID, options)
 	if err == nil || !reflect.DeepEqual(got, summaryVegetationWorkbookSource{}) {
 		t.Fatal("nil request context admitted", err)

@@ -48,6 +48,7 @@ export type {
     ProjectMetadataRow,
     ProjectMetadataTable,
     ProjectState,
+    ReportPreferenceOutcome,
     SUInfo,
     ScopedPlotLookup,
     ScopedPlotLookupResult,

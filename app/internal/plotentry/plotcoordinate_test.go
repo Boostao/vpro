@@ -1,13 +1,11 @@
 package plotentry
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestPlotCoordinate_DerivedSavePreservesUntouchedAxisAndAuditsOnlyChangedField(t *testing.T) {

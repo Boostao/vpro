@@ -1,17 +1,15 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/resources"
-	_ "github.com/mattn/go-sqlite3"
+
 	"os"
 	"path/filepath"
 	"regexp"
@@ -19,6 +17,8 @@ import (
 	"slices"
 	"strings"
 	"sync"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var SampleFiles = resources.SampleFiles
@@ -377,16 +377,16 @@ func (service *ProjectService) DiscoverSUsContext(ctx context.Context, project P
 		return nil, err
 	}
 	defer database.Close()
-	reader := sqlutil.ContextPlotDB{Db: database, Ctx: ctx}
+	reader := sqlutil.ContextPlotDB{DB: database, Ctx: ctx}
 	rows, err := reader.Query("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '%_SU'")
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	names := []string{}
 	for rows.Next() {
 		var table string
 		if err := rows.Scan(&table); err != nil {
-			rows.Close()
 			return nil, err
 		}
 		if name, ok := strings.CutSuffix(table, "_SU"); ok && ProjectNamePattern.MatchString(name) {
@@ -394,7 +394,6 @@ func (service *ProjectService) DiscoverSUsContext(ctx context.Context, project P
 		}
 	}
 	err = rows.Err()
-	rows.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -420,21 +419,22 @@ func (service *ProjectService) DiscoverSUsContext(ctx context.Context, project P
 			return nil, err
 		}
 		valid := map[string]bool{}
-		for fields.Next() {
-			var index, notNull, primaryKey int
-			var field, fieldType string
-			var defaultValue sql.NullString
-			if err := fields.Scan(&index, &field, &fieldType, &notNull, &defaultValue, &primaryKey); err != nil {
-				fields.Close()
-				return nil, err
+		if scanErr := func() error {
+			defer fields.Close()
+			for fields.Next() {
+				var index, notNull, primaryKey int
+				var field, fieldType string
+				var defaultValue sql.NullString
+				if err := fields.Scan(&index, &field, &fieldType, &notNull, &defaultValue, &primaryKey); err != nil {
+
+					return err
+				}
+				upper := strings.ToUpper(fieldType)
+				valid[field] = strings.Contains(upper, "CHAR") || strings.Contains(upper, "CLOB") || strings.Contains(upper, "TEXT")
 			}
-			upper := strings.ToUpper(fieldType)
-			valid[field] = strings.Contains(upper, "CHAR") || strings.Contains(upper, "CLOB") || strings.Contains(upper, "TEXT")
-		}
-		err = fields.Err()
-		fields.Close()
-		if err != nil {
-			return nil, err
+			return fields.Err()
+		}(); scanErr != nil {
+			return nil, scanErr
 		}
 		su.Compatible = valid["PlotNumber"] && valid["SiteUnit"] && (su.Kind == "ordinary" || su.Kind == "working")
 		sus = append(sus, su)
@@ -448,22 +448,21 @@ func InspectFileContext(ctx context.Context, path string) ([]ProjectInfo, error)
 		return nil, err
 	}
 	defer database.Close()
-	reader := sqlutil.ContextPlotDB{Db: database, Ctx: ctx}
+	reader := sqlutil.ContextPlotDB{DB: database, Ctx: ctx}
 	rows, err := reader.Query("SELECT name FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'")
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	tables := make(map[string]bool)
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			rows.Close()
 			return nil, err
 		}
 		tables[name] = true
 	}
 	err = rows.Err()
-	rows.Close()
 	if err != nil {
 		return nil, err
 	}

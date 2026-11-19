@@ -1,11 +1,6 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"encoding/json"
@@ -13,6 +8,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestProjectProfileSpeciesPresenceServiceOwnerGuards(t *testing.T) {
@@ -123,6 +121,7 @@ func TestProjectProfileSpeciesPresenceServiceWireAndRefusals(t *testing.T) {
 	if result, err := service.Preview(cancelled, state.ContextID, string(wire)); !errors.Is(err, context.Canceled) || result != nil {
 		t.Fatal("cancelled request was not zeroed", result, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if result, err := service.Preview(nil, state.ContextID, string(wire)); err == nil || result != nil {
 		t.Fatal("nil request context accepted", result, err)
 	}

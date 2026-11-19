@@ -1,11 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -17,6 +12,9 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 type summaryClassExpected struct {

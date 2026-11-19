@@ -1,16 +1,14 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"reflect"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SIVISpeciesEdit struct {
@@ -55,7 +53,7 @@ func siviSpeciesRowsJSON(data []byte) error {
 	return SourceChildRowsJSON(data, "Species")
 }
 
-func SiviSpeciesTableJSON(data []byte) error {
+func SourceSpeciesTableJSON(data []byte) error {
 	properties, err := siviSpeciesObject(data, []string{"columns", "rows"}, nil)
 	if err != nil {
 		return err
@@ -124,7 +122,7 @@ func (references *SIVISpeciesReferences) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	for _, name := range []string{"master", "personal"} {
-		if err := SiviSpeciesTableJSON(properties[name]); err != nil {
+		if err := SourceSpeciesTableJSON(properties[name]); err != nil {
 			return err
 		}
 	}
@@ -137,7 +135,7 @@ func (references *SIVISpeciesReferences) UnmarshalJSON(data []byte) error {
 		table    vprocore.ProjectMetadataTable
 		personal bool
 	}{{decoded.Master, false}, {decoded.Personal, true}} {
-		projected, err := ProjectSIVISpeciesDefinitions(context.Background(), source.table, source.personal)
+		projected, err := ProjectSourceSpeciesDefinitions(context.Background(), source.table, source.personal)
 		if err != nil {
 			return err
 		}
@@ -214,7 +212,7 @@ func (s *SIVISpeciesService) GetOriginal(ctx context.Context, contextID, plot st
 }
 
 func readSIVISpeciesReferences(ctx context.Context, db vprocore.ProjectMetadataQueryer, contextID, project, plot, masterAlias, personalAlias string) (SIVISpeciesReferences, error) {
-	return ReadPhysicalSpeciesReferences(ctx, db, contextID, project, plot, masterAlias, personalAlias, ProjectSIVISpeciesDefinitions)
+	return ReadPhysicalSpeciesReferences(ctx, db, contextID, project, plot, masterAlias, personalAlias, ProjectSourceSpeciesDefinitions)
 }
 
 func ReadPhysicalSpeciesReferences(ctx context.Context, db vprocore.ProjectMetadataQueryer, contextID, project, plot, masterAlias, personalAlias string,

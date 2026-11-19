@@ -363,27 +363,27 @@ test('public SDK registry routes only distinct project APIs using production-Go 
     GetLongVegetationReportScope:context=>{assert.equal(context,owner.contextId);return cancellable('scope',input.review.scope);},
     GetLongVegetationProjectFieldDefinitions:()=>cancellable('catalogue',{...scopeWire[0].catalogue,revision:input.review.scope.revision}),
     GetLongVegetationProjectUnitPreferences:(context,request)=>{
-      calls.push(['units',context,JSON.parse(request)]);
+      calls.push(['units',context,structuredClone(request)]);
       return cancellable('units',{scope:input.review.scope,preferences:{...owner,values:{unitGroups:saved},
         availability:{siteUnitTable:false,selectedFields:true,none:false}}});
     },
     SaveLongVegetationProjectUnits:(context,request)=>{
-      calls.push(['save',context,JSON.parse(request)]);saved=JSON.parse(request).proposed.unitGroups;
+      calls.push(['save',context,structuredClone(request)]);saved=request.proposed.unitGroups;
       return cancellable('save',{sourceKind:input.review.scope.sourceKind,revision:input.review.scope.revision,
         outcome:{contextId:context,changed:true,committed:true,errorMessage:''}});
     },
     GetLongVegetationProjectOptions:(context,request)=>{
-      calls.push(['options',context,JSON.parse(request)]);
+      calls.push(['options',context,structuredClone(request)]);
       return cancellable('options',{scope:input.review.scope,options:{...owner,settings:input.review.preview.settings}});
     },
     PreviewLongVegetationProject:(context,request)=>{
-      calls.push(['preview',context,JSON.parse(request)]);
+      calls.push(['preview',context,structuredClone(request)]);
       return cancellable('preview',{scope:input.review.scope,preview:input.review.preview});
     },
   };
   const workbookService={
-    GetReview:(context,request)=>{calls.push(['review',context,JSON.parse(request)]);return cancellable('review',input.review);},
-    ExportReviewed:(context,request)=>{calls.push(['publish',context,JSON.parse(request)]);return cancellable('publish',input.outcome);},
+    GetReview:(context,request)=>{calls.push(['review',context,structuredClone(request)]);return cancellable('review',input.review);},
+    ExportReviewed:(context,request)=>{calls.push(['publish',context,structuredClone(request)]);return cancellable('publish',input.outcome);},
   };
   const registry=sdkRegistry({
     VegetationReportService:{
@@ -415,10 +415,9 @@ test('actual public SDK read ownership cancels getter requests but never an issu
     GetLongVegetationReportScope:()=>cancellable('scope',Promise.resolve(state)),
     GetLongVegetationProjectFieldDefinitions:()=>cancellable('catalogue',Promise.resolve({
       ...scopeWire[0].catalogue,sourceKind:state.sourceKind,revision:state.revision})),
-    SetLongVegetationReportScope:(context,raw)=>{
-      const request=JSON.parse(raw);
+    SetLongVegetationReportScope:(context,request)=>{
       assert.equal(context,owner.contextId);
-      assert.deepEqual(request,{revision:'3',sourceKind:'selected-list'});
+      assert.deepEqual(JSON.parse(JSON.stringify(request)),{revision:'3',sourceKind:'selected-list'});
       state={...state,sourceKind:'selected-list',revision:'4',build:null,buildCurrent:false};
       return cancellable('switch',mutation.promise);
     },

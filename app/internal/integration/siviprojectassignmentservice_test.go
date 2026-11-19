@@ -1,14 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -17,14 +9,16 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-func siviPublicProjectAssignmentRequest(parent *sourceform.SiviParentProjection, selection sourceform.SiviProjectSelection) sourceform.SIVIProjectAssignmentWrite {
-	return sourceform.SIVIProjectAssignmentWrite{Original: parent, Selection: sourceform.SIVIProjectSelection{
-		ContextID: selection.ContextID, ControlID: selection.ControlID, Table: selection.Table, RowID: selection.RowID,
-		Expected: selection.Expected, SourceOption: selection.SourceOption, MetadataAlias: selection.MetadataAlias,
-		MetadataTable: selection.MetadataTable, MetadataColumns: selection.MetadataColumns, MetadataOriginal: selection.MetadataOriginal,
-	}}
+func siviPublicProjectAssignmentRequest(parent *sourceform.SourceParentProjection, selection sourceform.SourceProjectSelectionInternal) sourceform.SIVIProjectAssignmentWrite {
+	return sourceform.SIVIProjectAssignmentWrite{Original: parent, Selection: sourceform.SourceProjectSelection(selection)}
 }
 
 func siviEnablePublicAssignment(*vprocore.ContextService) {}
@@ -199,7 +193,7 @@ func TestSIVIProjectAssignmentPublicTransportRequiresCompleteTokens(t *testing.T
 	})
 	checkRequired(selectionBody, []string{"contextId", "controlId", "table", "rowId", "expected", "sourceOption",
 		"metadataAlias", "metadataTable", "metadataColumns", "metadataOriginal"}, func(raw []byte) error {
-		var decoded sourceform.SIVIProjectSelection
+		var decoded sourceform.SourceProjectSelection
 		return json.Unmarshal(raw, &decoded)
 	})
 	for _, field := range []string{"name", "declaredType"} {
@@ -216,7 +210,7 @@ func TestSIVIProjectAssignmentPublicTransportRequiresCompleteTokens(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
-			var decoded sourceform.SIVIProjectSelection
+			var decoded sourceform.SourceProjectSelection
 			if err := json.Unmarshal(raw, &decoded); err == nil {
 				t.Fatal("projected column silently defaulted", field, column)
 			}
@@ -232,7 +226,7 @@ func TestSIVIProjectAssignmentPublicTransportRequiresCompleteTokens(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		var decoded sourceform.SIVIProjectSelection
+		var decoded sourceform.SourceProjectSelection
 		if err := json.Unmarshal(raw, &decoded); err == nil {
 			t.Fatal("selected physical row silently defaulted", row)
 		}

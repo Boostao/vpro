@@ -1,15 +1,13 @@
 package plotentry
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"errors"
 	"os"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSoilSuggestionsCanonicalFamilyNullableDuplicateMetadataAndCancellation(t *testing.T) {

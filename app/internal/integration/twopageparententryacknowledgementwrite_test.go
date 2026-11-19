@@ -1,6 +1,12 @@
 package integration
 
 import (
+	"context"
+	"database/sql"
+	"errors"
+	"reflect"
+	"testing"
+
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/sourceform/sftest"
 	"github.com/boostao/vpro/app/internal/twopage"
@@ -8,24 +14,16 @@ import (
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-import (
-	"context"
-	"database/sql"
-	"errors"
-	"reflect"
-	"testing"
-)
-
 func TestTwoPageEntryOptionalAcknowledgementActualCatalogueAtomicWriteAndRestore(t *testing.T) {
 	for _, form := range []string{"FS882-8x6XL", "FS882-8x6XL-CHARS"} {
 		contexts, state, db, parent, _ := twoPageWriteFixture(t, form, false)
 		readers := sftest.TwoPageEntryBorrowedReferenceReaders(t)
-		references := &sourceform.SIVIParentSharedService{References: readers}
+		references := &sourceform.SourceParentSharedService{References: readers}
 		fresh, err := vprocore.WithContextPlotRequest(context.Background(), contexts, state.ContextID,
-			func(plots *vprocore.PlotService) (sourceform.SIVIParentSharedReference, error) {
-				return vprocore.WithOwnedSIVISnapshot(context.Background(), plots, func(owner *vprocore.SqliteContext, tx *sql.Tx) (sourceform.SIVIParentSharedReference, error) {
+			func(plots *vprocore.PlotService) (sourceform.SourceParentSharedReference, error) {
+				return vprocore.WithOwnedSIVISnapshot(context.Background(), plots, func(owner *vprocore.SqliteContext, tx *sql.Tx) (sourceform.SourceParentSharedReference, error) {
 					return references.ReadReference(context.Background(), tx, "VLists",
-						sourceform.SiviParentSharedReferencePolicy{Column: "RealmClass", List: "RealmClass", Reader: "parent", Maximum: 5, Required: false},
+						sourceform.SourceParentSharedReferencePolicy{Column: "RealmClass", List: "RealmClass", Reader: "parent", Maximum: 5, Required: false},
 						vprocore.ProjectMetadataCell{Storage: "null"})
 				})
 			})
@@ -37,7 +35,7 @@ func TestTwoPageEntryOptionalAcknowledgementActualCatalogueAtomicWriteAndRestore
 				t.Fatal("independent unlisted test code became a listed source Item")
 			}
 		}
-		edits := []sourceform.SiviParentScalarEdit{
+		edits := []sourceform.SourceParentScalarEdit{
 			sftest.SiviParentEdit(t, parent, "FieldNumber", vprotest.MetadataText("  Literal field  ")),
 			sftest.SiviParentEdit(t, parent, "SV_PolygonNumber", vprotest.MetadataText("  Literal polygon  ")),
 			sftest.SiviParentEdit(t, parent, "GIS_BGC", vprotest.MetadataText("  Literal GIS  ")),
@@ -47,7 +45,7 @@ func TestTwoPageEntryOptionalAcknowledgementActualCatalogueAtomicWriteAndRestore
 		if err != nil {
 			t.Fatal(err)
 		}
-		var target *sourceform.SiviParentScalarAssignment
+		var target *sourceform.SourceParentScalarAssignment
 		for i := range assignments {
 			if assignments[i].Column == "RealmClass" {
 				target = &assignments[i]
@@ -59,8 +57,8 @@ func TestTwoPageEntryOptionalAcknowledgementActualCatalogueAtomicWriteAndRestore
 		acknowledgement := twopage.TwoPageEntryCodeAcknowledgementInternal{ContextID: parent.ContextID, Project: parent.Project,
 			Plot: parent.Plot, Form: parent.Form, Table: target.Table, RowID: target.RowID, Column: target.Column,
 			Expected: target.Before, Value: target.After, Reference: fresh}
-		reader := func(ctx context.Context, tx *sql.Tx, field twopage.TwoPageEntryReferenceField) (sourceform.SIVIParentSharedReference, error) {
-			return references.ReadReference(ctx, tx, "two_page_entry_refs", field.SiviParentSharedReferencePolicy,
+		reader := func(ctx context.Context, tx *sql.Tx, field twopage.TwoPageEntryReferenceField) (sourceform.SourceParentSharedReference, error) {
+			return references.ReadReference(ctx, tx, "two_page_entry_refs", field.SourceParentSharedReferencePolicy,
 				vprocore.ProjectMetadataCell{Storage: "null"})
 		}
 		before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
@@ -76,11 +74,11 @@ func TestTwoPageEntryOptionalAcknowledgementActualCatalogueAtomicWriteAndRestore
 			case "old catalogue":
 				acknowledgements[0].Reference.Source = "old source context"
 			case "read failure":
-				currentReader = func(context.Context, *sql.Tx, twopage.TwoPageEntryReferenceField) (sourceform.SIVIParentSharedReference, error) {
-					return sourceform.SIVIParentSharedReference{}, errors.New("independent reference read failed")
+				currentReader = func(context.Context, *sql.Tx, twopage.TwoPageEntryReferenceField) (sourceform.SourceParentSharedReference, error) {
+					return sourceform.SourceParentSharedReference{}, errors.New("independent reference read failed")
 				}
 			}
-			approve := func(tx *sql.Tx, observed *sourceform.SiviParentProjection, assignments []sourceform.SiviParentScalarAssignment) error {
+			approve := func(tx *sql.Tx, observed *sourceform.SourceParentProjection, assignments []sourceform.SourceParentScalarAssignment) error {
 				return twopage.ApproveTwoPageEntryOptionalReferences(context.Background(), tx, observed, assignments, acknowledgements, currentReader)
 			}
 			if got, err := twopage.WriteTwoPageEntryWithRequiredReferences(contexts, context.Background(), state.ContextID, parent.Plot,
@@ -90,7 +88,7 @@ func TestTwoPageEntryOptionalAcknowledgementActualCatalogueAtomicWriteAndRestore
 			vprotest.AssertProfileSUFiles(t, contexts, before)
 		}
 		originalTables := vprotest.TwoPageWriteTables(t, db)
-		approve := func(tx *sql.Tx, observed *sourceform.SiviParentProjection, assignments []sourceform.SiviParentScalarAssignment) error {
+		approve := func(tx *sql.Tx, observed *sourceform.SourceParentProjection, assignments []sourceform.SourceParentScalarAssignment) error {
 			return twopage.ApproveTwoPageEntryOptionalReferences(context.Background(), tx, observed, assignments,
 				[]twopage.TwoPageEntryCodeAcknowledgementInternal{acknowledgement}, reader)
 		}

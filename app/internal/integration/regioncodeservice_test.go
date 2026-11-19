@@ -1,12 +1,7 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/references"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -16,8 +11,10 @@ import (
 	"sync"
 	"testing"
 
-	"context"
 	"github.com/boostao/vpro/app/internal/listcatalog"
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestRegionCatalogueAll1640CellsShapeAndNativeOrder(t *testing.T) {

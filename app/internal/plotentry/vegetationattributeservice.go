@@ -1,15 +1,13 @@
 package plotentry
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"math"
 	"reflect"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type VegetationAttributeUpdate vprocore.HeightRecordUpdate
@@ -50,7 +48,7 @@ func UpdateVegetationAttributes(s *vprocore.PlotService, plot string, updates []
 		if len(update.Values) == 0 || len(update.Values) != len(update.Expected) {
 			return errors.New("vegetation attributes require nonempty matching values/expected keys")
 		}
-		patch := vprocore.ChildRecordPatch{Kind: "Veg", Id: update.ID, Cells: map[string]vprocore.ChildExpectedValue{}}
+		patch := vprocore.ChildRecordPatch{Kind: "Veg", ID: update.ID, Cells: map[string]vprocore.ChildExpectedValue{}}
 		for property, number := range update.Values {
 			expected, present := update.Expected[property]
 			if !vegetationAttributeProperties[property] || !present {
@@ -72,7 +70,11 @@ func UpdateVegetationAttributes(s *vprocore.PlotService, plot string, updates []
 }
 
 func CtxUpdateVegetationAttributes(s *vprocore.ContextService, contextID, plot string, updates []VegetationAttributeUpdate) error {
-	return s.Edit(contextID, func(plots *vprocore.PlotService) error { return UpdateVegetationAttributes(plots, plot, updates) })
+	return CtxUpdateVegetationAttributesContext(s, context.Background(), contextID, plot, updates)
+}
+
+func CtxUpdateVegetationAttributesContext(s *vprocore.ContextService, ctx context.Context, contextID, plot string, updates []VegetationAttributeUpdate) error {
+	return vprocore.EditContext(ctx, s, contextID, func(plots *vprocore.PlotService) error { return UpdateVegetationAttributes(plots, plot, updates) })
 }
 
 func ListVegetationAttributeSuggestions(s *vprocore.ContextService, ctx context.Context, contextID string) ([]SoilSuggestion, error) {

@@ -1,4 +1,4 @@
-import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
+import { VegetationReportService, type SummaryVegetationFieldListRequest } from '../../bindings/github.com/boostao/vpro/app';
 import { fieldListJSON, fieldListOwner, validateFieldListReview, type FieldListOwner, type FieldListRead,
   type FieldListReview, type SummaryVegetationFieldListSession } from './summaryVegetationFieldList';
 import { fieldListRegistry } from './summaryVegetationFieldListSessions';
@@ -37,6 +37,14 @@ export function fieldListDesktop(port: FieldListDesktopPort, uuid?: () => string
     state: FieldListDesktopState; generation: number; pending: FieldListRead<unknown> | null;
     seed: FieldListReview | null; bootstrapDispatches: number; established: boolean;
   }>();
+  const host = globalThis as typeof globalThis & { __vproContextDisposers?: Set<(id: string) => void> };
+  (host.__vproContextDisposers ??= new Set()).add(id => {
+    for (const [k, item] of contexts.entries()) {
+      if (item.state.context.contextId === id && !item.state.readBusy && item.bootstrapDispatches === 0) {
+        contexts.delete(k);
+      }
+    }
+  });
   const listeners = new Set<() => void>();
   const changed = () => { for (const listener of listeners) listener(); };
   const registry = fieldListRegistry(owner => ({
@@ -162,6 +170,6 @@ export function fieldListDesktop(port: FieldListDesktopPort, uuid?: () => string
 
 export const summaryVegetationFieldListDesktop = fieldListDesktop({
   read: id => VegetationReportService.GetSummaryVegetationFieldList(id),
-  save: (id, json) => VegetationReportService.SaveSummaryVegetationFieldList(id, json),
+  save: (id, json) => VegetationReportService.SaveSummaryVegetationFieldList(id, JSON.parse(json) as SummaryVegetationFieldListRequest),
   validationYield: () => new Promise(resolve => setTimeout(resolve, 0)),
 });

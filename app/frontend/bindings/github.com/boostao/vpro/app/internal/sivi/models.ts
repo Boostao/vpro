@@ -63,6 +63,16 @@ export type SIVICreationResult = sourceform$0.SiviCreationResult;
 
 export type SIVICreationUndoHistoryList = siviCreationUndoHistoryList;
 
+export interface SIVICreationUndoRequest {
+    "requestId": string;
+    "contextId": string;
+    "project": string;
+    "plot": string;
+    "historyId": string;
+    "action": vprocore$0.AuditRestoreAction;
+    "expected": string;
+}
+
 export type SIVICreationUndoResult = siviCreationUndoResult;
 
 export type SIVICreationUndoReview = siviCreationUndoReview;
@@ -95,7 +105,7 @@ export interface SIVIParentActionSaveResult {
 }
 
 export interface SIVIParentActionWrite {
-    "original": sourceform$0.SIVIParentProjection | null;
+    "original": sourceform$0.SourceParentProjection | null;
     "actions": SIVIParentActionInput[] | null;
 }
 
@@ -139,15 +149,7 @@ export interface siviCreationUndoHistoryList {
     "events": siviCreationUndoHistoryEvent[] | null;
 }
 
-export interface siviCreationUndoRequest {
-    "requestId": string;
-    "contextId": string;
-    "project": string;
-    "plot": string;
-    "historyId": string;
-    "action": vprocore$0.AuditRestoreAction;
-    "expected": string;
-}
+export type siviCreationUndoRequest = SIVICreationUndoRequest;
 
 export interface siviCreationUndoResult {
     "requestId": string;

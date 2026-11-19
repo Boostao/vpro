@@ -1,14 +1,12 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func RequireTwoPageChildReadScope(ctx context.Context, tx *sql.Tx, project, table, plot, child string) error {

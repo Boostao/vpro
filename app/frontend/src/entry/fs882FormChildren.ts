@@ -44,6 +44,19 @@ import {
   type FS882ChildCapabilities,
 } from './fs882FormHelpers';
 
+function formatChildErrorMessage(cause: unknown): string {
+  let msg = cause instanceof Error ? cause.message : String(cause ?? '');
+  while (/^(?:RuntimeError|Error):\s*/i.test(msg)) {
+    msg = msg.replace(/^(?:RuntimeError|Error):\s*/i, '');
+  }
+  msg = msg.replace(
+    /\b(Humus|Mineral|Veg|Other)\s+identity\s+\("([^"]+)",\s*-?\d+\):\s*/g,
+    '$1 layer (Plot $2): ',
+  );
+  msg = msg.replace(/\b(Humus|Mineral|Veg|Other)\.([A-Za-z0-9_]+)\b/g, '$1 $2');
+  return msg.trim() || 'Unexpected error';
+}
+
 export interface ChildOperationContext {
   busy: boolean;
   headerWorkflowBusy: boolean;
@@ -109,7 +122,7 @@ export async function cancelChildDraftsImpl(params: {
     params.setSuccess(params.successMessage);
   } catch (cause) {
     params.invalidateCapabilities();
-    params.setError(`${params.reloadErrorMessage}: ${String(cause)}`);
+    params.setError(`${params.reloadErrorMessage}: ${formatChildErrorMessage(cause)}`);
   } finally {
     params.setBusy(false);
   }
@@ -155,10 +168,11 @@ export async function saveChildDraftsImpl(params: {
     params.setSuccess(params.buildSuccessMessage());
   } catch (cause) {
     if (committed) params.invalidateCapabilities();
+    const detail = formatChildErrorMessage(cause);
     params.setError(
       committed
-        ? `${params.committedRefreshPrefix}: ${String(cause)}`
-        : `${params.failedPrefix}: ${String(cause)}`,
+        ? `${params.committedRefreshPrefix}: ${detail}`
+        : `${params.failedPrefix}: ${detail}`,
     );
   } finally {
     params.setBusy(false);
@@ -192,16 +206,17 @@ export async function childOperationImpl(
     await ctx.loadChildData(ctx.plotNumber);
     return true;
   } catch (cause) {
+    const detail = formatChildErrorMessage(cause);
     if (committed) {
       ctx.invalidateCapabilities();
-      ctx.setError(`Child changes committed, but refresh failed. Reopen the plot before editing: ${String(cause)}`);
+      ctx.setError(`Child changes committed, but refresh failed. Reopen the plot before editing: ${detail}`);
       return true;
     }
-    ctx.setError(`Child operation failed: ${String(cause)}`);
+    ctx.setError(`Child operation failed: ${detail}`);
     try {
       await ctx.loadChildData(ctx.plotNumber);
     } catch (refreshError) {
-      ctx.appendError(`; refresh failed: ${String(refreshError)}`);
+      ctx.appendError(`; refresh failed: ${formatChildErrorMessage(refreshError)}`);
     }
     return false;
   } finally {
@@ -251,7 +266,11 @@ export function stageHeightCellImpl(params: {
     }
     return { heightDrafts: stageHeight(params.heightDrafts, params.id, field, params.raw, rows[0][field] ?? null, params.form) };
   } catch (cause) {
-    return { heightDrafts: params.heightDrafts, error: `Height draft failed: ${String(cause)}`, bumpRevision: true };
+    return {
+      heightDrafts: params.heightDrafts,
+      error: `Height draft failed: ${formatChildErrorMessage(cause)}`,
+      bumpRevision: true,
+    };
   }
 }
 
@@ -279,7 +298,12 @@ export function stageOtherCellImpl(params: {
       clearOtherError: true,
     };
   } catch (cause) {
-    return { otherDrafts: params.otherDrafts, clearOtherError: false, error: `Other draft failed: ${String(cause)}`, bumpRevision: true };
+    return {
+      otherDrafts: params.otherDrafts,
+      clearOtherError: false,
+      error: `Other draft failed: ${formatChildErrorMessage(cause)}`,
+      bumpRevision: true,
+    };
   }
 }
 
@@ -315,7 +339,12 @@ export function stageSoilCellImpl(params: {
       clearSoilError: true,
     };
   } catch (cause) {
-    return { soilDrafts: params.soilDrafts, clearSoilError: false, error: `Soil draft failed: ${String(cause)}`, bumpRevision: true };
+    return {
+      soilDrafts: params.soilDrafts,
+      clearSoilError: false,
+      error: `Soil draft failed: ${formatChildErrorMessage(cause)}`,
+      bumpRevision: true,
+    };
   }
 }
 
@@ -350,7 +379,7 @@ export function stageAttributeCellImpl(params: {
     return {
       attributeDrafts: params.attributeDrafts,
       clearAttrError: false,
-      error: `Vegetation attribute draft failed: ${String(cause)}`,
+      error: `Vegetation attribute draft failed: ${formatChildErrorMessage(cause)}`,
       bumpRevision: true,
     };
   }
@@ -384,7 +413,12 @@ export function stageCollectedCellImpl(params: {
       clearCollectedError: true,
     };
   } catch (cause) {
-    return { collectedDrafts: params.collectedDrafts, clearCollectedError: false, error: `Collected draft failed: ${String(cause)}`, bumpRevision: true };
+    return {
+      collectedDrafts: params.collectedDrafts,
+      clearCollectedError: false,
+      error: `Collected draft failed: ${formatChildErrorMessage(cause)}`,
+      bumpRevision: true,
+    };
   }
 }
 
@@ -426,7 +460,7 @@ export function stageSpeciesCellImpl(params: {
       speciesDrafts: params.speciesDrafts,
       speciesChoices: params.speciesChoices,
       clearSpeciesError: false,
-      error: `Species draft failed: ${String(cause)}`,
+      error: `Species draft failed: ${formatChildErrorMessage(cause)}`,
       bumpRevision: true,
     };
   }

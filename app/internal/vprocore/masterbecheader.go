@@ -1,15 +1,13 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 // UserAccreditation describes the active user's BEC master and USysUserRestrictions status.

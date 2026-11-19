@@ -1,10 +1,6 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"database/sql"
 	"errors"
 	"fmt"
@@ -18,6 +14,8 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 	"unsafe"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type HeaderField struct {
@@ -27,7 +25,7 @@ type HeaderField struct {
 	Column   string `json:"-" yaml:"-"`
 }
 
-// Allowlist verified against Forms/FS882-6x4XL.txt ControlSource and
+// HeaderFields — Allowlist verified against Forms/FS882-6x4XL.txt ControlSource and
 // Tables_Def/Sample_{Env,Admin}_CreateSQL.txt. FIELD NOTES binds SiteNotes;
 // Microtop. type/size bind SurfaceTopographyType/Size. optLockData is unbound:
 // its AfterUpdate saves the record then toggles AllowEdits on this form/children.
@@ -155,20 +153,21 @@ func HeaderCapabilities(db sqlutil.HeaderDB, project string) (map[string]bool, e
 			return nil, err
 		}
 		columns[table] = make(map[string]bool)
-		for rows.Next() {
-			var cid, notNull, pk int
-			var name, typ string
-			var def sql.NullString
-			if err := rows.Scan(&cid, &name, &typ, &notNull, &def, &pk); err != nil {
-				rows.Close()
-				return nil, err
+		if scanErr := func() error {
+			defer rows.Close()
+			for rows.Next() {
+				var cid, notNull, pk int
+				var name, typ string
+				var def sql.NullString
+				if err := rows.Scan(&cid, &name, &typ, &notNull, &def, &pk); err != nil {
+
+					return err
+				}
+				columns[table][strings.ToLower(name)] = true
 			}
-			columns[table][strings.ToLower(name)] = true
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return nil, err
+			return rows.Err()
+		}(); scanErr != nil {
+			return nil, scanErr
 		}
 	}
 	caps := make(map[string]bool, len(HeaderFields))
@@ -279,7 +278,7 @@ func HeaderStorageValue(value any) any {
 	return value
 }
 
-// V7mdlAudit.AuditTrail: strength 1 edits values, 2 adds values, exactly 3
+// AuditHeaderChange — V7mdlAudit.AuditTrail: strength 1 edits values, 2 adds values, exactly 3
 // also records deletions. Access NULL comparisons do not count as value edits.
 func AuditHeaderChange(before, after any, strength int) bool {
 	if reflect.DeepEqual(before, after) {
@@ -537,7 +536,7 @@ func (s *PlotService) validateHeaderBeforeTx(db *sql.DB, project string, h FS882
 		}
 	}
 	if mode == headerCreate && s.ContextScoped && len(utf16.Encode([]rune(h.PlotNumber))) > 7 {
-		return errors.New("PlotNumber exceeds 7 UTF-16 code units")
+		return errors.New("PlotNumber cannot exceed 7 characters")
 	}
 	return nil
 }
@@ -587,7 +586,7 @@ func (s *PlotService) resolveHeaderSaveTarget(tx *sql.Tx, project string, h FS88
 		return false, errors.New("PlotNumber must not have leading or trailing whitespace")
 	}
 	if creating && s.ContextScoped && len(utf16.Encode([]rune(h.PlotNumber))) > 7 {
-		return false, errors.New("PlotNumber exceeds 7 UTF-16 code units")
+		return false, errors.New("PlotNumber cannot exceed 7 characters")
 	}
 	return creating, nil
 }

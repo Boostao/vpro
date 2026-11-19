@@ -307,7 +307,7 @@ func RunMultivariateClustering(
 		unitPrefix = "CL"
 	}
 	if !utf8.ValidString(unitPrefix) || len(utf16.Encode([]rune(unitPrefix))) > 24 || strings.ContainsAny(unitPrefix, "\x00\r\n") {
-		return nil, errors.New("unitPrefix must be valid UTF-8 up to 24 UTF-16 code units")
+		return nil, errors.New("unitPrefix must be valid UTF-8 up to 24 characters")
 	}
 
 	cfg := effectiveOptions(opts...)
@@ -615,6 +615,7 @@ func PromoteClusterCandidateToSU(
 		if err != nil {
 			return struct{}{}, err
 		}
+		defer rows.Close()
 		type suPair struct {
 			plot string
 			unit string
@@ -624,7 +625,6 @@ func PromoteClusterCandidateToSU(
 		for rows.Next() {
 			var p, u string
 			if err := rows.Scan(&p, &u); err != nil {
-				rows.Close()
 				return struct{}{}, err
 			}
 			if req.ExcludeNoise && strings.HasSuffix(u, "_Noise") {
@@ -634,10 +634,8 @@ func PromoteClusterCandidateToSU(
 			pairs = append(pairs, suPair{plot: p, unit: u})
 		}
 		if err := rows.Err(); err != nil {
-			rows.Close()
 			return struct{}{}, err
 		}
-		rows.Close()
 
 		if len(pairs) == 0 {
 			return struct{}{}, errors.New("no non-noise cluster assignments remain to promote")

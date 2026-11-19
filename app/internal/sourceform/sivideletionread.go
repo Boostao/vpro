@@ -1,16 +1,14 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SiviDeletionOriginal struct {
@@ -58,7 +56,7 @@ func SiviDeletionSource(ctx context.Context, project, plot, form, rowID string, 
 		for _, candidate := range veg.Rows {
 			parent := candidate.Cells[columns["PlotNumber"]]
 			if parent.Text != nil && *parent.Text == plot &&
-				SiviIdentityCellMatches(candidate.Cells[columns["ID"]], strconv.FormatInt(id, 10)) {
+				SourceIdentityCellMatches(candidate.Cells[columns["ID"]], strconv.FormatInt(id, 10)) {
 				occupants++
 			}
 		}
@@ -128,7 +126,7 @@ func LookupSIVIDeletionReceipt(s *vprocore.ContextService, ctx context.Context, 
 				return nil, nil
 			}
 			tables := map[string]vprocore.ProjectMetadataTable{}
-			for _, name := range []string{SiviDeletionHistoryTable, request.Project + "_Veg", request.Project + "_Audit", SiviIdentityLedger} {
+			for _, name := range []string{SiviDeletionHistoryTable, request.Project + "_Veg", request.Project + "_Audit", SourceIdentityLedger} {
 				if !present[name] {
 					continue
 				}

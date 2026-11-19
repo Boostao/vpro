@@ -53,17 +53,17 @@ func CreateNewProject(s *vprocore.ContextService, ctx context.Context, contextID
 	projectIDNotice := ""
 	if projectID == "" {
 		projectID = projectName
-		if utf16Len(projectID) > 20 {
-			origUnits := utf16Len(projectID)
-			projectID = truncateUTF16(projectID, 20)
+		if sqlutil.UTF16Len(projectID) > 20 {
+			origUnits := sqlutil.UTF16Len(projectID)
+			projectID = sqlutil.TruncateUTF16(projectID, 20)
 			projectIDDerived = true
-			projectIDNotice = fmt.Sprintf("ProjectName %q (%d UTF-16 code units) exceeded the 20-unit ProjectID limit and was truncated to %q.", projectName, origUnits, projectID)
+			projectIDNotice = fmt.Sprintf("ProjectName %q (%d characters) exceeded the 20-character ProjectID limit and was truncated to %q.", projectName, origUnits, projectID)
 		}
 	}
-	if err := validateUTF16Max("Metadata.ProjectID", projectID, 20); err != nil {
+	if err := sqlutil.ValidateUTF16Bound("Metadata.ProjectID", projectID, 20); err != nil {
 		return NewProjectResult{}, err
 	}
-	if err := validateUTF16Max("Metadata.ProjectTitle", req.ProjectTitle, 255); err != nil {
+	if err := sqlutil.ValidateUTF16Bound("Metadata.ProjectTitle", req.ProjectTitle, 255); err != nil {
 		return NewProjectResult{}, err
 	}
 

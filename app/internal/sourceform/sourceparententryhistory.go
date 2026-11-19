@@ -1,17 +1,15 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"reflect"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-func VerifySourceParentAuditedSubset(audited, planned []SiviParentScalarAssignment, label string) error {
+func VerifySourceParentAuditedSubset(audited, planned []SourceParentScalarAssignment, label string) error {
 	for _, assignment := range audited {
 		found := false
 		for _, source := range planned {
@@ -24,9 +22,9 @@ func VerifySourceParentAuditedSubset(audited, planned []SiviParentScalarAssignme
 	return nil
 }
 
-func VerifySourceParentEntryPlan(ctx context.Context, original, committed *SiviParentProjection,
-	planned []SiviParentScalarAssignment, projectParent SourceParentProjector,
-	equal func(*SiviParentProjection, *SiviParentProjection) bool, label string) error {
+func VerifySourceParentEntryPlan(ctx context.Context, original, committed *SourceParentProjection,
+	planned []SourceParentScalarAssignment, projectParent SourceParentProjector,
+	equal func(*SourceParentProjection, *SourceParentProjection) bool, label string) error {
 	env := vprocore.ProjectMetadataTable{Columns: original.EnvColumns, Rows: []vprocore.ProjectMetadataRow{
 		{RowID: original.Rows[0].Env.RowID, Cells: append([]vprocore.ProjectMetadataCell{}, original.Rows[0].Env.Cells...)},
 	}}
@@ -51,7 +49,7 @@ func VerifySourceParentEntryPlan(ctx context.Context, original, committed *SiviP
 	return nil
 }
 
-func SourceParentProjectionStorageEqual(left, right *SiviParentProjection) bool {
+func SourceParentProjectionStorageEqual(left, right *SourceParentProjection) bool {
 	if !reflect.DeepEqual(left, right) {
 		return false
 	}

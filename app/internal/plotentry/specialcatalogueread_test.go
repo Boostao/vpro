@@ -1,17 +1,15 @@
 package plotentry
 
 import (
-	"github.com/boostao/vpro/app/internal/references"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSpecialCatalogueReadsCancelLocksAndSQLPoolWaits(t *testing.T) {
@@ -28,27 +26,27 @@ func TestSpecialCatalogueReadsCancelLocksAndSQLPoolWaits(t *testing.T) {
 		db    *sql.DB
 		read  func(context.Context) error
 	}{
-		{"BEC zones", &bec.Mu, bec.Db, func(ctx context.Context) error {
+		{"BEC zones", &bec.Mu, bec.DB, func(ctx context.Context) error {
 			_, err := bec.ListBECZones(ctx)
 			return err
 		}},
-		{"BEC subzones", &bec.Mu, bec.Db, func(ctx context.Context) error {
+		{"BEC subzones", &bec.Mu, bec.DB, func(ctx context.Context) error {
 			_, err := bec.ListBECSubZones(ctx, vprotest.BecString("BG"))
 			return err
 		}},
-		{"BEC series", &bec.Mu, bec.Db, func(ctx context.Context) error {
+		{"BEC series", &bec.Mu, bec.DB, func(ctx context.Context) error {
 			_, err := bec.ListBECSiteSeries(ctx, vprotest.BecString("BG"), vprotest.BecString("xh1"))
 			return err
 		}},
-		{"Quality", &quality.Mu, quality.Db, func(ctx context.Context) error {
+		{"Quality", &quality.Mu, quality.DB, func(ctx context.Context) error {
 			_, err := quality.ListPlotQualityChoices(ctx)
 			return err
 		}},
-		{"Master metadata", &unit.Mu, unit.Db, func(ctx context.Context) error {
+		{"Master metadata", &unit.Mu, unit.DB, func(ctx context.Context) error {
 			_, err := unit.GetMasterWorkingUnitChoices(ctx)
 			return err
 		}},
-		{"Master choices", &unit.Mu, unit.Db, func(ctx context.Context) error {
+		{"Master choices", &unit.Mu, unit.DB, func(ctx context.Context) error {
 			_, err := unit.GetWorkingUnitChoices(ctx, "master")
 			return err
 		}},

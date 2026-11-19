@@ -9,15 +9,16 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/resources"
-	"github.com/jackc/pgx/v5"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
+	"github.com/jackc/pgx/v5"
 )
 
 // PublishStandardsRequest configures custodian publication of 2026 VLists + BECdb + VMetaData standards.

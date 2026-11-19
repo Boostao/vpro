@@ -1,14 +1,12 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"strconv"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func reserveProfileIdentities(ctx context.Context, tx *sql.Tx, table string, current vprocore.ProjectMetadataTable) (map[int64]bool, error) {
@@ -42,25 +40,28 @@ func reserveProfileIdentities(ctx context.Context, tx *sql.Tx, table string, cur
 		if err != nil {
 			return nil, err
 		}
-		for rows.Next() {
-			var before, after string
-			if err := rows.Scan(&before, &after); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			for _, raw := range []string{before, after} {
-				var snapshot vprocore.ProjectMetadataTable
-				if err := vprocore.DecodeProfileLifecycleJSON([]byte(raw), &snapshot, "columns", "rows"); err != nil {
-					rows.Close()
-					return nil, err
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+			for rows.Next() {
+				var before, after string
+				if err := rows.Scan(&before, &after); err != nil {
+
+					return err
 				}
-				if err := add(snapshot); err != nil {
-					rows.Close()
-					return nil, err
+				for _, raw := range []string{before, after} {
+					var snapshot vprocore.ProjectMetadataTable
+					if err := vprocore.DecodeProfileLifecycleJSON([]byte(raw), &snapshot, "columns", "rows"); err != nil {
+
+						return err
+					}
+					if err := add(snapshot); err != nil {
+
+						return err
+					}
 				}
 			}
-		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return rows.Err()
+		}(); err != nil {
 			return nil, err
 		}
 	}
@@ -81,21 +82,24 @@ func reserveProfileIdentities(ctx context.Context, tx *sql.Tx, table string, cur
 	if err != nil {
 		return nil, err
 	}
-	for rows.Next() {
-		var storage string
-		var id int64
-		if err := rows.Scan(&storage, &id); err != nil {
-			rows.Close()
-			return nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var storage string
+			var id int64
+			if err := rows.Scan(&storage, &id); err != nil {
+
+				return err
+			}
+			if storage != "integer" {
+
+				return errors.New("profile reservation requires literal whole-number ID storage")
+			}
+			ids[id] = true
+			prior[id] = true
 		}
-		if storage != "integer" {
-			rows.Close()
-			return nil, errors.New("profile reservation requires literal signed64 integer storage")
-		}
-		ids[id] = true
-		prior[id] = true
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 	for id := range ids {

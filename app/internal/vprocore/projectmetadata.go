@@ -64,25 +64,36 @@ func (s *ContextService) ReviewProjectMetadata(ctx context.Context, contextID, p
 		}
 		var projectID *string
 		count := 0
-		for rows.Next() {
-			var raw []byte
-			var storage string
-			if err := rows.Scan(&raw, &storage); err != nil {
-				rows.Close()
+		{
+			alreadyWrapped := false
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+				for rows.Next() {
+					var raw []byte
+					var storage string
+					if err := rows.Scan(&raw, &storage); err != nil {
+
+						alreadyWrapped = true
+						return err
+					}
+					if storage != "text" && storage != "null" || !utf8.Valid(raw) {
+
+						alreadyWrapped = true
+						return errors.New("metadata parent ProjectID has unsupported historical storage; no identity was repaired")
+					}
+					if storage == "text" {
+						value := string(raw)
+						projectID = &value
+					}
+					count++
+				}
+				return rows.Err()
+			}(); err != nil {
+				if !alreadyWrapped {
+					return ProjectMetadataReview{}, fmt.Errorf("metadata parent read failed: %w", err)
+				}
 				return ProjectMetadataReview{}, err
 			}
-			if storage != "text" && storage != "null" || !utf8.Valid(raw) {
-				rows.Close()
-				return ProjectMetadataReview{}, errors.New("metadata parent ProjectID has unsupported historical storage; no identity was repaired")
-			}
-			if storage == "text" {
-				value := string(raw)
-				projectID = &value
-			}
-			count++
-		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
-			return ProjectMetadataReview{}, fmt.Errorf("metadata parent read failed: %w", err)
 		}
 		if count != 1 {
 			return ProjectMetadataReview{}, errors.New("metadata parent is unavailable or ambiguous in the selected context")
@@ -136,14 +147,14 @@ func ReadProjectMetadataRows(ctx context.Context, db ProjectMetadataQueryer, ali
 		}
 		id, err := strconv.ParseInt(*identity.Integer, 10, 32)
 		if err != nil || seen[*identity.Integer] {
-			return ProjectMetadataTable{}, errors.New("project metadata has an invalid or ambiguous signed32 ID")
+			return ProjectMetadataTable{}, errors.New("project metadata has an invalid or ambiguous record ID")
 		}
 		seen[strconv.FormatInt(id, 10)] = true
 	}
 	return result, nil
 }
 
-// Filter/order identifiers are internal literals; values remain SQL parameters.
+// ReadSQLiteStorageRows — Filter/order identifiers are internal literals; values remain SQL parameters.
 func ReadSQLiteStorageRows(ctx context.Context, db ProjectMetadataQueryer, alias, table, filterColumn string, filterValue *string, orderColumn string) (ProjectMetadataTable, error) {
 	return readSQLiteStorageRowsScoped(ctx, db, alias, table, filterColumn, filterValue, orderColumn, false)
 }
@@ -252,28 +263,31 @@ func readSQLiteStorageRowsScoped(ctx context.Context, db ProjectMetadataQueryer,
 		return ProjectMetadataTable{}, err
 	}
 	defer rows.Close()
-	for rows.Next() {
-		var rowID int64
-		storage := make([]string, len(result.Columns))
-		values := make([]any, len(result.Columns))
-		destinations := []any{&rowID}
-		for i := range values {
-			destinations = append(destinations, &storage[i], &values[i])
-		}
-		if err := rows.Scan(destinations...); err != nil {
-			return ProjectMetadataTable{}, err
-		}
-		row := ProjectMetadataRow{RowID: strconv.FormatInt(rowID, 10), Cells: []ProjectMetadataCell{}}
-		for i, value := range values {
-			cell, err := ProjectMetadataCellInternal(storage[i], value)
-			if err != nil {
-				return ProjectMetadataTable{}, fmt.Errorf("row %d column %s: %w", rowID, result.Columns[i].Name, err)
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var rowID int64
+			storage := make([]string, len(result.Columns))
+			values := make([]any, len(result.Columns))
+			destinations := []any{&rowID}
+			for i := range values {
+				destinations = append(destinations, &storage[i], &values[i])
 			}
-			row.Cells = append(row.Cells, cell)
+			if err := rows.Scan(destinations...); err != nil {
+				return err
+			}
+			row := ProjectMetadataRow{RowID: strconv.FormatInt(rowID, 10), Cells: []ProjectMetadataCell{}}
+			for i, value := range values {
+				cell, err := ProjectMetadataCellInternal(storage[i], value)
+				if err != nil {
+					return fmt.Errorf("row %d column %s: %w", rowID, result.Columns[i].Name, err)
+				}
+				row.Cells = append(row.Cells, cell)
+			}
+			result.Rows = append(result.Rows, row)
 		}
-		result.Rows = append(result.Rows, row)
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return ProjectMetadataTable{}, err
 	}
 	return result, nil
@@ -285,21 +299,24 @@ func ReadSQLiteStorageColumns(ctx context.Context, db ProjectMetadataQueryer, al
 		return nil, err
 	}
 	columns := []ProjectMetadataColumn{}
-	for schema.Next() {
-		var index, required, primary int
-		var name, kind string
-		var defaultValue sql.NullString
-		if err := schema.Scan(&index, &name, &kind, &required, &defaultValue, &primary); err != nil {
-			schema.Close()
-			return nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, schema.Close()) }()
+		for schema.Next() {
+			var index, required, primary int
+			var name, kind string
+			var defaultValue sql.NullString
+			if err := schema.Scan(&index, &name, &kind, &required, &defaultValue, &primary); err != nil {
+
+				return err
+			}
+			if !utf8.ValidString(name) || !utf8.ValidString(kind) {
+
+				return errors.New("metadata schema contains malformed Unicode")
+			}
+			columns = append(columns, ProjectMetadataColumn{name, kind})
 		}
-		if !utf8.ValidString(name) || !utf8.ValidString(kind) {
-			schema.Close()
-			return nil, errors.New("metadata schema contains malformed Unicode")
-		}
-		columns = append(columns, ProjectMetadataColumn{name, kind})
-	}
-	if err := errors.Join(schema.Err(), schema.Close()); err != nil {
+		return schema.Err()
+	}(); err != nil {
 		return nil, err
 	}
 	return columns, nil

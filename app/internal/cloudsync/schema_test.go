@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 func TestVP08AndStandardsColumnCountsAndCalibration(t *testing.T) {
@@ -36,10 +38,10 @@ func TestVP08AndStandardsColumnCountsAndCalibration(t *testing.T) {
 	}
 
 	// IEEE-754 float32 < 100 calibration
-	if _, ok := NarrowSingleCover(99.999996); !ok {
+	if _, ok := sqlutil.NarrowSingleCover(99.999996); !ok {
 		t.Fatal("expected 99.999996 to narrow to < 100 in float32 and pass")
 	}
-	if _, ok := NarrowSingleCover(99.999999); ok {
+	if _, ok := sqlutil.NarrowSingleCover(99.999999); ok {
 		t.Fatal("expected 99.999999 to narrow to 100.0 in float32 and reject")
 	}
 

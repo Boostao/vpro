@@ -1,16 +1,13 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"fmt"
 	"math"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/boostao/vpro/app/internal/vprocore"
 	"go.yaml.in/yaml/v3"
 )
 

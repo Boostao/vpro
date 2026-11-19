@@ -1,13 +1,6 @@
 package sivi
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -18,6 +11,11 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func siviCreationUndoFixture(t *testing.T, external bool, strength int) (*vprocore.ContextService, vprocore.ProjectState, *sql.DB, siviCreationUndoRequest, *sourceform.SiviCreationResult) {
@@ -588,9 +586,11 @@ func TestSIVICreationUndoCanonicalHistoryCorruption(t *testing.T) {
 		func(h *sourceform.SiviCreationHistory) { h.Request.Covers[0].Value = vprotest.SiviReal(1) },
 		func(h *sourceform.SiviCreationHistory) { h.Columns[0].Name = "NotPlotNumber" },
 		func(h *sourceform.SiviCreationHistory) { h.Columns = h.Columns[:43] },
-		func(h *sourceform.SiviCreationHistory) { h.Original.Cells[0] = sourceform.SiviCreationText("tampered") },
 		func(h *sourceform.SiviCreationHistory) {
-			h.Committed.Cells[0] = sourceform.SiviCreationText("tampered")
+			h.Original.Cells[0] = sourceform.SourceCreationText("tampered")
+		},
+		func(h *sourceform.SiviCreationHistory) {
+			h.Committed.Cells[0] = sourceform.SourceCreationText("tampered")
 		},
 		func(h *sourceform.SiviCreationHistory) { h.Actor = "" },
 		func(h *sourceform.SiviCreationHistory) { h.When = "2026-10-07T21:00:00Z" },

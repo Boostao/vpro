@@ -1,12 +1,6 @@
 package pictures
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -20,6 +14,10 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const pictureCreationHistoryTable = "__VPRO_PictureCreationHistory"
@@ -27,9 +25,9 @@ const pictureCreationHistorySQL = `CREATE TABLE "__VPRO_PictureCreationHistory"(
 const pictureCreationIdentityTable = "__VPRO_PictureCreationIdentity"
 const pictureCreationIdentitySQL = `CREATE TABLE "__VPRO_PictureCreationIdentity"(ID INTEGER PRIMARY KEY,RequestID TEXT NOT NULL)`
 
-// Private, unregistered draft boundary: a selected path is storage provenance,
+// PictureCreationRequest — Private, unregistered draft boundary: a selected path is storage provenance,
 // not an image-read grant or proof of a native chooser selection.
-type pictureCreationRequest struct {
+type PictureCreationRequest struct {
 	ContextID    string `json:"contextId"`
 	Project      string `json:"project"`
 	PlotNumber   string `json:"plotNumber"`
@@ -37,7 +35,9 @@ type pictureCreationRequest struct {
 	SelectedPath string `json:"selectedPath"`
 }
 
-func (request *pictureCreationRequest) UnmarshalJSON(data []byte) error {
+type pictureCreationRequest = PictureCreationRequest
+
+func (request *PictureCreationRequest) UnmarshalJSON(data []byte) error {
 	names := []string{"contextId", "project", "plotNumber", "requestId", "selectedPath"}
 	properties, err := sourceform.SourceChildJSONObject(data, "picture creation", names, nil)
 	if err != nil {
@@ -366,24 +366,27 @@ func pictureCreationSnapshot(ctx context.Context, tx *sql.Tx, plot string) (vpro
 	}
 	upper := strings.ToUpper(definition)
 	if strings.Contains(upper, "VIRTUAL TABLE") || strings.Contains(upper, "WITHOUT ROWID") {
-		return vprocore.ProjectMetadataTable{}, errors.New("picture creation requires an ordinary rowid table")
+		return vprocore.ProjectMetadataTable{}, errors.New("picture creation requires a standard VPro table")
 	}
 	rows, err := tx.QueryContext(ctx, `PRAGMA table_xinfo(tblVPics)`)
 	if err != nil {
 		return vprocore.ProjectMetadataTable{}, err
 	}
-	for rows.Next() {
-		var ordinal, required, primary, hidden int
-		var name, kind string
-		var defaultValue sql.NullString
-		if err := rows.Scan(&ordinal, &name, &kind, &required, &defaultValue, &primary, &hidden); err != nil {
-			return vprocore.ProjectMetadataTable{}, errors.Join(err, rows.Close())
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var ordinal, required, primary, hidden int
+			var name, kind string
+			var defaultValue sql.NullString
+			if err := rows.Scan(&ordinal, &name, &kind, &required, &defaultValue, &primary, &hidden); err != nil {
+				return err
+			}
+			if defaultValue.Valid {
+				return errors.New("picture creation refuses unreviewed SQLite source defaults")
+			}
 		}
-		if defaultValue.Valid {
-			return vprocore.ProjectMetadataTable{}, errors.Join(errors.New("picture creation refuses unreviewed SQLite source defaults"), rows.Close())
-		}
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return vprocore.ProjectMetadataTable{}, err
 	}
 	return vprocore.ReadSQLiteStorageRows(ctx, tx, "main", "tblVPics", "", nil, "")
@@ -418,8 +421,10 @@ func allocatePictureCreationID(ctx context.Context, tx *sql.Tx, limit int64, sou
 	if err != nil {
 		return 0, err
 	}
-	id, allocationErr := vprocore.AvailableChildID(rows, limit)
-	return id, errors.Join(allocationErr, rows.Close())
+	return func() (id int64, allocErr error) {
+		defer func() { allocErr = errors.Join(allocErr, rows.Close()) }()
+		return vprocore.AvailableChildID(rows, limit)
+	}()
 }
 
 func pictureCreationTechnicalState(ctx context.Context, tx *sql.Tx) (bool, error) {
@@ -511,37 +516,40 @@ func replayPictureCreation(ctx context.Context, tx *sql.Tx, source *ownedPicture
 	}
 	var found *pictureCreationResult
 	seen := map[int64]bool{}
-	for rows.Next() {
-		var id int64
-		var createdType, proposalType, restoredType string
-		var created, proposal []byte
-		if err := rows.Scan(&id, &createdType, &created, &proposalType, &proposal, &restoredType); err != nil {
-			return nil, errors.Join(err, rows.Close())
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var id int64
+			var createdType, proposalType, restoredType string
+			var created, proposal []byte
+			if err := rows.Scan(&id, &createdType, &created, &proposalType, &proposal, &restoredType); err != nil {
+				return err
+			}
+			var event pictureCreationHistory
+			err := json.Unmarshal(proposal, &event)
+			if err == nil {
+				err = validatePictureCreationHistory(event, id, string(created), source)
+			}
+			if err != nil || createdType != "text" || proposalType != "text" || restoredType != "null" ||
+				ledger[event.Result.ID] != event.Request.RequestID || seen[event.Result.ID] {
+				return errors.Join(errors.New("picture creation global history is corrupt; no receipt inferred"), err, rows.Close())
+			}
+			seen[event.Result.ID] = true
+			if event.Request.RequestID != request.RequestID {
+				continue
+			}
+			r := event.Result
+			if found != nil || event.Request != request || r.ContextID != authority.ContextID || r.Project != authority.Project ||
+				r.PlotNumber != authority.PlotNumber || r.Source != authority.Source || r.RequestedSource != authority.RequestedSource ||
+				r.Actor != authority.Actor || r.AuditStrength != authority.AuditStrength || !reflect.DeepEqual(r.OwnedFiles, authority.OwnedFiles) ||
+				!reflect.DeepEqual(r.Columns, snapshot.Columns) {
+				return errors.New("picture creation request identity collides with incompatible provenance")
+			}
+			r.Replayed = true
+			found = &r
 		}
-		var event pictureCreationHistory
-		err := json.Unmarshal(proposal, &event)
-		if err == nil {
-			err = validatePictureCreationHistory(event, id, string(created), source)
-		}
-		if err != nil || createdType != "text" || proposalType != "text" || restoredType != "null" ||
-			ledger[event.Result.ID] != event.Request.RequestID || seen[event.Result.ID] {
-			return nil, errors.Join(errors.New("picture creation global history is corrupt; no receipt inferred"), err, rows.Close())
-		}
-		seen[event.Result.ID] = true
-		if event.Request.RequestID != request.RequestID {
-			continue
-		}
-		r := event.Result
-		if found != nil || event.Request != request || r.ContextID != authority.ContextID || r.Project != authority.Project ||
-			r.PlotNumber != authority.PlotNumber || r.Source != authority.Source || r.RequestedSource != authority.RequestedSource ||
-			r.Actor != authority.Actor || r.AuditStrength != authority.AuditStrength || !reflect.DeepEqual(r.OwnedFiles, authority.OwnedFiles) ||
-			!reflect.DeepEqual(r.Columns, snapshot.Columns) {
-			return nil, errors.Join(errors.New("picture creation request identity collides with incompatible provenance"), rows.Close())
-		}
-		r.Replayed = true
-		found = &r
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 	if len(seen) != len(ledger) {

@@ -3,7 +3,7 @@ package sourceform
 import "testing"
 
 func TestSIVIParentDateTimestamp(t *testing.T) {
-	if err := ValidateSIVIParentDateTimestamp(nil); err != nil {
+	if err := ValidateSourceParentDateTimestamp(nil); err != nil {
 		t.Fatalf("explicit NULL rejected: %v", err)
 	}
 	for _, value := range []string{
@@ -12,7 +12,7 @@ func TestSIVIParentDateTimestamp(t *testing.T) {
 		"2026-11-01 01:30:00.123456789", "2026-03-08 02:30:00.100000000",
 	} {
 		original := value
-		if err := ValidateSIVIParentDateTimestamp(&value); err != nil {
+		if err := ValidateSourceParentDateTimestamp(&value); err != nil {
 			t.Errorf("valid timestamp %q rejected: %v", value, err)
 		}
 		if value != original {
@@ -31,7 +31,7 @@ func TestSIVIParentDateTimestamp(t *testing.T) {
 		"2026-01-01 00:00:00.1234567890", "2026-01-01 00:00:00,1",
 		"2026-01-01 00:00:00\x00", "2026-01-01 00:00:00\xed\xa0\x80",
 	} {
-		if err := ValidateSIVIParentDateTimestamp(&value); err == nil {
+		if err := ValidateSourceParentDateTimestamp(&value); err == nil {
 			t.Errorf("malformed timestamp %q accepted", value)
 		}
 	}

@@ -88,125 +88,128 @@ func loadAndFoldProjectVeg(
 			if err != nil {
 				return err
 			}
-			for vegRows.Next() {
-				var plotNum, rawSpp string
-				var c1, c2, c3, totA, c4, c5, c5a, c5b, c5c, totB, c6, c7, c8, c9, c10 sql.NullFloat64
-				if err := vegRows.Scan(
-					&plotNum, &rawSpp,
-					&c1, &c2, &c3, &totA,
-					&c4, &c5, &c5a, &c5b, &c5c, &totB,
-					&c6, &c7, &c8, &c9, &c10,
-				); err != nil {
-					vegRows.Close()
-					return err
-				}
-				if batchSet != nil {
-					if _, inBatch := batchSet[plotNum]; !inBatch {
+			return func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, vegRows.Close()) }()
+				for vegRows.Next() {
+					var plotNum, rawSpp string
+					var c1, c2, c3, totA, c4, c5, c5a, c5b, c5c, totB, c6, c7, c8, c9, c10 sql.NullFloat64
+					if err := vegRows.Scan(
+						&plotNum, &rawSpp,
+						&c1, &c2, &c3, &totA,
+						&c4, &c5, &c5a, &c5b, &c5c, &totB,
+						&c6, &c7, &c8, &c9, &c10,
+					); err != nil {
+
+						return err
+					}
+					if batchSet != nil {
+						if _, inBatch := batchSet[plotNum]; !inBatch {
+							continue
+						}
+					}
+					pIdx, ok := classifiedIndexByPlot[plotNum]
+					if !ok {
 						continue
 					}
-				}
-				pIdx, ok := classifiedIndexByPlot[plotNum]
-				if !ok {
-					continue
-				}
-				rawCode := strings.ToUpper(strings.TrimSpace(rawSpp))
-				if rawCode == "" {
-					continue
-				}
-				effCode := rawCode
-				wasMapped := false
-				if lumpMap != nil {
-					if mapped, found := lumpMap[rawCode]; found && mapped != "" {
-						effCode = mapped
-						wasMapped = true
-						foldedSourceTaxa[rawCode] = true
-						if lumpSourcesByTarget[effCode] == nil {
-							lumpSourcesByTarget[effCode] = map[string]bool{}
-						}
-						lumpSourcesByTarget[effCode][rawCode] = true
+					rawCode := strings.ToUpper(strings.TrimSpace(rawSpp))
+					if rawCode == "" {
+						continue
 					}
-				}
-
-				if coverPrec == "strata_totals" {
-					// Stratum A (BuildStrataTable): TotalA when populated (>0 emits uncapped; 0 suppresses A),
-					// otherwise sum Cover1..Cover3 with nulls as zero and cap fallback sum at 99.
-					if v, valid := narrowNullable(totA); valid {
-						if v > 0 {
-							addLayerCover(pIdx, 101, effCode, v, wasMapped)
-						}
-					} else {
-						var sumA float64
-						for _, nf := range []sql.NullFloat64{c1, c2, c3} {
-							if v, valid := narrowNullable(nf); valid {
-								sumA += v
+					effCode := rawCode
+					wasMapped := false
+					if lumpMap != nil {
+						if mapped, found := lumpMap[rawCode]; found && mapped != "" {
+							effCode = mapped
+							wasMapped = true
+							foldedSourceTaxa[rawCode] = true
+							if lumpSourcesByTarget[effCode] == nil {
+								lumpSourcesByTarget[effCode] = map[string]bool{}
 							}
-						}
-						if sumA > 0 {
-							if sumA > 99 {
-								sumA = 99
-							}
-							addLayerCover(pIdx, 101, effCode, sumA, wasMapped)
+							lumpSourcesByTarget[effCode][rawCode] = true
 						}
 					}
 
-					// Stratum B (BuildStrataTable): TotalB when populated (>0 emits uncapped; 0 suppresses B),
-					// otherwise sum Cover4..Cover5c with nulls as zero and cap fallback sum at 99.
-					if v, valid := narrowNullable(totB); valid {
-						if v > 0 {
-							addLayerCover(pIdx, 102, effCode, v, wasMapped)
-						}
-					} else {
-						var sumB float64
-						for _, nf := range []sql.NullFloat64{c4, c5, c5a, c5b, c5c} {
-							if v, valid := narrowNullable(nf); valid {
-								sumB += v
-							}
-						}
-						if sumB > 0 {
-							if sumB > 99 {
-								sumB = 99
-							}
-							addLayerCover(pIdx, 102, effCode, sumB, wasMapped)
-						}
-					}
-				} else {
-					// Stratum A (sublayer_sum / Access MakeDiagnosticData): use Cover1..Cover3 when any sublayer is populated, else TotalA
-					hasSubA := false
-					for idx, nf := range []sql.NullFloat64{c1, c2, c3} {
-						if v, valid := narrowNullable(nf); valid {
-							hasSubA = true
-							addLayerCover(pIdx, 1+idx, effCode, v, wasMapped)
-						}
-					}
-					if !hasSubA {
+					if coverPrec == "strata_totals" {
+						// Stratum A (BuildStrataTable): TotalA when populated (>0 emits uncapped; 0 suppresses A),
+						// otherwise sum Cover1..Cover3 with nulls as zero and cap fallback sum at 99.
 						if v, valid := narrowNullable(totA); valid {
-							addLayerCover(pIdx, 101, effCode, v, wasMapped)
+							if v > 0 {
+								addLayerCover(pIdx, 101, effCode, v, wasMapped)
+							}
+						} else {
+							var sumA float64
+							for _, nf := range []sql.NullFloat64{c1, c2, c3} {
+								if v, valid := narrowNullable(nf); valid {
+									sumA += v
+								}
+							}
+							if sumA > 0 {
+								if sumA > 99 {
+									sumA = 99
+								}
+								addLayerCover(pIdx, 101, effCode, sumA, wasMapped)
+							}
 						}
-					}
 
-					// Stratum B (sublayer_sum / Access MakeDiagnosticData): use Cover4..Cover5c when any sublayer is populated, else TotalB
-					hasSubB := false
-					for idx, nf := range []sql.NullFloat64{c4, c5, c5a, c5b, c5c} {
-						if v, valid := narrowNullable(nf); valid {
-							hasSubB = true
-							addLayerCover(pIdx, 4+idx, effCode, v, wasMapped)
-						}
-					}
-					if !hasSubB {
+						// Stratum B (BuildStrataTable): TotalB when populated (>0 emits uncapped; 0 suppresses B),
+						// otherwise sum Cover4..Cover5c with nulls as zero and cap fallback sum at 99.
 						if v, valid := narrowNullable(totB); valid {
-							addLayerCover(pIdx, 102, effCode, v, wasMapped)
+							if v > 0 {
+								addLayerCover(pIdx, 102, effCode, v, wasMapped)
+							}
+						} else {
+							var sumB float64
+							for _, nf := range []sql.NullFloat64{c4, c5, c5a, c5b, c5c} {
+								if v, valid := narrowNullable(nf); valid {
+									sumB += v
+								}
+							}
+							if sumB > 0 {
+								if sumB > 99 {
+									sumB = 99
+								}
+								addLayerCover(pIdx, 102, effCode, sumB, wasMapped)
+							}
+						}
+					} else {
+						// Stratum A (sublayer_sum / Access MakeDiagnosticData): use Cover1..Cover3 when any sublayer is populated, else TotalA
+						hasSubA := false
+						for idx, nf := range []sql.NullFloat64{c1, c2, c3} {
+							if v, valid := narrowNullable(nf); valid {
+								hasSubA = true
+								addLayerCover(pIdx, 1+idx, effCode, v, wasMapped)
+							}
+						}
+						if !hasSubA {
+							if v, valid := narrowNullable(totA); valid {
+								addLayerCover(pIdx, 101, effCode, v, wasMapped)
+							}
+						}
+
+						// Stratum B (sublayer_sum / Access MakeDiagnosticData): use Cover4..Cover5c when any sublayer is populated, else TotalB
+						hasSubB := false
+						for idx, nf := range []sql.NullFloat64{c4, c5, c5a, c5b, c5c} {
+							if v, valid := narrowNullable(nf); valid {
+								hasSubB = true
+								addLayerCover(pIdx, 4+idx, effCode, v, wasMapped)
+							}
+						}
+						if !hasSubB {
+							if v, valid := narrowNullable(totB); valid {
+								addLayerCover(pIdx, 102, effCode, v, wasMapped)
+							}
+						}
+					}
+
+					// Strata C & D (Cover6..Cover10)
+					for idx, nf := range []sql.NullFloat64{c6, c7, c8, c9, c10} {
+						if v, valid := narrowNullable(nf); valid {
+							addLayerCover(pIdx, 20+idx, effCode, v, wasMapped)
 						}
 					}
 				}
-
-				// Strata C & D (Cover6..Cover10)
-				for idx, nf := range []sql.NullFloat64{c6, c7, c8, c9, c10} {
-					if v, valid := narrowNullable(nf); valid {
-						addLayerCover(pIdx, 20+idx, effCode, v, wasMapped)
-					}
-				}
-			}
-			return errors.Join(vegRows.Err(), vegRows.Close())
+				return vegRows.Err()
+			}()
 		}
 
 		if len(classifiedPlots) <= 10000 {

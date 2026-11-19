@@ -1,11 +1,6 @@
 package pictures
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -15,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func (result *pictureDeletionResult) UnmarshalJSON(data []byte) error {
@@ -101,65 +99,68 @@ func readPictureDeletionHistory(ctx context.Context, tx *sql.Tx, source *ownedPi
 	events := []pictureDeletionResult{}
 	seen, proved := map[string]bool{}, map[int64]bool{}
 	restorationIDs, active := map[string]bool{}, map[int64]bool{}
-	for rows.Next() {
-		var historyID int64
-		var createdType, proposalType, restoredType string
-		var created, proposal, restored []byte
-		if err := rows.Scan(&historyID, &createdType, &created, &proposalType, &proposal, &restoredType, &restored); err != nil {
-			return nil, nil, errors.Join(err, rows.Close())
-		}
-		var event pictureDeletionResult
-		decodeErr := json.Unmarshal(proposal, &event)
-		_, id, requestErr := preparePictureDeletion(event.Request)
-		when, whenErr := time.Parse(time.RFC3339Nano, event.DeletedWhen)
-		if decodeErr != nil || requestErr != nil || whenErr != nil || when.UTC().Format(time.RFC3339Nano) != event.DeletedWhen ||
-			historyID < 1 || event.HistoryID != strconv.FormatInt(historyID, 10) || event.ID != id ||
-			event.DeletedWhen != string(created) || createdType != "text" || proposalType != "text" ||
-			!event.DidCommit || event.Replayed || seen[event.Request.RequestID] ||
-			event.Source != source.path || event.RequestedSource != source.requestedPath || event.Actor == "" ||
-			event.AuditStrength < 0 || event.AuditStrength > 3 || len(event.OwnedFiles) == 0 {
-			return nil, nil, errors.Join(fmt.Errorf("picture deletion durable history %d is corrupt", historyID), decodeErr, requestErr, whenErr, rows.Close())
-		}
-		if err := vprocore.ValidateChildPhysicalText("Picture deletion history actor", event.Actor, 255); err != nil {
-			return nil, nil, errors.Join(err, rows.Close())
-		}
-		if strings.ContainsRune(event.Actor, 0) {
-			return nil, nil, errors.Join(errors.New("picture deletion history actor contains NUL"), rows.Close())
-		}
-		for role, path := range event.OwnedFiles {
-			if role == "" || path == "" || strings.ContainsRune(role, 0) || strings.ContainsRune(path, 0) {
-				return nil, nil, errors.Join(errors.New("picture deletion history has invalid owned file provenance"), rows.Close())
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var historyID int64
+			var createdType, proposalType, restoredType string
+			var created, proposal, restored []byte
+			if err := rows.Scan(&historyID, &createdType, &created, &proposalType, &proposal, &restoredType, &restored); err != nil {
+				return err
 			}
-		}
-		if _, exists := reservations[event.ID]; !exists {
-			return nil, nil, errors.Join(errors.New("picture deletion history is missing its permanent ID reservation"), rows.Close())
-		}
-		if !proved[event.ID] {
-			if reservations[event.ID] != event.Request.RequestID {
-				return nil, nil, errors.Join(errors.New("picture deletion permanent reservation differs from its first deletion"), rows.Close())
+			var event pictureDeletionResult
+			decodeErr := json.Unmarshal(proposal, &event)
+			_, id, requestErr := preparePictureDeletion(event.Request)
+			when, whenErr := time.Parse(time.RFC3339Nano, event.DeletedWhen)
+			if decodeErr != nil || requestErr != nil || whenErr != nil || when.UTC().Format(time.RFC3339Nano) != event.DeletedWhen ||
+				historyID < 1 || event.HistoryID != strconv.FormatInt(historyID, 10) || event.ID != id ||
+				event.DeletedWhen != string(created) || createdType != "text" || proposalType != "text" ||
+				!event.DidCommit || event.Replayed || seen[event.Request.RequestID] ||
+				event.Source != source.path || event.RequestedSource != source.requestedPath || event.Actor == "" ||
+				event.AuditStrength < 0 || event.AuditStrength > 3 || len(event.OwnedFiles) == 0 {
+				return errors.Join(fmt.Errorf("picture deletion durable history %d is corrupt", historyID), decodeErr, requestErr, whenErr, rows.Close())
 			}
-			proved[event.ID] = true
-		}
-		if active[event.ID] {
-			return nil, nil, errors.Join(errors.New("picture deletion identity was reintroduced without typed restoration"), rows.Close())
-		}
-		active[event.ID] = true
-		switch restoredType {
-		case "null":
-		case "text":
-			receipt, err := decodePictureRestoration(restored, event)
-			if err != nil || restorationIDs[receipt.Request.RequestID] {
-				return nil, nil, errors.Join(err, errors.New("picture deletion has an invalid or duplicate restoration acknowledgement"), rows.Close())
+			if err := vprocore.ValidateChildPhysicalText("Picture deletion history actor", event.Actor, 255); err != nil {
+				return err
 			}
-			restorationIDs[receipt.Request.RequestID] = true
-			active[event.ID] = false
-		default:
-			return nil, nil, errors.Join(errors.New("picture deletion restoration acknowledgement has invalid storage"), rows.Close())
+			if strings.ContainsRune(event.Actor, 0) {
+				return errors.New("picture deletion history actor contains NUL")
+			}
+			for role, path := range event.OwnedFiles {
+				if role == "" || path == "" || strings.ContainsRune(role, 0) || strings.ContainsRune(path, 0) {
+					return errors.New("picture deletion history has invalid owned file provenance")
+				}
+			}
+			if _, exists := reservations[event.ID]; !exists {
+				return errors.New("picture deletion history is missing its permanent ID reservation")
+			}
+			if !proved[event.ID] {
+				if reservations[event.ID] != event.Request.RequestID {
+					return errors.New("picture deletion permanent reservation differs from its first deletion")
+				}
+				proved[event.ID] = true
+			}
+			if active[event.ID] {
+				return errors.New("picture deletion identity was reintroduced without typed restoration")
+			}
+			active[event.ID] = true
+			switch restoredType {
+			case "null":
+			case "text":
+				receipt, err := decodePictureRestoration(restored, event)
+				if err != nil || restorationIDs[receipt.Request.RequestID] {
+					return errors.Join(err, errors.New("picture deletion has an invalid or duplicate restoration acknowledgement"), rows.Close())
+				}
+				restorationIDs[receipt.Request.RequestID] = true
+				active[event.ID] = false
+			default:
+				return errors.New("picture deletion restoration acknowledgement has invalid storage")
+			}
+			seen[event.Request.RequestID] = true
+			events = append(events, event)
 		}
-		seen[event.Request.RequestID] = true
-		events = append(events, event)
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return nil, nil, err
 	}
 	if len(proved) != len(reservations) {

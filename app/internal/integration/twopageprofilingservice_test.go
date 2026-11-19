@@ -1,23 +1,18 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/classification"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
-
 	"errors"
 	"os"
-
 	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/boostao/vpro/app/internal/classification"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/mattn/go-sqlite3"
 )
 
@@ -126,6 +121,7 @@ func TestTwoPageProfilingGateInputsAndPaging(t *testing.T) {
 	if _, err := classification.NewTwoPageProfilingService(nil); err == nil {
 		t.Fatal("missing owner accepted")
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if got, err := service.GetReview(nil, state.ContextID, "108050", 0, 1); err == nil || got != nil {
 		t.Fatal("nil request accepted", got, err)
 	}

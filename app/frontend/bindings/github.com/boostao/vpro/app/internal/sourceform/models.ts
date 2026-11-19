@@ -18,14 +18,6 @@ export interface SIVIHeightWriteResult {
     "HistoryID": string;
 }
 
-export interface SIVIParentBinding {
-    "ControlID": string;
-    "Binding": string;
-    "Table": string;
-    "Column": number;
-    "Implicit": boolean;
-}
-
 export interface SIVIParentCellEdit {
     "contextId": string;
     "table": string;
@@ -36,11 +28,11 @@ export interface SIVIParentCellEdit {
 }
 
 export interface SIVIParentDirectWrite {
-    "original": SIVIParentProjection | null;
-    "scalars": SIVIParentCellEdit[] | null;
-    "options": SIVIParentCellEdit[] | null;
-    "text": SIVIParentCellEdit[] | null;
-    "categorical": SIVIParentCellEdit[] | null;
+    "original": SourceParentProjection | null;
+    "scalars": SourceParentCellEdit[] | null;
+    "options": SourceParentCellEdit[] | null;
+    "text": SourceParentCellEdit[] | null;
+    "categorical": SourceParentCellEdit[] | null;
 }
 
 export interface SIVIParentJoinReview {
@@ -54,26 +46,6 @@ export interface SIVIParentJoinReview {
     "AdminRowIDs": string[] | null;
 }
 
-export interface SIVIParentProjection {
-    "ContextID": string;
-    "Project": string;
-    "Plot": string;
-    "Form": string;
-    "Query": string;
-    "Membership": string;
-    "EnvTable": string;
-    "AdminTable": string;
-    "EnvColumns": vprocore$0.ProjectMetadataColumn[] | null;
-    "AdminColumns": vprocore$0.ProjectMetadataColumn[] | null;
-    "Bindings": SIVIParentBinding[] | null;
-    "Rows": SIVIParentRow[] | null;
-}
-
-export interface SIVIParentRow {
-    "Env": vprocore$0.ProjectMetadataRow;
-    "Admin": vprocore$0.ProjectMetadataRow;
-}
-
 export interface SIVIParentSharedReference {
     "column": string;
     "listName": string;
@@ -82,15 +54,7 @@ export interface SIVIParentSharedReference {
     "available": boolean;
     "diagnostic": string;
     "definitions": vprocore$0.ProjectMetadataTable;
-    "choices": SIVIParentSharedReferenceChoice[] | null;
-}
-
-export interface SIVIParentSharedReferenceChoice {
-    "rowId": string;
-    "code": string | null;
-    "description": string | null;
-    "selectable": boolean;
-    "diagnostic": string;
+    "choices": SourceParentSharedReferenceChoice[] | null;
 }
 
 export interface SIVIParentSharedReferences {
@@ -98,39 +62,24 @@ export interface SIVIParentSharedReferences {
     "project": string;
     "plot": string;
     "zone": vprocore$0.ProjectMetadataCell;
-    "fields": SIVIParentSharedReference[] | null;
+    "fields": SourceParentSharedReference[] | null;
 }
 
 export interface SIVIParentSharedWrite {
-    "original": SIVIParentProjection | null;
-    "edits": SIVIParentCellEdit[] | null;
-}
-
-export interface SIVIParentWriteResult {
-    "ChangedCells": number;
-    "HistoryID": string;
+    "original": SourceParentProjection | null;
+    "edits": SourceParentCellEdit[] | null;
 }
 
 export interface SIVIProjectAssignmentOriginal {
-    "Original": SIVIParentProjection | null;
-    "Choices": SIVIProjectChoices | null;
+    "Original": SourceParentProjection | null;
+    "Choices": SourceProjectChoices | null;
     "AssignmentAvailable": boolean;
     "AssignmentDiagnostic": string;
 }
 
 export interface SIVIProjectAssignmentWrite {
-    "original": SIVIParentProjection | null;
-    "selection": SIVIProjectSelection;
-}
-
-export interface SIVIProjectChoices {
-    "ContextID": string;
-    "Project": string;
-    "Source": string;
-    "Alias": string;
-    "Table": string;
-    "SourceOption": number;
-    "Choices": vprocore$0.ProjectMetadataTable;
+    "original": SourceParentProjection | null;
+    "selection": SourceProjectSelection;
 }
 
 export interface SIVIProjectSelection {
@@ -243,4 +192,59 @@ export interface SiviDeletionResult {
     "replayed": boolean;
 }
 
-export type SiviParentProjection = SIVIParentProjection;
+export interface SourceParentBinding {
+    "ControlID": string;
+    "Binding": string;
+    "Table": string;
+    "Column": number;
+    "Implicit": boolean;
+}
+
+export type SourceParentCellEdit = SIVIParentCellEdit;
+
+export interface SourceParentProjection {
+    "ContextID": string;
+    "Project": string;
+    "Plot": string;
+    "Form": string;
+    "Query": string;
+    "Membership": string;
+    "EnvTable": string;
+    "AdminTable": string;
+    "EnvColumns": vprocore$0.ProjectMetadataColumn[] | null;
+    "AdminColumns": vprocore$0.ProjectMetadataColumn[] | null;
+    "Bindings": SourceParentBinding[] | null;
+    "Rows": SourceParentRow[] | null;
+}
+
+export interface SourceParentRow {
+    "Env": vprocore$0.ProjectMetadataRow;
+    "Admin": vprocore$0.ProjectMetadataRow;
+}
+
+export type SourceParentSharedReference = SIVIParentSharedReference;
+
+export interface SourceParentSharedReferenceChoice {
+    "rowId": string;
+    "code": string | null;
+    "description": string | null;
+    "selectable": boolean;
+    "diagnostic": string;
+}
+
+export interface SourceParentWriteResult {
+    "ChangedCells": number;
+    "HistoryID": string;
+}
+
+export interface SourceProjectChoices {
+    "ContextID": string;
+    "Project": string;
+    "Source": string;
+    "Alias": string;
+    "Table": string;
+    "SourceOption": number;
+    "Choices": vprocore$0.ProjectMetadataTable;
+}
+
+export type SourceProjectSelection = SIVIProjectSelection;

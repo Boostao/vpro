@@ -1,10 +1,6 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -14,6 +10,8 @@ import (
 	"reflect"
 	"strconv"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const SiviHeightHistoryTable = "__VPRO_SIVIHeightHistory"
@@ -124,7 +122,7 @@ func WriteSIVIVegetationCellsWithHooks(s *vprocore.ContextService, ctx context.C
 			if err != nil {
 				return err
 			}
-			audit, err := AppendSIVIPlannedAudits(before[project+"_Audit"], records)
+			audit, err := AppendSourcePlannedAudits(before[project+"_Audit"], records)
 			if err != nil {
 				return err
 			}
@@ -239,11 +237,11 @@ func applySIVIHeightAssignments(ctx context.Context, tx *sql.Tx, project, plot s
 			}
 			idCell := row.Cells[columns["ID"]]
 			if idCell.Storage != "integer" || idCell.Integer == nil {
-				return vprocore.ProjectMetadataTable{}, nil, nil, errors.New("SIVI writes require the original signed32 application ID")
+				return vprocore.ProjectMetadataTable{}, nil, nil, errors.New("SIVI writes require the original record ID")
 			}
 			id, err := strconv.ParseInt(*idCell.Integer, 10, 32)
 			if err != nil || id < math.MinInt32 || id > math.MaxInt32 {
-				return vprocore.ProjectMetadataTable{}, nil, nil, errors.New("SIVI writes require the original signed32 application ID")
+				return vprocore.ProjectMetadataTable{}, nil, nil, errors.New("SIVI writes require the original record ID")
 			}
 			table := vprocore.QuoteHeaderIdentifier(project + "_Veg")
 			if err := vprocore.RequireChildIdentity(tx, table, "Veg", plot, id); err != nil {
@@ -297,7 +295,7 @@ func applySIVIHeightAssignments(ctx context.Context, tx *sql.Tx, project, plot s
 	return planned, changes, records, nil
 }
 
-func AppendSIVIPlannedAudits(original vprocore.ProjectMetadataTable, records []vprocore.AuditEntry) (vprocore.ProjectMetadataTable, error) {
+func AppendSourcePlannedAudits(original vprocore.ProjectMetadataTable, records []vprocore.AuditEntry) (vprocore.ProjectMetadataTable, error) {
 	columns, err := vprocore.SiteUnitTransferColumns(original, "Project", "User", "PlotNumber", "Table", "EditField",
 		"EditWhen", "BeforeEdit", "AfterEdit", "Restore", "Flag", "ID")
 	if err != nil || len(columns) != 11 {

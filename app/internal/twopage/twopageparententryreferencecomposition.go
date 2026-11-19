@@ -1,24 +1,22 @@
 package twopage
 
 import (
+	"context"
+	"database/sql"
+	"errors"
+
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-import (
-	"context"
-	"database/sql"
-	"errors"
-)
-
 type TwoPageEntryReferenceSnapshot struct {
-	Original                     *sourceform.SiviParentProjection
+	Original                     *sourceform.SourceParentProjection
 	ProjectSource, WorkingSource int
 	Zone, SubZone                vprocore.ProjectMetadataCell
-	Fields                       []sourceform.SIVIParentSharedReference
+	Fields                       []sourceform.SourceParentSharedReference
 	Policies                     []TwoPageEntryFieldPolicy
 	MasterEditingAvailable       bool
-	ProjectChoices               *sourceform.SIVIProjectChoices
+	ProjectChoices               *sourceform.SourceProjectChoices
 	ProjectAssignmentAvailable   bool
 	ProjectAssignmentDiagnostic  string
 }
@@ -27,14 +25,14 @@ type TwoPageEntryReferenceSnapshotInternal = TwoPageEntryReferenceSnapshot
 
 func ReadTwoPageEntryReferenceFields(ctx context.Context, tx *sql.Tx, owner *vprocore.SqliteContext,
 	provider *TwoPageEntryReferenceProvider, contextID, form string, selection TwoPageEntryReferenceSelection,
-	aliases TwoPageEntryReferenceAliases, zone, subZone vprocore.ProjectMetadataCell) ([]sourceform.SIVIParentSharedReference, error) {
+	aliases TwoPageEntryReferenceAliases, zone, subZone vprocore.ProjectMetadataCell) ([]sourceform.SourceParentSharedReference, error) {
 	return readTwoPageEntryReferenceFieldsWithHistoricalFilters(ctx, tx, owner, provider, contextID, form, selection,
 		aliases, zone, subZone, false)
 }
 
 func readTwoPageEntryReferenceFieldsWithHistoricalFilters(ctx context.Context, tx *sql.Tx, owner *vprocore.SqliteContext,
 	provider *TwoPageEntryReferenceProvider, contextID, form string, selection TwoPageEntryReferenceSelection,
-	aliases TwoPageEntryReferenceAliases, zone, subZone vprocore.ProjectMetadataCell, historical bool) ([]sourceform.SIVIParentSharedReference, error) {
+	aliases TwoPageEntryReferenceAliases, zone, subZone vprocore.ProjectMetadataCell, historical bool) ([]sourceform.SourceParentSharedReference, error) {
 	if tx == nil || owner == nil || provider == nil {
 		return nil, errors.New("complete-entry references require the owned transaction and catalogue provider")
 	}
@@ -56,9 +54,9 @@ func readTwoPageEntryReferenceFieldsWithHistoricalFilters(ctx context.Context, t
 			return nil, errors.New("complete-entry reference provider changed its exact source policies")
 		}
 	}
-	result := []sourceform.SIVIParentSharedReference{}
+	result := []sourceform.SourceParentSharedReference{}
 	for _, field := range fields {
-		var reference sourceform.SIVIParentSharedReference
+		var reference sourceform.SourceParentSharedReference
 		var err error
 		if historical && (field.Column == "SubZone" || field.Column == "SiteSeries") {
 			_, filterError := twoPageEntryBECFilter("Zone", zone, 4)
@@ -66,11 +64,11 @@ func readTwoPageEntryReferenceFieldsWithHistoricalFilters(ctx context.Context, t
 				_, filterError = twoPageEntryBECFilter("SubZone", subZone, 8)
 			}
 			if filterError != nil {
-				result = append(result, sourceform.SIVIParentSharedReference{Column: field.Column, ListName: field.List,
+				result = append(result, sourceform.SourceParentSharedReference{Column: field.Column, ListName: field.List,
 					Required: field.Required, Source: "owned historical BEC filters",
 					Diagnostic:  "Historical BEC filter cannot query choices: " + filterError.Error(),
 					Definitions: vprocore.ProjectMetadataTable{Columns: []vprocore.ProjectMetadataColumn{}, Rows: []vprocore.ProjectMetadataRow{}},
-					Choices:     []sourceform.SIVIParentSharedReferenceChoice{}})
+					Choices:     []sourceform.SourceParentSharedReferenceChoice{}})
 				continue
 			}
 		}
@@ -160,11 +158,11 @@ func ReadTwoPageEntryReferenceSnapshot(s *vprocore.ContextService, ctx context.C
 			if err != nil {
 				return nil, err
 			}
-			choices, err := sourceform.ReadSIVIProjectChoicesAtAlias(ctx, owner, tx, contextID, selection.ProjectSource, "project")
+			choices, err := sourceform.ReadSourceProjectChoicesAtAlias(ctx, owner, tx, contextID, selection.ProjectSource, "project")
 			if err != nil {
 				return nil, err
 			}
-			available, diagnostic, err := sourceform.SiviProjectAssignmentAvailability(ctx, tx, selection.ProjectSource)
+			available, diagnostic, err := sourceform.SourceProjectAssignmentAvailability(ctx, tx, selection.ProjectSource)
 			if err != nil {
 				return nil, err
 			}

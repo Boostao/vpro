@@ -1,19 +1,17 @@
 package sivi
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIParentDirectOwnedJSONWriteAndRestoration(t *testing.T) {
@@ -118,7 +116,7 @@ func TestSIVIParentDirectTransportRejectsOmissionsUnicodeAndActions(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		var decoded sourceform.SIVIParentCellEdit
+		var decoded sourceform.SourceParentCellEdit
 		if err := json.Unmarshal(bad, &decoded); err == nil {
 			t.Fatal("direct cell omitted its explicit ownership/value", key)
 		}

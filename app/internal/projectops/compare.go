@@ -120,10 +120,6 @@ func formatComparableCell(cell rawSQLiteCell, declaredBool bool) *string {
 	}
 }
 
-func sameNullableString(a, b *string) bool {
-	return sameNullableText(a, b, false)
-}
-
 func sameNullableText(a, b *string, caseInsensitive bool) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
@@ -189,20 +185,23 @@ func loadProjectSnapshotFromQueryer(ctx context.Context, tx sqliteQueryer, dbPat
 		if pErr != nil {
 			return nil, pErr
 		}
-		for pRows.Next() {
-			var cid, notNull, pk int
-			var cName, cType string
-			var defVal sql.NullString
-			if err := pRows.Scan(&cid, &cName, &cType, &notNull, &defVal, &pk); err != nil {
-				pRows.Close()
-				return nil, err
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, pRows.Close()) }()
+			for pRows.Next() {
+				var cid, notNull, pk int
+				var cName, cType string
+				var defVal sql.NullString
+				if err := pRows.Scan(&cid, &cName, &cType, &notNull, &defVal, &pk); err != nil {
+
+					return err
+				}
+				upper := strings.ToUpper(cType)
+				if strings.Contains(upper, "BOOL") || strings.Contains(upper, "BIT") || cName == "Flag" {
+					boolCols[cName] = true
+				}
 			}
-			upper := strings.ToUpper(cType)
-			if strings.Contains(upper, "BOOL") || strings.Contains(upper, "BIT") || cName == "Flag" {
-				boolCols[cName] = true
-			}
-		}
-		if err := errors.Join(pRows.Err(), pRows.Close()); err != nil {
+			return pRows.Err()
+		}(); err != nil {
 			return nil, err
 		}
 
@@ -336,8 +335,11 @@ func loadProjectSnapshotFromQueryer(ctx context.Context, tx sqliteQueryer, dbPat
 	if err != nil {
 		return nil, err
 	}
-	hasMetaTable = mCheckRows.Next()
-	if err := errors.Join(mCheckRows.Err(), mCheckRows.Close()); err != nil {
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, mCheckRows.Close()) }()
+		hasMetaTable = mCheckRows.Next()
+		return mCheckRows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 	if hasMetaTable {
@@ -711,10 +713,6 @@ func diffMetadataSnapshots(srcSnap, tgtSnap *loadedProjectSnapshot, caseInsensit
 		"Metadata", "", metaCols, srcSnap.metaRows, tgtSnap.metaRows,
 		metaGroupFn, metaGroupFn, map[string]bool{"ID": true}, false, caseInsensitive,
 	)
-}
-
-func diffLoadedSnapshots(srcSnap, tgtSnap *loadedProjectSnapshot) CompareProjectsResult {
-	return diffLoadedSnapshotsWithOptions(srcSnap, tgtSnap, false)
 }
 
 func diffLoadedSnapshotsWithOptions(srcSnap, tgtSnap *loadedProjectSnapshot, caseInsensitive bool) CompareProjectsResult {

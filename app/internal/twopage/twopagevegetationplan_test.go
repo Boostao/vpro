@@ -1,11 +1,6 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +8,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func twoPageVegetationPlanFixture(t *testing.T, form string) *twoPageVegetationOriginal {
@@ -212,6 +210,7 @@ func TestTwoPageVegetationPlanOwnerAndPhysicalWitnessRefusals(t *testing.T) {
 	if got, err := planTwoPageVegetationEdits(ctx, original, []twoPageVegetationEdit{edit}); got != nil || !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled planning accepted: %+v %v", got, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if got, err := planTwoPageVegetationEdits(nil, original, []twoPageVegetationEdit{edit}); got != nil || err == nil {
 		t.Fatal("nil planning context accepted")
 	}

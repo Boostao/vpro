@@ -1,16 +1,14 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSummaryVegetationFieldListSaveWireCommitReplayAndDrift(t *testing.T) {
@@ -126,6 +124,7 @@ func TestSummaryVegetationFieldListSaveGateContextAndStrictRefusal(t *testing.T)
 			return (*SummaryVegetationFieldListService)(nil).SaveSummaryVegetationFieldList(t.Context(), id, string(raw))
 		},
 		func() *SummaryVegetationFieldListOutcome {
+			//lint:ignore SA1012 intentional nil-context guard test
 			return service.SaveSummaryVegetationFieldList(nil, id, string(raw))
 		},
 	} {

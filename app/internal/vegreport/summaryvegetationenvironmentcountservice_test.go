@@ -1,11 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -16,6 +11,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func summaryEnvironmentalCountOwnedFixture(t *testing.T, external bool) (*SummaryVegetationEnvironmentalCountService, vprocore.ProjectState) {
@@ -45,6 +43,7 @@ func TestSummaryEnvironmentalCountServiceGateAndRequest(t *testing.T) {
 			t.Fatal("invalid context accepted", got, err)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if got, err := service.GetEnvironmentalPlotCount(nil, state.ContextID, &unit); got != nil || err == nil {
 		t.Fatal(got, err)
 	}

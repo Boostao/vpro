@@ -1,24 +1,21 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-
 	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func workbookServiceFixture(t *testing.T, external bool) (*EnvironmentWorkbookService, vprocore.ProjectState) {
@@ -108,6 +105,7 @@ func TestLongEnvironmentWorkbookServiceRawUnicodeAndScopeRefusal(t *testing.T) {
 	if _, err := service.GetReview(ctx, state.ContextID, `{"title":""}`); !errors.Is(err, context.Canceled) {
 		t.Fatal("cancelled request published review", err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := service.GetReview(nil, state.ContextID, `{"title":""}`); err == nil {
 		t.Fatal("nil context published")
 	}

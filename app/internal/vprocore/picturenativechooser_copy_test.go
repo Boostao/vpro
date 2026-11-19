@@ -8,6 +8,7 @@ import (
 )
 
 func TestPictureNativeChooserOwnerUsesPlainFileSelectionCopy(t *testing.T) {
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, _, err := PictureNativeChooserOwner(nil); err == nil {
 		t.Fatal("expected error on nil context")
 	} else if strings.Contains(strings.ToLower(err.Error()), "picture selection") || !strings.Contains(strings.ToLower(err.Error()), "file selection") {

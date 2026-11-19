@@ -314,17 +314,20 @@ func SaveHierarchyTableAs(ctx context.Context, contexts *vprocore.ContextService
 			if pErr != nil {
 				return pErr
 			}
-			for colRows.Next() {
-				var cid, notNull, pk int
-				var name, decl string
-				var dflt any
-				if sErr := colRows.Scan(&cid, &name, &decl, &notNull, &dflt, &pk); sErr != nil {
-					colRows.Close()
-					return sErr
+			if cErr := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, colRows.Close()) }()
+				for colRows.Next() {
+					var cid, notNull, pk int
+					var name, decl string
+					var dflt any
+					if sErr := colRows.Scan(&cid, &name, &decl, &notNull, &dflt, &pk); sErr != nil {
+
+						return sErr
+					}
+					colSet[name] = true
 				}
-				colSet[name] = true
-			}
-			if cErr := errors.Join(colRows.Err(), colRows.Close()); cErr != nil {
+				return colRows.Err()
+			}(); cErr != nil {
 				return cErr
 			}
 			optExpr := func(col string) string {
@@ -342,15 +345,18 @@ func SaveHierarchyTableAs(ctx context.Context, contexts *vprocore.ContextService
 			if rErr != nil {
 				return rErr
 			}
-			for rows.Next() {
-				var item copiedHierRow
-				if sErr := rows.Scan(&item.id, &item.name, &item.parent, &item.level, &item.tag, &item.myOrder, &item.childID, &item.startChild, &item.lastChild, &item.flag); sErr != nil {
-					rows.Close()
-					return sErr
+			return func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+				for rows.Next() {
+					var item copiedHierRow
+					if sErr := rows.Scan(&item.id, &item.name, &item.parent, &item.level, &item.tag, &item.myOrder, &item.childID, &item.startChild, &item.lastChild, &item.flag); sErr != nil {
+
+						return sErr
+					}
+					copied = append(copied, item)
 				}
-				copied = append(copied, item)
-			}
-			return errors.Join(rows.Err(), rows.Close())
+				return rows.Err()
+			}()
 		})
 		if snapErr != nil {
 			return struct{}{}, snapErr

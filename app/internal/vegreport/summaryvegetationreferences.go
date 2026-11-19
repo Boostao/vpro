@@ -1,15 +1,13 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"strconv"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SummaryVegetationReferenceOptions struct {
@@ -49,11 +47,11 @@ func summaryVegetationMasterLongInteger(cell vprocore.ProjectMetadataCell) (*int
 		return nil, nil
 	}
 	if cell.Storage != "integer" {
-		return nil, errors.New("master Lifeform requires exact nullable signed32 LONG storage")
+		return nil, errors.New("master Lifeform requires exact nullable whole-number Lifeform storage")
 	}
 	value, err := strconv.ParseInt(*cell.Integer, 10, 32)
 	if err != nil {
-		return nil, errors.New("master Lifeform exceeds source signed32 LONG range")
+		return nil, errors.New("master Lifeform exceeds source valid Lifeform number range")
 	}
 	result := int(value)
 	return &result, nil

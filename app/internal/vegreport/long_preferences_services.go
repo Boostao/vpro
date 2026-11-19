@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -51,51 +52,50 @@ type LongVegetationPreferencesReview struct {
 	Values      LongVegetationPreferenceValues `json:"values"`
 }
 
-type LongVegetationPreferencesOutcome struct {
-	ContextID    string `json:"contextId"`
-	Changed      bool   `json:"changed"`
-	Committed    bool   `json:"committed"`
-	ErrorMessage string `json:"errorMessage"`
-}
+type LongVegetationPreferencesOutcome = vprocore.ReportPreferenceOutcome
 
 type LongVegetationPreferencesService struct {
-	contexts *vprocore.ContextService
-	snapshot vprocore.PublicationReadSnapshotHooks
+	reportcore.PreferencesService[LongVegetationPreferencesRequest, LongVegetationPreferencesReview]
 }
 
 func NewLongVegetationPreferencesService(contexts *vprocore.ContextService) *LongVegetationPreferencesService {
-	return &LongVegetationPreferencesService{contexts: contexts}
-}
-
-func (s *LongVegetationPreferencesService) helper() vprocore.ReportPreferenceHelper {
-	if s == nil {
-		return vprocore.ReportPreferenceHelper{}
+	return &LongVegetationPreferencesService{
+		PreferencesService: reportcore.PreferencesService[LongVegetationPreferencesRequest, LongVegetationPreferencesReview]{
+			Contexts: contexts,
+			Label:    "Long Vegetation",
+			ReadFn: func(ctx context.Context, contextID string, plots *vprocore.PlotService, owner *vprocore.SqliteContext, _ *sql.Tx) (*LongVegetationPreferencesReview, error) {
+				title, err := ReadLongVegetationPreference(plots.Projects.Preferences, ctx)
+				if err != nil {
+					return nil, err
+				}
+				if err := vprocore.ValidateGoogleEarthReviewStrings(title); err != nil {
+					return nil, err
+				}
+				return &LongVegetationPreferencesReview{
+					ContextID: contextID, Project: owner.Selection.Project, ProjectPath: owner.Selection.ProjectPath,
+					SU: owner.Selection.SU, SUPath: owner.Selection.SUPath, Values: LongVegetationPreferenceValues{Title: title},
+				}, nil
+			},
+			WriteFn: func(ctx context.Context, _ string, plots *vprocore.PlotService, request LongVegetationPreferencesRequest) (vprocore.ReportPreferenceUpdate, error) {
+				return CompareAndSetLongVegetationPreference(plots.Projects.Preferences, ctx, request.Expected.Title, request.Proposed.Title)
+			},
+		},
 	}
-	return vprocore.ReportPreferenceHelper{Contexts: s.contexts, Snapshot: s.snapshot}
 }
 
 func (s *LongVegetationPreferencesService) GetLongVegetationPreferences(ctx context.Context, contextID string) (*LongVegetationPreferencesReview, error) {
-	return vprocore.GetOwnedReportPreferences(ctx, s.helper(), contextID, "Long Vegetation",
-		func(plots *vprocore.PlotService, owner *vprocore.SqliteContext, _ *sql.Tx) (*LongVegetationPreferencesReview, error) {
-			title, err := ReadLongVegetationPreference(plots.Projects.Preferences, ctx)
-			if err != nil {
-				return nil, err
-			}
-			if err := vprocore.ValidateGoogleEarthReviewStrings(title); err != nil {
-				return nil, err
-			}
-			return &LongVegetationPreferencesReview{
-				ContextID: contextID, Project: owner.Selection.Project, ProjectPath: owner.Selection.ProjectPath,
-				SU: owner.Selection.SU, SUPath: owner.Selection.SUPath, Values: LongVegetationPreferenceValues{Title: title},
-			}, nil
-		})
+	if s == nil {
+		return nil, errors.New("Long Vegetation preferences are unavailable")
+	}
+	return s.Get(ctx, contextID)
 }
 
 func (s *LongVegetationPreferencesService) SaveLongVegetationPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationPreferencesOutcome {
-	out := LongVegetationPreferencesOutcome(vprocore.SaveOwnedReportPreferences(ctx, s.helper(), contextID, requestJSON, "Long Vegetation", nil,
-		func(plots *vprocore.PlotService, request LongVegetationPreferencesRequest) (vprocore.ReportPreferenceUpdate, error) {
-			return CompareAndSetLongVegetationPreference(plots.Projects.Preferences, ctx, request.Expected.Title, request.Proposed.Title)
-		}))
+	if s == nil {
+		out := vprocore.ReportPreferenceOutcome{ContextID: contextID, ErrorMessage: "Long Vegetation preferences are unavailable"}
+		return &out
+	}
+	out := s.SaveJSON(ctx, contextID, requestJSON)
 	return &out
 }
 
@@ -140,48 +140,47 @@ type LongVegetationStatisticsPreferencesReview struct {
 	Values      LongVegetationStatisticsPreferenceValues `json:"values"`
 }
 
-type LongVegetationStatisticsPreferencesOutcome struct {
-	ContextID    string `json:"contextId"`
-	Changed      bool   `json:"changed"`
-	Committed    bool   `json:"committed"`
-	ErrorMessage string `json:"errorMessage"`
-}
+type LongVegetationStatisticsPreferencesOutcome = vprocore.ReportPreferenceOutcome
 
 type LongVegetationStatisticsPreferencesService struct {
-	contexts *vprocore.ContextService
-	snapshot vprocore.PublicationReadSnapshotHooks
+	reportcore.PreferencesService[LongVegetationStatisticsPreferencesRequest, LongVegetationStatisticsPreferencesReview]
 }
 
 func NewLongVegetationStatisticsPreferencesService(contexts *vprocore.ContextService) *LongVegetationStatisticsPreferencesService {
-	return &LongVegetationStatisticsPreferencesService{contexts: contexts}
-}
-
-func (s *LongVegetationStatisticsPreferencesService) helper() vprocore.ReportPreferenceHelper {
-	if s == nil {
-		return vprocore.ReportPreferenceHelper{}
+	return &LongVegetationStatisticsPreferencesService{
+		PreferencesService: reportcore.PreferencesService[LongVegetationStatisticsPreferencesRequest, LongVegetationStatisticsPreferencesReview]{
+			Contexts: contexts,
+			Label:    "Long Vegetation statistics",
+			ReadFn: func(ctx context.Context, contextID string, plots *vprocore.PlotService, owner *vprocore.SqliteContext, _ *sql.Tx) (*LongVegetationStatisticsPreferencesReview, error) {
+				values, err := ReadLongVegetationStatisticsPreferences(plots.Projects.Preferences, ctx)
+				if err != nil {
+					return nil, err
+				}
+				return &LongVegetationStatisticsPreferencesReview{
+					ContextID: contextID, Project: owner.Selection.Project, ProjectPath: owner.Selection.ProjectPath,
+					SU: owner.Selection.SU, SUPath: owner.Selection.SUPath, Values: values,
+				}, nil
+			},
+			WriteFn: func(ctx context.Context, _ string, plots *vprocore.PlotService, request LongVegetationStatisticsPreferencesRequest) (vprocore.ReportPreferenceUpdate, error) {
+				return CompareAndSetLongVegetationStatisticsPreferences(plots.Projects.Preferences, ctx, request.Expected, request.Proposed)
+			},
+		},
 	}
-	return vprocore.ReportPreferenceHelper{Contexts: s.contexts, Snapshot: s.snapshot}
 }
 
 func (s *LongVegetationStatisticsPreferencesService) GetLongVegetationStatisticsPreferences(ctx context.Context, contextID string) (*LongVegetationStatisticsPreferencesReview, error) {
-	return vprocore.GetOwnedReportPreferences(ctx, s.helper(), contextID, "Long Vegetation statistics",
-		func(plots *vprocore.PlotService, owner *vprocore.SqliteContext, _ *sql.Tx) (*LongVegetationStatisticsPreferencesReview, error) {
-			values, err := ReadLongVegetationStatisticsPreferences(plots.Projects.Preferences, ctx)
-			if err != nil {
-				return nil, err
-			}
-			return &LongVegetationStatisticsPreferencesReview{
-				ContextID: contextID, Project: owner.Selection.Project, ProjectPath: owner.Selection.ProjectPath,
-				SU: owner.Selection.SU, SUPath: owner.Selection.SUPath, Values: values,
-			}, nil
-		})
+	if s == nil {
+		return nil, errors.New("Long Vegetation statistics preferences are unavailable")
+	}
+	return s.Get(ctx, contextID)
 }
 
 func (s *LongVegetationStatisticsPreferencesService) SaveLongVegetationStatisticsPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationStatisticsPreferencesOutcome {
-	out := LongVegetationStatisticsPreferencesOutcome(vprocore.SaveOwnedReportPreferences(ctx, s.helper(), contextID, requestJSON, "Long Vegetation statistics", nil,
-		func(plots *vprocore.PlotService, request LongVegetationStatisticsPreferencesRequest) (vprocore.ReportPreferenceUpdate, error) {
-			return CompareAndSetLongVegetationStatisticsPreferences(plots.Projects.Preferences, ctx, request.Expected, request.Proposed)
-		}))
+	if s == nil {
+		out := vprocore.ReportPreferenceOutcome{ContextID: contextID, ErrorMessage: "Long Vegetation statistics preferences are unavailable"}
+		return &out
+	}
+	out := s.SaveJSON(ctx, contextID, requestJSON)
 	return &out
 }
 
@@ -229,48 +228,47 @@ type LongVegetationSwitchPreferencesReview struct {
 	Values      LongVegetationSwitchPreferenceValues `json:"values"`
 }
 
-type LongVegetationSwitchPreferencesOutcome struct {
-	ContextID    string `json:"contextId"`
-	Changed      bool   `json:"changed"`
-	Committed    bool   `json:"committed"`
-	ErrorMessage string `json:"errorMessage"`
-}
+type LongVegetationSwitchPreferencesOutcome = vprocore.ReportPreferenceOutcome
 
 type LongVegetationSwitchPreferencesService struct {
-	contexts *vprocore.ContextService
-	snapshot vprocore.PublicationReadSnapshotHooks
+	reportcore.PreferencesService[LongVegetationSwitchPreferencesRequest, LongVegetationSwitchPreferencesReview]
 }
 
 func NewLongVegetationSwitchPreferencesService(contexts *vprocore.ContextService) *LongVegetationSwitchPreferencesService {
-	return &LongVegetationSwitchPreferencesService{contexts: contexts}
-}
-
-func (s *LongVegetationSwitchPreferencesService) helper() vprocore.ReportPreferenceHelper {
-	if s == nil {
-		return vprocore.ReportPreferenceHelper{}
+	return &LongVegetationSwitchPreferencesService{
+		PreferencesService: reportcore.PreferencesService[LongVegetationSwitchPreferencesRequest, LongVegetationSwitchPreferencesReview]{
+			Contexts: contexts,
+			Label:    "Long Vegetation switch",
+			ReadFn: func(ctx context.Context, contextID string, plots *vprocore.PlotService, owner *vprocore.SqliteContext, _ *sql.Tx) (*LongVegetationSwitchPreferencesReview, error) {
+				values, err := ReadLongVegetationSwitchPreferences(plots.Projects.Preferences, ctx)
+				if err != nil {
+					return nil, err
+				}
+				return &LongVegetationSwitchPreferencesReview{
+					ContextID: contextID, Project: owner.Selection.Project, ProjectPath: owner.Selection.ProjectPath,
+					SU: owner.Selection.SU, SUPath: owner.Selection.SUPath, Values: values,
+				}, nil
+			},
+			WriteFn: func(ctx context.Context, _ string, plots *vprocore.PlotService, request LongVegetationSwitchPreferencesRequest) (vprocore.ReportPreferenceUpdate, error) {
+				return CompareAndSetLongVegetationSwitchPreferences(plots.Projects.Preferences, ctx, request.Expected, request.Proposed)
+			},
+		},
 	}
-	return vprocore.ReportPreferenceHelper{Contexts: s.contexts, Snapshot: s.snapshot}
 }
 
 func (s *LongVegetationSwitchPreferencesService) GetLongVegetationSwitchPreferences(ctx context.Context, contextID string) (*LongVegetationSwitchPreferencesReview, error) {
-	return vprocore.GetOwnedReportPreferences(ctx, s.helper(), contextID, "Long Vegetation switch",
-		func(plots *vprocore.PlotService, owner *vprocore.SqliteContext, _ *sql.Tx) (*LongVegetationSwitchPreferencesReview, error) {
-			values, err := ReadLongVegetationSwitchPreferences(plots.Projects.Preferences, ctx)
-			if err != nil {
-				return nil, err
-			}
-			return &LongVegetationSwitchPreferencesReview{
-				ContextID: contextID, Project: owner.Selection.Project, ProjectPath: owner.Selection.ProjectPath,
-				SU: owner.Selection.SU, SUPath: owner.Selection.SUPath, Values: values,
-			}, nil
-		})
+	if s == nil {
+		return nil, errors.New("Long Vegetation switch preferences are unavailable")
+	}
+	return s.Get(ctx, contextID)
 }
 
 func (s *LongVegetationSwitchPreferencesService) SaveLongVegetationSwitchPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationSwitchPreferencesOutcome {
-	out := LongVegetationSwitchPreferencesOutcome(vprocore.SaveOwnedReportPreferences(ctx, s.helper(), contextID, requestJSON, "Long Vegetation switch", nil,
-		func(plots *vprocore.PlotService, request LongVegetationSwitchPreferencesRequest) (vprocore.ReportPreferenceUpdate, error) {
-			return CompareAndSetLongVegetationSwitchPreferences(plots.Projects.Preferences, ctx, request.Expected, request.Proposed)
-		}))
+	if s == nil {
+		out := vprocore.ReportPreferenceOutcome{ContextID: contextID, ErrorMessage: "Long Vegetation switch preferences are unavailable"}
+		return &out
+	}
+	out := s.SaveJSON(ctx, contextID, requestJSON)
 	return &out
 }
 
@@ -342,48 +340,47 @@ type LongVegetationThresholdPreferencesReview struct {
 	Values      LongVegetationThresholdPreferenceValues `json:"values"`
 }
 
-type LongVegetationThresholdPreferencesOutcome struct {
-	ContextID    string `json:"contextId"`
-	Changed      bool   `json:"changed"`
-	Committed    bool   `json:"committed"`
-	ErrorMessage string `json:"errorMessage"`
-}
+type LongVegetationThresholdPreferencesOutcome = vprocore.ReportPreferenceOutcome
 
 type LongVegetationThresholdPreferencesService struct {
-	contexts *vprocore.ContextService
-	snapshot vprocore.PublicationReadSnapshotHooks
+	reportcore.PreferencesService[LongVegetationThresholdPreferencesRequest, LongVegetationThresholdPreferencesReview]
 }
 
 func NewLongVegetationThresholdPreferencesService(contexts *vprocore.ContextService) *LongVegetationThresholdPreferencesService {
-	return &LongVegetationThresholdPreferencesService{contexts: contexts}
-}
-
-func (s *LongVegetationThresholdPreferencesService) helper() vprocore.ReportPreferenceHelper {
-	if s == nil {
-		return vprocore.ReportPreferenceHelper{}
+	return &LongVegetationThresholdPreferencesService{
+		PreferencesService: reportcore.PreferencesService[LongVegetationThresholdPreferencesRequest, LongVegetationThresholdPreferencesReview]{
+			Contexts: contexts,
+			Label:    "Long Vegetation threshold",
+			ReadFn: func(ctx context.Context, contextID string, plots *vprocore.PlotService, owner *vprocore.SqliteContext, _ *sql.Tx) (*LongVegetationThresholdPreferencesReview, error) {
+				values, err := ReadLongVegetationThresholdPreferences(plots.Projects.Preferences, ctx)
+				if err != nil {
+					return nil, err
+				}
+				return &LongVegetationThresholdPreferencesReview{
+					ContextID: contextID, Project: owner.Selection.Project, ProjectPath: owner.Selection.ProjectPath,
+					SU: owner.Selection.SU, SUPath: owner.Selection.SUPath, Values: values,
+				}, nil
+			},
+			WriteFn: func(ctx context.Context, _ string, plots *vprocore.PlotService, request LongVegetationThresholdPreferencesRequest) (vprocore.ReportPreferenceUpdate, error) {
+				return CompareAndSetLongVegetationThresholdPreferences(plots.Projects.Preferences, ctx, request.Expected, request.Proposed)
+			},
+		},
 	}
-	return vprocore.ReportPreferenceHelper{Contexts: s.contexts, Snapshot: s.snapshot}
 }
 
 func (s *LongVegetationThresholdPreferencesService) GetLongVegetationThresholdPreferences(ctx context.Context, contextID string) (*LongVegetationThresholdPreferencesReview, error) {
-	return vprocore.GetOwnedReportPreferences(ctx, s.helper(), contextID, "Long Vegetation threshold",
-		func(plots *vprocore.PlotService, owner *vprocore.SqliteContext, _ *sql.Tx) (*LongVegetationThresholdPreferencesReview, error) {
-			values, err := ReadLongVegetationThresholdPreferences(plots.Projects.Preferences, ctx)
-			if err != nil {
-				return nil, err
-			}
-			return &LongVegetationThresholdPreferencesReview{
-				ContextID: contextID, Project: owner.Selection.Project, ProjectPath: owner.Selection.ProjectPath,
-				SU: owner.Selection.SU, SUPath: owner.Selection.SUPath, Values: values,
-			}, nil
-		})
+	if s == nil {
+		return nil, errors.New("Long Vegetation threshold preferences are unavailable")
+	}
+	return s.Get(ctx, contextID)
 }
 
 func (s *LongVegetationThresholdPreferencesService) SaveLongVegetationThresholdPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationThresholdPreferencesOutcome {
-	out := LongVegetationThresholdPreferencesOutcome(vprocore.SaveOwnedReportPreferences(ctx, s.helper(), contextID, requestJSON, "Long Vegetation threshold", nil,
-		func(plots *vprocore.PlotService, request LongVegetationThresholdPreferencesRequest) (vprocore.ReportPreferenceUpdate, error) {
-			return CompareAndSetLongVegetationThresholdPreferences(plots.Projects.Preferences, ctx, request.Expected, request.Proposed)
-		}))
+	if s == nil {
+		out := vprocore.ReportPreferenceOutcome{ContextID: contextID, ErrorMessage: "Long Vegetation threshold preferences are unavailable"}
+		return &out
+	}
+	out := s.SaveJSON(ctx, contextID, requestJSON)
 	return &out
 }
 
@@ -453,54 +450,50 @@ type LongVegetationGroupPreferencesReview struct {
 	Availability LongVegetationGroupAvailability     `json:"availability"`
 }
 
-type LongVegetationGroupPreferencesOutcome struct {
-	ContextID    string `json:"contextId"`
-	Changed      bool   `json:"changed"`
-	Committed    bool   `json:"committed"`
-	ErrorMessage string `json:"errorMessage"`
-}
+type LongVegetationGroupPreferencesOutcome = vprocore.ReportPreferenceOutcome
 
 type LongVegetationGroupPreferencesService struct {
-	contexts *vprocore.ContextService
-	snapshot vprocore.PublicationReadSnapshotHooks
+	reportcore.PreferencesService[LongVegetationGroupPreferencesRequest, LongVegetationGroupPreferencesReview]
 }
 
 func NewLongVegetationGroupPreferencesService(contexts *vprocore.ContextService) *LongVegetationGroupPreferencesService {
-	return &LongVegetationGroupPreferencesService{contexts: contexts}
-}
-
-func (s *LongVegetationGroupPreferencesService) helper() vprocore.ReportPreferenceHelper {
-	if s == nil {
-		return vprocore.ReportPreferenceHelper{}
+	avail := LongVegetationGroupAvailability{Layer: true, Strata: true, Lifeform: true, None: true}
+	return &LongVegetationGroupPreferencesService{
+		PreferencesService: reportcore.PreferencesService[LongVegetationGroupPreferencesRequest, LongVegetationGroupPreferencesReview]{
+			Contexts: contexts,
+			Label:    "Long Vegetation grouping",
+			ReadFn: func(ctx context.Context, contextID string, plots *vprocore.PlotService, owner *vprocore.SqliteContext, _ *sql.Tx) (*LongVegetationGroupPreferencesReview, error) {
+				values, err := ReadLongVegetationGroupPreferences(plots.Projects.Preferences, ctx)
+				if err != nil {
+					return nil, err
+				}
+				return &LongVegetationGroupPreferencesReview{
+					ContextID: contextID, Project: owner.Selection.Project, ProjectPath: owner.Selection.ProjectPath,
+					SU: owner.Selection.SU, SUPath: owner.Selection.SUPath, Values: values, Availability: avail,
+				}, nil
+			},
+			WriteFn: func(ctx context.Context, _ string, plots *vprocore.PlotService, request LongVegetationGroupPreferencesRequest) (vprocore.ReportPreferenceUpdate, error) {
+				if request.Expected.GroupBy != request.Proposed.GroupBy && !avail.allows(request.Proposed.GroupBy) {
+					return vprocore.ReportPreferenceUpdate{}, fmt.Errorf("Long Vegetation grouping choice %d is unavailable; saved LVGroupBy was not reset", request.Proposed.GroupBy)
+				}
+				return CompareAndSetLongVegetationGroupPreferences(plots.Projects.Preferences, ctx, request.Expected, request.Proposed)
+			},
+		},
 	}
-	return vprocore.ReportPreferenceHelper{Contexts: s.contexts, Snapshot: s.snapshot}
-}
-
-func (s *LongVegetationGroupPreferencesService) availability() LongVegetationGroupAvailability {
-	return LongVegetationGroupAvailability{Layer: true, Strata: true, Lifeform: true, None: true}
 }
 
 func (s *LongVegetationGroupPreferencesService) GetLongVegetationGroupPreferences(ctx context.Context, contextID string) (*LongVegetationGroupPreferencesReview, error) {
-	return vprocore.GetOwnedReportPreferences(ctx, s.helper(), contextID, "Long Vegetation grouping",
-		func(plots *vprocore.PlotService, owner *vprocore.SqliteContext, _ *sql.Tx) (*LongVegetationGroupPreferencesReview, error) {
-			values, err := ReadLongVegetationGroupPreferences(plots.Projects.Preferences, ctx)
-			if err != nil {
-				return nil, err
-			}
-			return &LongVegetationGroupPreferencesReview{
-				ContextID: contextID, Project: owner.Selection.Project, ProjectPath: owner.Selection.ProjectPath,
-				SU: owner.Selection.SU, SUPath: owner.Selection.SUPath, Values: values, Availability: s.availability(),
-			}, nil
-		})
+	if s == nil {
+		return nil, errors.New("Long Vegetation grouping preferences are unavailable")
+	}
+	return s.Get(ctx, contextID)
 }
 
 func (s *LongVegetationGroupPreferencesService) SaveLongVegetationGroupPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationGroupPreferencesOutcome {
-	out := LongVegetationGroupPreferencesOutcome(vprocore.SaveOwnedReportPreferences(ctx, s.helper(), contextID, requestJSON, "Long Vegetation grouping", nil,
-		func(plots *vprocore.PlotService, request LongVegetationGroupPreferencesRequest) (vprocore.ReportPreferenceUpdate, error) {
-			if request.Expected.GroupBy != request.Proposed.GroupBy && !s.availability().allows(request.Proposed.GroupBy) {
-				return vprocore.ReportPreferenceUpdate{}, fmt.Errorf("Long Vegetation grouping choice %d is unavailable; saved LVGroupBy was not reset", request.Proposed.GroupBy)
-			}
-			return CompareAndSetLongVegetationGroupPreferences(plots.Projects.Preferences, ctx, request.Expected, request.Proposed)
-		}))
+	if s == nil {
+		out := vprocore.ReportPreferenceOutcome{ContextID: contextID, ErrorMessage: "Long Vegetation grouping preferences are unavailable"}
+		return &out
+	}
+	out := s.SaveJSON(ctx, contextID, requestJSON)
 	return &out
 }

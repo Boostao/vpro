@@ -1,10 +1,6 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -15,11 +11,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const siviIdentityHistoryTable = "__VPRO_SIVIIdentityHistory"
 const SiviIdentityHistorySQL = `CREATE TABLE "__VPRO_SIVIIdentityHistory"(ID INTEGER PRIMARY KEY,Created TEXT NOT NULL,Proposal TEXT NOT NULL,Restored TEXT)`
-const SiviIdentityLedger = "__VPRO_ChildIdentity"
+const SourceIdentityLedger = "__VPRO_ChildIdentity"
 
 type SiviIdentityHistory struct {
 	Project, Plot   string
@@ -203,14 +201,14 @@ func WriteSIVIIdentities(s *vprocore.ContextService, ctx context.Context, contex
 				auditRecords = append(auditRecords, record)
 			}
 			event.Audits = append(event.Audits, auditRecords...)
-			plannedAudit, err := AppendSIVIPlannedAudits(baseline[project+"_Audit"], auditRecords)
+			plannedAudit, err := AppendSourcePlannedAudits(baseline[project+"_Audit"], auditRecords)
 			if err != nil {
 				return nil, false, err
 			}
 			expected := map[string]vprocore.ProjectMetadataTable{
-				project + "_Veg":   planned,
-				project + "_Audit": plannedAudit,
-				SiviIdentityLedger: ledger,
+				project + "_Veg":     planned,
+				project + "_Audit":   plannedAudit,
+				SourceIdentityLedger: ledger,
 			}
 			after, err := vprocore.EnvironmentSiteUnitTables(ctx, tx)
 			if err != nil {
@@ -289,7 +287,7 @@ func reserveSIVIIdentityPlan(ctx context.Context, tx *sql.Tx, project string, be
 
 func ReserveSourceChildIdentityPlan(ctx context.Context, tx *sql.Tx, project, kind, operation string, before map[string]vprocore.ProjectMetadataTable, cells []vprocore.ProjectMetadataCell) (map[string]vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, error) {
 	baseline := before
-	ledger, present := before[SiviIdentityLedger]
+	ledger, present := before[SourceIdentityLedger]
 	if !present {
 		if err := vprocore.EnsureChildIdentityTable(ctx, tx); err != nil {
 			return nil, vprocore.ProjectMetadataTable{}, err
@@ -298,10 +296,10 @@ func ReserveSourceChildIdentityPlan(ctx context.Context, tx *sql.Tx, project, ki
 		if err != nil {
 			return nil, vprocore.ProjectMetadataTable{}, err
 		}
-		if err := vprocore.VerifySiteUnitTransferTables(before, created, nil, SiviIdentityLedger); err != nil {
+		if err := vprocore.VerifySiteUnitTransferTables(before, created, nil, SourceIdentityLedger); err != nil {
 			return nil, vprocore.ProjectMetadataTable{}, err
 		}
-		ledger, baseline = created[SiviIdentityLedger], created
+		ledger, baseline = created[SourceIdentityLedger], created
 		if len(ledger.Rows) != 0 {
 			return nil, vprocore.ProjectMetadataTable{}, fmt.Errorf("new %s reservation ledger is not empty", operation)
 		}

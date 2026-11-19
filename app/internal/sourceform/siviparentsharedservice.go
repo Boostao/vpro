@@ -1,15 +1,13 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"strconv"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const siviParentSharedHistoryTable = "__VPRO_SIVIParentSharedHistory"
@@ -38,7 +36,7 @@ var SiviParentSharedNumberKinds = map[string]string{
 	"StartDate": "integer", "Latitude": "latitude", "Longitude": "longitude",
 }
 
-func ValidateSIVIParentSharedNumber(column, kind string, cell vprocore.ProjectMetadataCell) error {
+func ValidateSourceParentSharedNumber(column, kind string, cell vprocore.ProjectMetadataCell) error {
 	if cell.Storage == "null" {
 		return nil
 	}
@@ -66,7 +64,7 @@ func ValidateSIVIParentSharedNumber(column, kind string, cell vprocore.ProjectMe
 	}
 }
 
-var SiviParentSharedTextBounds = map[string]int{
+var SourceParentSharedTextBounds = map[string]int{
 	"SiteSurveyor": 30, "FieldNumber": 50, "Location": 255,
 	"NtsMapSheet": 8, "UTMZone": 2, "PlotRepresenting": 255,
 	"SiteSeries": 5, "MapUnit": 15, "SiteNotes": 0,
@@ -80,8 +78,8 @@ func SiviParentSharedSourceBinding(column string) string {
 }
 
 type SIVIParentSharedWrite struct {
-	Original *SIVIParentProjection `json:"original"`
-	Edits    []SIVIParentCellEdit  `json:"edits"`
+	Original *SourceParentProjection `json:"original"`
+	Edits    []SourceParentCellEdit  `json:"edits"`
 }
 
 func (request *SIVIParentSharedWrite) UnmarshalJSON(data []byte) error {
@@ -94,21 +92,21 @@ func (request *SIVIParentSharedWrite) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Registration is intentionally separate from the XL facade: shared storage
+// SourceParentSharedService — Registration is intentionally separate from the XL facade: shared storage
 // does not authorize XL callbacks or its whole-header Save.
-type SIVIParentSharedService struct {
-	Contexts   *vprocore.ContextService         `json:"-" yaml:"-"`
-	References SiviParentSharedReferenceReaders `json:"-" yaml:"-"`
+type SourceParentSharedService struct {
+	Contexts   *vprocore.ContextService           `json:"-" yaml:"-"`
+	References SourceParentSharedReferenceReaders `json:"-" yaml:"-"`
 }
 
-func NewSIVIParentSharedService(contexts *vprocore.ContextService) (*SIVIParentSharedService, error) {
+func NewSourceParentSharedService(contexts *vprocore.ContextService) (*SourceParentSharedService, error) {
 	if contexts == nil {
 		return nil, errors.New("SIVI shared-field service requires context ownership")
 	}
-	return &SIVIParentSharedService{Contexts: contexts}, nil
+	return &SourceParentSharedService{Contexts: contexts}, nil
 }
 
-func (s *SIVIParentSharedService) require(ctx context.Context) error {
+func (s *SourceParentSharedService) require(ctx context.Context) error {
 	if ctx == nil {
 		return errors.New("SIVI shared-field editing requires a context")
 	}
@@ -121,18 +119,18 @@ func (s *SIVIParentSharedService) require(ctx context.Context) error {
 	return nil
 }
 
-func (s *SIVIParentSharedService) GetOriginal(ctx context.Context, contextID, plot string) (*SIVIParentProjection, error) {
+func (s *SourceParentSharedService) GetOriginal(ctx context.Context, contextID, plot string) (*SourceParentProjection, error) {
 	if err := s.require(ctx); err != nil {
 		return nil, err
 	}
 	return ReadSIVIParent(s.Contexts, ctx, contextID, plot)
 }
 
-func PlanSIVIParentShared(ctx context.Context, original *SiviParentProjection, edits []SIVIParentCellEdit) ([]SiviParentScalarAssignment, error) {
+func PlanSIVIParentShared(ctx context.Context, original *SourceParentProjection, edits []SourceParentCellEdit) ([]SourceParentScalarAssignment, error) {
 	return PlanSIVIParentSharedScope(ctx, original, edits, false)
 }
 
-func PlanSIVIParentSharedScope(ctx context.Context, original *SiviParentProjection, edits []SIVIParentCellEdit, references bool) ([]SiviParentScalarAssignment, error) {
+func PlanSIVIParentSharedScope(ctx context.Context, original *SourceParentProjection, edits []SourceParentCellEdit, references bool) ([]SourceParentScalarAssignment, error) {
 	if original == nil || len(original.Rows) != 1 {
 		return nil, errors.New("SIVI shared-field editing requires one owned physical parent pair")
 	}
@@ -143,15 +141,15 @@ func PlanSIVIParentSharedScope(ctx context.Context, original *SiviParentProjecti
 		sourceOwners[SiviParentSharedSourceBinding(column)] = owner
 	}
 	if references {
-		for _, field := range SiviParentSharedReferenceFields {
+		for _, field := range SourceParentSharedReferenceFields {
 			sourceOwners[field.Column] = "Env"
 		}
 	}
-	sourceEdits := append([]SIVIParentCellEdit(nil), edits...)
+	sourceEdits := append([]SourceParentCellEdit(nil), edits...)
 	// The source planner uses literal bindings; writes/history use physical column names.
 	for i, edit := range sourceEdits {
 		_, allowed := SiviParentSharedOwners[edit.Column]
-		_, reference := SiviParentSharedReferenceField(edit.Column)
+		_, reference := SourceParentSharedReferenceField(edit.Column)
 		if !allowed && !(references && reference) {
 			return nil, fmt.Errorf("SIVI shared field %s is outside the canonical editor scope", edit.Column)
 		}
@@ -175,7 +173,7 @@ func PlanSIVIParentSharedScope(ctx context.Context, original *SiviParentProjecti
 	}
 	assignments, err := planSIVIParentCells(ctx, original.ContextID, original.Project, original.Plot, env, admin, sourceEdits,
 		sourceOwners, func(column string, cell vprocore.ProjectMetadataCell) error {
-			if field, reference := SiviParentSharedReferenceField(column); reference {
+			if field, reference := SourceParentSharedReferenceField(column); reference {
 				if cell.Storage != "null" && (cell.Storage != "text" || cell.Text == nil) {
 					return fmt.Errorf("SIVI %s requires nullable TEXT storage", column)
 				}
@@ -188,9 +186,9 @@ func PlanSIVIParentSharedScope(ctx context.Context, original *SiviParentProjecti
 				if cell.Storage != "null" && (cell.Storage != "text" || cell.Text == nil) {
 					return errors.New("SIVI Date requires nullable TEXT wall-clock storage")
 				}
-				return ValidateSIVIParentDateTimestamp(cell.Text)
+				return ValidateSourceParentDateTimestamp(cell.Text)
 			}
-			if maximum, text := SiviParentSharedTextBounds[column]; text {
+			if maximum, text := SourceParentSharedTextBounds[column]; text {
 				if cell.Storage != "null" && (cell.Storage != "text" || cell.Text == nil) {
 					return fmt.Errorf("SIVI %s requires nullable TEXT storage", column)
 				}
@@ -201,7 +199,7 @@ func PlanSIVIParentSharedScope(ctx context.Context, original *SiviParentProjecti
 				return err
 			}
 			if kind, number := SiviParentSharedNumberKinds[column]; number {
-				return ValidateSIVIParentSharedNumber(column, kind, cell)
+				return ValidateSourceParentSharedNumber(column, kind, cell)
 			}
 			if err := vprocore.ValidateOrdinaryRestoreValue(SiviParentSharedOwners[column], column, value); err != nil {
 				return err
@@ -222,9 +220,9 @@ func PlanSIVIParentSharedScope(ctx context.Context, original *SiviParentProjecti
 	return assignments, nil
 }
 
-var siviParentSharedHistory = SiviParentHistoryDomain{
+var siviParentSharedHistory = SourceParentHistoryDomain{
 	siviParentSharedHistoryTable, siviParentSharedHistorySQL, "SIVI shared fields",
-	func(ctx context.Context, event SiviParentHistory, project, plot string) ([]SiviParentScalarAssignment, error) {
+	func(ctx context.Context, event SourceParentHistory, project, plot string) ([]SourceParentScalarAssignment, error) {
 		if event.ProjectAssignment != nil {
 			return nil, errors.New("ProjectID history is not shared-field history")
 		}
@@ -232,9 +230,9 @@ var siviParentSharedHistory = SiviParentHistoryDomain{
 		if err != nil {
 			return nil, err
 		}
-		edits := make([]SIVIParentCellEdit, 0, len(event.Changes))
+		edits := make([]SourceParentCellEdit, 0, len(event.Changes))
 		for _, change := range event.Changes {
-			edits = append(edits, SIVIParentCellEdit{original.ContextID, change.Table, change.RowID, change.Column, change.Before, change.After})
+			edits = append(edits, SourceParentCellEdit{original.ContextID, change.Table, change.RowID, change.Column, change.Before, change.After})
 		}
 		assignments, err := PlanSIVIParentSharedScope(ctx, original, edits, true)
 		if err != nil || len(assignments) != len(event.Changes) {
@@ -244,14 +242,14 @@ var siviParentSharedHistory = SiviParentHistoryDomain{
 	},
 }
 
-func (s *SIVIParentSharedService) Save(ctx context.Context, contextID, plot string, request SIVIParentSharedWrite) (*SIVIParentWriteResult, error) {
+func (s *SourceParentSharedService) Save(ctx context.Context, contextID, plot string, request SIVIParentSharedWrite) (*SourceParentWriteResult, error) {
 	if err := s.require(ctx); err != nil {
 		return nil, err
 	}
 	return s.saveWithReferences(ctx, contextID, plot, request)
 }
 
-func (s *SIVIParentSharedService) Restore(ctx context.Context, contextID, plot, historyID string, action vprocore.AuditRestoreAction) (*vprocore.AuditRestoreResult, error) {
+func (s *SourceParentSharedService) Restore(ctx context.Context, contextID, plot, historyID string, action vprocore.AuditRestoreAction) (*vprocore.AuditRestoreResult, error) {
 	if err := s.require(ctx); err != nil {
 		return nil, err
 	}

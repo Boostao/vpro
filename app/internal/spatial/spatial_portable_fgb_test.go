@@ -86,10 +86,7 @@ func TestPortableSpatialAssetsDirAnd71kFlatGeobufPrealloc(t *testing.T) {
 	}
 
 	// Spot-check round-trip decoding of a small slice to confirm binary layout fidelity.
-	decoded, err := DecodeSpatialPlotsFlatGeobuf(encoded[:12+int(encoded[8])|int(encoded[9])<<8|int(encoded[10])<<16|int(encoded[11])<<24])
-	if err != nil || len(decoded) != 0 {
-		// Full decode of first 5 records via re-encoded 5-record sample:
-	}
+	_, _ = DecodeSpatialPlotsFlatGeobuf(encoded[:12+int(encoded[8])|int(encoded[9])<<8|int(encoded[10])<<16|int(encoded[11])<<24])
 	sampleBytes, err := EncodeSpatialPlotsFlatGeobuf("Sample5", records[:5])
 	if err != nil {
 		t.Fatal(err)

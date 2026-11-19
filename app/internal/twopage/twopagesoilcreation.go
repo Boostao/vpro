@@ -1,11 +1,6 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -15,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func validateTwoPageSoilRequestPlan(ctx context.Context, request twoPageSoilRequest) error {
@@ -107,11 +105,11 @@ func planTwoPageSoilCreation(ctx context.Context, original *twoPageSoilOriginal,
 		return nil, err
 	}
 	if id < -2147483648 || id > 2147483647 {
-		return nil, errors.New("soil creation requires a server-allocated signed32 identity")
+		return nil, errors.New("soil creation requires a server-allocated record ID")
 	}
 	identity := strconv.FormatInt(id, 10)
 	for _, row := range original.Records.Rows {
-		if sourceform.SiviIdentityCellMatches(row.Cells[columns["ID"]], identity) {
+		if sourceform.SourceIdentityCellMatches(row.Cells[columns["ID"]], identity) {
 			return nil, errors.New("soil creation identity already belongs to an original physical row")
 		}
 	}
@@ -167,7 +165,7 @@ func twoPageSoilCreationEditHistory(ctx context.Context, history twoPageSoilHist
 	}
 	id, err := strconv.ParseInt(*identity.Integer, 10, 32)
 	if err != nil || strconv.FormatInt(id, 10) != *identity.Integer {
-		return twoPageSoilHistory{}, errors.New("soil creation history allocated ID is not canonical signed32")
+		return twoPageSoilHistory{}, errors.New("soil creation history allocated ID is not a valid record ID")
 	}
 	cells, err := planTwoPageSoilCreation(ctx, request.Original, id, *request.Horizon)
 	if err != nil || !reflect.DeepEqual(created.Cells, cells) {
@@ -209,8 +207,8 @@ func prepareTwoPageSoilCreation(ctx context.Context, tx *sql.Tx, request twoPage
 	if original.Form == "SoilMineralXL" {
 		kind = "Mineral"
 	}
-	if _, exists := before[sourceform.SiviIdentityLedger]; exists {
-		if err := vprocore.ValidateSIVIPhysicalSchema(ctx, tx, "main", sourceform.SiviIdentityLedger, "soil creation reservations"); err != nil {
+	if _, exists := before[sourceform.SourceIdentityLedger]; exists {
+		if err := vprocore.ValidateSIVIPhysicalSchema(ctx, tx, "main", sourceform.SourceIdentityLedger, "soil creation reservations"); err != nil {
 			return nil, err
 		}
 	}
@@ -221,7 +219,7 @@ func prepareTwoPageSoilCreation(ctx context.Context, tx *sql.Tx, request twoPage
 	cells := []vprocore.ProjectMetadataCell{}
 	for _, row := range before[original.Table].Rows {
 		cell := row.Cells[columns["ID"]]
-		if err := sourceform.ValidateSIVIIdentityCell("soil creation original ID", cell); err != nil {
+		if err := sourceform.ValidateSourceIdentityCell("soil creation original ID", cell); err != nil {
 			return nil, err
 		}
 		cells = append(cells, cell)
@@ -246,7 +244,7 @@ func prepareTwoPageSoilCreation(ctx context.Context, tx *sql.Tx, request twoPage
 	for name, table := range baseline {
 		reservationSource[name] = table
 	}
-	reservationSource[sourceform.SiviIdentityLedger] = ledger
+	reservationSource[sourceform.SourceIdentityLedger] = ledger
 	_, ledger, err = sourceform.ReserveSourceChildIdentityPlan(ctx, tx, original.Project, kind, "soil creation", reservationSource,
 		[]vprocore.ProjectMetadataCell{created[columns["ID"]]})
 	if err != nil {

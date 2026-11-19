@@ -1,14 +1,12 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"sort"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func summaryVegetationAspectText(value int64) string {
@@ -71,7 +69,7 @@ func projectSummaryVegetationAspect(ctx context.Context, env vprocore.ProjectMet
 			value, err := vprocore.MetadataCellValue(aspect)
 			number, integer := value.(int64)
 			if err != nil || !integer || number < -32768 || number > 32767 {
-				return vprocore.ProjectMetadataTable{}, fmt.Errorf("environmental Aspect row %s requires original signed16 INTEGER storage", row.RowID)
+				return vprocore.ProjectMetadataTable{}, fmt.Errorf("environmental Aspect row %s requires whole-number storage", row.RowID)
 			}
 			label := summaryVegetationAspectText(number)
 			cells[columns["Aspect"]] = vprocore.ProjectMetadataCell{Storage: "text", Text: &label}

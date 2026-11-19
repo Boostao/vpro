@@ -147,14 +147,18 @@ func buildQuartoVegSummary(
 				vegSchema, vprocore.QuoteHeaderIdentifier(lumpTableName),
 			))
 			if lErr == nil {
-				for lRows.Next() {
-					var spp, lump string
-					var useFlag int
-					if err := lRows.Scan(&spp, &lump, &useFlag); err == nil && useFlag != 0 && spp != "" && lump != "" {
-						lumpMap[spp] = lump
+				func() {
+					defer lRows.Close()
+
+					for lRows.Next() {
+						var spp, lump string
+						var useFlag int
+						if err := lRows.Scan(&spp, &lump, &useFlag); err == nil && useFlag != 0 && spp != "" && lump != "" {
+							lumpMap[spp] = lump
+						}
 					}
-				}
-				lRows.Close()
+
+				}()
 			}
 		}
 	}
@@ -173,15 +177,19 @@ func buildQuartoVegSummary(
 		 WHERE COALESCE("Codetype", 'U') IN ('U', 'D')
 	`)
 	if sErr == nil {
-		for sRows.Next() {
-			var c, sci, eng string
-			if err := sRows.Scan(&c, &sci, &eng); err == nil && c != "" {
-				if _, exists := nameMap[c]; !exists {
-					nameMap[c] = sppNames{sci: sci, eng: eng}
+		func() {
+			defer sRows.Close()
+
+			for sRows.Next() {
+				var c, sci, eng string
+				if err := sRows.Scan(&c, &sci, &eng); err == nil && c != "" {
+					if _, exists := nameMap[c]; !exists {
+						nameMap[c] = sppNames{sci: sci, eng: eng}
+					}
 				}
 			}
-		}
-		sRows.Close()
+
+		}()
 	}
 
 	allowed := make(map[string]bool, len(plotNumbers))

@@ -1,13 +1,8 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/references"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"bytes"
-
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -15,10 +10,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
-	"context"
 	"github.com/boostao/vpro/app/internal/listcatalog"
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 func TestCatalogueCacheWarmAllListsAvoidHashesScansAndCloneMetadata(t *testing.T) {
@@ -236,12 +231,5 @@ func BenchmarkCatalogueCacheParentChoices(b *testing.B) {
 				}
 			}
 		})
-	}
-}
-
-func restoreCatalogueModTime(t *testing.T, path string, original time.Time) {
-	t.Helper()
-	if err := os.Chtimes(path, original, original); err != nil {
-		t.Fatal(err)
 	}
 }

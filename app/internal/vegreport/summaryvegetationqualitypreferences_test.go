@@ -1,11 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"errors"
@@ -14,6 +9,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func summaryQualityFixture(t *testing.T) *vprocore.DesktopConfig {
@@ -283,10 +281,10 @@ func TestDefaultConfigInitYMLQualityEnforceRetainsNumericSampleBECUsePlots(t *te
 	for _, display := range []int{1, 2, 3, 4, 5, 6} {
 		showClass := normalizeSummaryVegetationShowClass(display, 1)
 		exclPrev, err := PreviewSummaryVegetationWithExclusions(context.Background(), contexts, sampleState.ContextID, SummaryVegetationExclusionRequest{
-			Average:          1,
-			Display:          display,
-			ShowClass:        showClass,
-			GroupAndOrder:    11,
+			Average:           1,
+			Display:           display,
+			ShowClass:         showClass,
+			GroupAndOrder:     11,
 			UseDefaultPresets: true,
 		})
 		if err != nil || exclPrev == nil || len(exclPrev.Preview.Rows) == 0 {

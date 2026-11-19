@@ -128,7 +128,7 @@ func validateUserSiteUnitText(name, value string, maxUTF16 int, required bool) (
 		return "", fmt.Errorf("%s cannot be blank", name)
 	}
 	if len(utf16.Encode([]rune(trimmed))) > maxUTF16 {
-		return "", fmt.Errorf("%s exceeds %d UTF-16 code units", name, maxUTF16)
+		return "", fmt.Errorf("%s cannot exceed %d characters", name, maxUTF16)
 	}
 	return trimmed, nil
 }
@@ -230,15 +230,17 @@ func ListUserSiteUnitList(ctx context.Context, contexts *vprocore.ContextService
 		}()
 		hasLevel := false
 		if colRows, cErr := tx.QueryContext(ctx, `PRAGMA "VUser".table_info("UserSiteUnitList")`); cErr == nil {
-			for colRows.Next() {
-				var cid, notNull, pk int
-				var name, decl string
-				var dflt any
-				if err := colRows.Scan(&cid, &name, &decl, &notNull, &dflt, &pk); err == nil && strings.EqualFold(name, "Level") {
-					hasLevel = true
+			func() {
+				defer colRows.Close()
+				for colRows.Next() {
+					var cid, notNull, pk int
+					var name, decl string
+					var dflt any
+					if err := colRows.Scan(&cid, &name, &decl, &notNull, &dflt, &pk); err == nil && strings.EqualFold(name, "Level") {
+						hasLevel = true
+					}
 				}
-			}
-			_ = colRows.Close()
+			}()
 		}
 		entries, err := readUserSiteUnitEntries(ctx, tx, "VUser", hasLevel)
 		if err != nil {

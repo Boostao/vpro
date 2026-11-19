@@ -1,20 +1,17 @@
 package spatial
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
-
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestPlotLocationReviewFacadeExactDTOParityJSONAndDetachedValues(t *testing.T) {

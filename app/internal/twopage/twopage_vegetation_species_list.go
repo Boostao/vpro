@@ -123,7 +123,7 @@ func (references *twoPageVegetationSpeciesReferences) UnmarshalJSON(data []byte)
 		return err
 	}
 	for _, name := range []string{"master", "personal"} {
-		if err := sourceform.SiviSpeciesTableJSON(properties[name]); err != nil {
+		if err := sourceform.SourceSpeciesTableJSON(properties[name]); err != nil {
 			return err
 		}
 	}
@@ -305,7 +305,7 @@ func ReadTwoPageVegetationSpeciesReferences(s *vprocore.ContextService, ctx cont
 
 func projectTwoPageVegetationSpeciesDefinitions(ctx context.Context, source vprocore.ProjectMetadataTable, personal bool) (vprocore.ProjectMetadataTable, error) {
 	if personal {
-		return sourceform.ProjectSIVISpeciesDefinitions(ctx, source, true)
+		return sourceform.ProjectSourceSpeciesDefinitions(ctx, source, true)
 	}
 	return sourceform.ProjectPhysicalSpeciesDefinitions(ctx, source, false, func(cell vprocore.ProjectMetadataCell) error {
 		if _, err := vprocore.MetadataCellValue(cell); err != nil {
@@ -318,7 +318,7 @@ func projectTwoPageVegetationSpeciesDefinitions(ctx context.Context, source vpro
 			return errors.New("master Species Lifeform requires exact nullable source LONG integer storage; no coercion")
 		}
 		if _, err := strconv.ParseInt(*cell.Integer, 10, 32); err != nil {
-			return errors.New("master Species Lifeform exceeds source signed32 LONG range")
+			return errors.New("master Species Lifeform exceeds source valid Lifeform number range")
 		}
 		return nil
 	})

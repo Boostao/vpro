@@ -1,11 +1,6 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -17,6 +12,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type externalSUEnvironmentSource struct {
@@ -283,16 +281,6 @@ func withExternalSUEnvironmentTransactions(ctx context.Context, owner *vprocore.
 		return false, &externalSUEnvironmentCommitUncertainError{err}
 	}
 	return true, nil
-}
-
-func TransferExternalSUEnvironment(s *vprocore.ContextService, ctx context.Context, contextID string,
-	approved *externalSUEnvironmentSource) (*SiteUnitEnvironmentResult, error) {
-	return TransferExternalSUEnvironmentWithHooks(s, ctx, contextID, approved, externalSUEnvironmentWriteHooks{})
-}
-
-func TransferExternalSUEnvironmentWithHooks(s *vprocore.ContextService, ctx context.Context, contextID string,
-	approved *externalSUEnvironmentSource, hooks externalSUEnvironmentWriteHooks) (*SiteUnitEnvironmentResult, error) {
-	return TransferExternalSUEnvironmentOwned(s, ctx, contextID, approved, nil, hooks)
 }
 
 func TransferExternalSUEnvironmentOwned(s *vprocore.ContextService, ctx context.Context, contextID string,

@@ -7,14 +7,15 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/jackc/pgx/v5"
 	"hash"
 	"math"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/jackc/pgx/v5"
 )
 
 // cloudCell holds a typed value for byte-exact 3-way diffing and PostgreSQL parameterized writes.
@@ -251,33 +252,35 @@ func scanSnapshotTableRows(snap *cloudSnapshot, suffix string, cols []ColumnSpec
 		plotCol = "Plot"
 	}
 	byPlot := map[string][]childRowRecord{}
-	for rows.Next() {
-		vals, vErr := rows.Values()
-		if vErr != nil {
-			rows.Close()
-			return vErr
-		}
-		rec := childRowRecord{
-			cells: make(map[string]cloudCell, len(cols)),
-			comps: make(map[string]*string, len(cols)),
-		}
-		plotStr := ""
-		for i, col := range cols {
-			cc := pgValueToCloudCell(col, vals[i])
-			rec.cells[col.Name] = cc
-			rec.comps[col.Name] = cc.comparableString()
-			if col.Name == plotCol && cc.kind == "text" {
-				plotStr = cc.textVal
+	if err := func() error {
+		defer rows.Close()
+		for rows.Next() {
+			vals, vErr := rows.Values()
+			if vErr != nil {
+
+				return vErr
 			}
+			rec := childRowRecord{
+				cells: make(map[string]cloudCell, len(cols)),
+				comps: make(map[string]*string, len(cols)),
+			}
+			plotStr := ""
+			for i, col := range cols {
+				cc := pgValueToCloudCell(col, vals[i])
+				rec.cells[col.Name] = cc
+				rec.comps[col.Name] = cc.comparableString()
+				if col.Name == plotCol && cc.kind == "text" {
+					plotStr = cc.textVal
+				}
+			}
+			if plotStr == "" {
+				continue
+			}
+			snap.plots[plotStr] = true
+			byPlot[plotStr] = append(byPlot[plotStr], rec)
 		}
-		if plotStr == "" {
-			continue
-		}
-		snap.plots[plotStr] = true
-		byPlot[plotStr] = append(byPlot[plotStr], rec)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return err
 	}
 	for plot, list := range byPlot {
@@ -370,36 +373,39 @@ func loadSQLiteBaseSubsetSnapshot(ctx context.Context, dbPath, reqProject string
 			dest[i] = &rawVals[i]
 		}
 		byPlot := map[string][]childRowRecord{}
-		for rows.Next() {
-			if sErr := rows.Scan(dest...); sErr != nil {
-				rows.Close()
-				return nil, "", sErr
-			}
-			rec := childRowRecord{
-				cells: make(map[string]cloudCell, len(cols)),
-				comps: make(map[string]*string, len(cols)),
-			}
-			plotStr := ""
-			for i, col := range cols {
-				pgVal, cErr := CanonicalizeSQLiteToPG(col, rawVals[i])
-				if cErr != nil {
-					rows.Close()
-					return nil, "", fmt.Errorf("canonicalize %s.%s for snapshot: %w", suffix, col.Name, cErr) // ENG-GO-004
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+			for rows.Next() {
+				if sErr := rows.Scan(dest...); sErr != nil {
+
+					return sErr
 				}
-				cc := pgValueToCloudCell(col, pgVal)
-				rec.cells[col.Name] = cc
-				rec.comps[col.Name] = cc.comparableString()
-				if col.Name == plotCol && cc.kind == "text" {
-					plotStr = cc.textVal
+				rec := childRowRecord{
+					cells: make(map[string]cloudCell, len(cols)),
+					comps: make(map[string]*string, len(cols)),
 				}
+				plotStr := ""
+				for i, col := range cols {
+					pgVal, cErr := CanonicalizeSQLiteToPG(col, rawVals[i])
+					if cErr != nil {
+
+						return fmt.Errorf("canonicalize %s.%s for snapshot: %w", suffix, col.Name, cErr) // ENG-GO-004
+					}
+					cc := pgValueToCloudCell(col, pgVal)
+					rec.cells[col.Name] = cc
+					rec.comps[col.Name] = cc.comparableString()
+					if col.Name == plotCol && cc.kind == "text" {
+						plotStr = cc.textVal
+					}
+				}
+				if plotStr == "" || !allowed[plotStr] {
+					continue
+				}
+				snap.plots[plotStr] = true
+				byPlot[plotStr] = append(byPlot[plotStr], rec)
 			}
-			if plotStr == "" || !allowed[plotStr] {
-				continue
-			}
-			snap.plots[plotStr] = true
-			byPlot[plotStr] = append(byPlot[plotStr], rec)
-		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return rows.Err()
+		}(); err != nil {
 			return nil, "", err
 		}
 		for plot, list := range byPlot {

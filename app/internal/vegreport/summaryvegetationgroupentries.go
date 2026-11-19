@@ -1,24 +1,16 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
 	"strconv"
-)
 
-// EntryDat_Veg is a new typed read model, not a rewrite of the source table.
-func prepareSummaryVegetationGroupedEntries(ctx context.Context, prepared VegetationReportPreparation,
-	union vprocore.ProjectMetadataTable, grouping int) (vprocore.ProjectMetadataTable, error) {
-	return prepareSummaryVegetationGroupedEntriesWithInteger(ctx, prepared, union, grouping, vprocore.VegetationLifeformInteger)
-}
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
+)
 
 func prepareSummaryVegetationGroupedEntriesWithInteger(ctx context.Context, prepared VegetationReportPreparation,
 	union vprocore.ProjectMetadataTable, grouping int, readInteger func(vprocore.ProjectMetadataCell) (*int, error)) (vprocore.ProjectMetadataTable, error) {

@@ -96,25 +96,28 @@ func loadSplinterSourceSUMap(ctx context.Context, srcDB *sql.DB, snap contextSna
 	if sErr != nil {
 		return nil, false, sErr
 	}
-	for sRows.Next() {
-		var pBytes, uBytes []byte
-		var pType, uType string
-		if err := sRows.Scan(&pBytes, &pType, &uBytes, &uType); err != nil {
-			sRows.Close()
-			return nil, false, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, sRows.Close()) }()
+		for sRows.Next() {
+			var pBytes, uBytes []byte
+			var pType, uType string
+			if err := sRows.Scan(&pBytes, &pType, &uBytes, &uType); err != nil {
+
+				return err
+			}
+			if pType != "text" {
+				continue
+			}
+			pKey := string(pBytes)
+			if uType == "text" {
+				uStr := string(uBytes)
+				suMap[pKey] = &uStr
+			} else {
+				suMap[pKey] = nil
+			}
 		}
-		if pType != "text" {
-			continue
-		}
-		pKey := string(pBytes)
-		if uType == "text" {
-			uStr := string(uBytes)
-			suMap[pKey] = &uStr
-		} else {
-			suMap[pKey] = nil
-		}
-	}
-	if err := errors.Join(sRows.Err(), sRows.Close()); err != nil {
+		return sRows.Err()
+	}(); err != nil {
 		return nil, false, err
 	}
 	return suMap, true, nil
@@ -194,30 +197,33 @@ func selectSplinterPlots(
 		selectedProjectIDs: map[string]bool{},
 		fallbackSUMap:      map[string]*string{},
 	}
-	for pRows.Next() {
-		var pBytes []byte
-		var pType, pid, userSU, siteSeries string
-		if err := pRows.Scan(&pBytes, &pType, &pid, &userSU, &siteSeries); err != nil {
-			pRows.Close()
-			return splinterPlotSelection{}, err
-		}
-		if pType != "text" {
-			continue
-		}
-		sel.totalSourcePlots++
-		plot := string(pBytes)
-		if !matchSplinterPlotFilter(plot, userSU, siteSeries, useSU, hasSUSource, suMap, plotFilter, unitFilter, sel.fallbackSUMap) {
-			continue
-		}
-		if !sel.selectedPlots[plot] {
-			sel.selectedPlots[plot] = true
-			sel.orderedSelectedPlots = append(sel.orderedSelectedPlots, plot)
-			if pid != "" {
-				sel.selectedProjectIDs[strings.ToLower(pid)] = true
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, pRows.Close()) }()
+		for pRows.Next() {
+			var pBytes []byte
+			var pType, pid, userSU, siteSeries string
+			if err := pRows.Scan(&pBytes, &pType, &pid, &userSU, &siteSeries); err != nil {
+
+				return err
+			}
+			if pType != "text" {
+				continue
+			}
+			sel.totalSourcePlots++
+			plot := string(pBytes)
+			if !matchSplinterPlotFilter(plot, userSU, siteSeries, useSU, hasSUSource, suMap, plotFilter, unitFilter, sel.fallbackSUMap) {
+				continue
+			}
+			if !sel.selectedPlots[plot] {
+				sel.selectedPlots[plot] = true
+				sel.orderedSelectedPlots = append(sel.orderedSelectedPlots, plot)
+				if pid != "" {
+					sel.selectedProjectIDs[strings.ToLower(pid)] = true
+				}
 			}
 		}
-	}
-	if err := errors.Join(pRows.Err(), pRows.Close()); err != nil {
+		return pRows.Err()
+	}(); err != nil {
 		return splinterPlotSelection{}, err
 	}
 	return sel, nil
@@ -311,22 +317,25 @@ func readSourceIdentityReservations(ctx context.Context, srcTx *sql.Tx, srcProje
 	}
 	srcPrefix := strings.Trim(vprocore.QuoteHeaderIdentifier(srcProject+"_"), `"`)
 	var reservations []splinterIdentityReservation
-	for idRows.Next() {
-		var childTbl string
-		var reservedID int64
-		if sErr := idRows.Scan(&childTbl, &reservedID); sErr != nil {
-			_ = idRows.Close()
-			return nil, sErr
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, idRows.Close()) }()
+		for idRows.Next() {
+			var childTbl string
+			var reservedID int64
+			if sErr := idRows.Scan(&childTbl, &reservedID); sErr != nil {
+
+				return sErr
+			}
+			unquoted := strings.Trim(childTbl, `"`)
+			if strings.HasPrefix(unquoted, srcPrefix) {
+				reservations = append(reservations, splinterIdentityReservation{
+					suffix: strings.TrimPrefix(unquoted, srcPrefix),
+					id:     reservedID,
+				})
+			}
 		}
-		unquoted := strings.Trim(childTbl, `"`)
-		if strings.HasPrefix(unquoted, srcPrefix) {
-			reservations = append(reservations, splinterIdentityReservation{
-				suffix: strings.TrimPrefix(unquoted, srcPrefix),
-				id:     reservedID,
-			})
-		}
-	}
-	if err := errors.Join(idRows.Err(), idRows.Close()); err != nil {
+		return idRows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 	return reservations, nil

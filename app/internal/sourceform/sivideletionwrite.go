@@ -1,20 +1,17 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
-
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const SiviDeletionHistoryTable = "__VPRO_SIVIDeletionHistory"
@@ -120,7 +117,7 @@ func ValidateSIVIDeletionScope(project, plot, form, rowID string) error {
 	}
 	id, err := strconv.ParseInt(rowID, 10, 64)
 	if err != nil || strconv.FormatInt(id, 10) != rowID {
-		return errors.New("SIVI deletion requires an exact signed64 physical rowId")
+		return errors.New("SIVI deletion requires an exact record reference")
 	}
 	return nil
 }
@@ -159,11 +156,11 @@ func ValidateSIVIDeletionOriginal(original SiviDeletionOriginal) (int64, error) 
 	}
 	id := original.Original.Cells[columns["ID"]]
 	if id.Storage != "integer" || id.Integer == nil {
-		return 0, errors.New("SIVI deletion NULL or non-signed32 logical ID is unavailable; no identity repair")
+		return 0, errors.New("SIVI deletion NULL or non-record ID is unavailable; no identity repair")
 	}
 	number, err := strconv.ParseInt(*id.Integer, 10, 32)
 	if err != nil {
-		return 0, errors.New("SIVI deletion requires an existing signed32 logical ID")
+		return 0, errors.New("SIVI deletion requires an existing record ID")
 	}
 	return number, nil
 }
@@ -190,7 +187,7 @@ func SiviDeletionAuditValue(column vprocore.ProjectMetadataColumn, cell vprocore
 	return value, nil
 }
 
-// Full-row deletion evidence is a desktop safety adaptation, not an Access
+// ValidateSIVIDeletionHistory — Full-row deletion evidence is a desktop safety adaptation, not an Access
 // deletion-audit or deleted-row restoration parity claim.
 func ValidateSIVIDeletionHistory(ctx context.Context, history SiviDeletionHistory) error {
 	request := history.Request
@@ -267,11 +264,11 @@ func verifySIVIDeletionHistory(ctx context.Context, request SiviDeletionRequest,
 	for _, row := range veg.Rows {
 		parent := row.Cells[columns["PlotNumber"]]
 		if row.RowID == history.Result.RowID || parent.Text != nil && *parent.Text == request.Plot &&
-			SiviIdentityCellMatches(row.Cells[columns["ID"]], strconv.FormatInt(history.Result.ID, 10)) {
+			SourceIdentityCellMatches(row.Cells[columns["ID"]], strconv.FormatInt(history.Result.ID, 10)) {
 			return errors.New("SIVI deletion replay has a physical or parent/logical identity occupant")
 		}
 	}
-	ledger := tables[SiviIdentityLedger]
+	ledger := tables[SourceIdentityLedger]
 	ledgerColumns, err := vprocore.SiteUnitTransferColumns(ledger, "ChildTable", "ID")
 	if err != nil || len(ledgerColumns) != 2 {
 		return errors.Join(err, errors.New("SIVI deletion reservation schema differs"))
@@ -287,7 +284,7 @@ func verifySIVIDeletionHistory(ctx context.Context, request SiviDeletionRequest,
 		return errors.New("SIVI deletion replay lost its permanent identity reservation")
 	}
 	audit := tables[request.Project+"_Audit"]
-	plan, err := AppendSIVIPlannedAudits(vprocore.ProjectMetadataTable{Columns: audit.Columns}, history.Audits)
+	plan, err := AppendSourcePlannedAudits(vprocore.ProjectMetadataTable{Columns: audit.Columns}, history.Audits)
 	if err != nil {
 		return err
 	}
@@ -456,11 +453,11 @@ func DeleteSIVIVegetation(s *vprocore.ContextService, ctx context.Context, conte
 					plannedVeg.Rows = append(plannedVeg.Rows, row)
 				}
 			}
-			auditPlan, err := AppendSIVIPlannedAudits(before[request.Project+"_Audit"], records)
+			auditPlan, err := AppendSourcePlannedAudits(before[request.Project+"_Audit"], records)
 			if err != nil {
 				return nil, false, err
 			}
-			expected := map[string]vprocore.ProjectMetadataTable{request.Project + "_Veg": plannedVeg, request.Project + "_Audit": auditPlan, SiviIdentityLedger: ledger}
+			expected := map[string]vprocore.ProjectMetadataTable{request.Project + "_Veg": plannedVeg, request.Project + "_Audit": auditPlan, SourceIdentityLedger: ledger}
 			observed, err := vprocore.EnvironmentSiteUnitTables(ctx, tx)
 			if err != nil {
 				return nil, false, err
@@ -502,7 +499,7 @@ func DeleteSIVIVegetation(s *vprocore.ContextService, ctx context.Context, conte
 				historyPlan.Columns = []vprocore.ProjectMetadataColumn{{Name: "RequestID", DeclaredType: "TEXT"}, {Name: "Created", DeclaredType: "TEXT"}, {Name: "Proposal", DeclaredType: "TEXT"}}
 			}
 			historyPlan.Rows = append(append([]vprocore.ProjectMetadataRow{}, historyPlan.Rows...), vprocore.ProjectMetadataRow{
-				RowID: strconv.FormatInt(rowID, 10), Cells: []vprocore.ProjectMetadataCell{SiviCreationText(request.RequestID), SiviCreationText(when), SiviCreationText(string(proposal))}})
+				RowID: strconv.FormatInt(rowID, 10), Cells: []vprocore.ProjectMetadataCell{SourceCreationText(request.RequestID), SourceCreationText(when), SourceCreationText(string(proposal))}})
 			observed, err = vprocore.EnvironmentSiteUnitTables(ctx, tx)
 			if err != nil {
 				return nil, false, err

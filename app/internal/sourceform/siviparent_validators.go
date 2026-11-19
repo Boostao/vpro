@@ -12,7 +12,7 @@ import (
 
 var siviParentTimestampPattern = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?$`)
 
-func ValidateSIVIParentDateTimestamp(value *string) error {
+func ValidateSourceParentDateTimestamp(value *string) error {
 	if value == nil {
 		return nil
 	}
@@ -29,12 +29,12 @@ func ValidateSIVIParentDateTimestamp(value *string) error {
 	return nil
 }
 
-func PlanSIVIParentText(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable, edits []SiviParentScalarEdit) ([]SiviParentScalarAssignment, error) {
+func PlanSIVIParentText(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable, edits []SourceParentScalarEdit) ([]SourceParentScalarAssignment, error) {
 	owners := map[string]string{"SV_PolygonNumber": "Env", "SV_CanopyComposition": "Env"}
-	return planSIVIParentCells(ctx, contextID, project, plot, env, admin, edits, owners, ValidateSIVIParentText)
+	return planSIVIParentCells(ctx, contextID, project, plot, env, admin, edits, owners, ValidateSourceParentText)
 }
 
-func ValidateSIVIParentText(column string, value vprocore.ProjectMetadataCell) error {
+func ValidateSourceParentText(column string, value vprocore.ProjectMetadataCell) error {
 	if value.Storage != "null" && value.Storage != "text" {
 		return fmt.Errorf("SIVI %s requires explicit NULL or nonempty TEXT storage", column)
 	}
@@ -45,12 +45,12 @@ func ValidateSIVIParentText(column string, value vprocore.ProjectMetadataCell) e
 	return sqlutil.ValidateSiteCodeText(column, value.Text, maximum)
 }
 
-func PlanSIVIParentCategorical(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable, edits []SiviParentScalarEdit) ([]SiviParentScalarAssignment, error) {
+func PlanSIVIParentCategorical(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable, edits []SourceParentScalarEdit) ([]SourceParentScalarAssignment, error) {
 	owners := map[string]string{"SnowCoverregime": "Env", "SV_RootZoneTexture": "Env", "SV_AhorizonType": "Env"}
-	return planSIVIParentCells(ctx, contextID, project, plot, env, admin, edits, owners, ValidateSIVIParentCategorical)
+	return planSIVIParentCells(ctx, contextID, project, plot, env, admin, edits, owners, ValidateSourceParentCategorical)
 }
 
-func ValidateSIVIParentCategorical(column string, value vprocore.ProjectMetadataCell) error {
+func ValidateSourceParentCategorical(column string, value vprocore.ProjectMetadataCell) error {
 	if value.Storage != "null" && value.Storage != "text" {
 		return fmt.Errorf("SIVI %s requires explicit NULL or TEXT storage", column)
 	}
@@ -67,7 +67,7 @@ func ValidateSIVIParentCategorical(column string, value vprocore.ProjectMetadata
 	return sqlutil.ValidateSiteCodeText(column, value.Text, maximum)
 }
 
-func ValidateSourceParentBooleanAssignments(assignments []SiviParentScalarAssignment) error {
+func ValidateSourceParentBooleanAssignments(assignments []SourceParentScalarAssignment) error {
 	for _, assignment := range assignments {
 		if err := vprocore.ValidateSourceParentBooleanNull(assignment.Column,
 			assignment.Before.Storage == "null", assignment.After.Storage == "null"); err != nil {

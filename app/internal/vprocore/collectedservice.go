@@ -1,16 +1,14 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type CollectedRecordUpdate struct {
@@ -62,7 +60,7 @@ func (s *PlotService) UpdateCollectedRecords(plot string, updates []CollectedRec
 		if update.Expected != nil && !utf8.ValidString(*update.Expected) {
 			return errors.New("Collected expected contains malformed UTF-8")
 		}
-		patches = append(patches, ChildRecordPatch{Kind: "Veg", Id: update.ID, Cells: map[string]ChildExpectedValue{
+		patches = append(patches, ChildRecordPatch{Kind: "Veg", ID: update.ID, Cells: map[string]ChildExpectedValue{
 			"collected": {OtherNullable(update.Expected), OtherNullable(CollectedAfterClicks(update.Expected, update.Clicks)), reflect.String},
 		}})
 	}

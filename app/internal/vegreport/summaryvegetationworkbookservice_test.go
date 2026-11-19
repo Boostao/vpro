@@ -1,11 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -15,6 +10,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func summaryDraftWorkbookFixture(t *testing.T, external bool) (*SummaryVegetationWorkbookService, vprocore.ProjectState) {
@@ -155,6 +153,7 @@ func TestSummaryDraftWorkbookServiceGateStrictOptionsAndApproval(t *testing.T) {
 			t.Fatal("malformed/stale publication request accepted", request, outcome, err)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := service.GetReview(nil, state.ContextID, valid); err == nil {
 		t.Fatal("nil context accepted")
 	}

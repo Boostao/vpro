@@ -7,21 +7,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
-
-func validateUTF16FieldWidth(field, val string, maxUnits int) error {
-	if !utf8.ValidString(val) || strings.ContainsRune(val, 0) {
-		return fmt.Errorf("%s contains invalid UTF-8 or NUL bytes", field)
-	}
-	if maxUnits > 0 && len(utf16.Encode([]rune(val))) > maxUnits {
-		return fmt.Errorf("%s value %q exceeds %d UTF-16 code units", field, val, maxUnits)
-	}
-	return nil
-}
 
 func formatAuditBeforeAfter(val any) any {
 	if val == nil {
@@ -78,7 +69,7 @@ func planCoordinateMutations(r rawSpatialPlotRow, geod PlotGeodesyEvaluation, re
 	}
 	if req.SyncUTMFromLatLon && geod.ComputedUTMZone != nil && geod.ComputedUTMEasting != nil && geod.ComputedUTMNorthing != nil {
 		zStr := strconv.Itoa(*geod.ComputedUTMZone)
-		if err := validateUTF16FieldWidth("UTMZone", zStr, 2); err != nil {
+		if err := sqlutil.ValidateUTF16Bound("UTMZone", zStr, 2); err != nil {
 			return nil, err
 		}
 		eastRounded := math.Round(*geod.ComputedUTMEasting*10.0) / 10.0
@@ -138,7 +129,7 @@ func appendSuggestedTextMutation(
 	if suggestedVal == "" {
 		return nil
 	}
-	if err := validateUTF16FieldWidth(column, suggestedVal, maxUTF16); err != nil {
+	if err := sqlutil.ValidateUTF16Bound(column, suggestedVal, maxUTF16); err != nil {
 		return err
 	}
 	if onlyWhenBlank && strings.TrimSpace(currentVal) != "" {
@@ -161,7 +152,7 @@ func planSuggestedAttributeMutations(r rawSpatialPlotRow, sug *SpatialAttributeS
 	}
 	var muts []spatialCellMutation
 	if req.StampGISBGC && sug.GISBGC != "" {
-		if err := validateUTF16FieldWidth("GIS_BGC", sug.GISBGC, 255); err != nil {
+		if err := sqlutil.ValidateUTF16Bound("GIS_BGC", sug.GISBGC, 255); err != nil {
 			return nil, err
 		}
 		if !req.OnlyWhenBlank || strings.TrimSpace(r.gisBGC) == "" {

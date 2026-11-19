@@ -1,15 +1,7 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
-
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +9,11 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func assertSIVIDeletionRefused(t *testing.T, service *vprocore.ContextService, contextID string, request sourceform.SiviDeletionRequest, lookup bool) {

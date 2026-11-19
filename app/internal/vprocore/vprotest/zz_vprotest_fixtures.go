@@ -1,35 +1,26 @@
 package vprotest
 
 import (
-	"github.com/boostao/vpro/app/internal/references"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
 	"bytes"
 	"context"
-
 	"database/sql"
-
 	"encoding/json"
-
 	"errors"
 	"fmt"
-
 	"math"
-
 	"os"
 	"path/filepath"
 	"reflect"
-
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func BecTestDir(t *testing.T) string {

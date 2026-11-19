@@ -238,10 +238,6 @@ func (w *rdsWriter) writeDataFrame(df rdsDataFrame) error {
 	return nil
 }
 
-func EncodeNamedDataFramesToRDS(frames []rdsDataFrame) ([]byte, error) {
-	return encodeNamedDataFramesToRDSContext(context.Background(), frames)
-}
-
 func encodeNamedDataFramesToRDSContext(ctx context.Context, frames []rdsDataFrame) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -355,21 +351,19 @@ func readSQLiteTableAsRDSDataFrame(
 		kind rdsColumnKind
 	}
 	var metas []colMeta
-	for pRows.Next() {
-		var cid, notNull, pk int
-		var name, ctype string
-		var dflt any
-		if err := pRows.Scan(&cid, &name, &ctype, &notNull, &dflt, &pk); err != nil {
-			pRows.Close()
-			return rdsDataFrame{}, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, pRows.Close()) }()
+		for pRows.Next() {
+			var cid, notNull, pk int
+			var name, ctype string
+			var dflt any
+			if err := pRows.Scan(&cid, &name, &ctype, &notNull, &dflt, &pk); err != nil {
+				return err
+			}
+			metas = append(metas, colMeta{name: name, kind: classifySQLiteDeclaredType(ctype)})
 		}
-		metas = append(metas, colMeta{name: name, kind: classifySQLiteDeclaredType(ctype)})
-	}
-	if err := pRows.Err(); err != nil {
-		pRows.Close()
-		return rdsDataFrame{}, err
-	}
-	if err := pRows.Close(); err != nil {
+		return pRows.Err()
+	}(); err != nil {
 		return rdsDataFrame{}, err
 	}
 

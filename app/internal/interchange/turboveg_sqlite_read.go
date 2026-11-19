@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"path/filepath"
@@ -136,22 +137,20 @@ func readTV3PlotObservations(ctx context.Context, db *sql.DB, tbls map[string]bo
 	var plots []tvImportPlot
 	plotIdxByObsID := map[int]int{}
 	wktByObsID := map[int]string{}
-	for poRows.Next() {
-		var obsID int
-		var wkt string
-		if err := poRows.Scan(&obsID, &wkt); err != nil {
-			poRows.Close()
-			return nil, nil, nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, poRows.Close()) }()
+		for poRows.Next() {
+			var obsID int
+			var wkt string
+			if err := poRows.Scan(&obsID, &wkt); err != nil {
+				return err
+			}
+			plotIdxByObsID[obsID] = len(plots)
+			wktByObsID[obsID] = wkt
+			plots = append(plots, tvImportPlot{Header: tvPlotHeader{PlotID: obsID}})
 		}
-		plotIdxByObsID[obsID] = len(plots)
-		wktByObsID[obsID] = wkt
-		plots = append(plots, tvImportPlot{Header: tvPlotHeader{PlotID: obsID}})
-	}
-	if err := poRows.Err(); err != nil {
-		poRows.Close()
-		return nil, nil, nil, err
-	}
-	if err := poRows.Close(); err != nil {
+		return poRows.Err()
+	}(); err != nil {
 		return nil, nil, nil, err
 	}
 	return plots, plotIdxByObsID, wktByObsID, nil
@@ -194,27 +193,28 @@ func pivotTV3HeaderAttributes(
 	if err != nil {
 		return nil, fmt.Errorf("read Turboveg 3 plotobservationheaderdata: %w", err)
 	}
-	for hRows.Next() {
-		var row tv3HeaderRowValues
-		if err := hRows.Scan(
-			&row.obsID, &row.fieldName, &row.dtName, &row.valStr,
-			&row.valInt, &row.valFloat, &row.ldCode, &row.ldDesc,
-		); err != nil {
-			hRows.Close()
-			return nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, hRows.Close()) }()
+		for hRows.Next() {
+			var row tv3HeaderRowValues
+			if err := hRows.Scan(
+				&row.obsID, &row.fieldName, &row.dtName, &row.valStr,
+				&row.valInt, &row.valFloat, &row.ldCode, &row.ldDesc,
+			); err != nil {
+				return err
+			}
+			idx, ok := plotIdxByObsID[row.obsID]
+			if !ok {
+				continue
+			}
+			row.strVal = resolveTV3HeaderTextValue(row)
+			applyTV3HeaderRow(&plots[idx].Header, row, releveFallbackByObsID)
 		}
-		idx, ok := plotIdxByObsID[row.obsID]
-		if !ok {
-			continue
-		}
-		row.strVal = resolveTV3HeaderTextValue(row)
-		applyTV3HeaderRow(&plots[idx].Header, row, releveFallbackByObsID)
-	}
-	if err := hRows.Err(); err != nil {
-		hRows.Close()
+		return hRows.Err()
+	}(); err != nil {
 		return nil, err
 	}
-	return releveFallbackByObsID, hRows.Close()
+	return releveFallbackByObsID, nil
 }
 
 func buildTV3HeaderPivotQuery(tbls map[string]bool) string {
@@ -477,25 +477,26 @@ func loadTV3SpeciesObservationAttrs(ctx context.Context, db *sql.DB, tbls map[st
 	if err != nil {
 		return nil, fmt.Errorf("read Turboveg 3 speciesobservationdata: %w", err)
 	}
-	for sodRows.Next() {
-		var soID int
-		var fName, vStr string
-		var vInt sql.NullInt64
-		var vFloat sql.NullFloat64
-		if err := sodRows.Scan(&soID, &fName, &vStr, &vInt, &vFloat); err != nil {
-			sodRows.Close()
-			return nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, sodRows.Close()) }()
+		for sodRows.Next() {
+			var soID int
+			var fName, vStr string
+			var vInt sql.NullInt64
+			var vFloat sql.NullFloat64
+			if err := sodRows.Scan(&soID, &fName, &vStr, &vInt, &vFloat); err != nil {
+				return err
+			}
+			if attrsBySOID[soID] == nil {
+				attrsBySOID[soID] = &tv3SpeciesObsAttr{}
+			}
+			applyTV3SpeciesObsAttr(attrsBySOID[soID], fName, vStr, vInt, vFloat)
 		}
-		if attrsBySOID[soID] == nil {
-			attrsBySOID[soID] = &tv3SpeciesObsAttr{}
-		}
-		applyTV3SpeciesObsAttr(attrsBySOID[soID], fName, vStr, vInt, vFloat)
-	}
-	if err := sodRows.Err(); err != nil {
-		sodRows.Close()
+		return sodRows.Err()
+	}(); err != nil {
 		return nil, err
 	}
-	return attrsBySOID, sodRows.Close()
+	return attrsBySOID, nil
 }
 
 func applyTV3SpeciesObsAttr(a *tv3SpeciesObsAttr, fName, vStr string, vInt sql.NullInt64, vFloat sql.NullFloat64) {

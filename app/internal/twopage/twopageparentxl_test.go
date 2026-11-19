@@ -1,22 +1,20 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"math"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-func twoPageXLOriginal(t *testing.T, form string) *sourceform.SiviParentProjection {
+func twoPageXLOriginal(t *testing.T, form string) *sourceform.SourceParentProjection {
 	t.Helper()
 	env, admin := vprotest.SiviParentTables(t)
 	parent, err := ProjectTwoPageParent(context.Background(), "owned", "Sample", "108050", form, env, admin)
@@ -62,7 +60,7 @@ func TestTwoPageXLExactSourceScopeAndCompletePhysicalPlan(t *testing.T) {
 		if err != nil || len(fields) != want {
 			t.Fatal(form, len(fields), err)
 		}
-		edits := []sourceform.SiviParentScalarEdit{}
+		edits := []sourceform.SourceParentScalarEdit{}
 		for column, field := range fields {
 			edit := sftest.SiviParentEdit(t, parent, column, twoPageXLValue(column, field))
 			if edit.Table != "Sample_"+field.owner {
@@ -163,7 +161,7 @@ func TestTwoPageXLPhysicalThresholdsAndRawStorage(t *testing.T) {
 			}
 			for _, value := range valid {
 				edit := sftest.SiviParentEdit(t, parent, column, value)
-				got, err := planTwoPageXLProjection(context.Background(), parent, []sourceform.SiviParentScalarEdit{edit}, true)
+				got, err := planTwoPageXLProjection(context.Background(), parent, []sourceform.SourceParentScalarEdit{edit}, true)
 				want := 1
 				if value.Storage == "null" {
 					want = 0
@@ -177,7 +175,7 @@ func TestTwoPageXLPhysicalThresholdsAndRawStorage(t *testing.T) {
 			}
 			for _, value := range invalid {
 				edit := sftest.SiviParentEdit(t, parent, column, value)
-				if got, err := planTwoPageXLProjection(context.Background(), parent, []sourceform.SiviParentScalarEdit{edit}, true); err == nil || got != nil {
+				if got, err := planTwoPageXLProjection(context.Background(), parent, []sourceform.SourceParentScalarEdit{edit}, true); err == nil || got != nil {
 					t.Fatal("invalid threshold accepted", value, got, err)
 				}
 			}
@@ -204,7 +202,7 @@ func TestTwoPageXLHistoricalOmissionAndMasterAuthorization(t *testing.T) {
 			}
 		}
 		edit := sftest.SiviParentEdit(t, parent, column, value)
-		got, err := planTwoPageXLProjection(context.Background(), parent, []sourceform.SiviParentScalarEdit{edit}, false)
+		got, err := planTwoPageXLProjection(context.Background(), parent, []sourceform.SourceParentScalarEdit{edit}, false)
 		if err != nil || len(got) != 0 {
 			t.Fatal("unchanged historical value inherited an assignment or Master authorization", column, got, err)
 		}
@@ -213,12 +211,12 @@ func TestTwoPageXLHistoricalOmissionAndMasterAuthorization(t *testing.T) {
 	valid := sftest.SiviParentEdit(t, parent, "FieldNumber", vprotest.MetadataText("Valid"))
 	for _, value := range []vprocore.ProjectMetadataCell{vprotest.MetadataText("New"), {Storage: "null"}} {
 		edit.Value = value
-		if got, err := planTwoPageXLProjection(context.Background(), parent, []sourceform.SiviParentScalarEdit{valid, edit}, false); err == nil || got != nil {
+		if got, err := planTwoPageXLProjection(context.Background(), parent, []sourceform.SourceParentScalarEdit{valid, edit}, false); err == nil || got != nil {
 			t.Fatal("ordinary copy or clear granted Master writes or leaked an unrelated assignment", got, err)
 		}
 	}
 	edit.Value = vprotest.MetadataText("New")
-	if got, err := planTwoPageXLProjection(context.Background(), parent, []sourceform.SiviParentScalarEdit{edit}, true); err != nil || len(got) != 1 {
+	if got, err := planTwoPageXLProjection(context.Background(), parent, []sourceform.SourceParentScalarEdit{edit}, true); err != nil || len(got) != 1 {
 		t.Fatal("authorized Master physical plan", got, err)
 	}
 }
@@ -226,30 +224,30 @@ func TestTwoPageXLHistoricalOmissionAndMasterAuthorization(t *testing.T) {
 func TestTwoPageXLOwnershipCollisionCancellationAndNoPartialPlan(t *testing.T) {
 	parent := twoPageXLOriginal(t, "FS882-8x6XL")
 	edit := sftest.SiviParentEdit(t, parent, "FieldNumber", vprotest.MetadataText("New"))
-	for _, change := range []func(*sourceform.SiviParentScalarEdit){
-		func(e *sourceform.SiviParentScalarEdit) { e.ContextID = "foreign" },
-		func(e *sourceform.SiviParentScalarEdit) { e.Table = parent.AdminTable },
-		func(e *sourceform.SiviParentScalarEdit) { e.RowID = "9007199254740993" },
-		func(e *sourceform.SiviParentScalarEdit) { e.Expected = vprotest.MetadataText("stale") },
+	for _, change := range []func(*sourceform.SourceParentScalarEdit){
+		func(e *sourceform.SourceParentScalarEdit) { e.ContextID = "foreign" },
+		func(e *sourceform.SourceParentScalarEdit) { e.Table = parent.AdminTable },
+		func(e *sourceform.SourceParentScalarEdit) { e.RowID = "9007199254740993" },
+		func(e *sourceform.SourceParentScalarEdit) { e.Expected = vprotest.MetadataText("stale") },
 	} {
 		changed := edit
 		change(&changed)
-		if got, err := planTwoPageXLProjection(context.Background(), parent, []sourceform.SiviParentScalarEdit{changed}, false); err == nil || got != nil {
+		if got, err := planTwoPageXLProjection(context.Background(), parent, []sourceform.SourceParentScalarEdit{changed}, false); err == nil || got != nil {
 			t.Fatal("foreign or stale ownership accepted", got, err)
 		}
 	}
-	if got, err := planTwoPageXLProjection(context.Background(), parent, []sourceform.SiviParentScalarEdit{edit, edit}, false); err == nil || got != nil {
+	if got, err := planTwoPageXLProjection(context.Background(), parent, []sourceform.SourceParentScalarEdit{edit, edit}, false); err == nil || got != nil {
 		t.Fatal("duplicate tail leaked a partial plan", got, err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if got, err := planTwoPageXLProjection(ctx, parent, []sourceform.SiviParentScalarEdit{edit}, false); !errors.Is(err, context.Canceled) || got != nil {
+	if got, err := planTwoPageXLProjection(ctx, parent, []sourceform.SourceParentScalarEdit{edit}, false); !errors.Is(err, context.Canceled) || got != nil {
 		t.Fatal("cancellation lost", got, err)
 	}
 	if got, err := planTwoPageXLProjection(context.Background(), parent, nil, false); err == nil || got != nil {
 		t.Fatal("empty plan was success-shaped", got, err)
 	}
-	if got, err := planTwoPageXLProjection(context.Background(), nil, []sourceform.SiviParentScalarEdit{edit}, false); err == nil || got != nil {
+	if got, err := planTwoPageXLProjection(context.Background(), nil, []sourceform.SourceParentScalarEdit{edit}, false); err == nil || got != nil {
 		t.Fatal("missing original was success-shaped", got, err)
 	}
 }

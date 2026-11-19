@@ -1,20 +1,17 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
-
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/resources"
 	"reflect"
 	"strconv"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 var metadataTemplateMappingJSON = resources.ProjectMetadataTemplateJSON

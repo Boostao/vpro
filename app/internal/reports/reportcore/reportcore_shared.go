@@ -1,23 +1,18 @@
 package reportcore
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
-
 	"errors"
 	"fmt"
-
 	"math"
 	"math/big"
 	"reflect"
 	"sort"
-
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type ReportUnitNames struct {
@@ -28,7 +23,7 @@ type ReportUnitNames struct {
 
 func EnvironmentWorkbookText(value string) error {
 	if !utf8.ValidString(value) || len(utf16.Encode([]rune(value))) > 32767 {
-		return errors.New("workbook text requires valid Unicode within Excel's 32767 UTF-16 units; no truncation")
+		return errors.New("workbook text requires valid Unicode within Excel's 32,767-character cell limit; no truncation")
 	}
 	for _, r := range value {
 		if r != '\t' && r != '\n' && r != '\r' && (r < 0x20 || r == 0xfffe || r == 0xffff) {
@@ -81,12 +76,12 @@ func LifeformSummaryText(cell vprocore.ProjectMetadataCell, limit int) error {
 		return err
 	}
 	if value != nil && len(utf16.Encode([]rune(*value))) > limit {
-		return fmt.Errorf("historical text exceeds source TEXT(%d) UTF-16 units; no repair or truncation applied", limit)
+		return fmt.Errorf("historical text exceeds the %d-character field limit; no repair or truncation applied", limit)
 	}
 	return nil
 }
 
-// Validate provenance before JSON can replace malformed Unicode or typed cells.
+// LifeformWorkbookSourceValue — Validate provenance before JSON can replace malformed Unicode or typed cells.
 func LifeformWorkbookSourceValue(value reflect.Value) error {
 	return ReportWorkbookSourceValue(value, func(cell vprocore.ProjectMetadataCell) error {
 		_, err := vprocore.VegetationReportIdentity(cell)

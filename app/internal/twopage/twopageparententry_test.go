@@ -1,13 +1,6 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"encoding/json"
@@ -15,9 +8,14 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-func twoPageEntryEdits(t *testing.T, parent *sourceform.SiviParentProjection) []sourceform.SiviParentScalarEdit {
+func twoPageEntryEdits(t *testing.T, parent *sourceform.SourceParentProjection) []sourceform.SourceParentScalarEdit {
 	t.Helper()
 	xl, err := twoPageXLFields(parent.Form)
 	if err != nil {
@@ -38,7 +36,7 @@ func twoPageEntryEdits(t *testing.T, parent *sourceform.SiviParentProjection) []
 		}
 	}
 	seen := map[string]bool{}
-	edits := []sourceform.SiviParentScalarEdit{}
+	edits := []sourceform.SourceParentScalarEdit{}
 	for _, binding := range parent.Bindings {
 		if seen[binding.Binding] || binding.Binding == "PlotNumber" {
 			continue
@@ -112,7 +110,7 @@ func TestTwoPageEntryInvalidScopeTailsNeverLeakPartialPlan(t *testing.T) {
 	}
 	parent := twoPageXLOriginal(t, "FS882-8x6XL")
 	edits := twoPageEntryEdits(t, parent)
-	for _, tail := range []sourceform.SiviParentScalarEdit{
+	for _, tail := range []sourceform.SourceParentScalarEdit{
 		sftest.SiviParentEdit(t, parent, "PlotNumber", vprotest.MetadataText("Rename")),
 		edits[0],
 		{ContextID: parent.ContextID, Column: "Unknown", Value: vprotest.MetadataText("X")},

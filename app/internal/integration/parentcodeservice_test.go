@@ -1,14 +1,8 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/references"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -16,8 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"context"
 	"github.com/boostao/vpro/app/internal/listcatalog"
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func parentCatalogueExpected(t *testing.T, _ listcatalog.Provenance) []listcatalog.Choice {

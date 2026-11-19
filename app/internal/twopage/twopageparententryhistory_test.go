@@ -1,22 +1,20 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-func twoPageEntryProjectHistoryFixture(t *testing.T, form string, source int) sourceform.SiviParentHistory {
+func twoPageEntryProjectHistoryFixture(t *testing.T, form string, source int) sourceform.SourceParentHistory {
 	t.Helper()
 	service, state, _, _, selection := sftest.SiviProjectAssignmentWriteFixture(t, false, source, 3, "old")
 	original, err := ReadTwoPageParent(service, context.Background(), state.ContextID, "108050", form)
@@ -24,18 +22,18 @@ func twoPageEntryProjectHistoryFixture(t *testing.T, form string, source int) so
 		t.Fatal(err)
 	}
 	selection.ControlID = "form:" + form + "/ProjectID"
-	var evidence *sourceform.SiviProjectAssignmentHistory
-	hooks := sourceform.SiviProjectAssignmentWriteHooks(service, context.Background(), state.ContextID, "108050", selection)
-	err = sourceform.WithSIVIParentWriteTransaction(context.Background(), service.Projects.Sqlite, "source-history fixture read",
+	var evidence *sourceform.SourceProjectAssignmentHistory
+	hooks := sourceform.SourceProjectAssignmentWriteHooks(service, context.Background(), state.ContextID, "108050", selection)
+	err = sourceform.WithSourceParentWriteTransaction(context.Background(), service.Projects.Sqlite, "source-history fixture read",
 		func(tx *sql.Tx, _ string) error {
 			var err error
-			evidence, err = sourceform.ReadSIVIProjectAssignmentEvidence(context.Background(), service.Projects.Sqlite, tx, state.ContextID, selection)
+			evidence, err = sourceform.ReadSourceProjectAssignmentEvidence(context.Background(), service.Projects.Sqlite, tx, state.ContextID, selection)
 			return err
-		}, sourceform.SiviParentWriteHooks{Prepare: hooks.Prepare})
+		}, sourceform.SourceParentWriteHooks{Prepare: hooks.Prepare})
 	if err != nil {
 		t.Fatal(err)
 	}
-	edits := []sourceform.SiviParentScalarEdit{
+	edits := []sourceform.SourceParentScalarEdit{
 		sftest.SiviParentEdit(t, original, "ProjectID", selection.MetadataOriginal.Cells[0]),
 		sftest.SiviParentEdit(t, original, "FieldNumber", vprotest.MetadataText("  Literal field  ")),
 		sftest.SiviParentEdit(t, original, "SV_PolygonNumber", vprotest.MetadataText("  Literal polygon  ")),
@@ -46,10 +44,10 @@ func twoPageEntryProjectHistoryFixture(t *testing.T, form string, source int) so
 		t.Fatal("independent mixed source-history fixture did not plan four actual cells", assignments, err)
 	}
 	committed := *original
-	committed.Rows = append([]sourceform.SiviParentRow{}, original.Rows...)
+	committed.Rows = append([]sourceform.SourceParentRow{}, original.Rows...)
 	committed.Rows[0].Env.Cells = append([]vprocore.ProjectMetadataCell{}, original.Rows[0].Env.Cells...)
 	committed.Rows[0].Admin.Cells = append([]vprocore.ProjectMetadataCell{}, original.Rows[0].Admin.Cells...)
-	event := sourceform.SiviParentHistory{Original: original, Committed: &committed, ProjectAssignment: evidence, EntryPlan: edits}
+	event := sourceform.SourceParentHistory{Original: original, Committed: &committed, ProjectAssignment: evidence, EntryPlan: edits}
 	for _, assignment := range assignments {
 		row, columns := &committed.Rows[0].Env, committed.EnvColumns
 		if assignment.Table == original.AdminTable {
@@ -65,7 +63,7 @@ func twoPageEntryProjectHistoryFixture(t *testing.T, form string, source int) so
 		if !found {
 			t.Fatal("independent fixture lost a physical changed column", assignment.Column)
 		}
-		event.Changes = append(event.Changes, sourceform.SiviParentHistoryChange{Table: assignment.Table, RowID: assignment.RowID,
+		event.Changes = append(event.Changes, sourceform.SourceParentHistoryChange{Table: assignment.Table, RowID: assignment.RowID,
 			Column: assignment.Column, Before: assignment.Before, After: assignment.After})
 	}
 	return event
@@ -88,7 +86,7 @@ func TestTwoPageEntryMixedProjectHistoryExactSourceAndDomainIsolation(t *testing
 					t.Fatal("mixed history lost independently committed literal cells", assignment.Column)
 				}
 			}
-			if _, err := sourceform.SiviProjectAssignmentHistoryAssignments(context.Background(), event, event.Original.Project, event.Original.Plot); err == nil {
+			if _, err := sourceform.SourceProjectAssignmentHistoryAssignments(context.Background(), event, event.Original.Project, event.Original.Plot); err == nil {
 				t.Fatal("mixed entry provenance leaked into standalone SIVI history")
 			}
 			for _, other := range []string{"FS882-8x6XL", "FS882-8x6XL-CHARS"} {
@@ -116,7 +114,7 @@ func TestTwoPageEntryMixedProjectHistoryExactSourceAndDomainIsolation(t *testing
 				if err != nil {
 					t.Fatal(err)
 				}
-				var changed sourceform.SiviParentHistory
+				var changed sourceform.SourceParentHistory
 				if err := json.Unmarshal(data, &changed); err != nil {
 					t.Fatal(err)
 				}
@@ -172,7 +170,7 @@ func TestTwoPageEntryMixedProjectHistoryExactSourceAndDomainIsolation(t *testing
 	}
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
-	if planned, err := sourceform.ValidateSourceProjectAssignmentHistory(cancelled, nil, sourceform.SiviParentHistoryChange{}, nil, ""); !errors.Is(err, context.Canceled) || planned != nil {
+	if planned, err := sourceform.ValidateSourceProjectAssignmentHistory(cancelled, nil, sourceform.SourceParentHistoryChange{}, nil, ""); !errors.Is(err, context.Canceled) || planned != nil {
 		t.Fatal("source history evidence ignored cancellation", planned, err)
 	}
 }

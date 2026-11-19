@@ -199,19 +199,22 @@ func buildDatasheetWhereAndOrder(
 			if suErr != nil {
 				return "", nil, "", suErr
 			}
-			for suRows.Next() {
-				var raw []byte
-				if err := suRows.Scan(&raw); err != nil {
-					suRows.Close()
-					return "", nil, "", err
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, suRows.Close()) }()
+				for suRows.Next() {
+					var raw []byte
+					if err := suRows.Scan(&raw); err != nil {
+
+						return err
+					}
+					s := string(raw)
+					if !utf8.ValidString(s) || strings.ContainsRune(s, 0) {
+						allValidUTF8 = false
+					}
+					suPlots = append(suPlots, s)
 				}
-				s := string(raw)
-				if !utf8.ValidString(s) || strings.ContainsRune(s, 0) {
-					allValidUTF8 = false
-				}
-				suPlots = append(suPlots, s)
-			}
-			if err := errors.Join(suRows.Err(), suRows.Close()); err != nil {
+				return suRows.Err()
+			}(); err != nil {
 				return "", nil, "", err
 			}
 

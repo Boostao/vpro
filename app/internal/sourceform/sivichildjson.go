@@ -1,14 +1,12 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func SourceChildJSONObject(data []byte, operation string, required, optional []string) (map[string]json.RawMessage, error) {

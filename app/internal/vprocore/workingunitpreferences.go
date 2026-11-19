@@ -2,6 +2,7 @@ package vprocore
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -100,10 +101,10 @@ func writeWorkingUnitPreference(path, mode string, replace func(string, string) 
 func (s *WorkingUnitService) workingUnitMode(requested *string) (WorkingUnitModeState, error) {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
-	if s.Db == nil {
+	if s.DB == nil {
 		return WorkingUnitModeState{}, errors.New("Working Unit catalogue is closed")
 	}
-	if err := s.Db.Ping(); err != nil {
+	if err := s.DB.Ping(); err != nil {
 		return WorkingUnitModeState{}, fmt.Errorf("Working Unit catalogue is unavailable: %w", err)
 	}
 	var mode string
@@ -153,9 +154,29 @@ func (s *WorkingUnitService) GetWorkingUnitMode() (WorkingUnitModeState, error) 
 	return s.workingUnitMode(nil)
 }
 
+func (s *WorkingUnitService) GetWorkingUnitModeContext(ctx context.Context) (WorkingUnitModeState, error) {
+	if ctx == nil {
+		return WorkingUnitModeState{}, errors.New("working unit mode requires a context")
+	}
+	if err := ctx.Err(); err != nil {
+		return WorkingUnitModeState{}, err
+	}
+	return s.GetWorkingUnitMode()
+}
+
 func (s *WorkingUnitService) SetWorkingUnitMode(mode string) (WorkingUnitModeState, error) {
 	if err := validateWorkingUnitMode(mode); err != nil {
 		return WorkingUnitModeState{}, err
 	}
 	return s.workingUnitMode(&mode)
+}
+
+func (s *WorkingUnitService) SetWorkingUnitModeContext(ctx context.Context, mode string) (WorkingUnitModeState, error) {
+	if ctx == nil {
+		return WorkingUnitModeState{}, errors.New("working unit mode requires a context")
+	}
+	if err := ctx.Err(); err != nil {
+		return WorkingUnitModeState{}, err
+	}
+	return s.SetWorkingUnitMode(mode)
 }

@@ -1,11 +1,6 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -16,6 +11,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const SiviCreationHistoryTable = "__VPRO_SIVICreationHistory"
@@ -142,7 +140,7 @@ func SiviCreationInteger(value string) vprocore.ProjectMetadataCell {
 	return vprocore.ProjectMetadataCell{Storage: "integer", Integer: &value}
 }
 
-func SiviCreationText(value string) vprocore.ProjectMetadataCell {
+func SourceCreationText(value string) vprocore.ProjectMetadataCell {
 	return vprocore.ProjectMetadataCell{Storage: "text", Text: &value}
 }
 
@@ -216,10 +214,10 @@ func PlanSIVICreation(ctx context.Context, request SiviCreationRequest, veg vpro
 	}
 	original.Cells[columns["Flag"]] = SiviCreationInteger("0")
 	created := vprocore.ProjectMetadataRow{RowID: "1", Cells: append([]vprocore.ProjectMetadataCell{}, original.Cells...)}
-	created.Cells[columns["PlotNumber"]] = SiviCreationText(request.Plot)
-	created.Cells[columns["Species"]] = SiviCreationText(request.Species)
+	created.Cells[columns["PlotNumber"]] = SourceCreationText(request.Plot)
+	created.Cells[columns["Species"]] = SourceCreationText(request.Species)
 	created.Cells[columns["ID"]] = SiviCreationInteger(strconv.FormatInt(id, 10))
-	if err := ValidateSIVIIdentityCell("ID", created.Cells[columns["ID"]]); err != nil {
+	if err := ValidateSourceIdentityCell("ID", created.Cells[columns["ID"]]); err != nil {
 		return original, created, err
 	}
 	allowed := map[string]bool{}
@@ -281,7 +279,7 @@ func allocateSIVICreation(ctx context.Context, tx *sql.Tx, project string, befor
 		return 0, nil, vprocore.ProjectMetadataTable{}, err
 	}
 	for _, row := range before[project+"_Veg"].Rows {
-		if SiviIdentityCellMatches(row.Cells[columns["ID"]], strconv.FormatInt(id, 10)) {
+		if SourceIdentityCellMatches(row.Cells[columns["ID"]], strconv.FormatInt(id, 10)) {
 			return 0, nil, vprocore.ProjectMetadataTable{}, errors.New("SIVI creation allocator collided with physical storage")
 		}
 	}
@@ -289,7 +287,7 @@ func allocateSIVICreation(ctx context.Context, tx *sql.Tx, project string, befor
 	for name, table := range baseline {
 		next[name] = table
 	}
-	next[SiviIdentityLedger] = ledger
+	next[SourceIdentityLedger] = ledger
 	_, ledger, err = reserveSIVIIdentityPlan(ctx, tx, project, next,
 		[]SiviHeightAssignment{{Before: vprocore.ProjectMetadataCell{Storage: "null"}, After: SiviCreationInteger(strconv.FormatInt(id, 10))}})
 	return id, baseline, ledger, err
@@ -348,7 +346,7 @@ func VerifySIVICreationHistory(ctx context.Context, request SiviCreationRequest,
 		if row.RowID == planned.RowID {
 			found = reflect.DeepEqual(row, planned)
 		}
-		if SiviIdentityCellMatches(row.Cells[vegColumns["ID"]], strconv.FormatInt(history.Result.ID, 10)) {
+		if SourceIdentityCellMatches(row.Cells[vegColumns["ID"]], strconv.FormatInt(history.Result.ID, 10)) {
 			identityOccupants++
 		}
 	}
@@ -359,7 +357,7 @@ func VerifySIVICreationHistory(ctx context.Context, request SiviCreationRequest,
 	if err != nil || !reserved[strconv.FormatInt(history.Result.ID, 10)] {
 		return errors.Join(err, errors.New("SIVI creation replay lost its identity reservation"))
 	}
-	ledger := tables[SiviIdentityLedger]
+	ledger := tables[SourceIdentityLedger]
 	ledgerColumns, err := vprocore.SiteUnitTransferColumns(ledger, "ChildTable", "ID")
 	if err != nil {
 		return err
@@ -393,7 +391,7 @@ func VerifySIVICreationHistory(ctx context.Context, request SiviCreationRequest,
 	if len(expected) != len(history.Audits) {
 		return errors.New("SIVI creation history audit completeness differs")
 	}
-	auditPlan, err := AppendSIVIPlannedAudits(vprocore.ProjectMetadataTable{Columns: tables[request.Project+"_Audit"].Columns}, history.Audits)
+	auditPlan, err := AppendSourcePlannedAudits(vprocore.ProjectMetadataTable{Columns: tables[request.Project+"_Audit"].Columns}, history.Audits)
 	if err != nil {
 		return err
 	}
@@ -513,7 +511,7 @@ func LookupSIVICreationReceipt(s *vprocore.ContextService, ctx context.Context, 
 				return nil, nil
 			}
 			tables := map[string]vprocore.ProjectMetadataTable{}
-			for _, name := range []string{SiviCreationHistoryTable, request.Project + "_Veg", request.Project + "_Audit", SiviIdentityLedger} {
+			for _, name := range []string{SiviCreationHistoryTable, request.Project + "_Veg", request.Project + "_Audit", SourceIdentityLedger} {
 				if !present[name] {
 					continue
 				}
@@ -651,11 +649,11 @@ func CreateSIVIVegetation(s *vprocore.ContextService, ctx context.Context, conte
 				b, _ := strconv.ParseInt(plannedVeg.Rows[j].RowID, 10, 64)
 				return a < b
 			})
-			auditPlan, err := AppendSIVIPlannedAudits(before[request.Project+"_Audit"], records)
+			auditPlan, err := AppendSourcePlannedAudits(before[request.Project+"_Audit"], records)
 			if err != nil {
 				return nil, false, err
 			}
-			expected := map[string]vprocore.ProjectMetadataTable{request.Project + "_Veg": plannedVeg, request.Project + "_Audit": auditPlan, SiviIdentityLedger: ledger}
+			expected := map[string]vprocore.ProjectMetadataTable{request.Project + "_Veg": plannedVeg, request.Project + "_Audit": auditPlan, SourceIdentityLedger: ledger}
 			observed, err := vprocore.EnvironmentSiteUnitTables(ctx, tx)
 			if err != nil {
 				return nil, false, err
@@ -692,7 +690,7 @@ func CreateSIVIVegetation(s *vprocore.ContextService, ctx context.Context, conte
 				historyPlan.Columns = []vprocore.ProjectMetadataColumn{{Name: "RequestID", DeclaredType: "TEXT"}, {Name: "Created", DeclaredType: "TEXT"}, {Name: "Proposal", DeclaredType: "TEXT"}}
 			}
 			historyPlan.Rows = append(append([]vprocore.ProjectMetadataRow{}, historyPlan.Rows...), vprocore.ProjectMetadataRow{
-				RowID: strconv.FormatInt(historyRowID, 10), Cells: []vprocore.ProjectMetadataCell{SiviCreationText(request.RequestID), SiviCreationText(when), SiviCreationText(string(proposal))}})
+				RowID: strconv.FormatInt(historyRowID, 10), Cells: []vprocore.ProjectMetadataCell{SourceCreationText(request.RequestID), SourceCreationText(when), SourceCreationText(string(proposal))}})
 			observed, err = vprocore.EnvironmentSiteUnitTables(ctx, tx)
 			if err != nil {
 				return nil, false, err

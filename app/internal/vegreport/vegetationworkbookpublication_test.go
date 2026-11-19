@@ -1,12 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -20,6 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -306,6 +303,7 @@ func TestLongVegetationWorkbookPublicationCancelledLeaseAndStaleOwner(t *testing
 	if outcome, err := service.ExportReviewed(context.Background(), state.ContextID, request); err == nil || outcome != nil {
 		t.Fatal("stale owner published workbook", outcome, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := service.GetReview(nil, state.ContextID, `{"scope":"unlumped"}`); err == nil {
 		t.Fatal("nil context accepted")
 	}

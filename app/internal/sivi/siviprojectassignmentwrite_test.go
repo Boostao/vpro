@@ -1,6 +1,18 @@
 package sivi
 
 import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"os"
+	"reflect"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/sourceform/sftest"
 	"github.com/boostao/vpro/app/internal/sqlutil"
@@ -8,28 +20,13 @@ import (
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-import (
-	"context"
-	"database/sql"
-	"encoding/json"
-	"errors"
-	"os"
-
-	"reflect"
-	"strconv"
-	"strings"
-	"sync"
-	"testing"
-	"time"
-)
-
-func siviProjectAssignmentStoredEvent(t *testing.T, db *sql.DB, id string) sourceform.SiviParentHistory {
+func siviProjectAssignmentStoredEvent(t *testing.T, db *sql.DB, id string) sourceform.SourceParentHistory {
 	t.Helper()
 	var proposal string
 	if err := db.QueryRow(`SELECT Proposal FROM "__VPRO_SIVIProjectAssignmentHistory" WHERE ID=?`, id).Scan(&proposal); err != nil {
 		t.Fatal(err)
 	}
-	var event sourceform.SiviParentHistory
+	var event sourceform.SourceParentHistory
 	if err := json.Unmarshal([]byte(proposal), &event); err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +88,7 @@ func TestSIVIProjectAssignmentWriterOwnedSourcesStrengthAndTypedRestoration(t *t
 							t.Fatal("action validator accepted assignment history")
 						}
 						if !external && source == 1 && strength == 3 {
-							for _, domain := range []sourceform.SiviParentHistoryDomain{sourceform.SiviParentDirectHistory, siviParentActionHistory} {
+							for _, domain := range []sourceform.SourceParentHistoryDomain{sourceform.SiviParentDirectHistory, siviParentActionHistory} {
 								if _, err := db.Exec(domain.Schema + `; INSERT INTO ` + vprocore.QuoteHeaderIdentifier(domain.Table) +
 									`(ID,Created,Proposal) SELECT ID,Created,Proposal FROM "__VPRO_SIVIProjectAssignmentHistory"`); err != nil {
 									t.Fatal(err)
@@ -152,11 +149,11 @@ func TestSIVIProjectAssignmentWriterOwnedSourcesStrengthAndTypedRestoration(t *t
 func TestSIVIProjectAssignmentWriterHistoricalNoopsAndUnauditedPreservation(t *testing.T) {
 	for index, before := range []any{nil, "", strings.Repeat("🌱", 16), int64(2)} {
 		t.Run(strconv.Itoa(index), func(t *testing.T) {
-			service, state, db, parent, selection := sftest.SiviProjectAssignmentWriteFixture(t, false, 1, 3, before)
+			service, state, db, _, _ := sftest.SiviProjectAssignmentWriteFixture(t, false, 1, 3, before)
 			if _, err := db.Exec(`UPDATE Sample_Metadata SET ProjectID=?`, before); err != nil {
 				t.Fatal(err)
 			}
-			parent, selection = sftest.SiviProjectAssignmentWriteSelection(t, service, state)
+			parent, selection := sftest.SiviProjectAssignmentWriteSelection(t, service, state)
 			bytes := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
 			written, err := sourceform.WriteSIVIProjectAssignment(service, context.Background(), state.ContextID, "108050", parent, selection)
 			if err != nil || written == nil || written.ChangedCells != 0 || written.HistoryID != "" {
@@ -292,9 +289,9 @@ func TestSIVIProjectAssignmentWriterTriggersSchemaRollbackAndRetry(t *testing.T)
 			t.Fatal(err)
 		}
 	}
-	hooks := sourceform.SiviProjectAssignmentWriteHooks(service, context.Background(), state.ContextID, "108050", selection)
+	hooks := sourceform.SourceProjectAssignmentWriteHooks(service, context.Background(), state.ContextID, "108050", selection)
 	before := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
-	err := sourceform.WithSIVIParentWriteTransaction(context.Background(), service.Projects.Sqlite, "schema guard test", func(tx *sql.Tx, suAlias string) error {
+	err := sourceform.WithSourceParentWriteTransaction(context.Background(), service.Projects.Sqlite, "schema guard test", func(tx *sql.Tx, suAlias string) error {
 		if _, err := hooks.Plan(tx, parent); err != nil {
 			return err
 		}
@@ -336,8 +333,8 @@ func TestSIVIProjectAssignmentWriterCancellationCollisionAndPreferenceLease(t *t
 		t.Fatal("collision ignored cancellation", got, writeErr)
 	}
 	vprotest.AssertProfileSUFiles(t, service, before)
-	hooks := sourceform.SiviProjectAssignmentWriteHooks(service, context.Background(), state.ContextID, "108050", selection)
-	err = sourceform.WithSIVIParentWriteTransaction(context.Background(), service.Projects.Sqlite, "preference guard test", func(tx *sql.Tx, alias string) error {
+	hooks := sourceform.SourceProjectAssignmentWriteHooks(service, context.Background(), state.ContextID, "108050", selection)
+	err = sourceform.WithSourceParentWriteTransaction(context.Background(), service.Projects.Sqlite, "preference guard test", func(tx *sql.Tx, alias string) error {
 		if _, err := hooks.Plan(tx, parent); err != nil {
 			return err
 		}
@@ -505,30 +502,30 @@ func TestSIVIProjectAssignmentRestorationMalformedHistoryAndUnauditedDeletion(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	for index, mutation := range []func(*sourceform.SiviParentHistory){
-		func(e *sourceform.SiviParentHistory) { e.ProjectAssignment = nil },
-		func(e *sourceform.SiviParentHistory) { e.ProjectAssignment.Selection.SourceOption = 2 },
-		func(e *sourceform.SiviParentHistory) { e.ProjectAssignment.Selection.MetadataColumns = nil },
-		func(e *sourceform.SiviParentHistory) {
+	for index, mutation := range []func(*sourceform.SourceParentHistory){
+		func(e *sourceform.SourceParentHistory) { e.ProjectAssignment = nil },
+		func(e *sourceform.SourceParentHistory) { e.ProjectAssignment.Selection.SourceOption = 2 },
+		func(e *sourceform.SourceParentHistory) { e.ProjectAssignment.Selection.MetadataColumns = nil },
+		func(e *sourceform.SourceParentHistory) {
 			e.ProjectAssignment.Selection.MetadataColumns[0].DeclaredType += "_changed"
 		},
-		func(e *sourceform.SiviParentHistory) {
+		func(e *sourceform.SourceParentHistory) {
 			e.ProjectAssignment.Selection.MetadataOriginal.Cells[1] = vprotest.MetadataText("")
 		},
-		func(e *sourceform.SiviParentHistory) { e.ProjectAssignment.Schema = nil },
-		func(e *sourceform.SiviParentHistory) {
+		func(e *sourceform.SourceParentHistory) { e.ProjectAssignment.Schema = nil },
+		func(e *sourceform.SourceParentHistory) {
 			value := "malformed schema"
 			e.ProjectAssignment.Schema[0].SQL = &value
 		},
-		func(e *sourceform.SiviParentHistory) { e.ProjectAssignment.Columns[0].DeclaredType = "BLOB" },
-		func(e *sourceform.SiviParentHistory) { e.Changes[0].Column = "SV_PolygonNumber" },
-		func(e *sourceform.SiviParentHistory) { e.Changes = append(e.Changes, e.Changes[0]) },
-		func(e *sourceform.SiviParentHistory) {
+		func(e *sourceform.SourceParentHistory) { e.ProjectAssignment.Columns[0].DeclaredType = "BLOB" },
+		func(e *sourceform.SourceParentHistory) { e.Changes[0].Column = "SV_PolygonNumber" },
+		func(e *sourceform.SourceParentHistory) { e.Changes = append(e.Changes, e.Changes[0]) },
+		func(e *sourceform.SourceParentHistory) {
 			e.Committed.Rows[0].Env.Cells[0] = vprotest.MetadataText("other")
 		},
-		func(e *sourceform.SiviParentHistory) { value := "forged"; e.Changes[0].Audit.AfterEdit = &value },
+		func(e *sourceform.SourceParentHistory) { value := "forged"; e.Changes[0].Audit.AfterEdit = &value },
 	} {
-		var candidate sourceform.SiviParentHistory
+		var candidate sourceform.SourceParentHistory
 		if err := json.Unmarshal(original, &candidate); err != nil {
 			t.Fatal(err)
 		}

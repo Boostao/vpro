@@ -22,35 +22,6 @@ type siteUnitSummaryWorkbookInput struct {
 	Tables  []vprocore.ProjectMetadataTable
 }
 
-func ReadSiteUnitSummaryWorkbookInput(s *vprocore.ContextService, ctx context.Context, contextID string, method int,
-	hooks vprocore.PublicationReadSnapshotHooks) (siteUnitSummaryWorkbookInput, error) {
-	if ctx == nil {
-		return siteUnitSummaryWorkbookInput{}, errors.New("Summary Environment workbook requires a context")
-	}
-	if err := ctx.Err(); err != nil {
-		return siteUnitSummaryWorkbookInput{}, err
-	}
-	if s == nil || s.Projects == nil || s.Projects.Sqlite == nil || s.Plots == nil {
-		return siteUnitSummaryWorkbookInput{}, errors.New("Summary Environment workbook context service is unavailable")
-	}
-	if method != 1 && method != 2 {
-		return siteUnitSummaryWorkbookInput{}, errors.New("Summary Environment requires Mean (1) or Interquartile (2)")
-	}
-	if err := vprocore.ValidateGoogleEarthReviewStrings(contextID); err != nil {
-		return siteUnitSummaryWorkbookInput{}, err
-	}
-	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (siteUnitSummaryWorkbookInput, error) {
-		return vprocore.WithOwnedPreferenceSnapshot(ctx, plots, hooks, func(owner *vprocore.SqliteContext, tx *sql.Tx) (siteUnitSummaryWorkbookInput, error) {
-			return readSiteUnitSummaryWorkbookSource(ctx, owner, tx, contextID, method)
-		})
-	})
-}
-
-func readSiteUnitSummaryWorkbookSource(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx,
-	contextID string, method int) (siteUnitSummaryWorkbookInput, error) {
-	return readSiteUnitSummaryWorkbookSourceWithScope(ctx, owner, tx, contextID, method, 1)
-}
-
 func readSiteUnitSummaryWorkbookSourceWithScope(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx,
 	contextID string, method, unitType int) (siteUnitSummaryWorkbookInput, error) {
 	env, admin, su, master, source, err := resolveSiteUnitSummaryScopeTables(ctx, owner, tx, unitType, nil)

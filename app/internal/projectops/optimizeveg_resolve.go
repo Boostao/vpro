@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/boostao/vpro/app/internal/sqlutil"
+
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -215,17 +217,17 @@ func validateMemberCoverCell(col string, m vegRowWithRowID) (float64, bool, *inv
 				sourceID:  srcID,
 				hasID:     hasID,
 				display:   disp,
-				violation: fmt.Sprintf("out-of-bounds %s cover %s (exceeds IEEE-754 SINGLE range)%s", col, disp, idTag),
+				violation: fmt.Sprintf("out-of-bounds %s cover %s (outside supported numeric range)%s", col, disp, idTag),
 			}
 		}
-		narrowed, ok := NarrowSingleCover(val)
+		narrowed, ok := sqlutil.NarrowSingleCover(val)
 		if !ok {
 			narrowedDisp := strconv.FormatFloat(float64(narrowed), 'g', -1, 32)
 			return 0, true, &invalidVegNumericCell{
 				sourceID:  srcID,
 				hasID:     hasID,
 				display:   disp,
-				violation: fmt.Sprintf("out-of-bounds %s cover %s (IEEE-754 SINGLE %s >= 100)%s", col, disp, narrowedDisp, idTag),
+				violation: fmt.Sprintf("out-of-bounds %s cover %s (rounded cover %s%% reaches 100%%)%s", col, disp, narrowedDisp, idTag),
 			}
 		}
 		if narrowed == 0 {
@@ -307,7 +309,7 @@ func validateMemberHeightCell(col string, m vegRowWithRowID) (float64, bool, *in
 				sourceID:  srcID,
 				hasID:     hasID,
 				display:   disp,
-				violation: fmt.Sprintf("out-of-bounds %s height %s (exceeds IEEE-754 SINGLE range)%s", col, disp, idTag),
+				violation: fmt.Sprintf("out-of-bounds %s height %s (outside supported numeric range)%s", col, disp, idTag),
 			}
 		}
 		if val == 0 {

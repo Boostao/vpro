@@ -1,15 +1,13 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"slices"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type ownedTableCSVReview struct {

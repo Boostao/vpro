@@ -235,7 +235,7 @@ func validateDatasheetTextConstraints(tableKey string, colMeta DatasheetColumnMe
 		return fmt.Errorf("%s.%s must not have leading or trailing whitespace", tableKey, colMeta.Name)
 	}
 	if colMeta.MaxUTF16 > 0 && len(utf16.Encode([]rune(text))) > colMeta.MaxUTF16 {
-		return fmt.Errorf("%s.%s exceeds %d UTF-16 code units", tableKey, colMeta.Name, colMeta.MaxUTF16)
+		return fmt.Errorf("%s.%s cannot exceed %d characters", tableKey, colMeta.Name, colMeta.MaxUTF16)
 	}
 	if tableKey == "Env" && colMeta.Name == "Date" {
 		if err := vprocore.ValidateSurveyDateText(&text); err != nil {
@@ -340,16 +340,16 @@ func normalizeDatasheetSingleCell(
 		return nil, nil, vprocore.ProjectMetadataCell{}, err
 	}
 	if math.IsNaN(num) || math.IsInf(num, 0) || math.Abs(num) > math.MaxFloat32 {
-		return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("%s.%s exceeds physical IEEE-754 Single range", tableKey, colMeta.Name)
+		return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("%s.%s is outside the supported numeric range", tableKey, colMeta.Name)
 	}
 	// Narrow float64 to float32 BEFORE evaluating `< 100 Or Is Null`!
 	narrowed32 := float32(num)
 	if math.IsNaN(float64(narrowed32)) || math.IsInf(float64(narrowed32), 0) {
-		return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("%s.%s overflows IEEE-754 Single", tableKey, colMeta.Name)
+		return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("%s.%s is too large for a numeric field", tableKey, colMeta.Name)
 	}
 	if colMeta.IsCoverSingle {
 		if narrowed32 >= 100 {
-			return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("%s.%s must narrow to IEEE-754 float32 < 100 (or NULL)", tableKey, colMeta.Name)
+			return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("%s.%s must be from 0 to under 100%% (e.g. 99.9%%) or blank", tableKey, colMeta.Name)
 		}
 		if narrowed32 < 0 {
 			return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("%s.%s cover cannot be negative", tableKey, colMeta.Name)

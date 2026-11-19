@@ -11,7 +11,7 @@ import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-// Canonical wide phytosociological rank columns (1..11 VPro levels + WorkingUnit).
+// PhytosociologicalRanks — Canonical wide phytosociological rank columns (1..11 VPro levels + WorkingUnit).
 var PhytosociologicalRanks = []struct {
 	Key   string `json:"key"`
 	Label string `json:"label"`
@@ -586,20 +586,23 @@ func GetHierarchyExplorer(ctx context.Context, contexts *vprocore.ContextService
 			return nil, err
 		}
 		var records []rawHierarchyRecord
-		for rows.Next() {
-			var r rawHierarchyRecord
-			var parent sql.NullInt64
-			if err := rows.Scan(&r.id, &r.name, &parent, &r.level, &r.tag); err != nil {
-				rows.Close()
-				return nil, err
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+			for rows.Next() {
+				var r rawHierarchyRecord
+				var parent sql.NullInt64
+				if err := rows.Scan(&r.id, &r.name, &parent, &r.level, &r.tag); err != nil {
+
+					return err
+				}
+				if parent.Valid {
+					p := parent.Int64
+					r.parent = &p
+				}
+				records = append(records, r)
 			}
-			if parent.Valid {
-				p := parent.Int64
-				r.parent = &p
-			}
-			records = append(records, r)
-		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return rows.Err()
+		}(); err != nil {
 			return nil, err
 		}
 

@@ -167,10 +167,10 @@ func ValidateLumpCodes(lumpCode, sppCode string) (string, string, error) {
 		return "", "", errors.New("SppCode must not be empty")
 	}
 	if len(utf16.Encode([]rune(cleanLump))) > MaxLumpCodeUTF16Units {
-		return "", "", fmt.Errorf("LumpCode %q exceeds %d UTF-16 code units", cleanLump, MaxLumpCodeUTF16Units)
+		return "", "", fmt.Errorf("LumpCode %q cannot exceed %d characters", cleanLump, MaxLumpCodeUTF16Units)
 	}
 	if len(utf16.Encode([]rune(cleanSpp))) > MaxSppCodeUTF16Units {
-		return "", "", fmt.Errorf("SppCode %q exceeds %d UTF-16 code units", cleanSpp, MaxSppCodeUTF16Units)
+		return "", "", fmt.Errorf("SppCode %q cannot exceed %d characters", cleanSpp, MaxSppCodeUTF16Units)
 	}
 	if strings.EqualFold(cleanLump, cleanSpp) {
 		return "", "", fmt.Errorf("LumpCode and SppCode cannot be identical (%s)", cleanSpp)
@@ -332,13 +332,17 @@ func inspectDatabaseLumpTables(ctx context.Context, dbPath string, activeProject
 	if err := db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='_table_metadata')`).Scan(&hasMeta); err == nil && hasMeta {
 		mRows, mErr := db.QueryContext(ctx, `SELECT table_name, COALESCE(description, '') FROM "_table_metadata"`)
 		if mErr == nil {
-			for mRows.Next() {
-				var tName, desc string
-				if err := mRows.Scan(&tName, &desc); err == nil {
-					metaVersions[strings.ToLower(tName)] = desc
+			func() {
+				defer mRows.Close()
+
+				for mRows.Next() {
+					var tName, desc string
+					if err := mRows.Scan(&tName, &desc); err == nil {
+						metaVersions[strings.ToLower(tName)] = desc
+					}
 				}
-			}
-			mRows.Close()
+
+			}()
 		}
 	}
 
@@ -347,17 +351,20 @@ func inspectDatabaseLumpTables(ctx context.Context, dbPath string, activeProject
 		return nil, err
 	}
 	var candidateTables []string
-	for tRows.Next() {
-		var name string
-		if err := tRows.Scan(&name); err != nil {
-			tRows.Close()
-			return nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, tRows.Close()) }()
+		for tRows.Next() {
+			var name string
+			if err := tRows.Scan(&name); err != nil {
+
+				return err
+			}
+			if len(name) > 5 && strings.EqualFold(name[len(name)-5:], "_Lump") && !strings.HasPrefix(strings.ToUpper(name), "USYS") {
+				candidateTables = append(candidateTables, name)
+			}
 		}
-		if len(name) > 5 && strings.EqualFold(name[len(name)-5:], "_Lump") && !strings.HasPrefix(strings.ToUpper(name), "USYS") {
-			candidateTables = append(candidateTables, name)
-		}
-	}
-	if err := tRows.Close(); err != nil {
+		return tRows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 
@@ -385,21 +392,23 @@ func inspectDatabaseLumpTables(ctx context.Context, dbPath string, activeProject
 			continue
 		}
 		lumpSet := map[string]struct{}{}
-		for rows.Next() {
-			var lc sql.NullString
-			var rawUse any
-			if sErr := rows.Scan(&lc, &rawUse); sErr != nil {
-				continue
+		func() {
+			defer rows.Close()
+			for rows.Next() {
+				var lc sql.NullString
+				var rawUse any
+				if sErr := rows.Scan(&lc, &rawUse); sErr != nil {
+					continue
+				}
+				rowCount++
+				if lc.Valid && strings.TrimSpace(lc.String) != "" {
+					lumpSet[strings.ToUpper(strings.TrimSpace(lc.String))] = struct{}{}
+				}
+				if normalizeAccessBool(rawUse) {
+					activeCount++
+				}
 			}
-			rowCount++
-			if lc.Valid && strings.TrimSpace(lc.String) != "" {
-				lumpSet[strings.ToUpper(strings.TrimSpace(lc.String))] = struct{}{}
-			}
-			if normalizeAccessBool(rawUse) {
-				activeCount++
-			}
-		}
-		rows.Close()
+		}()
 		distinctLump = len(lumpSet)
 		summaries = append(summaries, LumpTableSummary{
 			Name:              base,

@@ -1,17 +1,15 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func soilFacade(t *testing.T, contexts *vprocore.ContextService) *TwoPageSoilService {
@@ -103,6 +101,7 @@ func TestTwoPageSoilServiceExplicitErrorsAndStrictTransport(t *testing.T) {
 		t.Fatal("cancelled context was replaced by transport failure", result, err)
 	}
 	for _, facade := range []*TwoPageSoilService{nil, {}, service} {
+		//lint:ignore SA1012 intentional nil-context guard test
 		if result, err := facade.Save(nil, state.ContextID, "invalid JSON"); err == nil || result != nil {
 			t.Fatal("nil context accepted")
 		}
@@ -144,4 +143,15 @@ func TestTwoPageSoilServiceExplicitErrorsAndStrictTransport(t *testing.T) {
 	if after := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments); !reflect.DeepEqual(after, before) {
 		t.Fatal("invalid facade guards/transport changed source/audit/history")
 	}
+}
+
+func (s *TwoPageSoilService) RecoverReceipt(ctx context.Context, contextID, requestJSON string) (*TwoPageSoilWriteResult, error) {
+	if err := s.require(ctx, false); err != nil {
+		return nil, err
+	}
+	var request twoPageSoilRequest
+	if err := json.Unmarshal([]byte(requestJSON), &request); err != nil {
+		return nil, err
+	}
+	return LookupTwoPageSoilReceipt(s.contexts, ctx, contextID, request)
 }

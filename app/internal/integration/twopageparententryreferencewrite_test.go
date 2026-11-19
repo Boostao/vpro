@@ -1,6 +1,12 @@
 package integration
 
 import (
+	"context"
+	"database/sql"
+	"errors"
+	"reflect"
+	"testing"
+
 	referencespkg "github.com/boostao/vpro/app/internal/references"
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/sourceform/sftest"
@@ -9,26 +15,18 @@ import (
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-import (
-	"context"
-	"database/sql"
-	"errors"
-	"reflect"
-	"testing"
-)
-
 func twoPageEntryConfiguredRequiredEdits(t *testing.T, contexts *vprocore.ContextService, state vprocore.ProjectState,
-	parent *sourceform.SiviParentProjection, readers sourceform.SiviParentSharedReferenceReaders) []sourceform.SiviParentScalarEdit {
+	parent *sourceform.SourceParentProjection, readers sourceform.SourceParentSharedReferenceReaders) []sourceform.SourceParentScalarEdit {
 	t.Helper()
 	fields, err := twopage.TwoPageEntryRequiredReferenceFields(parent.Form)
 	if err != nil {
 		t.Fatal(err)
 	}
-	references := &sourceform.SIVIParentSharedService{References: readers}
+	references := &sourceform.SourceParentSharedService{References: readers}
 	edits, err := vprocore.WithContextPlotRequest(context.Background(), contexts, state.ContextID,
-		func(plots *vprocore.PlotService) ([]sourceform.SiviParentScalarEdit, error) {
-			return vprocore.WithOwnedSIVISnapshot(context.Background(), plots, func(owner *vprocore.SqliteContext, tx *sql.Tx) ([]sourceform.SiviParentScalarEdit, error) {
-				edits := []sourceform.SiviParentScalarEdit{}
+		func(plots *vprocore.PlotService) ([]sourceform.SourceParentScalarEdit, error) {
+			return vprocore.WithOwnedSIVISnapshot(context.Background(), plots, func(owner *vprocore.SqliteContext, tx *sql.Tx) ([]sourceform.SourceParentScalarEdit, error) {
+				edits := []sourceform.SourceParentScalarEdit{}
 				for _, field := range fields {
 					reference, err := references.ReadReference(context.Background(), tx, "VLists", field, vprocore.ProjectMetadataCell{Storage: "null"})
 					if err != nil {
@@ -104,7 +102,7 @@ func TestTwoPageEntryConfiguredClosedCatalogueAndNullClearing(t *testing.T) {
 	}
 	vprotest.AssertProfileSUFiles(t, contexts, before)
 	if got, err := twopage.WriteTwoPageEntryWithRequiredReferences(contexts, context.Background(), state.ContextID,
-		parent.Plot, parent.Form, parent, []sourceform.SiviParentScalarEdit{sftest.SiviParentEdit(t, parent, "Exposure1", vprocore.ProjectMetadataCell{Storage: "null"})},
+		parent.Plot, parent.Form, parent, []sourceform.SourceParentScalarEdit{sftest.SiviParentEdit(t, parent, "Exposure1", vprocore.ProjectMetadataCell{Storage: "null"})},
 		false, readers, twoPageEntryApprovePhysical); err != nil || got == nil {
 		t.Fatal("closed borrowed catalogue prevented explicit NULL clearing", got, err)
 	}
@@ -158,7 +156,7 @@ func TestTwoPageEntryConfiguredRequiredReferenceFailuresRollbackAndRetry(t *test
 		before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 		ctx, cancel := context.WithCancel(context.Background())
 		currentReaders := readers
-		currentEdits := append([]sourceform.SiviParentScalarEdit(nil), edits...)
+		currentEdits := append([]sourceform.SourceParentScalarEdit(nil), edits...)
 		approval := twopage.TwoPageEntryApproval(twoPageEntryApprovePhysical)
 		switch failure {
 		case "nil approval":
@@ -170,11 +168,11 @@ func TestTwoPageEntryConfiguredRequiredReferenceFailuresRollbackAndRetry(t *test
 		case "unlisted":
 			currentEdits[len(currentEdits)-1] = sftest.SiviParentEdit(t, parent, "SurfaceShape", vprotest.MetadataText("ZZZ"))
 		case "approval":
-			approval = func(*sql.Tx, *sourceform.SiviParentProjection, []sourceform.SiviParentScalarAssignment) error {
+			approval = func(*sql.Tx, *sourceform.SourceParentProjection, []sourceform.SourceParentScalarAssignment) error {
 				return errors.New("independent optional approval failed")
 			}
 		case "cancel":
-			approval = func(*sql.Tx, *sourceform.SiviParentProjection, []sourceform.SiviParentScalarAssignment) error {
+			approval = func(*sql.Tx, *sourceform.SourceParentProjection, []sourceform.SourceParentScalarAssignment) error {
 				cancel()
 				return ctx.Err()
 			}

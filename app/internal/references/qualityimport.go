@@ -1,10 +1,6 @@
 package references
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"bytes"
 	"database/sql"
 	"encoding/hex"
@@ -17,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/boostao/vpro/app/internal/listcatalog"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type QualityProvenance struct {

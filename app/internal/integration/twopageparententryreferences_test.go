@@ -1,22 +1,20 @@
 package integration
 
 import (
+	"context"
+	"database/sql"
+	"errors"
+	"reflect"
+	"testing"
+
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/sourceform/sftest"
 	"github.com/boostao/vpro/app/internal/twopage"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-import (
-	"context"
-	"database/sql"
-	"errors"
-	"reflect"
-	"testing"
-)
-
 func TestTwoPageEntryRequiredReferenceSourceScope(t *testing.T) {
-	want := []sourceform.SiviParentSharedReferencePolicy{
+	want := []sourceform.SourceParentSharedReferencePolicy{
 		{Column: "Exposure1", List: "Exposure", Reader: "site", Maximum: 2, Required: true},
 		{Column: "Exposure2", List: "Exposure", Reader: "site", Maximum: 2, Required: true},
 		{Column: "MesoSlopePosition", List: "MesoSlopePosition", Reader: "family", Maximum: 3, Required: true},
@@ -31,7 +29,7 @@ func TestTwoPageEntryRequiredReferenceSourceScope(t *testing.T) {
 		}
 	}
 	for _, column := range []string{"MesoSlopePosition", "SurfaceShape"} {
-		field, exists := sourceform.SiviParentSharedReferenceField(column)
+		field, exists := sourceform.SourceParentSharedReferenceField(column)
 		if !exists || field.Required {
 			t.Fatal("two-page policy mutated the different SIVI source", column, field)
 		}
@@ -42,13 +40,13 @@ func TestTwoPageEntryRequiredReferenceSourceScope(t *testing.T) {
 }
 
 func TestTwoPageEntryRequiredReferenceApprovalExactMembershipAndFailures(t *testing.T) {
-	parent := &sourceform.SiviParentProjection{Form: "FS882-8x6XL"}
+	parent := &sourceform.SourceParentProjection{Form: "FS882-8x6XL"}
 	tx := &sql.Tx{}
-	reader := func(context.Context, *sql.Tx, sourceform.SiviParentSharedReferencePolicy) (sourceform.SIVIParentSharedReference, error) {
+	reader := func(context.Context, *sql.Tx, sourceform.SourceParentSharedReferencePolicy) (sourceform.SourceParentSharedReference, error) {
 		t.Fatal("unexpected reference read")
-		return sourceform.SIVIParentSharedReference{}, nil
+		return sourceform.SourceParentSharedReference{}, nil
 	}
-	if err := twopage.ApproveTwoPageEntryRequiredReferences(context.Background(), tx, parent, []sourceform.SiviParentScalarAssignment{
+	if err := twopage.ApproveTwoPageEntryRequiredReferences(context.Background(), tx, parent, []sourceform.SourceParentScalarAssignment{
 		{Column: "SurfaceShape", Value: nil}, {Column: "FieldNumber", Value: "literal"},
 	}, reader); err != nil {
 		t.Fatal("NULL clearing or unrelated assignment needs no reference lookup", err)
@@ -58,34 +56,34 @@ func TestTwoPageEntryRequiredReferenceApprovalExactMembershipAndFailures(t *test
 			"overlength", "malformed", "column", "list", "policy", "unavailable", "read", "cancel", "integer"} {
 			calls := 0
 			ctx, cancel := context.WithCancel(context.Background())
-			reader := func(ctx context.Context, observed *sql.Tx, field sourceform.SiviParentSharedReferencePolicy) (sourceform.SIVIParentSharedReference, error) {
+			reader := func(ctx context.Context, observed *sql.Tx, field sourceform.SourceParentSharedReferencePolicy) (sourceform.SourceParentSharedReference, error) {
 				calls++
 				if observed != tx || field.Column != column || !field.Required {
 					t.Fatal("reference read lost the owned transaction/source policy", observed, field)
 				}
-				reference := sourceform.SIVIParentSharedReference{Column: column, ListName: field.List, Required: true,
-					Available: true, Choices: []sourceform.SIVIParentSharedReferenceChoice{
+				reference := sourceform.SourceParentSharedReference{Column: column, ListName: field.List, Required: true,
+					Available: true, Choices: []sourceform.SourceParentSharedReferenceChoice{
 						sftest.TwoPageEntryReferenceChoice("AB"), sftest.TwoPageEntryReferenceChoice("AB"),
 					}}
 				switch failure {
 				case "prefix":
-					reference.Choices = []sourceform.SIVIParentSharedReferenceChoice{sftest.TwoPageEntryReferenceChoice("ABC")}
+					reference.Choices = []sourceform.SourceParentSharedReferenceChoice{sftest.TwoPageEntryReferenceChoice("ABC")}
 				case "case":
-					reference.Choices = []sourceform.SIVIParentSharedReferenceChoice{sftest.TwoPageEntryReferenceChoice("ab")}
+					reference.Choices = []sourceform.SourceParentSharedReferenceChoice{sftest.TwoPageEntryReferenceChoice("ab")}
 				case "unlisted":
-					reference.Choices = []sourceform.SIVIParentSharedReferenceChoice{sftest.TwoPageEntryReferenceChoice("XY")}
+					reference.Choices = []sourceform.SourceParentSharedReferenceChoice{sftest.TwoPageEntryReferenceChoice("XY")}
 				case "NULL":
-					reference.Choices = []sourceform.SIVIParentSharedReferenceChoice{{Selectable: true}}
+					reference.Choices = []sourceform.SourceParentSharedReferenceChoice{{Selectable: true}}
 				case "empty":
-					reference.Choices = []sourceform.SIVIParentSharedReferenceChoice{sftest.TwoPageEntryReferenceChoice("")}
+					reference.Choices = []sourceform.SourceParentSharedReferenceChoice{sftest.TwoPageEntryReferenceChoice("")}
 				case "nonselectable":
 					for i := range reference.Choices {
 						reference.Choices[i].Selectable = false
 					}
 				case "overlength":
-					reference.Choices = []sourceform.SIVIParentSharedReferenceChoice{sftest.TwoPageEntryReferenceChoice("123456789")}
+					reference.Choices = []sourceform.SourceParentSharedReferenceChoice{sftest.TwoPageEntryReferenceChoice("123456789")}
 				case "malformed":
-					reference.Choices = []sourceform.SIVIParentSharedReferenceChoice{sftest.TwoPageEntryReferenceChoice(string([]byte{0xff}))}
+					reference.Choices = []sourceform.SourceParentSharedReferenceChoice{sftest.TwoPageEntryReferenceChoice(string([]byte{0xff}))}
 				case "column":
 					reference.Column = "another field"
 				case "list":
@@ -95,7 +93,7 @@ func TestTwoPageEntryRequiredReferenceApprovalExactMembershipAndFailures(t *test
 				case "unavailable":
 					reference.Available, reference.Diagnostic = false, "catalogue closed"
 				case "read":
-					return sourceform.SIVIParentSharedReference{}, errors.New("reference read failed")
+					return sourceform.SourceParentSharedReference{}, errors.New("reference read failed")
 				case "cancel":
 					cancel()
 				}
@@ -105,7 +103,7 @@ func TestTwoPageEntryRequiredReferenceApprovalExactMembershipAndFailures(t *test
 			if failure == "integer" {
 				value = 1
 			}
-			err := twopage.ApproveTwoPageEntryRequiredReferences(ctx, tx, parent, []sourceform.SiviParentScalarAssignment{{Column: column, Value: value}}, reader)
+			err := twopage.ApproveTwoPageEntryRequiredReferences(ctx, tx, parent, []sourceform.SourceParentScalarAssignment{{Column: column, Value: value}}, reader)
 			cancel()
 			if failure == "" && (err != nil || calls != 1) {
 				t.Fatal("exact duplicate definitions should remain selectable", column, calls, err)
@@ -146,15 +144,15 @@ func TestTwoPageEntryRequiredReferenceApprovalSharesAtomicRollbackAndRetry(t *te
 		}
 		edits := append(twoPageEntryWriteEdits(t, parent), sftest.SiviParentEdit(t, parent, "MesoSlopePosition", vprotest.MetadataText("AB")))
 		before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
-		reader := func(ctx context.Context, tx *sql.Tx, field sourceform.SiviParentSharedReferencePolicy) (sourceform.SIVIParentSharedReference, error) {
+		reader := func(ctx context.Context, tx *sql.Tx, field sourceform.SourceParentSharedReferencePolicy) (sourceform.SourceParentSharedReference, error) {
 			var code string
 			if err := tx.QueryRowContext(ctx, `SELECT Code FROM EntryReferenceFixture`).Scan(&code); err != nil {
-				return sourceform.SIVIParentSharedReference{}, err
+				return sourceform.SourceParentSharedReference{}, err
 			}
-			return sourceform.SIVIParentSharedReference{Column: field.Column, ListName: field.List, Required: true, Available: true,
-				Choices: []sourceform.SIVIParentSharedReferenceChoice{sftest.TwoPageEntryReferenceChoice(code)}}, nil
+			return sourceform.SourceParentSharedReference{Column: field.Column, ListName: field.List, Required: true, Available: true,
+				Choices: []sourceform.SourceParentSharedReferenceChoice{sftest.TwoPageEntryReferenceChoice(code)}}, nil
 		}
-		approval := func(tx *sql.Tx, observed *sourceform.SiviParentProjection, assignments []sourceform.SiviParentScalarAssignment) error {
+		approval := func(tx *sql.Tx, observed *sourceform.SourceParentProjection, assignments []sourceform.SourceParentScalarAssignment) error {
 			return twopage.ApproveTwoPageEntryRequiredReferences(context.Background(), tx, observed, assignments, reader)
 		}
 		if got, err := twopage.WriteTwoPageEntry(contexts, context.Background(), state.ContextID, parent.Plot, form,

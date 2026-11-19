@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"strings"
-	"time"
 )
 
 const (

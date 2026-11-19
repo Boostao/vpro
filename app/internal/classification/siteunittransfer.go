@@ -1,11 +1,6 @@
 package classification
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -17,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf16"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type EnvironmentSiteUnitChange struct {
@@ -81,7 +79,7 @@ func planEnvironmentSiteUnits(env, admin, su vprocore.ProjectMetadataTable) ([]E
 			return nil, errors.New("environment/SU transfer cannot assign unsupported historical SiteUnit storage")
 		}
 		if after.Text != nil && (strings.ContainsRune(*after.Text, 0) || len(utf16.Encode([]rune(*after.Text))) > 255) {
-			return nil, errors.New("environment/SU transfer requires new SiteUnit text within the source 255 UTF-16-unit bound and without NUL")
+			return nil, errors.New("environment/SU transfer requires new SiteUnit text within 255 characters and without NUL")
 		}
 		changes = append(changes, EnvironmentSiteUnitChange{
 			plot, sources[0].RowID, parents[0].RowID, target.RowID, vprocore.CloneSiteUnitCell(before), vprocore.CloneSiteUnitCell(after)})

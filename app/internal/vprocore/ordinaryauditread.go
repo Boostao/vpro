@@ -50,7 +50,7 @@ func (s *PlotService) ListAuditReadEntries(plot string) ([]OrdinaryAuditReadEntr
 		}
 		entry.RowID = strconv.FormatInt(id, 10)
 		if entry.Project != project {
-			return nil, fmt.Errorf("audit rowId %s has foreign project ownership", entry.RowID)
+			return nil, fmt.Errorf("audit entry %s has foreign project ownership", entry.RowID)
 		}
 		texts := []string{entry.Project, entry.PlotNumber, entry.Table, entry.EditField}
 		for _, value := range []*string{entry.User, entry.EditWhen, entry.BeforeEdit, entry.AfterEdit} {
@@ -60,7 +60,7 @@ func (s *PlotService) ListAuditReadEntries(plot string) ([]OrdinaryAuditReadEntr
 		}
 		for _, value := range texts {
 			if !utf8.ValidString(value) {
-				return nil, fmt.Errorf("ordinary audit rowId %s contains malformed UTF-8; no text repaired", entry.RowID)
+				return nil, fmt.Errorf("ordinary audit entry %s contains malformed UTF-8; no text repaired", entry.RowID)
 			}
 		}
 		entries = append(entries, entry)

@@ -242,50 +242,55 @@ func SearchBECUnitPicker(
 				if qErr != nil {
 					continue
 				}
-				for rows.Next() {
-					var code, lname, sci string
-					if err := rows.Scan(&code, &lname, &sci); err != nil {
-						continue
-					}
-					code = strings.TrimSpace(code)
-					if code == "" {
-						continue
-					}
-					compact := compactBECUnitCode(code)
-					z, sz := splitZoneSubZoneFromUnitCode(code)
-					if zFilter != "" && !strings.EqualFold(z, zFilter) {
-						continue
-					}
-					if szFilter != "" && !strings.HasPrefix(strings.ToLower(sz), szFilter) {
-						continue
-					}
-					if q != "" {
-						hay := strings.ToLower(code + " " + compact + " " + lname + " " + sci)
-						if !strings.Contains(hay, q) && (qCompact == "" || !strings.Contains(hay, qCompact)) {
+				done := func() bool {
+					defer rows.Close()
+					for rows.Next() {
+						var code, lname, sci string
+						if err := rows.Scan(&code, &lname, &sci); err != nil {
 							continue
 						}
+						code = strings.TrimSpace(code)
+						if code == "" {
+							continue
+						}
+						compact := compactBECUnitCode(code)
+						z, sz := splitZoneSubZoneFromUnitCode(code)
+						if zFilter != "" && !strings.EqualFold(z, zFilter) {
+							continue
+						}
+						if szFilter != "" && !strings.HasPrefix(strings.ToLower(sz), szFilter) {
+							continue
+						}
+						if q != "" {
+							hay := strings.ToLower(code + " " + compact + " " + lname + " " + sci)
+							if !strings.Contains(hay, q) && (qCompact == "" || !strings.Contains(hay, qCompact)) {
+								continue
+							}
+						}
+						upper := strings.ToUpper(compact)
+						if seen[upper] {
+							continue
+						}
+						seen[upper] = true
+						found = append(found, BECUnitPickerChoice{
+							SiteSeries:     code,
+							LongName:       lname,
+							ScientificName: sci,
+							Zone:           z,
+							SubZone:        sz,
+							Source:         src.tag,
+							MaskValid:      BECUnitMaskValid(code),
+						})
+						if len(choices)+len(found) >= limit {
+							return true
+						}
 					}
-					upper := strings.ToUpper(compact)
-					if seen[upper] {
-						continue
-					}
-					seen[upper] = true
-					found = append(found, BECUnitPickerChoice{
-						SiteSeries:     code,
-						LongName:       lname,
-						ScientificName: sci,
-						Zone:           z,
-						SubZone:        sz,
-						Source:         src.tag,
-						MaskValid:      BECUnitMaskValid(code),
-					})
-					if len(choices)+len(found) >= limit {
-						rows.Close()
-						_ = tx.Commit()
-						return found, nil
-					}
+					return false
+				}()
+				if done {
+					_ = tx.Commit()
+					return found, nil
 				}
-				rows.Close()
 			}
 			_ = tx.Commit()
 			return found, nil
@@ -319,7 +324,7 @@ func AssignPlotsToSiteUnit(ctx context.Context, contexts *vprocore.ContextServic
 			return nil, errors.New("SiteUnit must be valid UTF-8 text without NUL")
 		}
 		if len(utf16.Encode([]rune(trimmed))) > 255 {
-			return nil, errors.New("SiteUnit exceeds 255 UTF-16 code units")
+			return nil, errors.New("SiteUnit cannot exceed 255 characters")
 		}
 		if trimmed != "" {
 			normalizedUnit = &trimmed
@@ -333,7 +338,7 @@ func AssignPlotsToSiteUnit(ctx context.Context, contexts *vprocore.ContextServic
 			return nil, fmt.Errorf("invalid plot number %q", p)
 		}
 		if len(utf16.Encode([]rune(p))) > 7 {
-			return nil, fmt.Errorf("plot number %q exceeds 7 UTF-16 code units", p)
+			return nil, fmt.Errorf("plot number %q cannot exceed 7 characters", p)
 		}
 		if !seenPlot[p] {
 			seenPlot[p] = true

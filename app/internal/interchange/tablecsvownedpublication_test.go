@@ -1,12 +1,6 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"archive/zip"
 	"bytes"
 	"context"
@@ -24,6 +18,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func ownedTableCSVPublicationFixture(t *testing.T) (*vprocore.ContextService, vprocore.ProjectState, ownedTableCSVReview) {

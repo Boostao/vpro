@@ -1,11 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -15,6 +10,9 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type LongVegetationSelectedUnitField struct {
@@ -38,12 +36,14 @@ type LongVegetationSelectedUnitSelection struct {
 	BuildCurrent bool                                      `json:"buildCurrent"`
 }
 
-type selectedUnitSelectionDraft struct {
+type LongVegetationSelectedUnitFieldsRequest struct {
 	Revision string   `json:"revision"`
 	Fields   []string `json:"fields"`
 }
 
-func (request *selectedUnitSelectionDraft) UnmarshalJSON(data []byte) error {
+type selectedUnitSelectionDraft = LongVegetationSelectedUnitFieldsRequest
+
+func (request *LongVegetationSelectedUnitFieldsRequest) UnmarshalJSON(data []byte) error {
 	type plain selectedUnitSelectionDraft
 	var decoded plain
 	if err := vprocore.DecodeStrictRequiredJSON(data, &decoded, "selected report unit field draft", "revision", "fields"); err != nil {

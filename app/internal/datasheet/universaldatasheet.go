@@ -70,7 +70,7 @@ func groupDatasheetEditsByRow(edits []DatasheetCellEdit) ([]int64, map[int64]*or
 	for _, edit := range edits {
 		rid, parseErr := strconv.ParseInt(strings.TrimSpace(edit.RowID), 10, 64)
 		if parseErr != nil {
-			return nil, nil, fmt.Errorf("invalid datasheet rowId %q", edit.RowID)
+			return nil, nil, fmt.Errorf("invalid datasheet row reference %q", edit.RowID)
 		}
 		colKey := fmt.Sprintf("%d:%s", rid, strings.ToLower(strings.TrimSpace(edit.Column)))
 		if seenCell[colKey] {

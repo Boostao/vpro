@@ -9,6 +9,11 @@ import type {} from "../github.com/wailsapp/wails/v3/internal/eventdata.js";
 import "../github.com/wailsapp/wails/v3/internal/eventcreate.js";
 
 /**
+ * Name of the custom event "vpro:access-import-progress".
+ */
+export const VproAccessImportProgress = "vpro:access-import-progress";
+
+/**
  * Name of the custom event "vpro:close-request".
  */
 export const VproCloseRequest = "vpro:close-request";

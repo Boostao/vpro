@@ -1,16 +1,14 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"math"
 	"math/big"
 	"sort"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type vegetationCrosstabKey struct {

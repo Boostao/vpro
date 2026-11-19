@@ -31,7 +31,7 @@ func ValidateSingleCoverChange(property string, before, after *float64) error {
 	}
 	narrowed := float32(*after)
 	if narrowed < 0 || narrowed >= 100 {
-		return fmt.Errorf("property %q must be >= 0 and < 100 in IEEE-754 SINGLE", property)
+		return fmt.Errorf("cover field %q must be from 0 to under 100%% (e.g. 99.9%%)", property)
 	}
 	return nil
 }

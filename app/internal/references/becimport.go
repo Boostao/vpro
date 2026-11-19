@@ -1,10 +1,6 @@
 package references
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
@@ -17,6 +13,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf16"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type BecSourceColumn struct {
@@ -148,7 +146,7 @@ CREATE INDEX BECSiteSeriesLookup ON BECSiteSeries(Zone COLLATE NOCASE, SubZone C
 CREATE TABLE BECProvenance (Version INTEGER NOT NULL, Exporter TEXT NOT NULL, SourceSHA256 TEXT NOT NULL, SnapshotSHA256 TEXT NOT NULL);
 `
 
-// This boundary consumes an evidenced native DAO snapshot, not an Access file.
+// ImportBECSnapshot — This boundary consumes an evidenced native DAO snapshot, not an Access file.
 func ImportBECSnapshot(db *sql.DB, data []byte, provenance BecProvenance) error {
 	snapshot, err := validateBECSnapshot(data, provenance)
 	if err != nil {

@@ -1,14 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -16,6 +8,12 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIParentActionProposalSixteenFieldsAndLegacyCompatibility(t *testing.T) {
@@ -64,7 +62,7 @@ func TestSIVIParentActionProposalSixteenFieldsAndLegacyCompatibility(t *testing.
 				t.Fatal(err)
 			}
 			for mask := 1; mask < 32; mask++ {
-				var a, b, c, d []sourceform.SiviParentScalarEdit
+				var a, b, c, d []sourceform.SourceParentScalarEdit
 				var e []sourceform.SiviParentActionEdit
 				if mask&1 != 0 {
 					a = scalars
@@ -96,22 +94,22 @@ func TestSIVIParentActionProposalSixteenFieldsAndLegacyCompatibility(t *testing.
 				} else if len(got.Options) != 0 {
 					t.Fatal("absent option domain invented assignments", mask, got)
 				}
-				wantText, wantCategorical, wantActions := []sourceform.SiviParentScalarAssignment{}, []sourceform.SiviParentScalarAssignment{}, []sourceform.SiviParentScalarAssignment{}
+				wantText, wantCategorical, wantActions := []sourceform.SourceParentScalarAssignment{}, []sourceform.SourceParentScalarAssignment{}, []sourceform.SourceParentScalarAssignment{}
 				if len(c) > 0 {
-					wantText = []sourceform.SiviParentScalarAssignment{
+					wantText = []sourceform.SourceParentScalarAssignment{
 						{ContextID: state.ContextID, Table: "Sample_Env", RowID: parent.Rows[0].Env.RowID, Column: "SV_PolygonNumber", Before: vprotest.MetadataText("original polygon"), After: vprotest.MetadataText("  New Polygon  "), Value: "  New Polygon  "},
 						{ContextID: state.ContextID, Table: "Sample_Env", RowID: parent.Rows[0].Env.RowID, Column: "SV_CanopyComposition", Before: vprotest.MetadataText("original canopy"), After: vprotest.MetadataText("Literal canopy"), Value: "Literal canopy"},
 					}
 				}
 				if len(d) > 0 {
-					wantCategorical = []sourceform.SiviParentScalarAssignment{
+					wantCategorical = []sourceform.SourceParentScalarAssignment{
 						{ContextID: state.ContextID, Table: "Sample_Env", RowID: parent.Rows[0].Env.RowID, Column: "SnowCoverregime", Before: vprotest.MetadataText("S"), After: vprotest.MetadataText("Z"), Value: "Z"},
 						{ContextID: state.ContextID, Table: "Sample_Env", RowID: parent.Rows[0].Env.RowID, Column: "SV_RootZoneTexture", Before: vprotest.MetadataText("original texture"), After: vprotest.MetadataText("  MiXeD \t "), Value: "  MiXeD \t "},
 						{ContextID: state.ContextID, Table: "Sample_Env", RowID: parent.Rows[0].Env.RowID, Column: "SV_AhorizonType", Before: vprotest.MetadataText("Ah"), After: vprotest.MetadataText(""), Value: ""},
 					}
 				}
 				if len(e) > 0 {
-					wantActions = []sourceform.SiviParentScalarAssignment{
+					wantActions = []sourceform.SourceParentScalarAssignment{
 						{ContextID: state.ContextID, Table: "Sample_Admin", RowID: parent.Rows[0].Admin.RowID, Column: "PlotType", Before: vprotest.MetadataText("Other"), After: vprotest.MetadataText("Ground"), Value: "Ground"},
 						{ContextID: state.ContextID, Table: "Sample_Env", RowID: parent.Rows[0].Env.RowID, Column: "SpeciesListComplete", Before: vprotest.MetadataInteger("2"), After: vprotest.MetadataInteger("-1"), Value: int64(-1)},
 					}
@@ -203,7 +201,7 @@ func TestSIVIParentActionProposalFifthDomainFailuresCancellationAndRetry(t *test
 	late, cancelLate := context.WithCancel(context.Background())
 	defer cancelLate()
 	rejected, err := vprocore.WithContextPlotRequest(late, service, state.ContextID, func(plots *vprocore.PlotService) (*sourceform.SiviParentActionProposal, error) {
-		return sourceform.WithOwnedSIVIParentRead(late, plots, state.ContextID, "108050", func(original *sourceform.SiviParentProjection) (*sourceform.SiviParentActionProposal, error) {
+		return sourceform.WithOwnedSIVIParentRead(late, plots, state.ContextID, "108050", func(original *sourceform.SourceParentProjection) (*sourceform.SiviParentActionProposal, error) {
 			if !reflect.DeepEqual(original, got.Original) {
 				t.Fatal("late-cancellation action snapshot changed")
 			}
@@ -248,7 +246,7 @@ func TestSIVIParentActionProposalStaleHistoryAndExplicitNull(t *testing.T) {
 	edits := sftest.SiviActionProposalEdits(current)
 	edits[1].Option = nil
 	got, err := sourceform.PrepareSIVIParentActionProposal(service, context.Background(), state.ContextID, "108050", nil, nil, nil, nil, edits)
-	want := []sourceform.SiviParentScalarAssignment{
+	want := []sourceform.SourceParentScalarAssignment{
 		{ContextID: state.ContextID, Table: "Sample_Admin", RowID: current.Rows[0].Admin.RowID, Column: "PlotType", Before: vprotest.MetadataText(""), After: vprotest.MetadataText("Ground"), Value: "Ground"},
 		{ContextID: state.ContextID, Table: "Sample_Env", RowID: current.Rows[0].Env.RowID, Column: "SpeciesListComplete", Before: vprotest.MetadataInteger("2"), After: vprocore.ProjectMetadataCell{Storage: "null"}, Value: nil},
 	}

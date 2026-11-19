@@ -1,16 +1,14 @@
 package integration
 
 import (
+	"context"
+	"errors"
+	"testing"
+
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/sourceform/sftest"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
-	"context"
-	"errors"
-	"testing"
 )
 
 func TestSIVIOwnedHeightRestorationRejectsDriftTamperedAuditAndTrigger(t *testing.T) {

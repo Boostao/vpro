@@ -282,8 +282,8 @@ func buildAndWriteWorkingUnitv13(becAccdb *accessreader.DB, becAccdbSHA, existin
 		candidates = append(candidates, uniqCandidate{
 			label:    lbl,
 			noSpace:  ns,
-			longName: truncateUTF16(optStr(r[4]), 120),
-			sci:      truncateUTF16(optStr(r[5]), 255),
+			longName: sqlutil.TruncateUTF16Ptr(optStr(r[4]), 120),
+			sci:      sqlutil.TruncateUTF16Ptr(optStr(r[5]), 255),
 		})
 	}
 	sort.Slice(candidates, func(i, j int) bool {
@@ -315,7 +315,7 @@ func buildAndWriteWorkingUnitv13(becAccdb *accessreader.DB, becAccdbSHA, existin
 		lblCopy := c.label
 		masterRows = append(masterRows, wuRow{
 			ID:                       &idStr,
-			SiteSeries:               truncateUTF16(&lblCopy, 50),
+			SiteSeries:               sqlutil.TruncateUTF16Ptr(&lblCopy, 50),
 			SiteSeriesLongName:       c.longName,
 			SiteSeriesScientificName: c.sci,
 			Level:                    &lvl11,

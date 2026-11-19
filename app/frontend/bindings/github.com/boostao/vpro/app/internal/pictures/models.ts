@@ -28,13 +28,56 @@ export interface PictureDeletionHistoryList {
     "events": PictureDeletionHistoryEvent[] | null;
 }
 
+export interface PictureDeletionRequest {
+    "requestId": string;
+    "contextId": string;
+    "project": string;
+    "plotNumber": string;
+    "columns": vprocore$0.ProjectMetadataColumn[] | null;
+    "original": vprocore$0.ProjectMetadataRow;
+}
+
 export type PictureDeletionResult = pictureDeletionResult;
 
 export type PictureImage = pictureImage;
 
+export interface PictureMetadataEdit {
+    "requestId": string;
+    "id": number;
+    "columns": vprocore$0.ProjectMetadataColumn[] | null;
+    "original": vprocore$0.ProjectMetadataRow;
+    "changes": vprocore$0.ProjectMetadataChange[] | null;
+}
+
 export type PictureMetadataReview = pictureMetadataReview;
 
 export type PictureMetadataWriteResult = pictureMetadataWriteResult;
+
+export interface PictureOptions {
+    "pictureLibraryPath": string;
+    "childDirectory": string;
+    "managerDirectory": string;
+    "effectiveLibraryPath": string;
+    "effectiveChildDirectory": string;
+    "effectiveManagerDirectory": string;
+    "defaultLibraryPath": string;
+    "defaultImagesDirectory": string;
+    "envOverride": boolean;
+}
+
+export interface PictureOptionsUpdate {
+    "pictureLibraryPath": string;
+    "childDirectory": string;
+    "managerDirectory": string;
+}
+
+export interface PictureRestorationRequest {
+    "requestId": string;
+    "contextId": string;
+    "historyId": string;
+    "deletion": PictureDeletionRequest;
+    "peers": vprocore$0.ProjectMetadataRow[] | null;
+}
 
 export type PictureRestorationResult = pictureRestorationResult;
 
@@ -68,14 +111,7 @@ export interface pictureCreationResult {
     "replayed": boolean;
 }
 
-export interface pictureDeletionRequest {
-    "requestId": string;
-    "contextId": string;
-    "project": string;
-    "plotNumber": string;
-    "columns": vprocore$0.ProjectMetadataColumn[] | null;
-    "original": vprocore$0.ProjectMetadataRow;
-}
+export type pictureDeletionRequest = PictureDeletionRequest;
 
 export interface pictureDeletionResult {
     "request": pictureDeletionRequest;
@@ -131,13 +167,7 @@ export interface pictureMetadataWriteResult {
     "replayed": boolean;
 }
 
-export interface pictureRestorationRequest {
-    "requestId": string;
-    "contextId": string;
-    "historyId": string;
-    "deletion": pictureDeletionRequest;
-    "peers": vprocore$0.ProjectMetadataRow[] | null;
-}
+export type pictureRestorationRequest = PictureRestorationRequest;
 
 export interface pictureRestorationResult {
     "request": pictureRestorationRequest;

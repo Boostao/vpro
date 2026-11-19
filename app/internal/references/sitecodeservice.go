@@ -1,16 +1,12 @@
 package references
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
-
 	"errors"
 	"sync"
 
 	"github.com/boostao/vpro/app/internal/listcatalog"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/resources"
 )
 

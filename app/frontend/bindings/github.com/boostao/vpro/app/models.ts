@@ -283,9 +283,17 @@ export type LongVegetationProjectOptions = vegreport$0.LongVegetationProjectOpti
 
 export type LongVegetationProjectPreview = vegreport$0.LongVegetationProjectPreview;
 
+export type LongVegetationProjectReadRequest = vegreport$0.LongVegetationProjectReadRequest;
+
 export type LongVegetationProjectUnitOutcome = vegreport$0.LongVegetationProjectUnitOutcome;
 
 export type LongVegetationProjectUnitPreferences = vegreport$0.LongVegetationProjectUnitPreferences;
+
+export type LongVegetationProjectUnitRequest = vegreport$0.LongVegetationProjectUnitRequest;
+
+export type LongVegetationProjectWorkbookExportRequest = vegreport$0.LongVegetationProjectWorkbookExportRequest;
+
+export type LongVegetationProjectWorkbookReadRequest = vegreport$0.LongVegetationProjectWorkbookReadRequest;
 
 export type LongVegetationProjectWorkbookReview = vegreport$0.LongVegetationProjectWorkbookReview;
 
@@ -299,9 +307,13 @@ export type LongVegetationQualityNullPreferencesReview = vegreport$0.LongVegetat
 
 export type LongVegetationReportScope = vegreport$0.LongVegetationReportScope;
 
+export type LongVegetationScopeRequest = vegreport$0.LongVegetationScopeRequest;
+
 export type LongVegetationSelectedFieldPreferencesOutcome = vegreport$0.LongVegetationSelectedFieldPreferencesOutcome;
 
 export type LongVegetationSelectedFieldPreferencesReview = vegreport$0.LongVegetationSelectedFieldPreferencesReview;
+
+export type LongVegetationSelectedUnitFieldsRequest = vegreport$0.LongVegetationSelectedUnitFieldsRequest;
 
 export type LongVegetationSelectedUnitSelection = vegreport$0.LongVegetationSelectedUnitSelection;
 
@@ -312,6 +324,10 @@ export type LongVegetationStatisticsPreferencesReview = vegreport$0.LongVegetati
 export type LongVegetationSwitchPreferencesOutcome = vegreport$0.LongVegetationSwitchPreferencesOutcome;
 
 export type LongVegetationSwitchPreferencesReview = vegreport$0.LongVegetationSwitchPreferencesReview;
+
+export type LongVegetationTabPreferencesBundle = vegreport$0.LongVegetationTabPreferencesBundle;
+
+export type LongVegetationTabPreferencesSaveRequest = vegreport$0.LongVegetationTabPreferencesSaveRequest;
 
 export type LongVegetationThresholdPreferencesOutcome = vegreport$0.LongVegetationThresholdPreferencesOutcome;
 
@@ -349,9 +365,15 @@ export type PictureDeletionResult = pictures$0.PictureDeletionResult;
 
 export type PictureImage = pictures$0.PictureImage;
 
+export type PictureMetadataEdit = pictures$0.PictureMetadataEdit;
+
 export type PictureMetadataReview = pictures$0.PictureMetadataReview;
 
 export type PictureMetadataWriteResult = pictures$0.PictureMetadataWriteResult;
+
+export type PictureOptions = pictures$0.PictureOptions;
+
+export type PictureOptionsUpdate = pictures$0.PictureOptionsUpdate;
 
 export type PictureRestorationResult = pictures$0.PictureRestorationResult;
 
@@ -475,6 +497,8 @@ export type SIVICreationResult = sivi$0.SIVICreationResult;
 
 export type SIVICreationUndoHistoryList = sivi$0.SIVICreationUndoHistoryList;
 
+export type SIVICreationUndoRequest = sivi$0.SIVICreationUndoRequest;
+
 export type SIVICreationUndoResult = sivi$0.SIVICreationUndoResult;
 
 export type SIVICreationUndoReview = sivi$0.SIVICreationUndoReview;
@@ -503,19 +527,19 @@ export type SIVIParentDirectWrite = sourceform$0.SIVIParentDirectWrite;
 
 export type SIVIParentJoinReview = sourceform$0.SIVIParentJoinReview;
 
-export type SIVIParentProjection = sourceform$0.SIVIParentProjection;
+export type SIVIParentProjection = sourceform$0.SourceParentProjection;
 
 export type SIVIParentSharedReferences = sourceform$0.SIVIParentSharedReferences;
 
 export type SIVIParentSharedWrite = sourceform$0.SIVIParentSharedWrite;
 
-export type SIVIParentWriteResult = sourceform$0.SIVIParentWriteResult;
+export type SIVIParentWriteResult = sourceform$0.SourceParentWriteResult;
 
 export type SIVIProjectAssignmentOriginal = sourceform$0.SIVIProjectAssignmentOriginal;
 
 export type SIVIProjectAssignmentWrite = sourceform$0.SIVIProjectAssignmentWrite;
 
-export type SIVIProjectChoices = sourceform$0.SIVIProjectChoices;
+export type SIVIProjectChoices = sourceform$0.SourceProjectChoices;
 
 export type SIVISpeciesReferences = sourceform$0.SIVISpeciesReferences;
 
@@ -610,6 +634,8 @@ export type SummaryVegetationExclusionPreview = vegreport$0.SummaryVegetationExc
 export type SummaryVegetationExclusionRequest = vegreport$0.SummaryVegetationExclusionRequest;
 
 export type SummaryVegetationFieldListOutcome = vegreport$0.SummaryVegetationFieldListOutcome;
+
+export type SummaryVegetationFieldListRequest = vegreport$0.SummaryVegetationFieldListRequest;
 
 export type SummaryVegetationFieldListReview = vegreport$0.SummaryVegetationFieldListReview;
 

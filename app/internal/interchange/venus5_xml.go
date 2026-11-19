@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 // parseVenusXMLArchive parses both hierarchical VENUS 5.0 XML (<VenusArchive>/<VenusDataset>/<VENUS>)
@@ -286,9 +288,6 @@ func decodeHierarchicalVenusPlot(dec *xml.Decoder, start xml.StartElement, defau
 				if sErr != nil {
 					return rec, sErr
 				}
-				if len(m) == 0 {
-					// Wait: decodeFlatXMLElement handles attributes & grandchildren, let's handle scalar leaf text if any!
-				}
 				for k, v := range m {
 					rec.Fields[sub+"_"+k] = v
 				}
@@ -306,7 +305,7 @@ func decodeHierarchicalVenusPlot(dec *xml.Decoder, start xml.StartElement, defau
 	if pNum == "" {
 		pNum = fmt.Sprintf("VP%05d", index)
 	}
-	pNum = truncateUTF16Units(pNum, 7)
+	pNum = sqlutil.TruncateUTF16(pNum, 7)
 	rec.PlotNumber = pNum
 	rec.PlotID = pNum
 	if pName := firstNonEmpty(rec.Fields, "projectname", "projectid"); pName != "" {
@@ -373,7 +372,7 @@ func venusCoarseFrags(code string) *float64 {
 func combineVenusTerrain(maxUnits int, a, b, c string) any {
 	joined := strings.TrimSpace(a) + strings.TrimSpace(b) + strings.TrimSpace(c)
 	if maxUnits > 0 {
-		joined = truncateUTF16Units(joined, maxUnits)
+		joined = sqlutil.TruncateUTF16(joined, maxUnits)
 	}
 	if joined == "" {
 		return nil
@@ -445,7 +444,7 @@ func optStrField(f map[string]string, maxUTF16 int, keys ...string) any {
 		return nil
 	}
 	if maxUTF16 > 0 {
-		s = truncateUTF16Units(s, maxUTF16)
+		s = sqlutil.TruncateUTF16(s, maxUTF16)
 		if s == "" {
 			return nil
 		}
@@ -460,7 +459,7 @@ func optSingleCoverField(f map[string]string, plotNum, label string, keys ...str
 	}
 	v := *raw
 	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || math.Abs(v) > math.MaxFloat32 || float32(v) >= 100 {
-		return nil, fmt.Errorf("VENUS plot %s %s %v violates IEEE-754 SINGLE [0, 100) bounds", plotNum, label, v)
+		return nil, fmt.Errorf("VENUS plot %s %s %v must be from 0 to under 100%% (e.g. 99.9%%)", plotNum, label, v)
 	}
 	narrowed := float64(float32(v))
 	return &narrowed, nil

@@ -1,18 +1,16 @@
 package integration
 
 import (
+	"context"
+	"encoding/json"
+	"reflect"
+	"testing"
+
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/sourceform/sftest"
 	"github.com/boostao/vpro/app/internal/twopage"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
-	"context"
-	"encoding/json"
-	"reflect"
-	"testing"
 )
 
 func TestTwoPageEntryMixedProjectWriterRejectsForeignSourceSelectionAndUser(t *testing.T) {
@@ -31,14 +29,14 @@ func TestTwoPageEntryMixedProjectWriterRejectsForeignSourceSelectionAndUser(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	edits := []sourceform.SiviParentScalarEdit{
+	edits := []sourceform.SourceParentScalarEdit{
 		sftest.SiviParentEdit(t, original, "ProjectID", selection.MetadataOriginal.Cells[0]),
 		sftest.SiviParentEdit(t, original, "FieldNumber", vprotest.MetadataText("  Literal field  ")),
 	}
 	before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 	for _, failure := range []string{"SIVI", "CHARS", "title", "source", "missing physical row", "different literal", "no audit user"} {
 		current := selection
-		currentEdits := append([]sourceform.SiviParentScalarEdit{}, edits...)
+		currentEdits := append([]sourceform.SourceParentScalarEdit{}, edits...)
 		user := contexts.Plots.CurrentUser
 		switch failure {
 		case "SIVI":
@@ -75,7 +73,7 @@ func TestTwoPageEntryMixedProjectWriterRejectsForeignSourceSelectionAndUser(t *t
 			replacement = owner.AttachmentInfo["project"]
 		}
 		owner.AttachmentInfo[role] = replacement
-		ordered := []sourceform.SiviParentScalarEdit{edits[1], edits[0]}
+		ordered := []sourceform.SourceParentScalarEdit{edits[1], edits[0]}
 		result, err := twopage.WriteTwoPageEntryWithOwnedReferencesAndProject(contexts, context.Background(), state.ContextID, "108050", original.Form,
 			original, ordered, false, provider.Readers, sources, nil, &selection)
 		owner.AttachmentInfo[role] = prior
@@ -113,7 +111,7 @@ func TestTwoPageEntryMixedProjectWriterAllAuditStrengthsAndUnauditedRestoration(
 						"SV_PolygonNumber": vprotest.MetadataText("  Literal polygon  "),
 						"GIS_BGC":          vprotest.MetadataText("  Literal GIS  "),
 					}
-					edits := []sourceform.SiviParentScalarEdit{}
+					edits := []sourceform.SourceParentScalarEdit{}
 					for _, column := range []string{"FieldNumber", "ProjectID", "SV_PolygonNumber", "GIS_BGC"} {
 						edits = append(edits, sftest.SiviParentEdit(t, original, column, values[column]))
 					}
@@ -156,7 +154,7 @@ func TestTwoPageEntryMixedProjectWriterAllAuditStrengthsAndUnauditedRestoration(
 					if err := db.QueryRow(`SELECT Proposal FROM `+vprocore.QuoteHeaderIdentifier(history.Table)+` WHERE ID=?`, result.HistoryID).Scan(&proposal); err != nil {
 						t.Fatal(err)
 					}
-					var event sourceform.SiviParentHistory
+					var event sourceform.SourceParentHistory
 					if err := json.Unmarshal([]byte(proposal), &event); err != nil {
 						t.Fatal(err)
 					}

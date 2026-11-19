@@ -1,15 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/twopage"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -18,6 +9,13 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/twopage"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestTwoPageParentEntryServiceOwnedReadsAndCancellation(t *testing.T) {
@@ -105,7 +103,7 @@ func TestTwoPageParentEntryServiceOwnedSnapshotHistoricalFiltersAndRetry(t *test
 			twopage.TwoPageEntryReferenceFilters{Zone: historical.Zone, SubZone: historical.SubZone}); got != nil || err == nil {
 			t.Fatal("invalid new draft filters accepted", got, err)
 		}
-		edits := []sourceform.SIVIParentCellEdit{sftest.SiviParentEdit(t, historical.Original, "FieldNumber", vprotest.MetadataText("  unchanged BEC  "))}
+		edits := []sourceform.SourceParentCellEdit{sftest.SiviParentEdit(t, historical.Original, "FieldNumber", vprotest.MetadataText("  unchanged BEC  "))}
 		written, err := service.Save(context.Background(), state.ContextID, "108050", form,
 			twopage.TwoPageParentEntryWrite{Original: historical.Original, Edits: edits, ProjectSource: historical.ProjectSource,
 				WorkingSource: historical.WorkingSource, Acknowledgements: []twopage.TwoPageEntryCodeAcknowledgement{}})
@@ -148,12 +146,10 @@ func TestTwoPageParentEntryServiceAtomicAcknowledgementsAndAuthority(t *testing.
 		}
 		vprotest.AssertProfileSUFiles(t, contexts, before)
 		for _, ack := range acknowledgements {
-			request.Acknowledgements = append(request.Acknowledgements, twopage.TwoPageEntryCodeAcknowledgement{
-				ContextID: ack.ContextID, Project: ack.Project, Plot: ack.Plot, Form: ack.Form, Table: ack.Table,
-				RowID: ack.RowID, Column: ack.Column, Expected: ack.Expected, Value: ack.Value, Reference: ack.Reference})
+			request.Acknowledgements = append(request.Acknowledgements, twopage.TwoPageEntryCodeAcknowledgement(ack))
 		}
 		masterRequest := request
-		masterRequest.Edits = append(append([]sourceform.SIVIParentCellEdit{}, edits...), sftest.SiviParentEdit(t, snapshot.Original, "BECSiteUnit", vprotest.MetadataText("Master")))
+		masterRequest.Edits = append(append([]sourceform.SourceParentCellEdit{}, edits...), sftest.SiviParentEdit(t, snapshot.Original, "BECSiteUnit", vprotest.MetadataText("Master")))
 		contexts.Plots.Mu.Lock()
 		contexts.Plots.CurrentUser = "ordinary user"
 		contexts.Plots.Mu.Unlock()
@@ -207,13 +203,10 @@ func TestTwoPageParentEntryServiceTypedProjectSaveRestore(t *testing.T) {
 			t.Fatal(err)
 		}
 		choice.ControlID = "form:" + form + "/ProjectID"
-		selection := sourceform.SIVIProjectSelection{ContextID: choice.ContextID, ControlID: choice.ControlID, Table: choice.Table,
-			RowID: choice.RowID, Expected: choice.Expected, SourceOption: choice.SourceOption,
-			MetadataAlias: choice.MetadataAlias, MetadataTable: choice.MetadataTable,
-			MetadataColumns: choice.MetadataColumns, MetadataOriginal: choice.MetadataOriginal}
+		selection := sourceform.SourceProjectSelection(choice)
 		request := twopage.TwoPageParentEntryWrite{Original: snapshot.Original, ProjectSource: snapshot.ProjectSource,
 			WorkingSource: snapshot.WorkingSource, Acknowledgements: []twopage.TwoPageEntryCodeAcknowledgement{},
-			Edits: []sourceform.SIVIParentCellEdit{sftest.SiviParentEdit(t, snapshot.Original, "FieldNumber", vprotest.MetadataText("  mixed  ")),
+			Edits: []sourceform.SourceParentCellEdit{sftest.SiviParentEdit(t, snapshot.Original, "FieldNumber", vprotest.MetadataText("  mixed  ")),
 				sftest.SiviParentEdit(t, snapshot.Original, "ProjectID", choice.MetadataOriginal.Cells[0])}}
 		before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 		if got, err := service.Save(context.Background(), state.ContextID, "108050", form, request); got != nil || err == nil {
@@ -275,11 +268,11 @@ func TestTwoPageParentEntryServiceStrictTransport(t *testing.T) {
 	empty := ""
 	ack := twopage.TwoPageEntryCodeAcknowledgement{ContextID: original.ContextID, Project: original.Project, Plot: original.Plot,
 		Form: original.Form, Table: "Sample_Env", RowID: "1", Column: "PlotType", Expected: vprotest.MetadataText("old"),
-		Value: vprotest.MetadataText("  literal  "), Reference: sourceform.SIVIParentSharedReference{Column: "PlotType",
+		Value: vprotest.MetadataText("  literal  "), Reference: sourceform.SourceParentSharedReference{Column: "PlotType",
 			Definitions: vprocore.ProjectMetadataTable{Columns: []vprocore.ProjectMetadataColumn{{Name: "Item", DeclaredType: "TEXT"}},
 				Rows: []vprocore.ProjectMetadataRow{{RowID: "1", Cells: []vprocore.ProjectMetadataCell{vprotest.MetadataText("")}}}},
-			Choices: []sourceform.SIVIParentSharedReferenceChoice{{RowID: "1", Code: nil, Description: &empty}}}}
-	request := twopage.TwoPageParentEntryWrite{Original: original, Edits: []sourceform.SIVIParentCellEdit{},
+			Choices: []sourceform.SourceParentSharedReferenceChoice{{RowID: "1", Code: nil, Description: &empty}}}}
+	request := twopage.TwoPageParentEntryWrite{Original: original, Edits: []sourceform.SourceParentCellEdit{},
 		ProjectSource: 1, WorkingSource: 1, Acknowledgements: []twopage.TwoPageEntryCodeAcknowledgement{ack}}
 	wire, err := json.Marshal(request)
 	if err != nil {

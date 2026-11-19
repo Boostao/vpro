@@ -10,14 +10,16 @@ import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-type vegetationProjectUnitRequest struct {
+type LongVegetationProjectUnitRequest struct {
 	Revision     string                             `json:"revision"`
 	ApprovalHash string                             `json:"approvalHash"`
 	Expected     LongVegetationUnitPreferenceValues `json:"expected"`
 	Proposed     LongVegetationUnitPreferenceValues `json:"proposed"`
 }
 
-func (request *vegetationProjectUnitRequest) UnmarshalJSON(data []byte) error {
+type vegetationProjectUnitRequest = LongVegetationProjectUnitRequest
+
+func (request *LongVegetationProjectUnitRequest) UnmarshalJSON(data []byte) error {
 	type plain vegetationProjectUnitRequest
 	var decoded plain
 	if err := vprocore.DecodeStrictRequiredJSON(data, &decoded, "project report unit save", "revision", "approvalHash", "expected", "proposed"); err != nil {

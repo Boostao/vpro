@@ -1,22 +1,20 @@
 package sivi
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-func siviParentActionWriteFixture(t *testing.T, external bool, strength int) (*vprocore.ContextService, vprocore.ProjectState, *sourceform.SiviParentProjection, []sourceform.SiviParentActionEdit) {
+func siviParentActionWriteFixture(t *testing.T, external bool, strength int) (*vprocore.ContextService, vprocore.ProjectState, *sourceform.SourceParentProjection, []sourceform.SiviParentActionEdit) {
 	t.Helper()
 	service, state, db, _, _ := sftest.SiviParentWriteFixture(t, external, strength)
 	if _, err := db.Exec(`UPDATE Sample_Env SET SpeciesListComplete=2 WHERE PlotNumber='108050';
@@ -240,32 +238,32 @@ func TestSIVIParentActionHistoryRejectsDirectTargetAndWrongSourceValue(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	event := sourceform.SiviParentHistory{Original: original, Committed: committed, Changes: []sourceform.SiviParentHistoryChange{}}
+	event := sourceform.SourceParentHistory{Original: original, Committed: committed, Changes: []sourceform.SourceParentHistoryChange{}}
 	planned, err := planSIVIParentActionEdits(context.Background(), original, actions)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, assignment := range planned {
-		event.Changes = append(event.Changes, sourceform.SiviParentHistoryChange{Table: assignment.Table, RowID: assignment.RowID,
+		event.Changes = append(event.Changes, sourceform.SourceParentHistoryChange{Table: assignment.Table, RowID: assignment.RowID,
 			Column: assignment.Column, Before: assignment.Before, After: assignment.After})
 	}
-	for name, mutate := range map[string]func(*sourceform.SiviParentHistory){
-		"direct-target": func(event *sourceform.SiviParentHistory) { event.Changes[0].Column = "SV_StandHeight" },
-		"plot-null": func(event *sourceform.SiviParentHistory) {
+	for name, mutate := range map[string]func(*sourceform.SourceParentHistory){
+		"direct-target": func(event *sourceform.SourceParentHistory) { event.Changes[0].Column = "SV_StandHeight" },
+		"plot-null": func(event *sourceform.SourceParentHistory) {
 			event.Changes[0].After = vprocore.ProjectMetadataCell{Storage: "null"}
 		},
-		"species-one": func(event *sourceform.SiviParentHistory) {
+		"species-one": func(event *sourceform.SourceParentHistory) {
 			value := "1"
 			event.Changes[1].After = vprocore.ProjectMetadataCell{Storage: "integer", Integer: &value}
 		},
-		"repeated": func(event *sourceform.SiviParentHistory) { event.Changes = append(event.Changes, event.Changes[0]) },
+		"repeated": func(event *sourceform.SourceParentHistory) { event.Changes = append(event.Changes, event.Changes[0]) },
 	} {
 		t.Run(name, func(t *testing.T) {
 			data, err := json.Marshal(event)
 			if err != nil {
 				t.Fatal(err)
 			}
-			var candidate sourceform.SiviParentHistory
+			var candidate sourceform.SourceParentHistory
 			if err := json.Unmarshal(data, &candidate); err != nil {
 				t.Fatal(err)
 			}
@@ -346,7 +344,7 @@ func TestSIVIParentActionLegacyRestorationPreservesUnauditedAssignments(t *testi
 			actions[1].Option = nil
 			// Old NULL-after receipts retain their original audited subset, not new-write authority.
 			result, err := sourceform.WriteSIVIParentPlanned(service, context.Background(), state.ContextID, original.Plot, original,
-				siviParentActionHistory, func(observed *sourceform.SiviParentProjection) ([]sourceform.SiviParentScalarAssignment, error) {
+				siviParentActionHistory, func(observed *sourceform.SourceParentProjection) ([]sourceform.SourceParentScalarAssignment, error) {
 					return planSIVIParentActionEdits(context.Background(), observed, actions)
 				})
 			if err != nil || result.ChangedCells != 2 || result.HistoryID == "" {

@@ -75,44 +75,6 @@ func ProjectNAD83ToBCAlbers(latDeg, lonDeg float64) (easting, northing float64) 
 	return easting, northing
 }
 
-// ProjectBCAlbersToNAD83 implements Snyder's iterative inverse GRS80 Albers projection (eqs. 14-19, 3-16).
-func ProjectBCAlbersToNAD83(easting, northing float64) (latDeg, lonDeg float64) {
-	dx := easting - bcAlbersFalseE
-	dy := bcAlbersRho0 - (northing - bcAlbersFalseN)
-	rho := math.Hypot(dx, dy)
-	if bcAlbersN < 0 {
-		rho = -rho
-		dx = -dx
-		dy = -dy
-	}
-	theta := 0.0
-	if rho != 0 {
-		theta = math.Atan2(dx, dy)
-	}
-	q := (bcAlbersC - (rho*bcAlbersN/grs80SemiMajor)*(rho*bcAlbersN/grs80SemiMajor)) / bcAlbersN
-	qMax := (1.0 - grs80E2) * (1.0/(1.0-grs80E2) - (1.0/(2.0*grs80E))*math.Log((1.0-grs80E)/(1.0+grs80E)))
-	arg := q / qMax
-	if arg > 1 {
-		arg = 1
-	} else if arg < -1 {
-		arg = -1
-	}
-	phi := math.Asin(arg)
-	for iter := 0; iter < 12; iter++ {
-		s := math.Sin(phi)
-		es := grs80E * s
-		oneMinusE2S2 := 1.0 - grs80E2*s*s
-		dPhi := (oneMinusE2S2 * oneMinusE2S2 / (2.0 * math.Cos(phi))) *
-			(q/(1.0-grs80E2) - s/oneMinusE2S2 + (1.0/(2.0*grs80E))*math.Log((1.0-es)/(1.0+es)))
-		phi += dPhi
-		if math.Abs(dPhi) < 1e-12 {
-			break
-		}
-	}
-	lam := bcAlbersLam0 + theta/bcAlbersN
-	return phi * 180.0 / math.Pi, lam * 180.0 / math.Pi
-}
-
 // NormalizeWesternLongitude normalizes positive Western Hemisphere longitudes (e.g., 125.4 -> -125.4)
 // and validates unified Western Canada / Alaska / BC latitude & longitude bounds ([45.0..85.0] N, [-170.0..-100.0] W).
 func NormalizeWesternLongitude(lat, lon float64) (normLat, normLon float64, wasFlipped, valid bool) {
@@ -138,54 +100,6 @@ func EncodeGeoPackagePoint(srsID int32, x, y float64) []byte {
 	binary.LittleEndian.PutUint64(buf[45:53], math.Float64bits(x))
 	binary.LittleEndian.PutUint64(buf[53:61], math.Float64bits(y))
 	return buf
-}
-
-// DecodeGeoPackagePoint parses a GeoPackage Binary Point for verification and tests.
-func DecodeGeoPackagePoint(blob []byte) (srsID int32, x, y float64, err error) {
-	if len(blob) < 29 || blob[0] != 'G' || blob[1] != 'P' {
-		return 0, 0, 0, errors.New("invalid GeoPackage binary magic")
-	}
-	flags := blob[3]
-	leHeader := (flags & 0x01) != 0
-	envCode := (flags >> 1) & 0x07
-	envBytes := 0
-	switch envCode {
-	case 0:
-		envBytes = 0
-	case 1:
-		envBytes = 32
-	case 2, 3:
-		envBytes = 48
-	case 4:
-		envBytes = 64
-	default:
-		return 0, 0, 0, fmt.Errorf("invalid GeoPackage envelope indicator %d", envCode)
-	}
-	if leHeader {
-		srsID = int32(binary.LittleEndian.Uint32(blob[4:8]))
-	} else {
-		srsID = int32(binary.BigEndian.Uint32(blob[4:8]))
-	}
-	wkbStart := 8 + envBytes
-	if len(blob) < wkbStart+21 {
-		return 0, 0, 0, errors.New("truncated GeoPackage WKB Point")
-	}
-	wkb := blob[wkbStart:]
-	wkbLE := wkb[0] == 1
-	var wkbType uint32
-	if wkbLE {
-		wkbType = binary.LittleEndian.Uint32(wkb[1:5])
-		x = math.Float64frombits(binary.LittleEndian.Uint64(wkb[5:13]))
-		y = math.Float64frombits(binary.LittleEndian.Uint64(wkb[13:21]))
-	} else {
-		wkbType = binary.BigEndian.Uint32(wkb[1:5])
-		x = math.Float64frombits(binary.BigEndian.Uint64(wkb[5:13]))
-		y = math.Float64frombits(binary.BigEndian.Uint64(wkb[13:21]))
-	}
-	if wkbType != 1 {
-		return 0, 0, 0, fmt.Errorf("expected WKB Point (1), got %d", wkbType)
-	}
-	return srsID, x, y, nil
 }
 
 const (
@@ -417,22 +331,20 @@ func readRawTableForGPKG(ctx context.Context, tx *sql.Tx, alias, table, cteSQL, 
 		return nil, nil, err
 	}
 	var specs []gpkgColSpec
-	for pRows.Next() {
-		var cid, notNull, pk int
-		var name, ctype string
-		var dflt any
-		if err := pRows.Scan(&cid, &name, &ctype, &notNull, &dflt, &pk); err != nil {
-			pRows.Close()
-			return nil, nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, pRows.Close()) }()
+		for pRows.Next() {
+			var cid, notNull, pk int
+			var name, ctype string
+			var dflt any
+			if err := pRows.Scan(&cid, &name, &ctype, &notNull, &dflt, &pk); err != nil {
+				return err
+			}
+			gType, isBool, isText := mapSQLiteToGPKGType(ctype)
+			specs = append(specs, gpkgColSpec{Name: name, GPKGType: gType, IsBool: isBool, IsText: isText})
 		}
-		gType, isBool, isText := mapSQLiteToGPKGType(ctype)
-		specs = append(specs, gpkgColSpec{Name: name, GPKGType: gType, IsBool: isBool, IsText: isText})
-	}
-	if err := pRows.Err(); err != nil {
-		pRows.Close()
-		return nil, nil, err
-	}
-	if err := pRows.Close(); err != nil {
+		return pRows.Err()
+	}(); err != nil {
 		return nil, nil, err
 	}
 

@@ -1,16 +1,14 @@
 package sivi
 
 import (
+	"context"
+	"strings"
+	"testing"
+
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/sourceform/sftest"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
-	"context"
-	"strings"
-	"testing"
 )
 
 func TestSourceParentBooleanNormalHistoricalNullAndLegacyReceipt(t *testing.T) {
@@ -28,7 +26,7 @@ func TestSourceParentBooleanNormalHistoricalNullAndLegacyReceipt(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			read := func() *sourceform.SiviParentProjection {
+			read := func() *sourceform.SourceParentProjection {
 				t.Helper()
 				parent, err := sourceform.ReadSIVIParent(service, context.Background(), state.ContextID, "108050")
 				if err != nil {
@@ -36,11 +34,11 @@ func TestSourceParentBooleanNormalHistoricalNullAndLegacyReceipt(t *testing.T) {
 				}
 				return parent
 			}
-			actionEdits := func(parent *sourceform.SiviParentProjection, option *int) []sourceform.SiviParentActionEdit {
+			actionEdits := func(parent *sourceform.SourceParentProjection, option *int) []sourceform.SiviParentActionEdit {
 				return []sourceform.SiviParentActionEdit{{ContextID: state.ContextID, ControlID: "form:frmSIVIsite/optSpeciesListComplete", Table: parent.EnvTable,
 					RowID: parent.Rows[0].Env.RowID, Expected: sftest.SiviParentCell(t, parent, column), Option: option}}
 			}
-			directEdits := func(parent *sourceform.SiviParentProjection, option *int) sourceform.SiviParentDirectEdits {
+			directEdits := func(parent *sourceform.SourceParentProjection, option *int) sourceform.SiviParentDirectEdits {
 				value := vprocore.ProjectMetadataCell{Storage: "null"}
 				if option != nil {
 					value = vprotest.MetadataInteger("0")
@@ -48,15 +46,15 @@ func TestSourceParentBooleanNormalHistoricalNullAndLegacyReceipt(t *testing.T) {
 						value = vprotest.MetadataInteger("-1")
 					}
 				}
-				return sourceform.SiviParentDirectEdits{Scalars: []sourceform.SiviParentScalarEdit{sftest.SiviParentEdit(t, parent, column, value)}}
+				return sourceform.SiviParentDirectEdits{Scalars: []sourceform.SourceParentScalarEdit{sftest.SiviParentEdit(t, parent, column, value)}}
 			}
-			write := func(parent *sourceform.SiviParentProjection, option *int) (*sourceform.SiviParentWriteResult, error) {
+			write := func(parent *sourceform.SourceParentProjection, option *int) (*sourceform.SourceParentWriteResult, error) {
 				if action {
 					result, err := WriteSIVIParentActions(service, context.Background(), state.ContextID, parent.Plot, parent, actionEdits(parent, option))
 					if result == nil {
 						return nil, err
 					}
-					return &result.SiviParentWriteResult, err
+					return &result.SourceParentWriteResult, err
 				}
 				return sourceform.WriteSIVIParentDirect(service, context.Background(), state.ContextID, parent.Plot, parent, directEdits(parent, option))
 			}
@@ -96,7 +94,7 @@ func TestSourceParentBooleanNormalHistoricalNullAndLegacyReceipt(t *testing.T) {
 			parent = read()
 			// Seed an old NULL-after receipt without using the corrected new-write entry point.
 			legacy, err := sourceform.WriteSIVIParentPlanned(service, context.Background(), state.ContextID, parent.Plot, parent, history,
-				func(observed *sourceform.SiviParentProjection) ([]sourceform.SiviParentScalarAssignment, error) {
+				func(observed *sourceform.SourceParentProjection) ([]sourceform.SourceParentScalarAssignment, error) {
 					if action {
 						return planSIVIParentActionEdits(context.Background(), observed, actionEdits(observed, nil))
 					}

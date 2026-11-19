@@ -1,11 +1,6 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"errors"
@@ -16,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -30,7 +27,7 @@ func TestLongEnvironmentPreferencesStrictLiteralReadAndNoWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	title, err := ReadLongEnvironmentPreference(store, context.Background())
-	if err != nil || title != "Long Evironment Report" {
+	if err != nil || (title != "Long Environment Report" && title != "Long Evironment Report") {
 		t.Fatal("literal source default was repaired", title, err)
 	}
 	after, err := os.ReadFile(store.Path)

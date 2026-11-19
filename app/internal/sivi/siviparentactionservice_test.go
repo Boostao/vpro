@@ -1,21 +1,19 @@
 package sivi
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-func siviPublicActionRequest(original *sourceform.SiviParentProjection, actions []sourceform.SiviParentActionEdit) SIVIParentActionWrite {
+func siviPublicActionRequest(original *sourceform.SourceParentProjection, actions []sourceform.SiviParentActionEdit) SIVIParentActionWrite {
 	request := SIVIParentActionWrite{Original: original, Actions: []SIVIParentActionInput{}}
 	for _, action := range actions {
 		request.Actions = append(request.Actions, SIVIParentActionInput{

@@ -1,12 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
@@ -16,6 +10,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func summaryVegetationGroupedServiceFixture(t *testing.T, external bool) (*SummaryVegetationService, vprocore.ProjectState) {
@@ -82,6 +80,7 @@ func TestSummaryVegetationGroupedServiceErrorsCleanupRetry(t *testing.T) {
 			t.Fatal("invalid explicit grouping produced output", got, err)
 		}
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := service.PreviewGrouped(nil, state.ContextID, 1, 12); err == nil {
 		t.Fatal("nil context accepted")
 	}

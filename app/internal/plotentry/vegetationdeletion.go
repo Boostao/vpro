@@ -1,11 +1,6 @@
 package plotentry
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -17,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type VegetationDeletionRequest struct {
@@ -71,7 +69,7 @@ func inspectVegetationDeletion(ctx context.Context, tx *sql.Tx, table, plot, for
 		return snapshot, err
 	}
 	if id < math.MinInt32 || id > math.MaxInt32 {
-		return snapshot, errors.New("vegetation deletion requires an exact signed32 identity")
+		return snapshot, errors.New("vegetation deletion requires an exact record ID")
 	}
 	if err := vprocore.RequireChildIdentity(tx, table, "Veg", plot, id); err != nil {
 		return snapshot, err
@@ -89,17 +87,20 @@ func inspectVegetationDeletion(ctx context.Context, tx *sql.Tx, table, plot, for
 		return snapshot, err
 	}
 	var cells []vegetationDeletionCell
-	for rows.Next() {
-		var cid, required, primary int
-		var name, typ string
-		var defaultValue sql.NullString
-		if err := rows.Scan(&cid, &name, &typ, &required, &defaultValue, &primary); err != nil {
-			rows.Close()
-			return snapshot, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var cid, required, primary int
+			var name, typ string
+			var defaultValue sql.NullString
+			if err := rows.Scan(&cid, &name, &typ, &required, &defaultValue, &primary); err != nil {
+
+				return err
+			}
+			cells = append(cells, vegetationDeletionCell{Name: name, Type: typ})
 		}
-		cells = append(cells, vegetationDeletionCell{Name: name, Type: typ})
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return snapshot, err
 	}
 	columns := []string{`rowid`}
@@ -215,5 +216,9 @@ func DeleteReviewedVegetation(s *vprocore.PlotService, plot string, request Vege
 }
 
 func CtxDeleteReviewedVegetation(s *vprocore.ContextService, contextID, plot string, request VegetationDeletionRequest) error {
-	return s.Edit(contextID, func(plots *vprocore.PlotService) error { return DeleteReviewedVegetation(plots, plot, request) })
+	return CtxDeleteReviewedVegetationContext(s, context.Background(), contextID, plot, request)
+}
+
+func CtxDeleteReviewedVegetationContext(s *vprocore.ContextService, ctx context.Context, contextID, plot string, request VegetationDeletionRequest) error {
+	return vprocore.EditContext(ctx, s, contextID, func(plots *vprocore.PlotService) error { return DeleteReviewedVegetation(plots, plot, request) })
 }

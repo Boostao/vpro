@@ -1,11 +1,6 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +9,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const twoPageVegetationHistoryTable = "__VPRO_TwoPageVegetationHistory"
@@ -88,7 +86,7 @@ func validateTwoPageVegetationHistory(ctx context.Context, history twoPageVegeta
 		audited++
 		rowID, err := strconv.ParseInt(audit.RowID, 10, 64)
 		if err != nil || strconv.FormatInt(rowID, 10) != audit.RowID || seen[audit.RowID] {
-			return errors.New("two-page vegetation history requires distinct canonical audit rowids")
+			return errors.New("two-page vegetation history requires distinct audit log entries")
 		}
 		seen[audit.RowID] = true
 		original := history.Request.Original

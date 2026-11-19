@@ -170,7 +170,7 @@ const tv3ReferenceSeedSQL = `
 `
 
 func seedTV3ReferenceMetadata(ctx context.Context, tx *sql.Tx, rawProjectName string) error {
-	projName := truncateUTF16Units(strings.TrimSpace(rawProjectName), 50)
+	projName := sqlutil.TruncateUTF16(strings.TrimSpace(rawProjectName), 50)
 	if projName == "" {
 		projName = "VProExport"
 	}
@@ -254,9 +254,9 @@ func seedTV3Taxa(ctx context.Context, tx *sql.Tx, species []tvSpeciesItem) (map[
 		if sci == "" {
 			sci = sp.SpeciesCode
 		}
-		letter := truncateUTF16Units(strings.TrimSpace(sp.LetterCode), 7)
+		letter := sqlutil.TruncateUTF16(strings.TrimSpace(sp.LetterCode), 7)
 		if letter == "" {
-			letter = truncateUTF16Units(strings.TrimSpace(sp.SpeciesCode), 7)
+			letter = sqlutil.TruncateUTF16(strings.TrimSpace(sp.SpeciesCode), 7)
 		}
 		metaBytes, _ := json.Marshal(map[string]any{
 			"vpro_code": sp.SpeciesCode,
@@ -660,8 +660,8 @@ func verifyTV3ForeignKeys(ctx context.Context, tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
+	defer fkRows.Close()
 	hasViolation := fkRows.Next()
-	_ = fkRows.Close()
 	if hasViolation {
 		return errors.New("exported Turboveg 3 SQLite database failed PRAGMA foreign_key_check")
 	}

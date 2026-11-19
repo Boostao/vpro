@@ -1,6 +1,14 @@
 package integration
 
 import (
+	"context"
+	"database/sql"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
 	"github.com/boostao/vpro/app/internal/classification"
 	"github.com/boostao/vpro/app/internal/datasheet"
 	"github.com/boostao/vpro/app/internal/references"
@@ -10,18 +18,6 @@ import (
 	"github.com/boostao/vpro/app/internal/twopage"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
-	"context"
-	"database/sql"
-
-	"os"
-	"path/filepath"
-	"reflect"
-	"strings"
-
-	"testing"
 )
 
 func twoPageEnvironmentTableFixture(t *testing.T, external bool) (*datasheet.TwoPageEnvironmentTableService, vprocore.ProjectState, *sql.DB) {
@@ -90,10 +86,10 @@ func twoPageGoogleEarthFixture(t *testing.T, external bool) (*spatial.TwoPageGoo
 	return service, state, db
 }
 
-func twoPageEntryApprovalDraft(t *testing.T, snapshot *twopage.TwoPageEntryReferenceSnapshotInternal) ([]sourceform.SiviParentScalarEdit, []twopage.TwoPageEntryCodeAcknowledgementInternal) {
+func twoPageEntryApprovalDraft(t *testing.T, snapshot *twopage.TwoPageEntryReferenceSnapshotInternal) ([]sourceform.SourceParentScalarEdit, []twopage.TwoPageEntryCodeAcknowledgementInternal) {
 	t.Helper()
 	original := snapshot.Original
-	edits := []sourceform.SiviParentScalarEdit{
+	edits := []sourceform.SourceParentScalarEdit{
 		sftest.SiviParentEdit(t, original, "FieldNumber", vprotest.MetadataText("  Literal field  ")),
 		sftest.SiviParentEdit(t, original, "Zone", vprotest.MetadataText("BG")),
 		sftest.SiviParentEdit(t, original, "SubZone", vprotest.MetadataText("xh1")),
@@ -218,7 +214,7 @@ func twoPageEntryCatalogueProviderFixture(t *testing.T, form string) *twopage.Tw
 	return provider
 }
 
-func twoPageWriteFixture(t *testing.T, form string, external bool) (*vprocore.ContextService, vprocore.ProjectState, *sql.DB, *sourceform.SiviParentProjection, []sourceform.SiviParentScalarEdit) {
+func twoPageWriteFixture(t *testing.T, form string, external bool) (*vprocore.ContextService, vprocore.ProjectState, *sql.DB, *sourceform.SourceParentProjection, []sourceform.SourceParentScalarEdit) {
 	t.Helper()
 	service, state, db, _, _ := sftest.SiviParentWriteFixture(t, external, 3)
 	parent, err := twopage.ReadTwoPageParent(service, context.Background(), state.ContextID, "108050", form)
@@ -235,7 +231,7 @@ func twoPageWriteFixture(t *testing.T, form string, external bool) (*vprocore.Co
 		{"GIS_BGC", vprotest.MetadataText("  MiXeD  ")}, {"GIS_BGC_VER", vprotest.MetadataInteger("-32768")},
 		{"BEC_Use", vprotest.MetadataText("Case Sensitive")},
 	}
-	edits := []sourceform.SiviParentScalarEdit{}
+	edits := []sourceform.SourceParentScalarEdit{}
 	for _, field := range values {
 		if form == "FS882-8x6XL-CHARS" && field.column == "BEC_Use" {
 			continue

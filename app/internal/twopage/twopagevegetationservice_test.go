@@ -1,17 +1,15 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func vegetationFacade(t *testing.T, contexts *vprocore.ContextService) *TwoPageVegetationService {
@@ -160,4 +158,15 @@ func TestTwoPageVegetationServiceExportedRPCContractAndStaleContextRejection(t *
 	if _, err := service.ListDeletedRows(ctx, "stale-context-id", "108050", "SubVegAXL_BC"); err == nil {
 		t.Fatal("expected stale context ID rejection on ListDeletedRows")
 	}
+}
+
+func (s *TwoPageVegetationService) RecoverReceipt(ctx context.Context, contextID, requestJSON string) (*TwoPageVegetationWriteResult, error) {
+	if err := s.require(ctx, false); err != nil {
+		return nil, err
+	}
+	var request twoPageVegetationRequest
+	if err := json.Unmarshal([]byte(requestJSON), &request); err != nil {
+		return nil, err
+	}
+	return LookupTwoPageVegetationReceipt(s.contexts, ctx, contextID, request)
 }

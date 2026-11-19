@@ -360,7 +360,7 @@ func ReadTwoPageSoilReferences(s *vprocore.ContextService, ctx context.Context, 
 				return nil, fmt.Errorf("two-page soil reference scope: %w", err)
 			}
 			for i := range fields {
-				definitions, err := sourceform.ReadSIVISharedFamilyReference(ctx, tx, "VLists", fields[i].ListName)
+				definitions, err := sourceform.ReadSourceSharedFamilyReference(ctx, tx, "VLists", fields[i].ListName)
 				if err != nil {
 					return nil, fmt.Errorf("two-page soil reference %s.%s: %w", form, fields[i].Column, err)
 				}
@@ -459,15 +459,4 @@ func (s *TwoPageSoilService) dispatchTwoPageSoilObserved(ctx context.Context, co
 	}
 	defer FinishTwoPageSoilAttempt(s.contexts, request.RequestID)
 	return WriteTwoPageSoilObserved(s.contexts, ctx, contextID, request, beforeCommit, afterCommit)
-}
-
-func (s *TwoPageSoilService) RecoverReceipt(ctx context.Context, contextID, requestJSON string) (*TwoPageSoilWriteResult, error) {
-	if err := s.require(ctx, false); err != nil {
-		return nil, err
-	}
-	var request twoPageSoilRequest
-	if err := json.Unmarshal([]byte(requestJSON), &request); err != nil {
-		return nil, err
-	}
-	return LookupTwoPageSoilReceipt(s.contexts, ctx, contextID, request)
 }

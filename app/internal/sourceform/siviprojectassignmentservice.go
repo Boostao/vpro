@@ -1,19 +1,17 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SIVIProjectAssignmentOriginal struct {
-	Original             *SIVIParentProjection
-	Choices              *SIVIProjectChoices
+	Original             *SourceParentProjection
+	Choices              *SourceProjectChoices
 	AssignmentAvailable  bool
 	AssignmentDiagnostic string
 }
@@ -31,13 +29,15 @@ type SIVIProjectSelection struct {
 	MetadataOriginal vprocore.ProjectMetadataRow      `json:"metadataOriginal"`
 }
 
+type SourceProjectSelection = SIVIProjectSelection
+
 type SIVIProjectAssignmentWrite struct {
-	Original  *SIVIParentProjection `json:"original"`
-	Selection SIVIProjectSelection  `json:"selection"`
+	Original  *SourceParentProjection `json:"original"`
+	Selection SourceProjectSelection  `json:"selection"`
 }
 
-func (input *SIVIProjectSelection) UnmarshalJSON(data []byte) error {
-	type plain SIVIProjectSelection
+func (input *SourceProjectSelection) UnmarshalJSON(data []byte) error {
+	type plain SourceProjectSelection
 	var decoded plain
 	if err := vprocore.DecodeProfileLifecycleJSON(data, &decoded, "contextId", "controlId", "table", "rowId",
 		"expected", "sourceOption", "metadataAlias", "metadataTable", "metadataColumns", "metadataOriginal"); err != nil {
@@ -59,7 +59,7 @@ func (input *SIVIProjectSelection) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("SIVI ProjectID metadata column transport: %w", err)
 		}
 	}
-	*input = SIVIProjectSelection(decoded)
+	*input = SourceProjectSelection(decoded)
 	return nil
 }
 
@@ -73,12 +73,8 @@ func (request *SIVIProjectAssignmentWrite) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (input SIVIProjectSelection) Private() SiviProjectSelection {
-	return SiviProjectSelection{
-		ContextID: input.ContextID, ControlID: input.ControlID, Table: input.Table, RowID: input.RowID,
-		Expected: input.Expected, SourceOption: input.SourceOption, MetadataAlias: input.MetadataAlias,
-		MetadataTable: input.MetadataTable, MetadataColumns: input.MetadataColumns, MetadataOriginal: input.MetadataOriginal,
-	}
+func (input SourceProjectSelection) Private() SourceProjectSelectionInternal {
+	return SourceProjectSelectionInternal(input)
 }
 
 func RequireSIVIProjectAssignment(s *vprocore.ContextService, ctx context.Context) error {
@@ -104,7 +100,7 @@ func GetSIVIProjectAssignmentOriginal(s *vprocore.ContextService, ctx context.Co
 	})
 }
 
-func SaveSIVIProjectAssignment(s *vprocore.ContextService, ctx context.Context, contextID, plot string, request SIVIProjectAssignmentWrite) (*SIVIParentWriteResult, error) {
+func SaveSIVIProjectAssignment(s *vprocore.ContextService, ctx context.Context, contextID, plot string, request SIVIProjectAssignmentWrite) (*SourceParentWriteResult, error) {
 	if err := RequireSIVIProjectAssignment(s, ctx); err != nil {
 		return nil, err
 	}

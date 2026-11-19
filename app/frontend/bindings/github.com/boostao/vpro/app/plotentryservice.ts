@@ -257,8 +257,8 @@ export function LookupSIVICreationReceipt(contextID: string, requestJSON: string
     return $Call.ByID(3043312526, contextID, requestJSON);
 }
 
-export function LookupSIVICreationUndoReceipt(contextID: string, requestJSON: string): $CancellablePromise<$models.SIVICreationUndoResult | null> {
-    return $Call.ByID(3011438824, contextID, requestJSON);
+export function LookupSIVICreationUndoReceipt(contextID: string, request: $models.SIVICreationUndoRequest): $CancellablePromise<$models.SIVICreationUndoResult | null> {
+    return $Call.ByID(3011438824, contextID, request);
 }
 
 export function LookupSIVIDeletionReceipt(contextID: string, requestJSON: string): $CancellablePromise<$models.SIVIDeletionResult | null> {
@@ -273,16 +273,8 @@ export function RecoverTwoPageSoilOutcome(contextID: string, requestJSON: string
     return $Call.ByID(1518046910, contextID, requestJSON);
 }
 
-export function RecoverTwoPageSoilReceipt(contextID: string, requestJSON: string): $CancellablePromise<$models.TwoPageSoilWriteResult | null> {
-    return $Call.ByID(2004571826, contextID, requestJSON);
-}
-
 export function RecoverTwoPageVegetationOutcome(contextID: string, requestJSON: string): $CancellablePromise<$models.TwoPageVegetationAttemptOutcome | null> {
     return $Call.ByID(1078535235, contextID, requestJSON);
-}
-
-export function RecoverTwoPageVegetationReceipt(contextID: string, requestJSON: string): $CancellablePromise<$models.TwoPageVegetationWriteResult | null> {
-    return $Call.ByID(1281964531, contextID, requestJSON);
 }
 
 export function ReloadGeologyCodeCatalogue(): $CancellablePromise<void> {
@@ -457,8 +449,8 @@ export function SetTwoPageSourceAuditRestoreSelection(contextID: string, plot: s
     return $Call.ByID(496735223, contextID, plot, form, rowIDs);
 }
 
-export function UndoSIVICreation(contextID: string, requestJSON: string): $CancellablePromise<$models.SIVICreationUndoResult | null> {
-    return $Call.ByID(1501653662, contextID, requestJSON);
+export function UndoSIVICreation(contextID: string, request: $models.SIVICreationUndoRequest): $CancellablePromise<$models.SIVICreationUndoResult | null> {
+    return $Call.ByID(1501653662, contextID, request);
 }
 
 export function UpdateCollectedRecords(plot: string, updates: $models.CollectedRecordUpdate[] | null): $CancellablePromise<void> {

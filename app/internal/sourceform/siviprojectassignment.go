@@ -1,20 +1,18 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-type SiviProjectSelection struct {
+type SourceProjectSelectionInternal struct {
 	ContextID, ControlID, Table, RowID string
 	Expected                           vprocore.ProjectMetadataCell
 	SourceOption                       int
@@ -23,8 +21,8 @@ type SiviProjectSelection struct {
 	MetadataOriginal                   vprocore.ProjectMetadataRow
 }
 
-type SiviProjectAssignmentPlan struct {
-	Assignments      []SiviParentScalarAssignment
+type SourceProjectAssignmentPlan struct {
+	Assignments      []SourceParentScalarAssignment
 	SourceOption     int
 	MetadataAlias    string
 	MetadataTable    string
@@ -33,12 +31,12 @@ type SiviProjectAssignmentPlan struct {
 }
 
 func planSIVIProjectAssignment(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable,
-	choices SIVIProjectChoices, selection SiviProjectSelection) (*SiviProjectAssignmentPlan, error) {
+	choices SourceProjectChoices, selection SourceProjectSelectionInternal) (*SourceProjectAssignmentPlan, error) {
 	return PlanSourceProjectAssignment(ctx, "form:frmSIVIsite/ProjectID", contextID, project, plot, env, admin, choices, selection)
 }
 
 func PlanSourceProjectAssignment(ctx context.Context, controlID, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable,
-	choices SIVIProjectChoices, selection SiviProjectSelection) (*SiviProjectAssignmentPlan, error) {
+	choices SourceProjectChoices, selection SourceProjectSelectionInternal) (*SourceProjectAssignmentPlan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -84,7 +82,7 @@ func PlanSourceProjectAssignment(ctx context.Context, controlID, contextID, proj
 		return nil, errors.New("SIVI ProjectID selected physical definition or title changed; reload before planning")
 	}
 	value := selected.Cells[0]
-	assignments, err := planSIVIParentCells(ctx, contextID, project, plot, env, admin, []SiviParentScalarEdit{{
+	assignments, err := planSIVIParentCells(ctx, contextID, project, plot, env, admin, []SourceParentScalarEdit{{
 		ContextID: selection.ContextID, Table: selection.Table, RowID: selection.RowID,
 		Column: "ProjectID", Expected: selection.Expected, Value: value,
 	}}, map[string]string{"ProjectID": "Env"}, func(column string, cell vprocore.ProjectMetadataCell) error {
@@ -96,7 +94,7 @@ func PlanSourceProjectAssignment(ctx context.Context, controlID, contextID, proj
 	if err != nil {
 		return nil, err
 	}
-	return &SiviProjectAssignmentPlan{
+	return &SourceProjectAssignmentPlan{
 		Assignments: assignments, SourceOption: choices.SourceOption,
 		MetadataAlias: choices.Alias, MetadataTable: choices.Table,
 		MetadataColumns: append([]vprocore.ProjectMetadataColumn{}, choices.Choices.Columns...),

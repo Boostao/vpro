@@ -1,33 +1,26 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"bytes"
 	"context"
-
 	"database/sql"
-
 	"encoding/json"
 	"errors"
 	"fmt"
-
-	"github.com/wailsapp/wails/v3/pkg/application"
 	"math"
 	"math/big"
 	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
-
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 type EnvironmentReportField struct {
@@ -51,12 +44,12 @@ func SortedEnvironmentReportKeys[T any](values map[string]T) []string {
 	return keys
 }
 
-type artifactPublicationReceipt struct {
+type ArtifactPublicationReceipt struct {
 	Status, RequestedDestination, Path, SHA256, ErrorMessage string
 }
 
-func ArtifactPublicationOutcome(requested string, result ArtifactPublication, err error, label string) artifactPublicationReceipt {
-	outcome := artifactPublicationReceipt{RequestedDestination: requested, Path: result.Path, SHA256: result.SHA256}
+func ArtifactPublicationOutcome(requested string, result ArtifactPublication, err error, label string) ArtifactPublicationReceipt {
+	outcome := ArtifactPublicationReceipt{RequestedDestination: requested, Path: result.Path, SHA256: result.SHA256}
 	switch {
 	case result.Published && err == nil:
 		outcome.Status = "published"
@@ -361,7 +354,7 @@ func SiteUnitTransferColumns(table ProjectMetadataTable, required ...string) (ma
 	for _, row := range table.Rows {
 		id, err := strconv.ParseInt(row.RowID, 10, 64)
 		if err != nil || strconv.FormatInt(id, 10) != row.RowID || seen[row.RowID] || len(row.Cells) != len(table.Columns) {
-			return nil, errors.New("transfer requires complete rows with distinct exact signed64 physical identities")
+			return nil, errors.New("transfer requires complete rows with distinct exact record references")
 		}
 		seen[row.RowID] = true
 	}
@@ -413,18 +406,21 @@ func ValidateSIVIPhysicalSchema(ctx context.Context, tx *sql.Tx, alias, table, s
 	if err != nil {
 		return err
 	}
-	for rows.Next() {
-		var position, required, primary, hidden int
-		var name, kind string
-		var defaultValue sql.NullString
-		if err := rows.Scan(&position, &name, &kind, &required, &defaultValue, &primary, &hidden); err != nil {
-			return errors.Join(err, rows.Close())
+	return func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var position, required, primary, hidden int
+			var name, kind string
+			var defaultValue sql.NullString
+			if err := rows.Scan(&position, &name, &kind, &required, &defaultValue, &primary, &hidden); err != nil {
+				return err
+			}
+			if hidden != 0 || strings.EqualFold(name, "rowid") || strings.EqualFold(name, "_rowid_") || strings.EqualFold(name, "oid") {
+				return fmt.Errorf("SIVI %s require unshadowed physical identities and ordinary columns", scope)
+			}
 		}
-		if hidden != 0 || strings.EqualFold(name, "rowid") || strings.EqualFold(name, "_rowid_") || strings.EqualFold(name, "oid") {
-			return errors.Join(fmt.Errorf("SIVI %s require unshadowed physical identities and ordinary columns", scope), rows.Close())
-		}
-	}
-	return errors.Join(rows.Err(), rows.Close())
+		return rows.Err()
+	}()
 }
 
 var SiviDeletionUUID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)

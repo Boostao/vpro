@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/boostao/vpro/app/internal/sqlutil"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -526,7 +528,7 @@ func lookupVP08ColumnSpec(suffix, field string) (ColumnSpec, bool) {
 }
 
 func (e *cloudStagingMergeExecutor) insertWholePlot(plot string) error {
-	if err := ValidateUTF16Bound("PlotNumber", plot, 7); err != nil {
+	if err := sqlutil.ValidateUTF16Bound("PlotNumber", plot, 7); err != nil {
 		return err
 	}
 	for _, suffix := range []string{"Env", "Admin"} {

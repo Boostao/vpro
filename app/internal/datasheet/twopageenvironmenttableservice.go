@@ -1,12 +1,6 @@
 package datasheet
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -15,6 +9,9 @@ import (
 	"sort"
 	"unicode/utf8"
 
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 )

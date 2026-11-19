@@ -153,6 +153,11 @@ export interface LongVegetationEnforcementPreferencesOutcome {
     "printers": vprocore$0.PrinterObservation | null;
 }
 
+export interface LongVegetationEnforcementPreferencesRequest {
+    "expected": LongVegetationEnforcementPreferenceValues;
+    "proposed": LongVegetationEnforcementPreferenceValues;
+}
+
 export interface LongVegetationEnforcementPreferencesReview {
     "contextId": string;
     "project": string;
@@ -187,11 +192,11 @@ export interface LongVegetationGroupPreferenceValues {
     "groupBy": number;
 }
 
-export interface LongVegetationGroupPreferencesOutcome {
-    "contextId": string;
-    "changed": boolean;
-    "committed": boolean;
-    "errorMessage": string;
+export type LongVegetationGroupPreferencesOutcome = vprocore$0.ReportPreferenceOutcome;
+
+export interface LongVegetationGroupPreferencesRequest {
+    "expected": LongVegetationGroupPreferenceValues;
+    "proposed": LongVegetationGroupPreferenceValues;
 }
 
 export interface LongVegetationGroupPreferencesReview {
@@ -216,11 +221,11 @@ export interface LongVegetationNamingPreferenceValues {
     "selectedField": string;
 }
 
-export interface LongVegetationNamingPreferencesOutcome {
-    "contextId": string;
-    "changed": boolean;
-    "committed": boolean;
-    "errorMessage": string;
+export type LongVegetationNamingPreferencesOutcome = vprocore$0.ReportPreferenceOutcome;
+
+export interface LongVegetationNamingPreferencesRequest {
+    "expected": LongVegetationNamingPreferenceValues;
+    "proposed": LongVegetationNamingPreferenceValues;
 }
 
 export interface LongVegetationNamingPreferencesReview {
@@ -259,11 +264,11 @@ export interface LongVegetationPreferenceValues {
     "title": string;
 }
 
-export interface LongVegetationPreferencesOutcome {
-    "contextId": string;
-    "changed": boolean;
-    "committed": boolean;
-    "errorMessage": string;
+export type LongVegetationPreferencesOutcome = vprocore$0.ReportPreferenceOutcome;
+
+export interface LongVegetationPreferencesRequest {
+    "expected": LongVegetationPreferenceValues;
+    "proposed": LongVegetationPreferenceValues;
 }
 
 export interface LongVegetationPreferencesReview {
@@ -304,6 +309,11 @@ export interface LongVegetationProjectPreview {
     "preview": LongVegetationPreview;
 }
 
+export interface LongVegetationProjectReadRequest {
+    "revision": string;
+    "approvalHash": string;
+}
+
 export interface LongVegetationProjectUnitOutcome {
     "sourceKind": string;
     "revision": string;
@@ -313,6 +323,28 @@ export interface LongVegetationProjectUnitOutcome {
 export interface LongVegetationProjectUnitPreferences {
     "scope": LongVegetationReportScope;
     "preferences": LongVegetationUnitPreferencesReview;
+}
+
+export interface LongVegetationProjectUnitRequest {
+    "revision": string;
+    "approvalHash": string;
+    "expected": LongVegetationUnitPreferenceValues;
+    "proposed": LongVegetationUnitPreferenceValues;
+}
+
+export interface LongVegetationProjectWorkbookExportRequest {
+    "revision": string;
+    "buildApprovalHash": string;
+    "scope": string;
+    "createdDate": string;
+    "approvalHash": string;
+    "destination": string;
+}
+
+export interface LongVegetationProjectWorkbookReadRequest {
+    "revision": string;
+    "buildApprovalHash": string;
+    "scope": string;
 }
 
 export interface LongVegetationProjectWorkbookReview {
@@ -340,11 +372,11 @@ export interface LongVegetationQualityMinimumPreferenceValues {
     "soilMinimum": string;
 }
 
-export interface LongVegetationQualityMinimumPreferencesOutcome {
-    "contextId": string;
-    "changed": boolean;
-    "committed": boolean;
-    "errorMessage": string;
+export type LongVegetationQualityMinimumPreferencesOutcome = vprocore$0.ReportPreferenceOutcome;
+
+export interface LongVegetationQualityMinimumPreferencesRequest {
+    "expected": LongVegetationQualityMinimumPreferenceValues;
+    "proposed": LongVegetationQualityMinimumPreferenceValues;
 }
 
 export interface LongVegetationQualityMinimumPreferencesReview {
@@ -364,11 +396,11 @@ export interface LongVegetationQualityNullPreferenceValues {
     "soilIncludeNulls": boolean;
 }
 
-export interface LongVegetationQualityNullPreferencesOutcome {
-    "contextId": string;
-    "changed": boolean;
-    "committed": boolean;
-    "errorMessage": string;
+export type LongVegetationQualityNullPreferencesOutcome = vprocore$0.ReportPreferenceOutcome;
+
+export interface LongVegetationQualityNullPreferencesRequest {
+    "expected": LongVegetationQualityNullPreferenceValues;
+    "proposed": LongVegetationQualityNullPreferenceValues;
 }
 
 export interface LongVegetationQualityNullPreferencesReview {
@@ -448,16 +480,21 @@ export interface LongVegetationRow {
     "plots": LongVegetationPlot[] | null;
 }
 
+export interface LongVegetationScopeRequest {
+    "revision": string;
+    "sourceKind": string;
+}
+
 export interface LongVegetationSelectedFieldPreferenceValues {
     "mode": number;
     "selectedField": string;
 }
 
-export interface LongVegetationSelectedFieldPreferencesOutcome {
-    "contextId": string;
-    "changed": boolean;
-    "committed": boolean;
-    "errorMessage": string;
+export type LongVegetationSelectedFieldPreferencesOutcome = vprocore$0.ReportPreferenceOutcome;
+
+export interface LongVegetationSelectedFieldPreferencesRequest {
+    "expected": LongVegetationSelectedFieldPreferenceValues;
+    "proposed": LongVegetationSelectedFieldPreferenceValues;
 }
 
 export interface LongVegetationSelectedFieldPreferencesReview {
@@ -477,6 +514,11 @@ export interface LongVegetationSelectedUnitField {
     "declaredType": string;
     "available": boolean;
     "reason": string;
+}
+
+export interface LongVegetationSelectedUnitFieldsRequest {
+    "revision": string;
+    "fields": string[] | null;
 }
 
 export interface LongVegetationSelectedUnitSelection {
@@ -515,11 +557,11 @@ export interface LongVegetationStatisticsPreferenceValues {
     "orderBy": number;
 }
 
-export interface LongVegetationStatisticsPreferencesOutcome {
-    "contextId": string;
-    "changed": boolean;
-    "committed": boolean;
-    "errorMessage": string;
+export type LongVegetationStatisticsPreferencesOutcome = vprocore$0.ReportPreferenceOutcome;
+
+export interface LongVegetationStatisticsPreferencesRequest {
+    "expected": LongVegetationStatisticsPreferenceValues;
+    "proposed": LongVegetationStatisticsPreferenceValues;
 }
 
 export interface LongVegetationStatisticsPreferencesReview {
@@ -538,11 +580,11 @@ export interface LongVegetationSwitchPreferenceValues {
     "constantSpeciesList": boolean;
 }
 
-export interface LongVegetationSwitchPreferencesOutcome {
-    "contextId": string;
-    "changed": boolean;
-    "committed": boolean;
-    "errorMessage": string;
+export type LongVegetationSwitchPreferencesOutcome = vprocore$0.ReportPreferenceOutcome;
+
+export interface LongVegetationSwitchPreferencesRequest {
+    "expected": LongVegetationSwitchPreferenceValues;
+    "proposed": LongVegetationSwitchPreferenceValues;
 }
 
 export interface LongVegetationSwitchPreferencesReview {
@@ -554,16 +596,54 @@ export interface LongVegetationSwitchPreferencesReview {
     "values": LongVegetationSwitchPreferenceValues;
 }
 
+/**
+ * LongVegetationTabPreferencesBundle returns the complete typed Long Vegetation
+ * YAML preference state across tabs in one call.
+ */
+export interface LongVegetationTabPreferencesBundle {
+    "title": LongVegetationPreferencesReview | null;
+    "statistics": LongVegetationStatisticsPreferencesReview | null;
+    "switch": LongVegetationSwitchPreferencesReview | null;
+    "threshold": LongVegetationThresholdPreferencesReview | null;
+    "group": LongVegetationGroupPreferencesReview | null;
+    "qualityNull": LongVegetationQualityNullPreferencesReview | null;
+    "qualityMinimum": LongVegetationQualityMinimumPreferencesReview | null;
+    "naming": LongVegetationNamingPreferencesReview | null;
+    "selectedField"?: LongVegetationSelectedFieldPreferencesReview | null;
+    "enforcement": LongVegetationEnforcementPreferencesReview | null;
+    "unit"?: LongVegetationUnitPreferencesReview | null;
+    "tabErrors"?: { [_ in string]?: string } | null;
+}
+
+/**
+ * LongVegetationTabPreferencesSaveRequest saves any single Long Vegetation preference tab
+ * via one typed Wails RPC contract (ENG-GO-009).
+ */
+export interface LongVegetationTabPreferencesSaveRequest {
+    "tab": string;
+    "title"?: LongVegetationPreferencesRequest | null;
+    "statistics"?: LongVegetationStatisticsPreferencesRequest | null;
+    "switch"?: LongVegetationSwitchPreferencesRequest | null;
+    "threshold"?: LongVegetationThresholdPreferencesRequest | null;
+    "group"?: LongVegetationGroupPreferencesRequest | null;
+    "qualityNull"?: LongVegetationQualityNullPreferencesRequest | null;
+    "qualityMinimum"?: LongVegetationQualityMinimumPreferencesRequest | null;
+    "naming"?: LongVegetationNamingPreferencesRequest | null;
+    "selectedField"?: LongVegetationSelectedFieldPreferencesRequest | null;
+    "enforcement"?: LongVegetationEnforcementPreferencesRequest | null;
+    "unit"?: LongVegetationUnitPreferencesRequest | null;
+}
+
 export interface LongVegetationThresholdPreferenceValues {
     "presenceGreaterThan": number;
     "meanCoverGreaterThan": number;
 }
 
-export interface LongVegetationThresholdPreferencesOutcome {
-    "contextId": string;
-    "changed": boolean;
-    "committed": boolean;
-    "errorMessage": string;
+export type LongVegetationThresholdPreferencesOutcome = vprocore$0.ReportPreferenceOutcome;
+
+export interface LongVegetationThresholdPreferencesRequest {
+    "expected": LongVegetationThresholdPreferenceValues;
+    "proposed": LongVegetationThresholdPreferenceValues;
 }
 
 export interface LongVegetationThresholdPreferencesReview {
@@ -601,6 +681,11 @@ export interface LongVegetationUnitPreferencesOutcome {
     "changed": boolean;
     "committed": boolean;
     "errorMessage": string;
+}
+
+export interface LongVegetationUnitPreferencesRequest {
+    "expected": LongVegetationUnitPreferenceValues;
+    "proposed": LongVegetationUnitPreferenceValues;
 }
 
 export interface LongVegetationUnitPreferencesReview {
@@ -790,6 +875,12 @@ export interface SummaryVegetationField {
     "size": number;
 }
 
+export interface SummaryVegetationFieldListAction {
+    "kind": string;
+    "rowId": string;
+    "selected": boolean;
+}
+
 export interface SummaryVegetationFieldListAssignment {
     "before": vprocore$0.ProjectMetadataRow;
     "after": vprocore$0.ProjectMetadataRow;
@@ -810,6 +901,12 @@ export interface SummaryVegetationFieldListOutcome {
     "verified": boolean;
     "plan": SummaryVegetationFieldListCommittedPlan | null;
     "errorMessage": string;
+}
+
+export interface SummaryVegetationFieldListRequest {
+    "requestId": string;
+    "review": SummaryVegetationFieldListReview;
+    "actions": SummaryVegetationFieldListAction[] | null;
 }
 
 export interface SummaryVegetationFieldListReview {

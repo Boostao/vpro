@@ -1,11 +1,6 @@
 package validation
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -14,6 +9,9 @@ import (
 	"reflect"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type SpeciesCodeCheckRow struct {
@@ -171,7 +169,11 @@ func LookupSpeciesCodeCheckTarget(s *vprocore.ContextService, ctx context.Contex
 }
 
 func SaveSpeciesCodeCheck(s *vprocore.ContextService, contextID string, updates []SpeciesCodeCheckUpdate) error {
-	return s.Edit(contextID, func(plots *vprocore.PlotService) error {
+	return SaveSpeciesCodeCheckContext(s, context.Background(), contextID, updates)
+}
+
+func SaveSpeciesCodeCheckContext(s *vprocore.ContextService, ctx context.Context, contextID string, updates []SpeciesCodeCheckUpdate) error {
+	return vprocore.EditContext(ctx, s, contextID, func(plots *vprocore.PlotService) error {
 		patches := make([]vprocore.ChildPlotPatch, 0, len(updates))
 		for _, update := range updates {
 			if update.Expected != nil && !utf8.ValidString(*update.Expected) {
@@ -203,7 +205,7 @@ func SaveSpeciesCodeCheck(s *vprocore.ContextService, contextID string, updates 
 				return nil
 			}
 			patches = append(patches, vprocore.ChildPlotPatch{Plot: update.PlotNumber, Patch: vprocore.ChildRecordPatch{
-				Kind: "Veg", Id: update.ID, Cells: map[string]vprocore.ChildExpectedValue{
+				Kind: "Veg", ID: update.ID, Cells: map[string]vprocore.ChildExpectedValue{
 					"species": {Expected: expected, Value: update.Value, Scalar: reflect.String},
 				},
 				Validate: validate,

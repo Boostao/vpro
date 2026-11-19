@@ -25,26 +25,6 @@ func siteUnitSummaryWorkbookFields(grouping int) ([]SiteUnitSummaryField, error)
 	return append(result, fields[27:]...), nil
 }
 
-func prepareSiteUnitSummaryLifeformWorkbook(ctx context.Context, input siteUnitQuickVegetationInput) (siteUnitSummaryWorkbook, error) {
-	if ctx == nil {
-		return siteUnitSummaryWorkbook{}, errors.New("Summary lifeform workbook requires a context")
-	}
-	preview, err := siteUnitSummaryLifeformPreview(ctx, input)
-	if err != nil {
-		return siteUnitSummaryWorkbook{}, err
-	}
-	return prepareSiteUnitSummaryWorkbookProjection(ctx, preview, 2, nil)
-}
-
-func prepareSiteUnitSummarySpeciesWorkbook(ctx context.Context, input siteUnitQuickVegetationInput,
-	request SiteUnitSpeciesListRequest) (siteUnitSummaryWorkbook, error) {
-	preview, err := siteUnitSummarySpeciesPreview(ctx, input, request)
-	if err != nil {
-		return siteUnitSummaryWorkbook{}, err
-	}
-	return prepareSiteUnitSummaryWorkbookProjection(ctx, preview.Environment, request.OrderBy, &preview)
-}
-
 func siteUnitSummarySpeciesPreview(ctx context.Context, input siteUnitQuickVegetationInput,
 	request SiteUnitSpeciesListRequest) (SiteUnitSpeciesListPreview, error) {
 	if ctx == nil {
@@ -78,8 +58,7 @@ func siteUnitSummarySpeciesPreview(ctx context.Context, input siteUnitQuickVeget
 				if err := ctx.Err(); err != nil {
 					return SiteUnitSpeciesListPreview{}, err
 				}
-				rows = append(rows, SiteUnitSpeciesListRow{row.Species, row.ScientificName, row.EnglishName,
-					row.CodeType, row.Cover, row.Presence, row.PhysicalValues, row.Included, row.ReferenceRowIDs})
+				rows = append(rows, SiteUnitSpeciesListRow(row))
 			}
 			next.Groups = append(next.Groups, SiteUnitSpeciesListGroup{group.Index, group.Caption, rows})
 		}

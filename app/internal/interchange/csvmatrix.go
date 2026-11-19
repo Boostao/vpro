@@ -117,42 +117,39 @@ func loadSpeciesLookupMeta(ctx context.Context, tx *sql.Tx) (map[string]speciesL
 	if err != nil {
 		return nil, err
 	}
-	rowIdx := 0
-	for rows.Next() {
-		if rowIdx&511 == 0 {
-			if err := ctx.Err(); err != nil {
-				rows.Close()
-				return nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		rowIdx := 0
+		for rows.Next() {
+			if rowIdx&511 == 0 {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+			}
+			rowIdx++
+			var code, sci, eng, auth, ctype string
+			var lf sql.NullInt64
+			if err := rows.Scan(&code, &sci, &eng, &auth, &lf, &ctype); err != nil {
+				return err
+			}
+			u := strings.ToUpper(strings.TrimSpace(code))
+			if _, exists := meta[u]; exists {
+				continue
+			}
+			var lfPtr *int
+			if lf.Valid {
+				v := int(lf.Int64)
+				lfPtr = &v
+			}
+			meta[u] = speciesLookupMeta{
+				ScientificName: strings.TrimSpace(sci),
+				EnglishName:    strings.TrimSpace(eng),
+				Authority:      strings.TrimSpace(auth),
+				Lifeform:       lfPtr,
 			}
 		}
-		rowIdx++
-		var code, sci, eng, auth, ctype string
-		var lf sql.NullInt64
-		if err := rows.Scan(&code, &sci, &eng, &auth, &lf, &ctype); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		u := strings.ToUpper(strings.TrimSpace(code))
-		if _, exists := meta[u]; exists {
-			continue
-		}
-		var lfPtr *int
-		if lf.Valid {
-			v := int(lf.Int64)
-			lfPtr = &v
-		}
-		meta[u] = speciesLookupMeta{
-			ScientificName: strings.TrimSpace(sci),
-			EnglishName:    strings.TrimSpace(eng),
-			Authority:      strings.TrimSpace(auth),
-			Lifeform:       lfPtr,
-		}
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return nil, err
-	}
-	if err := rows.Close(); err != nil {
+		return rows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 
@@ -163,41 +160,38 @@ func loadSpeciesLookupMeta(ctx context.Context, tx *sql.Tx) (map[string]speciesL
 	if err != nil {
 		return nil, err
 	}
-	uIdx := 0
-	for uRows.Next() {
-		if uIdx&511 == 0 {
-			if err := ctx.Err(); err != nil {
-				uRows.Close()
-				return nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, uRows.Close()) }()
+		uIdx := 0
+		for uRows.Next() {
+			if uIdx&511 == 0 {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+			}
+			uIdx++
+			var code, sci, eng string
+			var lf sql.NullInt64
+			if err := uRows.Scan(&code, &sci, &eng, &lf); err != nil {
+				return err
+			}
+			u := strings.ToUpper(strings.TrimSpace(code))
+			if _, exists := meta[u]; exists {
+				continue
+			}
+			var lfPtr *int
+			if lf.Valid {
+				v := int(lf.Int64)
+				lfPtr = &v
+			}
+			meta[u] = speciesLookupMeta{
+				ScientificName: strings.TrimSpace(sci),
+				EnglishName:    strings.TrimSpace(eng),
+				Lifeform:       lfPtr,
 			}
 		}
-		uIdx++
-		var code, sci, eng string
-		var lf sql.NullInt64
-		if err := uRows.Scan(&code, &sci, &eng, &lf); err != nil {
-			uRows.Close()
-			return nil, err
-		}
-		u := strings.ToUpper(strings.TrimSpace(code))
-		if _, exists := meta[u]; exists {
-			continue
-		}
-		var lfPtr *int
-		if lf.Valid {
-			v := int(lf.Int64)
-			lfPtr = &v
-		}
-		meta[u] = speciesLookupMeta{
-			ScientificName: strings.TrimSpace(sci),
-			EnglishName:    strings.TrimSpace(eng),
-			Lifeform:       lfPtr,
-		}
-	}
-	if err := uRows.Err(); err != nil {
-		uRows.Close()
-		return nil, err
-	}
-	if err := uRows.Close(); err != nil {
+		return uRows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 	return meta, ctx.Err()

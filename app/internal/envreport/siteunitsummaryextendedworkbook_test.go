@@ -1,11 +1,6 @@
 package envreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"encoding/hex"
@@ -17,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSummaryExtendedWorkbookBothMethodsGroupsAndExactCells(t *testing.T) {
@@ -158,6 +156,7 @@ func TestSummaryExtendedWorkbookRefusalCancellationAndRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := SiteUnitSpeciesListRequest{1, 1, 1, 1, 0, 0}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if result, err := prepareSiteUnitSummarySpeciesWorkbook(nil, input, request); err == nil || len(result.Bytes) != 0 {
 		t.Fatal("nil context accepted", err)
 	}

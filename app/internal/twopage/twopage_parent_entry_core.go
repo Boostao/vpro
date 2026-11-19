@@ -12,7 +12,7 @@ import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-func PlanTwoPageEntryProjection(ctx context.Context, original *sourceform.SiviParentProjection, edits []sourceform.SiviParentScalarEdit, masterAllowed bool) ([]sourceform.SiviParentScalarAssignment, error) {
+func PlanTwoPageEntryProjection(ctx context.Context, original *sourceform.SourceParentProjection, edits []sourceform.SourceParentScalarEdit, masterAllowed bool) ([]sourceform.SourceParentScalarAssignment, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -23,7 +23,7 @@ func PlanTwoPageEntryProjection(ctx context.Context, original *sourceform.SiviPa
 	if err != nil {
 		return nil, err
 	}
-	var xlEdits, commonEdits, extraEdits []sourceform.SiviParentScalarEdit
+	var xlEdits, commonEdits, extraEdits []sourceform.SourceParentScalarEdit
 	for _, edit := range edits {
 		_, inXL := xl[edit.Column]
 		_, inCommon := TwoPageParentCommonFields[edit.Column]
@@ -46,12 +46,12 @@ func PlanTwoPageEntryProjection(ctx context.Context, original *sourceform.SiviPa
 			extraEdits = append(extraEdits, edit)
 		}
 	}
-	assignments := []sourceform.SiviParentScalarAssignment{}
+	assignments := []sourceform.SourceParentScalarAssignment{}
 	for _, scope := range []struct {
-		edits []sourceform.SiviParentScalarEdit
-		plan  func(context.Context, *sourceform.SiviParentProjection, []sourceform.SiviParentScalarEdit) ([]sourceform.SiviParentScalarAssignment, error)
+		edits []sourceform.SourceParentScalarEdit
+		plan  func(context.Context, *sourceform.SourceParentProjection, []sourceform.SourceParentScalarEdit) ([]sourceform.SourceParentScalarAssignment, error)
 	}{
-		{xlEdits, func(ctx context.Context, parent *sourceform.SiviParentProjection, edits []sourceform.SiviParentScalarEdit) ([]sourceform.SiviParentScalarAssignment, error) {
+		{xlEdits, func(ctx context.Context, parent *sourceform.SourceParentProjection, edits []sourceform.SourceParentScalarEdit) ([]sourceform.SourceParentScalarAssignment, error) {
 			return planTwoPageXLProjection(ctx, parent, edits, masterAllowed)
 		}},
 		{commonEdits, PlanTwoPageParentCommonProjection},
@@ -70,7 +70,7 @@ func PlanTwoPageEntryProjection(ctx context.Context, original *sourceform.SiviPa
 }
 
 func twoPageEntryHistoryAssignments(ctx context.Context, form string, masterAllowed bool,
-	event sourceform.SiviParentHistory, project, plot string) ([]sourceform.SiviParentScalarAssignment, error) {
+	event sourceform.SourceParentHistory, project, plot string) ([]sourceform.SourceParentScalarAssignment, error) {
 	if event.Original == nil || event.Committed == nil || event.Original.Form != form || event.Committed.Form != form {
 		return nil, errors.New("complete-entry history belongs to another exact source form")
 	}
@@ -82,9 +82,9 @@ func twoPageEntryHistoryAssignments(ctx context.Context, form string, masterAllo
 	if err != nil {
 		return nil, err
 	}
-	edits := make([]sourceform.SiviParentScalarEdit, 0, len(event.Changes))
+	edits := make([]sourceform.SourceParentScalarEdit, 0, len(event.Changes))
 	for _, change := range event.Changes {
-		edits = append(edits, sourceform.SiviParentScalarEdit{ContextID: original.ContextID, Table: change.Table, RowID: change.RowID, Column: change.Column, Expected: change.Before, Value: change.After})
+		edits = append(edits, sourceform.SourceParentScalarEdit{ContextID: original.ContextID, Table: change.Table, RowID: change.RowID, Column: change.Column, Expected: change.Before, Value: change.After})
 	}
 	audited, err := PlanTwoPageEntryProjection(ctx, original, edits, masterAllowed)
 	if err != nil || len(audited) != len(event.Changes) {
@@ -109,10 +109,10 @@ func twoPageEntryHistoryAssignments(ctx context.Context, form string, masterAllo
 	if err := sourceform.VerifySourceParentAuditedSubset(audited, planned, "complete-entry"); err != nil {
 		return nil, err
 	}
-	var projectChange *sourceform.SiviParentHistoryChange
+	var projectChange *sourceform.SourceParentHistoryChange
 	for _, assignment := range planned {
 		if assignment.Column == "ProjectID" {
-			projectChange = &sourceform.SiviParentHistoryChange{Table: assignment.Table, RowID: assignment.RowID, Column: assignment.Column,
+			projectChange = &sourceform.SourceParentHistoryChange{Table: assignment.Table, RowID: assignment.RowID, Column: assignment.Column,
 				Before: assignment.Before, After: assignment.After}
 		}
 	}
@@ -136,7 +136,7 @@ func twoPageEntryHistoryAssignments(ctx context.Context, form string, masterAllo
 		}
 	}
 	if err := sourceform.VerifySourceParentEntryPlan(ctx, original, event.Committed, planned, projectParent,
-		func(left, right *sourceform.SiviParentProjection) bool { return reflect.DeepEqual(left, right) }, "complete-entry"); err != nil {
+		func(left, right *sourceform.SourceParentProjection) bool { return reflect.DeepEqual(left, right) }, "complete-entry"); err != nil {
 		return nil, err
 	}
 	return audited, nil
@@ -206,8 +206,8 @@ func TwoPageEntryFieldPolicies(form string) ([]TwoPageEntryFieldPolicy, error) {
 	return result, nil
 }
 
-func PlanTwoPageEntryProjectAssignment(ctx context.Context, original *sourceform.SiviParentProjection,
-	choices sourceform.SIVIProjectChoices, selection sourceform.SiviProjectSelection) (*sourceform.SiviProjectAssignmentPlan, error) {
+func PlanTwoPageEntryProjectAssignment(ctx context.Context, original *sourceform.SourceParentProjection,
+	choices sourceform.SourceProjectChoices, selection sourceform.SourceProjectSelectionInternal) (*sourceform.SourceProjectAssignmentPlan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -228,17 +228,17 @@ func PlanTwoPageEntryProjectAssignment(ctx context.Context, original *sourceform
 		original.Plot, env, admin, choices, selection)
 }
 
-// Mandatory membership supplements, but never substitutes for, complete entry approval.
+// WriteTwoPageEntryWithRequiredReferences — Mandatory membership supplements, but never substitutes for, complete entry approval.
 func WriteTwoPageEntryWithRequiredReferences(s *vprocore.ContextService, ctx context.Context, contextID, plot, form string,
-	original *sourceform.SiviParentProjection, edits []sourceform.SiviParentScalarEdit, masterAllowed bool,
-	readers sourceform.SiviParentSharedReferenceReaders, approve TwoPageEntryApproval) (*sourceform.SiviParentWriteResult, error) {
+	original *sourceform.SourceParentProjection, edits []sourceform.SourceParentScalarEdit, masterAllowed bool,
+	readers sourceform.SourceParentSharedReferenceReaders, approve TwoPageEntryApproval) (*sourceform.SourceParentWriteResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if approve == nil {
 		return nil, errors.New("complete-entry mandatory references require separate full reference and role approval")
 	}
-	references := &sourceform.SIVIParentSharedService{References: readers}
+	references := &sourceform.SourceParentSharedService{References: readers}
 	lifecycle := TwoPageEntryLifecycle{
 		Prepare: func(plots *vprocore.PlotService, conn *sql.Conn) (func(), error) {
 			owner := plots.Projects.Sqlite
@@ -259,8 +259,8 @@ func WriteTwoPageEntryWithRequiredReferences(s *vprocore.ContextService, ctx con
 		},
 	}
 	return WriteTwoPageEntryWithLifecycle(s, ctx, contextID, plot, form, original, edits, masterAllowed,
-		func(tx *sql.Tx, observed *sourceform.SiviParentProjection, assignments []sourceform.SiviParentScalarAssignment) error {
-			read := func(ctx context.Context, tx *sql.Tx, field sourceform.SiviParentSharedReferencePolicy) (sourceform.SIVIParentSharedReference, error) {
+		func(tx *sql.Tx, observed *sourceform.SourceParentProjection, assignments []sourceform.SourceParentScalarAssignment) error {
+			read := func(ctx context.Context, tx *sql.Tx, field sourceform.SourceParentSharedReferencePolicy) (sourceform.SourceParentSharedReference, error) {
 				return references.ReadReference(ctx, tx, "two_page_entry_refs", field, vprocore.ProjectMetadataCell{Storage: "null"})
 			}
 			if err := ApproveTwoPageEntryRequiredReferences(ctx, tx, observed, assignments, read); err != nil {

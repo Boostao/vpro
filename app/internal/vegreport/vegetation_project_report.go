@@ -48,7 +48,7 @@ func validateProjectUnitInputs(ctx context.Context, inputs []vegetationProjectUn
 		for _, id := range ids {
 			value, err := strconv.ParseInt(id, 10, 64)
 			if err != nil || strconv.FormatInt(value, 10) != id {
-				return nil, errors.New("project report units require exact original physical signed64 identities")
+				return nil, errors.New("project report units require exact original record references")
 			}
 		}
 		if seen[key] {

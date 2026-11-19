@@ -1,17 +1,15 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"strconv"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func summaryEnvironmentalDepthPhysicalFixture(t *testing.T) (vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable) {
@@ -104,6 +102,7 @@ func TestSummaryEnvironmentalDepthRefusalsAndImmutableInputs(t *testing.T) {
 	if _, err := prepareSummaryVegetationEnvironmentalDepth(ctx, "SVSeepage", &unit, env, su); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if _, err := prepareSummaryVegetationEnvironmentalDepth(nil, "SVSeepage", &unit, env, su); err == nil {
 		t.Fatal("nil context accepted")
 	}

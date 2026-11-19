@@ -3,6 +3,12 @@ import { SIVICreationSession } from './siviCreationSession';
 import type { SIVISpeciesOwner } from './siviSpeciesEditor';
 
 const sessions = new Map<string, SIVICreationSession>();
+const host = globalThis as typeof globalThis & { __vproContextDisposers?: Set<(id: string) => void> };
+(host.__vproContextDisposers ??= new Set()).add(id => {
+  for (const key of sessions.keys()) {
+    if (JSON.parse(key)[0] === id) sessions.delete(key);
+  }
+});
 
 export function siviCreationSession(owner: SIVISpeciesOwner): SIVICreationSession {
   const key = JSON.stringify([owner.contextId, owner.project, owner.plot]);

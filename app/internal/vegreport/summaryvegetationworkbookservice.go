@@ -1,10 +1,6 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -17,6 +13,8 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const summaryVegetationWorkbookDraftScope = "Explicit read-only normal-SU layer inspection; literal XLSX, not original NewShortVeg orchestration, saved callbacks, ancillary sheets or formatting/printing parity"
@@ -99,11 +97,6 @@ func (s *SummaryVegetationWorkbookService) authorize(ctx context.Context) error 
 
 func readSummaryWorkbookQualityPolicy(ctx context.Context, config *vprocore.DesktopConfig) (summaryVegetationQualityPreferenceValues, error) {
 	return ReadSummaryVegetationQualityPreferences(config, ctx)
-}
-
-func (s *SummaryVegetationWorkbookService) readSource(ctx context.Context, plots *vprocore.PlotService, owner *vprocore.SqliteContext,
-	tx *sql.Tx, contextID string, options SummaryVegetationWorkbookOptions) (summaryVegetationWorkbookSource, error) {
-	return s.readSourceAt(ctx, plots, owner, tx, contextID, options, "")
 }
 
 func (s *SummaryVegetationWorkbookService) readSourceAt(ctx context.Context, plots *vprocore.PlotService, owner *vprocore.SqliteContext,

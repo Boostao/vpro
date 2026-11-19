@@ -1,14 +1,12 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"database/sql"
 	"errors"
 	"fmt"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 func validateCodeHeaderValues(h FS882Header, old *FS882Header, fields func(FS882Header) []BecHeaderField, rejectUnchangedMalformedText bool) error {

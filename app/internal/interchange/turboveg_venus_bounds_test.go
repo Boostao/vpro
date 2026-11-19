@@ -8,17 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/boostao/vpro/app/internal/interchange"
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
-
-func utf16LenTest(s string) int {
-	return len(utf16.Encode([]rune(s)))
-}
 
 func TestTurboVegAndVenusAuditBooleansFloat32CoverUTF16AndSoilDepthSigns(t *testing.T) {
 	ctx := context.Background()
@@ -96,9 +91,9 @@ func TestTurboVegAndVenusAuditBooleansFloat32CoverUTF16AndSoilDepthSigns(t *test
 		tvDB.Close()
 		t.Fatal(err)
 	}
-	if !utf8.ValidString(tvPlotNum) || utf16LenTest(tvPlotNum) > 7 {
+	if !utf8.ValidString(tvPlotNum) || sqlutil.UTF16Len(tvPlotNum) > 7 {
 		tvDB.Close()
-		t.Fatalf("TurboVeg PlotNumber %q exceeded 7 UTF-16 units (%d) or invalid UTF-8", tvPlotNum, utf16LenTest(tvPlotNum))
+		t.Fatalf("TurboVeg PlotNumber %q exceeded 7 UTF-16 units (%d) or invalid UTF-8", tvPlotNum, sqlutil.UTF16Len(tvPlotNum))
 	}
 
 	// Bug A: ListAuditEntries & ListAuditReadEntries must NOT crash with NULL Restore/Flag!
@@ -146,15 +141,15 @@ func TestTurboVegAndVenusAuditBooleansFloat32CoverUTF16AndSoilDepthSigns(t *test
 			tvDB.Close()
 			t.Fatal(err)
 		}
-		if !utf8.ValidString(spp) || utf16LenTest(spp) > 8 {
+		if !utf8.ValidString(spp) || sqlutil.UTF16Len(spp) > 8 {
 			vRows.Close()
 			tvDB.Close()
-			t.Fatalf("TurboVeg Species %q exceeded 8 UTF-16 units (%d)", spp, utf16LenTest(spp))
+			t.Fatalf("TurboVeg Species %q exceeded 8 UTF-16 units (%d)", spp, sqlutil.UTF16Len(spp))
 		}
-		if !utf8.ValidString(coll) || utf16LenTest(coll) > 1 {
+		if !utf8.ValidString(coll) || sqlutil.UTF16Len(coll) > 1 {
 			vRows.Close()
 			tvDB.Close()
-			t.Fatalf("TurboVeg Collected %q invalid UTF-8 or exceeded 1 UTF-16 unit (%d)", coll, utf16LenTest(coll))
+			t.Fatalf("TurboVeg Collected %q invalid UTF-8 or exceeded 1 UTF-16 unit (%d)", coll, sqlutil.UTF16Len(coll))
 		}
 	}
 	vRows.Close()
@@ -233,8 +228,8 @@ func TestTurboVegAndVenusAuditBooleansFloat32CoverUTF16AndSoilDepthSigns(t *test
 	if err := vDB.QueryRow(`SELECT "PlotNumber" FROM VenusBoundsImp_Env LIMIT 1`).Scan(&vPlot); err != nil {
 		t.Fatal(err)
 	}
-	if !utf8.ValidString(vPlot) || utf16LenTest(vPlot) > 7 {
-		t.Fatalf("VENUS PlotNumber %q exceeded 7 UTF-16 units (%d)", vPlot, utf16LenTest(vPlot))
+	if !utf8.ValidString(vPlot) || sqlutil.UTF16Len(vPlot) > 7 {
+		t.Fatalf("VENUS PlotNumber %q exceeded 7 UTF-16 units (%d)", vPlot, sqlutil.UTF16Len(vPlot))
 	}
 
 	// Bug A on VENUS: ListAuditEntries & ListAuditReadEntries must succeed!
@@ -268,7 +263,7 @@ func TestTurboVegAndVenusAuditBooleansFloat32CoverUTF16AndSoilDepthSigns(t *test
 			t.Fatal(err)
 		}
 		humusCount++
-		if utf16LenTest(hz) > 8 {
+		if sqlutil.UTF16Len(hz) > 8 {
 			hRows.Close()
 			t.Fatalf("VENUS Humus Horizon %q exceeded 8 UTF-16 units", hz)
 		}
@@ -295,9 +290,9 @@ func TestTurboVegAndVenusAuditBooleansFloat32CoverUTF16AndSoilDepthSigns(t *test
 		Scan(&mHz, &mU, &mL, &mTex, &mCol); err != nil {
 		t.Fatal(err)
 	}
-	if utf16LenTest(mHz) > 8 || utf16LenTest(mTex) > 4 || utf16LenTest(mCol) > 14 {
+	if sqlutil.UTF16Len(mHz) > 8 || sqlutil.UTF16Len(mTex) > 4 || sqlutil.UTF16Len(mCol) > 14 {
 		t.Fatalf("VENUS Mineral UTF-16 overflow: hz=%q(%d) tex=%q(%d) col=%q(%d)",
-			mHz, utf16LenTest(mHz), mTex, utf16LenTest(mTex), mCol, utf16LenTest(mCol))
+			mHz, sqlutil.UTF16Len(mHz), mTex, sqlutil.UTF16Len(mTex), mCol, sqlutil.UTF16Len(mCol))
 	}
 	if !(mU < mL) {
 		t.Fatalf("VENUS Mineral horizon depth sign not normalized: upper=%v lower=%v (want upper < lower)", mU, mL)
@@ -475,9 +470,9 @@ func TestTurboVegLongPlotIDCollisionDisambiguationAndExactDuplicateError(t *test
 			rows.Close()
 			t.Fatal(err)
 		}
-		if !utf8.ValidString(p) || utf16LenTest(p) > 7 {
+		if !utf8.ValidString(p) || sqlutil.UTF16Len(p) > 7 {
 			rows.Close()
-			t.Fatalf("disambiguated PlotNumber %q exceeded 7 UTF-16 units (%d)", p, utf16LenTest(p))
+			t.Fatalf("disambiguated PlotNumber %q exceeded 7 UTF-16 units (%d)", p, sqlutil.UTF16Len(p))
 		}
 		seenImported[p] = true
 	}

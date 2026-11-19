@@ -1,10 +1,6 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -14,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func RestoreSIVIHeights(s *vprocore.ContextService, ctx context.Context, contextID, plot, historyID string, action vprocore.AuditRestoreAction) (*vprocore.AuditRestoreResult, error) {
@@ -269,7 +267,7 @@ func VerifySIVIPhysicalAudit(table vprocore.ProjectMetadataTable, record vprocor
 }
 
 func verifySIVIPhysicalTableAudit(table vprocore.ProjectMetadataTable, record vprocore.AuditEntry, project, suffix string) error {
-	expected, err := AppendSIVIPlannedAudits(vprocore.ProjectMetadataTable{Columns: table.Columns}, []vprocore.AuditEntry{record})
+	expected, err := AppendSourcePlannedAudits(vprocore.ProjectMetadataTable{Columns: table.Columns}, []vprocore.AuditEntry{record})
 	if err != nil {
 		return err
 	}

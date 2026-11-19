@@ -273,7 +273,7 @@ func readSummaryEnvironmentalIntegerAggregate(ctx context.Context, field string,
 		}
 		number, integer := value.(int64)
 		if cell.Storage != "null" && (!integer || number < -32768 || number > 32767) {
-			return fail(fmt.Errorf("Env row %s %s requires original signed16 INTEGER storage", row.RowID, field))
+			return fail(fmt.Errorf("Env row %s %s requires whole-number storage", row.RowID, field))
 		}
 		if plot == nil || memberships[*plot] == 0 {
 			continue

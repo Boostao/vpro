@@ -1,14 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -19,11 +11,17 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-func sharedTextEdits(t *testing.T, original *sourceform.SIVIParentProjection) []sourceform.SIVIParentCellEdit {
+func sharedTextEdits(t *testing.T, original *sourceform.SourceParentProjection) []sourceform.SourceParentCellEdit {
 	t.Helper()
-	edits := []sourceform.SIVIParentCellEdit{}
+	edits := []sourceform.SourceParentCellEdit{}
 	for _, column := range []string{"SiteSurveyor", "FieldNumber", "Location", "NtsMapSheet", "UTMZone", "PlotRepresenting", "SiteSeries", "MapUnit", "SiteNotes"} {
 		text := "  X  "
 		if column == "UTMZone" {
@@ -39,9 +37,9 @@ func sharedTextEdits(t *testing.T, original *sourceform.SIVIParentProjection) []
 	return edits
 }
 
-func sharedNumericEdits(t *testing.T, original *sourceform.SIVIParentProjection) []sourceform.SIVIParentCellEdit {
+func sharedNumericEdits(t *testing.T, original *sourceform.SourceParentProjection) []sourceform.SourceParentCellEdit {
 	t.Helper()
-	edits := []sourceform.SIVIParentCellEdit{}
+	edits := []sourceform.SourceParentCellEdit{}
 	for _, field := range []struct {
 		column string
 		value  vprocore.ProjectMetadataCell
@@ -111,7 +109,7 @@ func TestSIVIParentSharedTextPhysicalBoundsAndLiteralBinding(t *testing.T) {
 	ctx := context.Background()
 	expectedBounds := map[string]int{"SiteSurveyor": 30, "FieldNumber": 50, "Location": 255,
 		"NtsMapSheet": 8, "UTMZone": 2, "PlotRepresenting": 255, "SiteSeries": 5, "MapUnit": 15, "SiteNotes": 0}
-	if !reflect.DeepEqual(sourceform.SiviParentSharedTextBounds, expectedBounds) {
+	if !reflect.DeepEqual(sourceform.SourceParentSharedTextBounds, expectedBounds) {
 		t.Fatal("source physical bounds changed")
 	}
 	for _, edit := range sharedTextEdits(t, original) {
@@ -125,7 +123,7 @@ func TestSIVIParentSharedTextPhysicalBoundsAndLiteralBinding(t *testing.T) {
 			{Storage: "text", Text: vprotest.SiviSharedTestPointer("01")},
 		} {
 			edit.Value = value
-			assignments, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SIVIParentCellEdit{edit})
+			assignments, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SourceParentCellEdit{edit})
 			if err != nil {
 				t.Fatal("valid text/null rejected", edit.Column, err)
 			}
@@ -144,7 +142,7 @@ func TestSIVIParentSharedTextPhysicalBoundsAndLiteralBinding(t *testing.T) {
 		}
 		for _, value := range bad {
 			edit.Value = value
-			if _, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SIVIParentCellEdit{edit}); err == nil {
+			if _, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SourceParentCellEdit{edit}); err == nil {
 				t.Fatal("text validator fallthrough accepted changed invalid storage", edit.Column, value)
 			}
 		}
@@ -152,12 +150,12 @@ func TestSIVIParentSharedTextPhysicalBoundsAndLiteralBinding(t *testing.T) {
 	notes := sharedTextEdits(t, original)[8]
 	for _, column := range []string{"siteNotes", "SITENOTES", "sitesurveyor"} {
 		notes.Column = column
-		if _, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SIVIParentCellEdit{notes}); err == nil {
+		if _, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SourceParentCellEdit{notes}); err == nil {
 			t.Fatal("blanket recasing/source alias accepted as public column", column)
 		}
 	}
 	notes = sharedTextEdits(t, original)[8]
-	if _, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SIVIParentCellEdit{notes, notes}); err == nil {
+	if _, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SourceParentCellEdit{notes, notes}); err == nil {
 		t.Fatal("repeated canonical Notes target accepted")
 	}
 	for _, binding := range original.Bindings {
@@ -165,7 +163,7 @@ func TestSIVIParentSharedTextPhysicalBoundsAndLiteralBinding(t *testing.T) {
 			original.EnvColumns[binding.Column].Name = "siteNotes"
 		}
 	}
-	if _, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SIVIParentCellEdit{notes}); err == nil {
+	if _, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SourceParentCellEdit{notes}); err == nil {
 		t.Fatal("guessed physical Notes casing accepted")
 	}
 }
@@ -245,7 +243,7 @@ func TestSIVIParentSharedTextHistoricalOmissionsRollbackAndRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	edits := []sourceform.SIVIParentCellEdit{
+	edits := []sourceform.SourceParentCellEdit{
 		sftest.SiviParentEdit(t, original, "HumusThickness", vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(2.5)}),
 		sftest.SiviParentEdit(t, original, "UTMZone", vprocore.ProjectMetadataCell{Storage: "text", Text: vprotest.SiviSharedTestPointer("01")}),
 	}
@@ -269,7 +267,7 @@ func TestSIVIParentSharedTextHistoricalOmissionsRollbackAndRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	wrong := request
-	wrong.Edits = append([]sourceform.SIVIParentCellEdit(nil), edits...)
+	wrong.Edits = append([]sourceform.SourceParentCellEdit(nil), edits...)
 	wrong.Edits[2].RowID = original.Rows[0].Admin.RowID
 	if _, err := service.Save(ctx, state.ContextID, "108050", wrong); err == nil {
 		t.Fatal("Notes accepted Admin physical row")
@@ -288,7 +286,7 @@ func TestSIVIParentSharedTextHistoricalOmissionsRollbackAndRetry(t *testing.T) {
 }
 func TestSIVIParentSharedStrictTransport(t *testing.T) {
 	_, _, _, request := sftest.SharedServiceFixture(t)
-	if _, err := sourceform.NewSIVIParentSharedService(nil); err == nil {
+	if _, err := sourceform.NewSourceParentSharedService(nil); err == nil {
 		t.Fatal("nil context accepted")
 	}
 	wire, err := json.Marshal(request)
@@ -375,7 +373,7 @@ func TestSIVIParentSharedRejectsUnsafeTargetsAndPreservesHistoricalNoops(t *test
 		},
 	} {
 		copy := request
-		copy.Edits = append([]sourceform.SIVIParentCellEdit{}, request.Edits...)
+		copy.Edits = append([]sourceform.SourceParentCellEdit{}, request.Edits...)
 		mutate(&copy)
 		if _, err := service.Save(ctx, state.ContextID, "108050", copy); err == nil {
 			t.Fatal("unsafe assignment accepted")
@@ -394,7 +392,7 @@ func TestSIVIParentSharedRejectsUnsafeTargetsAndPreservesHistoricalNoops(t *test
 		}
 	}
 	noop := sftest.SiviParentEdit(t, original, "AirPhotoNum", sftest.SiviParentCell(t, original, "AirPhotoNum"))
-	assignments, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SIVIParentCellEdit{noop})
+	assignments, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SourceParentCellEdit{noop})
 	if err != nil || len(assignments) != 0 {
 		t.Fatal("historical invalid noop was validated/assigned", assignments, err)
 	}
@@ -442,9 +440,9 @@ func TestSIVIParentSharedAuditFailureRollsBackAndRetryRechecksOwnership(t *testi
 	vprotest.AssertProfileSUFiles(t, service.Contexts, before)
 }
 
-func sharedSoilEdits(t *testing.T, original *sourceform.SIVIParentProjection) []sourceform.SIVIParentCellEdit {
+func sharedSoilEdits(t *testing.T, original *sourceform.SourceParentProjection) []sourceform.SourceParentCellEdit {
 	t.Helper()
-	edits := []sourceform.SIVIParentCellEdit{sftest.SiviParentEdit(t, original, "HumusThickness",
+	edits := []sourceform.SourceParentCellEdit{sftest.SiviParentEdit(t, original, "HumusThickness",
 		vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(2.5)})}
 	for i, column := range []string{"SeepageDepth", "RootingDepth", "RootRestrictingDepth"} {
 		value := []string{"999", "32767", "0"}[i]
@@ -526,7 +524,7 @@ func TestSIVIParentSharedSoilCanonicalDomainsAndCrossTableCollisions(t *testing.
 		{Storage: "text", Text: vprotest.SiviSharedTestPointer("3")},
 	} {
 		if _, err := sourceform.PlanSIVIParentShared(ctx, original,
-			[]sourceform.SIVIParentCellEdit{sftest.SiviParentEdit(t, original, "HumusThickness", value)}); err == nil {
+			[]sourceform.SourceParentCellEdit{sftest.SiviParentEdit(t, original, "HumusThickness", value)}); err == nil {
 			t.Fatal("invalid Admin Single accepted", value)
 		}
 	}
@@ -537,7 +535,7 @@ func TestSIVIParentSharedSoilCanonicalDomainsAndCrossTableCollisions(t *testing.
 			{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("32767")},
 			{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("0")},
 		} {
-			if _, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SIVIParentCellEdit{sftest.SiviParentEdit(t, original, column, value)}); err != nil {
+			if _, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SourceParentCellEdit{sftest.SiviParentEdit(t, original, column, value)}); err != nil {
 				t.Fatal("valid integer domain rejected", column, value, err)
 			}
 		}
@@ -551,7 +549,7 @@ func TestSIVIParentSharedSoilCanonicalDomainsAndCrossTableCollisions(t *testing.
 			{Storage: "real", Real: vprotest.SiviSharedTestPointer(3.0)},
 			{Storage: "text", Text: vprotest.SiviSharedTestPointer("3")},
 		} {
-			if _, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SIVIParentCellEdit{sftest.SiviParentEdit(t, original, column, value)}); err == nil {
+			if _, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SourceParentCellEdit{sftest.SiviParentEdit(t, original, column, value)}); err == nil {
 				t.Fatal("noncanonical/out-of-range integer accepted", column, value)
 			}
 		}
@@ -594,7 +592,7 @@ func TestSIVIParentSharedDateTransportAndCalendar(t *testing.T) {
 	}
 	for _, value := range valid {
 		edit := sftest.SiviParentEdit(t, original, "Date", vprocore.ProjectMetadataCell{Storage: "text", Text: vprotest.SiviSharedTestPointer(value)})
-		request := sourceform.SIVIParentSharedWrite{Original: original, Edits: []sourceform.SIVIParentCellEdit{edit}}
+		request := sourceform.SIVIParentSharedWrite{Original: original, Edits: []sourceform.SourceParentCellEdit{edit}}
 		wire, err := json.Marshal(request)
 		if err != nil {
 			t.Fatal(err)
@@ -629,12 +627,12 @@ func TestSIVIParentSharedDateTransportAndCalendar(t *testing.T) {
 		{Storage: "text", Text: vprotest.SiviSharedTestPointer("2026-01-01 00:00:00\xed\xa0\x80")},
 	} {
 		if _, err := sourceform.PlanSIVIParentShared(ctx, original,
-			[]sourceform.SIVIParentCellEdit{sftest.SiviParentEdit(t, original, "Date", value)}); err == nil {
+			[]sourceform.SourceParentCellEdit{sftest.SiviParentEdit(t, original, "Date", value)}); err == nil {
 			t.Fatal("malformed/new nontext Date accepted", value)
 		}
 	}
 	if _, err := sourceform.PlanSIVIParentShared(ctx, original,
-		[]sourceform.SIVIParentCellEdit{sftest.SiviParentEdit(t, original, "Date", vprocore.ProjectMetadataCell{Storage: "null"})}); err != nil {
+		[]sourceform.SourceParentCellEdit{sftest.SiviParentEdit(t, original, "Date", vprocore.ProjectMetadataCell{Storage: "null"})}); err != nil {
 		t.Fatal("explicit Date NULL rejected", err)
 	}
 }
@@ -658,7 +656,7 @@ func TestSIVIParentSharedDateLegacyCorrectionNullAndAuthoritativeRestore(t *test
 					t.Fatal(err)
 				}
 				noop := sftest.SiviParentEdit(t, original, "Date", sftest.SiviParentCell(t, original, "Date"))
-				result, err := service.Save(ctx, state.ContextID, "108050", sourceform.SIVIParentSharedWrite{Original: original, Edits: []sourceform.SIVIParentCellEdit{noop}})
+				result, err := service.Save(ctx, state.ContextID, "108050", sourceform.SIVIParentSharedWrite{Original: original, Edits: []sourceform.SourceParentCellEdit{noop}})
 				if err != nil || result.ChangedCells != 0 || result.HistoryID != "" {
 					t.Fatal("historical Date noop parsed/assigned", result, err)
 				}
@@ -666,7 +664,7 @@ func TestSIVIParentSharedDateLegacyCorrectionNullAndAuthoritativeRestore(t *test
 					vprocore.ProjectMetadataCell{Storage: "text", Text: vprotest.SiviSharedTestPointer("2026-03-08 02:30:00.100000000")})
 				year := sftest.SiviParentEdit(t, original, "StartDate",
 					vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("1900")})
-				result, err = service.Save(ctx, state.ContextID, "108050", sourceform.SIVIParentSharedWrite{Original: original, Edits: []sourceform.SIVIParentCellEdit{date, year}})
+				result, err = service.Save(ctx, state.ContextID, "108050", sourceform.SIVIParentSharedWrite{Original: original, Edits: []sourceform.SourceParentCellEdit{date, year}})
 				if err != nil || result.ChangedCells != 2 {
 					t.Fatal("mixed Date/year correction failed", result, err)
 				}
@@ -683,7 +681,7 @@ func TestSIVIParentSharedDateLegacyCorrectionNullAndAuthoritativeRestore(t *test
 				}
 				if historical != nil {
 					result, err = service.Save(ctx, state.ContextID, "108050", sourceform.SIVIParentSharedWrite{Original: fresh,
-						Edits: []sourceform.SIVIParentCellEdit{sftest.SiviParentEdit(t, fresh, "Date", vprocore.ProjectMetadataCell{Storage: "null"})}})
+						Edits: []sourceform.SourceParentCellEdit{sftest.SiviParentEdit(t, fresh, "Date", vprocore.ProjectMetadataCell{Storage: "null"})}})
 					if err != nil || result.ChangedCells != 1 {
 						t.Fatal("nullable Date Save failed", result, err)
 					}
@@ -716,15 +714,15 @@ func TestSIVIParentSharedDateOwnershipCollisionAtomicRollbackAndRetry(t *testing
 		vprocore.ProjectMetadataCell{Storage: "text", Text: vprotest.SiviSharedTestPointer("0100-01-01 00:00:00.000000000")})
 	year := sftest.SiviParentEdit(t, original, "StartDate",
 		vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("1900")})
-	request := sourceform.SIVIParentSharedWrite{Original: original, Edits: []sourceform.SIVIParentCellEdit{year, date}}
+	request := sourceform.SIVIParentSharedWrite{Original: original, Edits: []sourceform.SourceParentCellEdit{year, date}}
 	before := vprotest.DatabaseBytes(t, service.Contexts.Projects.Sqlite.Attachments)
-	for _, bad := range []sourceform.SIVIParentCellEdit{
+	for _, bad := range []sourceform.SourceParentCellEdit{
 		sftest.SiviParentEdit(t, original, "Date", vprocore.ProjectMetadataCell{Storage: "text", Text: vprotest.SiviSharedTestPointer("invalid")}),
 		{ContextID: date.ContextID, Table: original.AdminTable, RowID: date.RowID, Column: "Date", Expected: date.Expected, Value: date.Value},
 		{ContextID: date.ContextID, Table: date.Table, RowID: original.Rows[0].Admin.RowID, Column: "Date", Expected: date.Expected, Value: date.Value},
 	} {
 		if _, err := service.Save(ctx, state.ContextID, "108050",
-			sourceform.SIVIParentSharedWrite{Original: original, Edits: []sourceform.SIVIParentCellEdit{year, bad}}); err == nil {
+			sourceform.SIVIParentSharedWrite{Original: original, Edits: []sourceform.SourceParentCellEdit{year, bad}}); err == nil {
 			t.Fatal("mixed Date/year malformed or foreign target accepted")
 		}
 		vprotest.AssertProfileSUFiles(t, service.Contexts, before)
@@ -757,7 +755,7 @@ func TestSIVIParentSharedDateOwnershipCollisionAtomicRollbackAndRetry(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	request = sourceform.SIVIParentSharedWrite{Original: fresh, Edits: []sourceform.SIVIParentCellEdit{
+	request = sourceform.SIVIParentSharedWrite{Original: fresh, Edits: []sourceform.SourceParentCellEdit{
 		sftest.SiviParentEdit(t, fresh, "StartDate", year.Value), sftest.SiviParentEdit(t, fresh, "Date", date.Value),
 	}}
 	result, err := service.Save(ctx, state.ContextID, "108050", request)
@@ -829,7 +827,7 @@ func TestSIVIParentSharedNumericDomainsAndOwnership(t *testing.T) {
 		}
 		for _, value := range valid {
 			edit.Value = value
-			assignments, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SIVIParentCellEdit{edit})
+			assignments, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SourceParentCellEdit{edit})
 			if err != nil {
 				t.Fatal("valid physical/safety numeric domain rejected", edit.Column, value, err)
 			}
@@ -839,7 +837,7 @@ func TestSIVIParentSharedNumericDomainsAndOwnership(t *testing.T) {
 		}
 		for _, value := range bad {
 			edit.Value = value
-			if _, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SIVIParentCellEdit{edit}); err == nil {
+			if _, err := sourceform.PlanSIVIParentShared(ctx, original, []sourceform.SourceParentCellEdit{edit}); err == nil {
 				t.Fatal("invalid numeric domain accepted", edit.Column, value)
 			}
 		}
@@ -848,7 +846,7 @@ func TestSIVIParentSharedNumericDomainsAndOwnership(t *testing.T) {
 	edits := sharedNumericEdits(t, original)
 	for _, column := range []string{"StartDate", "Latitude"} {
 		for _, change := range []string{"row", "table", "context", "duplicate"} {
-			bad := append([]sourceform.SIVIParentCellEdit(nil), edits...)
+			bad := append([]sourceform.SourceParentCellEdit(nil), edits...)
 			for i := range bad {
 				if bad[i].Column != column {
 					continue
@@ -900,7 +898,7 @@ func TestSIVIParentSharedNumericHistoricalRollbackRetryAndCancellation(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	noops := []sourceform.SIVIParentCellEdit{}
+	noops := []sourceform.SourceParentCellEdit{}
 	for _, edit := range sharedNumericEdits(t, original) {
 		edit.Value = vprocore.CloneSiteUnitCell(edit.Expected)
 		noops = append(noops, edit)
@@ -909,7 +907,7 @@ func TestSIVIParentSharedNumericHistoricalRollbackRetryAndCancellation(t *testin
 	if err != nil || result.ChangedCells != 0 || result.HistoryID != "" {
 		t.Fatal("historical numeric noops assigned/audited", result, err)
 	}
-	edits := []sourceform.SIVIParentCellEdit{
+	edits := []sourceform.SourceParentCellEdit{
 		sftest.SiviParentEdit(t, original, "StartDate", vprocore.ProjectMetadataCell{Storage: "null"}),
 		sftest.SiviParentEdit(t, original, "Latitude", vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(-90.0)}),
 	}
@@ -980,7 +978,7 @@ func TestSIVIParentSharedSoilHistoricalOmissionsRollbackRetryAndDrift(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	noops := []sourceform.SIVIParentCellEdit{}
+	noops := []sourceform.SourceParentCellEdit{}
 	for _, column := range []string{"HumusThickness", "SeepageDepth", "RootingDepth", "RootRestrictingDepth"} {
 		noops = append(noops, sftest.SiviParentEdit(t, original, column, sftest.SiviParentCell(t, original, column)))
 	}
@@ -988,7 +986,7 @@ func TestSIVIParentSharedSoilHistoricalOmissionsRollbackRetryAndDrift(t *testing
 	if err != nil || result.ChangedCells != 0 || result.HistoryID != "" {
 		t.Fatal("historical noops assigned/audited", result, err)
 	}
-	mixed := []sourceform.SIVIParentCellEdit{
+	mixed := []sourceform.SourceParentCellEdit{
 		sftest.SiviParentEdit(t, original, "HumusThickness", vprocore.ProjectMetadataCell{Storage: "null"}),
 		sftest.SiviParentEdit(t, original, "RootingDepth", vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("5")}),
 		noops[1], noops[3],

@@ -249,7 +249,7 @@ test('owner cache uses actual four generated SDK methods, survives remount and i
     GetSIVICreationUndoHistory(...args) { calls.push(['GetHistory', ...args]); return read(history()); },
     ReviewSIVICreationUndo(...args) { calls.push(['Review', ...args]); return read(review()); },
     UndoSIVICreation(...args) { calls.push(['Undo', ...args]); return delivery.promise; },
-    LookupSIVICreationUndoReceipt(...args) { calls.push(['LookupReceipt', ...args]); return read(result(review(), JSON.parse(args[1]), true)); },
+    LookupSIVICreationUndoReceipt(...args) { calls.push(['LookupReceipt', ...args]); return read(result(review(), args[1], true)); },
   };
   const cache = loadTypeScript('siviCreationUndoSessions.ts', {
     '../bindings/github.com/boostao/vpro/app': { PlotEntryService: sdk },
@@ -269,6 +269,6 @@ test('owner cache uses actual four generated SDK methods, survives remount and i
   assert.deepEqual(calls[0], ['GetHistory', 'C', 'P']);
   assert.deepEqual(calls[1], ['Review', 'C', 'P', historyId]);
   assert.equal(calls[2][0], 'Undo'); assert.equal(calls[3][0], 'LookupReceipt');
-  assert.equal(calls[2][1], 'C'); assert.equal(calls[3][2], calls[2][2]);
-  assert.equal(JSON.parse(calls[2][2]).plot, 'P'); assert.equal(session.view().revision, 1);
+  assert.equal(calls[2][1], 'C'); assert.deepEqual(calls[3][2], calls[2][2]);
+  assert.equal(calls[2][2].plot, 'P'); assert.equal(session.view().revision, 1);
 });

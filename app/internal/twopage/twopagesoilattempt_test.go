@@ -1,11 +1,6 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +8,9 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func soilAttemptJSON(t *testing.T, request twoPageSoilRequest) string {
@@ -226,6 +224,7 @@ func TestTwoPageSoilAttemptRecoveryStrictTransportAndLeaseCancellation(t *testin
 	contexts, state, _, request := soilWriteFixture(t, false, "SoilHumusXL", 3)
 	raw := soilAttemptJSON(t, request)
 	service := soilFacade(t, contexts)
+	//lint:ignore SA1012 intentional nil-context guard test
 	if outcome, err := service.RecoverOutcome(nil, state.ContextID, raw); err == nil || outcome != nil {
 		t.Fatal("nil recovery context accepted", outcome, err)
 	}

@@ -1,13 +1,6 @@
 package twopage
 
 import (
-	referencespkg "github.com/boostao/vpro/app/internal/references"
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -15,10 +8,14 @@ import (
 	"strings"
 
 	"github.com/boostao/vpro/app/internal/listcatalog"
+	referencespkg "github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type TwoPageEntryReferenceReaders struct {
-	Shared     sourceform.SiviParentSharedReferenceReaders `json:"-" yaml:"-"`
+	Shared     sourceform.SourceParentSharedReferenceReaders `json:"-" yaml:"-"`
 	Ecosection interface {
 		ListEcosectionChoices(context.Context) ([]referencespkg.RegionCodeChoice, error)
 	} `json:"-" yaml:"-"`
@@ -68,11 +65,11 @@ func twoPageEntryBECFilter(column string, cell vprocore.ProjectMetadataCell, max
 }
 
 func (s *TwoPageEntryReferenceProvider) Read(ctx context.Context, tx *sql.Tx, alias string, field TwoPageEntryReferenceField,
-	zone, subZone vprocore.ProjectMetadataCell) (sourceform.SIVIParentSharedReference, error) {
-	result := sourceform.SIVIParentSharedReference{Column: field.Column, ListName: field.List, Required: field.Required,
+	zone, subZone vprocore.ProjectMetadataCell) (sourceform.SourceParentSharedReference, error) {
+	result := sourceform.SourceParentSharedReference{Column: field.Column, ListName: field.List, Required: field.Required,
 		Source:      "frozen-DAO-catalogue; source-ordinal identities",
 		Definitions: vprocore.ProjectMetadataTable{Columns: []vprocore.ProjectMetadataColumn{}, Rows: []vprocore.ProjectMetadataRow{}},
-		Choices:     []sourceform.SIVIParentSharedReferenceChoice{}}
+		Choices:     []sourceform.SourceParentSharedReferenceChoice{}}
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
@@ -102,9 +99,9 @@ func (s *TwoPageEntryReferenceProvider) Read(ctx context.Context, tx *sql.Tx, al
 		}
 		for _, row := range values {
 			result.Definitions.Rows = append(result.Definitions.Rows, vprocore.ProjectMetadataRow{RowID: row.RowID,
-				Cells: []vprocore.ProjectMetadataCell{sourceform.SiviReferenceText(row.Zone), sourceform.SiviReferenceText(row.SubZone),
-					sourceform.SiviReferenceText(row.ZoneDescription), sourceform.SiviReferenceText(row.Description)}})
-			choice := sourceform.SIVIParentSharedReferenceChoice{RowID: row.RowID, Code: row.SubZone, Description: row.Description}
+				Cells: []vprocore.ProjectMetadataCell{sourceform.SourceReferenceText(row.Zone), sourceform.SourceReferenceText(row.SubZone),
+					sourceform.SourceReferenceText(row.ZoneDescription), sourceform.SourceReferenceText(row.Description)}})
+			choice := sourceform.SourceParentSharedReferenceChoice{RowID: row.RowID, Code: row.SubZone, Description: row.Description}
 			if row.SubZone == nil {
 				choice.Diagnostic = "Item is NULL"
 			} else if err := sqlutil.ValidateSiteCodeText(field.Column, row.SubZone, field.Maximum); err != nil {
@@ -133,7 +130,7 @@ func (s *TwoPageEntryReferenceProvider) Read(ctx context.Context, tx *sql.Tx, al
 		result.Source = "verified BEC catalogue; current Zone/SubZone pair; source-ordinal identities; no stale RowSource reuse"
 		result.Definitions = twoPageEntrySeriesDefinitions(values)
 		for _, row := range values {
-			choice := sourceform.SIVIParentSharedReferenceChoice{RowID: row.RowID, Code: row.SiteSeries, Description: row.Description}
+			choice := sourceform.SourceParentSharedReferenceChoice{RowID: row.RowID, Code: row.SiteSeries, Description: row.Description}
 			if !row.Selectable {
 				choice.Diagnostic = row.Diagnostic
 				if choice.Diagnostic == "" {
@@ -194,8 +191,8 @@ func (s *TwoPageEntryReferenceProvider) Read(ctx context.Context, tx *sql.Tx, al
 			if field.Reader == "family" && (tx == nil || alias == "") {
 				return result, errors.New("complete-entry family references require an owned transaction and attachment alias")
 			}
-			shared := &sourceform.SIVIParentSharedService{References: s.Readers.Shared}
-			policy := field.SiviParentSharedReferencePolicy
+			shared := &sourceform.SourceParentSharedService{References: s.Readers.Shared}
+			policy := field.SourceParentSharedReferencePolicy
 			if field.Column == "LocationAccuracy" {
 				policy.List = "Accuracy"
 			}
@@ -207,11 +204,11 @@ func (s *TwoPageEntryReferenceProvider) Read(ctx context.Context, tx *sql.Tx, al
 			result.ListName = field.List
 		}
 		if field.Reader == "ecosection" || field.Reader == "quality" || field.Reader == "soil" {
-			policy := field.SiviParentSharedReferencePolicy
+			policy := field.SourceParentSharedReferencePolicy
 			if field.Reader == "ecosection" {
 				policy.List = "Ecosection"
 			}
-			if err := sourceform.ProjectSIVIReferenceCatalogue(&result, policy, rows); err != nil {
+			if err := sourceform.ProjectSourceReferenceCatalogue(&result, policy, rows); err != nil {
 				return result, err
 			}
 		}
@@ -260,7 +257,7 @@ func twoPageEntrySeriesDefinitions(rows []referencespkg.BECSiteSeries) vprocore.
 		for _, value := range []*string{row.SourceID, row.SSCode, row.Name, row.Region, row.Zone, row.SubZone,
 			row.BaseSubZone, row.Variant, row.Phase, row.SiteSeries, row.SiteSeriesPhase, row.Variation, row.Seral,
 			row.Description, row.PlantAssociation, row.Comments} {
-			cells = append(cells, sourceform.SiviReferenceText(value))
+			cells = append(cells, sourceform.SourceReferenceText(value))
 		}
 		reference := vprocore.ProjectMetadataCell{Storage: "null"}
 		if row.ReferenceID != nil {
@@ -270,9 +267,9 @@ func twoPageEntrySeriesDefinitions(rows []referencespkg.BECSiteSeries) vprocore.
 		cells = append(cells, reference)
 		for _, value := range []*string{row.AddedDate, row.ExpiredDate, row.OriginalSourceID, row.MergedBGC,
 			row.Suballiance, row.Alliance, row.MissingNpeNa, row.TransferID} {
-			cells = append(cells, sourceform.SiviReferenceText(value))
+			cells = append(cells, sourceform.SourceReferenceText(value))
 		}
-		cells = append(cells, sourceform.SiviReferenceBool(row.Flag))
+		cells = append(cells, sourceform.SourceReferenceBool(row.Flag))
 		result.Rows = append(result.Rows, vprocore.ProjectMetadataRow{RowID: row.RowID, Cells: cells})
 	}
 	return result

@@ -1,15 +1,10 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-
 	"os"
 	"path/filepath"
 	"slices"
@@ -17,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/mattn/go-sqlite3"
 )
 
@@ -57,7 +53,7 @@ func BeginConnReadSnapshot(ctx context.Context, conn *sql.Conn) (*sql.Tx, error)
 	return tx, nil
 }
 
-// database/sql discards a pinned SQLite connection when a transaction's context
+// BeginReadSnapshot — database/sql discards a pinned SQLite connection when a transaction's context
 // is cancelled. Keep cleanup caller-owned; every query still uses the request
 // context, and callers must check it before committing the read snapshot.
 func (c *SqliteContext) BeginReadSnapshot(ctx context.Context) (*sql.Tx, error) {
@@ -410,7 +406,7 @@ func (c *SqliteContext) validateProject(ctx context.Context) error {
 	return nil
 }
 
-func (c *SqliteContext) createView(ctx context.Context, name, query string) error {
+func (c *SqliteContext) createView(ctx context.Context, name, query string) (resultErr error) {
 	if _, err := c.conn.ExecContext(ctx, "CREATE TEMP VIEW "+QuoteHeaderIdentifier(name)+" AS "+query); err != nil {
 		return fmt.Errorf("create temporary %s: %w", name, err)
 	}
@@ -418,7 +414,8 @@ func (c *SqliteContext) createView(ctx context.Context, name, query string) erro
 	if err != nil {
 		return fmt.Errorf("validate temporary %s: %w", name, err)
 	}
-	return rows.Close()
+	defer func() { resultErr = errors.Join(resultErr, rows.Close()) }()
+	return rows.Err()
 }
 
 // ExactTextPlotPredicate returns an index-friendly SQLite predicate enforcing
@@ -543,23 +540,6 @@ func (c *SqliteContext) Close() error {
 	return err
 }
 
-func truncateUserLogUTF16(raw string, maxUnits int) string {
-	units := 0
-	var out strings.Builder
-	for _, r := range raw {
-		need := 1
-		if r > 0xFFFF {
-			need = 2
-		}
-		if units+need > maxUnits {
-			break
-		}
-		out.WriteRune(r)
-		units += need
-	}
-	return out.String()
-}
-
 func isReadOnlyUserLogErr(err error) bool {
 	if err == nil {
 		return false
@@ -604,6 +584,7 @@ func openWritableVPro64LogDB(ctx context.Context, path string) (*sql.DB, error) 
 		_ = db.Close()
 		return nil, nil
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var cid, notNull, pk int
 		var name, colType string
@@ -612,7 +593,6 @@ func openWritableVPro64LogDB(ctx context.Context, path string) (*sql.DB, error) 
 			cols[name] = true
 		}
 	}
-	_ = rows.Close()
 	for _, req := range []string{"User", "InTime", "OutTime", "LocalMachine"} {
 		if !cols[req] {
 			_ = db.Close()
@@ -651,9 +631,9 @@ func (c *SqliteContext) startUserLogSessionLocked(ctx context.Context, user stri
 	if actor == "" {
 		actor = "Admin"
 	}
-	actor = truncateUserLogUTF16(actor, 50)
+	actor = sqlutil.TruncateUTF16(actor, 50)
 	host, _ := os.Hostname()
-	host = truncateUserLogUTF16(strings.TrimSpace(host), 50)
+	host = sqlutil.TruncateUTF16(strings.TrimSpace(host), 50)
 	now := time.Now().Format("2006-01-02 15:04:05")
 
 	tx, err := db.BeginTx(ctx, nil)
@@ -755,7 +735,7 @@ func (c *SqliteContext) RotateUserLogSession(ctx context.Context, user string) {
 	if c.userLogRowID == 0 {
 		return
 	}
-	trimmed := truncateUserLogUTF16(strings.TrimSpace(user), 50)
+	trimmed := sqlutil.TruncateUTF16(strings.TrimSpace(user), 50)
 	if trimmed == "" || trimmed == c.userLogUser {
 		return
 	}

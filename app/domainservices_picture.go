@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	picturespkg "github.com/boostao/vpro/app/internal/pictures"
@@ -10,10 +11,11 @@ import (
 
 type PictureOptions = picturespkg.PictureOptions
 type PictureOptionsUpdate = picturespkg.PictureOptionsUpdate
+type PictureMetadataEdit = picturespkg.PictureMetadataEdit
 
 type PictureService struct {
 	runtime *runtimeShutdownTracker
-	*picturespkg.PictureService
+	core    *picturespkg.PictureService
 }
 
 func (s *PictureService) acquire() (*PictureService, func()) {
@@ -38,38 +40,9 @@ func unwrapPictureService(s *PictureService) *picturespkg.PictureService {
 		if snap == nil || snap.pictures == nil {
 			return nil
 		}
-		return snap.pictures.PictureService
+		return snap.pictures.core
 	}
-	return s.PictureService
-}
-
-func newDefaultPictureEnvLookup(base func(string) (string, bool), defaultVPicsPath, defaultImagesDir string) func(string) (string, bool) {
-	return func(key string) (string, bool) {
-		if base != nil {
-			if val, ok := base(key); ok {
-				return val, true
-			}
-		}
-		switch key {
-		case "VPRO_PICTURE_LIBRARY_PATH":
-			if defaultVPicsPath != "" {
-				return defaultVPicsPath, true
-			}
-		case "VPRO_PICTURE_CHILD_DIRECTORY", "VPRO_PICTURE_MANAGER_DIRECTORY":
-			if defaultImagesDir != "" {
-				return defaultImagesDir, true
-			}
-		}
-		return "", false
-	}
-}
-
-func NewPictureService(contexts *ContextService, lookup func(string) (string, bool)) (*PictureService, error) {
-	core, err := picturespkg.NewPictureService(unwrapContextService(contexts), lookup)
-	if err != nil {
-		return nil, err
-	}
-	return &PictureService{PictureService: core}, nil
+	return s.core
 }
 
 func NewPictureMetadataService(s *PictureService) (*picturespkg.PictureMetadataService, error) {
@@ -96,7 +69,7 @@ func buildPictureService(contexts *ContextService, dataDir string, baseLookup fu
 	if err != nil {
 		return nil, err
 	}
-	svc := &PictureService{PictureService: core}
+	svc := &PictureService{core: core}
 	metadata, err := NewPictureMetadataService(svc)
 	if err != nil {
 		return nil, err
@@ -109,179 +82,195 @@ func buildPictureService(contexts *ContextService, dataDir string, baseLookup fu
 	if err != nil {
 		return nil, err
 	}
-	svc.Metadata = metadata
-	svc.Creation = creation
-	svc.Deletion = deletion
+	svc.core.Metadata = metadata
+	svc.core.Creation = creation
+	svc.core.Deletion = deletion
 	return svc, nil
+}
+
+func marshalTypedRPCRequest(v any) (string, error) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
 }
 
 func (s *PictureService) GetPictureOptions(ctx context.Context) (*PictureOptions, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil {
+	if s == nil || s.core == nil {
 		return nil, errors.New("picture service is unavailable")
 	}
-	return s.PictureService.GetPictureOptions(ctx)
+	return s.core.GetPictureOptions(ctx)
 }
 
 func (s *PictureService) SavePictureOptions(ctx context.Context, update PictureOptionsUpdate) (*PictureOptions, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil {
+	if s == nil || s.core == nil {
 		return nil, errors.New("picture service is unavailable")
 	}
-	return s.PictureService.SavePictureOptions(ctx, update)
+	return s.core.SavePictureOptions(ctx, update)
 }
 
 func (s *PictureService) GetMetadata(ctx context.Context, contextID, plot string) (*PictureMetadataReview, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil {
+	if s == nil || s.core == nil {
 		return nil, errors.New("picture service is unavailable")
 	}
-	return s.PictureService.GetMetadata(ctx, contextID, plot)
+	return s.core.GetMetadata(ctx, contextID, plot)
 }
 
 func (s *PictureService) GetImage(ctx context.Context, contextID, plot, requestJSON string) (*PictureImage, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil {
+	if s == nil || s.core == nil {
 		return nil, errors.New("picture service is unavailable")
 	}
-	return s.PictureService.GetImage(ctx, contextID, plot, requestJSON)
+	return s.core.GetImage(ctx, contextID, plot, requestJSON)
 }
 
-func (s *PictureService) SaveMetadata(ctx context.Context, contextID, plot, requestJSON string) (*PictureMetadataWriteResult, error) {
+func (s *PictureService) SaveMetadata(ctx context.Context, contextID, plot string, request PictureMetadataEdit) (*PictureMetadataWriteResult, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil || s.Metadata == nil {
+	if s == nil || s.core == nil || s.core.Metadata == nil {
 		return nil, errors.New("picture metadata service is unavailable")
 	}
-	return s.Metadata.Save(ctx, contextID, plot, requestJSON)
+	raw, err := marshalTypedRPCRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	return s.core.SaveMetadata(ctx, contextID, plot, raw)
 }
 
-func (s *PictureService) LookupMetadataReceipt(ctx context.Context, contextID, plot, requestJSON string) (*PictureMetadataWriteResult, error) {
+func (s *PictureService) LookupMetadataReceipt(ctx context.Context, contextID, plot string, request PictureMetadataEdit) (*PictureMetadataWriteResult, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil || s.Metadata == nil {
+	if s == nil || s.core == nil || s.core.Metadata == nil {
 		return nil, errors.New("picture metadata service is unavailable")
 	}
-	return s.Metadata.LookupReceipt(ctx, contextID, plot, requestJSON)
+	raw, err := marshalTypedRPCRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	return s.core.LookupMetadataReceipt(ctx, contextID, plot, raw)
 }
 
 func (s *PictureService) ChooseCreationImage(ctx context.Context, contextID, project, plot string) (*PictureCreationSelection, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil || s.Creation == nil {
+	if s == nil || s.core == nil || s.core.Creation == nil {
 		return nil, errors.New("picture creation service is unavailable")
 	}
-	return s.Creation.Choose(ctx, contextID, project, plot)
+	return s.core.ChooseCreationImage(ctx, contextID, project, plot)
 }
 
 func (s *PictureService) GetSelectedCreationImage(ctx context.Context, token, requestJSON string) (*PictureImage, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil || s.Creation == nil {
+	if s == nil || s.core == nil || s.core.Creation == nil {
 		return nil, errors.New("picture creation service is unavailable")
 	}
-	return s.Creation.GetSelectedImage(ctx, token, requestJSON)
+	return s.core.GetSelectedCreationImage(ctx, token, requestJSON)
 }
 
 func (s *PictureService) RecoverCreationSelection(ctx context.Context, contextID, project, plot string) (*PictureCreationSelection, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil || s.Creation == nil {
+	if s == nil || s.core == nil || s.core.Creation == nil {
 		return nil, errors.New("picture creation service is unavailable")
 	}
-	return s.Creation.RecoverSelection(ctx, contextID, project, plot)
+	return s.core.RecoverCreationSelection(ctx, contextID, project, plot)
 }
 
 func (s *PictureService) ReleaseCreationSelection(ctx context.Context, token string) error {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil || s.Creation == nil {
+	if s == nil || s.core == nil || s.core.Creation == nil {
 		return errors.New("picture creation service is unavailable")
 	}
-	return s.Creation.ReleaseSelection(ctx, token)
+	return s.core.ReleaseCreationSelection(ctx, token)
 }
 
 func (s *PictureService) CreatePicture(ctx context.Context, token, requestJSON string) (*PictureCreationResult, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil || s.Creation == nil {
+	if s == nil || s.core == nil || s.core.Creation == nil {
 		return nil, errors.New("picture creation service is unavailable")
 	}
-	return s.Creation.Create(ctx, token, requestJSON)
+	return s.core.CreatePicture(ctx, token, requestJSON)
 }
 
 func (s *PictureService) LookupCreationReceipt(ctx context.Context, requestJSON string) (*PictureCreationResult, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil || s.Creation == nil {
+	if s == nil || s.core == nil || s.core.Creation == nil {
 		return nil, errors.New("picture creation service is unavailable")
 	}
-	return s.Creation.LookupReceipt(ctx, requestJSON)
+	return s.core.LookupCreationReceipt(ctx, requestJSON)
 }
 
 func (s *PictureService) AcknowledgeCreationReceipt(ctx context.Context, token string) error {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil || s.Creation == nil {
+	if s == nil || s.core == nil || s.core.Creation == nil {
 		return errors.New("picture creation service is unavailable")
 	}
-	return s.Creation.AcknowledgeReceipt(ctx, token)
+	return s.core.AcknowledgeCreationReceipt(ctx, token)
 }
 
 func (s *PictureService) DeletePicture(ctx context.Context, contextID, requestJSON string) (*PictureDeletionResult, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil || s.Deletion == nil {
+	if s == nil || s.core == nil || s.core.Deletion == nil {
 		return nil, errors.New("picture deletion service is unavailable")
 	}
-	return s.Deletion.Delete(ctx, contextID, requestJSON)
+	return s.core.DeletePicture(ctx, contextID, requestJSON)
 }
 
 func (s *PictureService) GetDeletionHistory(ctx context.Context, contextID, plot string) (*PictureDeletionHistoryList, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil || s.Deletion == nil {
+	if s == nil || s.core == nil || s.core.Deletion == nil {
 		return nil, errors.New("picture deletion service is unavailable")
 	}
-	return s.Deletion.GetHistory(ctx, contextID, plot)
+	return s.core.GetDeletionHistory(ctx, contextID, plot)
 }
 
 func (s *PictureService) LookupDeletionReceipt(ctx context.Context, contextID, requestJSON string) (*PictureDeletionResult, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil || s.Deletion == nil {
+	if s == nil || s.core == nil || s.core.Deletion == nil {
 		return nil, errors.New("picture deletion service is unavailable")
 	}
-	return s.Deletion.LookupReceipt(ctx, contextID, requestJSON)
+	return s.core.LookupDeletionReceipt(ctx, contextID, requestJSON)
 }
 
 func (s *PictureService) LookupDeletionRestorationReceipt(ctx context.Context, contextID, requestJSON string) (*PictureRestorationResult, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil || s.Deletion == nil {
+	if s == nil || s.core == nil || s.core.Deletion == nil {
 		return nil, errors.New("picture deletion service is unavailable")
 	}
-	return s.Deletion.LookupRestorationReceipt(ctx, contextID, requestJSON)
+	return s.core.LookupDeletionRestorationReceipt(ctx, contextID, requestJSON)
 }
 
 func (s *PictureService) ReviewDeletionRestoration(ctx context.Context, contextID, plot, historyID string) (*PictureRestorationReview, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil || s.Deletion == nil {
+	if s == nil || s.core == nil || s.core.Deletion == nil {
 		return nil, errors.New("picture deletion service is unavailable")
 	}
-	return s.Deletion.ReviewRestoration(ctx, contextID, plot, historyID)
+	return s.core.ReviewDeletionRestoration(ctx, contextID, plot, historyID)
 }
 
 func (s *PictureService) RestoreDeletedPicture(ctx context.Context, contextID, requestJSON string) (*PictureRestorationResult, error) {
 	s, release := s.acquire()
 	defer release()
-	if s == nil || s.PictureService == nil || s.Deletion == nil {
+	if s == nil || s.core == nil || s.core.Deletion == nil {
 		return nil, errors.New("picture deletion service is unavailable")
 	}
-	return s.Deletion.Restore(ctx, contextID, requestJSON)
+	return s.core.RestoreDeletedPicture(ctx, contextID, requestJSON)
 }

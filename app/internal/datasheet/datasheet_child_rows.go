@@ -313,7 +313,7 @@ func DeleteDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextServ
 	}
 	rid, parseErr := strconv.ParseInt(strings.TrimSpace(request.RowID), 10, 64)
 	if parseErr != nil {
-		return nil, fmt.Errorf("invalid datasheet rowId %q", request.RowID)
+		return nil, fmt.Errorf("invalid datasheet row reference %q", request.RowID)
 	}
 
 	return vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (*DatasheetDeleteChildRowResult, error) {

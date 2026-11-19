@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/jackc/pgx/v5"
 	"math"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/jackc/pgx/v5"
 )
 
 func cleanTokens(items []string) []string {
@@ -144,6 +145,7 @@ func (m *Manager) PreviewBECMasterSubset(ctx context.Context, filter SubsetFilte
 	if err != nil {
 		return SubsetPreview{}, wrapRedactedError("preview BECMaster zone breakdown", err, creds)
 	}
+	defer zRows.Close()
 	for zRows.Next() {
 		var z string
 		var c int
@@ -151,7 +153,6 @@ func (m *Manager) PreviewBECMasterSubset(ctx context.Context, filter SubsetFilte
 			zones[z] = c
 		}
 	}
-	zRows.Close()
 
 	samplePlots := []string{}
 	sRows, err := pool.Query(ctx, cte+` SELECT "PlotNumber" FROM matched ORDER BY "PlotNumber" LIMIT 20`, args...)
@@ -403,16 +404,15 @@ func querySubsetMatchingPlots(
 	if err != nil {
 		return nil, wrapRedactedError("query matching BECMaster plots", err, creds)
 	}
+	defer pRows.Close()
 	var plotList []string
 	for pRows.Next() {
 		var p string
 		if err := pRows.Scan(&p); err != nil {
-			pRows.Close()
 			return nil, wrapRedactedError("scan matching BECMaster plot", err, creds)
 		}
 		plotList = append(plotList, p)
 	}
-	pRows.Close()
 	if err := pRows.Err(); err != nil {
 		return nil, wrapRedactedError("read matching BECMaster plots", err, creds)
 	}
@@ -629,6 +629,7 @@ func streamSubsetMetadataPGToSQLite(
 	if pErr != nil {
 		return 0, pErr
 	}
+	defer projIDRows.Close()
 	var refProjIDs []string
 	for projIDRows.Next() {
 		var pid string
@@ -636,7 +637,6 @@ func streamSubsetMetadataPGToSQLite(
 			refProjIDs = append(refProjIDs, pid)
 		}
 	}
-	projIDRows.Close()
 
 	metaN := 0
 	if len(refProjIDs) > 0 {

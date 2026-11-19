@@ -1,15 +1,13 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"strconv"
+
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type summaryVegetationGroupField struct {
@@ -46,11 +44,6 @@ func prepareSummaryVegetationConstancyReferences(ctx context.Context, project, s
 		average, 13, 1, 0, references, summaryVegetationGroupedConstancy)
 }
 
-func prepareSummaryVegetationGrouped(ctx context.Context, project, suName string,
-	veg, su, master, personal, layers vprocore.ProjectMetadataTable, average, grouping int) (summaryVegetationGroupedReport, error) {
-	return prepareSummaryVegetationGroupedOptions(ctx, project, suName, veg, su, master, personal, layers, average, grouping, 6, 0)
-}
-
 func validateSummaryVegetationGroupedOptions(ctx context.Context, average, grouping, display, showClass int) error {
 	if err := validateSummaryVegetationDisplayOptions(ctx, average, display, showClass); err != nil {
 		return err
@@ -62,12 +55,6 @@ func validateSummaryVegetationGroupedOptions(ctx context.Context, average, group
 		return fmt.Errorf("summary vegetation group%d display2 has original CDbl composite criteria type mismatch; projection unavailable", grouping)
 	}
 	return nil
-}
-
-func prepareSummaryVegetationGroupedOptions(ctx context.Context, project, suName string,
-	veg, su, master, personal, layers vprocore.ProjectMetadataTable, average, grouping, display, showClass int) (summaryVegetationGroupedReport, error) {
-	return prepareSummaryVegetationGroupedReferences(ctx, project, suName, veg, su, master, personal, layers,
-		average, grouping, display, showClass, nil)
 }
 
 func prepareSummaryVegetationGroupedReferences(ctx context.Context, project, suName string,
@@ -167,31 +154,6 @@ func prepareSummaryVegetationGroupedQuery(ctx context.Context, project, suName s
 		return fail(err)
 	}
 	return report, nil
-}
-
-func planSummaryVegetationGroupedStage(ctx context.Context,
-	raw, su, stage, master, personal, layers vprocore.ProjectMetadataTable, average, grouping int) (summaryVegetationGroupedReport, error) {
-	return planSummaryVegetationGroupedStageOptions(ctx, raw, su, stage, master, personal, layers, average, grouping, 6, 0)
-}
-
-func planSummaryVegetationGroupedStageOptions(ctx context.Context,
-	raw, su, stage, master, personal, layers vprocore.ProjectMetadataTable, average, grouping, display, showClass int) (summaryVegetationGroupedReport, error) {
-	return planSummaryVegetationGroupedStageReferences(ctx, raw, su, stage, master, personal, layers,
-		average, grouping, display, showClass, nil)
-}
-
-func planSummaryVegetationGroupedStageReferences(ctx context.Context,
-	raw, su, stage, master, personal, layers vprocore.ProjectMetadataTable, average, grouping, display, showClass int,
-	references *summaryVegetationReferencePlan) (summaryVegetationGroupedReport, error) {
-	return planSummaryVegetationGroupedStageQuery(ctx, raw, su, stage, master, personal, layers,
-		average, grouping, display, showClass, references, summaryVegetationGroupedOrdinary)
-}
-
-func planSummaryVegetationUnanimousCommonStage(ctx context.Context,
-	raw, su, stage, master, personal, layers vprocore.ProjectMetadataTable, average, grouping int,
-	references *summaryVegetationReferencePlan) (summaryVegetationGroupedReport, error) {
-	return planSummaryVegetationGroupedStageQuery(ctx, raw, su, stage, master, personal, layers,
-		average, grouping, 6, 0, references, summaryVegetationGroupedUnanimousCommon)
 }
 
 func planSummaryVegetationGroupedStageQuery(ctx context.Context,

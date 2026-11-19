@@ -1,21 +1,19 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"math"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
-func twoPageExtraFixture(t *testing.T, column string, before vprocore.ProjectMetadataCell) (vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, sourceform.SiviParentScalarEdit) {
+func twoPageExtraFixture(t *testing.T, column string, before vprocore.ProjectMetadataCell) (vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, sourceform.SourceParentScalarEdit) {
 	t.Helper()
 	env, admin := vprotest.SiviParentTables(t)
 	field, exists := sourceform.TwoPageParentExtraFields[column]
@@ -29,14 +27,14 @@ func twoPageExtraFixture(t *testing.T, column string, before vprocore.ProjectMet
 	for i, physical := range table.Columns {
 		if physical.Name == column {
 			table.Rows[0].Cells[i] = before
-			return env, admin, sourceform.SiviParentScalarEdit{
+			return env, admin, sourceform.SourceParentScalarEdit{
 				ContextID: "owned", Table: "Sample_" + field.Owner, RowID: table.Rows[0].RowID,
 				Column: column, Expected: before,
 			}
 		}
 	}
 	t.Fatal("missing additional physical field", column)
-	return vprocore.ProjectMetadataTable{}, vprocore.ProjectMetadataTable{}, sourceform.SiviParentScalarEdit{}
+	return vprocore.ProjectMetadataTable{}, vprocore.ProjectMetadataTable{}, sourceform.SourceParentScalarEdit{}
 }
 
 func TestTwoPageParentExtraFieldTypedBoundsAndExactValues(t *testing.T) {
@@ -74,7 +72,7 @@ func TestTwoPageParentExtraFieldTypedBoundsAndExactValues(t *testing.T) {
 			for _, cell := range valid {
 				edit.Value = cell
 				for _, form := range []string{"FS882-8x6XL", "FS882-8x6XL-CHARS"} {
-					got, err := planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", form, env, admin, []sourceform.SiviParentScalarEdit{edit})
+					got, err := planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", form, env, admin, []sourceform.SourceParentScalarEdit{edit})
 					if column == "BEC_Use" && strings.HasSuffix(form, "-CHARS") {
 						if err == nil || got != nil {
 							t.Fatal("CHARS inherited an unbound normal-only field", got, err)
@@ -93,12 +91,12 @@ func TestTwoPageParentExtraFieldTypedBoundsAndExactValues(t *testing.T) {
 			}
 			for _, cell := range invalid {
 				edit.Value = cell
-				if got, err := planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", "FS882-8x6XL", env, admin, []sourceform.SiviParentScalarEdit{edit}); err == nil || got != nil {
+				if got, err := planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", "FS882-8x6XL", env, admin, []sourceform.SourceParentScalarEdit{edit}); err == nil || got != nil {
 					t.Fatal("invalid new field returned a plan", cell, got, err)
 				}
 			}
 			edit.Value = vprocore.ProjectMetadataCell{Storage: "null"}
-			got, err := planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", "FS882-8x6XL", env, admin, []sourceform.SiviParentScalarEdit{edit})
+			got, err := planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", "FS882-8x6XL", env, admin, []sourceform.SourceParentScalarEdit{edit})
 			if err != nil || got == nil || len(got) != 0 {
 				t.Fatal("unchanged NULL returned an assignment", got, err)
 			}
@@ -113,12 +111,12 @@ func TestTwoPageParentExtraFieldHistoricalOmissionAndNullableCorrection(t *testi
 			vprotest.MetadataInteger("40000"), vprotest.SiviReal(math.MaxFloat64), {Storage: "blob", BlobHex: &blob}} {
 			env, admin, edit := twoPageExtraFixture(t, column, historical)
 			edit.Value = historical
-			got, err := planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", "FS882-8x6XL", env, admin, []sourceform.SiviParentScalarEdit{edit})
+			got, err := planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", "FS882-8x6XL", env, admin, []sourceform.SourceParentScalarEdit{edit})
 			if err != nil || got == nil || len(got) != 0 {
 				t.Fatal("unchanged historical invalid storage became an assignment", column, got, err)
 			}
 			edit.Value = vprocore.ProjectMetadataCell{Storage: "null"}
-			got, err = planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", "FS882-8x6XL", env, admin, []sourceform.SiviParentScalarEdit{edit})
+			got, err = planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", "FS882-8x6XL", env, admin, []sourceform.SourceParentScalarEdit{edit})
 			if err != nil || len(got) != 1 || got[0].Value != nil || !reflect.DeepEqual(got[0].Before, historical) {
 				t.Fatal("explicit NULL correction rewrote historical before value", column, got, err)
 			}
@@ -145,19 +143,19 @@ func TestTwoPageParentExtraFieldRejectsStaleRepeatedAndForeignTargets(t *testing
 		case "other-source":
 			invalid.Column = "HumusThickness"
 		}
-		if got, err := planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", "FS882-8x6XL", env, admin, []sourceform.SiviParentScalarEdit{edit, invalid}); err == nil || got != nil {
+		if got, err := planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", "FS882-8x6XL", env, admin, []sourceform.SourceParentScalarEdit{edit, invalid}); err == nil || got != nil {
 			t.Fatal("invalid tail leaked a partial plan", kind, got, err)
 		}
 	}
 	if got, err := planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", "FS882-8x6XL", env, admin, nil); err == nil || got != nil {
 		t.Fatal("empty request became an authorized plan", got, err)
 	}
-	if got, err := sourceform.PlanSIVIParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SiviParentScalarEdit{edit}); err == nil || got != nil {
+	if got, err := sourceform.PlanSourceParentScalars(context.Background(), "owned", "Sample", "108050", env, admin, []sourceform.SourceParentScalarEdit{edit}); err == nil || got != nil {
 		t.Fatal("existing SIVI scope widened to accept two-page fields", got, err)
 	}
 	admin.Rows = append(admin.Rows, admin.Rows[0])
 	admin.Rows[1].RowID = "-999"
-	if got, err := planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", "FS882-8x6XL", env, admin, []sourceform.SiviParentScalarEdit{edit}); err == nil || got != nil {
+	if got, err := planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", "FS882-8x6XL", env, admin, []sourceform.SourceParentScalarEdit{edit}); err == nil || got != nil {
 		t.Fatal("ambiguous physical pair became writable", got, err)
 	}
 }
@@ -165,7 +163,7 @@ func TestTwoPageParentExtraFieldRejectsStaleRepeatedAndForeignTargets(t *testing
 func TestTwoPageParentExtraFieldCloneSafetyAndLateCancellation(t *testing.T) {
 	env, admin, edit := twoPageExtraFixture(t, "GIS_BGC", vprotest.MetadataText("original"))
 	edit.Value = vprotest.MetadataText("  NewCase  ")
-	got, err := planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", "FS882-8x6XL", env, admin, []sourceform.SiviParentScalarEdit{edit})
+	got, err := planTwoPageParentExtraFields(context.Background(), "owned", "Sample", "108050", "FS882-8x6XL", env, admin, []sourceform.SourceParentScalarEdit{edit})
 	if err != nil || len(got) != 1 {
 		t.Fatal(got, err)
 	}
@@ -179,7 +177,7 @@ func TestTwoPageParentExtraFieldCloneSafetyAndLateCancellation(t *testing.T) {
 	}
 	for _, remaining := range []int{1, 10000 - probe.Remaining + 1, 10000 - probe.Remaining + 2} {
 		ctx := &vprotest.VegetationCancelContext{Context: context.Background(), Remaining: remaining}
-		got, err := planTwoPageParentExtraFields(ctx, "owned", "Sample", "108050", "FS882-8x6XL", env, admin, []sourceform.SiviParentScalarEdit{edit})
+		got, err := planTwoPageParentExtraFields(ctx, "owned", "Sample", "108050", "FS882-8x6XL", env, admin, []sourceform.SourceParentScalarEdit{edit})
 		if !errors.Is(err, context.Canceled) || got != nil {
 			t.Fatal("cancelled planning returned a partial or complete plan", got, err)
 		}

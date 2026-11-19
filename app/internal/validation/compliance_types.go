@@ -8,14 +8,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
 	"math"
 	"slices"
 	"strings"
 	"time"
-	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type ComplianceOptions struct {
@@ -102,10 +102,6 @@ type ComplianceValidationReport struct {
 	PlotsWithoutVegetation []string                      `json:"plotsWithoutVegetation"`
 	DuplicateVegFindings   []DuplicateVegSpeciesFinding  `json:"duplicateVegFindings"`
 	TaxonomyFindings       []TaxonomyComplianceFinding   `json:"taxonomyFindings"`
-}
-
-func utf16CodeUnitLen(s string) int {
-	return len(utf16.Encode([]rune(s)))
 }
 
 func asciiLower(s string) string {
@@ -265,15 +261,18 @@ func QuarantineOrphanRecords(s *vprocore.ContextService, ctx context.Context, co
 			if eErr != nil {
 				return eErr
 			}
-			for eRows.Next() {
-				var raw []byte
-				if err := eRows.Scan(&raw); err != nil {
-					eRows.Close()
-					return err
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, eRows.Close()) }()
+				for eRows.Next() {
+					var raw []byte
+					if err := eRows.Scan(&raw); err != nil {
+
+						return err
+					}
+					envTextPlots[string(raw)] = struct{}{}
 				}
-				envTextPlots[string(raw)] = struct{}{}
-			}
-			if err := errors.Join(eRows.Err(), eRows.Close()); err != nil {
+				return eRows.Err()
+			}(); err != nil {
 				return err
 			}
 
@@ -298,25 +297,28 @@ func QuarantineOrphanRecords(s *vprocore.ContextService, ctx context.Context, co
 				var colNames []string
 				var colDefs []string
 				hasID := false
-				for pRows.Next() {
-					var cid, notNull, pk int
-					var cName, cType string
-					var defVal sql.NullString
-					if err := pRows.Scan(&cid, &cName, &cType, &notNull, &defVal, &pk); err != nil {
-						pRows.Close()
-						return err
+				if err := func() (scanErr error) {
+					defer func() { scanErr = errors.Join(scanErr, pRows.Close()) }()
+					for pRows.Next() {
+						var cid, notNull, pk int
+						var cName, cType string
+						var defVal sql.NullString
+						if err := pRows.Scan(&cid, &cName, &cType, &notNull, &defVal, &pk); err != nil {
+
+							return err
+						}
+						if cName == "ID" {
+							hasID = true
+						}
+						colNames = append(colNames, cName)
+						decl := cType
+						if strings.TrimSpace(decl) == "" {
+							decl = "BLOB"
+						}
+						colDefs = append(colDefs, vprocore.QuoteHeaderIdentifier(cName)+" "+decl)
 					}
-					if cName == "ID" {
-						hasID = true
-					}
-					colNames = append(colNames, cName)
-					decl := cType
-					if strings.TrimSpace(decl) == "" {
-						decl = "BLOB"
-					}
-					colDefs = append(colDefs, vprocore.QuoteHeaderIdentifier(cName)+" "+decl)
-				}
-				if err := errors.Join(pRows.Err(), pRows.Close()); err != nil {
+					return pRows.Err()
+				}(); err != nil {
 					return err
 				}
 
@@ -335,29 +337,32 @@ func QuarantineOrphanRecords(s *vprocore.ContextService, ctx context.Context, co
 				}
 				var orphanRowIDs []int64
 				var tableIDs []int64
-				for scanRows.Next() {
-					var rowID, id int64
-					var plotType, p string
-					var rawPlot []byte
-					if err := scanRows.Scan(&rowID, &plotType, &rawPlot, &p, &id); err != nil {
-						scanRows.Close()
-						return err
-					}
-					if plotType == "text" {
-						if _, inEnv := envTextPlots[string(rawPlot)]; inEnv {
-							continue
+				if err := func() (scanErr error) {
+					defer func() { scanErr = errors.Join(scanErr, scanRows.Close()) }()
+					for scanRows.Next() {
+						var rowID, id int64
+						var plotType, p string
+						var rawPlot []byte
+						if err := scanRows.Scan(&rowID, &plotType, &rawPlot, &p, &id); err != nil {
+
+							return err
+						}
+						if plotType == "text" {
+							if _, inEnv := envTextPlots[string(rawPlot)]; inEnv {
+								continue
+							}
+						}
+						orphanRowIDs = append(orphanRowIDs, rowID)
+						if !seenPlots[p] {
+							seenPlots[p] = true
+							plotSet = append(plotSet, p)
+						}
+						if id > 0 {
+							tableIDs = append(tableIDs, id)
 						}
 					}
-					orphanRowIDs = append(orphanRowIDs, rowID)
-					if !seenPlots[p] {
-						seenPlots[p] = true
-						plotSet = append(plotSet, p)
-					}
-					if id > 0 {
-						tableIDs = append(tableIDs, id)
-					}
-				}
-				if err := errors.Join(scanRows.Err(), scanRows.Close()); err != nil {
+					return scanRows.Err()
+				}(); err != nil {
 					return err
 				}
 

@@ -1,21 +1,18 @@
 package references
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-)
-
-import (
 	"bytes"
 	"context"
 	"database/sql"
-
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/resources"
+
 	_ "github.com/mattn/go-sqlite3"
 )
 

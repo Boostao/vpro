@@ -1,15 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/classification"
-	"github.com/boostao/vpro/app/internal/projectops"
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -19,6 +10,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/classification"
+	"github.com/boostao/vpro/app/internal/projectops"
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIIdentityOwnedSaveUnauditedAtEveryStrengthAndTypedRestoration(t *testing.T) {

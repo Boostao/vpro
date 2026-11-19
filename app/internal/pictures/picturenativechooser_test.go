@@ -16,6 +16,7 @@ func TestPictureNativeChooserRefusesUnownedRequestsBeforeDialog(t *testing.T) {
 	}{
 		{"nil-context", nil},
 		{"no-window", t.Context()},
+		//lint:ignore SA1029 intentional plain-string key collision test
 		{"wrong-key-type", context.WithValue(t.Context(), "Window", &application.WebviewWindow{})},
 		{"typed-nil-window", context.WithValue(t.Context(), application.WindowKey, missing)},
 		{"nonnative-window", context.WithValue(t.Context(), application.WindowKey, "browser")},

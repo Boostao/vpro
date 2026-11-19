@@ -290,6 +290,7 @@ func (ctx *cancellingContext) Err() error {
 
 func TestCancellationAndMissingContext(t *testing.T) {
 	hierarchy, labels := ordinary()
+	//lint:ignore SA1012 intentional nil-context guard test
 	if result, err := Plan(nil, hierarchy, labels); err == nil || !reflect.DeepEqual(result, Matrix{}) {
 		t.Fatal("missing context accepted")
 	}

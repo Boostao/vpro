@@ -21,8 +21,8 @@ type SIVIParentActionInput struct {
 }
 
 type SIVIParentActionWrite struct {
-	Original *sourceform.SIVIParentProjection `json:"original"`
-	Actions  []SIVIParentActionInput          `json:"actions"`
+	Original *sourceform.SourceParentProjection `json:"original"`
+	Actions  []SIVIParentActionInput            `json:"actions"`
 }
 
 type SIVIParentActionSaveResult struct {
@@ -62,7 +62,7 @@ func RequireSIVIParentActionEditing(s *vprocore.ContextService, ctx context.Cont
 	return sourceform.RequireSIVIParentEditing(s, ctx)
 }
 
-func GetSIVIParentActionOriginal(s *vprocore.ContextService, ctx context.Context, contextID, plot string) (*sourceform.SIVIParentProjection, error) {
+func GetSIVIParentActionOriginal(s *vprocore.ContextService, ctx context.Context, contextID, plot string) (*sourceform.SourceParentProjection, error) {
 	if err := RequireSIVIParentActionEditing(s, ctx); err != nil {
 		return nil, err
 	}
@@ -94,16 +94,16 @@ func RestoreSIVIParentActions(s *vprocore.ContextService, ctx context.Context, c
 const siviParentActionHistoryTable = "__VPRO_SIVIParentActionHistory"
 const siviParentActionHistorySQL = `CREATE TABLE "__VPRO_SIVIParentActionHistory"(ID INTEGER PRIMARY KEY,Created TEXT NOT NULL,Proposal TEXT NOT NULL,Restored TEXT)`
 
-var siviParentActionHistory = sourceform.SiviParentHistoryDomain{
+var siviParentActionHistory = sourceform.SourceParentHistoryDomain{
 	Table: siviParentActionHistoryTable, Schema: siviParentActionHistorySQL, Label: "SIVI parent action", Assignments: siviParentActionHistoryAssignments,
 }
 
 type siviParentActionWriteResult struct {
-	sourceform.SiviParentWriteResult
+	sourceform.SourceParentWriteResult
 	SourceRefreshRequired bool
 }
 
-func planSIVIParentActionEdits(ctx context.Context, original *sourceform.SiviParentProjection, edits []sourceform.SiviParentActionEdit) ([]sourceform.SiviParentScalarAssignment, error) {
+func planSIVIParentActionEdits(ctx context.Context, original *sourceform.SourceParentProjection, edits []sourceform.SiviParentActionEdit) ([]sourceform.SourceParentScalarAssignment, error) {
 	if original == nil || len(original.Rows) != 1 || len(edits) == 0 {
 		return nil, errors.New("SIVI parent action writing requires one physical pair and explicit source actions")
 	}
@@ -112,9 +112,9 @@ func planSIVIParentActionEdits(ctx context.Context, original *sourceform.SiviPar
 	return sourceform.PlanSIVIParentActions(ctx, original.ContextID, original.Project, original.Plot, env, admin, edits)
 }
 
-func WriteSIVIParentActions(s *vprocore.ContextService, ctx context.Context, contextID, plot string, original *sourceform.SiviParentProjection, edits []sourceform.SiviParentActionEdit) (*siviParentActionWriteResult, error) {
+func WriteSIVIParentActions(s *vprocore.ContextService, ctx context.Context, contextID, plot string, original *sourceform.SourceParentProjection, edits []sourceform.SiviParentActionEdit) (*siviParentActionWriteResult, error) {
 	refresh := false
-	result, err := sourceform.WriteSIVIParentPlanned(s, ctx, contextID, plot, original, siviParentActionHistory, func(observed *sourceform.SiviParentProjection) ([]sourceform.SiviParentScalarAssignment, error) {
+	result, err := sourceform.WriteSIVIParentPlanned(s, ctx, contextID, plot, original, siviParentActionHistory, func(observed *sourceform.SourceParentProjection) ([]sourceform.SourceParentScalarAssignment, error) {
 		assignments, err := planSIVIParentActionEdits(ctx, observed, edits)
 		if err != nil {
 			return nil, err
@@ -137,7 +137,7 @@ func WriteSIVIParentActions(s *vprocore.ContextService, ctx context.Context, con
 	return &siviParentActionWriteResult{*result, refresh}, nil
 }
 
-func siviParentActionHistoryAssignments(ctx context.Context, event sourceform.SiviParentHistory, project, plot string) ([]sourceform.SiviParentScalarAssignment, error) {
+func siviParentActionHistoryAssignments(ctx context.Context, event sourceform.SourceParentHistory, project, plot string) ([]sourceform.SourceParentScalarAssignment, error) {
 	original, err := sourceform.ValidateSIVIParentHistoryOriginal(ctx, event, project, plot)
 	if err != nil {
 		return nil, err
@@ -211,7 +211,7 @@ func requireSIVIParentReview(s *vprocore.ContextService, ctx context.Context) er
 	return nil
 }
 
-func GetSIVIParentOriginal(s *vprocore.ContextService, ctx context.Context, contextID, plot string) (*sourceform.SIVIParentProjection, error) {
+func GetSIVIParentOriginal(s *vprocore.ContextService, ctx context.Context, contextID, plot string) (*sourceform.SourceParentProjection, error) {
 	if err := requireSIVIParentReview(s, ctx); err != nil {
 		return nil, err
 	}
@@ -227,18 +227,18 @@ func GetSIVIParentJoinReview(s *vprocore.ContextService, ctx context.Context, co
 	})
 }
 
-func GetSIVIProjectIDChoices(s *vprocore.ContextService, ctx context.Context, contextID string) (*sourceform.SIVIProjectChoices, error) {
+func GetSIVIProjectIDChoices(s *vprocore.ContextService, ctx context.Context, contextID string) (*sourceform.SourceProjectChoices, error) {
 	if err := requireSIVIParentReview(s, ctx); err != nil {
 		return nil, err
 	}
 	return sourceform.ReadSIVIProjectChoices(s, ctx, contextID)
 }
 
-func SetSIVIProjectIDSource(s *vprocore.ContextService, ctx context.Context, contextID string, expected, source int) (*sourceform.SIVIProjectChoices, error) {
+func SetSIVIProjectIDSource(s *vprocore.ContextService, ctx context.Context, contextID string, expected, source int) (*sourceform.SourceProjectChoices, error) {
 	if err := requireSIVIParentReview(s, ctx); err != nil {
 		return nil, err
 	}
-	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (*sourceform.SIVIProjectChoices, error) {
+	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (*sourceform.SourceProjectChoices, error) {
 		choices, err := sourceform.ReadOwnedSIVIProjectChoicesAtSource(ctx, plots, contextID, source)
 		if err != nil {
 			return nil, err

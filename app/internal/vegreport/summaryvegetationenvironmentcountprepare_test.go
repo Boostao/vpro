@@ -1,16 +1,14 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"errors"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func summaryEnvironmentalCountPreparationFixture() vprocore.ProjectMetadataTable {
@@ -102,6 +100,7 @@ func TestSummaryEnvironmentalCountPreparationRefusalCorrection(t *testing.T) {
 	if err == nil || !reflect.DeepEqual(cell, vprocore.ProjectMetadataCell{}) {
 		t.Fatalf("malformed scope result %#v %v", cell, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	cell, err = prepareSummaryVegetationEnvironmentalPlotCount(nil, &unit, summaryEnvironmentalCountPreparationFixture())
 	if err == nil || !reflect.DeepEqual(cell, vprocore.ProjectMetadataCell{}) {
 		t.Fatalf("nil context %#v %v", cell, err)

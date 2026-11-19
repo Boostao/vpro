@@ -262,10 +262,8 @@ func TestCloseService_CancelConfirmationRace(t *testing.T) {
 
 func TestCloseService_WailsHookSignatureAndDependencyValidation(t *testing.T) {
 	// Compile against beta.26's real hook and callback types without launching.
-	var register func(events.WindowEventType, func(*application.WindowEvent)) func() = (*application.WebviewWindow)(nil).RegisterHook
-	if register == nil {
-		t.Fatal("missing native hook")
-	}
+	var register = (*application.WebviewWindow)(nil).RegisterHook
+	func(func(events.WindowEventType, func(*application.WindowEvent)) func()) {}(register)
 	for _, test := range []struct {
 		prefix string
 		emit   func(string) bool

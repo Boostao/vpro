@@ -8,15 +8,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"math"
 	"os"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 func extractActiveProjectSubmissionArtifacts(
@@ -59,13 +60,13 @@ func extractActiveProjectSubmissionArtifacts(
 			if sfErr != nil {
 				return struct{}{}, fmt.Errorf("read active SU %s: %w", activeSU, sfErr)
 			}
+			defer suFilterRows.Close()
 			for suFilterRows.Next() {
 				var raw []byte
 				if suFilterRows.Scan(&raw) == nil && len(raw) > 0 {
 					suScopePlots[string(raw)] = struct{}{}
 				}
 			}
-			suFilterRows.Close()
 			if len(suScopePlots) == 0 {
 				return struct{}{}, fmt.Errorf("active Site Unit table %q contains 0 text-keyed plots", activeSU)
 			}
@@ -77,6 +78,7 @@ func extractActiveProjectSubmissionArtifacts(
 		if eErr != nil {
 			return struct{}{}, eErr
 		}
+		defer eRows.Close()
 		validEnvPlots := map[string]struct{}{}
 		for eRows.Next() {
 			var raw []byte
@@ -91,25 +93,27 @@ func extractActiveProjectSubmissionArtifacts(
 				plotCount++
 			}
 		}
-		eRows.Close()
 
 		vRows, vErr := tx.QueryContext(ctx, fmt.Sprintf(`SELECT CAST("PlotNumber" AS BLOB), COALESCE(CAST("Species" AS TEXT), '') FROM "project".%s WHERE typeof("PlotNumber") = 'text'`, quotePGIdent(projName+"_Veg")))
 		if vErr == nil {
-			for vRows.Next() {
-				var raw []byte
-				var spp string
-				if vRows.Scan(&raw, &spp) == nil {
-					p := string(raw)
-					if _, ok := validEnvPlots[p]; !ok {
-						continue
-					}
-					vegCount++
-					if trimmedSpp := strings.TrimSpace(spp); trimmedSpp != "" {
-						referencedSpeciesUpper[strings.ToUpper(trimmedSpp)] = struct{}{}
+			func() {
+				defer vRows.Close()
+
+				for vRows.Next() {
+					var raw []byte
+					var spp string
+					if vRows.Scan(&raw, &spp) == nil {
+						if _, ok := validEnvPlots[string(raw)]; !ok {
+							continue
+						}
+						vegCount++
+						if trimmedSpp := strings.TrimSpace(spp); trimmedSpp != "" {
+							referencedSpeciesUpper[strings.ToUpper(trimmedSpp)] = struct{}{}
+						}
 					}
 				}
-			}
-			vRows.Close()
+
+			}()
 		}
 
 		_ = tx.QueryRowContext(ctx, fmt.Sprintf(`SELECT COALESCE(CAST("ProjectID" AS TEXT), '') FROM "project".%s LIMIT 1`, quotePGIdent(projName+"_Metadata"))).Scan(&projID)
@@ -125,44 +129,46 @@ func extractActiveProjectSubmissionArtifacts(
 		`)
 		var species []CloudUserSpeciesRecord
 		if uErr == nil {
-			for uRows.Next() {
-				var code string
-				var sci, eng, ctype sql.NullString
-				var lf, sppNum sql.NullInt64
-				var rep sql.NullFloat64
-				if sErr := uRows.Scan(&code, &sci, &lf, &eng, &rep, &sppNum, &ctype); sErr == nil {
-					if _, used := referencedSpeciesUpper[strings.ToUpper(strings.TrimSpace(code))]; !used {
-						continue
+			func() {
+				defer uRows.Close()
+				for uRows.Next() {
+					var code string
+					var sci, eng, ctype sql.NullString
+					var lf, sppNum sql.NullInt64
+					var rep sql.NullFloat64
+					if sErr := uRows.Scan(&code, &sci, &lf, &eng, &rep, &sppNum, &ctype); sErr == nil {
+						if _, used := referencedSpeciesUpper[strings.ToUpper(strings.TrimSpace(code))]; !used {
+							continue
+						}
+						rec := CloudUserSpeciesRecord{Code: code}
+						if sci.Valid {
+							v := sci.String
+							rec.ScientificName = &v
+						}
+						if lf.Valid {
+							v := int(lf.Int64)
+							rec.LifeForm = &v
+						}
+						if eng.Valid {
+							v := eng.String
+							rec.EnglishName = &v
+						}
+						if rep.Valid {
+							v := rep.Float64
+							rec.Report = &v
+						}
+						if sppNum.Valid {
+							v := int(sppNum.Int64)
+							rec.SppNumber = &v
+						}
+						if ctype.Valid {
+							v := ctype.String
+							rec.Codetype = &v
+						}
+						species = append(species, rec)
 					}
-					rec := CloudUserSpeciesRecord{Code: code}
-					if sci.Valid {
-						v := sci.String
-						rec.ScientificName = &v
-					}
-					if lf.Valid {
-						v := int(lf.Int64)
-						rec.LifeForm = &v
-					}
-					if eng.Valid {
-						v := eng.String
-						rec.EnglishName = &v
-					}
-					if rep.Valid {
-						v := rep.Float64
-						rec.Report = &v
-					}
-					if sppNum.Valid {
-						v := int(sppNum.Int64)
-						rec.SppNumber = &v
-					}
-					if ctype.Valid {
-						v := ctype.String
-						rec.Codetype = &v
-					}
-					species = append(species, rec)
 				}
-			}
-			uRows.Close()
+			}()
 		}
 		if species == nil {
 			species = []CloudUserSpeciesRecord{}
@@ -185,17 +191,21 @@ func extractActiveProjectSubmissionArtifacts(
 		if hasLump {
 			lRows, lErr := tx.QueryContext(ctx, fmt.Sprintf(`SELECT COALESCE(CAST("LumpCode" AS TEXT),''), COALESCE(CAST("SppCode" AS TEXT),''), CASE WHEN typeof("Use") = 'text' THEN CAST("Use" AS BLOB) ELSE "Use" END FROM "project".%s ORDER BY "LumpCode", "SppCode"`, quotePGIdent(projName+"_Lump")))
 			if lErr == nil {
-				useCol := bCol("Use")
-				for lRows.Next() {
-					var lc, sc string
-					var rawUse any
-					if lRows.Scan(&lc, &sc, &rawUse) == nil && lc != "" && sc != "" {
-						convUse, uErr := CanonicalizeSQLiteToPG(useCol, rawUse)
-						useBool := uErr == nil && convUse == int16(-1)
-						lumpRows = append(lumpRows, StagingLumpRow{LumpCode: lc, SppCode: sc, Use: useBool})
+				func() {
+					defer lRows.Close()
+
+					useCol := bCol("Use")
+					for lRows.Next() {
+						var lc, sc string
+						var rawUse any
+						if lRows.Scan(&lc, &sc, &rawUse) == nil && lc != "" && sc != "" {
+							convUse, uErr := CanonicalizeSQLiteToPG(useCol, rawUse)
+							useBool := uErr == nil && convUse == int16(-1)
+							lumpRows = append(lumpRows, StagingLumpRow{LumpCode: lc, SppCode: sc, Use: useBool})
+						}
 					}
-				}
-				lRows.Close()
+
+				}()
 			}
 		}
 
@@ -204,26 +214,9 @@ func extractActiveProjectSubmissionArtifacts(
 		if activeSU != "" && activeSU != "None" {
 			sRows, sErr := tx.QueryContext(ctx, fmt.Sprintf(`SELECT CAST("PlotNumber" AS TEXT), "SiteUnit" FROM "su".%s WHERE typeof("PlotNumber") = 'text' ORDER BY CAST("PlotNumber" AS BLOB)`, quotePGIdent(activeSU+"_SU")))
 			if sErr == nil {
-				for sRows.Next() {
-					var p string
-					var su sql.NullString
-					if sRows.Scan(&p, &su) == nil {
-						var ptr *string
-						if su.Valid {
-							v := su.String
-							ptr = &v
-						}
-						suRows = append(suRows, StagingSURow{PlotNumber: p, SiteUnit: ptr})
-					}
-				}
-				sRows.Close()
-			}
-		} else {
-			var hasProjSU bool
-			_ = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM "project".sqlite_master WHERE type='table' AND name=?)`, projName+"_SU").Scan(&hasProjSU)
-			if hasProjSU {
-				sRows, sErr := tx.QueryContext(ctx, fmt.Sprintf(`SELECT CAST("PlotNumber" AS TEXT), "SiteUnit" FROM "project".%s WHERE typeof("PlotNumber") = 'text' ORDER BY CAST("PlotNumber" AS BLOB)`, quotePGIdent(projName+"_SU")))
-				if sErr == nil {
+				func() {
+					defer sRows.Close()
+
 					for sRows.Next() {
 						var p string
 						var su sql.NullString
@@ -236,7 +229,32 @@ func extractActiveProjectSubmissionArtifacts(
 							suRows = append(suRows, StagingSURow{PlotNumber: p, SiteUnit: ptr})
 						}
 					}
-					sRows.Close()
+
+				}()
+			}
+		} else {
+			var hasProjSU bool
+			_ = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM "project".sqlite_master WHERE type='table' AND name=?)`, projName+"_SU").Scan(&hasProjSU)
+			if hasProjSU {
+				sRows, sErr := tx.QueryContext(ctx, fmt.Sprintf(`SELECT CAST("PlotNumber" AS TEXT), "SiteUnit" FROM "project".%s WHERE typeof("PlotNumber") = 'text' ORDER BY CAST("PlotNumber" AS BLOB)`, quotePGIdent(projName+"_SU")))
+				if sErr == nil {
+					func() {
+						defer sRows.Close()
+
+						for sRows.Next() {
+							var p string
+							var su sql.NullString
+							if sRows.Scan(&p, &su) == nil {
+								var ptr *string
+								if su.Valid {
+									v := su.String
+									ptr = &v
+								}
+								suRows = append(suRows, StagingSURow{PlotNumber: p, SiteUnit: ptr})
+							}
+						}
+
+					}()
 				}
 			}
 		}
@@ -305,17 +323,19 @@ func runLayer1ComplianceFallback(ctx context.Context, s *vprocore.ContextService
 		if err != nil {
 			return fail("PlotNumber bounds", err)
 		}
-		for pRows.Next() {
-			var p string
-			if err := pRows.Scan(&p); err != nil {
-				pRows.Close()
-				return fail("PlotNumber bounds", err)
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, pRows.Close()) }()
+			for pRows.Next() {
+				var p string
+				if err := pRows.Scan(&p); err != nil {
+					return err
+				}
+				if sqlutil.ValidateUTF16Bound("PlotNumber", p, 7) != nil {
+					boundsErrs++
+				}
 			}
-			if ValidateUTF16Bound("PlotNumber", p, 7) != nil {
-				boundsErrs++
-			}
-		}
-		if err := errors.Join(pRows.Err(), pRows.Close()); err != nil {
+			return pRows.Err()
+		}(); err != nil {
 			return fail("PlotNumber bounds", err)
 		}
 
@@ -326,17 +346,19 @@ func runLayer1ComplianceFallback(ctx context.Context, s *vprocore.ContextService
 		if err != nil {
 			return fail("Veg schema", err)
 		}
-		for cRows.Next() {
-			var name string
-			if err := cRows.Scan(&name); err != nil {
-				cRows.Close()
-				return fail("Veg schema", err)
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, cRows.Close()) }()
+			for cRows.Next() {
+				var name string
+				if err := cRows.Scan(&name); err != nil {
+					return err
+				}
+				if vprocore.VegetationCoverColumns[name] {
+					vegColumns = append(vegColumns, quotePGIdent(name))
+				}
 			}
-			if vprocore.VegetationCoverColumns[name] {
-				vegColumns = append(vegColumns, quotePGIdent(name))
-			}
-		}
-		if err := errors.Join(cRows.Err(), cRows.Close()); err != nil {
+			return cRows.Err()
+		}(); err != nil {
 			return fail("Veg schema", err)
 		}
 		selectCols := `COALESCE(CAST("Species" AS TEXT),'')`
@@ -347,40 +369,42 @@ func runLayer1ComplianceFallback(ctx context.Context, s *vprocore.ContextService
 		if err != nil {
 			return fail("Veg bounds", err)
 		}
-		for vRows.Next() {
-			var spp string
-			covers := make([]any, len(vegColumns))
-			dest := []any{&spp}
-			for i := range covers {
-				dest = append(dest, &covers[i])
-			}
-			if err := vRows.Scan(dest...); err != nil {
-				vRows.Close()
-				return fail("Veg bounds", err)
-			}
-			if ValidateUTF16Bound("Species", spp, 8) != nil {
-				boundsErrs++
-			}
-			for _, raw := range covers {
-				if raw == nil {
-					continue
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, vRows.Close()) }()
+			for vRows.Next() {
+				var spp string
+				covers := make([]any, len(vegColumns))
+				dest := []any{&spp}
+				for i := range covers {
+					dest = append(dest, &covers[i])
 				}
-				var value float64
-				switch v := raw.(type) {
-				case float64:
-					value = v
-				case int64:
-					value = float64(v)
-				default: // text, blob or anything non-numeric stored in a cover column
-					boundsErrs++
-					continue
+				if err := vRows.Scan(dest...); err != nil {
+					return err
 				}
-				if _, ok := NarrowSingleCover(value); !ok {
+				if sqlutil.ValidateUTF16Bound("Species", spp, 8) != nil {
 					boundsErrs++
 				}
+				for _, raw := range covers {
+					if raw == nil {
+						continue
+					}
+					var value float64
+					switch v := raw.(type) {
+					case float64:
+						value = v
+					case int64:
+						value = float64(v)
+					default: // text, blob or anything non-numeric stored in a cover column
+						boundsErrs++
+						continue
+					}
+					if _, ok := sqlutil.NarrowSingleCover(value); !ok {
+						boundsErrs++
+					}
+				}
 			}
-		}
-		if err := errors.Join(vRows.Err(), vRows.Close()); err != nil {
+			return vRows.Err()
+		}(); err != nil {
 			return fail("Veg bounds", err)
 		}
 
@@ -405,15 +429,17 @@ func runLayer1ComplianceFallback(ctx context.Context, s *vprocore.ContextService
 			if err != nil {
 				return fail(sc.kind+" schema", err)
 			}
-			for scRows.Next() {
-				var name string
-				if err := scRows.Scan(&name); err != nil {
-					scRows.Close()
-					return fail(sc.kind+" schema", err)
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, scRows.Close()) }()
+				for scRows.Next() {
+					var name string
+					if err := scRows.Scan(&name); err != nil {
+						return err
+					}
+					soilCols[strings.ToLower(name)] = name
 				}
-				soilCols[strings.ToLower(name)] = name
-			}
-			if err := errors.Join(scRows.Err(), scRows.Close()); err != nil {
+				return scRows.Err()
+			}(); err != nil {
 				return fail(sc.kind+" schema", err)
 			}
 			for _, reqCol := range []string{"horizon", "upperdepth", "lowerdepth"} {
@@ -441,46 +467,48 @@ func runLayer1ComplianceFallback(ctx context.Context, s *vprocore.ContextService
 			if err != nil {
 				return fail(sc.kind+" bounds", err)
 			}
-			for sRows.Next() {
-				var rawHz []byte
-				var rawUpper, rawLower any
-				rawExtras := make([][]byte, len(activeExtras))
-				dest := []any{&rawHz, &rawUpper, &rawLower}
-				for i := range rawExtras {
-					dest = append(dest, &rawExtras[i])
-				}
-				if err := sRows.Scan(dest...); err != nil {
-					sRows.Close()
-					return fail(sc.kind+" bounds", err)
-				}
-				var hzPtr *string
-				if rawHz != nil {
-					hz := string(rawHz)
-					if ValidateUTF16Bound(sc.kind+".Horizon", hz, 8) != nil {
-						boundsErrs++
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, sRows.Close()) }()
+				for sRows.Next() {
+					var rawHz []byte
+					var rawUpper, rawLower any
+					rawExtras := make([][]byte, len(activeExtras))
+					dest := []any{&rawHz, &rawUpper, &rawLower}
+					for i := range rawExtras {
+						dest = append(dest, &rawExtras[i])
 					}
-					hzPtr = &hz
-				}
-				for i, extra := range activeExtras {
-					if rawExtras[i] != nil {
-						if ValidateUTF16Bound(sc.kind+"."+extra.col, string(rawExtras[i]), extra.maxUnits) != nil {
+					if err := sRows.Scan(dest...); err != nil {
+						return err
+					}
+					var hzPtr *string
+					if rawHz != nil {
+						hz := string(rawHz)
+						if sqlutil.ValidateUTF16Bound(sc.kind+".Horizon", hz, 8) != nil {
 							boundsErrs++
 						}
+						hzPtr = &hz
+					}
+					for i, extra := range activeExtras {
+						if rawExtras[i] != nil {
+							if sqlutil.ValidateUTF16Bound(sc.kind+"."+extra.col, string(rawExtras[i]), extra.maxUnits) != nil {
+								boundsErrs++
+							}
+						}
+					}
+					upperPtr, okUpper := parseComplianceSoilDepth(rawUpper)
+					lowerPtr, okLower := parseComplianceSoilDepth(rawLower)
+					if !okUpper {
+						boundsErrs++
+					}
+					if !okLower {
+						boundsErrs++
+					}
+					if vprocore.ValidateSoilHorizonDepthSign(sc.kind, hzPtr, upperPtr, lowerPtr) != nil {
+						boundsErrs++
 					}
 				}
-				upperPtr, okUpper := parseComplianceSoilDepth(rawUpper)
-				lowerPtr, okLower := parseComplianceSoilDepth(rawLower)
-				if !okUpper {
-					boundsErrs++
-				}
-				if !okLower {
-					boundsErrs++
-				}
-				if vprocore.ValidateSoilHorizonDepthSign(sc.kind, hzPtr, upperPtr, lowerPtr) != nil {
-					boundsErrs++
-				}
-			}
-			if err := errors.Join(sRows.Err(), sRows.Close()); err != nil {
+				return sRows.Err()
+			}(); err != nil {
 				return fail(sc.kind+" bounds", err)
 			}
 		}

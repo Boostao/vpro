@@ -1,14 +1,12 @@
 package sivi
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/resources"
-)
-
-import (
 	"encoding/json"
 	"os"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestSIVIDeletionAuditRealProducerFormat(t *testing.T) {

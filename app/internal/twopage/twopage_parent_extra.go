@@ -39,7 +39,7 @@ var twoPageParentSources = sync.OnceValues(func() (map[string]*fs882layout.Layou
 	return result, nil
 })
 
-func twoPageParentBindings(form string) ([]sourceform.SiviParentBinding, error) {
+func twoPageParentBindings(form string) ([]sourceform.SourceParentBinding, error) {
 	sources, err := twoPageParentSources()
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func twoPageParentBindings(form string) ([]sourceform.SiviParentBinding, error) 
 	if !exists {
 		return nil, errors.New("two-page parent requires an exact normal or CHARS source variant")
 	}
-	result := []sourceform.SiviParentBinding{}
+	result := []sourceform.SourceParentBinding{}
 	controls, columns := map[string]bool{}, map[string]bool{}
 	for _, field := range layout.Forms[0].Fields {
 		if field.Binding == "" {
@@ -59,7 +59,7 @@ func twoPageParentBindings(form string) ([]sourceform.SiviParentBinding, error) 
 		}
 		controls[field.ControlID] = true
 		columns[strings.ToLower(field.Binding)] = true
-		result = append(result, sourceform.SiviParentBinding{ControlID: field.ControlID, Binding: field.Binding})
+		result = append(result, sourceform.SourceParentBinding{ControlID: field.ControlID, Binding: field.Binding})
 	}
 	expectedColumns, expectedInstances := 118, 121
 	if form == "FS882-8x6XL-CHARS" {
@@ -71,7 +71,7 @@ func twoPageParentBindings(form string) ([]sourceform.SiviParentBinding, error) 
 	return result, nil
 }
 
-func ProjectTwoPageParent(ctx context.Context, contextID, project, plot, form string, env, admin vprocore.ProjectMetadataTable) (*sourceform.SiviParentProjection, error) {
+func ProjectTwoPageParent(ctx context.Context, contextID, project, plot, form string, env, admin vprocore.ProjectMetadataTable) (*sourceform.SourceParentProjection, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func ProjectTwoPageParent(ctx context.Context, contextID, project, plot, form st
 	return parent, nil
 }
 
-func planTwoPageParentExtraFields(ctx context.Context, contextID, project, plot, form string, env, admin vprocore.ProjectMetadataTable, edits []sourceform.SiviParentScalarEdit) ([]sourceform.SiviParentScalarAssignment, error) {
+func planTwoPageParentExtraFields(ctx context.Context, contextID, project, plot, form string, env, admin vprocore.ProjectMetadataTable, edits []sourceform.SourceParentScalarEdit) ([]sourceform.SourceParentScalarAssignment, error) {
 	parent, err := ProjectTwoPageParent(ctx, contextID, project, plot, form, env, admin)
 	if err != nil {
 		return nil, err
@@ -124,7 +124,7 @@ func validateTwoPageParentExtraField(column string, value vprocore.ProjectMetada
 		}
 		return vprocore.ValidateParentSoilSingle(column, nil, value.Real)
 	case "integer":
-		return sourceform.ValidateSIVIParentSharedNumber(column, "integer", value)
+		return sourceform.ValidateSourceParentSharedNumber(column, "integer", value)
 	case "text":
 		if value.Storage != "text" || value.Text == nil {
 			return fmt.Errorf("two-page %s requires nullable text storage", column)
@@ -135,9 +135,9 @@ func validateTwoPageParentExtraField(column string, value vprocore.ProjectMetada
 	}
 }
 
-func ReadTwoPageParent(s *vprocore.ContextService, ctx context.Context, contextID, plot, form string) (*sourceform.SiviParentProjection, error) {
-	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (*sourceform.SiviParentProjection, error) {
-		return vprocore.WithOwnedSIVISnapshot(ctx, plots, func(owner *vprocore.SqliteContext, tx *sql.Tx) (*sourceform.SiviParentProjection, error) {
+func ReadTwoPageParent(s *vprocore.ContextService, ctx context.Context, contextID, plot, form string) (*sourceform.SourceParentProjection, error) {
+	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (*sourceform.SourceParentProjection, error) {
+		return vprocore.WithOwnedSIVISnapshot(ctx, plots, func(owner *vprocore.SqliteContext, tx *sql.Tx) (*sourceform.SourceParentProjection, error) {
 			tables, err := sourceform.ReadSourceParentTables(ctx, owner, tx, plot)
 			if err != nil {
 				return nil, err
@@ -151,30 +151,30 @@ func TwoPageParentProjector(form string) (sourceform.SourceParentProjector, erro
 	if _, err := twoPageParentBindings(form); err != nil {
 		return nil, err
 	}
-	return func(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable) (*sourceform.SiviParentProjection, error) {
+	return func(ctx context.Context, contextID, project, plot string, env, admin vprocore.ProjectMetadataTable) (*sourceform.SourceParentProjection, error) {
 		return ProjectTwoPageParent(ctx, contextID, project, plot, form, env, admin)
 	}, nil
 }
 
-func TwoPageParentExtraHistory(form string) (sourceform.SiviParentHistoryDomain, error) {
+func TwoPageParentExtraHistory(form string) (sourceform.SourceParentHistoryDomain, error) {
 	return twoPageParentHistory(form, "Extra", "two-page additional fields", PlanTwoPageParentExtraProjection)
 }
 
-func twoPageParentHistory(form, scope, label string, plan func(context.Context, *sourceform.SiviParentProjection, []sourceform.SiviParentScalarEdit) ([]sourceform.SiviParentScalarAssignment, error)) (sourceform.SiviParentHistoryDomain, error) {
+func twoPageParentHistory(form, scope, label string, plan func(context.Context, *sourceform.SourceParentProjection, []sourceform.SourceParentScalarEdit) ([]sourceform.SourceParentScalarAssignment, error)) (sourceform.SourceParentHistoryDomain, error) {
 	projectParent, err := TwoPageParentProjector(form)
 	if err != nil {
-		return sourceform.SiviParentHistoryDomain{}, err
+		return sourceform.SourceParentHistoryDomain{}, err
 	}
 	table := "__VPRO_TwoPageParent" + scope + "History"
 	if form == "FS882-8x6XL-CHARS" {
 		table = "__VPRO_TwoPageCHARSParent" + scope + "History"
 	}
-	return sourceform.SiviParentHistoryDomain{
+	return sourceform.SourceParentHistoryDomain{
 		Table: table,
 		Schema: `CREATE TABLE ` + vprocore.QuoteHeaderIdentifier(table) +
 			`(ID INTEGER PRIMARY KEY,Created TEXT NOT NULL,Proposal TEXT NOT NULL,Restored TEXT)`,
 		Label: label,
-		Assignments: func(ctx context.Context, event sourceform.SiviParentHistory, project, plot string) ([]sourceform.SiviParentScalarAssignment, error) {
+		Assignments: func(ctx context.Context, event sourceform.SourceParentHistory, project, plot string) ([]sourceform.SourceParentScalarAssignment, error) {
 			if event.ProjectAssignment != nil || event.EntryPlan != nil || event.Committed == nil || event.Committed.Form != form {
 				return nil, fmt.Errorf("%s history belongs to another source domain", label)
 			}
@@ -182,9 +182,9 @@ func twoPageParentHistory(form, scope, label string, plan func(context.Context, 
 			if err != nil {
 				return nil, err
 			}
-			edits := make([]sourceform.SiviParentScalarEdit, 0, len(event.Changes))
+			edits := make([]sourceform.SourceParentScalarEdit, 0, len(event.Changes))
 			for _, change := range event.Changes {
-				edits = append(edits, sourceform.SiviParentScalarEdit{ContextID: original.ContextID, Table: change.Table, RowID: change.RowID, Column: change.Column, Expected: change.Before, Value: change.After})
+				edits = append(edits, sourceform.SourceParentScalarEdit{ContextID: original.ContextID, Table: change.Table, RowID: change.RowID, Column: change.Column, Expected: change.Before, Value: change.After})
 			}
 			assignments, err := plan(ctx, original, edits)
 			if err != nil || len(assignments) != len(event.Changes) {
@@ -195,7 +195,7 @@ func twoPageParentHistory(form, scope, label string, plan func(context.Context, 
 	}, nil
 }
 
-func PlanTwoPageParentExtraProjection(ctx context.Context, original *sourceform.SiviParentProjection, edits []sourceform.SiviParentScalarEdit) ([]sourceform.SiviParentScalarAssignment, error) {
+func PlanTwoPageParentExtraProjection(ctx context.Context, original *sourceform.SourceParentProjection, edits []sourceform.SourceParentScalarEdit) ([]sourceform.SourceParentScalarAssignment, error) {
 	if original == nil || len(original.Rows) != 1 {
 		return nil, errors.New("two-page additional-field editing requires one owned physical pair")
 	}
@@ -204,17 +204,17 @@ func PlanTwoPageParentExtraProjection(ctx context.Context, original *sourceform.
 		vprocore.ProjectMetadataTable{Columns: original.AdminColumns, Rows: []vprocore.ProjectMetadataRow{original.Rows[0].Admin}}, edits)
 }
 
-func TwoPageParentWriteReader(form string) (func(context.Context, *sql.Tx, *vprocore.SqliteContext, string, string, string) (*sourceform.SiviParentProjection, error), error) {
+func TwoPageParentWriteReader(form string) (func(context.Context, *sql.Tx, *vprocore.SqliteContext, string, string, string) (*sourceform.SourceParentProjection, error), error) {
 	projectParent, err := TwoPageParentProjector(form)
 	if err != nil {
 		return nil, err
 	}
-	return func(ctx context.Context, tx *sql.Tx, owner *vprocore.SqliteContext, suAlias, contextID, plot string) (*sourceform.SiviParentProjection, error) {
+	return func(ctx context.Context, tx *sql.Tx, owner *vprocore.SqliteContext, suAlias, contextID, plot string) (*sourceform.SourceParentProjection, error) {
 		return sourceform.ReadSourceParentForWrite(ctx, tx, owner, suAlias, contextID, plot, projectParent)
 	}, nil
 }
 
-func WriteTwoPageParentExtra(s *vprocore.ContextService, ctx context.Context, contextID, plot, form string, original *sourceform.SiviParentProjection, edits []sourceform.SiviParentScalarEdit) (*sourceform.SiviParentWriteResult, error) {
+func WriteTwoPageParentExtra(s *vprocore.ContextService, ctx context.Context, contextID, plot, form string, original *sourceform.SourceParentProjection, edits []sourceform.SourceParentScalarEdit) (*sourceform.SourceParentWriteResult, error) {
 	history, err := TwoPageParentExtraHistory(form)
 	if err != nil {
 		return nil, err
@@ -223,10 +223,10 @@ func WriteTwoPageParentExtra(s *vprocore.ContextService, ctx context.Context, co
 	if err != nil {
 		return nil, err
 	}
-	result, err := sourceform.WriteSIVIParentPlannedWithHooks(s, ctx, contextID, plot, original, history,
-		func(observed *sourceform.SiviParentProjection) ([]sourceform.SiviParentScalarAssignment, error) {
+	result, err := sourceform.WriteSourceParentPlannedWithHooks(s, ctx, contextID, plot, original, history,
+		func(observed *sourceform.SourceParentProjection) ([]sourceform.SourceParentScalarAssignment, error) {
 			return PlanTwoPageParentExtraProjection(ctx, observed, edits)
-		}, sourceform.SiviParentWriteHooks{Read: read})
+		}, sourceform.SourceParentWriteHooks{Read: read})
 	if err != nil {
 		return nil, fmt.Errorf("two-page additional-field writing: %w", err)
 	}

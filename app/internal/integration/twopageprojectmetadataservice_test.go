@@ -1,13 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/classification"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -18,6 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/boostao/vpro/app/internal/classification"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/mattn/go-sqlite3"
 )
 
@@ -277,6 +274,7 @@ func TestTwoPageProjectMetadataMaximumPhysicalBound(t *testing.T) {
 func TestTwoPageProjectMetadataInFlightCancellationAndRetry(t *testing.T) {
 	service, state, _ := twoPageProjectMetadataFixture(t, false)
 	owner := service.Contexts.Projects.Sqlite
+	//lint:ignore SA1012 intentional nil-context guard test
 	if got, err := service.GetReview(nil, state.ContextID, "108050", 0, 1); err == nil || got != nil {
 		t.Fatal("nil request context returned data", got, err)
 	}

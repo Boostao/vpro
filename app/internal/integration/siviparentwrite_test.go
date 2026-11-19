@@ -1,14 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -22,6 +14,12 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIParentDirectWriterFourDomainsAndExactAudits(t *testing.T) {
@@ -29,7 +27,7 @@ func TestSIVIParentDirectWriterFourDomainsAndExactAudits(t *testing.T) {
 		t.Run(strconv.Itoa(domain), func(t *testing.T) {
 			service, state, db, parent, all := sftest.SiviParentWriteFixture(t, domain%2 == 0, 3)
 			drafts := sourceform.SiviParentDirectEdits{}
-			var edits []sourceform.SiviParentScalarEdit
+			var edits []sourceform.SourceParentScalarEdit
 			switch domain {
 			case 0:
 				drafts.Scalars, edits = all.Scalars, all.Scalars
@@ -122,7 +120,7 @@ func TestSIVIParentDirectWriterFourDomainsAndExactAudits(t *testing.T) {
 			if err := db.QueryRow(`SELECT Proposal FROM "__VPRO_SIVIParentHistory" WHERE ID=?`, result.HistoryID).Scan(&proposal); err != nil {
 				t.Fatal(err)
 			}
-			var history sourceform.SiviParentHistory
+			var history sourceform.SourceParentHistory
 			if err := json.Unmarshal([]byte(proposal), &history); err != nil || !reflect.DeepEqual(history.Original, parent) ||
 				!reflect.DeepEqual(history.Committed, fresh) || len(history.Changes) != len(edits) {
 				t.Fatal("history lost complete original/committed pair", history, err)
@@ -149,8 +147,8 @@ func TestSIVIParentDirectWriterRejectsInvalidDomainsAndOwnership(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			id, plot := state.ContextID, "108050"
 			drafts := sourceform.SiviParentDirectEdits{
-				Scalars: append([]sourceform.SiviParentScalarEdit{}, all.Scalars...), Options: append([]sourceform.SiviParentScalarEdit{}, all.Options...),
-				Text: append([]sourceform.SiviParentScalarEdit{}, all.Text...), Categorical: append([]sourceform.SiviParentScalarEdit{}, all.Categorical...),
+				Scalars: append([]sourceform.SourceParentScalarEdit{}, all.Scalars...), Options: append([]sourceform.SourceParentScalarEdit{}, all.Options...),
+				Text: append([]sourceform.SourceParentScalarEdit{}, all.Text...), Categorical: append([]sourceform.SourceParentScalarEdit{}, all.Categorical...),
 			}
 			original := *parent
 			switch kind {
@@ -179,11 +177,11 @@ func TestSIVIParentDirectWriterRejectsInvalidDomainsAndOwnership(t *testing.T) {
 			case "late-domain":
 				drafts.Categorical = append(drafts.Categorical, all.Options[0])
 			case "boolean":
-				drafts.Scalars = []sourceform.SiviParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_FloodPlain", vprotest.MetadataInteger("1"))}
+				drafts.Scalars = []sourceform.SourceParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_FloodPlain", vprotest.MetadataInteger("1"))}
 			case "single-overflow":
-				drafts.Scalars = []sourceform.SiviParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_StandHeight", vprotest.SiviReal(math.MaxFloat64))}
+				drafts.Scalars = []sourceform.SourceParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_StandHeight", vprotest.SiviReal(math.MaxFloat64))}
 			case "single-type":
-				drafts.Scalars = []sourceform.SiviParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_StandHeight", vprotest.MetadataInteger("5"))}
+				drafts.Scalars = []sourceform.SourceParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_StandHeight", vprotest.MetadataInteger("5"))}
 			case "option-caption":
 				drafts.Options[0].Value = vprotest.MetadataText("Est.")
 			case "option-integer":
@@ -342,13 +340,13 @@ func TestSIVIParentDirectWriterHistoricalNoopAndBLOBReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := sourceform.SiviParentDirectEdits{
-		Scalars: []sourceform.SiviParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_FloodPlain", sftest.SiviParentCell(t, parent, "SV_FloodPlain"))},
-		Options: []sourceform.SiviParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_StandAgeEstMeas", vprotest.MetadataText("bad"))},
-		Text: []sourceform.SiviParentScalarEdit{
+		Scalars: []sourceform.SourceParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_FloodPlain", sftest.SiviParentCell(t, parent, "SV_FloodPlain"))},
+		Options: []sourceform.SourceParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_StandAgeEstMeas", vprotest.MetadataText("bad"))},
+		Text: []sourceform.SourceParentScalarEdit{
 			sftest.SiviParentEdit(t, parent, "SV_PolygonNumber", vprotest.MetadataText("")),
 			sftest.SiviParentEdit(t, parent, "SV_CanopyComposition", vprotest.MetadataText(strings.Repeat("x", 51))),
 		},
-		Categorical: []sourceform.SiviParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_RootZoneTexture", sftest.SiviParentCell(t, parent, "SV_RootZoneTexture"))},
+		Categorical: []sourceform.SourceParentScalarEdit{sftest.SiviParentEdit(t, parent, "SV_RootZoneTexture", sftest.SiviParentCell(t, parent, "SV_RootZoneTexture"))},
 	}
 	before := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
 	result, err := sourceform.WriteSIVIParentDirect(service, context.Background(), state.ContextID, "108050", parent, all)
@@ -501,7 +499,7 @@ func TestSIVIParentDirectTransactionLateCancellationOwnershipRollbackAndRetry(t 
 			sentinel := errors.New("injected rejection after parent and audit staging")
 			_, writeErr := vprocore.WithContextPlotRequest(ctx, service, state.ContextID, func(plots *vprocore.PlotService) (struct{}, error) {
 				owner := plots.Projects.Sqlite
-				err := sourceform.WithSIVIParentWriteTransaction(ctx, owner, "parent edit", func(tx *sql.Tx, suAlias string) error {
+				err := sourceform.WithSourceParentWriteTransaction(ctx, owner, "parent edit", func(tx *sql.Tx, suAlias string) error {
 					observed, err := sourceform.ReadSIVIParentForWrite(ctx, tx, owner, suAlias, state.ContextID, "108050")
 					if err != nil || !reflect.DeepEqual(observed, parent) {
 						return errors.Join(err, errors.New("late boundary original changed"))

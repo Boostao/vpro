@@ -1,14 +1,12 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type LongVegetationSettings struct {
@@ -136,14 +134,6 @@ type LongVegetationPreview struct {
 	Report      LongVegetationReport   `json:"report"`
 }
 
-func loadLongVegetationOptions(plots *vprocore.PlotService) (longVegetationOptions, error) {
-	values, err := plots.Projects.Preferences.Snapshot()
-	if err != nil {
-		return longVegetationOptions{}, err
-	}
-	return decodeLongVegetationOptions(values)
-}
-
 func vegetationSettings(options longVegetationOptions) LongVegetationSettings {
 	lumpTable := options.resolvedLumpTable
 	if lumpTable == "" && options.CombineVariants {
@@ -155,7 +145,7 @@ func vegetationSettings(options longVegetationOptions) LongVegetationSettings {
 		Title: options.Title, Average: options.Average, ConstantSpeciesList: options.ConstantSpeciesList,
 		PresenceGreaterThan: options.PresenceGreaterThan, MeanCoverGreaterThan: options.MeanCoverGreaterThan,
 		Order: options.Order, ShowEnglishName: options.ShowEnglishName, ShowSpeciesCode: options.ShowSpeciesCode,
-		SelectedField: options.SelectedField,
+		SelectedField:   options.SelectedField,
 		CombineVariants: options.CombineVariants, LumpTable: lumpTable,
 	}
 	settings.Grouping = "layer"
@@ -337,7 +327,7 @@ func cloneLongVegetationTransport(ctx context.Context, source vegetationLayerRep
 		if err := ctx.Err(); err != nil {
 			return LongVegetationReport{}, err
 		}
-		result.Diagnostics = append(result.Diagnostics, LongVegetationDiagnostic{diagnostic.Code, diagnostic.Identity, diagnostic.Count})
+		result.Diagnostics = append(result.Diagnostics, LongVegetationDiagnostic(diagnostic))
 	}
 	if source.Quality != nil {
 		quality := &LongVegetationQualitySelection{

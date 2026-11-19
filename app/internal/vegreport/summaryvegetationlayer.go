@@ -69,24 +69,6 @@ type summaryStageContext struct {
 	denominators  map[string]int64
 }
 
-// This literal read model deliberately excludes Access regional collation and
-// options/callbacks. Raw preparation omits NULL covers before the source joins.
-func prepareSummaryVegetationLayer(ctx context.Context, project, suName string,
-	veg, su, master, personal, layers vprocore.ProjectMetadataTable, average int) (summaryVegetationLayerReport, error) {
-	return prepareSummaryVegetationLayerDisplay(ctx, project, suName, veg, su, master, personal, layers, average, 6)
-}
-
-func prepareSummaryVegetationLayerDisplay(ctx context.Context, project, suName string,
-	veg, su, master, personal, layers vprocore.ProjectMetadataTable, average, display int) (summaryVegetationLayerReport, error) {
-	return prepareSummaryVegetationLayerOptions(ctx, project, suName, veg, su, master, personal, layers, average, display, 0)
-}
-
-func prepareSummaryVegetationLayerOptions(ctx context.Context, project, suName string,
-	veg, su, master, personal, layers vprocore.ProjectMetadataTable, average, display, showClass int) (summaryVegetationLayerReport, error) {
-	return prepareSummaryVegetationLayerReferences(ctx, project, suName, veg, su, master, personal, layers,
-		average, display, showClass, nil)
-}
-
 func prepareSummaryVegetationLayerReferences(ctx context.Context, project, suName string,
 	veg, su, master, personal, layers vprocore.ProjectMetadataTable, average, display, showClass int,
 	references *summaryVegetationReferencePlan) (summaryVegetationLayerReport, error) {
@@ -213,24 +195,6 @@ func attachSummaryStageWitnessProvenance(
 		}
 	}
 	return nil
-}
-
-// Stage is the physical EntryDat_Veg boundary. Its NULL covers establish pivot
-// columns, unlike NULL raw covers omitted by ConvertProVeg2V2.
-func planSummaryVegetationLayer(ctx context.Context,
-	raw, su, stage, master, personal, layers vprocore.ProjectMetadataTable, average int) (summaryVegetationLayerReport, error) {
-	return planSummaryVegetationLayerDisplay(ctx, raw, su, stage, master, personal, layers, average, 6)
-}
-
-func planSummaryVegetationLayerDisplay(ctx context.Context,
-	raw, su, stage, master, personal, layers vprocore.ProjectMetadataTable, average, display int) (summaryVegetationLayerReport, error) {
-	return planSummaryVegetationLayerOptions(ctx, raw, su, stage, master, personal, layers, average, display, 0)
-}
-
-func planSummaryVegetationLayerOptions(ctx context.Context,
-	raw, su, stage, master, personal, layers vprocore.ProjectMetadataTable, average, display, showClass int) (summaryVegetationLayerReport, error) {
-	return planSummaryVegetationStage(ctx, raw, su, stage, master, personal, layers, average, display, showClass,
-		summaryVegetationStageProjection{joinField: "Layer1234567", joinLimit: 2, labelField: "Layer", labelLimit: 3})
 }
 
 type summaryVegetationStageProjection struct {

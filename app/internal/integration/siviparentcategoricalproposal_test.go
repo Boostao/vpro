@@ -1,14 +1,6 @@
 package integration
 
 import (
-	"github.com/boostao/vpro/app/internal/sourceform"
-	"github.com/boostao/vpro/app/internal/sourceform/sftest"
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"database/sql"
 	"errors"
@@ -16,6 +8,12 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestSIVIParentCategoricalProposalFourteenFieldsAndLegacyCompatibility(t *testing.T) {
@@ -63,7 +61,7 @@ func TestSIVIParentCategoricalProposalFourteenFieldsAndLegacyCompatibility(t *te
 				t.Fatal(err)
 			}
 			for mask := 1; mask < 16; mask++ {
-				var a, b, c, d []sourceform.SiviParentScalarEdit
+				var a, b, c, d []sourceform.SourceParentScalarEdit
 				if mask&1 != 0 {
 					a = scalars
 				}
@@ -91,16 +89,16 @@ func TestSIVIParentCategoricalProposalFourteenFieldsAndLegacyCompatibility(t *te
 				} else if len(got.Options) != 0 {
 					t.Fatal("absent option domain invented assignments", mask, got)
 				}
-				wantText := []sourceform.SiviParentScalarAssignment{}
+				wantText := []sourceform.SourceParentScalarAssignment{}
 				if len(c) > 0 {
-					wantText = []sourceform.SiviParentScalarAssignment{
+					wantText = []sourceform.SourceParentScalarAssignment{
 						{ContextID: state.ContextID, Table: "Sample_Env", RowID: parent.Rows[0].Env.RowID, Column: "SV_PolygonNumber", Before: vprotest.MetadataText("original polygon"), After: vprotest.MetadataText("  New Polygon  "), Value: "  New Polygon  "},
 						{ContextID: state.ContextID, Table: "Sample_Env", RowID: parent.Rows[0].Env.RowID, Column: "SV_CanopyComposition", Before: vprotest.MetadataText("original canopy"), After: vprotest.MetadataText("Literal canopy"), Value: "Literal canopy"},
 					}
 				}
-				wantCategorical := []sourceform.SiviParentScalarAssignment{}
+				wantCategorical := []sourceform.SourceParentScalarAssignment{}
 				if len(d) > 0 {
-					wantCategorical = []sourceform.SiviParentScalarAssignment{
+					wantCategorical = []sourceform.SourceParentScalarAssignment{
 						{ContextID: state.ContextID, Table: "Sample_Env", RowID: parent.Rows[0].Env.RowID, Column: "SnowCoverregime", Before: vprotest.MetadataText("S"), After: vprotest.MetadataText("Z"), Value: "Z"},
 						{ContextID: state.ContextID, Table: "Sample_Env", RowID: parent.Rows[0].Env.RowID, Column: "SV_RootZoneTexture", Before: vprotest.MetadataText("original texture"), After: vprotest.MetadataText("  MiXeD \t "), Value: "  MiXeD \t "},
 						{ContextID: state.ContextID, Table: "Sample_Env", RowID: parent.Rows[0].Env.RowID, Column: "SV_AhorizonType", Before: vprotest.MetadataText("Ah"), After: vprotest.MetadataText(""), Value: ""},
@@ -159,7 +157,7 @@ func TestSIVIParentCategoricalProposalFourthDomainFailureAndRetry(t *testing.T) 
 	files := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
 	for _, kind := range []string{"empty", "overlength", "domain", "implicit", "duplicate", "expected", "row", "context", "table", "missing-pair", "stale-context"} {
 		t.Run(kind, func(t *testing.T) {
-			a, b, c, d := scalars, options, text, append([]sourceform.SiviParentScalarEdit(nil), categorical...)
+			a, b, c, d := scalars, options, text, append([]sourceform.SourceParentScalarEdit(nil), categorical...)
 			id, plot := state.ContextID, "108050"
 			switch kind {
 			case "empty":
@@ -202,7 +200,7 @@ func TestSIVIParentCategoricalProposalFourthDomainFailureAndRetry(t *testing.T) 
 	late, cancelLate := context.WithCancel(context.Background())
 	defer cancelLate()
 	rejected, err := vprocore.WithContextPlotRequest(late, service, state.ContextID, func(plots *vprocore.PlotService) (*sourceform.SiviParentCategoricalProposal, error) {
-		return sourceform.WithOwnedSIVIParentRead(late, plots, state.ContextID, "108050", func(original *sourceform.SiviParentProjection) (*sourceform.SiviParentCategoricalProposal, error) {
+		return sourceform.WithOwnedSIVIParentRead(late, plots, state.ContextID, "108050", func(original *sourceform.SourceParentProjection) (*sourceform.SiviParentCategoricalProposal, error) {
 			if !reflect.DeepEqual(original, got.Original) {
 				t.Fatal("late-cancellation snapshot differs from completed proposal")
 			}

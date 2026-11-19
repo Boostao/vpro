@@ -16,14 +16,14 @@ import (
 	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
-// A private preparation kernel, not a project lease or desktop export API.
+// ArtifactPublication — A private preparation kernel, not a project lease or desktop export API.
 type ArtifactPublication struct {
 	Path      string
 	SHA256    string
 	Published bool
 }
 
-// Per-call fault seams keep tests independent; production uses the nil defaults.
+// ArtifactPublicationHooks — Per-call fault seams keep tests independent; production uses the nil defaults.
 type ArtifactPublicationHooks struct {
 	Observe func(phase, temporary string) error `json:"-" yaml:"-"`
 	Write   func(*os.File, []byte) (int, error) `json:"-" yaml:"-"`
@@ -42,7 +42,7 @@ type ArtifactPublicationFormat struct {
 	Validate     func(context.Context, []byte) error   `json:"-" yaml:"-"`
 }
 
-// Source authority is independent of the publisher's test-only fault seams.
+// PublishArtifactChecked — Source authority is independent of the publisher's test-only fault seams.
 // Validation precedes the final artifact/parent rechecks and irreversible link.
 func PublishArtifactChecked(ctx context.Context, requested string, format ArtifactPublicationFormat, validateSource func() error, hooks ArtifactPublicationHooks) (result ArtifactPublication, resultErr error) {
 	if ctx == nil {

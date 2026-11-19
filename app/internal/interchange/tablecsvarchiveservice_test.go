@@ -1,11 +1,6 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -16,6 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestTableCSVArchiveServiceUnavailableAuthorization(t *testing.T) {
@@ -28,6 +26,7 @@ func TestTableCSVArchiveServiceUnavailableAuthorization(t *testing.T) {
 		}
 	}
 	service := NewTableCSVArchiveService(nil)
+	//lint:ignore SA1012 intentional nil-context guard test
 	if result, err := service.GetTableCSVArchiveReview(nil, "", "{}"); result != nil || err == nil {
 		t.Fatal("nil request context accepted")
 	}

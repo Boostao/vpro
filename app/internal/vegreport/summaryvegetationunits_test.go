@@ -1,17 +1,15 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func summaryUnitTables(raw []vprocore.ProjectMetadataCell, members [][2]vprocore.ProjectMetadataCell) (vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable) {
@@ -148,6 +146,7 @@ func TestSummaryVegetationUnitsStrictInputAndCancellation(t *testing.T) {
 	if !errors.Is(err, context.Canceled) || result != nil {
 		t.Fatal("cancelled request returned units", result, err)
 	}
+	//lint:ignore SA1012 intentional nil-context guard test
 	if result, err := prepareSummaryVegetationUnits(nil, veg, su); err == nil || result != nil {
 		t.Fatal("nil context accepted", result, err)
 	}

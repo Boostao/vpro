@@ -74,15 +74,18 @@ func ListSynthesisLumpTables(ctx context.Context, contexts *vprocore.ContextServ
 			return nil, err
 		}
 		var names []string
-		for rows.Next() {
-			var n string
-			if err := rows.Scan(&n); err != nil {
-				rows.Close()
-				return nil, err
+		if err := func() (scanErr error) {
+			defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+			for rows.Next() {
+				var n string
+				if err := rows.Scan(&n); err != nil {
+
+					return err
+				}
+				names = append(names, n)
 			}
-			names = append(names, n)
-		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return rows.Err()
+		}(); err != nil {
 			return nil, err
 		}
 
@@ -94,16 +97,18 @@ func ListSynthesisLumpTables(ctx context.Context, contexts *vprocore.ContextServ
 				continue
 			}
 			total, active := 0, 0
-			for rRows.Next() {
-				var rawUse string
-				if err := rRows.Scan(&rawUse); err == nil {
-					total++
-					if normalizeAccessBooleanValue(rawUse) {
-						active++
+			func() {
+				defer rRows.Close()
+				for rRows.Next() {
+					var rawUse string
+					if err := rRows.Scan(&rawUse); err == nil {
+						total++
+						if normalizeAccessBooleanValue(rawUse) {
+							active++
+						}
 					}
 				}
-			}
-			rRows.Close()
+			}()
 			baseName := tbl
 			if len(baseName) > 5 && strings.EqualFold(baseName[len(baseName)-5:], "_Lump") {
 				baseName = baseName[:len(baseName)-5]
@@ -343,17 +348,20 @@ func loadOrderedProjectPlots(
 	if aErr != nil {
 		return nil, nil, aErr
 	}
-	for adminRows.Next() {
-		var pNum, uSU string
-		if err := adminRows.Scan(&pNum, &uSU); err != nil {
-			adminRows.Close()
-			return nil, nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, adminRows.Close()) }()
+		for adminRows.Next() {
+			var pNum, uSU string
+			if err := adminRows.Scan(&pNum, &uSU); err != nil {
+
+				return err
+			}
+			if _, dup := adminMap[pNum]; !dup {
+				adminMap[pNum] = uSU
+			}
 		}
-		if _, dup := adminMap[pNum]; !dup {
-			adminMap[pNum] = uSU
-		}
-	}
-	if err := errors.Join(adminRows.Err(), adminRows.Close()); err != nil {
+		return adminRows.Err()
+	}(); err != nil {
 		return nil, nil, err
 	}
 
@@ -373,26 +381,29 @@ func loadOrderedProjectPlots(
 	}
 	ordered := make([]SynthesisUnitPlot, 0, len(adminMap))
 	idxByPlot := make(map[string]int, len(adminMap))
-	for envRows.Next() {
-		var rec SynthesisUnitPlot
-		if err := envRows.Scan(
-			&rec.PlotNumber, &rec.FieldNumber, &rec.Zone, &rec.SubZone, &rec.SiteSeries,
-			&rec.MoistureRegime, &rec.NutrientRegime,
-		); err != nil {
-			envRows.Close()
-			return nil, nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, envRows.Close()) }()
+		for envRows.Next() {
+			var rec SynthesisUnitPlot
+			if err := envRows.Scan(
+				&rec.PlotNumber, &rec.FieldNumber, &rec.Zone, &rec.SubZone, &rec.SiteSeries,
+				&rec.MoistureRegime, &rec.NutrientRegime,
+			); err != nil {
+
+				return err
+			}
+			uSU, inAdmin := adminMap[rec.PlotNumber]
+			if !inAdmin {
+				continue
+			}
+			if _, dup := idxByPlot[rec.PlotNumber]; !dup {
+				rec.UserSiteUnit = uSU
+				idxByPlot[rec.PlotNumber] = len(ordered)
+				ordered = append(ordered, rec)
+			}
 		}
-		uSU, inAdmin := adminMap[rec.PlotNumber]
-		if !inAdmin {
-			continue
-		}
-		if _, dup := idxByPlot[rec.PlotNumber]; !dup {
-			rec.UserSiteUnit = uSU
-			idxByPlot[rec.PlotNumber] = len(ordered)
-			ordered = append(ordered, rec)
-		}
-	}
-	if err := errors.Join(envRows.Err(), envRows.Close()); err != nil {
+		return envRows.Err()
+	}(); err != nil {
 		return nil, nil, err
 	}
 
@@ -416,18 +427,22 @@ func loadFullSpeciesCatalog(ctx context.Context, tx *sql.Tx) (map[string]Species
 	userLifeformCol := ""
 	pRows, pErr := tx.QueryContext(ctx, `PRAGMA "VUser".table_info("USysUserSpp")`)
 	if pErr == nil {
-		for pRows.Next() {
-			var cid, notNull, pk int
-			var name, ctype string
-			var dflt any
-			if err := pRows.Scan(&cid, &name, &ctype, &notNull, &dflt, &pk); err == nil {
-				if name == "LifeForm" || name == "Lifeform" {
-					userLifeformCol = name
-					break
+		func() {
+			defer pRows.Close()
+
+			for pRows.Next() {
+				var cid, notNull, pk int
+				var name, ctype string
+				var dflt any
+				if err := pRows.Scan(&cid, &name, &ctype, &notNull, &dflt, &pk); err == nil {
+					if name == "LifeForm" || name == "Lifeform" {
+						userLifeformCol = name
+						break
+					}
 				}
 			}
-		}
-		pRows.Close()
+
+		}()
 	}
 
 	mRows, err := tx.QueryContext(ctx,
@@ -443,36 +458,39 @@ func loadFullSpeciesCatalog(ctx context.Context, tx *sql.Tx) (map[string]Species
 	if err != nil {
 		return nil, err
 	}
-	for mRows.Next() {
-		var code, sci, eng, codetype string
-		var lf sql.NullInt64
-		if err := mRows.Scan(&code, &sci, &eng, &lf, &codetype); err != nil {
-			mRows.Close()
-			return nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, mRows.Close()) }()
+		for mRows.Next() {
+			var code, sci, eng, codetype string
+			var lf sql.NullInt64
+			if err := mRows.Scan(&code, &sci, &eng, &lf, &codetype); err != nil {
+
+				return err
+			}
+			if code == "" {
+				continue
+			}
+			if _, exists := catalog[code]; exists {
+				continue
+			}
+			var lfPtr *int
+			if lf.Valid && lf.Int64 >= math.MinInt32 && lf.Int64 <= math.MaxInt32 {
+				v := int(lf.Int64)
+				lfPtr = &v
+			}
+			lfName, stratum := LifeformLabel(lfPtr)
+			catalog[code] = SpeciesTaxonMeta{
+				Species:         code,
+				ScientificName:  strings.TrimSpace(sci),
+				EnglishName:     strings.TrimSpace(eng),
+				Lifeform:        lfPtr,
+				LifeformName:    lfName,
+				StratumGroup:    stratum,
+				SourceCatalogue: "VLists",
+			}
 		}
-		if code == "" {
-			continue
-		}
-		if _, exists := catalog[code]; exists {
-			continue
-		}
-		var lfPtr *int
-		if lf.Valid && lf.Int64 >= math.MinInt32 && lf.Int64 <= math.MaxInt32 {
-			v := int(lf.Int64)
-			lfPtr = &v
-		}
-		lfName, stratum := LifeformLabel(lfPtr)
-		catalog[code] = SpeciesTaxonMeta{
-			Species:         code,
-			ScientificName:  strings.TrimSpace(sci),
-			EnglishName:     strings.TrimSpace(eng),
-			Lifeform:        lfPtr,
-			LifeformName:    lfName,
-			StratumGroup:    stratum,
-			SourceCatalogue: "VLists",
-		}
-	}
-	if err := errors.Join(mRows.Err(), mRows.Close()); err != nil {
+		return mRows.Err()
+	}(); err != nil {
 		return nil, err
 	}
 
@@ -488,36 +506,39 @@ func loadFullSpeciesCatalog(ctx context.Context, tx *sql.Tx) (map[string]Species
 			 ORDER BY rowid ASC`,
 		)
 		if uErr == nil {
-			for uRows.Next() {
-				var code, sci, eng string
-				var lf sql.NullInt64
-				if err := uRows.Scan(&code, &sci, &eng, &lf); err != nil {
-					uRows.Close()
-					return nil, err
+			if err := func() (scanErr error) {
+				defer func() { scanErr = errors.Join(scanErr, uRows.Close()) }()
+				for uRows.Next() {
+					var code, sci, eng string
+					var lf sql.NullInt64
+					if err := uRows.Scan(&code, &sci, &eng, &lf); err != nil {
+
+						return err
+					}
+					if code == "" {
+						continue
+					}
+					if _, exists := catalog[code]; exists {
+						continue
+					}
+					var lfPtr *int
+					if lf.Valid && lf.Int64 >= math.MinInt16 && lf.Int64 <= math.MaxInt16 {
+						v := int(lf.Int64)
+						lfPtr = &v
+					}
+					lfName, stratum := LifeformLabel(lfPtr)
+					catalog[code] = SpeciesTaxonMeta{
+						Species:         code,
+						ScientificName:  strings.TrimSpace(sci),
+						EnglishName:     strings.TrimSpace(eng),
+						Lifeform:        lfPtr,
+						LifeformName:    lfName,
+						StratumGroup:    stratum,
+						SourceCatalogue: "VUser",
+					}
 				}
-				if code == "" {
-					continue
-				}
-				if _, exists := catalog[code]; exists {
-					continue
-				}
-				var lfPtr *int
-				if lf.Valid && lf.Int64 >= math.MinInt16 && lf.Int64 <= math.MaxInt16 {
-					v := int(lf.Int64)
-					lfPtr = &v
-				}
-				lfName, stratum := LifeformLabel(lfPtr)
-				catalog[code] = SpeciesTaxonMeta{
-					Species:         code,
-					ScientificName:  strings.TrimSpace(sci),
-					EnglishName:     strings.TrimSpace(eng),
-					Lifeform:        lfPtr,
-					LifeformName:    lfName,
-					StratumGroup:    stratum,
-					SourceCatalogue: "VUser",
-				}
-			}
-			if err := errors.Join(uRows.Err(), uRows.Close()); err != nil {
+				return uRows.Err()
+			}(); err != nil {
 				return nil, err
 			}
 		}
@@ -598,13 +619,17 @@ func loadUnitLongNamesForOwner(ctx context.Context, tx *sql.Tx, owner *vprocore.
 			`SELECT COALESCE(CAST("SiteSeries" AS TEXT), ''), COALESCE(CAST("SiteSeriesLongName" AS TEXT), '')
 			 FROM `+vprocore.QuoteHeaderIdentifier(src.role)+`.`+vprocore.QuoteHeaderIdentifier(src.table))
 		if uErr == nil {
-			for uRows.Next() {
-				var code, lname string
-				if err := uRows.Scan(&code, &lname); err == nil && strings.TrimSpace(code) != "" {
-					unitLongNames[strings.TrimSpace(code)] = strings.TrimSpace(lname)
+			func() {
+				defer uRows.Close()
+
+				for uRows.Next() {
+					var code, lname string
+					if err := uRows.Scan(&code, &lname); err == nil && strings.TrimSpace(code) != "" {
+						unitLongNames[strings.TrimSpace(code)] = strings.TrimSpace(lname)
+					}
 				}
-			}
-			uRows.Close()
+
+			}()
 		}
 	}
 	if ok {

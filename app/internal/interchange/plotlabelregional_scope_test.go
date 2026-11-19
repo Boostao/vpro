@@ -1,11 +1,9 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
-)
-
-import (
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestPlotLabelRegionalLiteralStorageAndAmbiguousParents(t *testing.T) {

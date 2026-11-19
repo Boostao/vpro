@@ -1,11 +1,6 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro/app/internal/sqlutil"
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"archive/zip"
 	"bytes"
 	"context"
@@ -18,24 +13,10 @@ import (
 	"slices"
 	"sort"
 	"unicode/utf8"
-)
 
-// This private container publishes neither files nor databases. Its byte budget
-// bounds both the whole input archive and the aggregate uncompressed members.
-func encodeTableCSVBundle(ctx context.Context, document tableCSVDocument) ([]byte, error) {
-	document = snapshotTableCSVBundleDocument(document)
-	if _, err := decodeTableCSV(ctx, document); err != nil {
-		return nil, fmt.Errorf("table CSV bundle document: %w", err)
-	}
-	manifest, err := json.Marshal(document.Manifest)
-	if err != nil {
-		return nil, fmt.Errorf("table CSV bundle manifest: %w", err)
-	}
-	if err := validateTableCSVBundleManifest(ctx, manifest); err != nil {
-		return nil, fmt.Errorf("table CSV bundle manifest: %w", err)
-	}
-	return encodeTableCSVBundleMembers(ctx, document.Data, manifest)
-}
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+)
 
 func encodeTableCSVBundleMembers(ctx context.Context, csv, manifest []byte) ([]byte, error) {
 	var output bytes.Buffer
@@ -47,8 +28,9 @@ func encodeTableCSVBundleMembers(ctx context.Context, csv, manifest []byte) ([]b
 		if err := ctx.Err(); err != nil {
 			return nil, fmt.Errorf("table CSV bundle encode: %w", err)
 		}
-		header := &zip.FileHeader{Name: member.name, Method: zip.Store,
-			CreatorVersion: 20, ReaderVersion: 20, ModifiedDate: 33,
+		//lint:ignore SA1019 CreateRaw requires raw DOS ModifiedDate=33 (1980-01-01) for deterministic ZIP bytes
+		header := &zip.FileHeader{Name: member.name, Method: zip.Store, ModifiedDate: 33,
+			CreatorVersion: 20, ReaderVersion: 20,
 			CRC32:            crc32.ChecksumIEEE(member.data),
 			CompressedSize64: uint64(len(member.data)), UncompressedSize64: uint64(len(member.data))}
 		header.SetMode(0600)
@@ -67,29 +49,6 @@ func encodeTableCSVBundleMembers(ctx context.Context, csv, manifest []byte) ([]b
 		return nil, fmt.Errorf("table CSV bundle encode: %w", err)
 	}
 	return append([]byte(nil), output.Bytes()...), nil
-}
-
-func decodeTableCSVBundle(ctx context.Context, encoded []byte, byteBudget int64) (tableCSVDocument, error) {
-	var zero tableCSVDocument
-	contents, err := decodeTableCSVBundleMembers(ctx, encoded, byteBudget)
-	if err != nil {
-		return zero, err
-	}
-	if err := validateTableCSVBundleManifest(ctx, contents["manifest.json"]); err != nil {
-		return zero, fmt.Errorf("table CSV bundle manifest: %w", err)
-	}
-	var manifest TableCSVManifest
-	if err := json.Unmarshal(contents["manifest.json"], &manifest); err != nil {
-		return zero, fmt.Errorf("table CSV bundle manifest decode: %w", err)
-	}
-	document := tableCSVDocument{Manifest: manifest, Data: contents["table.csv"]}
-	if _, err := decodeTableCSV(ctx, document); err != nil {
-		return zero, fmt.Errorf("table CSV bundle document: %w", err)
-	}
-	if err := ctx.Err(); err != nil {
-		return zero, fmt.Errorf("table CSV bundle decode: %w", err)
-	}
-	return document, nil
 }
 
 func decodeTableCSVBundleMembers(ctx context.Context, encoded []byte, byteBudget int64) (map[string][]byte, error) {
@@ -319,12 +278,6 @@ func validateTableCSVBundleHeaders(ctx context.Context, data []byte, members []*
 		return errors.New("unexpected data between ZIP members and central directory")
 	}
 	return nil
-}
-
-// Bounded to the four object shapes in this manifest, not an application-wide
-// JSON policy. Inspect every raw string before encoding/json can repair Unicode.
-func validateTableCSVBundleManifest(ctx context.Context, raw []byte) error {
-	return validateTableCSVBundleJSON(ctx, raw, "manifest")
 }
 
 func validateTableCSVBundleJSON(ctx context.Context, raw []byte, shape string) error {

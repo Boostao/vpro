@@ -1,18 +1,15 @@
 package lifecycle
 
 import (
-	"github.com/boostao/vpro/app/internal/vprocore"
-)
-
-import (
 	"bytes"
 	"context"
-
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro/app/resources"
 	"strings"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 var standards2026ProvenanceJSON = resources.Standards2026ProvenanceJSON

@@ -195,21 +195,24 @@ func scanEnvPlotKeys(ctx context.Context, tx *sql.Tx, envTbl string, keys *compl
 	if err != nil {
 		return err
 	}
-	for rows.Next() {
-		var pType, disp string
-		var raw []byte
-		if err := rows.Scan(&pType, &raw, &disp); err != nil {
-			rows.Close()
-			return err
+	return func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var pType, disp string
+			var raw []byte
+			if err := rows.Scan(&pType, &raw, &disp); err != nil {
+
+				return err
+			}
+			isText := pType == "text"
+			rawStr := string(raw)
+			if isText {
+				keys.envTextPlots[rawStr] = struct{}{}
+			}
+			keys.envOrdered = append(keys.envOrdered, compliancePlotKeyEntry{isText: isText, rawKey: rawStr, display: disp})
 		}
-		isText := pType == "text"
-		rawStr := string(raw)
-		if isText {
-			keys.envTextPlots[rawStr] = struct{}{}
-		}
-		keys.envOrdered = append(keys.envOrdered, compliancePlotKeyEntry{isText: isText, rawKey: rawStr, display: disp})
-	}
-	return errors.Join(rows.Err(), rows.Close())
+		return rows.Err()
+	}()
 }
 
 func scanSUPlotKeys(ctx context.Context, tx *sql.Tx, activeSU string, keys *compliancePlotKeySets) error {
@@ -219,27 +222,30 @@ func scanSUPlotKeys(ctx context.Context, tx *sql.Tx, activeSU string, keys *comp
 	if err != nil {
 		return err
 	}
-	for rows.Next() {
-		var pType, disp string
-		var raw []byte
-		if err := rows.Scan(&pType, &raw, &disp); err != nil {
-			rows.Close()
-			return err
+	return func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var pType, disp string
+			var raw []byte
+			if err := rows.Scan(&pType, &raw, &disp); err != nil {
+
+				return err
+			}
+			rawStr := string(raw)
+			if pType != "text" {
+				keys.suOrphanCounts[disp]++
+				continue
+			}
+			if _, seen := keys.suTextPlots[rawStr]; !seen {
+				keys.suTextPlots[rawStr] = struct{}{}
+				keys.suPlotList = append(keys.suPlotList, rawStr)
+			}
+			if _, ok := keys.envTextPlots[rawStr]; !ok {
+				keys.suOrphanCounts[disp]++
+			}
 		}
-		rawStr := string(raw)
-		if pType != "text" {
-			keys.suOrphanCounts[disp]++
-			continue
-		}
-		if _, seen := keys.suTextPlots[rawStr]; !seen {
-			keys.suTextPlots[rawStr] = struct{}{}
-			keys.suPlotList = append(keys.suPlotList, rawStr)
-		}
-		if _, ok := keys.envTextPlots[rawStr]; !ok {
-			keys.suOrphanCounts[disp]++
-		}
-	}
-	return errors.Join(rows.Err(), rows.Close())
+		return rows.Err()
+	}()
 }
 
 func scanAdminPlotKeys(ctx context.Context, tx *sql.Tx, adminTbl string, keys *compliancePlotKeySets) error {
@@ -250,24 +256,27 @@ func scanAdminPlotKeys(ctx context.Context, tx *sql.Tx, adminTbl string, keys *c
 	if err != nil {
 		return err
 	}
-	for rows.Next() {
-		var pType, disp string
-		var raw []byte
-		if err := rows.Scan(&pType, &raw, &disp); err != nil {
-			rows.Close()
-			return err
-		}
-		rawStr := string(raw)
-		if pType == "text" {
-			keys.adminTextPlots[rawStr] = struct{}{}
-			if _, ok := keys.envTextPlots[rawStr]; !ok {
-				keys.orphanAdmins = append(keys.orphanAdmins, compliancePlotKeyEntry{isText: true, rawKey: rawStr, display: disp})
+	return func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var pType, disp string
+			var raw []byte
+			if err := rows.Scan(&pType, &raw, &disp); err != nil {
+
+				return err
 			}
-		} else {
-			keys.orphanAdmins = append(keys.orphanAdmins, compliancePlotKeyEntry{isText: false, rawKey: rawStr, display: disp})
+			rawStr := string(raw)
+			if pType == "text" {
+				keys.adminTextPlots[rawStr] = struct{}{}
+				if _, ok := keys.envTextPlots[rawStr]; !ok {
+					keys.orphanAdmins = append(keys.orphanAdmins, compliancePlotKeyEntry{isText: true, rawKey: rawStr, display: disp})
+				}
+			} else {
+				keys.orphanAdmins = append(keys.orphanAdmins, compliancePlotKeyEntry{isText: false, rawKey: rawStr, display: disp})
+			}
 		}
-	}
-	return errors.Join(rows.Err(), rows.Close())
+		return rows.Err()
+	}()
 }
 
 func populateEnvAdminCompleteness(keys compliancePlotKeySets, useSU bool, report *ComplianceValidationReport) {
@@ -352,16 +361,22 @@ func queryOrphanChildCounts(
 		return nil, err
 	}
 	orphanCounts := map[string]int{}
-	for cRows.Next() {
-		var disp string
-		var grpCnt int
-		if err := cRows.Scan(&disp, &grpCnt); err != nil {
-			cRows.Close()
-			return nil, err
+	if scanErr := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, cRows.Close()) }()
+		for cRows.Next() {
+			var disp string
+			var grpCnt int
+			if err := cRows.Scan(&disp, &grpCnt); err != nil {
+
+				return err
+			}
+			orphanCounts[disp] += grpCnt
 		}
-		orphanCounts[disp] += grpCnt
+		return cRows.Err()
+	}(); scanErr != nil {
+		return nil, scanErr
 	}
-	return orphanCounts, errors.Join(cRows.Err(), cRows.Close())
+	return orphanCounts, nil
 }
 
 func appendSortedOrphanFindings(table string, orphanCounts map[string]int, countTowardSummary bool, report *ComplianceValidationReport) {
@@ -441,15 +456,18 @@ func loadVegTextPlots(
 	if err != nil {
 		return err
 	}
-	for rows.Next() {
-		var raw []byte
-		if err := rows.Scan(&raw); err != nil {
-			rows.Close()
-			return err
+	return func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, rows.Close()) }()
+		for rows.Next() {
+			var raw []byte
+			if err := rows.Scan(&raw); err != nil {
+
+				return err
+			}
+			vegTextPlots[string(raw)] = struct{}{}
 		}
-		vegTextPlots[string(raw)] = struct{}{}
-	}
-	return errors.Join(rows.Err(), rows.Close())
+		return rows.Err()
+	}()
 }
 
 func checkVListsEnvCodeCompliance(
@@ -492,15 +510,18 @@ func loadVListsCodeDefinitions(
 		return nil, nil, err
 	}
 	var defs []complianceListDef
-	for defRows.Next() {
-		var d complianceListDef
-		if err := defRows.Scan(&d.listName, &d.fieldUsedIn, &d.loops); err != nil {
-			defRows.Close()
-			return nil, nil, err
+	if err := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, defRows.Close()) }()
+		for defRows.Next() {
+			var d complianceListDef
+			if err := defRows.Scan(&d.listName, &d.fieldUsedIn, &d.loops); err != nil {
+
+				return err
+			}
+			defs = append(defs, d)
 		}
-		defs = append(defs, d)
-	}
-	if err := errors.Join(defRows.Err(), defRows.Close()); err != nil {
+		return defRows.Err()
+	}(); err != nil {
 		return nil, nil, err
 	}
 
@@ -511,19 +532,25 @@ func loadVListsCodeDefinitions(
 	if err != nil {
 		return nil, nil, err
 	}
-	for itemRows.Next() {
-		var ln, it string
-		if err := itemRows.Scan(&ln, &it); err != nil {
-			itemRows.Close()
-			return nil, nil, err
+	if scanErr := func() (scanErr error) {
+		defer func() { scanErr = errors.Join(scanErr, itemRows.Close()) }()
+		for itemRows.Next() {
+			var ln, it string
+			if err := itemRows.Scan(&ln, &it); err != nil {
+
+				return err
+			}
+			lnKey := asciiLower(ln)
+			if validItemsByList[lnKey] == nil {
+				validItemsByList[lnKey] = map[string]struct{}{}
+			}
+			validItemsByList[lnKey][asciiLower(it)] = struct{}{}
 		}
-		lnKey := asciiLower(ln)
-		if validItemsByList[lnKey] == nil {
-			validItemsByList[lnKey] = map[string]struct{}{}
-		}
-		validItemsByList[lnKey][asciiLower(it)] = struct{}{}
+		return itemRows.Err()
+	}(); scanErr != nil {
+		return nil, nil, scanErr
 	}
-	return defs, validItemsByList, errors.Join(itemRows.Err(), itemRows.Close())
+	return defs, validItemsByList, nil
 }
 
 func expandCodeCheckDefinitions(

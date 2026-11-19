@@ -13,6 +13,8 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
+	"github.com/boostao/vpro/app/internal/sqlutil"
+
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -138,7 +140,7 @@ func extractTVDatasetFromContext(ctx context.Context, tx *sql.Tx, owner *vprocor
 		sppDefs[i] = tvSpeciesItem{
 			SpeciesNR:      nr,
 			SpeciesCode:    code,
-			LetterCode:     truncateUTF16Units(code, 7),
+			LetterCode:     sqlutil.TruncateUTF16(code, 7),
 			ScientificName: sci,
 			EnglishName:    m.EnglishName,
 			Lifeform:       m.Lifeform,
@@ -378,11 +380,11 @@ func abbreviateSpeciesName(sci string) string {
 		return ""
 	}
 	if len(parts) == 1 {
-		return truncateUTF16Units(parts[0], 8)
+		return sqlutil.TruncateUTF16(parts[0], 8)
 	}
-	g := truncateUTF16Units(parts[0], 4)
-	sp := truncateUTF16Units(parts[1], 3)
-	return truncateUTF16Units(g+sp, 8)
+	g := sqlutil.TruncateUTF16(parts[0], 4)
+	sp := sqlutil.TruncateUTF16(parts[1], 3)
+	return sqlutil.TruncateUTF16(g+sp, 8)
 }
 
 func populateVP08FromTVPlots(ctx context.Context, tx *sql.Tx, project string, plots []tvImportPlot) (int, int, error) {
@@ -501,7 +503,7 @@ func populateVP08FromTVPlots(ctx context.Context, tx *sql.Tx, project string, pl
 		if strings.TrimSpace(projID) == "" {
 			projID = project
 		}
-		projID = truncateUTF16Units(projID, 20)
+		projID = sqlutil.TruncateUTF16(projID, 20)
 
 		if _, err := envStmt.ExecContext(ctx,
 			pNum,
@@ -528,7 +530,7 @@ func populateVP08FromTVPlots(ctx context.Context, tx *sql.Tx, project string, pl
 		if _, err := adminStmt.ExecContext(ctx, pNum, "FS882", h.PlotSize, nullTruncatedUTF16(h.SiteUnit, 100)); err != nil {
 			return 0, 0, fmt.Errorf("insert plot %s into _Admin: %w", pNum, err)
 		}
-		if suUnit := truncateUTF16Units(strings.TrimSpace(h.SiteUnit), 255); suUnit != "" {
+		if suUnit := sqlutil.TruncateUTF16(strings.TrimSpace(h.SiteUnit), 255); suUnit != "" {
 			suRows = append(suRows, [2]string{pNum, suUnit})
 		}
 
@@ -547,7 +549,7 @@ func populateVP08FromTVPlots(ctx context.Context, tx *sql.Tx, project string, pl
 			if err := validateUTF8Text(o.Collected, "Collected"); err != nil {
 				return 0, 0, err
 			}
-			code := truncateUTF16Units(strings.ToUpper(strings.TrimSpace(o.SpeciesCode)), 8)
+			code := sqlutil.TruncateUTF16(strings.ToUpper(strings.TrimSpace(o.SpeciesCode)), 8)
 			if code == "" {
 				continue
 			}
@@ -558,7 +560,7 @@ func populateVP08FromTVPlots(ctx context.Context, tx *sql.Tx, project string, pl
 				sppOrder = append(sppOrder, code)
 			}
 			if wr.collected == "" && strings.TrimSpace(o.Collected) != "" {
-				wr.collected = truncateUTF16Units(strings.TrimSpace(o.Collected), 1)
+				wr.collected = sqlutil.TruncateUTF16(strings.TrimSpace(o.Collected), 1)
 			}
 			cCol, hCol := resolveIncomingTurboVegLayer(o.TVLayerRaw, o.VProLayer, o.IsWoody)
 			if err := accumulateImportedSingleCover(wr.covers, cCol, o.Cover, pNum, code); err != nil {
@@ -653,7 +655,7 @@ func populateVP08FromTVPlots(ctx context.Context, tx *sql.Tx, project string, pl
 }
 
 func allocateUniqueTVPlotNumber(rawPlot string, usedTargetPlots, reservedLiteralShort map[string]bool) string {
-	cand := truncateUTF16Units(rawPlot, 7)
+	cand := sqlutil.TruncateUTF16(rawPlot, 7)
 	if cand != "" && !usedTargetPlots[cand] && (cand == rawPlot || !reservedLiteralShort[cand]) {
 		return cand
 	}
@@ -661,13 +663,13 @@ func allocateUniqueTVPlotNumber(rawPlot string, usedTargetPlots, reservedLiteral
 		suffix := "~" + strconv.Itoa(seq)
 		var disambig string
 		if maxPrefix := 7 - len(suffix); maxPrefix > 0 {
-			disambig = truncateUTF16Units(rawPlot, maxPrefix) + suffix
+			disambig = sqlutil.TruncateUTF16(rawPlot, maxPrefix) + suffix
 		} else {
 			b36 := strings.ToUpper(strconv.FormatInt(int64(seq), 36))
 			if len(b36) < 7 {
 				b36 = strings.Repeat("0", 7-len(b36)) + b36
 			}
-			disambig = truncateUTF16Units(b36, 7)
+			disambig = sqlutil.TruncateUTF16(b36, 7)
 		}
 		if disambig != "" && !usedTargetPlots[disambig] && !reservedLiteralShort[disambig] {
 			return disambig
