@@ -17,7 +17,9 @@ var PhytosociologicalRanks = []struct {
 	Label string `json:"label"`
 	Level int64  `json:"level"`
 }{
+	{Key: "Superclass", Label: "Superclass", Level: 1},
 	{Key: "Class", Label: "Class", Level: 2},
+	{Key: "Subclass", Label: "Subclass", Level: 3},
 	{Key: "Order", Label: "Order", Level: 4},
 	{Key: "SubOrder", Label: "SubOrder", Level: 5},
 	{Key: "Alliance", Label: "Alliance", Level: 6},
@@ -122,7 +124,7 @@ func levelToRankName(level int64, tag string) string {
 func SplitBreakpointPrefix(name string) (clean string, isBreak bool) {
 	trimmed := strings.TrimSpace(name)
 	if strings.HasPrefix(trimmed, "~") {
-		return strings.TrimPrefix(trimmed, "~"), true
+		return strings.TrimSpace(strings.TrimLeft(trimmed, "~")), true
 	}
 	return trimmed, false
 }
@@ -302,23 +304,121 @@ func buildHierarchyTreeAndFlatRows(records []rawHierarchyRecord) ([]HierarchyExp
 	return roots, flatNodes, flatRows, diag
 }
 
-func chainToFlatHierarchyRow(chain []rawHierarchyRecord) FlatHierarchyRow {
-	var row FlatHierarchyRow
-	if len(chain) > 0 {
-		row.LeafID = chain[len(chain)-1].id
+type flatSubseqCandidate struct {
+	indices     []int
+	includeLeaf bool
+}
+
+func betterFlatSubseq(a, b flatSubseqCandidate) bool {
+	if len(a.indices) != len(b.indices) {
+		return len(a.indices) > len(b.indices)
 	}
-	for idx, rec := range chain {
-		lvl := rec.level
-		if lvl < 1 || lvl > 11 {
-			if idx == len(chain)-1 {
-				lvl = 11
-			} else {
-				lvl = min(10, int64(idx+2))
+	if a.includeLeaf != b.includeLeaf {
+		return a.includeLeaf
+	}
+	for i := range a.indices {
+		if a.indices[i] != b.indices[i] {
+			return a.indices[i] < b.indices[i]
+		}
+	}
+	return false
+}
+
+func effectiveChainRank(rec rawHierarchyRecord, idx, chainLen int) (string, int) {
+	lvl := rec.level
+	if lvl < 1 || lvl > 11 {
+		if idx == chainLen-1 {
+			lvl = 11
+		} else {
+			lvl = min(10, int64(idx+2))
+		}
+	}
+	rank := levelToRankName(lvl, rec.tag)
+	switch rank {
+	case "Superclass":
+		return rank, 0
+	case "Class":
+		return rank, 1
+	case "Subclass":
+		return rank, 2
+	case "Order":
+		return rank, 3
+	case "SubOrder":
+		return rank, 4
+	case "Alliance":
+		return rank, 5
+	case "SubAlliance":
+		return rank, 6
+	case "Association":
+		return rank, 7
+	case "SubAssociation":
+		return rank, 8
+	case "Facies":
+		return rank, 9
+	case "WorkingUnit":
+		return rank, 10
+	default:
+		return "SiteSeries", 11
+	}
+}
+
+// selectFlatChainIndices chooses the longest strictly increasing rank-slot
+// subsequence along a root-to-leaf chain, preferring inclusion of the leaf on
+// equal length and otherwise the earliest (uppermost) ancestor at each rank so
+// a descendant with an inverted or duplicate Level never overwrites an ancestor
+// rank slot or inverts parent-child order across rows.
+func selectFlatChainIndices(slots []int) []int {
+	if len(slots) == 0 {
+		return nil
+	}
+	var bestBySlot [12]flatSubseqCandidate
+	for idx, slot := range slots {
+		isLeaf := idx == len(slots)-1
+		cand := flatSubseqCandidate{indices: []int{idx}, includeLeaf: isLeaf}
+		for prevSlot := 0; prevSlot < slot; prevSlot++ {
+			prev := bestBySlot[prevSlot]
+			if len(prev.indices) == 0 {
+				continue
+			}
+			ext := flatSubseqCandidate{
+				indices:     append(slices.Clone(prev.indices), idx),
+				includeLeaf: isLeaf,
+			}
+			if betterFlatSubseq(ext, cand) {
+				cand = ext
 			}
 		}
-		_, isBrk := SplitBreakpointPrefix(rec.name)
-		rank := levelToRankName(lvl, rec.tag)
-		if isBrk {
+		if len(bestBySlot[slot].indices) == 0 || betterFlatSubseq(cand, bestBySlot[slot]) {
+			bestBySlot[slot] = cand
+		}
+	}
+	var winner flatSubseqCandidate
+	for _, cand := range bestBySlot {
+		if len(cand.indices) == 0 {
+			continue
+		}
+		if len(winner.indices) == 0 || betterFlatSubseq(cand, winner) {
+			winner = cand
+		}
+	}
+	return winner.indices
+}
+
+func chainToFlatHierarchyRow(chain []rawHierarchyRecord) FlatHierarchyRow {
+	var row FlatHierarchyRow
+	if len(chain) == 0 {
+		return row
+	}
+	row.LeafID = chain[len(chain)-1].id
+	ranks := make([]string, len(chain))
+	slots := make([]int, len(chain))
+	for idx, rec := range chain {
+		ranks[idx], slots[idx] = effectiveChainRank(rec, idx, len(chain))
+	}
+	for _, idx := range selectFlatChainIndices(slots) {
+		rec := chain[idx]
+		rank := ranks[idx]
+		if _, isBrk := SplitBreakpointPrefix(rec.name); isBrk {
 			row.BreakpointRank = rank
 		}
 		// Keep full Name (including '~' prefix when marked as breakpoint) so flat table displays & round-trips breakpoints losslessly.
@@ -341,14 +441,10 @@ func chainToFlatHierarchyRow(chain []rawHierarchyRecord) FlatHierarchyRow {
 			row.Association = rec.name
 		case "SubAssociation":
 			row.SubAssociation = rec.name
+		case "Facies":
+			row.Facies = rec.name
 		case "WorkingUnit":
 			row.WorkingUnit = rec.name
-		case "Facies":
-			if row.Facies == "" {
-				row.Facies = rec.name
-			} else if row.WorkingUnit == "" {
-				row.WorkingUnit = rec.name
-			}
 		default:
 			row.SiteSeries = rec.name
 		}

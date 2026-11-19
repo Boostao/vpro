@@ -346,3 +346,70 @@ test('UX-CLASS-001: rows under an existing Superclass validate without false par
   const hiddenParent = { ...empty, class: 'ClassA', siteSeries: 'QA_NEW_SERIES' };
   assert.match(cls.validateFlatHierarchyRows([loaded, hiddenParent]), /conflicting parents/);
 });
+
+test('UX-CLASS-001: Sample_Hierarchy ClassA/ClassB rows validate cleanly and enforce rank/breakpoint/UTF-16 rules', () => {
+  const empty = cls.createEmptyFlatHierarchyRow();
+  const sampleRows = [
+    {
+      ...empty,
+      leafId: -370059454,
+      superclass: 'Conifer Forests',
+      class: 'ClassA',
+      subclass: 'SubClassA',
+      order: 'ORDER Tsugmer',
+      subOrder: 'SUBORDER Tsugmer-Coptasp',
+      subAlliance: 'SubAllianceA',
+      association: '~ASSOC Tsugmer-Phylemp-Cladina',
+      subAssociation: 'SUBASS Hm-Phylemp-Cladina(Abieama)',
+      facies: 'FaciesA',
+      siteSeries: 'MH  whp  /02',
+    },
+    {
+      ...empty,
+      leafId: 1212739030,
+      superclass: 'Conifer Forests',
+      class: 'ClassA',
+      subclass: 'SubClassA',
+      order: 'ORDER Tsugmer',
+      subOrder: 'SUBORDER Tsugmer-Coptasp',
+      subAlliance: 'SubAllianceB',
+      association: '~ASSOC Tsugmer-Cassste',
+      subAssociation: 'SUBASS Hm-Cassste(Veravir)',
+      facies: 'Facies - B',
+      siteSeries: 'MH  whp  /01',
+    },
+    {
+      ...empty,
+      leafId: -1218107202,
+      superclass: 'Conifer Forests',
+      class: 'ClassB',
+      facies: 'ClassLess',
+      siteSeries: 'BWBSdk 2 /06',
+    },
+    {
+      ...empty,
+      superclass: 'Conifer Forests',
+      class: 'ClassA',
+      siteSeries: 'QA_NEW_SERIES',
+    },
+  ];
+  assert.equal(cls.validateFlatHierarchyRows(sampleRows), '');
+
+  // Repeated ~ prefixes normalize consistently with Go SplitBreakpointPrefix
+  assert.equal(cls.toggleBreakpointName('~~Tsugion'), 'Tsugion');
+  assert.match(
+    cls.validateFlatHierarchyRows([{ ...empty, class: '~~   ' }]),
+    /empty breakpoint node/
+  );
+  assert.match(
+    cls.validateFlatHierarchyRows([
+      { ...empty, superclass: 'Conifer Forests', class: 'ClassA', siteSeries: 'SS01' },
+      { ...empty, superclass: 'Conifer Forests', order: 'ClassA', siteSeries: 'SS02' },
+    ]),
+    /conflicting ranks/
+  );
+  assert.match(
+    cls.validateFlatHierarchyRows([{ ...empty, siteSeries: 'A'.repeat(256) }]),
+    /255 UTF-16 code units/
+  );
+});

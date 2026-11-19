@@ -724,48 +724,53 @@ export function wouldIntroduceHierarchyCycle(
 export function toggleBreakpointName(rawName: string): string {
   const trimmed = rawName.trim();
   if (trimmed.startsWith('~')) {
-    return trimmed.slice(1).trim();
+    return trimmed.replace(/^~+/, '').trim();
   }
   return `~${trimmed}`;
 }
 
 export function validateFlatHierarchyRows(rows: readonly FlatHierarchyRow[]): string {
   const parentByNode = new Map<string, string>();
+  const rankByNode = new Map<string, string>();
+  const fmtParent = (p: string) => (p === '__root__' ? 'root' : `"${p}"`);
+
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
-    const chain = [
-      r.superclass,
-      r.class,
-      r.subclass,
-      r.order,
-      r.subOrder,
-      r.alliance,
-      r.subAlliance,
-      r.association,
-      r.subAssociation,
-      r.facies,
-      r.workingUnit,
-      r.siteSeries,
-    ]
-      .map(v => (v ?? '').trim())
-      .filter(Boolean);
-
     let prev = '__root__';
     const seenInRow = new Set<string>();
-    for (const rawName of chain) {
-      const clean = rawName.replace(/^~/, '').trim().toLowerCase();
-      if (!clean) {
+
+    for (const col of PHYTOSOCIOLOGICAL_RANK_COLUMNS) {
+      const rawName = (r[col.key] ?? '').trim();
+      if (!rawName) continue;
+      if (rawName.includes('\0')) {
+        return `Row ${i + 1} (${col.label}) contains an invalid NUL character.`;
+      }
+      const hasBreak = rawName.startsWith('~');
+      const cleanOrig = rawName.replace(/^~+/, '').trim();
+      if (!cleanOrig) {
         return `Row ${i + 1} has an empty breakpoint node ('~').`;
       }
+      const normalizedStored = hasBreak ? `~${cleanOrig}` : cleanOrig;
+      if (normalizedStored.length > 255) {
+        return `Row ${i + 1} (${col.label}) exceeds 255 UTF-16 code units.`;
+      }
+      const clean = cleanOrig.toLowerCase();
       if (seenInRow.has(clean)) {
         return `Row ${i + 1} repeats "${clean}" at multiple ranks (cycle).`;
       }
       seenInRow.add(clean);
+
       const existingParent = parentByNode.get(clean);
       if (existingParent !== undefined && existingParent !== prev) {
-        return `Row ${i + 1} places "${clean}" under conflicting parents.`;
+        return `Row ${i + 1} places "${clean}" under conflicting parents (${fmtParent(prev)} vs ${fmtParent(existingParent)}).`;
       }
+      const existingRank = rankByNode.get(clean);
+      if (existingRank !== undefined && existingRank !== col.key) {
+        return `Row ${i + 1} places "${clean}" at conflicting ranks (${col.label} vs ${existingRank}).`;
+      }
+
       parentByNode.set(clean, prev);
+      rankByNode.set(clean, col.key);
       prev = clean;
     }
   }
