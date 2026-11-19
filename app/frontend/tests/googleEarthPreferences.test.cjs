@@ -235,7 +235,7 @@ test('panel independently gates preferences shares one title and field and prote
   }
   assert.equal((source.match(/id="google-earth-place-name"/g) || []).length, 1);
   assert.equal((source.match(/id="google-earth-description"/g) || []).length, 1);
-  assert.match(source, /<option value=\{selectedField\}>[\s\S]*saved literal; physical availability not established/);
+  assert.match(source, /<option value=\{selectedField\}>[\s\S]*saved preference — load fields to verify/);
   assert.match(source, /fields = null; if \(!preferencesEnabled\) selectedField = ''/);
   assert.match(source, /\{#if kmlEnabled \|\| kmlExportEnabled \|\| preferencesEnabled\}/);
   assert.match(source, /\{#if kmlEnabled \|\| kmlExportEnabled\}[\s\S]*data-google-earth-kml-prepare/);
@@ -245,19 +245,19 @@ test('panel independently gates preferences shares one title and field and prote
   const save = source.slice(source.indexOf('async function savePreferences'), source.indexOf('async function loadFields'));
   assert.doesNotMatch(save, /reads\.track|\.cancel/);
   assert.match(source, /preferences\.busy \|\| preferences\.blocked/);
-  const busy = source.slice(source.indexOf('function updateBusy'), source.indexOf('const unsubscribe ='));
+  const busy = source.slice(source.indexOf('function updateBusy'), source.indexOf('let lastNotifiedKmlKey'));
   assert.match(busy, /preferences\.draftError/);
   const locks = source.slice(source.indexOf('const preferenceLocked'), source.indexOf('function updateBusy'));
   assert.doesNotMatch(locks, /draftError/);
   assert.match(source, /data-google-earth-preferences-save disabled=\{locked \|\| !preferences\.saved \|\| !!preferences\.draftError\}/);
   assert.match(source, /data-google-earth-preferences-undo disabled=\{locked \|\| !preferences\.saved\}/);
-  assert.match(source, /title = \(event\.currentTarget as HTMLTextAreaElement\)\.value;[\s\S]*rememberDraft/);
+  assert.match(source, /title = \(event\.currentTarget as HTMLInputElement\)\.value;[\s\S]*rememberDraft/);
   assert.match(source, /selectedField = \(event\.currentTarget as HTMLSelectElement\)\.value;[\s\S]*rememberDraft/);
   assert.ok(source.indexOf('data-google-earth-preferences-draft-error') < source.indexOf('id="google-earth-place-name"'));
   const undo = source.slice(source.indexOf('function undoPreferences'), source.indexOf('async function loadPreferences'));
   assert.match(undo, /preferenceSession\.undo/); assert.match(undo, /review = null; kml = null; approval = null/);
   assert.doesNotMatch(undo, /Service\./);
-  assert.match(source, /Text preparation itself creates no file, saves no preference and launches no viewer/);
+  assert.match(source, /Previewing KML does not write a file, change saved preferences, or open Google Earth/);
   assert.match(source, /onDestroy\(\(\) => unsubscribePreferences\?\.\(\)\)/);
   assert.doesNotMatch(source, /\$effect[\s\S]*loadPreferences/);
   const generated = readFileSync(path.join(__dirname, '..', 'bindings', 'github.com', 'boostao', 'vpro', 'app', 'spatialservice.ts'), 'utf8');

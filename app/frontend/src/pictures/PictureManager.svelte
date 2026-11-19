@@ -60,17 +60,17 @@
       return;
     }
     if (metadataBlocked) {
-      error = 'Finish or explicitly discard the retained picture metadata draft before replacing its literal parent.';
+      error = 'Finish or discard the retained picture metadata draft before selecting another plot.';
       if (typeof notifications !== 'undefined') notifications.error('Plot selection blocked', error, { category: 'entry', source: 'Plot Pictures', contextTag });
       return;
     }
     if (creationBlocked) {
-      error = 'Resolve the retained picture selection or creation receipt before replacing its literal parent.';
+      error = 'Resolve the retained picture selection or creation receipt before selecting another plot.';
       if (typeof notifications !== 'undefined') notifications.error('Plot selection blocked', error, { category: 'entry', source: 'Plot Pictures', contextTag });
       return;
     }
     if (lifecycleBlocked) {
-      error = 'Finish the retained picture lifecycle review or resolve/acknowledge its receipt before replacing its literal parent.';
+      error = 'Finish the retained picture lifecycle review or acknowledge its receipt before selecting another plot.';
       if (typeof notifications !== 'undefined') notifications.error('Plot selection blocked', error, { category: 'entry', source: 'Plot Pictures', contextTag });
       return;
     }
@@ -165,7 +165,7 @@
 <section class="manager" data-picture-manager aria-label="Plot Pictures">
   <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-stone-200" data-workbench-sticky-bar>
     <h1>Plot Pictures</h1>
-    <p>Owned project {project}. Select an exact parent; Load checks its literal membership in the current context.</p>
+    <p>Project <strong>{project}</strong>. Enter an exact plot number to view, attach, edit, or manage linked plot photos.</p>
     <form onsubmit={event => { event.preventDefault(); selectPlot(); }}>
       <label for="picture-manager-plot">Plot number
         <input id="picture-manager-plot" bind:value={plot} disabled={busy || metadataBlocked || creationBlocked || lifecycleBlocked} />
@@ -229,7 +229,7 @@
     {/if}
   </details>
   {#if selected}
-    <p data-picture-manager-parent>Selected literal parent: {JSON.stringify(selected)}</p>
+    <p data-picture-manager-parent>Selected plot: {JSON.stringify(selected)}</p>
     {#key selected}
       {#if creationSession}<PictureCreationPanel session={creationSession} disabled={busy || metadataBlocked || lifecycleBlocked} />{/if}
       {#if lifecycleSession}<PictureLifecyclePanel session={lifecycleSession} disabled={busy || metadataBlocked || creationBlocked} />{/if}
@@ -237,15 +237,11 @@
         disabled={creationBlocked} />
     {/key}
   {/if}
-  <p class="guidance">Adaptation of frmPlotPictureMaster / frmPlotPictures. Parent and child link by PlotNumber.
-    This review does not apply current SU or profile filters. Selecting or loading never changes the parent or picture metadata.
-    {#if creationEnabled}Add a Picture requires its independent backend permission and native chooser; it grants only the selected file.
-    {:else}Add a Picture remains unavailable.{/if}
-    {#if metadataWritingEnabled}Existing metadata editing requires its independent backend permission.
-    {:else}Metadata editing remains unavailable.{/if}
-    {#if lifecycleEnabled}Reference deletion/restoration requires independent backend permissions and complete physical review; source GUI confirmation remains unverified.
-    {:else}Deletion/restoration remains unavailable.{/if}
-    Directory-wide access and automatic installation remain unavailable.</p>
+  <p class="guidance">Plot photos are linked by PlotNumber across the whole project without Site Unit or profile filtering.
+    Selecting a plot or loading previews never modifies plot records or image files on disk.
+    {#if !creationEnabled}Adding pictures is unavailable in this session.{/if}
+    {#if !metadataWritingEnabled}Editing picture metadata is unavailable in this session.{/if}
+    {#if !lifecycleEnabled}Deleting or restoring picture links is unavailable in this session.{/if}</p>
 </section>
 
 <style>

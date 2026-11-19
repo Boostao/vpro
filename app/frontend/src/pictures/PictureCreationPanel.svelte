@@ -139,16 +139,14 @@
     {/if}
   </div>
   {#if view.selection}
-    <p data-picture-selected-path>Selected literal file: {view.selection.selectedPath}</p>
+    <p data-picture-selected-path>Selected file: {view.selection.selectedPath}</p>
   {/if}
-  {#if view.request}<p data-picture-creation-request>Stable request: {view.request.requestId}</p>{/if}
+  {#if view.request}<p data-picture-creation-request>Request ID: {view.request.requestId}</p>{/if}
   {#if view.image}
-    <img data-picture-selected-image src={view.image.dataUrl} alt="Selected file for the retained committed row" />
+    <img data-picture-selected-image src={view.image.dataUrl} alt="Selected plot attachment preview" />
     <p>{view.image.width} × {view.image.height}; {view.image.mime}; SHA256 {view.image.sha256}</p>
   {/if}
-  <p class="guidance">Source-bound, independently gated creation. Accepting a file appends its literal path and parent once;
-    Cancel makes no assignments. Files are not copied. This selection never authorizes its directory or sibling files.
-    Preview or refresh failures retain the metadata commit. Deletion and restoration remain unavailable.</p>
+  <p class="guidance">Choose a JPEG or PNG image file to link to this plot. VPro records the file path for this plot without copying or moving image files on disk; cancelling leaves the plot unchanged.</p>
 </section>
 
 <style>

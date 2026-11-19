@@ -109,9 +109,9 @@
     cancel(); rememberDraft(); review = null; kml = null; approval = null; error = '';
   }
   function changeTitle(event: Event) {
-    title = (event.currentTarget as HTMLTextAreaElement).value;
+    title = (event.currentTarget as HTMLInputElement).value;
     cancel(); rememberDraft(); kml = null; approval = null;
-    error = preferencesEnabled || googleEarthXMLText(title) ? '' : 'Place Name requires valid Unicode and XML text; no text repaired.';
+    error = preferencesEnabled || googleEarthXMLText(title) ? '' : 'Place Name contains unsupported control characters; remove them before preparing KML.';
   }
   function undoPreferences() {
     if (locked || !preferenceSession) return;
@@ -132,7 +132,7 @@
       title = applied.title; selectedField = applied.descriptionField;
       review = null; kml = null; approval = null;
       if (!googleEarthXMLText(title)) {
-        error = 'Saved Place Name retained literally but is not valid KML XML text; correct it explicitly before preparing KML.';
+        error = 'Saved Place Name contains unsupported control characters; update Place Name before preparing KML.';
         notifications.error('Saved Place Name invalid for KML', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
       }
     } catch (cause) {
@@ -212,7 +212,7 @@
       return;
     }
     if (!fields || !fields.fields.some(field => field.name === selectedField) || !googleEarthXMLText(title)) {
-      error = 'Load and choose a literal description field and correct Place Name before preparing KML.';
+      error = 'Load description fields, choose a field, and enter a valid Place Name before preparing KML.';
       notifications.error('KML preview blocked', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
       return;
     }
@@ -249,7 +249,7 @@
       return;
     }
     if (!fields || !fields.fields.some(field => field.name === selectedField)) {
-      error = 'Load the owned physical Env fields and choose a literal description field before reviewing.';
+      error = 'Load description fields and choose a field before reviewing plot locations.';
       notifications.error('Google Earth location review blocked', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
       return;
     }
@@ -363,75 +363,68 @@
       <button type="button" data-google-earth-kml-acknowledge onclick={acknowledgePublication}>Acknowledge outcome before a new review</button>
     </section>
   {/if}
-  <p>Project {project} / SU {su}. Direct Env scope: no Admin, current-plot or profile filter.</p>
-  <dl><div><dt>Owned project database</dt><dd>{projectPath}</dd></div>
-    {#if su !== 'None'}<div><dt>Owned SU database</dt><dd>{suPath}</dd></div>{/if}</dl>
+  <p>Project <strong>{project}</strong> · Site Unit <strong>{su}</strong>. Includes all plots with coordinates in the current project{su !== 'None' ? ' and Site Unit table' : ''}.</p>
+  <dl><div><dt>Project file</dt><dd>{projectPath}</dd></div>
+    {#if su !== 'None'}<div><dt>Site Unit file</dt><dd>{suPath}</dd></div>{/if}</dl>
   <div class="options">
   {#if kmlExportEnabled}
     <div class="field">
       <label for="google-earth-kml-destination">New output file:</label>
-      <textarea id="google-earth-kml-destination" rows="2" disabled={locked} bind:value={destination}></textarea>
+      <input id="google-earth-kml-destination" type="text" placeholder="/path/to/plots.kml" disabled={locked} bind:value={destination} />
     </div>
   {/if}
   {#if kmlEnabled || kmlExportEnabled || preferencesEnabled}
     <div class="field" data-google-earth-kml-controls>
       <label for="google-earth-place-name">Place Name:</label>
-      <textarea id="google-earth-place-name" rows="2" disabled={locked} bind:value={title} oninput={changeTitle}></textarea>
+      <input id="google-earth-place-name" type="text" disabled={locked} bind:value={title} oninput={changeTitle} />
     </div>
   {/if}
   <div class="field">
     <label for="google-earth-description">Description field:</label>
     <select id="google-earth-description" disabled={locked || !fields} bind:value={selectedField} onchange={changeField}>
-      <option value="">Choose a literal Env field</option>
+      <option value="">Choose a plot description field</option>
       {#if preferencesEnabled && selectedField && !fields?.fields.some(field => field.name === selectedField)}
-        <option value={selectedField}>{selectedField} (saved literal; physical availability not established)</option>
+        <option value={selectedField}>{selectedField} (saved preference — load fields to verify)</option>
       {/if}
       {#each fields?.fields ?? [] as field (field.name)}<option value={field.name}>{field.name}</option>{/each}
     </select>
   </div>
   </div>
-  {#if preferencesEnabled}
-    <p class="notice">Only explicit Load applies saved literals. Save changes shared ReportOptions preferences only, not source approvals or files.
-      Saved fields may be unavailable or unsupported for KML; they are retained, never substituted.
-      Live description literal: “{selectedField}”. Physical membership alone does not establish KML support; KML requires TEXT/NULL description cells.
+  <p class="notice">
+    Load description fields, choose a text field for placemark descriptions, and enter a full output path for a new <code>.kml</code> file (existing files are never overwritten).
+    {#if preferencesEnabled}
+      Edits to Place Name and Description field apply to the current preview; use Load saved preferences or Save reviewed preferences to reuse or update your defaults.
       {#if selectedField && !fields?.fields.some(field => field.name === selectedField)}
-        Current literal “{selectedField}” is not an established current physical field; export remains unavailable until physical membership is verified.
+        Selected field "{selectedField}" has not been verified in this project yet — click Load description fields before exporting.
       {/if}
-    </p>
-  {/if}
+    {/if}
+    {#if !kmlExportEnabled}KML file export is currently unavailable.{/if}
+  </p>
   {#if kmlEnabled || kmlExportEnabled}
     {#if kml}
-      <p role="status" data-google-earth-kml-summary>{kml.placemarkCount} placemarks; {kml.byteCount} UTF-8 bytes from a new complete owned snapshot.
-        {#if preferencesEnabled}Text preparation itself creates no file, saves no preference and launches no viewer; explicit preference saves and file publications have separate retained outcomes.
+      <p role="status" data-google-earth-kml-summary>{kml.placemarkCount} placemarks ({kml.byteCount} bytes) ready to export.
+        {#if preferencesEnabled}Previewing KML does not write a file, change saved preferences, or open Google Earth.
         {:else if !publication.requestedDestination}No file created, preference saved or viewer launched.
-        {:else}Text preparation itself creates no file; the separate publication outcome is retained above.{/if}</p>
+        {:else}Previewing KML does not write a file; see the export status above.{/if}</p>
       <label for="google-earth-kml-text">Prepared KML text:</label>
       <textarea id="google-earth-kml-text" readonly rows="10" value={kml.kml}></textarea>
     {/if}
-    <p class="notice">{preferencesEnabled ? 'Place Name and description are live drafts; only explicit Load applies saved preferences and explicit Save persists them.' : 'Place Name is temporary; the visible initial text is the source default, not a saved preference.'}
-      TEXT/NULL descriptions only; NULL contributes empty text plus the source period.
-      Finite map coordinate bounds apply only to KML preparation. HTML/XML text is escaped and remote icons are omitted.
-      XML shape is not schema, viewer or native Access acceptance; viewers may automatically link URLs.</p>
-    {#if kmlExportEnabled}<p class="notice">Choose an explicit absolute new file path. Existing files are never replaced and no extension is added.
-      Review binds original raw cells and physical rows, not only XML. Publication is not cancellable; acknowledge its retained outcome before another review.
-      File publication leaves data, audits and preferences unchanged. Remote icons and viewer launch remain unavailable.</p>{/if}
   {/if}
   {#if review}
-    <p role="status" data-google-earth-summary>{review.totalRows} physical Env/SU pairs with both coordinates present.
-      Duplicate memberships remain separate.
-      {#if preferencesEnabled}This location review writes no data, audits, preferences or files; explicit preference saves have separate retained outcomes.
+    <p role="status" data-google-earth-summary>{review.totalRows} plot locations with latitude and longitude ready for export.
+      {#if preferencesEnabled}Previewing plot locations does not modify project data, saved preferences, or files on disk.
       {:else}No data, audits, preferences or files written.{/if}</p>
     <div class="table-scroll">
       <table>
-        <caption>Direct Env preparation; western-hemisphere longitude then original latitude, altitude not yet serialized</caption>
+        <caption>Plot coordinates for Google Earth export (signed decimal longitude and latitude)</caption>
         <thead><tr>{#each review.fields as field, i}<th id={`earth-field-${i}`} scope="col">{field.label}</th>{/each}</tr></thead>
         <tbody>{#each review.rows as row (`${row.envRowId}:${row.membershipRowId}`)}
           <tr data-google-earth-row={`${row.envRowId}:${row.membershipRowId}`}>
             {#each [row.plotNumber, row.longitude, row.latitude, row.description] as cell, i}
-              <td headers={`earth-field-${i}`} aria-label={`${review.fields[i].label} for Env row ${row.envRowId}, SU row ${row.membershipRowId || 'not selected'}`}>{reportCellText(cell)}</td>
+              <td headers={`earth-field-${i}`} aria-label={`${review.fields[i].label} for plot record ${row.envRowId}, Site Unit record ${row.membershipRowId || 'not selected'}`}>{reportCellText(cell)}</td>
             {/each}
           </tr>
-        {:else}<tr><td colspan="4">No coordinate pairs in this page. No coordinates inferred.</td></tr>{/each}</tbody>
+        {:else}<tr><td colspan="4">No plot coordinates found on this page.</td></tr>{/each}</tbody>
       </table>
     </div>
     <div class="actions" aria-label="Google Earth preparation pages">
@@ -439,16 +432,13 @@
       <span>{review.rows.length ? review.offset + 1 : 0}-{review.rows.length ? review.offset + review.rows.length : 0} of {review.totalRows}</span>
       <button type="button" disabled={locked || review.offset + review.rows.length >= review.totalRows} onclick={() => show(nextOffset)}>Next pairs</button>
     </div>
-    <details><summary>Physical provenance for this page</summary>
+    <details><summary>Plot record details for this page</summary>
       {#each review.rows as row (`${row.envRowId}:${row.membershipRowId}`)}
-        <p>Env row {row.envRowId}; SU row {row.membershipRowId || 'not selected'};
+        <p>Plot record {row.envRowId}; Site Unit record {row.membershipRowId || 'not selected'};
           stored longitude {reportCellText(row.storedLongitude)}.</p>
       {/each}
     </details>
   {/if}
-  <p class="notice">Google Earth (KML) coordinate preview. Description selection applies to this export without altering saved preferences;
-    NULL, empty, and non-text coordinate values remain distinct.
-    {#if !kmlExportEnabled}KML file export is currently unavailable.{/if}</p>
 </section>
 
 <style>
@@ -458,10 +448,10 @@
   .field { display: grid; grid-template-columns: minmax(10rem, auto) minmax(0, 30rem); align-items: center; gap: .5rem; }
   .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; }
   label, dt { font-weight: 600; color: #003366; }
-  select, textarea, button { border: 1px solid #D8D8D8; border-radius: .25rem; padding: .4rem .6rem; min-width: 0; background: #FFFFFF; color: #313132; }
+  input, select, textarea, button { border: 1px solid #D8D8D8; border-radius: .25rem; padding: .4rem .6rem; min-width: 0; background: #FFFFFF; color: #313132; }
   button { border-color: #003366; color: #003366; font-weight: 600; }
-  select, textarea { width: 100%; }
-  button:disabled { opacity: .5; }
+  input, select, textarea { width: 100%; }
+  input:disabled, select:disabled, textarea:disabled, button:disabled { opacity: .5; }
   dl > div { margin: .6rem 0; }
   dd, p { overflow-wrap: anywhere; }
   .table-scroll { overflow-x: auto; max-width: 100%; }

@@ -70,8 +70,8 @@ test('picture editor renders associated source labels, identity, Zone 1 field er
     view: () => ({ draft: retained, busy: false, blocked: true, error: 'unknown receipt', receipt: null }),
     closeState: () => ({ unsaved: true, busy: false, blocked: true, canSave: false }),
   } } }).body;
-  assert.match(output, /Literal parent/);
-  assert.match(output, /physical row 9223372036854775806/);
+  assert.match(output, /Plot (?:"|&quot;)P(?:"|&quot;) · Picture ID -3/);
+  assert.match(output, /record 9223372036854775806/);
   for (const column of ['PicDir', 'PicName', 'PicComment']) {
     assert.match(output, new RegExp(`for="picture-metadata-${column}"`));
     assert.match(output, new RegExp(`id="picture-metadata-${column}"`));

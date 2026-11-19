@@ -130,7 +130,7 @@
 {#if view.draft}
   <section class="editor" data-picture-metadata-editor aria-label="Existing picture metadata">
     <h4>Existing picture metadata</h4>
-    <p>Literal parent {JSON.stringify(view.draft.plotNumber)}; ID {view.draft.id}; physical row {view.draft.original.rowId}.</p>
+    <p>Plot {JSON.stringify(view.draft.plotNumber)} · Picture ID {view.draft.id} (record {view.draft.original.rowId})</p>
     {#if view.blocked}
       <p role="alert">The picture Save outcome is unknown. The original and draft remain retained.
         Matching current values do not prove this request committed. Resolve its durable receipt or explicitly discard and reload.</p>
@@ -157,9 +157,9 @@
       <button onclick={() => void operation('discard')} disabled={disabled || view.busy}>Discard draft and reload picture</button>
       {#if view.busy}<button onclick={() => cancelMetadata()}>Cancel picture metadata operation</button>{/if}
     </div>
-    <p class="guidance">Literal text, at most 255 UTF-16 units. Directory permits empty text or NULL; File Name permits NULL, not new empty text; Comment / Caption stores text or NULL when cleared.
-      This saves PicDir, PicName, and PicComment. It neither copies/renames image files nor authorizes external directories.
-      Discard reloads the current stored row; it does not undo a completed Save.</p>
+    <p class="guidance">Each field accepts at most 255 characters. Picture Directory allows blank text or NULL; Picture File Name cannot be saved as empty text; clearing Comment / Caption saves NULL.
+      Saving updates the folder, file name, and caption in the picture library without moving or renaming image files on disk.
+      Discard reloads the saved record; it does not undo a completed Save.</p>
   </section>
 {/if}
 

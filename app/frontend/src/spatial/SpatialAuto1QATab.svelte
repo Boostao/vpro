@@ -51,7 +51,7 @@
   }
 </script>
 
-<div class="wb-panel-body">
+<div class="wb-panel-body wb-qa-panel-body" data-spatial-qa-panel>
   <div class="wb-card">
     <div class="wb-card-head">
       <h2>Batch Coordinate &amp; BGC Stamp</h2>
@@ -62,41 +62,41 @@
 
     {#if qaReport}
       <div class="wb-qa-summary">
-        <span>Unsigned West Lon: <strong>{qaReport.unsignedLonCount}</strong></span>
-        <span>UTM &gt;50m Div: <strong>{qaReport.utmDivergenceCount}</strong></span>
+        <span>Positive West Lon: <strong>{qaReport.unsignedLonCount}</strong></span>
+        <span>UTM &gt;50 m Offset: <strong>{qaReport.utmDivergenceCount}</strong></span>
         <span>BGC Mismatch: <strong>{qaReport.bgcMismatchCount}</strong></span>
-        <span>Missing GIS_BGC: <strong>{qaReport.missingGisBgcCount}</strong></span>
+        <span>Missing Mapped BGC: <strong>{qaReport.missingGisBgcCount}</strong></span>
       </div>
     {/if}
 
     <div class="wb-form-stack">
       <label class="wb-check-row">
         <input type="checkbox" bind:checked={stampGISBGC} />
-        <span>Stamp &lt;Project&gt;_Admin.GIS_BGC &amp; GIS_BGC_VER = 13</span>
+        <span>Stamp mapped BGC unit &amp; version (BECdb v13)</span>
       </label>
       <label class="wb-check-row">
         <input type="checkbox" bind:checked={stampAdminFields} />
-        <span>Stamp Ecosection, FSRegionDistrict, NtsMapSheet &amp; Province</span>
+        <span>Stamp Ecosection, Forest Region/District, NTS Map Sheet &amp; Province</span>
       </label>
       <label class="wb-check-row">
         <input type="checkbox" bind:checked={stampOnlyWhenBlank} />
-        <span>Preserve existing non-blank field entries (only fill blanks)</span>
+        <span>Keep existing field entries (only fill blank values)</span>
       </label>
       <label class="wb-check-row">
         <input type="checkbox" bind:checked={normalizeLonSign} />
-        <span>Normalize unsigned positive West longitudes (125.4 -&gt; -125.4)</span>
+        <span>Add negative sign to Western Hemisphere longitudes (125.4 to -125.4)</span>
       </label>
       <label class="wb-check-row">
         <input type="checkbox" bind:checked={syncUTMFromDD} />
-        <span>Project NAD83 Lat/Lon -&gt; UTMZone / Easting / Northing</span>
+        <span>Calculate NAD83 UTM Zone, Easting &amp; Northing from Latitude/Longitude</span>
       </label>
       <label class="wb-check-row">
         <input type="checkbox" data-sync-latlon-from-utm bind:checked={syncLatLonFromUTM} />
-        <span>Derive NAD83 Lat/Lon &lt;- UTMZone / Easting / Northing</span>
+        <span>Calculate NAD83 Latitude/Longitude from UTM Zone, Easting &amp; Northing</span>
       </label>
       <label class="wb-check-row">
         <input type="checkbox" bind:checked={qaFilterOnlyIssues} />
-        <span>Show only plots with QA discrepancies or missing GIS_BGC</span>
+        <span>Show only plots with coordinate discrepancies or missing mapped BGC</span>
       </label>
     </div>
 
@@ -126,7 +126,7 @@
         <tr>
           <th scope="col">Sel</th>
           <th scope="col">Plot</th>
-          <th scope="col">Field-&gt;GIS</th>
+          <th scope="col">Field / Map BGC</th>
           <th scope="col">UTM Delta</th>
         </tr>
       </thead>
@@ -168,3 +168,11 @@
     </table>
   </div>
 </div>
+
+<style>
+  .wb-qa-panel-body {
+    min-height: 0;
+    padding-bottom: 12rem;
+    scroll-padding-bottom: 12rem;
+  }
+</style>

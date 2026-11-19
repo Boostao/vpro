@@ -189,9 +189,7 @@
       {/if}
     </details>
   {/if}
-  <p class="guidance">Independently gated desktop safety adaptation. This does not establish Access GUI confirmation or Current parity.
-    Only the five-cell physical reference is mutated; image files are untouched. Restoration never replaces an occupied rowid/ID,
-    repairs identities or prunes source audits/history.</p>
+  <p class="guidance">Deleting or restoring a picture updates only the plot's photo link in the picture library; image files on disk are never modified or deleted, and change history is preserved.</p>
 </section>
 
 <style>

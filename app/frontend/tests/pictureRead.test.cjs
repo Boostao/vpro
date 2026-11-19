@@ -456,8 +456,8 @@ test('manager server render retains source caption, literal parent and separate 
     initialPlot: owner.plotNumber, onBusyChange() {} } }).body;
   assert.match(output, /Plot Pictures/);
   assert.match(output, /for="picture-manager-plot"/);
-  assert.match(output, /Selected literal parent/);
+  assert.match(output, /Selected plot:/);
   assert.match(output, /explicitly authorized manager directory, not the FS882 child directory/);
-  assert.match(output, /Add a Picture requires its independent backend permission/);
-  assert.match(output, /Existing metadata editing requires its independent backend permission/);
+  assert.match(output, /Plot photos are linked by PlotNumber across the whole project/);
+  assert.match(output, /Selecting a plot or loading previews never modifies plot records or image files on disk/);
 });
