@@ -10,8 +10,21 @@ import (
 )
 
 type ContextService struct {
-	core  *vprocorepkg.ContextService
-	cloud *cloudsyncpkg.Manager
+	runtime *runtimeShutdownTracker
+	core    *vprocorepkg.ContextService
+	cloud   *cloudsyncpkg.Manager
+}
+
+func (s *ContextService) acquire() (*ContextService, func()) {
+	if s == nil || s.runtime == nil {
+		return s, noopRelease
+	}
+	snap, release := s.runtime.acquire()
+	if snap == nil {
+		release()
+		return nil, noopRelease
+	}
+	return snap.context, release
 }
 
 func NewCloudSyncManager(configDir string) *cloudsyncpkg.Manager {
@@ -19,6 +32,8 @@ func NewCloudSyncManager(configDir string) *cloudsyncpkg.Manager {
 }
 
 func (s *ContextService) cloudManager() (*cloudsyncpkg.Manager, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -35,6 +50,14 @@ func (s *ContextService) cloudManager() (*cloudsyncpkg.Manager, error) {
 func unwrapContextService(s *ContextService) *vprocorepkg.ContextService {
 	if s == nil {
 		return nil
+	}
+	if s.runtime != nil {
+		snap, release := s.runtime.acquire()
+		defer release()
+		if snap == nil || snap.context == nil {
+			return nil
+		}
+		return snap.context.core
 	}
 	return s.core
 }
@@ -115,6 +138,8 @@ func openActiveProjectContext(
 }
 
 func (s *ContextService) GetState(ctx context.Context) (ProjectState, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil || s.core.Projects == nil {
 		return ProjectState{}, errors.New("project context is unavailable")
 	}
@@ -122,6 +147,8 @@ func (s *ContextService) GetState(ctx context.Context) (ProjectState, error) {
 }
 
 func (s *ContextService) ListPlots(ctx context.Context, offset, limit int) (PlotPage, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil || s.core.Projects == nil {
 		return PlotPage{}, errors.New("project context is unavailable")
 	}
@@ -129,6 +156,8 @@ func (s *ContextService) ListPlots(ctx context.Context, offset, limit int) (Plot
 }
 
 func (s *ContextService) GetHierarchyNodes(ctx context.Context) ([]HierarchyNode, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil || s.core.Projects == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -136,6 +165,8 @@ func (s *ContextService) GetHierarchyNodes(ctx context.Context) ([]HierarchyNode
 }
 
 func (s *ContextService) SelectProject(name string) (ProjectState, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil || s.core.Projects == nil {
 		return ProjectState{}, errors.New("project context is unavailable")
 	}
@@ -143,6 +174,8 @@ func (s *ContextService) SelectProject(name string) (ProjectState, error) {
 }
 
 func (s *ContextService) SelectSU(name string) (ProjectState, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil || s.core.Projects == nil {
 		return ProjectState{}, errors.New("project context is unavailable")
 	}
@@ -150,6 +183,8 @@ func (s *ContextService) SelectSU(name string) (ProjectState, error) {
 }
 
 func (s *ContextService) SelectHierarchy(name, file string) (ProjectState, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil || s.core.Projects == nil {
 		return ProjectState{}, errors.New("project context is unavailable")
 	}
@@ -157,6 +192,8 @@ func (s *ContextService) SelectHierarchy(name, file string) (ProjectState, error
 }
 
 func (s *ContextService) SwitchContext(expectedID string, requested vprocorepkg.ContextSelection) (vprocorepkg.ProjectState, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return vprocorepkg.ProjectState{}, errors.New("project context is unavailable")
 	}
@@ -164,6 +201,8 @@ func (s *ContextService) SwitchContext(expectedID string, requested vprocorepkg.
 }
 
 func (s *ContextService) GetPlot(ctx context.Context, contextID, plot string) (*vprocorepkg.FS882Header, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -171,6 +210,8 @@ func (s *ContextService) GetPlot(ctx context.Context, contextID, plot string) (*
 }
 
 func (s *ContextService) GetHeaderCapabilities(ctx context.Context, contextID string) (map[string]bool, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -178,6 +219,8 @@ func (s *ContextService) GetHeaderCapabilities(ctx context.Context, contextID st
 }
 
 func (s *ContextService) CanEditMasterBEC(ctx context.Context, contextID string) (bool, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return false, errors.New("project context is unavailable")
 	}
@@ -185,6 +228,8 @@ func (s *ContextService) CanEditMasterBEC(ctx context.Context, contextID string)
 }
 
 func (s *ContextService) GetUserSetup(ctx context.Context, contextID string) (UserAccreditation, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return UserAccreditation{}, errors.New("project context is unavailable")
 	}
@@ -192,6 +237,8 @@ func (s *ContextService) GetUserSetup(ctx context.Context, contextID string) (Us
 }
 
 func (s *ContextService) SetUserName(ctx context.Context, contextID, user string) (UserAccreditation, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return UserAccreditation{}, errors.New("project context is unavailable")
 	}
@@ -199,6 +246,8 @@ func (s *ContextService) SetUserName(ctx context.Context, contextID, user string
 }
 
 func (s *ContextService) GetChildCapabilities(ctx context.Context, contextID, kind string) (map[string]bool, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -206,6 +255,8 @@ func (s *ContextService) GetChildCapabilities(ctx context.Context, contextID, ki
 }
 
 func (s *ContextService) ListVegRecords(ctx context.Context, contextID, plot string) ([]vprocorepkg.VegRecord, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -213,6 +264,8 @@ func (s *ContextService) ListVegRecords(ctx context.Context, contextID, plot str
 }
 
 func (s *ContextService) ListHumusRecords(ctx context.Context, contextID, plot string) ([]vprocorepkg.HumusRecord, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -220,6 +273,8 @@ func (s *ContextService) ListHumusRecords(ctx context.Context, contextID, plot s
 }
 
 func (s *ContextService) ListMineralRecords(ctx context.Context, contextID, plot string) ([]vprocorepkg.MineralRecord, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -227,6 +282,8 @@ func (s *ContextService) ListMineralRecords(ctx context.Context, contextID, plot
 }
 
 func (s *ContextService) ListOtherRecords(ctx context.Context, contextID, plot string) ([]vprocorepkg.OtherRecord, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -234,6 +291,8 @@ func (s *ContextService) ListOtherRecords(ctx context.Context, contextID, plot s
 }
 
 func (s *ContextService) ListAuditEntries(ctx context.Context, contextID, plot string) ([]vprocorepkg.AuditEntry, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -241,6 +300,8 @@ func (s *ContextService) ListAuditEntries(ctx context.Context, contextID, plot s
 }
 
 func (s *ContextService) ListAuditReadEntries(ctx context.Context, contextID, plot string) ([]vprocorepkg.OrdinaryAuditReadEntry, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -248,6 +309,8 @@ func (s *ContextService) ListAuditReadEntries(ctx context.Context, contextID, pl
 }
 
 func (s *ContextService) CreatePlot(contextID string, header vprocorepkg.FS882Header) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -255,6 +318,8 @@ func (s *ContextService) CreatePlot(contextID string, header vprocorepkg.FS882He
 }
 
 func (s *ContextService) UpdatePlot(contextID string, header vprocorepkg.FS882Header) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -262,6 +327,8 @@ func (s *ContextService) UpdatePlot(contextID string, header vprocorepkg.FS882He
 }
 
 func (s *ContextService) SaveVegRecord(contextID string, record vprocorepkg.VegRecord) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -269,6 +336,8 @@ func (s *ContextService) SaveVegRecord(contextID string, record vprocorepkg.VegR
 }
 
 func (s *ContextService) UpdateVegRecord(contextID string, record vprocorepkg.VegRecord) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -276,6 +345,8 @@ func (s *ContextService) UpdateVegRecord(contextID string, record vprocorepkg.Ve
 }
 
 func (s *ContextService) DeleteVegRecord(contextID, plot string, id int64) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -283,6 +354,8 @@ func (s *ContextService) DeleteVegRecord(contextID, plot string, id int64) error
 }
 
 func (s *ContextService) SaveHumusRecord(contextID string, record vprocorepkg.HumusRecord) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -290,6 +363,8 @@ func (s *ContextService) SaveHumusRecord(contextID string, record vprocorepkg.Hu
 }
 
 func (s *ContextService) UpdateHumusRecord(contextID string, record vprocorepkg.HumusRecord) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -297,6 +372,8 @@ func (s *ContextService) UpdateHumusRecord(contextID string, record vprocorepkg.
 }
 
 func (s *ContextService) DeleteHumusRecord(contextID, plot string, id int64) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -304,6 +381,8 @@ func (s *ContextService) DeleteHumusRecord(contextID, plot string, id int64) err
 }
 
 func (s *ContextService) SaveMineralRecord(contextID string, record vprocorepkg.MineralRecord) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -311,6 +390,8 @@ func (s *ContextService) SaveMineralRecord(contextID string, record vprocorepkg.
 }
 
 func (s *ContextService) UpdateMineralRecord(contextID string, record vprocorepkg.MineralRecord) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -318,6 +399,8 @@ func (s *ContextService) UpdateMineralRecord(contextID string, record vprocorepk
 }
 
 func (s *ContextService) DeleteMineralRecord(contextID, plot string, id int64) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -325,6 +408,8 @@ func (s *ContextService) DeleteMineralRecord(contextID, plot string, id int64) e
 }
 
 func (s *ContextService) SaveOtherRecord(contextID string, record vprocorepkg.OtherRecord) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -332,6 +417,8 @@ func (s *ContextService) SaveOtherRecord(contextID string, record vprocorepkg.Ot
 }
 
 func (s *ContextService) UpdateOtherRecord(contextID string, record vprocorepkg.OtherRecord) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -339,6 +426,8 @@ func (s *ContextService) UpdateOtherRecord(contextID string, record vprocorepkg.
 }
 
 func (s *ContextService) UpdateOtherRecords(contextID, plot string, updates []vprocorepkg.OtherRecordUpdate) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -346,6 +435,8 @@ func (s *ContextService) UpdateOtherRecords(contextID, plot string, updates []vp
 }
 
 func (s *ContextService) UpdateSoilRecords(contextID, plot string, updates []vprocorepkg.SoilRecordUpdate) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -353,6 +444,8 @@ func (s *ContextService) UpdateSoilRecords(contextID, plot string, updates []vpr
 }
 
 func (s *ContextService) DeleteOtherRecord(contextID, plot string, id int64) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -360,6 +453,8 @@ func (s *ContextService) DeleteOtherRecord(contextID, plot string, id int64) err
 }
 
 func (s *ContextService) UpdateHeightRecords(contextID, plot string, updates []vprocorepkg.HeightRecordUpdate) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -367,6 +462,8 @@ func (s *ContextService) UpdateHeightRecords(contextID, plot string, updates []v
 }
 
 func (s *ContextService) SetAuditRestoreSelection(contextID, plot string, rowIDs []string) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -374,6 +471,8 @@ func (s *ContextService) SetAuditRestoreSelection(contextID, plot string, rowIDs
 }
 
 func (s *ContextService) UpdateCollectedRecords(contextID, plot string, updates []vprocorepkg.CollectedRecordUpdate) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -381,6 +480,8 @@ func (s *ContextService) UpdateCollectedRecords(contextID, plot string, updates 
 }
 
 func (s *ContextService) UpdateVegetationSpecies(contextID, plot string, updates []vprocorepkg.VegetationSpeciesUpdate) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -388,6 +489,8 @@ func (s *ContextService) UpdateVegetationSpecies(contextID, plot string, updates
 }
 
 func (s *ContextService) ListVegetationSpecies(ctx context.Context, contextID, form string) ([]vprocorepkg.VegetationSpeciesOption, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -395,6 +498,8 @@ func (s *ContextService) ListVegetationSpecies(ctx context.Context, contextID, f
 }
 
 func (s *ContextService) ListVegetationSpeciesAliases(ctx context.Context, contextID string, lookup vprocorepkg.VegetationSpeciesLookup) ([]vprocorepkg.VegetationSpeciesAlias, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -402,6 +507,8 @@ func (s *ContextService) ListVegetationSpeciesAliases(ctx context.Context, conte
 }
 
 func (s *ContextService) ListVegetationSpeciesUsers(ctx context.Context, contextID string, lookup vprocorepkg.VegetationSpeciesLookup) ([]vprocorepkg.VegetationSpeciesOption, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -409,6 +516,8 @@ func (s *ContextService) ListVegetationSpeciesUsers(ctx context.Context, context
 }
 
 func (s *ContextService) GetVegetationReadAvailability(ctx context.Context, contextID, plot string) (*vprocorepkg.VegetationReadAvailability, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -416,6 +525,8 @@ func (s *ContextService) GetVegetationReadAvailability(ctx context.Context, cont
 }
 
 func (s *ContextService) UpdateVegetationNumbers(contextID, plot string, updates []vprocorepkg.VegetationNumberUpdate) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -423,6 +534,8 @@ func (s *ContextService) UpdateVegetationNumbers(contextID, plot string, updates
 }
 
 func (s *ContextService) CreateSourceVegetation(contextID, plot string, request vprocorepkg.VegetationCreationRequest) (int64, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return 0, errors.New("project context is unavailable")
 	}
@@ -430,6 +543,8 @@ func (s *ContextService) CreateSourceVegetation(contextID, plot string, request 
 }
 
 func (s *ContextService) LookupScopedPlot(ctx context.Context, contextID string, request vprocorepkg.ScopedPlotLookup) (vprocorepkg.ScopedPlotLookupResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return vprocorepkg.ScopedPlotLookupResult{}, errors.New("project context is unavailable")
 	}
@@ -437,6 +552,8 @@ func (s *ContextService) LookupScopedPlot(ctx context.Context, contextID string,
 }
 
 func (s *ContextService) SaveProjectMetadata(ctx context.Context, contextID string, request vprocorepkg.ProjectMetadataEdit) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}
@@ -444,6 +561,8 @@ func (s *ContextService) SaveProjectMetadata(ctx context.Context, contextID stri
 }
 
 func (s *ContextService) ReviewProjectMetadata(ctx context.Context, contextID, plot string) (vprocorepkg.ProjectMetadataReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return vprocorepkg.ProjectMetadataReview{}, errors.New("project context is unavailable")
 	}
@@ -451,6 +570,8 @@ func (s *ContextService) ReviewProjectMetadata(ctx context.Context, contextID, p
 }
 
 func (s *ContextService) InspectExternalSQLiteFile(ctx context.Context, contextID, path string) (vprocorepkg.ExternalSQLiteFileInspection, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return vprocorepkg.ExternalSQLiteFileInspection{}, errors.New("project context is unavailable")
 	}
@@ -458,6 +579,8 @@ func (s *ContextService) InspectExternalSQLiteFile(ctx context.Context, contextI
 }
 
 func (s *ContextService) ChooseExternalSQLiteFile(ctx context.Context, contextID string) (vprocorepkg.ExternalSQLiteFileInspection, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return vprocorepkg.ExternalSQLiteFileInspection{}, errors.New("project context is unavailable")
 	}
@@ -465,6 +588,8 @@ func (s *ContextService) ChooseExternalSQLiteFile(ctx context.Context, contextID
 }
 
 func (s *ContextService) ChooseAccessDatabaseFile(ctx context.Context, contextID string) (string, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return "", errors.New("project context is unavailable")
 	}
@@ -472,6 +597,8 @@ func (s *ContextService) ChooseAccessDatabaseFile(ctx context.Context, contextID
 }
 
 func (s *ContextService) ChooseNewSQLiteProjectFile(ctx context.Context, contextID, suggestedProject string) (string, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return "", errors.New("project context is unavailable")
 	}
@@ -479,6 +606,8 @@ func (s *ContextService) ChooseNewSQLiteProjectFile(ctx context.Context, context
 }
 
 func (s *ContextService) RevealInFileExplorer(ctx context.Context, contextID, target string) (string, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return "", errors.New("project context is unavailable")
 	}
@@ -486,6 +615,8 @@ func (s *ContextService) RevealInFileExplorer(ctx context.Context, contextID, ta
 }
 
 func (s *ContextService) ReadNewProjectTemplates(ctx context.Context, contextID string) (*vprocorepkg.NewProjectTemplateReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -493,6 +624,8 @@ func (s *ContextService) ReadNewProjectTemplates(ctx context.Context, contextID 
 }
 
 func (s *ContextService) SelectPlotProfile(expectedID string, requested vprocorepkg.PlotProfileSource) (vprocorepkg.ProjectState, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return vprocorepkg.ProjectState{}, errors.New("project context is unavailable")
 	}
@@ -500,6 +633,8 @@ func (s *ContextService) SelectPlotProfile(expectedID string, requested vprocore
 }
 
 func (s *ContextService) ListPlotProfileSources(ctx context.Context, contextID, path string) ([]vprocorepkg.PlotProfileSourceInfo, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -507,6 +642,8 @@ func (s *ContextService) ListPlotProfileSources(ctx context.Context, contextID, 
 }
 
 func (s *ContextService) ReadPlotLocations(ctx context.Context, contextID string) (*vprocorepkg.PlotLocationReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")
 	}
@@ -514,6 +651,8 @@ func (s *ContextService) ReadPlotLocations(ctx context.Context, contextID string
 }
 
 func (s *ContextService) RequireSelectedListReportScope(contextID string) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return errors.New("project context is unavailable")
 	}

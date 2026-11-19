@@ -10,6 +10,8 @@ import (
 // SIVI entry/cover/height/species/collected/combined/identity/creation/deletion/undo delegates
 
 func (s *PlotEntryService) GetSIVIParentSharedOriginal(ctx context.Context, contextID, plot string) (*SIVIParentProjection, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviParentShared == nil {
 		return nil, errors.New("SIVI parent shared service is unavailable")
 	}
@@ -17,6 +19,8 @@ func (s *PlotEntryService) GetSIVIParentSharedOriginal(ctx context.Context, cont
 }
 
 func (s *PlotEntryService) GetSIVIParentSharedReferences(ctx context.Context, contextID, plot string, zone ProjectMetadataCell) (*SIVIParentSharedReferences, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviParentShared == nil {
 		return nil, errors.New("SIVI parent shared service is unavailable")
 	}
@@ -24,6 +28,8 @@ func (s *PlotEntryService) GetSIVIParentSharedReferences(ctx context.Context, co
 }
 
 func (s *PlotEntryService) SaveSIVIParentShared(ctx context.Context, contextID, plot string, request SIVIParentSharedWrite) (*SIVIParentWriteResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviParentShared == nil {
 		return nil, errors.New("SIVI parent shared service is unavailable")
 	}
@@ -31,6 +37,8 @@ func (s *PlotEntryService) SaveSIVIParentShared(ctx context.Context, contextID, 
 }
 
 func (s *PlotEntryService) RestoreSIVIParentShared(ctx context.Context, contextID, plot, historyID string, action AuditRestoreAction) (*AuditRestoreResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviParentShared == nil {
 		return nil, errors.New("SIVI parent shared service is unavailable")
 	}
@@ -38,6 +46,8 @@ func (s *PlotEntryService) RestoreSIVIParentShared(ctx context.Context, contextI
 }
 
 func (s *PlotEntryService) GetSIVICoverOriginal(ctx context.Context, contextID, plot string, extended bool) ([]SIVIVegetationProjection, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviCovers == nil {
 		return nil, errors.New("SIVI cover service is unavailable")
 	}
@@ -45,6 +55,8 @@ func (s *PlotEntryService) GetSIVICoverOriginal(ctx context.Context, contextID, 
 }
 
 func (s *PlotEntryService) SaveSIVICoverReviewed(ctx context.Context, contextID, plot string, extended bool, requestJSON string) (*SIVICoverWriteResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviCovers == nil {
 		return nil, errors.New("SIVI cover service is unavailable")
 	}
@@ -52,6 +64,8 @@ func (s *PlotEntryService) SaveSIVICoverReviewed(ctx context.Context, contextID,
 }
 
 func (s *PlotEntryService) RestoreSIVICoverReviewed(ctx context.Context, contextID, plot, historyID string, action AuditRestoreAction) (*AuditRestoreResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviCovers == nil {
 		return nil, errors.New("SIVI cover service is unavailable")
 	}
@@ -59,6 +73,8 @@ func (s *PlotEntryService) RestoreSIVICoverReviewed(ctx context.Context, context
 }
 
 func (s *PlotEntryService) GetSIVICombinedOriginal(ctx context.Context, contextID, plot string, extended bool) ([]SIVIVegetationProjection, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviCombined == nil {
 		return nil, errors.New("SIVI combined service is unavailable")
 	}
@@ -66,6 +82,8 @@ func (s *PlotEntryService) GetSIVICombinedOriginal(ctx context.Context, contextI
 }
 
 func (s *PlotEntryService) SaveSIVICombinedReviewed(ctx context.Context, contextID, plot string, extended bool, requestJSON string) (*SIVIHeightWriteResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviCombined == nil {
 		return nil, errors.New("SIVI combined service is unavailable")
 	}
@@ -73,6 +91,8 @@ func (s *PlotEntryService) SaveSIVICombinedReviewed(ctx context.Context, context
 }
 
 func (s *PlotEntryService) RestoreSIVICombinedReviewed(ctx context.Context, contextID, plot, historyID string, action AuditRestoreAction) (*AuditRestoreResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviCombined == nil {
 		return nil, errors.New("SIVI combined service is unavailable")
 	}
@@ -80,6 +100,8 @@ func (s *PlotEntryService) RestoreSIVICombinedReviewed(ctx context.Context, cont
 }
 
 func (s *PlotEntryService) GetSIVICollectedOriginal(ctx context.Context, contextID, plot string, extended bool) ([]SIVIVegetationProjection, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviCollected == nil {
 		return nil, errors.New("SIVI collected service is unavailable")
 	}
@@ -87,6 +109,8 @@ func (s *PlotEntryService) GetSIVICollectedOriginal(ctx context.Context, context
 }
 
 func (s *PlotEntryService) SaveSIVICollectedReviewed(ctx context.Context, contextID, plot string, extended bool, requestJSON string) (*SIVIHeightWriteResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviCollected == nil {
 		return nil, errors.New("SIVI collected service is unavailable")
 	}
@@ -94,6 +118,8 @@ func (s *PlotEntryService) SaveSIVICollectedReviewed(ctx context.Context, contex
 }
 
 func (s *PlotEntryService) RestoreSIVICollectedReviewed(ctx context.Context, contextID, plot, historyID string, action AuditRestoreAction) (*AuditRestoreResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviCollected == nil {
 		return nil, errors.New("SIVI collected service is unavailable")
 	}
@@ -101,6 +127,8 @@ func (s *PlotEntryService) RestoreSIVICollectedReviewed(ctx context.Context, con
 }
 
 func (s *PlotEntryService) GetSIVISpeciesOriginal(ctx context.Context, contextID, plot string, extended bool) ([]SIVIVegetationProjection, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviSpecies == nil {
 		return nil, errors.New("SIVI species service is unavailable")
 	}
@@ -108,6 +136,8 @@ func (s *PlotEntryService) GetSIVISpeciesOriginal(ctx context.Context, contextID
 }
 
 func (s *PlotEntryService) GetSIVISpeciesReferences(ctx context.Context, contextID, plot string) (SIVISpeciesReferences, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviSpecies == nil {
 		return SIVISpeciesReferences{}, errors.New("SIVI species service is unavailable")
 	}
@@ -115,6 +145,8 @@ func (s *PlotEntryService) GetSIVISpeciesReferences(ctx context.Context, context
 }
 
 func (s *PlotEntryService) SaveSIVISpeciesReviewed(ctx context.Context, contextID, plot string, extended bool, requestJSON string) (*SIVIHeightWriteResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviSpecies == nil {
 		return nil, errors.New("SIVI species service is unavailable")
 	}
@@ -122,6 +154,8 @@ func (s *PlotEntryService) SaveSIVISpeciesReviewed(ctx context.Context, contextI
 }
 
 func (s *PlotEntryService) RestoreSIVISpeciesReviewed(ctx context.Context, contextID, plot, historyID string, action AuditRestoreAction) (*AuditRestoreResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviSpecies == nil {
 		return nil, errors.New("SIVI species service is unavailable")
 	}
@@ -129,6 +163,8 @@ func (s *PlotEntryService) RestoreSIVISpeciesReviewed(ctx context.Context, conte
 }
 
 func (s *PlotEntryService) GetSIVIIdentityOriginal(ctx context.Context, contextID, plot string, extended bool) ([]SIVIVegetationProjection, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviIdentity == nil {
 		return nil, errors.New("SIVI identity service is unavailable")
 	}
@@ -136,6 +172,8 @@ func (s *PlotEntryService) GetSIVIIdentityOriginal(ctx context.Context, contextI
 }
 
 func (s *PlotEntryService) SaveSIVIIdentityReviewed(ctx context.Context, contextID, plot string, extended bool, requestJSON string) (*SIVIHeightWriteResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviIdentity == nil {
 		return nil, errors.New("SIVI identity service is unavailable")
 	}
@@ -143,6 +181,8 @@ func (s *PlotEntryService) SaveSIVIIdentityReviewed(ctx context.Context, context
 }
 
 func (s *PlotEntryService) RestoreSIVIIdentityReviewed(ctx context.Context, contextID, plot, historyID string, action AuditRestoreAction) (*AuditRestoreResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviIdentity == nil {
 		return nil, errors.New("SIVI identity service is unavailable")
 	}
@@ -150,6 +190,8 @@ func (s *PlotEntryService) RestoreSIVIIdentityReviewed(ctx context.Context, cont
 }
 
 func (s *PlotEntryService) CreateSIVIVegetation(ctx context.Context, contextID, requestJSON string) (*SIVICreationResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviCreation == nil {
 		return nil, errors.New("SIVI creation service is unavailable")
 	}
@@ -157,6 +199,8 @@ func (s *PlotEntryService) CreateSIVIVegetation(ctx context.Context, contextID, 
 }
 
 func (s *PlotEntryService) GetSIVICreationReferences(ctx context.Context, contextID, plot string) (SIVISpeciesReferences, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviCreation == nil {
 		return SIVISpeciesReferences{}, errors.New("SIVI creation service is unavailable")
 	}
@@ -164,6 +208,8 @@ func (s *PlotEntryService) GetSIVICreationReferences(ctx context.Context, contex
 }
 
 func (s *PlotEntryService) LookupSIVICreationReceipt(ctx context.Context, contextID, requestJSON string) (*SIVICreationResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviCreation == nil {
 		return nil, errors.New("SIVI creation service is unavailable")
 	}
@@ -171,6 +217,8 @@ func (s *PlotEntryService) LookupSIVICreationReceipt(ctx context.Context, contex
 }
 
 func (s *PlotEntryService) GetSIVICreationUndoHistory(ctx context.Context, contextID, plot string) (*SIVICreationUndoHistoryList, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviCreationUndo == nil {
 		return nil, errors.New("SIVI creation undo service is unavailable")
 	}
@@ -178,6 +226,8 @@ func (s *PlotEntryService) GetSIVICreationUndoHistory(ctx context.Context, conte
 }
 
 func (s *PlotEntryService) LookupSIVICreationUndoReceipt(ctx context.Context, contextID, requestJSON string) (*SIVICreationUndoResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviCreationUndo == nil {
 		return nil, errors.New("SIVI creation undo service is unavailable")
 	}
@@ -185,6 +235,8 @@ func (s *PlotEntryService) LookupSIVICreationUndoReceipt(ctx context.Context, co
 }
 
 func (s *PlotEntryService) ReviewSIVICreationUndo(ctx context.Context, contextID, plot, historyID string) (*SIVICreationUndoReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviCreationUndo == nil {
 		return nil, errors.New("SIVI creation undo service is unavailable")
 	}
@@ -192,6 +244,8 @@ func (s *PlotEntryService) ReviewSIVICreationUndo(ctx context.Context, contextID
 }
 
 func (s *PlotEntryService) UndoSIVICreation(ctx context.Context, contextID, requestJSON string) (*SIVICreationUndoResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviCreationUndo == nil {
 		return nil, errors.New("SIVI creation undo service is unavailable")
 	}
@@ -199,6 +253,8 @@ func (s *PlotEntryService) UndoSIVICreation(ctx context.Context, contextID, requ
 }
 
 func (s *PlotEntryService) DeleteSIVIVegetation(ctx context.Context, contextID, requestJSON string) (*SIVIDeletionResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviDeletion == nil {
 		return nil, errors.New("SIVI deletion service is unavailable")
 	}
@@ -206,6 +262,8 @@ func (s *PlotEntryService) DeleteSIVIVegetation(ctx context.Context, contextID, 
 }
 
 func (s *PlotEntryService) GetSIVIDeletionHistory(ctx context.Context, contextID, plot string) (*SIVIDeletionHistoryList, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviDeletion == nil {
 		return nil, errors.New("SIVI deletion service is unavailable")
 	}
@@ -213,6 +271,8 @@ func (s *PlotEntryService) GetSIVIDeletionHistory(ctx context.Context, contextID
 }
 
 func (s *PlotEntryService) GetSIVIDeletionOriginal(ctx context.Context, contextID, plot, form, rowID string) (*SIVIDeletionOriginal, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviDeletion == nil {
 		return nil, errors.New("SIVI deletion service is unavailable")
 	}
@@ -220,6 +280,8 @@ func (s *PlotEntryService) GetSIVIDeletionOriginal(ctx context.Context, contextI
 }
 
 func (s *PlotEntryService) GetSIVIDeletionTargets(ctx context.Context, contextID, plot string) (*SIVIDeletionTargets, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviDeletion == nil {
 		return nil, errors.New("SIVI deletion service is unavailable")
 	}
@@ -227,6 +289,8 @@ func (s *PlotEntryService) GetSIVIDeletionTargets(ctx context.Context, contextID
 }
 
 func (s *PlotEntryService) LookupSIVIDeletionReceipt(ctx context.Context, contextID, requestJSON string) (*SIVIDeletionResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviDeletion == nil {
 		return nil, errors.New("SIVI deletion service is unavailable")
 	}
@@ -234,6 +298,8 @@ func (s *PlotEntryService) LookupSIVIDeletionReceipt(ctx context.Context, contex
 }
 
 func (s *PlotEntryService) LookupSIVIDeletionRestorationReceipt(ctx context.Context, contextID, requestJSON string) (*SIVIDeletionRestorationResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviDeletion == nil {
 		return nil, errors.New("SIVI deletion service is unavailable")
 	}
@@ -241,6 +307,8 @@ func (s *PlotEntryService) LookupSIVIDeletionRestorationReceipt(ctx context.Cont
 }
 
 func (s *PlotEntryService) RestoreSIVIDeletion(ctx context.Context, contextID, requestJSON string) (*SIVIDeletionRestorationResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviDeletion == nil {
 		return nil, errors.New("SIVI deletion service is unavailable")
 	}
@@ -248,6 +316,8 @@ func (s *PlotEntryService) RestoreSIVIDeletion(ctx context.Context, contextID, r
 }
 
 func (s *PlotEntryService) ReviewSIVIDeletionRestoration(ctx context.Context, contextID, plot, historyID string) (*SIVIDeletionRestorationReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siviDeletion == nil {
 		return nil, errors.New("SIVI deletion service is unavailable")
 	}
@@ -257,6 +327,8 @@ func (s *PlotEntryService) ReviewSIVIDeletionRestoration(ctx context.Context, co
 // Two-Page entry, soil, vegetation, audit & metadata delegates
 
 func (s *PlotEntryService) GetTwoPageParentExtraOriginal(ctx context.Context, contextID, plot, form string) (*SIVIParentProjection, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageParentExtra == nil {
 		return nil, errors.New("two-page parent extra service is unavailable")
 	}
@@ -264,6 +336,8 @@ func (s *PlotEntryService) GetTwoPageParentExtraOriginal(ctx context.Context, co
 }
 
 func (s *PlotEntryService) SaveTwoPageParentExtra(ctx context.Context, contextID, plot, form string, request TwoPageParentExtraWrite) (*SIVIParentWriteResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageParentExtra == nil {
 		return nil, errors.New("two-page parent extra service is unavailable")
 	}
@@ -271,6 +345,8 @@ func (s *PlotEntryService) SaveTwoPageParentExtra(ctx context.Context, contextID
 }
 
 func (s *PlotEntryService) RestoreTwoPageParentExtra(ctx context.Context, contextID, plot, form, historyID string, action AuditRestoreAction) (*AuditRestoreResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageParentExtra == nil {
 		return nil, errors.New("two-page parent extra service is unavailable")
 	}
@@ -278,6 +354,8 @@ func (s *PlotEntryService) RestoreTwoPageParentExtra(ctx context.Context, contex
 }
 
 func (s *PlotEntryService) GetTwoPageParentCommonOriginal(ctx context.Context, contextID, plot, form string) (*SIVIParentProjection, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageParentCommon == nil {
 		return nil, errors.New("two-page parent common service is unavailable")
 	}
@@ -285,6 +363,8 @@ func (s *PlotEntryService) GetTwoPageParentCommonOriginal(ctx context.Context, c
 }
 
 func (s *PlotEntryService) SaveTwoPageParentCommon(ctx context.Context, contextID, plot, form string, request TwoPageParentCommonWrite) (*SIVIParentWriteResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageParentCommon == nil {
 		return nil, errors.New("two-page parent common service is unavailable")
 	}
@@ -292,6 +372,8 @@ func (s *PlotEntryService) SaveTwoPageParentCommon(ctx context.Context, contextI
 }
 
 func (s *PlotEntryService) RestoreTwoPageParentCommon(ctx context.Context, contextID, plot, form, historyID string, action AuditRestoreAction) (*AuditRestoreResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageParentCommon == nil {
 		return nil, errors.New("two-page parent common service is unavailable")
 	}
@@ -299,6 +381,8 @@ func (s *PlotEntryService) RestoreTwoPageParentCommon(ctx context.Context, conte
 }
 
 func (s *PlotEntryService) GetTwoPageParentEntryOriginal(ctx context.Context, contextID, plot, form string) (*TwoPageEntryReferenceSnapshot, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageParentEntry == nil {
 		return nil, errors.New("two-page parent entry service is unavailable")
 	}
@@ -306,6 +390,8 @@ func (s *PlotEntryService) GetTwoPageParentEntryOriginal(ctx context.Context, co
 }
 
 func (s *PlotEntryService) GetTwoPageParentEntryReferences(ctx context.Context, contextID, plot, form string, filters TwoPageEntryReferenceFilters) (*TwoPageEntryReferenceSnapshot, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageParentEntry == nil {
 		return nil, errors.New("two-page parent entry service is unavailable")
 	}
@@ -313,6 +399,8 @@ func (s *PlotEntryService) GetTwoPageParentEntryReferences(ctx context.Context, 
 }
 
 func (s *PlotEntryService) SaveTwoPageParentEntry(ctx context.Context, contextID, plot, form string, request TwoPageParentEntryWrite) (*SIVIParentWriteResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageParentEntry == nil {
 		return nil, errors.New("two-page parent entry service is unavailable")
 	}
@@ -320,6 +408,8 @@ func (s *PlotEntryService) SaveTwoPageParentEntry(ctx context.Context, contextID
 }
 
 func (s *PlotEntryService) RestoreTwoPageParentEntry(ctx context.Context, contextID, plot, form, historyID string, action AuditRestoreAction) (*AuditRestoreResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageParentEntry == nil {
 		return nil, errors.New("two-page parent entry service is unavailable")
 	}
@@ -327,6 +417,8 @@ func (s *PlotEntryService) RestoreTwoPageParentEntry(ctx context.Context, contex
 }
 
 func (s *PlotEntryService) CreateTwoPageSoilHorizon(ctx context.Context, contextID, requestJSON string) (*TwoPageSoilWriteResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageSoil == nil {
 		return nil, errors.New("two-page soil service is unavailable")
 	}
@@ -334,6 +426,8 @@ func (s *PlotEntryService) CreateTwoPageSoilHorizon(ctx context.Context, context
 }
 
 func (s *PlotEntryService) GetTwoPageSoilOriginal(ctx context.Context, contextID, plot, form string) (*TwoPageSoilOriginal, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageSoil == nil {
 		return nil, errors.New("two-page soil service is unavailable")
 	}
@@ -341,6 +435,8 @@ func (s *PlotEntryService) GetTwoPageSoilOriginal(ctx context.Context, contextID
 }
 
 func (s *PlotEntryService) GetTwoPageSoilReferences(ctx context.Context, contextID, plot, form string) (*TwoPageSoilReferences, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageSoil == nil {
 		return nil, errors.New("two-page soil service is unavailable")
 	}
@@ -348,6 +444,8 @@ func (s *PlotEntryService) GetTwoPageSoilReferences(ctx context.Context, context
 }
 
 func (s *PlotEntryService) RecoverTwoPageSoilOutcome(ctx context.Context, contextID, requestJSON string) (*TwoPageSoilAttemptOutcome, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageSoil == nil {
 		return nil, errors.New("two-page soil service is unavailable")
 	}
@@ -355,6 +453,8 @@ func (s *PlotEntryService) RecoverTwoPageSoilOutcome(ctx context.Context, contex
 }
 
 func (s *PlotEntryService) RecoverTwoPageSoilReceipt(ctx context.Context, contextID, requestJSON string) (*TwoPageSoilWriteResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageSoil == nil {
 		return nil, errors.New("two-page soil service is unavailable")
 	}
@@ -362,6 +462,8 @@ func (s *PlotEntryService) RecoverTwoPageSoilReceipt(ctx context.Context, contex
 }
 
 func (s *PlotEntryService) SaveTwoPageSoil(ctx context.Context, contextID, requestJSON string) (*TwoPageSoilWriteResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageSoil == nil {
 		return nil, errors.New("two-page soil service is unavailable")
 	}
@@ -369,6 +471,8 @@ func (s *PlotEntryService) SaveTwoPageSoil(ctx context.Context, contextID, reque
 }
 
 func (s *PlotEntryService) GetTwoPageVegetationOriginal(ctx context.Context, contextID, plot, form string) (*TwoPageVegetationOriginal, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageVegetation == nil {
 		return nil, errors.New("two-page vegetation service is unavailable")
 	}
@@ -376,6 +480,8 @@ func (s *PlotEntryService) GetTwoPageVegetationOriginal(ctx context.Context, con
 }
 
 func (s *PlotEntryService) GetTwoPageVegetationSpeciesReferences(ctx context.Context, contextID, plot, form string) (*TwoPageVegetationSpeciesReferences, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageVegetation == nil {
 		return nil, errors.New("two-page vegetation service is unavailable")
 	}
@@ -383,6 +489,8 @@ func (s *PlotEntryService) GetTwoPageVegetationSpeciesReferences(ctx context.Con
 }
 
 func (s *PlotEntryService) RecoverTwoPageVegetationOutcome(ctx context.Context, contextID, requestJSON string) (*TwoPageVegetationAttemptOutcome, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageVegetation == nil {
 		return nil, errors.New("two-page vegetation service is unavailable")
 	}
@@ -390,6 +498,8 @@ func (s *PlotEntryService) RecoverTwoPageVegetationOutcome(ctx context.Context, 
 }
 
 func (s *PlotEntryService) RecoverTwoPageVegetationReceipt(ctx context.Context, contextID, requestJSON string) (*TwoPageVegetationWriteResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageVegetation == nil {
 		return nil, errors.New("two-page vegetation service is unavailable")
 	}
@@ -397,6 +507,8 @@ func (s *PlotEntryService) RecoverTwoPageVegetationReceipt(ctx context.Context, 
 }
 
 func (s *PlotEntryService) SaveTwoPageVegetation(ctx context.Context, contextID, requestJSON string) (*TwoPageVegetationWriteResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageVegetation == nil {
 		return nil, errors.New("two-page vegetation service is unavailable")
 	}
@@ -404,6 +516,8 @@ func (s *PlotEntryService) SaveTwoPageVegetation(ctx context.Context, contextID,
 }
 
 func (s *PlotEntryService) SaveTwoPageVegetationSpeciesList(ctx context.Context, contextID, requestJSON string) (*TwoPageVegetationWriteResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageVegetationSpeciesList == nil {
 		return nil, errors.New("two-page vegetation species list service is unavailable")
 	}
@@ -411,6 +525,8 @@ func (s *PlotEntryService) SaveTwoPageVegetationSpeciesList(ctx context.Context,
 }
 
 func (s *PlotEntryService) CreateTwoPageVegetationRow(ctx context.Context, contextID string, request CreateTwoPageVegetationRequest) (CreateTwoPageVegetationResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageVegetation == nil {
 		return CreateTwoPageVegetationResult{}, errors.New("two-page vegetation service is unavailable")
 	}
@@ -418,6 +534,8 @@ func (s *PlotEntryService) CreateTwoPageVegetationRow(ctx context.Context, conte
 }
 
 func (s *PlotEntryService) DeleteTwoPageVegetationRow(ctx context.Context, contextID string, request DeleteTwoPageVegetationRequest) (DeleteTwoPageVegetationResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageVegetation == nil {
 		return DeleteTwoPageVegetationResult{}, errors.New("two-page vegetation service is unavailable")
 	}
@@ -425,6 +543,8 @@ func (s *PlotEntryService) DeleteTwoPageVegetationRow(ctx context.Context, conte
 }
 
 func (s *PlotEntryService) RestoreTwoPageVegetationRow(ctx context.Context, contextID string, request RestoreTwoPageVegetationRequest) (RestoreTwoPageVegetationResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageVegetation == nil {
 		return RestoreTwoPageVegetationResult{}, errors.New("two-page vegetation service is unavailable")
 	}
@@ -432,6 +552,8 @@ func (s *PlotEntryService) RestoreTwoPageVegetationRow(ctx context.Context, cont
 }
 
 func (s *PlotEntryService) ListTwoPageVegetationDeletedRows(ctx context.Context, contextID, plot, form string) ([]DeletedTwoPageVegetationEntry, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageVegetation == nil {
 		return nil, errors.New("two-page vegetation service is unavailable")
 	}
@@ -439,6 +561,8 @@ func (s *PlotEntryService) ListTwoPageVegetationDeletedRows(ctx context.Context,
 }
 
 func (s *PlotEntryService) GetTwoPageSourceAuditOriginal(ctx context.Context, contextID, plot, form string) (*TwoPageSourceAuditOriginal, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageSourceAudit == nil {
 		return nil, errors.New("two-page source audit service is unavailable")
 	}
@@ -446,6 +570,8 @@ func (s *PlotEntryService) GetTwoPageSourceAuditOriginal(ctx context.Context, co
 }
 
 func (s *PlotEntryService) SetTwoPageSourceAuditRestoreSelection(ctx context.Context, contextID, plot, form string, rowIDs []string) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageSourceAudit == nil {
 		return errors.New("two-page source audit service is unavailable")
 	}
@@ -453,6 +579,8 @@ func (s *PlotEntryService) SetTwoPageSourceAuditRestoreSelection(ctx context.Con
 }
 
 func (s *PlotEntryService) RestoreSelectedTwoPageSourceAudit(ctx context.Context, contextID, plot, form string, rowIDs []string, action AuditRestoreAction) (*AuditRestoreResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageSourceAudit == nil {
 		return nil, errors.New("two-page source audit service is unavailable")
 	}
@@ -460,6 +588,8 @@ func (s *PlotEntryService) RestoreSelectedTwoPageSourceAudit(ctx context.Context
 }
 
 func (s *PlotEntryService) GetTwoPageProjectMetadataReview(ctx context.Context, contextID, plot string, offset, limit int) (*TwoPageProjectMetadataReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageProjectMetadata == nil {
 		return nil, errors.New("two-page project metadata service is unavailable")
 	}
@@ -469,6 +599,8 @@ func (s *PlotEntryService) GetTwoPageProjectMetadataReview(ctx context.Context, 
 // Reference picklist lookup delegates
 
 func (s *PlotEntryService) GetAllLists(ctx context.Context) (map[string][]ListItem, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.references == nil {
 		return nil, errors.New("reference catalogue is unavailable")
 	}
@@ -476,6 +608,8 @@ func (s *PlotEntryService) GetAllLists(ctx context.Context) (map[string][]ListIt
 }
 
 func (s *PlotEntryService) GetListItems(ctx context.Context, listName string) ([]ListItem, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.references == nil {
 		return nil, errors.New("reference catalogue is unavailable")
 	}
@@ -483,6 +617,8 @@ func (s *PlotEntryService) GetListItems(ctx context.Context, listName string) ([
 }
 
 func (s *PlotEntryService) GetSpecies(ctx context.Context, code string) (*SpeciesItem, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.references == nil {
 		return nil, errors.New("reference catalogue is unavailable")
 	}
@@ -490,6 +626,8 @@ func (s *PlotEntryService) GetSpecies(ctx context.Context, code string) (*Specie
 }
 
 func (s *PlotEntryService) SearchSpecies(ctx context.Context, query string, limit int) ([]SpeciesItem, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.references == nil {
 		return nil, errors.New("reference catalogue is unavailable")
 	}
@@ -497,6 +635,8 @@ func (s *PlotEntryService) SearchSpecies(ctx context.Context, query string, limi
 }
 
 func (s *PlotEntryService) ListExposureChoices(ctx context.Context) ([]SiteCodeChoice, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siteCodes == nil {
 		return nil, errors.New("site code catalogue is unavailable")
 	}
@@ -504,6 +644,8 @@ func (s *PlotEntryService) ListExposureChoices(ctx context.Context) ([]SiteCodeC
 }
 
 func (s *PlotEntryService) ListSiteDisturbanceChoices(ctx context.Context) ([]SiteCodeChoice, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siteCodes == nil {
 		return nil, errors.New("site code catalogue is unavailable")
 	}
@@ -511,6 +653,8 @@ func (s *PlotEntryService) ListSiteDisturbanceChoices(ctx context.Context) ([]Si
 }
 
 func (s *PlotEntryService) ReloadSiteCodeCatalogue(ctx context.Context) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siteCodes == nil {
 		return errors.New("site code catalogue is unavailable")
 	}
@@ -518,6 +662,8 @@ func (s *PlotEntryService) ReloadSiteCodeCatalogue(ctx context.Context) error {
 }
 
 func (s *PlotEntryService) ListGreatGroupChoices(ctx context.Context) ([]SoilCodeChoice, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.soilCodes == nil {
 		return nil, errors.New("soil code catalogue is unavailable")
 	}
@@ -525,6 +671,8 @@ func (s *PlotEntryService) ListGreatGroupChoices(ctx context.Context) ([]SoilCod
 }
 
 func (s *PlotEntryService) ListSubgroupChoices(ctx context.Context) ([]SoilCodeChoice, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.soilCodes == nil {
 		return nil, errors.New("soil code catalogue is unavailable")
 	}
@@ -532,6 +680,8 @@ func (s *PlotEntryService) ListSubgroupChoices(ctx context.Context) ([]SoilCodeC
 }
 
 func (s *PlotEntryService) ReloadSoilCodeCatalogue(ctx context.Context) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.soilCodes == nil {
 		return errors.New("soil code catalogue is unavailable")
 	}
@@ -539,6 +689,8 @@ func (s *PlotEntryService) ReloadSoilCodeCatalogue(ctx context.Context) error {
 }
 
 func (s *PlotEntryService) ListParentCodeChoices(ctx context.Context, listName string) ([]ParentCodeChoice, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.parentCodes == nil {
 		return nil, errors.New("parent code catalogue is unavailable")
 	}
@@ -546,6 +698,8 @@ func (s *PlotEntryService) ListParentCodeChoices(ctx context.Context, listName s
 }
 
 func (s *PlotEntryService) ReloadParentCodeCatalogue(ctx context.Context) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.parentCodes == nil {
 		return errors.New("parent code catalogue is unavailable")
 	}
@@ -553,6 +707,8 @@ func (s *PlotEntryService) ReloadParentCodeCatalogue(ctx context.Context) error 
 }
 
 func (s *PlotEntryService) ListBedrockChoices(ctx context.Context) ([]GeologyCodeChoice, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.geologyCodes == nil {
 		return nil, errors.New("geology code catalogue is unavailable")
 	}
@@ -560,6 +716,8 @@ func (s *PlotEntryService) ListBedrockChoices(ctx context.Context) ([]GeologyCod
 }
 
 func (s *PlotEntryService) ReloadGeologyCodeCatalogue(ctx context.Context) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.geologyCodes == nil {
 		return errors.New("geology code catalogue is unavailable")
 	}
@@ -567,6 +725,8 @@ func (s *PlotEntryService) ReloadGeologyCodeCatalogue(ctx context.Context) error
 }
 
 func (s *PlotEntryService) ListEcosectionChoices(ctx context.Context) ([]RegionCodeChoice, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.regionCodes == nil {
 		return nil, errors.New("region code catalogue is unavailable")
 	}
@@ -574,6 +734,8 @@ func (s *PlotEntryService) ListEcosectionChoices(ctx context.Context) ([]RegionC
 }
 
 func (s *PlotEntryService) ListRegionChoices(ctx context.Context) ([]RegionCodeChoice, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.regionCodes == nil {
 		return nil, errors.New("region code catalogue is unavailable")
 	}
@@ -581,6 +743,8 @@ func (s *PlotEntryService) ListRegionChoices(ctx context.Context) ([]RegionCodeC
 }
 
 func (s *PlotEntryService) ReloadRegionCodeCatalogue(ctx context.Context) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.regionCodes == nil {
 		return errors.New("region code catalogue is unavailable")
 	}
@@ -588,6 +752,8 @@ func (s *PlotEntryService) ReloadRegionCodeCatalogue(ctx context.Context) error 
 }
 
 func (s *PlotEntryService) ListPlotQualityChoices(ctx context.Context) ([]PlotQualityChoice, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.quality == nil {
 		return nil, errors.New("plot quality catalogue is unavailable")
 	}
@@ -601,6 +767,8 @@ func (s *PlotEntryService) EvaluatePlotDiagnostics(header FS882Header, humus []H
 }
 
 func (s *PlotEntryService) EvaluateStoredPlotDiagnostics(ctx context.Context, contextID, plotNumber string) (lmh25rules.PlotDiagnosticsResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || unwrapContextService(s.contexts) == nil {
 		return lmh25rules.PlotDiagnosticsResult{}, errors.New("plot entry context is unavailable")
 	}

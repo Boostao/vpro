@@ -107,6 +107,8 @@ func (s *ContextService) buildSnapshotBundleExporter() cloudsyncpkg.SnapshotBund
 }
 
 func (s *ContextService) GetCloudSyncConfigStatus(ctx context.Context) (cloudsyncpkg.CloudConfigStatus, error) {
+	s, release := s.acquire()
+	defer release()
 	if err := ctx.Err(); err != nil {
 		return cloudsyncpkg.CloudConfigStatus{}, err
 	}
@@ -118,6 +120,8 @@ func (s *ContextService) GetCloudSyncConfigStatus(ctx context.Context) (cloudsyn
 }
 
 func (s *ContextService) ConfigureCloudSyncSession(ctx context.Context, req cloudsyncpkg.SessionConfigRequest) (cloudsyncpkg.CloudConfigStatus, error) {
+	s, release := s.acquire()
+	defer release()
 	if err := ctx.Err(); err != nil {
 		return cloudsyncpkg.CloudConfigStatus{}, err
 	}
@@ -129,6 +133,8 @@ func (s *ContextService) ConfigureCloudSyncSession(ctx context.Context, req clou
 }
 
 func (s *ContextService) TestCloudConnection(ctx context.Context) (cloudsyncpkg.CloudConnectionReport, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return cloudsyncpkg.CloudConnectionReport{}, err
@@ -137,6 +143,8 @@ func (s *ContextService) TestCloudConnection(ctx context.Context) (cloudsyncpkg.
 }
 
 func (s *ContextService) BootstrapCloudSchemas(ctx context.Context) (cloudsyncpkg.SchemaBootstrapResult, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return cloudsyncpkg.SchemaBootstrapResult{}, err
@@ -145,6 +153,8 @@ func (s *ContextService) BootstrapCloudSchemas(ctx context.Context) (cloudsyncpk
 }
 
 func (s *ContextService) PublishStandardsToCloud(ctx context.Context, contextID string, req cloudsyncpkg.PublishStandardsRequest) (cloudsyncpkg.PublishStandardsResult, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return cloudsyncpkg.PublishStandardsResult{}, err
@@ -153,6 +163,8 @@ func (s *ContextService) PublishStandardsToCloud(ctx context.Context, contextID 
 }
 
 func (s *ContextService) SeedBECMasterBaseline(ctx context.Context, req cloudsyncpkg.SeedBaselineRequest) (cloudsyncpkg.SeedBaselineResult, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return cloudsyncpkg.SeedBaselineResult{}, err
@@ -161,6 +173,8 @@ func (s *ContextService) SeedBECMasterBaseline(ctx context.Context, req cloudsyn
 }
 
 func (s *ContextService) PullCloudStandards(ctx context.Context, contextID string) (cloudsyncpkg.PullStandardsResult, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return cloudsyncpkg.PullStandardsResult{}, err
@@ -169,6 +183,8 @@ func (s *ContextService) PullCloudStandards(ctx context.Context, contextID strin
 }
 
 func (s *ContextService) PreviewBECMasterSubset(ctx context.Context, filter cloudsyncpkg.SubsetFilter) (cloudsyncpkg.SubsetPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return cloudsyncpkg.SubsetPreview{}, err
@@ -177,6 +193,8 @@ func (s *ContextService) PreviewBECMasterSubset(ctx context.Context, filter clou
 }
 
 func (s *ContextService) PullBECMasterSubset(ctx context.Context, contextID string, req cloudsyncpkg.PullSubsetRequest) (cloudsyncpkg.PullSubsetResult, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return cloudsyncpkg.PullSubsetResult{}, err
@@ -185,6 +203,8 @@ func (s *ContextService) PullBECMasterSubset(ctx context.Context, contextID stri
 }
 
 func (s *ContextService) PreviewStagingSubmission(ctx context.Context, contextID string, useActiveSU bool) (cloudsyncpkg.StagingPreflightPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return cloudsyncpkg.StagingPreflightPreview{}, err
@@ -193,6 +213,8 @@ func (s *ContextService) PreviewStagingSubmission(ctx context.Context, contextID
 }
 
 func (s *ContextService) SubmitProjectToStaging(ctx context.Context, contextID string, req cloudsyncpkg.SubmitStagingRequest) (cloudsyncpkg.SubmitStagingResult, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return cloudsyncpkg.SubmitStagingResult{}, err
@@ -201,6 +223,8 @@ func (s *ContextService) SubmitProjectToStaging(ctx context.Context, contextID s
 }
 
 func (s *ContextService) ListStagingSubmissions(ctx context.Context, filter cloudsyncpkg.ListSubmissionsFilter) ([]cloudsyncpkg.StagingSubmissionSummary, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return nil, err
@@ -209,6 +233,8 @@ func (s *ContextService) ListStagingSubmissions(ctx context.Context, filter clou
 }
 
 func (s *ContextService) GetStagingSubmissionDetail(ctx context.Context, submissionID string) (cloudsyncpkg.StagingSubmissionDetail, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return cloudsyncpkg.StagingSubmissionDetail{}, err
@@ -217,6 +243,8 @@ func (s *ContextService) GetStagingSubmissionDetail(ctx context.Context, submiss
 }
 
 func (s *ContextService) PreviewStagingToMasterMerge(ctx context.Context, req cloudsyncpkg.StagingMergePreviewRequest) (cloudsyncpkg.StagingMergePreview, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return cloudsyncpkg.StagingMergePreview{}, err
@@ -225,6 +253,8 @@ func (s *ContextService) PreviewStagingToMasterMerge(ctx context.Context, req cl
 }
 
 func (s *ContextService) ExecuteStagingToMasterMerge(ctx context.Context, req cloudsyncpkg.StagingMergeExecuteRequest) (cloudsyncpkg.StagingMergeResult, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return cloudsyncpkg.StagingMergeResult{}, err
@@ -233,6 +263,8 @@ func (s *ContextService) ExecuteStagingToMasterMerge(ctx context.Context, req cl
 }
 
 func (s *ContextService) RejectStagingSubmission(ctx context.Context, req cloudsyncpkg.RejectSubmissionRequest) (cloudsyncpkg.StagingSubmissionSummary, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return cloudsyncpkg.StagingSubmissionSummary{}, err
@@ -241,6 +273,8 @@ func (s *ContextService) RejectStagingSubmission(ctx context.Context, req clouds
 }
 
 func (s *ContextService) CreateBECMasterSnapshot(ctx context.Context, contextID string, req cloudsyncpkg.CreateSnapshotRequest) (cloudsyncpkg.SnapshotRecord, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return cloudsyncpkg.SnapshotRecord{}, err
@@ -249,6 +283,8 @@ func (s *ContextService) CreateBECMasterSnapshot(ctx context.Context, contextID 
 }
 
 func (s *ContextService) ListBECMasterSnapshots(ctx context.Context) ([]cloudsyncpkg.SnapshotRecord, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return nil, err
@@ -257,6 +293,8 @@ func (s *ContextService) ListBECMasterSnapshots(ctx context.Context) ([]cloudsyn
 }
 
 func (s *ContextService) ListBECMasterDownloadLog(ctx context.Context, limit int) ([]cloudsyncpkg.DownloadLogEntry, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return nil, err
@@ -265,6 +303,8 @@ func (s *ContextService) ListBECMasterDownloadLog(ctx context.Context, limit int
 }
 
 func (s *ContextService) VerifyBECMasterAuditChain(ctx context.Context, limit int) (cloudsyncpkg.AuditChainVerification, error) {
+	s, release := s.acquire()
+	defer release()
 	mgr, err := s.cloudManager()
 	if err != nil {
 		return cloudsyncpkg.AuditChainVerification{}, err

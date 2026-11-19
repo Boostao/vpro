@@ -9,7 +9,20 @@ import (
 )
 
 type HelpService struct {
-	core *lifecyclepkg.HelpService
+	runtime *runtimeShutdownTracker
+	core    *lifecyclepkg.HelpService
+}
+
+func (s *HelpService) acquire() (*HelpService, func()) {
+	if s == nil || s.runtime == nil {
+		return s, noopRelease
+	}
+	snap, release := s.runtime.acquire()
+	if snap == nil {
+		release()
+		return nil, noopRelease
+	}
+	return snap.help, release
 }
 
 func NewHelpService(preferences *vprocorepkg.DesktopConfig) (*HelpService, error) {
@@ -43,6 +56,8 @@ func (s *HelpService) setDataDir(dataDir string) {
 }
 
 func (s *HelpService) GetLibraryStamps(ctx context.Context) (LibraryStamps, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return LibraryStamps{}, errors.New("help service is unavailable")
 	}
@@ -50,6 +65,8 @@ func (s *HelpService) GetLibraryStamps(ctx context.Context) (LibraryStamps, erro
 }
 
 func (s *HelpService) GetReleaseChannel(ctx context.Context) (string, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return "", errors.New("help service is unavailable")
 	}
@@ -57,6 +74,8 @@ func (s *HelpService) GetReleaseChannel(ctx context.Context) (string, error) {
 }
 
 func (s *HelpService) GetAboutInfo(ctx context.Context) (AboutInfo, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return AboutInfo{}, errors.New("help service is unavailable")
 	}
@@ -64,6 +83,8 @@ func (s *HelpService) GetAboutInfo(ctx context.Context) (AboutInfo, error) {
 }
 
 func (s *HelpService) GetHelpBundle(ctx context.Context) (HelpBundle, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return HelpBundle{}, errors.New("help service is unavailable")
 	}
@@ -71,6 +92,8 @@ func (s *HelpService) GetHelpBundle(ctx context.Context) (HelpBundle, error) {
 }
 
 func (s *HelpService) LookupHelpTopic(ctx context.Context, helpID string) (HelpLookupResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return HelpLookupResult{}, errors.New("help service is unavailable")
 	}
@@ -78,6 +101,8 @@ func (s *HelpService) LookupHelpTopic(ctx context.Context, helpID string) (HelpL
 }
 
 func (s *HelpService) SearchHelp(ctx context.Context, query string) ([]HelpSearchHit, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return nil, errors.New("help service is unavailable")
 	}
@@ -85,6 +110,8 @@ func (s *HelpService) SearchHelp(ctx context.Context, query string) ([]HelpSearc
 }
 
 func (s *HelpService) GetWhatsNewStatus(ctx context.Context) (WhatsNewStatus, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return WhatsNewStatus{}, errors.New("help service is unavailable")
 	}
@@ -92,6 +119,8 @@ func (s *HelpService) GetWhatsNewStatus(ctx context.Context) (WhatsNewStatus, er
 }
 
 func (s *HelpService) AcknowledgeWhatsNew(ctx context.Context, version string) (WhatsNewStatus, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return WhatsNewStatus{}, errors.New("help service is unavailable")
 	}
@@ -99,6 +128,8 @@ func (s *HelpService) AcknowledgeWhatsNew(ctx context.Context, version string) (
 }
 
 func (s *HelpService) ResetWorkspaceToSample(ctx context.Context, contextID string) (ProjectState, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.core == nil {
 		return ProjectState{}, errors.New("help service is unavailable")
 	}

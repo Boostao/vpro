@@ -9,7 +9,20 @@ import (
 )
 
 type ValidationService struct {
+	runtime  *runtimeShutdownTracker
 	contexts *ContextService
+}
+
+func (s *ValidationService) acquire() (*ValidationService, func()) {
+	if s == nil || s.runtime == nil {
+		return s, noopRelease
+	}
+	snap, release := s.runtime.acquire()
+	if snap == nil {
+		release()
+		return nil, noopRelease
+	}
+	return snap.validation, release
 }
 
 func NewValidationService(contexts *ContextService) *ValidationService {
@@ -17,6 +30,8 @@ func NewValidationService(contexts *ContextService) *ValidationService {
 }
 
 func (s *ValidationService) CheckSpeciesCodes(ctx context.Context, contextID string) (SpeciesCodeCheckReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return SpeciesCodeCheckReview{}, errors.New("validation context is unavailable")
 	}
@@ -24,6 +39,8 @@ func (s *ValidationService) CheckSpeciesCodes(ctx context.Context, contextID str
 }
 
 func (s *ValidationService) LookupSpeciesCodeCheckTarget(ctx context.Context, contextID string, lookup VegetationSpeciesLookup) ([]SpeciesCodeCheckOption, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("validation context is unavailable")
 	}
@@ -31,6 +48,8 @@ func (s *ValidationService) LookupSpeciesCodeCheckTarget(ctx context.Context, co
 }
 
 func (s *ValidationService) ApplySpeciesCodeCheck(contextID string, updates []SpeciesCodeCheckUpdate) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return errors.New("validation context is unavailable")
 	}
@@ -38,6 +57,8 @@ func (s *ValidationService) ApplySpeciesCodeCheck(contextID string, updates []Sp
 }
 
 func (s *ValidationService) RunComplianceValidation(ctx context.Context, contextID string, opts validationpkg.ComplianceOptions) (validationpkg.ComplianceValidationReport, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return validationpkg.ComplianceValidationReport{}, errors.New("validation context is unavailable")
 	}
@@ -45,6 +66,8 @@ func (s *ValidationService) RunComplianceValidation(ctx context.Context, context
 }
 
 func (s *ValidationService) QuarantineOrphanRecords(ctx context.Context, contextID string, req validationpkg.QuarantineOrphanRequest) (validationpkg.QuarantineOrphanResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return validationpkg.QuarantineOrphanResult{}, errors.New("validation context is unavailable")
 	}
@@ -52,6 +75,8 @@ func (s *ValidationService) QuarantineOrphanRecords(ctx context.Context, context
 }
 
 func (s *ValidationService) PreviewOptimizeVeg(ctx context.Context, contextID string, opts projectopspkg.OptimizeVegOptions) (projectopspkg.OptimizeVegPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return projectopspkg.OptimizeVegPreview{}, errors.New("validation context is unavailable")
 	}
@@ -59,6 +84,8 @@ func (s *ValidationService) PreviewOptimizeVeg(ctx context.Context, contextID st
 }
 
 func (s *ValidationService) ApplyOptimizeVeg(ctx context.Context, contextID string, req projectopspkg.ApplyOptimizeVegRequest) (projectopspkg.OptimizeVegResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return projectopspkg.OptimizeVegResult{}, errors.New("validation context is unavailable")
 	}
@@ -66,6 +93,8 @@ func (s *ValidationService) ApplyOptimizeVeg(ctx context.Context, contextID stri
 }
 
 func (s *ValidationService) PreviewThreeWayMerge(ctx context.Context, contextID string, req projectopspkg.ThreeWayMergePreviewRequest) (projectopspkg.ThreeWayMergePreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return projectopspkg.ThreeWayMergePreview{}, errors.New("validation context is unavailable")
 	}
@@ -73,6 +102,8 @@ func (s *ValidationService) PreviewThreeWayMerge(ctx context.Context, contextID 
 }
 
 func (s *ValidationService) ExecuteThreeWayMerge(ctx context.Context, contextID string, req projectopspkg.ThreeWayMergeExecuteRequest) (projectopspkg.ThreeWayMergeResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return projectopspkg.ThreeWayMergeResult{}, errors.New("validation context is unavailable")
 	}

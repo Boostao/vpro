@@ -24,6 +24,7 @@ type LongVegetationExclusionRequest = vegreportpkg.LongVegetationExclusionReques
 type LongVegetationExclusionPreview = vegreportpkg.LongVegetationExclusionPreview
 
 type VegetationReportService struct {
+	runtime                        *runtimeShutdownTracker
 	contexts                       *ContextService
 	summary                        *vegreportpkg.SummaryVegetationService
 	summaryEnvironment             *vegreportpkg.SummaryVegetationEnvironmentalService
@@ -51,6 +52,18 @@ type VegetationReportService struct {
 	lifeformSummary                *vegreportpkg.LifeformSummaryService
 	lifeformWorkbook               *vegreportpkg.LifeformWorkbookService
 	speciesAttributeSummary        *vegreportpkg.SpeciesAttributeSummaryService
+}
+
+func (s *VegetationReportService) acquire() (*VegetationReportService, func()) {
+	if s == nil || s.runtime == nil {
+		return s, noopRelease
+	}
+	snap, release := s.runtime.acquire()
+	if snap == nil {
+		release()
+		return nil, noopRelease
+	}
+	return snap.vegReport, release
 }
 
 func buildVegetationReportService(contexts *ContextService) (VegetationReportService, error) {
@@ -121,6 +134,8 @@ func buildVegetationReportService(contexts *ContextService) (VegetationReportSer
 // Summary Vegetation report & workbook delegates
 
 func (s *VegetationReportService) PreviewSummaryVegetation(ctx context.Context, contextID string, average, display int) (SummaryVegetationPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summary == nil {
 		return SummaryVegetationPreview{}, errors.New("summary vegetation service is unavailable")
 	}
@@ -128,6 +143,8 @@ func (s *VegetationReportService) PreviewSummaryVegetation(ctx context.Context, 
 }
 
 func (s *VegetationReportService) PreviewSummaryVegetationClass(ctx context.Context, contextID string, average, display, showClass int) (SummaryVegetationPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summary == nil {
 		return SummaryVegetationPreview{}, errors.New("summary vegetation service is unavailable")
 	}
@@ -135,6 +152,8 @@ func (s *VegetationReportService) PreviewSummaryVegetationClass(ctx context.Cont
 }
 
 func (s *VegetationReportService) PreviewSummaryVegetationGrouped(ctx context.Context, contextID string, average, groupAndOrder int) (SummaryVegetationPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summary == nil {
 		return SummaryVegetationPreview{}, errors.New("summary vegetation service is unavailable")
 	}
@@ -142,6 +161,8 @@ func (s *VegetationReportService) PreviewSummaryVegetationGrouped(ctx context.Co
 }
 
 func (s *VegetationReportService) PreviewSummaryVegetationGroupedDisplay(ctx context.Context, contextID string, average, groupAndOrder, display, showClass int) (SummaryVegetationPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summary == nil {
 		return SummaryVegetationPreview{}, errors.New("summary vegetation service is unavailable")
 	}
@@ -149,6 +170,8 @@ func (s *VegetationReportService) PreviewSummaryVegetationGroupedDisplay(ctx con
 }
 
 func (s *VegetationReportService) PreviewSummaryVegetationWithPreferences(ctx context.Context, contextID string) (SummaryVegetationPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summary == nil {
 		return SummaryVegetationPreview{}, errors.New("summary vegetation service is unavailable")
 	}
@@ -156,6 +179,8 @@ func (s *VegetationReportService) PreviewSummaryVegetationWithPreferences(ctx co
 }
 
 func (s *VegetationReportService) PreviewSummaryVegetationConfigured(ctx context.Context, contextID, requestJSON string) (SummaryVegetationPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summary == nil {
 		return SummaryVegetationPreview{}, errors.New("summary vegetation service is unavailable")
 	}
@@ -163,6 +188,8 @@ func (s *VegetationReportService) PreviewSummaryVegetationConfigured(ctx context
 }
 
 func (s *VegetationReportService) PreviewSummaryVegetationEnvironmental(ctx context.Context, contextID string, average, display, showClass int) (*SummaryVegetationEnvironmentalPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summaryEnvironment == nil {
 		return nil, errors.New("summary vegetation environmental service is unavailable")
 	}
@@ -170,6 +197,8 @@ func (s *VegetationReportService) PreviewSummaryVegetationEnvironmental(ctx cont
 }
 
 func (s *VegetationReportService) PreviewSummaryVegetationEnvironmentalNumeric(ctx context.Context, contextID string, average, display, showClass int) (*SummaryVegetationEnvironmentalNumericPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summaryEnvironment == nil {
 		return nil, errors.New("summary vegetation environmental service is unavailable")
 	}
@@ -177,6 +206,8 @@ func (s *VegetationReportService) PreviewSummaryVegetationEnvironmentalNumeric(c
 }
 
 func (s *VegetationReportService) PreviewSummaryVegetationEnvironmentalLifeform(ctx context.Context, contextID string, average, display, showClass int) (*SummaryVegetationEnvironmentalLifeformPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summaryEnvironmentLifeform == nil {
 		return nil, errors.New("summary vegetation environmental lifeform service is unavailable")
 	}
@@ -184,6 +215,8 @@ func (s *VegetationReportService) PreviewSummaryVegetationEnvironmentalLifeform(
 }
 
 func (s *VegetationReportService) GetSummaryVegetationWorkbookReview(ctx context.Context, contextID, requestJSON string) (*SummaryVegetationWorkbookReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summaryWorkbook == nil {
 		return nil, errors.New("summary vegetation workbook service is unavailable")
 	}
@@ -191,6 +224,8 @@ func (s *VegetationReportService) GetSummaryVegetationWorkbookReview(ctx context
 }
 
 func (s *VegetationReportService) GetSummaryVegetationWorkbookReviewFromPreferences(ctx context.Context, contextID string) (*SummaryVegetationWorkbookReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summaryWorkbook == nil {
 		return nil, errors.New("summary vegetation workbook service is unavailable")
 	}
@@ -198,6 +233,8 @@ func (s *VegetationReportService) GetSummaryVegetationWorkbookReviewFromPreferen
 }
 
 func (s *VegetationReportService) ExportReviewedSummaryVegetationWorkbook(ctx context.Context, contextID, requestJSON string) (*VegetationWorkbookOutcome, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summaryWorkbook == nil {
 		return nil, errors.New("summary vegetation workbook service is unavailable")
 	}
@@ -205,6 +242,8 @@ func (s *VegetationReportService) ExportReviewedSummaryVegetationWorkbook(ctx co
 }
 
 func (s *VegetationReportService) GetSummaryVegetationPreferences(ctx context.Context, contextID string) (*SummaryVegetationPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summaryPreferences == nil {
 		return nil, errors.New("summary vegetation preferences service is unavailable")
 	}
@@ -212,6 +251,8 @@ func (s *VegetationReportService) GetSummaryVegetationPreferences(ctx context.Co
 }
 
 func (s *VegetationReportService) SaveSummaryVegetationPreferences(ctx context.Context, contextID, requestJSON string) *SummaryVegetationPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summaryPreferences == nil {
 		return &SummaryVegetationPreferencesOutcome{ContextID: contextID, ErrorMessage: "summary vegetation preferences service is unavailable"}
 	}
@@ -219,6 +260,8 @@ func (s *VegetationReportService) SaveSummaryVegetationPreferences(ctx context.C
 }
 
 func (s *VegetationReportService) GetSummaryVegetationQualityPreferences(ctx context.Context, contextID string) (*SummaryVegetationQualityPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summaryQualityPreferences == nil {
 		return nil, errors.New("summary vegetation quality preferences service is unavailable")
 	}
@@ -226,6 +269,8 @@ func (s *VegetationReportService) GetSummaryVegetationQualityPreferences(ctx con
 }
 
 func (s *VegetationReportService) SaveSummaryVegetationQualityPreferences(ctx context.Context, contextID, requestJSON string) *SummaryVegetationQualityPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summaryQualityPreferences == nil {
 		return &SummaryVegetationQualityPreferencesOutcome{ContextID: contextID, ErrorMessage: "summary vegetation quality preferences service is unavailable"}
 	}
@@ -233,6 +278,8 @@ func (s *VegetationReportService) SaveSummaryVegetationQualityPreferences(ctx co
 }
 
 func (s *VegetationReportService) GetSummaryVegetationPresentationPreferences(ctx context.Context, contextID string) (*SummaryVegetationPresentationPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summaryPresentationPreferences == nil {
 		return nil, errors.New("summary vegetation presentation preferences service is unavailable")
 	}
@@ -240,6 +287,8 @@ func (s *VegetationReportService) GetSummaryVegetationPresentationPreferences(ct
 }
 
 func (s *VegetationReportService) SaveSummaryVegetationPresentationPreferences(ctx context.Context, contextID, requestJSON string) *SummaryVegetationPresentationPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summaryPresentationPreferences == nil {
 		return &SummaryVegetationPresentationPreferencesOutcome{ContextID: contextID, ErrorMessage: "summary vegetation presentation preferences service is unavailable"}
 	}
@@ -247,6 +296,8 @@ func (s *VegetationReportService) SaveSummaryVegetationPresentationPreferences(c
 }
 
 func (s *VegetationReportService) GetSummaryVegetationFieldList(ctx context.Context, contextID string) (*SummaryVegetationFieldListReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summaryFieldList == nil {
 		return nil, errors.New("summary vegetation field list service is unavailable")
 	}
@@ -254,6 +305,8 @@ func (s *VegetationReportService) GetSummaryVegetationFieldList(ctx context.Cont
 }
 
 func (s *VegetationReportService) GetSummaryVegetationFieldListIndex(ctx context.Context, contextID string) (*SummaryVegetationFieldListSelection, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summaryFieldList == nil {
 		return nil, errors.New("summary vegetation field list service is unavailable")
 	}
@@ -261,6 +314,8 @@ func (s *VegetationReportService) GetSummaryVegetationFieldListIndex(ctx context
 }
 
 func (s *VegetationReportService) SaveSummaryVegetationFieldList(ctx context.Context, contextID, requestJSON string) *SummaryVegetationFieldListOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.summaryFieldList == nil {
 		return &SummaryVegetationFieldListOutcome{ContextID: contextID, ErrorMessage: "summary vegetation field list service is unavailable"}
 	}
@@ -270,6 +325,8 @@ func (s *VegetationReportService) SaveSummaryVegetationFieldList(ctx context.Con
 // Long Vegetation report, preferences, scope & workbook delegates
 
 func (s *VegetationReportService) GetLongVegetationOptions(ctx context.Context, contextID string) (LongVegetationOptions, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return LongVegetationOptions{}, errors.New("vegetation report context is unavailable")
 	}
@@ -277,6 +334,8 @@ func (s *VegetationReportService) GetLongVegetationOptions(ctx context.Context, 
 }
 
 func (s *VegetationReportService) PreviewLongVegetation(ctx context.Context, contextID string) (LongVegetationPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return LongVegetationPreview{}, errors.New("vegetation report context is unavailable")
 	}
@@ -284,6 +343,8 @@ func (s *VegetationReportService) PreviewLongVegetation(ctx context.Context, con
 }
 
 func (s *VegetationReportService) GetLongVegetationPreferences(ctx context.Context, contextID string) (*LongVegetationPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longPreferences == nil {
 		return nil, errors.New("long vegetation preferences service is unavailable")
 	}
@@ -291,6 +352,8 @@ func (s *VegetationReportService) GetLongVegetationPreferences(ctx context.Conte
 }
 
 func (s *VegetationReportService) SaveLongVegetationPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longPreferences == nil {
 		return &LongVegetationPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation preferences service is unavailable"}
 	}
@@ -298,6 +361,8 @@ func (s *VegetationReportService) SaveLongVegetationPreferences(ctx context.Cont
 }
 
 func (s *VegetationReportService) GetLongVegetationStatisticsPreferences(ctx context.Context, contextID string) (*LongVegetationStatisticsPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longStatisticsPreferences == nil {
 		return nil, errors.New("long vegetation statistics preferences service is unavailable")
 	}
@@ -305,6 +370,8 @@ func (s *VegetationReportService) GetLongVegetationStatisticsPreferences(ctx con
 }
 
 func (s *VegetationReportService) SaveLongVegetationStatisticsPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationStatisticsPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longStatisticsPreferences == nil {
 		return &LongVegetationStatisticsPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation statistics preferences service is unavailable"}
 	}
@@ -312,6 +379,8 @@ func (s *VegetationReportService) SaveLongVegetationStatisticsPreferences(ctx co
 }
 
 func (s *VegetationReportService) GetLongVegetationSwitchPreferences(ctx context.Context, contextID string) (*LongVegetationSwitchPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longSwitchPreferences == nil {
 		return nil, errors.New("long vegetation switch preferences service is unavailable")
 	}
@@ -319,6 +388,8 @@ func (s *VegetationReportService) GetLongVegetationSwitchPreferences(ctx context
 }
 
 func (s *VegetationReportService) SaveLongVegetationSwitchPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationSwitchPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longSwitchPreferences == nil {
 		return &LongVegetationSwitchPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation switch preferences service is unavailable"}
 	}
@@ -326,6 +397,8 @@ func (s *VegetationReportService) SaveLongVegetationSwitchPreferences(ctx contex
 }
 
 func (s *VegetationReportService) GetLongVegetationThresholdPreferences(ctx context.Context, contextID string) (*LongVegetationThresholdPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longThresholdPreferences == nil {
 		return nil, errors.New("long vegetation threshold preferences service is unavailable")
 	}
@@ -333,6 +406,8 @@ func (s *VegetationReportService) GetLongVegetationThresholdPreferences(ctx cont
 }
 
 func (s *VegetationReportService) SaveLongVegetationThresholdPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationThresholdPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longThresholdPreferences == nil {
 		return &LongVegetationThresholdPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation threshold preferences service is unavailable"}
 	}
@@ -340,6 +415,8 @@ func (s *VegetationReportService) SaveLongVegetationThresholdPreferences(ctx con
 }
 
 func (s *VegetationReportService) GetLongVegetationGroupPreferences(ctx context.Context, contextID string) (*LongVegetationGroupPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longGroupPreferences == nil {
 		return nil, errors.New("long vegetation group preferences service is unavailable")
 	}
@@ -347,6 +424,8 @@ func (s *VegetationReportService) GetLongVegetationGroupPreferences(ctx context.
 }
 
 func (s *VegetationReportService) SaveLongVegetationGroupPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationGroupPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longGroupPreferences == nil {
 		return &LongVegetationGroupPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation group preferences service is unavailable"}
 	}
@@ -354,6 +433,8 @@ func (s *VegetationReportService) SaveLongVegetationGroupPreferences(ctx context
 }
 
 func (s *VegetationReportService) GetLongVegetationQualityNullPreferences(ctx context.Context, contextID string) (*LongVegetationQualityNullPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longQualityNullPreferences == nil {
 		return nil, errors.New("long vegetation quality null preferences service is unavailable")
 	}
@@ -361,6 +442,8 @@ func (s *VegetationReportService) GetLongVegetationQualityNullPreferences(ctx co
 }
 
 func (s *VegetationReportService) SaveLongVegetationQualityNullPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationQualityNullPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longQualityNullPreferences == nil {
 		return &LongVegetationQualityNullPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation quality null preferences service is unavailable"}
 	}
@@ -368,6 +451,8 @@ func (s *VegetationReportService) SaveLongVegetationQualityNullPreferences(ctx c
 }
 
 func (s *VegetationReportService) GetLongVegetationQualityMinimumPreferences(ctx context.Context, contextID string) (*LongVegetationQualityMinimumPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longQualityMinimumPreferences == nil {
 		return nil, errors.New("long vegetation quality minimum preferences service is unavailable")
 	}
@@ -375,6 +460,8 @@ func (s *VegetationReportService) GetLongVegetationQualityMinimumPreferences(ctx
 }
 
 func (s *VegetationReportService) SaveLongVegetationQualityMinimumPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationQualityMinimumPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longQualityMinimumPreferences == nil {
 		return &LongVegetationQualityMinimumPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation quality minimum preferences service is unavailable"}
 	}
@@ -382,6 +469,8 @@ func (s *VegetationReportService) SaveLongVegetationQualityMinimumPreferences(ct
 }
 
 func (s *VegetationReportService) GetLongVegetationNamingPreferences(ctx context.Context, contextID string) (*LongVegetationNamingPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longNamingPreferences == nil {
 		return nil, errors.New("long vegetation naming preferences service is unavailable")
 	}
@@ -389,6 +478,8 @@ func (s *VegetationReportService) GetLongVegetationNamingPreferences(ctx context
 }
 
 func (s *VegetationReportService) SaveLongVegetationNamingPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationNamingPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longNamingPreferences == nil {
 		return &LongVegetationNamingPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation naming preferences service is unavailable"}
 	}
@@ -396,6 +487,8 @@ func (s *VegetationReportService) SaveLongVegetationNamingPreferences(ctx contex
 }
 
 func (s *VegetationReportService) GetLongVegetationSelectedFieldPreferences(ctx context.Context, contextID string) (*LongVegetationSelectedFieldPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longSelectedFieldPreferences == nil {
 		return nil, errors.New("long vegetation selected field preferences service is unavailable")
 	}
@@ -403,6 +496,8 @@ func (s *VegetationReportService) GetLongVegetationSelectedFieldPreferences(ctx 
 }
 
 func (s *VegetationReportService) SaveLongVegetationSelectedFieldPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationSelectedFieldPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longSelectedFieldPreferences == nil {
 		return &LongVegetationSelectedFieldPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation selected field preferences service is unavailable"}
 	}
@@ -410,6 +505,8 @@ func (s *VegetationReportService) SaveLongVegetationSelectedFieldPreferences(ctx
 }
 
 func (s *VegetationReportService) GetLongVegetationEnforcementPreferences(ctx context.Context, contextID string) (*LongVegetationEnforcementPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longEnforcementPreferences == nil {
 		return nil, errors.New("long vegetation enforcement preferences service is unavailable")
 	}
@@ -417,6 +514,8 @@ func (s *VegetationReportService) GetLongVegetationEnforcementPreferences(ctx co
 }
 
 func (s *VegetationReportService) SaveLongVegetationEnforcementPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationEnforcementPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longEnforcementPreferences == nil {
 		return &LongVegetationEnforcementPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation enforcement preferences service is unavailable"}
 	}
@@ -424,6 +523,8 @@ func (s *VegetationReportService) SaveLongVegetationEnforcementPreferences(ctx c
 }
 
 func (s *VegetationReportService) GetLongVegetationUnitPreferences(ctx context.Context, contextID string) (*LongVegetationUnitPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longUnitPreferences == nil {
 		return nil, errors.New("long vegetation unit preferences service is unavailable")
 	}
@@ -431,6 +532,8 @@ func (s *VegetationReportService) GetLongVegetationUnitPreferences(ctx context.C
 }
 
 func (s *VegetationReportService) SaveLongVegetationUnitPreferences(ctx context.Context, contextID, requestJSON string) *LongVegetationUnitPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longUnitPreferences == nil {
 		return &LongVegetationUnitPreferencesOutcome{ContextID: contextID, ErrorMessage: "long vegetation unit preferences service is unavailable"}
 	}
@@ -438,6 +541,8 @@ func (s *VegetationReportService) SaveLongVegetationUnitPreferences(ctx context.
 }
 
 func (s *VegetationReportService) BuildLongVegetationSelectedUnitSelection(ctx context.Context, contextID, revision string) (*LongVegetationSelectedUnitSelection, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longSelectedUnitSelection == nil {
 		return nil, errors.New("long vegetation selected unit selection service is unavailable")
 	}
@@ -445,6 +550,8 @@ func (s *VegetationReportService) BuildLongVegetationSelectedUnitSelection(ctx c
 }
 
 func (s *VegetationReportService) GetLongVegetationSelectedUnitSelection(ctx context.Context, contextID string) (*LongVegetationSelectedUnitSelection, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longSelectedUnitSelection == nil {
 		return nil, errors.New("long vegetation selected unit selection service is unavailable")
 	}
@@ -452,6 +559,8 @@ func (s *VegetationReportService) GetLongVegetationSelectedUnitSelection(ctx con
 }
 
 func (s *VegetationReportService) SetLongVegetationSelectedUnitFields(ctx context.Context, contextID, requestJSON string) (*LongVegetationSelectedUnitSelection, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longSelectedUnitSelection == nil {
 		return nil, errors.New("long vegetation selected unit selection service is unavailable")
 	}
@@ -459,6 +568,8 @@ func (s *VegetationReportService) SetLongVegetationSelectedUnitFields(ctx contex
 }
 
 func (s *VegetationReportService) BuildLongVegetationProjectScope(ctx context.Context, contextID, revision string) (*LongVegetationReportScope, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longReportScope == nil {
 		return nil, errors.New("long vegetation report scope service is unavailable")
 	}
@@ -466,6 +577,8 @@ func (s *VegetationReportService) BuildLongVegetationProjectScope(ctx context.Co
 }
 
 func (s *VegetationReportService) GetLongVegetationProjectFieldDefinitions(ctx context.Context, contextID string) (*LongVegetationProjectFieldDefinitions, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longReportScope == nil {
 		return nil, errors.New("long vegetation report scope service is unavailable")
 	}
@@ -473,6 +586,8 @@ func (s *VegetationReportService) GetLongVegetationProjectFieldDefinitions(ctx c
 }
 
 func (s *VegetationReportService) GetLongVegetationProjectOptions(ctx context.Context, contextID, requestJSON string) (LongVegetationProjectOptions, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longReportScope == nil {
 		return LongVegetationProjectOptions{}, errors.New("long vegetation report scope service is unavailable")
 	}
@@ -480,6 +595,8 @@ func (s *VegetationReportService) GetLongVegetationProjectOptions(ctx context.Co
 }
 
 func (s *VegetationReportService) GetLongVegetationProjectUnitPreferences(ctx context.Context, contextID, requestJSON string) (LongVegetationProjectUnitPreferences, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longReportScope == nil {
 		return LongVegetationProjectUnitPreferences{}, errors.New("long vegetation report scope service is unavailable")
 	}
@@ -487,6 +604,8 @@ func (s *VegetationReportService) GetLongVegetationProjectUnitPreferences(ctx co
 }
 
 func (s *VegetationReportService) GetLongVegetationReportScope(ctx context.Context, contextID string) (*LongVegetationReportScope, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longReportScope == nil {
 		return nil, errors.New("long vegetation report scope service is unavailable")
 	}
@@ -494,6 +613,8 @@ func (s *VegetationReportService) GetLongVegetationReportScope(ctx context.Conte
 }
 
 func (s *VegetationReportService) PreviewLongVegetationProject(ctx context.Context, contextID, requestJSON string) (LongVegetationProjectPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longReportScope == nil {
 		return LongVegetationProjectPreview{}, errors.New("long vegetation report scope service is unavailable")
 	}
@@ -501,6 +622,8 @@ func (s *VegetationReportService) PreviewLongVegetationProject(ctx context.Conte
 }
 
 func (s *VegetationReportService) SaveLongVegetationProjectUnits(ctx context.Context, contextID, requestJSON string) LongVegetationProjectUnitOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longReportScope == nil {
 		return LongVegetationProjectUnitOutcome{
 			Outcome: LongVegetationUnitPreferencesOutcome{
@@ -513,6 +636,8 @@ func (s *VegetationReportService) SaveLongVegetationProjectUnits(ctx context.Con
 }
 
 func (s *VegetationReportService) SetLongVegetationProjectFields(ctx context.Context, contextID, requestJSON string) (*LongVegetationReportScope, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longReportScope == nil {
 		return nil, errors.New("long vegetation report scope service is unavailable")
 	}
@@ -520,6 +645,8 @@ func (s *VegetationReportService) SetLongVegetationProjectFields(ctx context.Con
 }
 
 func (s *VegetationReportService) SetLongVegetationReportScope(ctx context.Context, contextID, requestJSON string) (*LongVegetationReportScope, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longReportScope == nil {
 		return nil, errors.New("long vegetation report scope service is unavailable")
 	}
@@ -527,6 +654,8 @@ func (s *VegetationReportService) SetLongVegetationReportScope(ctx context.Conte
 }
 
 func (s *VegetationReportService) GetLongVegetationProjectWorkbookReview(ctx context.Context, contextID, requestJSON string) (*LongVegetationProjectWorkbookReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longProjectWorkbook == nil {
 		return nil, errors.New("long vegetation project workbook service is unavailable")
 	}
@@ -534,6 +663,8 @@ func (s *VegetationReportService) GetLongVegetationProjectWorkbookReview(ctx con
 }
 
 func (s *VegetationReportService) ExportReviewedLongVegetationProjectWorkbook(ctx context.Context, contextID, requestJSON string) (*VegetationWorkbookOutcome, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longProjectWorkbook == nil {
 		return nil, errors.New("long vegetation project workbook service is unavailable")
 	}
@@ -541,6 +672,8 @@ func (s *VegetationReportService) ExportReviewedLongVegetationProjectWorkbook(ct
 }
 
 func (s *VegetationReportService) GetVegetationWorkbookReview(ctx context.Context, contextID, requestJSON string) (*VegetationWorkbookReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.vegetationWorkbook == nil {
 		return nil, errors.New("vegetation workbook service is unavailable")
 	}
@@ -548,6 +681,8 @@ func (s *VegetationReportService) GetVegetationWorkbookReview(ctx context.Contex
 }
 
 func (s *VegetationReportService) ExportReviewedVegetationWorkbook(ctx context.Context, contextID, requestJSON string) (*VegetationWorkbookOutcome, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.vegetationWorkbook == nil {
 		return nil, errors.New("vegetation workbook service is unavailable")
 	}
@@ -557,6 +692,8 @@ func (s *VegetationReportService) ExportReviewedVegetationWorkbook(ctx context.C
 // Lifeform & Species Attribute Summary delegates
 
 func (s *VegetationReportService) PreviewLifeformSummary(ctx context.Context, contextID string) (LifeformSummaryPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.lifeformSummary == nil {
 		return LifeformSummaryPreview{}, errors.New("lifeform summary service is unavailable")
 	}
@@ -564,6 +701,8 @@ func (s *VegetationReportService) PreviewLifeformSummary(ctx context.Context, co
 }
 
 func (s *VegetationReportService) PreviewLifeformSummaryWithHierarchyBreakpoints(ctx context.Context, contextID, breakpointPolicy string) (LifeformSummaryPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.lifeformSummary == nil {
 		return LifeformSummaryPreview{}, errors.New("lifeform summary service is unavailable")
 	}
@@ -571,6 +710,8 @@ func (s *VegetationReportService) PreviewLifeformSummaryWithHierarchyBreakpoints
 }
 
 func (s *VegetationReportService) GetLifeformWorkbookReview(ctx context.Context, contextID, requestJSON string) (*LifeformWorkbookReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.lifeformWorkbook == nil {
 		return nil, errors.New("lifeform workbook service is unavailable")
 	}
@@ -578,6 +719,8 @@ func (s *VegetationReportService) GetLifeformWorkbookReview(ctx context.Context,
 }
 
 func (s *VegetationReportService) ExportReviewedLifeformWorkbook(ctx context.Context, contextID, requestJSON string) (*LifeformWorkbookOutcome, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.lifeformWorkbook == nil {
 		return nil, errors.New("lifeform workbook service is unavailable")
 	}
@@ -585,6 +728,8 @@ func (s *VegetationReportService) ExportReviewedLifeformWorkbook(ctx context.Con
 }
 
 func (s *VegetationReportService) PreviewSpeciesAttributeSummary(ctx context.Context, contextID string) (SpeciesAttributeSummaryPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.speciesAttributeSummary == nil {
 		return SpeciesAttributeSummaryPreview{}, errors.New("species attribute summary service is unavailable")
 	}
@@ -592,6 +737,8 @@ func (s *VegetationReportService) PreviewSpeciesAttributeSummary(ctx context.Con
 }
 
 func (s *VegetationReportService) PreviewSpeciesAttributeSummaryWithHierarchyBreakpoints(ctx context.Context, contextID, breakpointPolicy string) (SpeciesAttributeSummaryPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.speciesAttributeSummary == nil {
 		return SpeciesAttributeSummaryPreview{}, errors.New("species attribute summary service is unavailable")
 	}
@@ -605,6 +752,8 @@ func (s *VegetationReportService) GetDefaultSiteUnitExclusions() []string {
 }
 
 func (s *VegetationReportService) PreviewSiteUnitExclusions(ctx context.Context, contextID string, request SiteUnitExclusionPreviewRequest) (*SiteUnitExclusionPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("vegetation report context is unavailable")
 	}
@@ -612,6 +761,8 @@ func (s *VegetationReportService) PreviewSiteUnitExclusions(ctx context.Context,
 }
 
 func (s *VegetationReportService) ResolveHierarchyBreakpointUnits(ctx context.Context, contextID string, request HierarchyBreakpointRequest) (*HierarchyBreakpointResolution, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("vegetation report context is unavailable")
 	}
@@ -619,6 +770,8 @@ func (s *VegetationReportService) ResolveHierarchyBreakpointUnits(ctx context.Co
 }
 
 func (s *VegetationReportService) PreviewSummaryVegetationWithExclusions(ctx context.Context, contextID string, request SummaryVegetationExclusionRequest) (*SummaryVegetationExclusionPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("vegetation report context is unavailable")
 	}
@@ -626,6 +779,8 @@ func (s *VegetationReportService) PreviewSummaryVegetationWithExclusions(ctx con
 }
 
 func (s *VegetationReportService) PreviewLongVegetationWithExclusions(ctx context.Context, contextID string, request LongVegetationExclusionRequest) (*LongVegetationExclusionPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("vegetation report context is unavailable")
 	}

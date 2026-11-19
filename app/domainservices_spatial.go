@@ -34,6 +34,7 @@ var NewDynamicPMTilesAssetHandler = spatialpkg.NewDynamicPMTilesAssetHandler
 var NewPMTilesAttributor = spatialpkg.NewPMTilesAttributor
 
 type SpatialService struct {
+	runtime                *runtimeShutdownTracker
 	contexts               *ContextService
 	coordinates            *vprocorepkg.CoordinateService
 	googleEarthReview      *spatialpkg.GoogleEarthReviewService
@@ -44,6 +45,18 @@ type SpatialService struct {
 	dataDir                string
 	extraDirs              []string
 	attributor             *spatialpkg.PMTilesAttributor
+}
+
+func (s *SpatialService) acquire() (*SpatialService, func()) {
+	if s == nil || s.runtime == nil {
+		return s, noopRelease
+	}
+	snap, release := s.runtime.acquire()
+	if snap == nil {
+		release()
+		return nil, noopRelease
+	}
+	return snap.spatial, release
 }
 
 func buildSpatialService(
@@ -72,12 +85,14 @@ func buildSpatialService(
 		googleEarthPreferences: spatialpkg.NewGoogleEarthPreferencesService(core),
 		twoPageGoogleEarth:     twoPageGoogleEarth,
 		dataDir:                dataDir,
-		extraDirs:              extraDirs,
+		extraDirs:              append([]string(nil), extraDirs...),
 		attributor:             attributor,
 	}, nil
 }
 
 func (s *SpatialService) GetCoordinateMode() (CoordinateMode, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.coordinates == nil {
 		return "", errors.New("coordinate service is unavailable")
 	}
@@ -86,6 +101,8 @@ func (s *SpatialService) GetCoordinateMode() (CoordinateMode, error) {
 }
 
 func (s *SpatialService) SetCoordinateMode(mode CoordinateMode) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.coordinates == nil {
 		return errors.New("coordinate service is unavailable")
 	}
@@ -93,6 +110,8 @@ func (s *SpatialService) SetCoordinateMode(mode CoordinateMode) error {
 }
 
 func (s *SpatialService) DecomposeCoordinate(value *float64, mode CoordinateMode) (CoordinateParts, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.coordinates == nil {
 		return CoordinateParts{}, errors.New("coordinate service is unavailable")
 	}
@@ -100,6 +119,8 @@ func (s *SpatialService) DecomposeCoordinate(value *float64, mode CoordinateMode
 }
 
 func (s *SpatialService) ConvertCoordinate(axis string, mode CoordinateMode, parts CoordinateParts) (*float64, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.coordinates == nil {
 		return nil, errors.New("coordinate service is unavailable")
 	}
@@ -107,6 +128,8 @@ func (s *SpatialService) ConvertCoordinate(axis string, mode CoordinateMode, par
 }
 
 func (s *SpatialService) GetGoogleEarthDescriptionFields(ctx context.Context, contextID string) (*GoogleEarthDescriptionFields, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.googleEarthReview == nil {
 		return nil, errors.New("Google Earth review service is unavailable")
 	}
@@ -114,6 +137,8 @@ func (s *SpatialService) GetGoogleEarthDescriptionFields(ctx context.Context, co
 }
 
 func (s *SpatialService) GetGoogleEarthReview(ctx context.Context, contextID, requestJSON string) (*GoogleEarthReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.googleEarthReview == nil {
 		return nil, errors.New("Google Earth review service is unavailable")
 	}
@@ -121,6 +146,8 @@ func (s *SpatialService) GetGoogleEarthReview(ctx context.Context, contextID, re
 }
 
 func (s *SpatialService) GetGoogleEarthKMLReview(ctx context.Context, contextID, requestJSON string) (*GoogleEarthKMLReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.googleEarthKML == nil {
 		return nil, errors.New("Google Earth KML service is unavailable")
 	}
@@ -128,6 +155,8 @@ func (s *SpatialService) GetGoogleEarthKMLReview(ctx context.Context, contextID,
 }
 
 func (s *SpatialService) GetGoogleEarthKMLExportReview(ctx context.Context, contextID, requestJSON string) (*GoogleEarthKMLExportReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.googleEarthKMLExport == nil {
 		return nil, errors.New("Google Earth KML export service is unavailable")
 	}
@@ -135,6 +164,8 @@ func (s *SpatialService) GetGoogleEarthKMLExportReview(ctx context.Context, cont
 }
 
 func (s *SpatialService) ExportReviewedGoogleEarthKML(ctx context.Context, contextID, requestJSON string) (*GoogleEarthKMLExportOutcome, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.googleEarthKMLExport == nil {
 		return nil, errors.New("Google Earth KML export service is unavailable")
 	}
@@ -142,6 +173,8 @@ func (s *SpatialService) ExportReviewedGoogleEarthKML(ctx context.Context, conte
 }
 
 func (s *SpatialService) GetGoogleEarthPreferences(ctx context.Context, contextID string) (*GoogleEarthPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.googleEarthPreferences == nil {
 		return nil, errors.New("Google Earth preferences service is unavailable")
 	}
@@ -149,6 +182,8 @@ func (s *SpatialService) GetGoogleEarthPreferences(ctx context.Context, contextI
 }
 
 func (s *SpatialService) SaveGoogleEarthPreferences(ctx context.Context, contextID, requestJSON string) *GoogleEarthPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.googleEarthPreferences == nil {
 		return &GoogleEarthPreferencesOutcome{ContextID: contextID, ErrorMessage: "Google Earth preferences service is unavailable"}
 	}
@@ -156,6 +191,8 @@ func (s *SpatialService) SaveGoogleEarthPreferences(ctx context.Context, context
 }
 
 func (s *SpatialService) GetTwoPageGoogleEarthOptions(ctx context.Context, contextID, plot, form string) (*TwoPageGoogleEarthOptions, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageGoogleEarth == nil {
 		return nil, errors.New("two-page Google Earth service is unavailable")
 	}
@@ -163,6 +200,8 @@ func (s *SpatialService) GetTwoPageGoogleEarthOptions(ctx context.Context, conte
 }
 
 func (s *SpatialService) GetTwoPageGoogleEarthReview(ctx context.Context, contextID, plot, form, requestJSON string) (*TwoPageGoogleEarthReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageGoogleEarth == nil {
 		return nil, errors.New("two-page Google Earth service is unavailable")
 	}
@@ -170,6 +209,8 @@ func (s *SpatialService) GetTwoPageGoogleEarthReview(ctx context.Context, contex
 }
 
 func (s *SpatialService) GetPlotLocationReview(ctx context.Context, contextID string) (*PlotLocationReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("spatial context is unavailable")
 	}
@@ -177,6 +218,8 @@ func (s *SpatialService) GetPlotLocationReview(ctx context.Context, contextID st
 }
 
 func (s *SpatialService) GetPMTilesManifest(ctx context.Context) (PMTilesManifest, error) {
+	s, release := s.acquire()
+	defer release()
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return PMTilesManifest{}, err
@@ -243,6 +286,8 @@ func (s *SpatialService) EvaluatePlotGeodesy(ctx context.Context, input PlotGeod
 }
 
 func (s *SpatialService) SuggestSpatialAttributes(ctx context.Context, lat, lon float64) (*SpatialAttributeSuggestion, error) {
+	s, release := s.acquire()
+	defer release()
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -255,6 +300,8 @@ func (s *SpatialService) SuggestSpatialAttributes(ctx context.Context, lat, lon 
 }
 
 func (s *SpatialService) BatchAuditSpatialQA(ctx context.Context, contextID string) (*SpatialBatchAuditReport, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("spatial context is unavailable")
 	}
@@ -262,6 +309,8 @@ func (s *SpatialService) BatchAuditSpatialQA(ctx context.Context, contextID stri
 }
 
 func (s *SpatialService) ApplySpatialAttributes(ctx context.Context, contextID string, request ApplySpatialAttributesRequest) (*ApplySpatialAttributesResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("spatial context is unavailable")
 	}
@@ -269,6 +318,8 @@ func (s *SpatialService) ApplySpatialAttributes(ctx context.Context, contextID s
 }
 
 func (s *SpatialService) GetSpatialWorkbenchPayload(ctx context.Context, contextID string) (*SpatialWorkbenchPayload, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("spatial context is unavailable")
 	}
@@ -276,6 +327,8 @@ func (s *SpatialService) GetSpatialWorkbenchPayload(ctx context.Context, context
 }
 
 func (s *SpatialService) GetSpatialPlotsFlatGeobuf(ctx context.Context, contextID string) ([]byte, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("spatial context is unavailable")
 	}
@@ -283,6 +336,8 @@ func (s *SpatialService) GetSpatialPlotsFlatGeobuf(ctx context.Context, contextI
 }
 
 func (s *SpatialService) SelectPlotsInPolygonAOI(ctx context.Context, contextID string, request SpatialAOISelectionRequest) (*SpatialAOISelectionResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("spatial context is unavailable")
 	}
@@ -290,6 +345,8 @@ func (s *SpatialService) SelectPlotsInPolygonAOI(ctx context.Context, contextID 
 }
 
 func (s *SpatialService) AssignSpatialAOIToSU(ctx context.Context, contextID string, request AssignSpatialAOIToSURequest) (*AssignSpatialAOIToSUResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("spatial context is unavailable")
 	}

@@ -9,7 +9,9 @@ import (
 	"sync"
 	"time"
 
+	cloudsyncpkg "github.com/boostao/vpro/app/internal/cloudsync"
 	lifecyclepkg "github.com/boostao/vpro/app/internal/lifecycle"
+	referencespkg "github.com/boostao/vpro/app/internal/references"
 	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/resources"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -65,39 +67,60 @@ func resolveSpatialExtraDirs(lookup func(string) (string, bool), configured ...s
 //go:embed all:frontend/dist
 var assets embed.FS
 
-func main() {
-	dataDir, configDir, windows, err := resolveHostEnvironment()
-	if err != nil {
-		log.Fatal(err)
+type wailsServiceGraph struct {
+	lifecycle      *LifecycleService
+	context        *ContextService
+	plotEntry      *PlotEntryService
+	datasheet      *DatasheetService
+	classification *ClassificationService
+	validation     *ValidationService
+	importExport   *ImportExportService
+	vegReport      *VegetationReportService
+	envReport      *EnvironmentReportService
+	spatial        *SpatialService
+	pictures       *PictureService
+	help           *HelpService
+	tracker        *runtimeShutdownTracker
+}
+
+func newWailsServiceGraph(
+	dataDir, configDir string,
+	refs *referenceCatalogBundle,
+	cloudSyncManager *cloudsyncpkg.Manager,
+	closeService *lifecyclepkg.CloseService,
+	lookupEnv func(string) (string, bool),
+) wailsServiceGraph {
+	if lookupEnv == nil {
+		lookupEnv = os.LookupEnv
 	}
-
-	refs := openReferenceCatalogBundle(dataDir)
-	var app *application.App
-	closeService, err := lifecyclepkg.NewCloseService(
-		func(nonce string) bool { return app.Event.Emit(lifecyclepkg.CloseRequestEvent, nonce) },
-		func() { app.Quit() },
-	)
-	if err != nil {
-		log.Fatal(err)
+	var becSvc *referencespkg.BECService
+	if refs != nil {
+		becSvc = refs.bec
 	}
-
-	cloudSyncManager := NewCloudSyncManager(configDir)
-	lifecycleService := NewLifecycleService(nil, closeService, nil)
-	contextService := &ContextService{cloud: cloudSyncManager}
-	plotEntryService := &PlotEntryService{}
-	datasheetService := &DatasheetService{}
-	classificationService := &ClassificationService{bec: refs.bec}
-	validationService := &ValidationService{}
-	importExportService := &ImportExportService{}
-	vegetationReportService := &VegetationReportService{}
-	environmentReportService := &EnvironmentReportService{dataDir: dataDir}
-
-	spatialExtraDirs := resolveSpatialExtraDirs(os.LookupEnv)
+	spatialExtraDirs := resolveSpatialExtraDirs(lookupEnv)
 	initialAttributor := NewPMTilesAttributor(dataDir, spatialExtraDirs...)
-	spatialService := &SpatialService{dataDir: dataDir, extraDirs: spatialExtraDirs, attributor: initialAttributor}
-	pictures := &PictureService{}
-	helpService := &HelpService{}
-	runtimeTracker := &runtimeShutdownTracker{attributor: initialAttributor, extraDirs: spatialExtraDirs}
+	initialBundle := &runtimeBundle{
+		attributor:     initialAttributor,
+		context:        &ContextService{cloud: cloudSyncManager},
+		plotEntry:      &PlotEntryService{},
+		datasheet:      &DatasheetService{},
+		classification: &ClassificationService{bec: becSvc},
+		validation:     &ValidationService{},
+		importExport:   &ImportExportService{},
+		vegReport:      &VegetationReportService{},
+		envReport:      &EnvironmentReportService{dataDir: dataDir},
+		spatial: &SpatialService{
+			dataDir:    dataDir,
+			extraDirs:  append([]string(nil), spatialExtraDirs...),
+			attributor: initialAttributor,
+		},
+		pictures: &PictureService{},
+		help:     &HelpService{},
+	}
+	runtimeTracker := newRuntimeShutdownTracker(initialBundle, spatialExtraDirs)
+
+	lifecycleService := NewLifecycleService(nil, closeService, nil)
+	lifecycleService.runtime = runtimeTracker
 	lifecycleService.onShutdown = func() { runtimeTracker.shutdown(refs, cloudSyncManager) }
 
 	activateRuntime := func() (StartupState, error) {
@@ -106,14 +129,13 @@ func main() {
 			return StartupState{}, err
 		}
 		plots := active.plots
-		*contextService = *active.contextSvc
+		contextService := active.contextSvc
 
 		var workingUnits *vprocorepkg.WorkingUnitService
 		abort := func(cause error) (StartupState, error) {
 			if workingUnits != nil {
 				_ = workingUnits.Close()
 			}
-			contextService.core = nil
 			_ = active.projects.CloseSQLiteContext()
 			return StartupState{}, cause
 		}
@@ -122,7 +144,7 @@ func main() {
 		if err != nil {
 			return abort(err)
 		}
-		builtPictures, err := buildPictureService(contextService, dataDir, os.LookupEnv)
+		builtPictures, err := buildPictureService(contextService, dataDir, lookupEnv)
 		if err != nil {
 			return abort(err)
 		}
@@ -149,7 +171,7 @@ func main() {
 		if workingUnits, err = vprocorepkg.NewWorkingUnitService(active.projects, configDir); err != nil {
 			log.Printf("Warning: failed to initialize WorkingUnitService: %v", err)
 		}
-		builtClassification, err := buildClassificationService(contextService, refs.bec, workingUnits)
+		builtClassification, err := buildClassificationService(contextService, becSvc, workingUnits)
 		if err != nil {
 			return abort(err)
 		}
@@ -157,7 +179,7 @@ func main() {
 		if err != nil {
 			return abort(err)
 		}
-		effectiveExtraDirs := resolveSpatialExtraDirs(os.LookupEnv, active.configuredSpatialDir)
+		effectiveExtraDirs := resolveSpatialExtraDirs(lookupEnv, active.configuredSpatialDir)
 		nextAttributor := NewPMTilesAttributor(dataDir, effectiveExtraDirs...)
 		builtSpatial, err := buildSpatialService(contextService, configDir, active.preferences, dataDir, effectiveExtraDirs, nextAttributor)
 		if err != nil {
@@ -167,25 +189,79 @@ func main() {
 			return abort(err)
 		}
 
-		lifecycleService.userLog = userLog
-		*plotEntryService = builtPlotEntry
-		*datasheetService = *builtDatasheet
-		*classificationService = *builtClassification
-		*validationService = *NewValidationService(contextService)
-		*importExportService = *builtImportExport
-		*vegetationReportService = builtVegReport
-		*environmentReportService = builtEnvReport
-		*spatialService = builtSpatial
-		*pictures = *builtPictures
-		*helpService = *builtHelp
+		runtimeTracker.publish(&runtimeBundle{
+			projects:       active.projects,
+			working:        workingUnits,
+			attributor:     nextAttributor,
+			userLog:        userLog,
+			context:        contextService,
+			plotEntry:      &builtPlotEntry,
+			datasheet:      builtDatasheet,
+			classification: builtClassification,
+			validation:     NewValidationService(contextService),
+			importExport:   builtImportExport,
+			vegReport:      &builtVegReport,
+			envReport:      &builtEnvReport,
+			spatial:        &builtSpatial,
+			pictures:       builtPictures,
+			help:           builtHelp,
+		}, effectiveExtraDirs)
 
-		runtimeTracker.swap(active.projects, workingUnits, nextAttributor, effectiveExtraDirs)
 		nextState := StartupState{Ready: true, ConfigPath: active.preferences.Path, ReleaseChannel: active.releaseChannel}
 		lifecyclepkg.PopulateRecoveryHints(&nextState)
 		return nextState, nil
 	}
 
 	lifecycleService.startup = newStartupServiceWithInitialActivation(dataDir, configDir, activateRuntime)
+
+	return wailsServiceGraph{
+		lifecycle:      lifecycleService,
+		context:        &ContextService{runtime: runtimeTracker},
+		plotEntry:      &PlotEntryService{runtime: runtimeTracker},
+		datasheet:      &DatasheetService{runtime: runtimeTracker},
+		classification: &ClassificationService{runtime: runtimeTracker},
+		validation:     &ValidationService{runtime: runtimeTracker},
+		importExport:   &ImportExportService{runtime: runtimeTracker},
+		vegReport:      &VegetationReportService{runtime: runtimeTracker},
+		envReport:      &EnvironmentReportService{runtime: runtimeTracker},
+		spatial:        &SpatialService{runtime: runtimeTracker},
+		pictures:       &PictureService{runtime: runtimeTracker},
+		help:           &HelpService{runtime: runtimeTracker},
+		tracker:        runtimeTracker,
+	}
+}
+
+func main() {
+	dataDir, configDir, windows, err := resolveHostEnvironment()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	refs := openReferenceCatalogBundle(dataDir)
+	var app *application.App
+	closeService, err := lifecyclepkg.NewCloseService(
+		func(nonce string) bool { return app.Event.Emit(lifecyclepkg.CloseRequestEvent, nonce) },
+		func() { app.Quit() },
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	cloudSyncManager := NewCloudSyncManager(configDir)
+	wailsGraph := newWailsServiceGraph(dataDir, configDir, refs, cloudSyncManager, closeService, os.LookupEnv)
+	lifecycleService := wailsGraph.lifecycle
+	contextService := wailsGraph.context
+	plotEntryService := wailsGraph.plotEntry
+	datasheetService := wailsGraph.datasheet
+	classificationService := wailsGraph.classification
+	validationService := wailsGraph.validation
+	importExportService := wailsGraph.importExport
+	vegetationReportService := wailsGraph.vegReport
+	environmentReportService := wailsGraph.envReport
+	spatialService := wailsGraph.spatial
+	pictures := wailsGraph.pictures
+	helpService := wailsGraph.help
+	runtimeTracker := wailsGraph.tracker
 
 	services := []application.Service{
 		application.NewService(lifecycleService),

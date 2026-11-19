@@ -27,9 +27,22 @@ type DatasheetDeleteChildRowRequest = datasheetpkg.DatasheetDeleteChildRowReques
 type DatasheetDeleteChildRowResult = datasheetpkg.DatasheetDeleteChildRowResult
 
 type DatasheetService struct {
+	runtime          *runtimeShutdownTracker
 	contexts         *vprocorepkg.ContextService
 	environmentTable *datasheetpkg.TwoPageEnvironmentTableService
 	vegetationTable  *datasheetpkg.TwoPageVegetationTableService
+}
+
+func (s *DatasheetService) acquire() (*DatasheetService, func()) {
+	if s == nil || s.runtime == nil {
+		return s, noopRelease
+	}
+	snap, release := s.runtime.acquire()
+	if snap == nil {
+		release()
+		return nil, noopRelease
+	}
+	return snap.datasheet, release
 }
 
 func NewDatasheetService(environmentTable *datasheetpkg.TwoPageEnvironmentTableService, vegetationTable *datasheetpkg.TwoPageVegetationTableService) *DatasheetService {
@@ -78,6 +91,8 @@ func (s *DatasheetService) datasheetContext() (*vprocorepkg.ContextService, erro
 }
 
 func (s *DatasheetService) GetEnvironmentTableReview(ctx context.Context, contextID, plot string, offset, limit int) (*TwoPageEnvironmentTableReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.environmentTable == nil {
 		return nil, errors.New("environment table service is unavailable")
 	}
@@ -85,6 +100,8 @@ func (s *DatasheetService) GetEnvironmentTableReview(ctx context.Context, contex
 }
 
 func (s *DatasheetService) GetVegetationTableReview(ctx context.Context, contextID, plot, form string, offset, limit int) (*TwoPageVegetationTableReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.vegetationTable == nil {
 		return nil, errors.New("vegetation table service is unavailable")
 	}
@@ -92,6 +109,8 @@ func (s *DatasheetService) GetVegetationTableReview(ctx context.Context, context
 }
 
 func (s *DatasheetService) ListDatasheetTables(ctx context.Context, contextID string) ([]DatasheetTableInfo, error) {
+	s, release := s.acquire()
+	defer release()
 	contexts, err := s.datasheetContext()
 	if err != nil {
 		return nil, err
@@ -100,6 +119,8 @@ func (s *DatasheetService) ListDatasheetTables(ctx context.Context, contextID st
 }
 
 func (s *DatasheetService) ListDatasheetAllTables(ctx context.Context, contextID string) ([]DatasheetTableInfo, error) {
+	s, release := s.acquire()
+	defer release()
 	contexts, err := s.datasheetContext()
 	if err != nil {
 		return nil, err
@@ -108,6 +129,8 @@ func (s *DatasheetService) ListDatasheetAllTables(ctx context.Context, contextID
 }
 
 func (s *DatasheetService) GetDatasheetPage(ctx context.Context, contextID string, request DatasheetPageRequest) (*DatasheetPage, error) {
+	s, release := s.acquire()
+	defer release()
 	contexts, err := s.datasheetContext()
 	if err != nil {
 		return nil, err
@@ -116,6 +139,8 @@ func (s *DatasheetService) GetDatasheetPage(ctx context.Context, contextID strin
 }
 
 func (s *DatasheetService) PreviewDatasheetFindReplace(ctx context.Context, contextID string, request DatasheetFindReplaceRequest) (*DatasheetFindReplacePreview, error) {
+	s, release := s.acquire()
+	defer release()
 	contexts, err := s.datasheetContext()
 	if err != nil {
 		return nil, err
@@ -124,6 +149,8 @@ func (s *DatasheetService) PreviewDatasheetFindReplace(ctx context.Context, cont
 }
 
 func (s *DatasheetService) ApplyDatasheetEdits(ctx context.Context, contextID string, request DatasheetEditRequest) (*DatasheetEditResult, error) {
+	s, release := s.acquire()
+	defer release()
 	contexts, err := s.datasheetContext()
 	if err != nil {
 		return nil, err
@@ -132,6 +159,8 @@ func (s *DatasheetService) ApplyDatasheetEdits(ctx context.Context, contextID st
 }
 
 func (s *DatasheetService) InsertDatasheetChildRow(ctx context.Context, contextID string, request DatasheetInsertChildRowRequest) (*DatasheetInsertChildRowResult, error) {
+	s, release := s.acquire()
+	defer release()
 	contexts, err := s.datasheetContext()
 	if err != nil {
 		return nil, err
@@ -140,6 +169,8 @@ func (s *DatasheetService) InsertDatasheetChildRow(ctx context.Context, contextI
 }
 
 func (s *DatasheetService) DeleteDatasheetChildRow(ctx context.Context, contextID string, request DatasheetDeleteChildRowRequest) (*DatasheetDeleteChildRowResult, error) {
+	s, release := s.acquire()
+	defer release()
 	contexts, err := s.datasheetContext()
 	if err != nil {
 		return nil, err

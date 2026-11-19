@@ -54,12 +54,25 @@ type ExportDiagnosticWorkbookRequest = diagnosticspkg.ExportDiagnosticWorkbookRe
 type ExportDiagnosticWorkbookResult = diagnosticspkg.ExportDiagnosticWorkbookResult
 
 type ClassificationService struct {
+	runtime               *runtimeShutdownTracker
 	contexts              *ContextService
 	bec                   *referencespkg.BECService
 	workingUnits          *vprocorepkg.WorkingUnitService
 	externalSUEnvironment *classificationpkg.ExternalSUEnvironmentService
 	twoPageProfiling      *classificationpkg.TwoPageProfilingService
 	speciesPresence       *classificationpkg.ProjectProfileSpeciesPresenceService
+}
+
+func (s *ClassificationService) acquire() (*ClassificationService, func()) {
+	if s == nil || s.runtime == nil {
+		return s, noopRelease
+	}
+	snap, release := s.runtime.acquire()
+	if snap == nil {
+		release()
+		return nil, noopRelease
+	}
+	return snap.classification, release
 }
 
 func NewClassificationService(
@@ -105,6 +118,8 @@ func buildClassificationService(
 }
 
 func (s *ClassificationService) GetBECCatalogueStatus(ctx context.Context) (BECCatalogueStatus, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.bec == nil {
 		return BECCatalogueStatus{}, errors.New("BEC catalogue service is unavailable")
 	}
@@ -112,6 +127,8 @@ func (s *ClassificationService) GetBECCatalogueStatus(ctx context.Context) (BECC
 }
 
 func (s *ClassificationService) ListBECZones(ctx context.Context) ([]BECZone, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.bec == nil {
 		return nil, errors.New("BEC catalogue service is unavailable")
 	}
@@ -119,6 +136,8 @@ func (s *ClassificationService) ListBECZones(ctx context.Context) ([]BECZone, er
 }
 
 func (s *ClassificationService) ListBECSubZones(ctx context.Context, zone *string) ([]BECSubZone, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.bec == nil {
 		return nil, errors.New("BEC catalogue service is unavailable")
 	}
@@ -126,6 +145,8 @@ func (s *ClassificationService) ListBECSubZones(ctx context.Context, zone *strin
 }
 
 func (s *ClassificationService) ListBECSiteSeries(ctx context.Context, zone, subZone *string) ([]BECSiteSeries, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.bec == nil {
 		return nil, errors.New("BEC catalogue service is unavailable")
 	}
@@ -133,6 +154,8 @@ func (s *ClassificationService) ListBECSiteSeries(ctx context.Context, zone, sub
 }
 
 func (s *ClassificationService) SearchBECSiteSeries(ctx context.Context, zone, subZone *string, query string, limit int) ([]BECSiteSeries, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.bec == nil {
 		return nil, errors.New("BEC catalogue service is unavailable")
 	}
@@ -140,6 +163,8 @@ func (s *ClassificationService) SearchBECSiteSeries(ctx context.Context, zone, s
 }
 
 func (s *ClassificationService) GetWorkingUnitMode() (WorkingUnitModeState, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.workingUnits == nil {
 		return WorkingUnitModeState{}, errors.New("working unit service is unavailable")
 	}
@@ -147,6 +172,8 @@ func (s *ClassificationService) GetWorkingUnitMode() (WorkingUnitModeState, erro
 }
 
 func (s *ClassificationService) SetWorkingUnitMode(mode string) (WorkingUnitModeState, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.workingUnits == nil {
 		return WorkingUnitModeState{}, errors.New("working unit service is unavailable")
 	}
@@ -154,6 +181,8 @@ func (s *ClassificationService) SetWorkingUnitMode(mode string) (WorkingUnitMode
 }
 
 func (s *ClassificationService) GetWorkingUnitChoices(ctx context.Context, mode string) ([]WorkingUnitChoice, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.workingUnits == nil {
 		return nil, errors.New("working unit service is unavailable")
 	}
@@ -161,6 +190,8 @@ func (s *ClassificationService) GetWorkingUnitChoices(ctx context.Context, mode 
 }
 
 func (s *ClassificationService) GetMasterWorkingUnitChoices(ctx context.Context) ([]WorkingUnitChoice, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.workingUnits == nil {
 		return nil, errors.New("working unit service is unavailable")
 	}
@@ -168,6 +199,8 @@ func (s *ClassificationService) GetMasterWorkingUnitChoices(ctx context.Context)
 }
 
 func (s *ClassificationService) GetExternalSUEnvironmentReview(ctx context.Context, contextID string) (*ExternalSUEnvironmentReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.externalSUEnvironment == nil {
 		return nil, errors.New("external SU environment service is unavailable")
 	}
@@ -175,6 +208,8 @@ func (s *ClassificationService) GetExternalSUEnvironmentReview(ctx context.Conte
 }
 
 func (s *ClassificationService) TransferExternalSUEnvironmentReviewed(ctx context.Context, contextID, requestJSON string) (*ExternalSUEnvironmentOutcome, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.externalSUEnvironment == nil {
 		return nil, errors.New("external SU environment service is unavailable")
 	}
@@ -182,6 +217,8 @@ func (s *ClassificationService) TransferExternalSUEnvironmentReviewed(ctx contex
 }
 
 func (s *ClassificationService) RecoverExternalSUEnvironmentOutcome(ctx context.Context, contextID, requestJSON string) (*ExternalSUEnvironmentAttemptOutcome, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.externalSUEnvironment == nil {
 		return nil, errors.New("external SU environment service is unavailable")
 	}
@@ -189,6 +226,8 @@ func (s *ClassificationService) RecoverExternalSUEnvironmentOutcome(ctx context.
 }
 
 func (s *ClassificationService) GetTwoPageProfilingReview(ctx context.Context, contextID, plot string, offset, limit int) (*TwoPageProfilingReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.twoPageProfiling == nil {
 		return nil, errors.New("two-page profiling service is unavailable")
 	}
@@ -196,6 +235,8 @@ func (s *ClassificationService) GetTwoPageProfilingReview(ctx context.Context, c
 }
 
 func (s *ClassificationService) PreviewSpeciesPresence(ctx context.Context, contextID, requestJSON string) (*ProjectProfileSpeciesPresencePreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.speciesPresence == nil {
 		return nil, errors.New("project profile species presence service is unavailable")
 	}
@@ -203,6 +244,8 @@ func (s *ClassificationService) PreviewSpeciesPresence(ctx context.Context, cont
 }
 
 func (s *ClassificationService) GetHierarchyNodes(ctx context.Context) ([]HierarchyNode, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -210,6 +253,8 @@ func (s *ClassificationService) GetHierarchyNodes(ctx context.Context) ([]Hierar
 }
 
 func (s *ClassificationService) ListPlotProfileSources(ctx context.Context, contextID, path string) ([]PlotProfileSourceInfo, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -217,6 +262,8 @@ func (s *ClassificationService) ListPlotProfileSources(ctx context.Context, cont
 }
 
 func (s *ClassificationService) SelectPlotProfile(expectedID string, requested PlotProfileSource) (ProjectState, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return ProjectState{}, errors.New("classification context is unavailable")
 	}
@@ -224,6 +271,8 @@ func (s *ClassificationService) SelectPlotProfile(expectedID string, requested P
 }
 
 func (s *ClassificationService) SetPlotProfileEditing(ctx context.Context, expectedID string, request PlotProfileWriteRequest) (ProjectState, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return ProjectState{}, errors.New("classification context is unavailable")
 	}
@@ -231,6 +280,8 @@ func (s *ClassificationService) SetPlotProfileEditing(ctx context.Context, expec
 }
 
 func (s *ClassificationService) ReviewPlotProfileFileCreation(ctx context.Context, contextID string) (PlotProfileFileReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return PlotProfileFileReview{}, errors.New("classification context is unavailable")
 	}
@@ -238,6 +289,8 @@ func (s *ClassificationService) ReviewPlotProfileFileCreation(ctx context.Contex
 }
 
 func (s *ClassificationService) CreatePlotProfileFile(ctx context.Context, contextID string, request PlotProfileFileCreation) (PlotProfileFileCreated, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return PlotProfileFileCreated{}, errors.New("classification context is unavailable")
 	}
@@ -245,6 +298,8 @@ func (s *ClassificationService) CreatePlotProfileFile(ctx context.Context, conte
 }
 
 func (s *ClassificationService) ReviewPlotProfileTableCreation(ctx context.Context, contextID string) (PlotProfileTableReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return PlotProfileTableReview{}, errors.New("classification context is unavailable")
 	}
@@ -252,6 +307,8 @@ func (s *ClassificationService) ReviewPlotProfileTableCreation(ctx context.Conte
 }
 
 func (s *ClassificationService) CreatePlotProfileTable(ctx context.Context, contextID string, request PlotProfileTableCreation) (PlotProfileFileCreated, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return PlotProfileFileCreated{}, errors.New("classification context is unavailable")
 	}
@@ -259,6 +316,8 @@ func (s *ClassificationService) CreatePlotProfileTable(ctx context.Context, cont
 }
 
 func (s *ClassificationService) ReviewProjectPlotProfile(ctx context.Context, contextID string) (ProjectPlotProfileReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return ProjectPlotProfileReview{}, errors.New("classification context is unavailable")
 	}
@@ -266,6 +325,8 @@ func (s *ClassificationService) ReviewProjectPlotProfile(ctx context.Context, co
 }
 
 func (s *ClassificationService) SaveProjectPlotProfile(ctx context.Context, contextID string, request ProjectPlotProfileEdit) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return errors.New("classification context is unavailable")
 	}
@@ -273,6 +334,8 @@ func (s *ClassificationService) SaveProjectPlotProfile(ctx context.Context, cont
 }
 
 func (s *ClassificationService) CreateProjectPlotProfileRule(ctx context.Context, contextID string, request ProjectPlotProfileCreation) (ProjectMetadataRow, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return ProjectMetadataRow{}, errors.New("classification context is unavailable")
 	}
@@ -280,6 +343,8 @@ func (s *ClassificationService) CreateProjectPlotProfileRule(ctx context.Context
 }
 
 func (s *ClassificationService) DeleteProjectPlotProfileRule(ctx context.Context, contextID string, request ProjectPlotProfileDeletion) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return errors.New("classification context is unavailable")
 	}
@@ -287,6 +352,8 @@ func (s *ClassificationService) DeleteProjectPlotProfileRule(ctx context.Context
 }
 
 func (s *ClassificationService) ListProjectPlotProfileChoices(ctx context.Context, contextID string) (ProjectPlotProfileChoices, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return ProjectPlotProfileChoices{}, errors.New("classification context is unavailable")
 	}
@@ -294,6 +361,8 @@ func (s *ClassificationService) ListProjectPlotProfileChoices(ctx context.Contex
 }
 
 func (s *ClassificationService) ReviewProjectPlotProfileLump(ctx context.Context, contextID string) (ProjectMetadataTable, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return ProjectMetadataTable{}, errors.New("classification context is unavailable")
 	}
@@ -301,6 +370,8 @@ func (s *ClassificationService) ReviewProjectPlotProfileLump(ctx context.Context
 }
 
 func (s *ClassificationService) ListProjectPlotProfileLumpTables(ctx context.Context, contextID string) ([]ProfileLumpChoice, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -308,6 +379,8 @@ func (s *ClassificationService) ListProjectPlotProfileLumpTables(ctx context.Con
 }
 
 func (s *ClassificationService) ReviewProjectPlotProfileLumpTable(ctx context.Context, contextID, location string) (ProjectMetadataTable, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return ProjectMetadataTable{}, errors.New("classification context is unavailable")
 	}
@@ -315,6 +388,8 @@ func (s *ClassificationService) ReviewProjectPlotProfileLumpTable(ctx context.Co
 }
 
 func (s *ClassificationService) RunProjectPlotProfile(ctx context.Context, contextID string, request ProjectPlotProfileRunRequest) (ProjectPlotProfileResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return ProjectPlotProfileResult{}, errors.New("classification context is unavailable")
 	}
@@ -322,6 +397,8 @@ func (s *ClassificationService) RunProjectPlotProfile(ctx context.Context, conte
 }
 
 func (s *ClassificationService) ResolveProjectPlotProfileNavigation(ctx context.Context, contextID string, request ProjectPlotProfileFilterRequest) (ProjectPlotProfileNavigation, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return ProjectPlotProfileNavigation{}, errors.New("classification context is unavailable")
 	}
@@ -329,6 +406,8 @@ func (s *ClassificationService) ResolveProjectPlotProfileNavigation(ctx context.
 }
 
 func (s *ClassificationService) ReviewProjectPlotProfileSU(ctx context.Context, contextID string, filter ProjectPlotProfileFilterRequest) (ProfileSUReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return ProfileSUReview{}, errors.New("classification context is unavailable")
 	}
@@ -336,6 +415,8 @@ func (s *ClassificationService) ReviewProjectPlotProfileSU(ctx context.Context, 
 }
 
 func (s *ClassificationService) SaveProjectPlotProfileSU(ctx context.Context, contextID string, request ProfileSUCreation) (ProfileSUCreated, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return ProfileSUCreated{}, errors.New("classification context is unavailable")
 	}
@@ -343,6 +424,8 @@ func (s *ClassificationService) SaveProjectPlotProfileSU(ctx context.Context, co
 }
 
 func (s *ClassificationService) ReviewProjectPlotProfileSUInProject(ctx context.Context, contextID string, filter ProjectPlotProfileFilterRequest) (ProfileSUProjectReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return ProfileSUProjectReview{}, errors.New("classification context is unavailable")
 	}
@@ -350,6 +433,8 @@ func (s *ClassificationService) ReviewProjectPlotProfileSUInProject(ctx context.
 }
 
 func (s *ClassificationService) SaveProjectPlotProfileSUInProject(ctx context.Context, contextID string, request ProfileSUProjectCreation) (ProfileSUCreated, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return ProfileSUCreated{}, errors.New("classification context is unavailable")
 	}
@@ -357,6 +442,8 @@ func (s *ClassificationService) SaveProjectPlotProfileSUInProject(ctx context.Co
 }
 
 func (s *ClassificationService) ReviewEnvironmentSiteUnits(ctx context.Context, contextID string) (EnvironmentSiteUnitReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return EnvironmentSiteUnitReview{}, errors.New("classification context is unavailable")
 	}
@@ -364,6 +451,8 @@ func (s *ClassificationService) ReviewEnvironmentSiteUnits(ctx context.Context, 
 }
 
 func (s *ClassificationService) TransferEnvironmentSiteUnits(ctx context.Context, contextID string, request EnvironmentSiteUnitTransfer) (*EnvironmentSiteUnitResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -371,6 +460,8 @@ func (s *ClassificationService) TransferEnvironmentSiteUnits(ctx context.Context
 }
 
 func (s *ClassificationService) ReviewSiteUnitEnvironment(ctx context.Context, contextID string) (SiteUnitEnvironmentReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return SiteUnitEnvironmentReview{}, errors.New("classification context is unavailable")
 	}
@@ -378,6 +469,8 @@ func (s *ClassificationService) ReviewSiteUnitEnvironment(ctx context.Context, c
 }
 
 func (s *ClassificationService) TransferSiteUnitEnvironment(ctx context.Context, contextID string, request SiteUnitEnvironmentTransfer) (*SiteUnitEnvironmentResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -385,6 +478,8 @@ func (s *ClassificationService) TransferSiteUnitEnvironment(ctx context.Context,
 }
 
 func (s *ClassificationService) CreateSUTable(ctx context.Context, contextID string, request CreateSUTableRequest) (*SUTableLifecycleResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -392,6 +487,8 @@ func (s *ClassificationService) CreateSUTable(ctx context.Context, contextID str
 }
 
 func (s *ClassificationService) SaveSUTableAs(ctx context.Context, contextID string, request SaveSUTableAsRequest) (*SUTableLifecycleResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -399,6 +496,8 @@ func (s *ClassificationService) SaveSUTableAs(ctx context.Context, contextID str
 }
 
 func (s *ClassificationService) GetSUPlotTree(ctx context.Context, contextID, filterText string) (*SUPlotTree, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -406,6 +505,8 @@ func (s *ClassificationService) GetSUPlotTree(ctx context.Context, contextID, fi
 }
 
 func (s *ClassificationService) GetPlotInspectorSummary(ctx context.Context, contextID, plotNumber string) (*PlotInspectorSummary, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -413,6 +514,8 @@ func (s *ClassificationService) GetPlotInspectorSummary(ctx context.Context, con
 }
 
 func (s *ClassificationService) SearchBECUnitPicker(ctx context.Context, contextID string, request BECUnitPickerRequest) ([]BECUnitPickerChoice, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil {
 		return nil, errors.New("classification service is unavailable")
 	}
@@ -420,6 +523,8 @@ func (s *ClassificationService) SearchBECUnitPicker(ctx context.Context, context
 }
 
 func (s *ClassificationService) AssignPlotsToSiteUnit(ctx context.Context, contextID string, request AssignPlotsToSiteUnitRequest) (*AssignPlotsToSiteUnitResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -427,6 +532,8 @@ func (s *ClassificationService) AssignPlotsToSiteUnit(ctx context.Context, conte
 }
 
 func (s *ClassificationService) UndoSUAssignment(ctx context.Context, contextID string, historyID int64) (*AssignPlotsToSiteUnitResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -434,6 +541,8 @@ func (s *ClassificationService) UndoSUAssignment(ctx context.Context, contextID 
 }
 
 func (s *ClassificationService) CreateSUFromEnvFields(ctx context.Context, contextID string, request CreateSUFromEnvFieldsRequest) (*CreateSUFromEnvFieldsResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -441,6 +550,8 @@ func (s *ClassificationService) CreateSUFromEnvFields(ctx context.Context, conte
 }
 
 func (s *ClassificationService) GetHierarchyExplorer(ctx context.Context, contextID string) (*HierarchyExplorerView, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -448,6 +559,8 @@ func (s *ClassificationService) GetHierarchyExplorer(ctx context.Context, contex
 }
 
 func (s *ClassificationService) CreateHierarchyTable(ctx context.Context, contextID string, request CreateHierarchyTableRequest) (*HierarchyTableLifecycleResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -455,6 +568,8 @@ func (s *ClassificationService) CreateHierarchyTable(ctx context.Context, contex
 }
 
 func (s *ClassificationService) SaveHierarchyTableAs(ctx context.Context, contextID string, request SaveHierarchyTableAsRequest) (*HierarchyTableLifecycleResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -462,6 +577,8 @@ func (s *ClassificationService) SaveHierarchyTableAs(ctx context.Context, contex
 }
 
 func (s *ClassificationService) AddHierarchyNode(ctx context.Context, contextID string, request HierarchyAddNodeRequest) (*HierarchyMutationResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -469,6 +586,8 @@ func (s *ClassificationService) AddHierarchyNode(ctx context.Context, contextID 
 }
 
 func (s *ClassificationService) RenameHierarchyNode(ctx context.Context, contextID string, request HierarchyRenameNodeRequest) (*HierarchyMutationResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -476,6 +595,8 @@ func (s *ClassificationService) RenameHierarchyNode(ctx context.Context, context
 }
 
 func (s *ClassificationService) ReparentHierarchyNode(ctx context.Context, contextID string, request HierarchyReparentNodeRequest) (*HierarchyMutationResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -483,6 +604,8 @@ func (s *ClassificationService) ReparentHierarchyNode(ctx context.Context, conte
 }
 
 func (s *ClassificationService) ToggleHierarchyBreakpoint(ctx context.Context, contextID string, nodeID int64) (*HierarchyMutationResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -490,6 +613,8 @@ func (s *ClassificationService) ToggleHierarchyBreakpoint(ctx context.Context, c
 }
 
 func (s *ClassificationService) DeleteHierarchyNode(ctx context.Context, contextID string, request HierarchyDeleteNodeRequest) (*HierarchyMutationResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -497,6 +622,8 @@ func (s *ClassificationService) DeleteHierarchyNode(ctx context.Context, context
 }
 
 func (s *ClassificationService) SaveFlatHierarchyRows(ctx context.Context, contextID string, request SaveFlatHierarchyRequest) (*HierarchyMutationResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -504,6 +631,8 @@ func (s *ClassificationService) SaveFlatHierarchyRows(ctx context.Context, conte
 }
 
 func (s *ClassificationService) ListSynthesisLumpTables(ctx context.Context, contextID string) ([]SynthesisLumpTableOption, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -511,6 +640,8 @@ func (s *ClassificationService) ListSynthesisLumpTables(ctx context.Context, con
 }
 
 func (s *ClassificationService) ComputeSynthesisSnapshot(ctx context.Context, contextID string, opts SynthesisOptions) (*SynthesisSnapshot, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -518,6 +649,8 @@ func (s *ClassificationService) ComputeSynthesisSnapshot(ctx context.Context, co
 }
 
 func (s *ClassificationService) ReassignSynthesisPlotUnit(ctx context.Context, contextID string, request ReassignSynthesisPlotRequest) (*ReassignSynthesisPlotResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -525,6 +658,8 @@ func (s *ClassificationService) ReassignSynthesisPlotUnit(ctx context.Context, c
 }
 
 func (s *ClassificationService) UndoSynthesisReassignment(ctx context.Context, contextID string, request UndoSynthesisReassignmentRequest) (*ReassignSynthesisPlotResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -532,6 +667,8 @@ func (s *ClassificationService) UndoSynthesisReassignment(ctx context.Context, c
 }
 
 func (s *ClassificationService) ExportDiagnosticWorkbook(ctx context.Context, contextID string, request ExportDiagnosticWorkbookRequest) (*ExportDiagnosticWorkbookResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -539,6 +676,8 @@ func (s *ClassificationService) ExportDiagnosticWorkbook(ctx context.Context, co
 }
 
 func (s *ClassificationService) ListUserSiteUnitList(ctx context.Context, contextID string) ([]UserSiteUnitEntry, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -546,6 +685,8 @@ func (s *ClassificationService) ListUserSiteUnitList(ctx context.Context, contex
 }
 
 func (s *ClassificationService) SaveUserSiteUnitEntry(ctx context.Context, contextID string, request UpsertUserSiteUnitRequest) (*UserSiteUnitEntry, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}
@@ -553,6 +694,8 @@ func (s *ClassificationService) SaveUserSiteUnitEntry(ctx context.Context, conte
 }
 
 func (s *ClassificationService) DeleteUserSiteUnitEntry(ctx context.Context, contextID string, request DeleteUserSiteUnitRequest) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return errors.New("classification context is unavailable")
 	}
@@ -560,6 +703,8 @@ func (s *ClassificationService) DeleteUserSiteUnitEntry(ctx context.Context, con
 }
 
 func (s *ClassificationService) ExportUserSiteUnitListCSV(ctx context.Context, contextID string) (string, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return "", errors.New("classification context is unavailable")
 	}
@@ -567,6 +712,8 @@ func (s *ClassificationService) ExportUserSiteUnitListCSV(ctx context.Context, c
 }
 
 func (s *ClassificationService) ImportUserSiteUnitListCSV(ctx context.Context, contextID, csvText string, overwriteExisting bool) (*UserSiteUnitImportResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
 	}

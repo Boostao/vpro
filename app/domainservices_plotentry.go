@@ -102,6 +102,7 @@ func (b *referenceCatalogBundle) Close() {
 }
 
 type PlotEntryService struct {
+	runtime                      *runtimeShutdownTracker
 	contexts                     *ContextService
 	plots                        *vprocorepkg.PlotService
 	siviParentShared             *sourceformpkg.SIVIParentSharedService
@@ -128,6 +129,18 @@ type PlotEntryService struct {
 	geologyCodes                 *referencespkg.GeologyCodeService
 	regionCodes                  *referencespkg.RegionCodeService
 	quality                      *referencespkg.QualityService
+}
+
+func (s *PlotEntryService) acquire() (*PlotEntryService, func()) {
+	if s == nil || s.runtime == nil {
+		return s, noopRelease
+	}
+	snap, release := s.runtime.acquire()
+	if snap == nil {
+		release()
+		return nil, noopRelease
+	}
+	return snap.plotEntry, release
 }
 
 func buildPlotEntryService(contexts *ContextService, plots *vprocorepkg.PlotService, refs *referenceCatalogBundle) (PlotEntryService, error) {
@@ -271,6 +284,8 @@ func buildPlotEntryService(contexts *ContextService, plots *vprocorepkg.PlotServ
 // PlotService delegates
 
 func (s *PlotEntryService) CanEditMasterBEC() bool {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return false
 	}
@@ -278,6 +293,8 @@ func (s *PlotEntryService) CanEditMasterBEC() bool {
 }
 
 func (s *PlotEntryService) UserAccreditationStatus(ctx context.Context) (UserAccreditation, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return UserAccreditation{}, errors.New("plot service is unavailable")
 	}
@@ -285,6 +302,8 @@ func (s *PlotEntryService) UserAccreditationStatus(ctx context.Context) (UserAcc
 }
 
 func (s *PlotEntryService) CreatePlot(h FS882Header) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -292,6 +311,8 @@ func (s *PlotEntryService) CreatePlot(h FS882Header) error {
 }
 
 func (s *PlotEntryService) CreateSourceVegetation(plot string, request VegetationCreationRequest) (int64, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return 0, errors.New("plot service is unavailable")
 	}
@@ -299,6 +320,8 @@ func (s *PlotEntryService) CreateSourceVegetation(plot string, request Vegetatio
 }
 
 func (s *PlotEntryService) DeleteHumusRecord(plotNumber string, id int64) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -306,6 +329,8 @@ func (s *PlotEntryService) DeleteHumusRecord(plotNumber string, id int64) error 
 }
 
 func (s *PlotEntryService) DeleteMineralRecord(plotNumber string, id int64) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -313,6 +338,8 @@ func (s *PlotEntryService) DeleteMineralRecord(plotNumber string, id int64) erro
 }
 
 func (s *PlotEntryService) DeleteOtherRecord(plotNumber string, id int64) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -320,6 +347,8 @@ func (s *PlotEntryService) DeleteOtherRecord(plotNumber string, id int64) error 
 }
 
 func (s *PlotEntryService) DeleteReviewedVegetation(plot string, request VegetationDeletionRequest) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -327,6 +356,8 @@ func (s *PlotEntryService) DeleteReviewedVegetation(plot string, request Vegetat
 }
 
 func (s *PlotEntryService) DeleteVegRecord(plotNumber string, id int64) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -334,6 +365,8 @@ func (s *PlotEntryService) DeleteVegRecord(plotNumber string, id int64) error {
 }
 
 func (s *PlotEntryService) GetChildCapabilities(kind string) (map[string]bool, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return nil, errors.New("plot service is unavailable")
 	}
@@ -341,6 +374,8 @@ func (s *PlotEntryService) GetChildCapabilities(kind string) (map[string]bool, e
 }
 
 func (s *PlotEntryService) GetHeaderCapabilities() (map[string]bool, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return nil, errors.New("plot service is unavailable")
 	}
@@ -348,6 +383,8 @@ func (s *PlotEntryService) GetHeaderCapabilities() (map[string]bool, error) {
 }
 
 func (s *PlotEntryService) GetPlot(plotNumber string) (*FS882Header, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return nil, errors.New("plot service is unavailable")
 	}
@@ -355,6 +392,8 @@ func (s *PlotEntryService) GetPlot(plotNumber string) (*FS882Header, error) {
 }
 
 func (s *PlotEntryService) ListAuditEntries(plotNumber string) ([]AuditEntry, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return nil, errors.New("plot service is unavailable")
 	}
@@ -362,6 +401,8 @@ func (s *PlotEntryService) ListAuditEntries(plotNumber string) ([]AuditEntry, er
 }
 
 func (s *PlotEntryService) ListAuditReadEntries(plot string) ([]OrdinaryAuditReadEntry, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return nil, errors.New("plot service is unavailable")
 	}
@@ -369,6 +410,8 @@ func (s *PlotEntryService) ListAuditReadEntries(plot string) ([]OrdinaryAuditRea
 }
 
 func (s *PlotEntryService) ListHumusRecords(plotNumber string) ([]HumusRecord, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return nil, errors.New("plot service is unavailable")
 	}
@@ -376,6 +419,8 @@ func (s *PlotEntryService) ListHumusRecords(plotNumber string) ([]HumusRecord, e
 }
 
 func (s *PlotEntryService) ListMineralRecords(plotNumber string) ([]MineralRecord, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return nil, errors.New("plot service is unavailable")
 	}
@@ -383,6 +428,8 @@ func (s *PlotEntryService) ListMineralRecords(plotNumber string) ([]MineralRecor
 }
 
 func (s *PlotEntryService) ListOtherRecords(plotNumber string) ([]OtherRecord, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return nil, errors.New("plot service is unavailable")
 	}
@@ -390,6 +437,8 @@ func (s *PlotEntryService) ListOtherRecords(plotNumber string) ([]OtherRecord, e
 }
 
 func (s *PlotEntryService) ListVegRecords(plotNumber string) ([]VegRecord, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return nil, errors.New("plot service is unavailable")
 	}
@@ -397,6 +446,8 @@ func (s *PlotEntryService) ListVegRecords(plotNumber string) ([]VegRecord, error
 }
 
 func (s *PlotEntryService) RestoreAuditRecords(plotNumber string, removeAuditRows bool) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -404,6 +455,8 @@ func (s *PlotEntryService) RestoreAuditRecords(plotNumber string, removeAuditRow
 }
 
 func (s *PlotEntryService) RestoreSelectedAuditRecords(plotNumber string, rowIDs []string, action AuditRestoreAction) (*AuditRestoreResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return nil, errors.New("plot service is unavailable")
 	}
@@ -411,6 +464,8 @@ func (s *PlotEntryService) RestoreSelectedAuditRecords(plotNumber string, rowIDs
 }
 
 func (s *PlotEntryService) SaveHumusRecord(r HumusRecord) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -418,6 +473,8 @@ func (s *PlotEntryService) SaveHumusRecord(r HumusRecord) error {
 }
 
 func (s *PlotEntryService) SaveMineralRecord(r MineralRecord) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -425,6 +482,8 @@ func (s *PlotEntryService) SaveMineralRecord(r MineralRecord) error {
 }
 
 func (s *PlotEntryService) SaveOtherRecord(r OtherRecord) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -432,6 +491,8 @@ func (s *PlotEntryService) SaveOtherRecord(r OtherRecord) error {
 }
 
 func (s *PlotEntryService) SavePlot(h FS882Header) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -439,6 +500,8 @@ func (s *PlotEntryService) SavePlot(h FS882Header) error {
 }
 
 func (s *PlotEntryService) SaveVegRecord(r VegRecord) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -446,6 +509,8 @@ func (s *PlotEntryService) SaveVegRecord(r VegRecord) error {
 }
 
 func (s *PlotEntryService) SetAuditRestoreSelection(plotNumber string, rowIDs []string) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -453,6 +518,8 @@ func (s *PlotEntryService) SetAuditRestoreSelection(plotNumber string, rowIDs []
 }
 
 func (s *PlotEntryService) SetAuditStrength(strength int) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -460,6 +527,8 @@ func (s *PlotEntryService) SetAuditStrength(strength int) error {
 }
 
 func (s *PlotEntryService) SetCurrentUser(user string) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -467,6 +536,8 @@ func (s *PlotEntryService) SetCurrentUser(user string) error {
 }
 
 func (s *PlotEntryService) UpdateCollectedRecords(plot string, updates []CollectedRecordUpdate) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -474,6 +545,8 @@ func (s *PlotEntryService) UpdateCollectedRecords(plot string, updates []Collect
 }
 
 func (s *PlotEntryService) UpdateHeightRecords(plotNumber string, updates []HeightRecordUpdate) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -481,6 +554,8 @@ func (s *PlotEntryService) UpdateHeightRecords(plotNumber string, updates []Heig
 }
 
 func (s *PlotEntryService) UpdateHumusRecord(r HumusRecord) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -488,6 +563,8 @@ func (s *PlotEntryService) UpdateHumusRecord(r HumusRecord) error {
 }
 
 func (s *PlotEntryService) UpdateMineralRecord(r MineralRecord) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -495,6 +572,8 @@ func (s *PlotEntryService) UpdateMineralRecord(r MineralRecord) error {
 }
 
 func (s *PlotEntryService) UpdateOtherRecord(r OtherRecord) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -502,6 +581,8 @@ func (s *PlotEntryService) UpdateOtherRecord(r OtherRecord) error {
 }
 
 func (s *PlotEntryService) UpdateOtherRecords(plot string, updates []OtherRecordUpdate) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -509,6 +590,8 @@ func (s *PlotEntryService) UpdateOtherRecords(plot string, updates []OtherRecord
 }
 
 func (s *PlotEntryService) UpdatePlot(h FS882Header) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -516,6 +599,8 @@ func (s *PlotEntryService) UpdatePlot(h FS882Header) error {
 }
 
 func (s *PlotEntryService) UpdateSoilRecords(plot string, updates []SoilRecordUpdate) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -523,6 +608,8 @@ func (s *PlotEntryService) UpdateSoilRecords(plot string, updates []SoilRecordUp
 }
 
 func (s *PlotEntryService) UpdateVegRecord(r VegRecord) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -530,6 +617,8 @@ func (s *PlotEntryService) UpdateVegRecord(r VegRecord) error {
 }
 
 func (s *PlotEntryService) UpdateVegetationAttributes(plot string, updates []VegetationAttributeUpdate) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -537,6 +626,8 @@ func (s *PlotEntryService) UpdateVegetationAttributes(plot string, updates []Veg
 }
 
 func (s *PlotEntryService) UpdateVegetationNumbers(plot string, updates []VegetationNumberUpdate) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}
@@ -544,6 +635,8 @@ func (s *PlotEntryService) UpdateVegetationNumbers(plot string, updates []Vegeta
 }
 
 func (s *PlotEntryService) UpdateVegetationSpecies(plot string, updates []VegetationSpeciesUpdate) error {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.plots == nil {
 		return errors.New("plot service is unavailable")
 	}

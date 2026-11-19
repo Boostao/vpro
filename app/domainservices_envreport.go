@@ -33,6 +33,7 @@ type SiteUnitSummaryFullPreferenceValues = envreportpkg.SiteUnitSummaryFullPrefe
 type SiteUnitSummaryFullPreferences = envreportpkg.SiteUnitSummaryFullPreferences
 
 type EnvironmentReportService struct {
+	runtime                         *runtimeShutdownTracker
 	contexts                        *ContextService
 	environmentWorkbook             *envreportpkg.EnvironmentWorkbookService
 	longEnvironmentPreferences      *envreportpkg.LongEnvironmentPreferencesService
@@ -41,6 +42,18 @@ type EnvironmentReportService struct {
 	siteUnitSummaryExtendedWorkbook *envreportpkg.SiteUnitSummaryExtendedWorkbookService
 	subzoneMatrix                   *envreportpkg.SubzoneMatrixService
 	dataDir                         string
+}
+
+func (s *EnvironmentReportService) acquire() (*EnvironmentReportService, func()) {
+	if s == nil || s.runtime == nil {
+		return s, noopRelease
+	}
+	snap, release := s.runtime.acquire()
+	if snap == nil {
+		release()
+		return nil, noopRelease
+	}
+	return snap.envReport, release
 }
 
 func buildEnvironmentReportService(contexts *ContextService, dataDir string) (EnvironmentReportService, error) {
@@ -81,6 +94,8 @@ func (s *EnvironmentReportService) rRuntimeOptions() []rsidecarpkg.RuntimeOption
 }
 
 func (s *EnvironmentReportService) GetLongEnvironmentOptions(ctx context.Context, contextID string) (LongEnvironmentOptions, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return LongEnvironmentOptions{}, errors.New("environment report context is unavailable")
 	}
@@ -88,6 +103,8 @@ func (s *EnvironmentReportService) GetLongEnvironmentOptions(ctx context.Context
 }
 
 func (s *EnvironmentReportService) PreviewLongEnvironment(ctx context.Context, contextID string, request LongEnvironmentRequest) (LongEnvironmentPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return LongEnvironmentPreview{}, errors.New("environment report context is unavailable")
 	}
@@ -95,6 +112,8 @@ func (s *EnvironmentReportService) PreviewLongEnvironment(ctx context.Context, c
 }
 
 func (s *EnvironmentReportService) GetLongEnvironmentPreferences(ctx context.Context, contextID string) (*LongEnvironmentPreferencesReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longEnvironmentPreferences == nil {
 		return nil, errors.New("long environment preferences service is unavailable")
 	}
@@ -102,6 +121,8 @@ func (s *EnvironmentReportService) GetLongEnvironmentPreferences(ctx context.Con
 }
 
 func (s *EnvironmentReportService) SaveLongEnvironmentPreferences(ctx context.Context, contextID, requestJSON string) *LongEnvironmentPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.longEnvironmentPreferences == nil {
 		return &LongEnvironmentPreferencesOutcome{ContextID: contextID, ErrorMessage: "long environment preferences service is unavailable"}
 	}
@@ -109,6 +130,8 @@ func (s *EnvironmentReportService) SaveLongEnvironmentPreferences(ctx context.Co
 }
 
 func (s *EnvironmentReportService) GetEnvironmentWorkbookReview(ctx context.Context, contextID, requestJSON string) (*EnvironmentWorkbookReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.environmentWorkbook == nil {
 		return nil, errors.New("environment workbook service is unavailable")
 	}
@@ -116,6 +139,8 @@ func (s *EnvironmentReportService) GetEnvironmentWorkbookReview(ctx context.Cont
 }
 
 func (s *EnvironmentReportService) ExportReviewedEnvironmentWorkbook(ctx context.Context, contextID, requestJSON string) (*EnvironmentWorkbookOutcome, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.environmentWorkbook == nil {
 		return nil, errors.New("environment workbook service is unavailable")
 	}
@@ -123,6 +148,8 @@ func (s *EnvironmentReportService) ExportReviewedEnvironmentWorkbook(ctx context
 }
 
 func (s *EnvironmentReportService) GetSiteUnitSummaryOptions(ctx context.Context, contextID string) (SiteUnitSummaryOptions, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return SiteUnitSummaryOptions{}, errors.New("environment report context is unavailable")
 	}
@@ -130,6 +157,8 @@ func (s *EnvironmentReportService) GetSiteUnitSummaryOptions(ctx context.Context
 }
 
 func (s *EnvironmentReportService) PreviewSiteUnitSummary(ctx context.Context, contextID string, request SiteUnitSummaryRequest) (SiteUnitSummaryPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return SiteUnitSummaryPreview{}, errors.New("environment report context is unavailable")
 	}
@@ -137,6 +166,8 @@ func (s *EnvironmentReportService) PreviewSiteUnitSummary(ctx context.Context, c
 }
 
 func (s *EnvironmentReportService) PreviewSiteUnitSummaryLifeforms(ctx context.Context, contextID string, request SiteUnitSummaryRequest) (SiteUnitSummaryPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return SiteUnitSummaryPreview{}, errors.New("environment report context is unavailable")
 	}
@@ -144,6 +175,8 @@ func (s *EnvironmentReportService) PreviewSiteUnitSummaryLifeforms(ctx context.C
 }
 
 func (s *EnvironmentReportService) PreviewSiteUnitSummarySpecies(ctx context.Context, contextID string, request SiteUnitSpeciesListRequest) (SiteUnitSpeciesListPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return SiteUnitSpeciesListPreview{}, errors.New("environment report context is unavailable")
 	}
@@ -151,6 +184,8 @@ func (s *EnvironmentReportService) PreviewSiteUnitSummarySpecies(ctx context.Con
 }
 
 func (s *EnvironmentReportService) GetSiteUnitSummaryPreferences(ctx context.Context, contextID string) (*SiteUnitSummaryOptions, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siteUnitSummaryPreferences == nil {
 		return nil, errors.New("site unit summary preferences service is unavailable")
 	}
@@ -158,6 +193,8 @@ func (s *EnvironmentReportService) GetSiteUnitSummaryPreferences(ctx context.Con
 }
 
 func (s *EnvironmentReportService) SaveSiteUnitSummaryPreferences(ctx context.Context, contextID, requestJSON string) *SiteUnitSummaryPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siteUnitSummaryPreferences == nil {
 		return &SiteUnitSummaryPreferencesOutcome{ContextID: contextID, ErrorMessage: "site unit summary preferences service is unavailable"}
 	}
@@ -165,6 +202,8 @@ func (s *EnvironmentReportService) SaveSiteUnitSummaryPreferences(ctx context.Co
 }
 
 func (s *EnvironmentReportService) GetFullSiteUnitSummaryPreferences(ctx context.Context, contextID string) (*SiteUnitSummaryFullPreferences, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siteUnitSummaryPreferences == nil {
 		return nil, errors.New("site unit summary preferences service is unavailable")
 	}
@@ -172,6 +211,8 @@ func (s *EnvironmentReportService) GetFullSiteUnitSummaryPreferences(ctx context
 }
 
 func (s *EnvironmentReportService) SaveFullSiteUnitSummaryPreferences(ctx context.Context, contextID, requestJSON string) *SiteUnitSummaryPreferencesOutcome {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siteUnitSummaryPreferences == nil {
 		return &SiteUnitSummaryPreferencesOutcome{ContextID: contextID, ErrorMessage: "site unit summary preferences service is unavailable"}
 	}
@@ -179,6 +220,8 @@ func (s *EnvironmentReportService) SaveFullSiteUnitSummaryPreferences(ctx contex
 }
 
 func (s *EnvironmentReportService) GetSiteUnitSummaryWorkbookReview(ctx context.Context, contextID, requestJSON string) (*SiteUnitSummaryWorkbookReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siteUnitSummaryWorkbook == nil {
 		return nil, errors.New("site unit summary workbook service is unavailable")
 	}
@@ -186,6 +229,8 @@ func (s *EnvironmentReportService) GetSiteUnitSummaryWorkbookReview(ctx context.
 }
 
 func (s *EnvironmentReportService) ExportReviewedSiteUnitSummaryWorkbook(ctx context.Context, contextID, requestJSON string) (*SiteUnitSummaryWorkbookOutcome, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siteUnitSummaryWorkbook == nil {
 		return nil, errors.New("site unit summary workbook service is unavailable")
 	}
@@ -193,6 +238,8 @@ func (s *EnvironmentReportService) ExportReviewedSiteUnitSummaryWorkbook(ctx con
 }
 
 func (s *EnvironmentReportService) GetSiteUnitSummaryExtendedWorkbookReview(ctx context.Context, contextID, requestJSON string) (*SiteUnitSummaryExtendedWorkbookReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siteUnitSummaryExtendedWorkbook == nil {
 		return nil, errors.New("site unit summary extended workbook service is unavailable")
 	}
@@ -200,6 +247,8 @@ func (s *EnvironmentReportService) GetSiteUnitSummaryExtendedWorkbookReview(ctx 
 }
 
 func (s *EnvironmentReportService) ExportReviewedSiteUnitSummaryExtendedWorkbook(ctx context.Context, contextID, requestJSON string) (*SiteUnitSummaryWorkbookOutcome, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.siteUnitSummaryExtendedWorkbook == nil {
 		return nil, errors.New("site unit summary extended workbook service is unavailable")
 	}
@@ -207,6 +256,8 @@ func (s *EnvironmentReportService) ExportReviewedSiteUnitSummaryExtendedWorkbook
 }
 
 func (s *EnvironmentReportService) GetSubzoneMatrixPreview(ctx context.Context, contextID, requestJSON string) (*SubzoneMatrixPreview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.subzoneMatrix == nil {
 		return nil, errors.New("subzone matrix service is unavailable")
 	}
@@ -214,6 +265,8 @@ func (s *EnvironmentReportService) GetSubzoneMatrixPreview(ctx context.Context, 
 }
 
 func (s *EnvironmentReportService) GetSubzoneMatrixReview(ctx context.Context, contextID string) (*SubzoneMatrixWorkbookReview, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.subzoneMatrix == nil {
 		return nil, errors.New("subzone matrix service is unavailable")
 	}
@@ -221,6 +274,8 @@ func (s *EnvironmentReportService) GetSubzoneMatrixReview(ctx context.Context, c
 }
 
 func (s *EnvironmentReportService) ExportReviewedSubzoneMatrix(ctx context.Context, contextID, requestJSON string) (*SubzoneMatrixWorkbookOutcome, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.subzoneMatrix == nil {
 		return nil, errors.New("subzone matrix service is unavailable")
 	}
@@ -228,10 +283,14 @@ func (s *EnvironmentReportService) ExportReviewedSubzoneMatrix(ctx context.Conte
 }
 
 func (s *EnvironmentReportService) DetectRRuntime(ctx context.Context) (*RRuntimeStatus, error) {
+	s, release := s.acquire()
+	defer release()
 	return rsidecarpkg.DetectRRuntime(ctx, s.rRuntimeOptions()...)
 }
 
 func (s *EnvironmentReportService) GetCachedPlotClimate(ctx context.Context, contextID, refPeriod string) ([]PlotClimateRow, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("environment report context is unavailable")
 	}
@@ -239,6 +298,8 @@ func (s *EnvironmentReportService) GetCachedPlotClimate(ctx context.Context, con
 }
 
 func (s *EnvironmentReportService) ComputePlotClimateAndDualEdatopic(ctx context.Context, contextID string, request ClimateEdatopicRequest) (*ClimateEdatopicResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("environment report context is unavailable")
 	}
@@ -246,6 +307,8 @@ func (s *EnvironmentReportService) ComputePlotClimateAndDualEdatopic(ctx context
 }
 
 func (s *EnvironmentReportService) RunMultivariateClustering(ctx context.Context, contextID string, request ClusteringRequest) (*ClusteringResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("environment report context is unavailable")
 	}
@@ -253,6 +316,8 @@ func (s *EnvironmentReportService) RunMultivariateClustering(ctx context.Context
 }
 
 func (s *EnvironmentReportService) PromoteClusterCandidateToSU(ctx context.Context, contextID string, request PromoteCandidateSURequest) (*PromoteCandidateSUResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("environment report context is unavailable")
 	}
@@ -260,6 +325,8 @@ func (s *EnvironmentReportService) PromoteClusterCandidateToSU(ctx context.Conte
 }
 
 func (s *EnvironmentReportService) RenderQuartoGuide(ctx context.Context, contextID string, request QuartoGuideRequest) (*QuartoGuideResult, error) {
+	s, release := s.acquire()
+	defer release()
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("environment report context is unavailable")
 	}
