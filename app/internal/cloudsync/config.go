@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -147,6 +148,9 @@ func RedactSecrets(msg string, creds *ResolvedCredentials, extraSecrets ...strin
 		addSecret(creds.UserURL, "postgres://<redacted>")
 		addSecret(creds.AdminURL, "postgres://<redacted>")
 		addSecret(creds.Host, "<pg-host>")
+		for _, part := range strings.Split(creds.Host, ",") {
+			addSecret(stripIPv6Brackets(part), "<pg-host>")
+		}
 		for _, rawU := range []string{creds.UserURL, creds.AdminURL} {
 			if rawU == "" {
 				continue
@@ -163,6 +167,11 @@ func RedactSecrets(msg string, creds *ResolvedCredentials, extraSecrets ...strin
 			}
 			if pCfg, err := pgx.ParseConfig(rawU); err == nil {
 				addSecret(pCfg.Host, "<pg-host>")
+				for _, fb := range pCfg.Fallbacks {
+					if fb != nil {
+						addSecret(fb.Host, "<pg-host>")
+					}
+				}
 				addSecret(pCfg.Password, "<redacted>")
 			}
 		}
@@ -320,7 +329,7 @@ func (m *Manager) ResolveCredentials() (*ResolvedCredentials, error) {
 		}
 		if cfg, err := pgx.ParseConfig(rawURL); err == nil {
 			if host == "" {
-				host = cfg.Host
+				host = collectConfigHosts(cfg)
 			}
 			if portStr == "" && cfg.Port != 0 {
 				port = cfg.Port
@@ -443,12 +452,12 @@ func (m *Manager) ConfigureSession(req SessionConfigRequest) (CloudConfigStatus,
 	if req.Port < 0 || req.Port > 65535 {
 		return CloudConfigStatus{}, errors.New("port must be between 1 and 65535")
 	}
-	ssl := strings.TrimSpace(req.SSLMode)
+	ssl := strings.ToLower(strings.TrimSpace(req.SSLMode))
 	if ssl != "" {
 		switch ssl {
 		case "disable", "allow", "prefer", "require", "verify-ca", "verify-full":
 		default:
-			return CloudConfigStatus{}, fmt.Errorf("invalid sslMode %q", ssl)
+			return CloudConfigStatus{}, fmt.Errorf("invalid sslMode %q", req.SSLMode)
 		}
 	}
 
@@ -515,6 +524,155 @@ func (m *Manager) ConfigureSession(req SessionConfigRequest) (CloudConfigStatus,
 	return m.GetConfigStatus()
 }
 
+func collectConfigHosts(cfg *pgx.ConnConfig) string {
+	if cfg == nil {
+		return ""
+	}
+	seen := make(map[string]struct{}, 1+len(cfg.Fallbacks))
+	var hosts []string
+	addHost := func(h string) {
+		trimmed := strings.TrimSpace(h)
+		if trimmed == "" {
+			return
+		}
+		if _, ok := seen[trimmed]; ok {
+			return
+		}
+		seen[trimmed] = struct{}{}
+		hosts = append(hosts, trimmed)
+	}
+	addHost(cfg.Host)
+	for _, fb := range cfg.Fallbacks {
+		if fb != nil {
+			addHost(fb.Host)
+		}
+	}
+	return strings.Join(hosts, ",")
+}
+
+type parsedPGHostTarget struct {
+	host   string
+	port   string
+	isUnix bool
+}
+
+func isUnixSocketPGHost(host string) bool {
+	if strings.HasPrefix(host, "/") {
+		return true
+	}
+	// Match pgconn.isAbsolutePath on Windows (e.g. C:\tmp)
+	if len(host) >= 3 && host[0] >= 'A' && host[0] <= 'Z' && host[1] == ':' && host[2] == '\\' {
+		return true
+	}
+	return false
+}
+
+// stripIPv6Brackets removes a single pair of surrounding '[' and ']' from an IPv6 literal
+// (e.g. "[::1]" -> "::1"). Malformed nested brackets such as "[[::1]]" are left intact so
+// downstream validation rejects them.
+func stripIPv6Brackets(host string) string {
+	h := strings.TrimSpace(host)
+	if len(h) >= 2 && h[0] == '[' && h[len(h)-1] == ']' {
+		inner := h[1 : len(h)-1]
+		if !strings.ContainsAny(inner, "[]") {
+			return inner
+		}
+	}
+	return h
+}
+
+func isTLSEnforcingSSLMode(sslMode string) bool {
+	switch strings.ToLower(strings.TrimSpace(sslMode)) {
+	case "require", "verify-ca", "verify-full":
+		return true
+	default:
+		return false
+	}
+}
+
+func parsePGHostSegments(rawHost string, defaultPort uint16) ([]parsedPGHostTarget, error) {
+	if strings.TrimSpace(rawHost) == "" {
+		return nil, errors.New("PostgreSQL host is empty")
+	}
+	defaultPortStr := strconv.Itoa(int(defaultPort))
+	rawParts := strings.Split(rawHost, ",")
+	targets := make([]parsedPGHostTarget, 0, len(rawParts))
+	for _, rawPart := range rawParts {
+		part := strings.TrimSpace(rawPart)
+		if part == "" {
+			return nil, errors.New("invalid PostgreSQL host: empty entry in comma-separated host list")
+		}
+		if isUnixSocketPGHost(part) {
+			targets = append(targets, parsedPGHostTarget{
+				host:   part,
+				port:   defaultPortStr,
+				isUnix: true,
+			})
+			continue
+		}
+		if strings.HasPrefix(part, "[") {
+			if strings.HasSuffix(part, "]") {
+				inner := part[1 : len(part)-1]
+				if inner == "" || strings.ContainsAny(inner, "[]") {
+					return nil, errors.New("invalid bracketed IPv6 PostgreSQL host")
+				}
+				if addr, err := netip.ParseAddr(inner); err != nil || !addr.Is6() {
+					return nil, errors.New("invalid bracketed IPv6 PostgreSQL host")
+				}
+				targets = append(targets, parsedPGHostTarget{
+					host: inner,
+					port: defaultPortStr,
+				})
+				continue
+			}
+			h, p, err := net.SplitHostPort(part)
+			if err != nil || h == "" || strings.ContainsAny(h, "[]") {
+				return nil, errors.New("invalid bracketed IPv6 PostgreSQL host:port")
+			}
+			if addr, err := netip.ParseAddr(h); err != nil || !addr.Is6() {
+				return nil, errors.New("invalid bracketed IPv6 PostgreSQL host")
+			}
+			parsedP, err := strconv.ParseUint(p, 10, 16)
+			if err != nil || parsedP == 0 {
+				return nil, errors.New("invalid port in PostgreSQL host")
+			}
+			targets = append(targets, parsedPGHostTarget{
+				host: h,
+				port: strconv.FormatUint(parsedP, 10),
+			})
+			continue
+		}
+		if strings.ContainsAny(part, "[]") {
+			return nil, errors.New("invalid bracket characters in PostgreSQL host")
+		}
+		if strings.Count(part, ":") == 1 {
+			h, p, err := net.SplitHostPort(part)
+			if err != nil || strings.TrimSpace(h) == "" {
+				return nil, errors.New("invalid PostgreSQL host:port")
+			}
+			parsedP, err := strconv.ParseUint(p, 10, 16)
+			if err != nil || parsedP == 0 {
+				return nil, errors.New("invalid port in PostgreSQL host")
+			}
+			targets = append(targets, parsedPGHostTarget{
+				host: h,
+				port: strconv.FormatUint(parsedP, 10),
+			})
+			continue
+		}
+		if strings.Count(part, ":") >= 2 {
+			if addr, err := netip.ParseAddr(part); err != nil || !addr.Is6() {
+				return nil, errors.New("invalid IPv6 PostgreSQL host")
+			}
+		}
+		targets = append(targets, parsedPGHostTarget{
+			host: part,
+			port: defaultPortStr,
+		})
+	}
+	return targets, nil
+}
+
 func buildConnURLStringForRole(creds *ResolvedCredentials, roleMode string) (string, error) {
 	if creds == nil {
 		return "", errors.New("PostgreSQL credentials are not configured")
@@ -531,12 +689,17 @@ func buildConnURLStringForRole(creds *ResolvedCredentials, roleMode string) (str
 		missingMsg = "PostgreSQL custodian admin credentials are not configured (set VPRO_PG_ADMIN_USER/VPRO_PG_ADMIN_PASSWORD or ~/.config/vpro/becmaster.env)"
 	}
 	if rawURL != "" {
+		if preCfg, preErr := pgx.ParseConfig(rawURL); preErr == nil {
+			if tlsErr := requireTLSForRemoteHost(preCfg); tlsErr != nil {
+				return "", tlsErr
+			}
+		}
 		return rawURL, nil
 	}
-	if creds.Host == "" || user == "" {
+	if strings.TrimSpace(creds.Host) == "" || user == "" {
 		return "", errors.New(missingMsg)
 	}
-	ssl := creds.SSLMode
+	ssl := strings.ToLower(strings.TrimSpace(creds.SSLMode))
 	if ssl == "" {
 		ssl = "require"
 	}
@@ -548,12 +711,38 @@ func buildConnURLStringForRole(creds *ResolvedCredentials, roleMode string) (str
 	if db == "" {
 		db = "becmaster"
 	}
+
+	targets, err := parsePGHostSegments(creds.Host, port)
+	if err != nil {
+		return "", wrapRedactedError("parse PostgreSQL host", err, creds)
+	}
+	if !isTLSEnforcingSSLMode(ssl) {
+		for _, target := range targets {
+			if !isLoopbackPGHost(target.host) {
+				return "", errRemotePlaintext
+			}
+		}
+	}
+
 	q := url.Values{}
 	q.Set("sslmode", ssl)
+	var urlHost string
+	if len(targets) == 1 && !targets[0].isUnix && !strings.ContainsRune(targets[0].host, '%') {
+		urlHost = net.JoinHostPort(targets[0].host, targets[0].port)
+	} else {
+		hosts := make([]string, len(targets))
+		ports := make([]string, len(targets))
+		for i, target := range targets {
+			hosts[i] = target.host
+			ports[i] = target.port
+		}
+		q.Set("host", strings.Join(hosts, ","))
+		q.Set("port", strings.Join(ports, ","))
+	}
 	u := &url.URL{
 		Scheme:   "postgres",
 		User:     url.UserPassword(user, pass),
-		Host:     net.JoinHostPort(creds.Host, strconv.Itoa(int(port))),
+		Host:     urlHost,
 		Path:     "/" + db,
 		RawQuery: q.Encode(),
 	}
@@ -581,16 +770,24 @@ var errRemotePlaintext = errors.New("TLS is required for remote PostgreSQL hosts
 
 // requireTLSForRemoteHost rejects connection configs that could send credentials or plot data in
 // plaintext to a non-loopback host. pgx represents sslmode=disable as a nil TLSConfig and
-// allow/prefer as a plaintext fallback, so both the primary config and every fallback are checked.
+// allow/prefer/multi-host as FallbackConfig entries, so BOTH the primary config AND every
+// fallback entry are checked unconditionally (even when the primary host is loopback or a Unix socket).
 func requireTLSForRemoteHost(cfg *pgx.ConnConfig) error {
-	if cfg == nil || isLoopbackPGHost(cfg.Host) {
+	if cfg == nil {
 		return nil
 	}
-	if cfg.TLSConfig == nil {
+	hasRemoteHostAddr := false
+	if hostAddr := strings.TrimSpace(cfg.RuntimeParams["hostaddr"]); hostAddr != "" && !isLoopbackPGHost(hostAddr) {
+		hasRemoteHostAddr = true
+	}
+	if (hasRemoteHostAddr || !isLoopbackPGHost(cfg.Host)) && cfg.TLSConfig == nil {
 		return errRemotePlaintext
 	}
 	for _, fb := range cfg.Fallbacks {
-		if fb != nil && fb.TLSConfig == nil && !isLoopbackPGHost(fb.Host) {
+		if fb == nil {
+			continue
+		}
+		if (hasRemoteHostAddr || !isLoopbackPGHost(fb.Host)) && fb.TLSConfig == nil {
 			return errRemotePlaintext
 		}
 	}
@@ -599,12 +796,156 @@ func requireTLSForRemoteHost(cfg *pgx.ConnConfig) error {
 
 func isLoopbackPGHost(host string) bool {
 	h := strings.TrimSpace(host)
-	if h == "" || strings.HasPrefix(h, "/") { // empty or unix-domain socket directory
+	if h == "" {
+		return true
+	}
+	if strings.ContainsRune(h, ',') {
+		for _, part := range strings.Split(h, ",") {
+			trimmed := strings.TrimSpace(part)
+			if trimmed == "" || !isSingleLoopbackPGHost(trimmed) {
+				return false
+			}
+		}
+		return true
+	}
+	return isSingleLoopbackPGHost(h)
+}
+
+func isSingleLoopbackPGHost(host string) bool {
+	h := strings.TrimSpace(host)
+	if h == "" {
+		return true
+	}
+	if strings.ContainsRune(h, ',') {
+		return false
+	}
+	if isUnixSocketPGHost(h) {
 		return true
 	}
 	if strings.EqualFold(h, "localhost") {
 		return true
 	}
-	ip := net.ParseIP(strings.Trim(h, "[]"))
-	return ip != nil && ip.IsLoopback()
+	unbracketed := stripIPv6Brackets(h)
+	if strings.ContainsAny(unbracketed, "[]") {
+		return false
+	}
+	addr, err := netip.ParseAddr(unbracketed)
+	return err == nil && addr.Unmap().IsLoopback()
+}
+
+// ErrDestructiveDBUnconfirmed indicates that a disposable test database was configured,
+// but VPRO_LIVE_PG_DESTRUCTIVE_DB was not set to confirm destructive execution.
+var ErrDestructiveDBUnconfirmed = errors.New("VPRO_LIVE_PG_DESTRUCTIVE_DB confirmation is not set")
+
+// IsDisposableTestDatabaseName returns true only when dbName explicitly identifies an isolated
+// test/QA/scratch/disposable database and is never a production-like or PostgreSQL system database
+// (such as "becmaster", "postgres", "template0", "template1", or "becmaster_latest").
+func IsDisposableTestDatabaseName(dbName string) bool {
+	trimmed := strings.TrimSpace(dbName)
+	if trimmed == "" {
+		return false
+	}
+	lower := strings.ToLower(trimmed)
+	switch lower {
+	case "becmaster", "bec_master", "postgres", "template0", "template1", "defaultdb", "master", "prod", "production", "staging", "vpro":
+		return false
+	}
+	tokens := strings.FieldsFunc(lower, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9')
+	})
+	if len(tokens) == 0 {
+		return false
+	}
+	hasTestMarker := false
+	for _, tok := range tokens {
+		switch tok {
+		case "prod", "production", "template0", "template1":
+			return false
+		case "test", "tests", "testing", "qa", "tmp", "temp", "scratch", "disposable", "ephemeral",
+			"testdb", "qadb", "tmpdb", "tempdb", "scratchdb",
+			"vprotest", "becmastertest", "becmasterqa", "becmastertmp", "becmasterscratch":
+			hasTestMarker = true
+		default:
+			for _, prefix := range []string{"test", "qa", "tmp", "temp", "scratch", "disposable"} {
+				if strings.HasPrefix(tok, prefix) && isAllASCIIDigits(tok[len(prefix):]) {
+					hasTestMarker = true
+					break
+				}
+			}
+		}
+	}
+	return hasTestMarker
+}
+
+func isAllASCIIDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// ValidateDestructiveTestDatabase refuses destructive live PostgreSQL tests unless every resolved
+// target database (field/env Database plus UserURL and AdminURL) is a disposable test/QA/scratch
+// database AND matches confirmedDB (from VPRO_LIVE_PG_DESTRUCTIVE_DB).
+func ValidateDestructiveTestDatabase(creds *ResolvedCredentials, confirmedDB string) error {
+	if creds == nil {
+		return errors.New("PostgreSQL credentials are not configured")
+	}
+	primaryDB := strings.TrimSpace(creds.Database)
+	if !IsDisposableTestDatabaseName(primaryDB) {
+		return fmt.Errorf(
+			"refusing destructive PostgreSQL test against database %q: must be an isolated test/qa/tmp/scratch/disposable database (never becmaster, postgres, template0, template1, or a production database)",
+			primaryDB,
+		)
+	}
+	checkRoleURLDB := func(label, rawURL string) error {
+		if strings.TrimSpace(rawURL) == "" {
+			return nil
+		}
+		uCfg, err := pgx.ParseConfig(rawURL)
+		if err != nil {
+			return wrapRedactedError("parse "+label+" PostgreSQL URL", err, creds)
+		}
+		roleDB := strings.TrimSpace(uCfg.Database)
+		if roleDB == "" {
+			roleDB = strings.TrimSpace(uCfg.User)
+		}
+		if !IsDisposableTestDatabaseName(roleDB) {
+			return fmt.Errorf(
+				"refusing destructive PostgreSQL test against %s URL database %q: must be an isolated test/qa/tmp/scratch/disposable database",
+				label,
+				roleDB,
+			)
+		}
+		if roleDB != primaryDB {
+			return fmt.Errorf("%s URL database %q does not match configured database %q", label, roleDB, primaryDB)
+		}
+		return nil
+	}
+	if err := checkRoleURLDB("contributor", creds.UserURL); err != nil {
+		return err
+	}
+	if err := checkRoleURLDB("custodian", creds.AdminURL); err != nil {
+		return err
+	}
+
+	confirmed := strings.TrimSpace(confirmedDB)
+	if confirmed == "" {
+		return fmt.Errorf("%w: set VPRO_LIVE_PG_DESTRUCTIVE_DB=%s to confirm %q is a disposable test database", ErrDestructiveDBUnconfirmed, primaryDB, primaryDB)
+	}
+	if !IsDisposableTestDatabaseName(confirmed) {
+		return fmt.Errorf(
+			"refusing destructive PostgreSQL test with VPRO_LIVE_PG_DESTRUCTIVE_DB=%q: must name an isolated test/qa/tmp/scratch/disposable database",
+			confirmed,
+		)
+	}
+	if confirmed != primaryDB {
+		return fmt.Errorf("VPRO_LIVE_PG_DESTRUCTIVE_DB=%q does not match configured test database %q", confirmed, primaryDB)
+	}
+	return nil
 }

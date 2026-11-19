@@ -139,8 +139,13 @@ func TestOfflineConfigResolutionAndSecretRedaction(t *testing.T) {
 const liveTestOptInEnv = "VPRO_RUN_LIVE_PG_TESTS"
 
 func liveTestsOptedIn() bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv(liveTestOptInEnv)))
-	return v == "1" || v == "true"
+	for _, key := range []string{liveTestOptInEnv, "VPRO_LIVE_PG_TEST", "VPRO_LIVE_PG"} {
+		v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+		if v == "1" || v == "true" {
+			return true
+		}
+	}
+	return false
 }
 
 func requireLivePostgresOrSkip(t *testing.T) *Manager {
@@ -153,6 +158,10 @@ func requireLivePostgresOrSkip(t *testing.T) *Manager {
 	if err != nil || !st.Configured || !st.HasCustodianCreds || !st.HasContributorCreds {
 		mgr.Close()
 		t.Skip("live PostgreSQL credentials (VPRO_PG_URL / VPRO_PG_HOST or becmaster.env) not configured; skipping live PG test")
+	}
+	if strings.EqualFold(st.Database, "template0") || strings.EqualFold(st.Database, "template1") {
+		mgr.Close()
+		t.Fatalf("refusing live PostgreSQL test against PostgreSQL template database %q", st.Database)
 	}
 	return mgr
 }

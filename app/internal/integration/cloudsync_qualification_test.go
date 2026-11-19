@@ -4,10 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -83,28 +87,83 @@ func makeLayer3ComplianceValidator() cloudsync.ComplianceValidatorFunc {
 	}
 }
 
+func livePGQualificationOptedIn() bool {
+	for _, key := range []string{"VPRO_RUN_LIVE_PG_TESTS", "VPRO_LIVE_PG_TEST", "VPRO_LIVE_PG"} {
+		v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+		if v == "1" || v == "true" {
+			return true
+		}
+	}
+	return false
+}
+
+type qualificationGateReporter interface {
+	Helper()
+	Skip(args ...any)
+	Skipf(format string, args ...any)
+	Fatalf(format string, args ...any)
+}
+
+func requireDestructiveQualificationManager(t qualificationGateReporter) *cloudsync.Manager {
+	t.Helper()
+	if !livePGQualificationOptedIn() {
+		t.Skip("live PostgreSQL qualification skipped: set VPRO_RUN_LIVE_PG_TESTS=1 to run against an isolated test server")
+		return nil
+	}
+
+	mgr := cloudsync.NewManager("", os.LookupEnv)
+	cfgStatus, err := mgr.GetConfigStatus()
+	if err != nil || !cfgStatus.Configured || !cfgStatus.HasContributorCreds || !cfgStatus.HasCustodianCreds {
+		mgr.Close()
+		t.Skip("live PostgreSQL credentials (VPRO_PG_URL / VPRO_PG_HOST or becmaster.env) not configured; skipping live qualification")
+		return nil
+	}
+	creds, err := mgr.ResolveCredentials()
+	if err != nil {
+		mgr.Close()
+		t.Fatalf("resolve PostgreSQL credentials: %v", err)
+		return nil
+	}
+	// This test can reseed the whole baseline (ReplaceExisting) and edits becmaster rows, so it must
+	// refuse production-like/system databases (becmaster, postgres, template0, template1, etc.) EVEN IF
+	// VPRO_LIVE_PG_DESTRUCTIVE_DB matches cfgStatus.Database.
+	confirmed := strings.TrimSpace(os.Getenv("VPRO_LIVE_PG_DESTRUCTIVE_DB"))
+	if err := cloudsync.ValidateDestructiveTestDatabase(creds, confirmed); err != nil {
+		mgr.Close()
+		if confirmed == "" {
+			t.Skipf("destructive live qualification skipped: %v", err)
+			return nil
+		}
+		t.Fatalf("destructive live qualification refused: %v", err)
+		return nil
+	}
+	return mgr
+}
+
 func TestCloudSyncBECMaster71kQualificationAndThreeWayCustodianMerge(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping live PostgreSQL 71,567-plot BECMaster qualification in -short mode")
 	}
-	if v := strings.ToLower(strings.TrimSpace(os.Getenv("VPRO_RUN_LIVE_PG_TESTS"))); v != "1" && v != "true" {
-		t.Skip("live PostgreSQL qualification skipped: set VPRO_RUN_LIVE_PG_TESTS=1 to run against the configured server")
-	}
-
-	mgr := cloudsync.NewManager("", os.LookupEnv)
+	mgr := requireDestructiveQualificationManager(t)
 	defer mgr.Close()
-	cfgStatus, err := mgr.GetConfigStatus()
-	if err != nil || !cfgStatus.Configured || !cfgStatus.HasContributorCreds || !cfgStatus.HasCustodianCreds {
-		t.Skip("live PostgreSQL credentials (VPRO_PG_URL / VPRO_PG_HOST or becmaster.env) not configured; skipping live qualification")
-	}
-	// This test can reseed the whole baseline (ReplaceExisting) and edits becmaster rows, so it must
-	// only ever run against a database the operator has explicitly named as disposable.
-	if confirmed := strings.TrimSpace(os.Getenv("VPRO_LIVE_PG_DESTRUCTIVE_DB")); confirmed == "" || confirmed != cfgStatus.Database {
-		t.Skip("destructive live qualification skipped: set VPRO_LIVE_PG_DESTRUCTIVE_DB to the configured database name to confirm it is a disposable test database")
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
+
+	// Verify server-side current_database() before running any DDL or SeedBECMasterBaseline(ReplaceExisting: true)
+	preConn, _, err := mgr.OpenDedicatedConn(ctx, cloudsync.RoleModeCustodian)
+	if err != nil {
+		t.Fatalf("custodian preflight connect failed: %v", err)
+	}
+	var actualServerDB string
+	if err := preConn.QueryRow(ctx, `SELECT current_database()`).Scan(&actualServerDB); err != nil {
+		preConn.Close(ctx)
+		t.Fatalf("query current_database(): %v", err)
+	}
+	preConn.Close(ctx)
+	if !cloudsync.IsDisposableTestDatabaseName(actualServerDB) {
+		t.Fatalf("destructive live qualification refused: server reported non-test current_database()=%q", actualServerDB)
+	}
 
 	// 1. Bootstrap schemas + role grants as Custodian
 	if _, err := mgr.BootstrapSchemas(ctx); err != nil {
@@ -550,5 +609,144 @@ func TestCloudSyncBECMaster71kQualificationAndThreeWayCustodianMerge(t *testing.
 	dlLogs, err := mgr.ListBECMasterDownloadLog(ctx, 10)
 	if err != nil || len(dlLogs) == 0 {
 		t.Fatalf("expected becmaster.download_log entries, got len=%d err=%v", len(dlLogs), err)
+	}
+}
+
+type mockGateReporter struct {
+	skipped  bool
+	skipMsg  string
+	failed   bool
+	fatalMsg string
+}
+
+func (m *mockGateReporter) Helper() {}
+
+func (m *mockGateReporter) Skip(args ...any) {
+	m.skipped = true
+	m.skipMsg = fmt.Sprint(args...)
+}
+
+func (m *mockGateReporter) Skipf(format string, args ...any) {
+	m.skipped = true
+	m.skipMsg = fmt.Sprintf(format, args...)
+}
+
+func (m *mockGateReporter) Fatalf(format string, args ...any) {
+	m.failed = true
+	m.fatalMsg = fmt.Sprintf(format, args...)
+}
+
+func TestCloudSyncDestructiveDatabaseGateRejectsProductionAndRequiresTestDB(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	var tcpConns atomic.Int64
+	go func() {
+		for {
+			c, acceptErr := ln.Accept()
+			if acceptErr != nil {
+				return
+			}
+			tcpConns.Add(1)
+			_ = c.Close()
+		}
+	}()
+
+	_, portStr, err := net.SplitHostPort(ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	writeEnv := func(dbName string) string {
+		dir := t.TempDir()
+		content := strings.Join([]string{
+			"VPRO_PG_HOST=127.0.0.1",
+			"VPRO_PG_PORT=" + portStr,
+			"VPRO_PG_DBNAME=" + dbName,
+			"VPRO_PG_SSLMODE=disable",
+			"VPRO_PG_USER=contrib",
+			"VPRO_PG_PASSWORD=secret",
+			"VPRO_PG_ADMIN_USER=custodian",
+			"VPRO_PG_ADMIN_PASSWORD=secret",
+		}, "\n")
+		if err := os.WriteFile(filepath.Join(dir, "becmaster.env"), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+
+	for _, envKey := range []string{
+		"VPRO_PG_URL", "VPRO_PG_ADMIN_URL", "VPRO_PG_HOST", "VPRO_PG_DBNAME",
+		"VPRO_PG_USER", "VPRO_PG_PASSWORD", "VPRO_PG_ADMIN_USER", "VPRO_PG_ADMIN_PASSWORD",
+		"VPRO_PG_PORT", "VPRO_PG_SSLMODE",
+		"VPRO_RUN_LIVE_PG_TESTS", "VPRO_LIVE_PG_TEST", "VPRO_LIVE_PG",
+		"VPRO_LIVE_PG_DESTRUCTIVE_DB",
+	} {
+		t.Setenv(envKey, "")
+	}
+
+	// 1. Opt-in unset with valid becmaster.env -> skip, 0 TCP connections
+	t.Setenv("VPRO_CONFIG_DIR", writeEnv("becmaster"))
+	rep1 := &mockGateReporter{}
+	if mgr := requireDestructiveQualificationManager(rep1); mgr != nil {
+		mgr.Close()
+		t.Fatal("expected nil manager when opt-in is unset")
+	}
+	if !rep1.skipped || rep1.failed {
+		t.Fatalf("expected skip when opt-in is unset, got skipped=%v failed=%v", rep1.skipped, rep1.failed)
+	}
+
+	// 2. Production/system/non-test DB names MUST be refused EVEN WHEN VPRO_LIVE_PG_DESTRUCTIVE_DB matches!
+	t.Setenv("VPRO_RUN_LIVE_PG_TESTS", "1")
+	for _, prodDB := range []string{"becmaster", "BECMaster", "postgres", "template0", "template1", "becmaster_latest", "becmaster_prod", "vpro"} {
+		t.Setenv("VPRO_CONFIG_DIR", writeEnv(prodDB))
+		t.Setenv("VPRO_LIVE_PG_DESTRUCTIVE_DB", prodDB)
+		rep := &mockGateReporter{}
+		if mgr := requireDestructiveQualificationManager(rep); mgr != nil {
+			mgr.Close()
+			t.Fatalf("SECURITY FAILURE: destructive qualification accepted non-test database %q", prodDB)
+		}
+		if !rep.failed || rep.skipped {
+			t.Fatalf("expected Fatalf refusal for database %q with matching VPRO_LIVE_PG_DESTRUCTIVE_DB, got skipped=%v failed=%v msg=%q",
+				prodDB, rep.skipped, rep.failed, rep.skipMsg)
+		}
+	}
+
+	// 3. Valid disposable test DB without confirmation -> skips with ErrDestructiveDBUnconfirmed
+	t.Setenv("VPRO_CONFIG_DIR", writeEnv("becmaster_test"))
+	t.Setenv("VPRO_LIVE_PG_DESTRUCTIVE_DB", "")
+	repUnconfirmed := &mockGateReporter{}
+	if mgr := requireDestructiveQualificationManager(repUnconfirmed); mgr != nil {
+		mgr.Close()
+		t.Fatal("expected nil manager when VPRO_LIVE_PG_DESTRUCTIVE_DB is empty")
+	}
+	if !repUnconfirmed.skipped || repUnconfirmed.failed || !strings.Contains(repUnconfirmed.skipMsg, "becmaster_test") {
+		t.Fatalf("expected skip mentioning becmaster_test, got %+v", repUnconfirmed)
+	}
+	if err := cloudsync.ValidateDestructiveTestDatabase(&cloudsync.ResolvedCredentials{Database: "becmaster_test"}, ""); !errors.Is(err, cloudsync.ErrDestructiveDBUnconfirmed) {
+		t.Fatalf("expected ErrDestructiveDBUnconfirmed, got %v", err)
+	}
+
+	// 4. Valid disposable test DBs with matching confirmation -> accepted
+	for _, testDB := range []string{"becmaster_test", "becmaster_qa", "becmaster_tmp", "becmaster_scratch", "vpro_disposable"} {
+		t.Setenv("VPRO_CONFIG_DIR", writeEnv(testDB))
+		t.Setenv("VPRO_LIVE_PG_DESTRUCTIVE_DB", testDB)
+		repOK := &mockGateReporter{}
+		mgr := requireDestructiveQualificationManager(repOK)
+		if mgr == nil || repOK.failed || repOK.skipped {
+			if mgr != nil {
+				mgr.Close()
+			}
+			t.Fatalf("expected %q with matching confirmation to be accepted, got skipped=%v failed=%v fatal=%q",
+				testDB, repOK.skipped, repOK.failed, repOK.fatalMsg)
+		}
+		mgr.Close()
+	}
+
+	if got := tcpConns.Load(); got != 0 {
+		t.Fatalf("expected 0 TCP connections during gate checks, got %d", got)
 	}
 }
