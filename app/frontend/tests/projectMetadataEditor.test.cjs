@@ -99,18 +99,30 @@ test('actual metadata menu dispatch closes disclosure once and never dispatches 
   assert.deepEqual(calls, ['focus', 'metadata', 'plots']);
 });
 
-test('actual root metadata entry rejects unavailable and stale owners without opening or replacing anything',async()=>{
-  for (const unavailable of ['route', 'editor', 'context', 'guard']) {
+test('actual root metadata entry rejects unavailable and stale owners inside fs882 while opening standalone outside fs882',async()=>{
+  for (const unavailable of ['editor', 'context', 'guard']) {
     let opened = 0, transitions = 0;
     const owner = { canOpenProjectMetadata: () => unavailable !== 'guard', openProjectMetadata: () => opened++ };
     const context = componentFunctions('App.svelte', ['openProjectMetadata'], {
-      view: unavailable === 'route' ? 'home' : 'fs882', editor: unavailable === 'editor' ? undefined : owner,
+      view: 'fs882', editor: unavailable === 'editor' ? undefined : owner,
       $projectState: unavailable === 'context' ? null : { contextId: 'owned' }, error: '',
       requestTransition: async run => { transitions++; await run('owned'); },
     });
     await context.actions.openProjectMetadata();
     assert.equal(opened, 0); assert.equal(transitions, 0);
     assert.match(context.error, /clean, unlocked open plot/);
+  }
+  {
+    let transitions = 0;
+    const outside = componentFunctions('App.svelte', ['openProjectMetadata'], {
+      view: 'home', editor: undefined, selected: { plotNumber: '00337' }, standaloneMetadataPlot: '',
+      $projectState: { contextId: 'owned' }, error: '',
+      requestTransition: async run => { transitions++; await run('owned'); },
+    });
+    await outside.actions.openProjectMetadata();
+    assert.equal(transitions, 1);
+    assert.equal(outside.standaloneMetadataPlot, '00337');
+    assert.equal(outside.error, '');
   }
   for (const stale of ['route', 'editor', 'context', 'callbackContext', 'guard', 'none']) {
     let pending, opened = 0, allowed = true;
@@ -205,10 +217,10 @@ test('actual client-runtime metadata availability reacts across the exported edi
     child.update(...changes); assert.equal(parent.enabled(), false);
     child.update(true, false, false, false); assert.equal(parent.enabled(), true);
   }
-  parent.route('home'); assert.equal(parent.enabled(), false);
-  parent.route('fs882'); assert.equal(parent.enabled(), true);
+  parent.route('home'); assert.equal(parent.enabled(), true);
   parent.context(''); assert.equal(parent.enabled(), false);
   parent.context('owned'); assert.equal(parent.enabled(), true);
+  parent.route('fs882'); assert.equal(parent.enabled(), true);
   const allowed = runtime.state(true);
   child.entry(true, 'entry', { canOpenMetadataEditor: () => runtime.get(allowed), openMetadataEditor() {} });
   assert.equal(parent.enabled(), true);

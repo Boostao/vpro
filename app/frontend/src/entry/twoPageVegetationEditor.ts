@@ -47,7 +47,7 @@ export function stageTwoPageVegetation(original: TwoPageVegetationOriginal, rowI
     else if (expected.storage !== 'null' && raw === metadataCellText(expected)) value = { ...expected };
     else if (column === 'Collected') {
       value = { ...value, storage: 'text', text: raw };
-      if (raw.length > 1) error = 'Collected exceeds1 UTF-16 unit.';
+      if (raw.length > 1) error = 'Collected exceeds 1 UTF-16 unit.';
     } else {
       const parsed = finiteSingleValue(column, raw, expected.storage === 'real' ? expected.real : undefined);
       if (raw !== raw.trim() || raw === '' || parsed.error || parsed.value === null) {
@@ -57,7 +57,7 @@ export function stageTwoPageVegetation(original: TwoPageVegetationOriginal, rowI
       } else if (Object.is(Math.fround(parsed.value), -0)) {
         error = `${column} new negative-zero values require lossless source/storage calibration.`;
       } else if (parsed.value < 0 || Math.fround(parsed.value) < 0 || Math.fround(parsed.value) >= 100) {
-        error = `${column} requires a value >= 0 and below100 or NULL (<100 Or Is Null).`;
+        error = `${column} requires a value >= 0 and below 100 or NULL (<100 Or Is Null).`;
       } else value = { ...value, storage: 'real', real: Math.fround(parsed.value) };
     }
   }

@@ -47,7 +47,7 @@
   {#if error}<p role="alert" class="break-words text-red-700">{error}</p>{/if}
   <p class="text-sm">Read-only adaptation: controlled English-ignore-case order/membership, numeric covers descending,
     NULL covers last and physical-row ties. General ACE locale parity is unverified.
-    Each physical input is limited to100000 rows; pages contain up to50 joined rows, without truncating the total.</p>
+    Each physical input is limited to 100000 rows; pages contain up to 50 joined rows, without truncating the total.</p>
   <div class="flex flex-wrap gap-2">
     <button type="button" disabled={busy} onclick={() => load()}>Load saved vegetation table</button>
     {#if busy}<button type="button" onclick={cancel}>Cancel vegetation table read</button><p role="status">Reading owned vegetation page...</p>{/if}

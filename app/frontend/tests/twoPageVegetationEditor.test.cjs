@@ -225,10 +225,10 @@ test('negative cover (-1) and float32 >= 100 are rejected before request build w
       const rejected = editor.stageTwoPageVegetation(source, '-7', column, bad, false);
       assert.equal(rejected.raw, bad);
       assert.ok(rejected.error, `${form}.${column} ${bad}`);
-      assert.match(rejected.error, />= 0.*below100/);
+      assert.match(rejected.error, />= 0.*below 100/);
       assert.throws(
         () => editor.twoPageVegetationRequest(source, scopedOwner, { [column]: rejected }, fixture.request.requestId),
-        />= 0.*below100/,
+        />= 0.*below 100/,
       );
     }
     const corrected = editor.stageTwoPageVegetation(source, '-7', column, '15', false);

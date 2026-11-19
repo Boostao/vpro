@@ -60,6 +60,9 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
     else notifications.error(title, message, opts);
   }
 
+  export function hasUnsavedChanges(): boolean {
+    return dirty || errors.length > 0 || committedFailure || restorationOpen;
+  }
   export function getCloseState(): EditorCloseState {
     if (restorationOpen) return restorationEditor?.getCloseState() ?? {
       unsaved: true, busy, canSave: false, error, saveReason: 'Finish or dismiss metadata restoration before closing.'
@@ -101,7 +104,7 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
       await oncommitted();
       const next = await client.ReviewProjectMetadata(plot);
       review = next; draft = beginMetadataDraft(next, created.rowId);
-      success = 'Blank metadata record and full creation audit committed atomically. All73 ordinary/stamp fields remain NULL; edit and Save separately.';
+      success = 'Blank metadata record and full creation audit committed atomically. All 73 ordinary/stamp fields remain NULL; edit and Save separately.';
       notifyMetadata('success', 'Blank metadata record created', success);
     } catch (cause) {
       if (committed || String(cause).includes('metadata edit committed, but')) {
@@ -296,7 +299,7 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
     </fieldset>
   {/if}
   {#if template}
-    <fieldset data-metadata-template-proposal><legend>Review32 assignments from master record {template.original.rowId}</legend>
+    <fieldset data-metadata-template-proposal><legend>Review 32 assignments from master record {template.original.rowId}</legend>
       <p>Existing Project ID {JSON.stringify(template.review.projectId)} remains unchanged.
         Source timestamps require an explicit signed16 year or NULL; incompatible codes require literal text or NULL.
         No source value is silently converted. Unmapped fields and version/date stamps remain NULL.
@@ -349,7 +352,7 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
   {#if blank}
     <fieldset data-metadata-blank-proposal><legend>Confirm one blank record for the existing parent identity</legend>
       <p>Project ID {JSON.stringify(blank.projectId)} is copied literally from the selected plot, never assigned to it.
-        All73 other source fields, including version/date stamps, remain NULL. No master template is copied.
+        All 73 other source fields, including version/date stamps, remain NULL. No master template is copied.
         A reserved signed32 ID is allocated only by the creation transaction.</p>
       <button type="button" disabled={!ready || busy || committedFailure} onclick={createBlank}>Create reviewed blank metadata record</button>
     </fieldset>

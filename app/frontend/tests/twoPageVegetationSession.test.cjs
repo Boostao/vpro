@@ -123,7 +123,7 @@ test('raw errors survive remounted subscriptions and block Save/reload/disposal 
   const stop = session.subscribe(() => { retained = session.view(); }); stop();
   assert.equal(Object.values(retained.drafts)[0].raw, '100');
   assert.equal(session.closeState().blocked, true);
-  await assert.rejects(session.save(requestId), /below100/);
+  await assert.rejects(session.save(requestId), /below 100/);
   await assert.rejects(session.load(), /Correct or Undo/);
   assert.throws(() => session.dispose(), /Correct or Undo/);
   session.stage('-7', 'Cover1', '5', false);

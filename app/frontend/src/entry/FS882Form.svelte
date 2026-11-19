@@ -469,7 +469,7 @@
       if (p) await loadChildData(p);
       if (request !== loadRequest) return;
       if (res !== null) {
-        draft = { ...res }; original = JSON.parse(JSON.stringify(res)); activeLayerDepthRaw = null; dirty = false; headerValidation = {};
+        draft = { ...res }; original = JSON.parse(JSON.stringify(res)); activeLayerDepthRaw = null; dirty = false; headerValidation = {}; headerRevision++;
         const plot = res.plotNumber;
         if (siviParentReviewEnabled && $projectState?.contextId === siviContextId) {
           const project = $projectState.activeProject;
@@ -582,14 +582,26 @@
     busy = true; error = null; successMsg = null;
     try {
       const payload = $state.snapshot({ ...draft, locked: capabilities.locked === true && draft.locked });
-      if (original) await PlotService.UpdatePlot(payload); else await PlotService.CreatePlot(payload);
+      if (original) {
+        const baseline = $state.snapshot(original);
+        await PlotService.UpdatePlot({ ...payload, original: baseline } as FS882Header);
+      } else {
+        await PlotService.CreatePlot(payload);
+      }
       original = JSON.parse(JSON.stringify(draft)); activeLayerDepthRaw = null; workingUnitSession.plot = draft.plotNumber; dirty = false; headerValidation = {}; successMsg = `Plot ${draft.plotNumber} saved successfully.`;
       lastNotifiedSuccessMsg = successMsg;
       if (typeof notifications !== 'undefined') notifications.success?.(`Plot ${draft.plotNumber} saved`, 'Saved to project file.', { category: 'entry', source: 'FS882 Form', contextTag: draft.plotNumber ? `Plot ${draft.plotNumber}` : undefined });
       await loadChildData(draft.plotNumber);
       if (siviParentSession?.view().original || siviParentSession?.view().error) await refreshSIVIParent(draft.plotNumber, [siviParentWriteSession, siviParentActionSession, siviProjectAssignmentSession, siviParentSharedSession]);
       if (onSaved) await onSaved(draft.plotNumber);
-    } catch (e) { error = String(e); } finally { busy = false; }
+    } catch (e) {
+      const rawMsg = String(e);
+      const conflict = rawMsg.includes('plot changed since it was loaded') || rawMsg.includes('no longer exists; reload before saving');
+      error = conflict ? rawMsg.replace(/^(?:(?:RuntimeError|Error):\s*)+/, '') : rawMsg;
+      if (conflict && typeof notifications !== 'undefined') {
+        notifications.error?.(`Plot ${draft.plotNumber} save conflict`, error, { category: 'entry', source: 'FS882 Form', contextTag: draft.plotNumber ? `Plot ${draft.plotNumber}` : undefined });
+      }
+    } finally { busy = false; }
   }
   export function getCloseState(): EditorCloseState {
     if (twoPageVegetationBusy || twoPageVegetationBlocked) return { unsaved: true, busy: twoPageVegetationBusy, blocked: true, canSave: false, error, saveReason: 'Finish retained linked-vegetation drafts/operations, recover unknown outcomes and acknowledge receipts before parent Save, Lock or close.' };
@@ -644,6 +656,7 @@
   const deleteVeg = (id: number) => deleteSourceChild('SubVegAXL_BC', id);
   const deleteHumus = (id: number) => deleteSourceChild('SoilHumusXL', id);
   const showTwoPagePlotPrompt = $derived(standaloneTwoPage && !plotNumber && original === null);
+  const isHeaderConflict = $derived(Boolean(error && original && (error.includes('plot changed since it was loaded') || error.includes('no longer exists; reload before saving'))));
   let twoPagePickerFilter = $state('');
   const filteredTwoPagePlots = $derived.by(() => {
     const q = twoPagePickerFilter.trim().toLowerCase();
@@ -776,7 +789,7 @@
           <span class="font-semibold text-[#A61B20]">{canUndoPlotDelete ? 'Delete Newly Created Plot' : `Remove Plot ${original.plotNumber} into Clean Project Copy`}</span>
           <div class="flex items-center gap-1.5">
             {#if !canUndoPlotDelete}
-              <input type="text" maxlength="30" data-fs882-clean-project-input class="rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs w-44" placeholder="Clean project name" bind:value={removeCleanProject} disabled={managePlotBusy || busy} />
+              <input type="text" maxlength="30" aria-label="Clean project copy name" data-fs882-clean-project-input class="rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs w-44" placeholder="Clean project name" bind:value={removeCleanProject} disabled={managePlotBusy || busy} />
             {/if}
             <button type="button" data-fs882-remove-plot-btn class="rounded border border-[#D8292F] bg-white px-2.5 py-1 font-semibold text-[#D8292F] hover:bg-[#FBEAEA] disabled:opacity-50" disabled={managePlotBusy || busy || (!canUndoPlotDelete && !removeCleanProject.trim())} onclick={() => void runRemovePlot()}>{canUndoPlotDelete ? 'Delete Plot' : 'Save & Switch Without Plot'}</button>
           </div>
@@ -786,7 +799,7 @@
     </section>
   {/if}
 
-  {#if error}<div role="alert" class="p-2 bg-red-50 border-b border-red-200 text-red-800 text-xs flex items-center gap-2"><AlertTriangle size={14} class="text-red-600 shrink-0" /><span>{error}</span><button type="button" class="ml-auto rounded border border-red-300 bg-white px-2 py-0.5 text-[11px] font-medium text-red-800 hover:bg-red-100" onclick={() => { error = null; }}>Dismiss</button></div>{/if}
+  {#if error}<div role="alert" class="p-2 bg-red-50 border-b border-red-200 text-red-800 text-xs flex flex-wrap items-center gap-2"><AlertTriangle size={14} class="text-red-600 shrink-0" /><span>{error}</span>{#if isHeaderConflict && original}<div class="ml-auto flex items-center gap-1.5"><button type="button" data-fs882-conflict-reload class="rounded bg-[#003366] px-2.5 py-0.5 text-[11px] font-semibold text-white hover:bg-[#002244] disabled:opacity-50" disabled={busy || headerWorkflowBusy} onclick={() => { if (original) void load(original.plotNumber); }}>Reload Latest Plot</button><button type="button" data-fs882-conflict-review class="rounded border border-red-300 bg-white px-2 py-0.5 text-[11px] font-medium text-red-800 hover:bg-red-100" onclick={() => { error = null; }}>Keep Draft to Review</button></div>{:else}<button type="button" class="ml-auto rounded border border-red-300 bg-white px-2 py-0.5 text-[11px] font-medium text-red-800 hover:bg-red-100" onclick={() => { error = null; }}>Dismiss</button>{/if}</div>{/if}
   {#if vegetationReadUnavailable}<p role="alert" class="p-2 bg-amber-50 text-amber-900 text-sm" data-vegetation-unavailable>Ordinary ID-keyed vegetation is unavailable: {vegetationReadUnavailable} Use independently enabled physical-row source views. Ordinary vegetation rows, totals and actions are not presented as an empty result.</p>{/if}
 
   <nav aria-label={siviStandalone ? 'SIVI sections' : 'FS882 sections'} hidden={standaloneTwoPage && twoPageOpen && twoPageScope === 'entry'} class="fs882-tabs flex flex-wrap border-b border-stone-200 bg-stone-50 px-3 text-xs font-medium">

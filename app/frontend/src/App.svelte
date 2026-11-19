@@ -26,6 +26,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   import CloseConfirm from './shell/CloseConfirm.svelte';
   import { closeDisposition, type CloseDecision, type EditorCloseState } from './shell/closeLifecycle';
   import { ReadRequests } from './shared/readRequests';
+  import { bindContextPlots } from './shared/contextPlots';
   import { validateProfileNavigation, profileNavigationPage, type ProfileNavigation } from './classification/projectPlotProfileReview';
   import { plotLookupInputError, validateScopedPlotLookup } from './shared/scopedPlotLookup';
   import { tableCSVArchivePublicationSession } from './interchange/tableCSVArchiveExport';
@@ -131,6 +132,8 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   let view = $state<'home' | 'plots' | 'geospatial-map' | 'diagnostic-synthesis' | 'r-sidecar' | 'hierarchy' | 'fs882' | 'datasheet' | 'classification-explorer' | 'project-admin' | 'lump-editor' | 'interchange-hub' | 'long-environment' | 'summary-environment' | 'long-vegetation' | 'summary-vegetation' | 'lifeform-summary' | 'subzone-matrix' | 'table-csv' | 'user-log' | 'plot-locations' | 'google-earth-review' | 'picture-manager' | 'plot-label-preview'>('home');
   let projectAdminTab = $state<'lifecycle' | 'compliance' | 'optimizeveg' | 'merge' | 'cloudsync'>('lifecycle');
   let projectAdminTabNonce = $state(0), newSiviModalOpen = $state(false);
+  let standaloneMetadataPlot = $state('');
+  let standaloneMetadataEditor: { hasUnsavedChanges?: () => boolean; getCloseState: () => EditorCloseState; undo: () => void } | undefined = $state();
   let helpDrawerOpen = $state(false), helpDrawerTopicId = $state('site.plot_number'), helpDrawerTab = $state<HelpDrawerTab>('inspector');
   let tourOpen = $state(false), tourInitialId = $state<string | null>(null), tourAutoOpenedContext = $state(false);
   let shortcutsModalOpen = $state(false), whatsNewModalOpen = $state(false), aboutModalOpen = $state(false);
@@ -366,12 +369,14 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
       if (await LifecycleService.GetPendingCloseRequest() !== requestId) return;
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
       await tick();
+      const hasStandaloneMetaDirty = typeof standaloneMetadataPlot !== 'undefined' && Boolean(standaloneMetadataPlot && standaloneMetadataEditor?.hasUnsavedChanges?.());
+      const hasWorkbenchDirty = (typeof workbenchDirtyLabel !== 'undefined' && Boolean(workbenchDirtyLabel)) || hasStandaloneMetaDirty;
       const state = view === 'fs882' ? editor?.getCloseState() ?? null : null;
       const disposition = closeDisposition(state, busy || editorBusy || transitionWorking || archivePublicationBusy || vegetationPublicationBusy || lifeformPublicationBusy || summaryPublicationBusy || pendingTransition !== null || editorInitializing || (typeof companionPanelBusy !== 'undefined' && companionPanelBusy));
       if (disposition === 'busy') {
         await LifecycleService.CancelClose(requestId);
-        error = (typeof workbenchDirtyLabel !== 'undefined' && workbenchDirtyLabel) ? 'Save or discard unsaved workbench edits before closing VPro.' : 'Wait for the current operation to finish before closing VPRO.';
-      } else if (typeof workbenchDirtyLabel !== 'undefined' && workbenchDirtyLabel) {
+        error = hasWorkbenchDirty ? 'Save or discard unsaved workbench edits before closing VPro.' : 'Wait for the current operation to finish before closing VPRO.';
+      } else if (hasWorkbenchDirty) {
         await LifecycleService.CancelClose(requestId);
         error = 'Save or discard unsaved workbench edits before closing VPro.';
       } else if (disposition === 'clean') {
@@ -404,7 +409,8 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     await tick();
     if (ownedAction && !ownedAction()) { error = 'Owned action or editor availability changed; no editor replaced.'; return; }
-    if (!ownedAction && typeof workbenchDirtyLabel !== 'undefined' && workbenchDirtyLabel) {
+    const hasStandaloneMetaDirty = typeof standaloneMetadataPlot !== 'undefined' && Boolean(standaloneMetadataPlot && standaloneMetadataEditor?.hasUnsavedChanges?.());
+    if (!ownedAction && ((typeof workbenchDirtyLabel !== 'undefined' && workbenchDirtyLabel) || hasStandaloneMetaDirty)) {
       error = 'Save or discard unsaved workbench edits before changing context or view.'; return;
     }
     const state = view === 'fs882' ? editor?.getCloseState() ?? null : null;
@@ -443,11 +449,15 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   }
 
   function navigate(next: typeof view | 'fs882-twopage') {
-    if (next === 'fs882-twopage' && view === 'fs882' && editorEntryForm === 'fs882-twopage') return;
-    if (next === 'fs882' && view === 'fs882' && editorEntryForm === 'fs882') return;
-    if (next === view && next !== 'project-admin' && next !== 'fs882') return;
+    const standaloneOpen = typeof standaloneMetadataPlot !== 'undefined' && Boolean(standaloneMetadataPlot);
+    if (!standaloneOpen) {
+      if (next === 'fs882-twopage' && view === 'fs882' && editorEntryForm === 'fs882-twopage') return;
+      if (next === 'fs882' && view === 'fs882' && editorEntryForm === 'fs882') return;
+      if (next === view && next !== 'project-admin' && next !== 'fs882') return;
+    }
     void requestTransition(async () => {
       error = '';
+      if (typeof standaloneMetadataPlot !== 'undefined') standaloneMetadataPlot = '';
       if (next === 'project-admin') { projectAdminTab = 'lifecycle'; projectAdminTabNonce++; }
       if (next === 'fs882-twopage') {
         editorPlotNumber = (view === 'fs882' ? editorPlotNumber : undefined) ?? selected?.plotNumber;
@@ -479,19 +489,49 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   }
 
   async function openProjectMetadata() {
-    if (view !== 'fs882' || !editor || !$projectState?.contextId || !editor.canOpenProjectMetadata()) {
-      error = 'Project metadata requires its existing gate and a clean, unlocked open plot; finish or Undo drafts first.'; return;
+    const inPlotEditor = view === 'fs882' && !((typeof editorPlotNumber === 'undefined' || !editorPlotNumber) && typeof editorEntryForm !== 'undefined' && editorEntryForm === 'fs882-twopage');
+    if (inPlotEditor) {
+      if (!editor || !$projectState?.contextId || !editor.canOpenProjectMetadata()) {
+        error = 'Project metadata requires its existing gate and a clean, unlocked open plot; finish or Undo drafts first.'; return;
+      }
+      const owner = editor, contextId = $projectState.contextId;
+      const ownedAction = owner.canOpenMetadataInPlace?.()
+        ? () => view === 'fs882' && editor === owner && $projectState?.contextId === contextId && owner.canOpenMetadataInPlace?.() === true
+        : undefined;
+      await requestTransition(async currentContext => {
+        if (view !== 'fs882' || editor !== owner || currentContext !== contextId || $projectState?.contextId !== contextId || !owner.canOpenProjectMetadata()) {
+          throw new Error('Project metadata owner or availability changed; no editor replaced.');
+        }
+        owner.openProjectMetadata();
+      }, ownedAction);
+      return;
     }
-    const owner = editor, contextId = $projectState.contextId;
-    const ownedAction = owner.canOpenMetadataInPlace?.()
-      ? () => view === 'fs882' && editor === owner && $projectState?.contextId === contextId && owner.canOpenMetadataInPlace?.() === true
-      : undefined;
+    if (!$projectState?.contextId) {
+      error = 'Open a project before reviewing project metadata.'; return;
+    }
+    const contextId = $projectState.contextId;
     await requestTransition(async currentContext => {
-      if (view !== 'fs882' || editor !== owner || currentContext !== contextId || $projectState?.contextId !== contextId || !owner.canOpenProjectMetadata()) {
+      if (currentContext !== contextId || $projectState?.contextId !== contextId) {
         throw new Error('Project metadata owner or availability changed; no editor replaced.');
       }
-      owner.openProjectMetadata();
-    }, ownedAction);
+      const available = typeof allAvailablePlots !== 'undefined' ? allAvailablePlots : [];
+      let targetPlot = (typeof selected !== 'undefined' && selected?.plotNumber) || available[0]?.plotNumber || '';
+      if (!targetPlot && typeof ContextService !== 'undefined' && typeof ContextService?.ListPlots === 'function') {
+        const firstPage = await plotReads.track(ContextService.ListPlots(0, 1));
+        if ($projectState?.contextId !== contextId) return;
+        targetPlot = firstPage?.plots?.[0]?.plotNumber ?? '';
+      }
+      if (!targetPlot) {
+        if (typeof standaloneMetadataPlot !== 'undefined') standaloneMetadataPlot = '';
+        projectAdminTab = 'lifecycle';
+        projectAdminTabNonce++;
+        view = 'project-admin';
+        error = '';
+        return;
+      }
+      standaloneMetadataPlot = targetPlot;
+      error = '';
+    });
   }
 
   async function resolveNavigation(proposal: ProjectPlotProfileFilterRequest, contextId: string): Promise<ProfileNavigation> {
@@ -657,6 +697,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
       const state = await ContextService.SwitchContext(contextId, selection);
       request++; projectState.set(state); profileNavigation = null; plotProfilePanel?.clearCachedSources();
       scopedCatalogKey = ''; scopedPlotCatalogRows = []; dynamicPalettePlotRows = []; createdSiviPlots = [];
+      standaloneMetadataPlot = '';
       page = null; selected = null; hierarchyNodes = []; editorPlotNumber = undefined; diagnosticsDraft = null; view = next;
       await loadPlots(0);
       if (next === 'hierarchy') {
@@ -680,6 +721,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
 
   async function handleAccessActivated() {
     scopedCatalogKey = ''; scopedPlotCatalogRows = []; dynamicPalettePlotRows = []; createdSiviPlots = [];
+    standaloneMetadataPlot = '';
     profileNavigation = null; plotProfilePanel?.resetAllReviews(); editorPlotNumber = undefined; diagnosticsDraft = null; view = 'plots';
     await loadPlots(0);
   }
@@ -740,6 +782,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         const nextState = await defaultHelpPort.resetWorkspaceToSample(contextId);
         cancelAllReads(); projectState.set(nextState); profileNavigation = null; plotProfilePanel?.clearCachedSources();
         scopedCatalogKey = ''; scopedPlotCatalogRows = []; dynamicPalettePlotRows = []; createdSiviPlots = [];
+        standaloneMetadataPlot = '';
         selected = null; page = null; hierarchyNodes = []; editorPlotNumber = undefined; diagnosticsDraft = null; resetSampleConfirmOpen = false; view = 'plots';
         resetSampleNotice = 'Workspace reset to the built-in Sample project (Project: Sample, SU: Sample, Hierarchy: Sample). Your own project files were preserved.';
         notifications.push({
@@ -1064,6 +1107,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
       activateOnSuccess: true,
     });
     scopedCatalogKey = ''; scopedPlotCatalogRows = []; dynamicPalettePlotRows = []; createdSiviPlots = [];
+    standaloneMetadataPlot = '';
     profileNavigation = null;
     selected = null;
     editorPlotNumber = undefined;
@@ -1108,7 +1152,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   const sessionStatusKind = $derived<'busy' | 'dirty' | 'ready'>(
     busy || editorBusy || companionPanelBusy || transitionWorking
       ? 'busy'
-      : (closeState?.unsaved ?? false) || Boolean(workbenchDirtyLabel)
+      : (closeState?.unsaved ?? false) || Boolean(workbenchDirtyLabel) || Boolean(standaloneMetadataPlot && standaloneMetadataEditor?.hasUnsavedChanges?.())
         ? 'dirty'
         : 'ready'
   );
@@ -1149,7 +1193,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     })),
     selectedPlotNumber: currentContextPlotNumber || null,
     activeSU: $projectState?.activeSU ?? 'None',
-    metadataAvailable: view === 'fs882' && !!$projectState?.contextId && !!editor?.canOpenProjectMetadata(),
+    metadataAvailable: !!$projectState?.contextId && (view === 'fs882' ? (!!editor?.canOpenProjectMetadata() || ((typeof editorPlotNumber === 'undefined' || !editorPlotNumber) && typeof editorEntryForm !== 'undefined' && editorEntryForm === 'fs882-twopage')) : true),
     siviAvailable: siviStandaloneEnabled,
     newSiviAvailable: !!$projectState?.contextId && !busy && !editorBusy && !companionPanelBusy && !transitionWorking,
   });
@@ -1351,8 +1395,8 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     {#if !startupFailure}<Navigation {view} activeEntryForm={editorEntryForm} onnavigate={navigate}
       siviAvailable={siviStandaloneEnabled && !!selected && !!$projectState?.contextId} onopensivi={() => void openSIVI()}
       newSiviAvailable={!!$projectState?.contextId && !busy && !editorBusy && !companionPanelBusy && !transitionWorking} onopennewsivi={() => { newSiviModalOpen = true; }}
-      metadataAvailable={view === 'fs882' && !!$projectState?.contextId && !!editor?.canOpenProjectMetadata()} onopenmetadata={() => void openProjectMetadata()}
-      onopencloudsync={() => { void requestTransition(async () => { projectAdminTab = 'cloudsync'; projectAdminTabNonce++; view = 'project-admin'; error = ''; }); }}
+      metadataAvailable={!!$projectState?.contextId && (view === 'fs882' ? (!!editor?.canOpenProjectMetadata() || ((typeof editorPlotNumber === 'undefined' || !editorPlotNumber) && typeof editorEntryForm !== 'undefined' && editorEntryForm === 'fs882-twopage')) : true)} onopenmetadata={() => void openProjectMetadata()}
+      onopencloudsync={() => { void requestTransition(async () => { standaloneMetadataPlot = ''; projectAdminTab = 'cloudsync'; projectAdminTabNonce++; view = 'project-admin'; error = ''; }); }}
       onopenusersetup={() => { userSetupOpen = true; }}
       whatsNewUnreadCount={whatsNewStatus?.unreadCount ?? 0} resetSampleAvailable={!!$projectState?.contextId && !busy && !editorBusy && !companionPanelBusy && !transitionWorking}
       {releaseChannel} onhelpaction={handleHelpMenuAction} />{/if}
@@ -1498,6 +1542,61 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         {#await import('./shell/StartupRecoveryPanel.svelte') then { default: StartupRecoveryPanel }}
           <StartupRecoveryPanel {startupFailure} {busy} onrecovered={async (notice) => { startupBackupNotice = notice; if (notice && typeof notifications !== 'undefined') notifications.success('Startup recovery complete', notice, { source: 'Startup Recovery' }); startupFailure = null; await refresh(); }} />
         {/await}
+      {:else if standaloneMetadataPlot && $projectState?.contextId}
+        <div class="p-3 space-y-3" data-standalone-metadata-host>
+          <div class="flex flex-wrap items-center justify-between gap-2 rounded border border-stone-200 bg-stone-50 px-3 py-2 text-xs">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="font-semibold text-[#003366]">Project Metadata ({$projectState.activeProject})</span>
+              {#if allAvailablePlots.length > 1}
+                <label class="inline-flex items-center gap-1.5 text-stone-700" for="standalone-metadata-plot-select">
+                  <span>Plot scope:</span>
+                  <select
+                    id="standalone-metadata-plot-select"
+                    class="rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs"
+                    value={standaloneMetadataPlot}
+                    disabled={localEditorBusy || Boolean(standaloneMetadataEditor?.hasUnsavedChanges?.())}
+                    onchange={(e) => { standaloneMetadataPlot = e.currentTarget.value; }}
+                  >
+                    {#each allAvailablePlots as p (p.plotNumber)}
+                      <option value={p.plotNumber}>{p.plotNumber}</option>
+                    {/each}
+                  </select>
+                </label>
+              {/if}
+            </div>
+            <button
+              type="button"
+              class="rounded border border-[#003366] bg-white px-2.5 py-1 font-semibold text-[#003366] hover:bg-[#EBF1F8] disabled:opacity-50"
+              disabled={localEditorBusy || Boolean(standaloneMetadataEditor?.hasUnsavedChanges?.())}
+              onclick={() => { standaloneMetadataPlot = ''; localEditorBusy = false; navigate('project-admin'); }}
+            >
+              Open Metadata Presets &amp; Project Admin
+            </button>
+          </div>
+          {#key `${$projectState.contextId}:${standaloneMetadataPlot}`}
+            {#await import('./admin/ProjectMetadataEditor.svelte')}
+              <p role="status" class="p-4 text-sm">Loading Project Metadata Editor...</p>
+            {:then { default: ProjectMetadataEditor }}
+              <ProjectMetadataEditor
+                bind:this={standaloneMetadataEditor}
+                client={bindContextPlots($projectState.contextId)}
+                contextId={$projectState.contextId}
+                plot={standaloneMetadataPlot}
+                allowCreation={true}
+                allowTemplateCreation={true}
+                allowRestoration={true}
+                onbusy={(b) => { localEditorBusy = b; }}
+                oncommitted={async () => {
+                  const nextState = await stateReads.track(ContextService.GetState());
+                  projectState.set(nextState);
+                }}
+                onclosed={() => { standaloneMetadataPlot = ''; localEditorBusy = false; }}
+              />
+            {:catch loadError}
+              <p class="error" role="alert">Project Metadata Editor could not load: {String(loadError)}</p>
+            {/await}
+          {/key}
+        </div>
       {:else if view === 'home'}
         <div class="content-heading"><div><div class="eyebrow">VPro</div><h1>Home</h1></div></div>
         <HomeWorkspaceHub activeProject={$projectState?.activeProject ?? 'No project selected'} projectPath={$projectState?.projectPath ?? ''}
@@ -1608,7 +1707,12 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             <ProjectAdminWorkbench contextId={$projectState.contextId ?? ''} activeProject={$projectState.activeProject} activeSu={$projectState.activeSU}
               initialTab={projectAdminTab} initialTabNonce={projectAdminTabNonce}
               operationHeld={busy || companionPanelBusy || transitionWorking || pendingTransition !== null || !!closeRequest}
-              onBusyChange={(value) => { localEditorBusy = value; }} oncontextswitched={async () => { await refresh(); }} />
+              onBusyChange={(value) => { localEditorBusy = value; }}
+              onprojectlistchanged={async () => {
+                const nextState = await stateReads.track(ContextService.GetState());
+                projectState.set(nextState);
+              }}
+              oncontextswitched={async () => { await refresh(); }} />
           {/await}
           {#await import('./admin/ProjectMetadataPresets.svelte') then { default: ProjectMetadataPresets }}
             <ProjectMetadataPresets contextId={$projectState.contextId ?? ''} projectId=""

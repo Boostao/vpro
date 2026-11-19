@@ -14,11 +14,11 @@
 
   let {
     contextId, activeProject, activeSu = 'None', initialTab = 'lifecycle', initialTabNonce = 0,
-    operationHeld = false, port = defaultProjectAdminPort, onBusyChange, oncontextswitched,
+    operationHeld = false, port = defaultProjectAdminPort, onBusyChange, onprojectlistchanged, oncontextswitched,
   }: {
     contextId: string; activeProject: string; activeSu?: string; initialTab?: WorkbenchTab;
     initialTabNonce?: number; operationHeld?: boolean; port?: ProjectAdminPort;
-    onBusyChange?: (busy: boolean) => void; oncontextswitched?: (state: unknown) => void;
+    onBusyChange?: (busy: boolean) => void; onprojectlistchanged?: (state?: unknown) => void | Promise<void>; oncontextswitched?: (state: unknown) => void;
   } = $props();
 
   let activeTab = $state<WorkbenchTab>('lifecycle');
@@ -235,7 +235,8 @@
       newProjResult = res;
       statusMessage = `Created VPro project "${res.projectName}" at ${res.destinationPath}.`;
       notifyAdmin('success', `Created project "${res.projectName}"`, statusMessage);
-      if (res.activated && res.state && oncontextswitched) oncontextswitched(res.state);
+      if (res.activated && res.state && oncontextswitched) await oncontextswitched(res.state);
+      else if (typeof onprojectlistchanged === 'function') await onprojectlistchanged(res.state);
     });
   }
 
@@ -257,7 +258,8 @@
       saveAsResult = res;
       statusMessage = `Saved project "${res.sourceProject}" as "${res.newProjectName}" (${res.copiedTables.length} tables).`;
       notifyAdmin('success', `Saved project as "${res.newProjectName}"`, statusMessage);
-      if (res.activated && res.state && oncontextswitched) oncontextswitched(res.state);
+      if (res.activated && res.state && oncontextswitched) await oncontextswitched(res.state);
+      else if (typeof onprojectlistchanged === 'function') await onprojectlistchanged(res.state);
     });
   }
 
@@ -282,7 +284,8 @@
       splinterResult = res;
       statusMessage = `Exported ${res.exportedPlotCount} of ${res.sourcePlotCount} plots to "${res.splinterProject}".`;
       notifyAdmin('success', `Exported splinter "${res.splinterProject}"`, statusMessage);
-      if (res.activated && res.state && oncontextswitched) oncontextswitched(res.state);
+      if (res.activated && res.state && oncontextswitched) await oncontextswitched(res.state);
+      else if (typeof onprojectlistchanged === 'function') await onprojectlistchanged(res.state);
     });
   }
 

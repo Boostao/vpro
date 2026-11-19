@@ -208,7 +208,7 @@ func ValidateSIVICreationRequest(request SiviCreationRequest) error {
 func PlanSIVICreation(ctx context.Context, request SiviCreationRequest, veg vprocore.ProjectMetadataTable, id int64) (vprocore.ProjectMetadataRow, vprocore.ProjectMetadataRow, error) {
 	columns, err := vprocore.SiteUnitTransferColumns(veg, SiviCreationColumns...)
 	if err != nil || len(columns) != len(SiviCreationColumns) {
-		return vprocore.ProjectMetadataRow{}, vprocore.ProjectMetadataRow{}, errors.Join(err, errors.New("SIVI creation requires all44 canonical fields without extra defaults"))
+		return vprocore.ProjectMetadataRow{}, vprocore.ProjectMetadataRow{}, errors.Join(err, errors.New("SIVI creation requires all 44 canonical fields without extra defaults"))
 	}
 	original := vprocore.ProjectMetadataRow{Cells: make([]vprocore.ProjectMetadataCell, len(columns))}
 	for i := range original.Cells {

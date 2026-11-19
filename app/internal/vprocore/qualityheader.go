@@ -120,11 +120,32 @@ func (h *FS882Header) UnmarshalJSON(data []byte) error {
 	if err := sqlutil.ValidateJSONTextProperties(data, names); err != nil {
 		return err
 	}
-	decoded := sqlutil.CloneForStaging(headerAlias(*h))
-	if err := json.Unmarshal(data, &decoded); err != nil {
+	var envelope struct {
+		headerAlias
+		Original json.RawMessage `json:"original"`
+	}
+	envelope.headerAlias = sqlutil.CloneForStaging(headerAlias(*h))
+	if err := json.Unmarshal(data, &envelope); err != nil {
 		return err
 	}
-	*h = FS882Header(decoded)
+	priorBaseline := h.Baseline()
+	next := FS882Header(envelope.headerAlias)
+	if next.PlotNumber != "" {
+		next.PlotNumber = strings.Clone(next.PlotNumber)
+	}
+	if len(envelope.Original) > 0 && strings.TrimSpace(string(envelope.Original)) != "null" {
+		if err := sqlutil.ValidateJSONTextProperties(envelope.Original, names); err != nil {
+			return err
+		}
+		var orig headerAlias
+		if err := json.Unmarshal(envelope.Original, &orig); err != nil {
+			return err
+		}
+		next = next.WithBaseline(FS882Header(orig))
+	} else if len(envelope.Original) == 0 && priorBaseline != nil {
+		next = next.WithBaseline(*priorBaseline)
+	}
+	*h = next
 	return nil
 }
 

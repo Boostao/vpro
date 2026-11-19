@@ -219,7 +219,9 @@
                   ? itemEnabled(item) ? 'SIVI / FS1333 editor for the selected plot. Existing draft and close guards apply.'
                     : 'Select a plot to open SIVI / FS1333 data entry.'
                   : item.action === 'metadata'
-                    ? 'Project metadata for the open plot. Requires a clean, unlocked editor; finish or Undo drafts first.'
+                    ? itemEnabled(item)
+                      ? 'Project metadata for the active project (requires a clean, unlocked editor when a plot is open).'
+                      : 'Finish or Undo drafts in a clean, unlocked editor before opening Project Metadata.'
                   : item.action === 'cloud-sync'
                     ? item.name
                   : item.helpAction === 'reset-sample'
