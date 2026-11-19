@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestDatabaseFamily2026VListsStandardsAndMetadata(t *testing.T) {
@@ -202,5 +205,99 @@ func TestEnsureDefaultPictureLibraryCanonical5ColumnSchema(t *testing.T) {
 	afterBytes, err := os.ReadFile(dbPath)
 	if err != nil || string(beforeBytes) != string(afterBytes) {
 		t.Fatal("EnsureDefaultPictureLibrary mutated existing VPics.db on subsequent call")
+	}
+}
+
+func TestDatabaseFamilyCaseInsensitiveCoexistenceAndSupportResolution(t *testing.T) {
+	dataDir := t.TempDir()
+
+	// 1. Simulate a case-insensitive NTFS/APFS top-level <dataDir>/vlists.db <-> <dataDir>/VLists.db
+	// containing the 2-table lookup read-model before InstallDatabaseFamily runs.
+	lowerReadModel := filepath.Join(dataDir, "vlists.db")
+	pascalAlias := filepath.Join(dataDir, "VLists.db")
+	if err := os.WriteFile(lowerReadModel, resources.VListsDB, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(pascalAlias); os.IsNotExist(err) {
+		if err := os.Symlink(lowerReadModel, pascalAlias); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Without database-family/VLists.db installed yet, ResolveWorkspaceSupportDatabase
+	// must reject the 2-table lookup read-model because USysAllSpecs is absent.
+	if got, err := ResolveWorkspaceSupportDatabase(dataDir, "VLists"); err == nil {
+		t.Fatalf("expected 2-table read-model at %s to be rejected as VP08 VLists.db, got %q", pascalAlias, got)
+	}
+
+	// 2. InstallDatabaseFamily + NewReferenceService coexist cleanly in shared dataDir.
+	paths, err := InstallDatabaseFamily(dataDir)
+	if err != nil {
+		t.Fatalf("InstallDatabaseFamily: %v", err)
+	}
+	refSvc, err := references.NewReferenceService(dataDir)
+	if err != nil {
+		t.Fatalf("NewReferenceService: %v", err)
+	}
+	defer refSvc.Close()
+
+	wantVLists, err := CanonicalSupportDatabasePath(dataDir, "vlists")
+	if err != nil || wantVLists != filepath.Join(dataDir, "database-family", "VLists.db") {
+		t.Fatalf("CanonicalSupportDatabasePath(vlists) = %q (%v)", wantVLists, err)
+	}
+	wantVUser, err := CanonicalSupportDatabasePath(dataDir, "VUser.db")
+	if err != nil || wantVUser != filepath.Join(dataDir, "database-family", "VUser.db") {
+		t.Fatalf("CanonicalSupportDatabasePath(VUser.db) = %q (%v)", wantVUser, err)
+	}
+	if paths["VLists"] != wantVLists || paths["VUser"] != wantVUser {
+		t.Fatalf("InstallDatabaseFamily paths mismatch: VLists=%q VUser=%q", paths["VLists"], paths["VUser"])
+	}
+
+	gotVLists, err := ResolveWorkspaceSupportDatabase(dataDir, "VLists")
+	if err != nil || gotVLists != wantVLists {
+		t.Fatalf("ResolveWorkspaceSupportDatabase(VLists) = %q (%v), want %q", gotVLists, err, wantVLists)
+	}
+	gotVUser, err := ResolveWorkspaceSupportDatabase(dataDir, "VUser")
+	if err != nil || gotVUser != wantVUser {
+		t.Fatalf("ResolveWorkspaceSupportDatabase(VUser) = %q (%v), want %q", gotVUser, err, wantVUser)
+	}
+
+	// 3. Even when a valid top-level <dir>/VLists.db exists alongside <dir>/database-family/VLists.db,
+	// database-family/VLists.db always wins.
+	dualDir := t.TempDir()
+	if _, err := InstallDatabaseFamily(dualDir); err != nil {
+		t.Fatal(err)
+	}
+	famBytes, err := os.ReadFile(filepath.Join(dualDir, "database-family", "VLists.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dualDir, "VLists.db"), famBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	resolvedDual, err := ResolveWorkspaceSupportDatabase(dualDir, "VLists.db")
+	if err != nil || resolvedDual != filepath.Join(dualDir, "database-family", "VLists.db") {
+		t.Fatalf("expected database-family/VLists.db precedence over top-level VLists.db, got %q (%v)", resolvedDual, err)
+	}
+
+	// 4. If database-family/VLists.db was accidentally clobbered by the embedded 2-table vlists.db
+	// read-model, InstallDatabaseFamily heals it back to the canonical 2026 VLists.db seed.
+	healDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(healDir, "database-family"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	clobberedPath := filepath.Join(healDir, "database-family", "VLists.db")
+	if err := os.WriteFile(clobberedPath, resources.VListsDB, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InstallDatabaseFamily(healDir); err != nil {
+		t.Fatalf("InstallDatabaseFamily heal failed: %v", err)
+	}
+	healedBytes, err := os.ReadFile(clobberedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sqlutil.BecHash(healedBytes) != "81e259244106b14d6dd3c65f0a7e7e87bdb06f60e6c54947c0506e2039379441" {
+		t.Fatalf("expected clobbered database-family/VLists.db to heal to canonical 2026 seed, got %s", sqlutil.BecHash(healedBytes))
 	}
 }

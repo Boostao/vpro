@@ -273,8 +273,7 @@ vpro_pg_subset_where <- function(
       }
     }
   } else {
-    cand <- file.path(vpro_data_dir(), "VLists.db")
-    vdb <- if (file.exists(cand)) cand else tryCatch(vpro_bundled_db("VLists.db"), error = function(e) "")
+    vdb <- tryCatch(vpro_find_support_db("VLists.db", vpro_data_dir()), error = function(e) "")
   }
 
   if (is.character(vdb) && length(vdb) == 1L && nzchar(vdb) && file.exists(vdb)) {

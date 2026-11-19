@@ -444,17 +444,21 @@ vpro_master_standards_sync <- function(pg, data_dir = vpro_data_dir()) {
     as.character(pub_raw)
   }
 
-  cand_top <- file.path(data_dir, "VLists.db")
   cand_fam <- file.path(data_dir, "database-family", "VLists.db")
-  if (file.exists(cand_top)) {
-    target_path <- normalizePath(cand_top, winslash = "/", mustWork = FALSE)
-    target_exists <- TRUE
-  } else if (file.exists(cand_fam)) {
+  cand_top <- file.path(data_dir, "VLists.db")
+  if (.vpro_is_valid_support_db(cand_fam, "VLists.db")) {
     target_path <- normalizePath(cand_fam, winslash = "/", mustWork = FALSE)
     target_exists <- TRUE
-  } else {
-    dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
+  } else if (file.exists(cand_fam) && !dir.exists(cand_fam)) {
+    target_path <- normalizePath(cand_fam, winslash = "/", mustWork = FALSE)
+    target_exists <- FALSE
+  } else if (.vpro_is_valid_support_db(cand_top, "VLists.db")) {
     target_path <- normalizePath(cand_top, winslash = "/", mustWork = FALSE)
+    target_exists <- TRUE
+  } else {
+    fam_dir <- file.path(data_dir, "database-family")
+    dir.create(fam_dir, recursive = TRUE, showWarnings = FALSE)
+    target_path <- normalizePath(cand_fam, winslash = "/", mustWork = FALSE)
     target_exists <- FALSE
   }
 
@@ -539,12 +543,24 @@ vpro_master_standards_sync <- function(pg, data_dir = vpro_data_dir()) {
   }
 
   chk_con <- vpro_sqlite_ro(tmp_vlists)
-  ic_df <- tryCatch(
-    DBI::dbGetQuery(chk_con, "PRAGMA integrity_check"),
+  staged_check <- tryCatch(
+    {
+      ic_df <- DBI::dbGetQuery(chk_con, "PRAGMA integrity_check")
+      tbl_df <- DBI::dbGetQuery(chk_con, "SELECT name FROM sqlite_master WHERE type = 'table'")
+      list(ic = ic_df, tables = as.character(tbl_df$name))
+    },
     finally = if (DBI::dbIsValid(chk_con)) DBI::dbDisconnect(chk_con)
   )
+  ic_df <- staged_check$ic
   if (nrow(ic_df) == 0L || !identical(tolower(trimws(as.character(ic_df[[1L]][[1L]]))), "ok")) {
     cli::cli_abort("Staged {.file VLists.db} failed database integrity verification.")
+  }
+  req_vlists_tbls <- c("USysAllSpecs", "USysTableOfLists", "MasterSiteUnitList", "USysZoneList")
+  missing_vlists_tbls <- req_vlists_tbls[!(tolower(req_vlists_tbls) %in% tolower(staged_check$tables))]
+  if (length(missing_vlists_tbls) > 0L) {
+    cli::cli_abort(
+      "Staged {.file VLists.db} is missing required catalogue table{?s}: {.val {missing_vlists_tbls}}."
+    )
   }
 
   if (file.exists(wal_path) || file.exists(shm_path)) {

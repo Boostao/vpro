@@ -57,19 +57,157 @@ var DatabaseFamilySeeds = []databaseFamilySeed{
 		[]string{"tblMessageBoard", "tblMessageList"}},
 }
 
-const legacyVListsSeedSHA256 = "dd80135e45878d92dee626701ba29bd4cc1d69549d6784c2a91dc276f6a79a51"
-const VPicsSeedSHA256 = "671ef38d6341a7a917107c457079dff336b24886369b4a3af339b45559c8312a"
+const (
+	DatabaseFamilySubdir                 = "database-family"
+	legacyVListsSeedSHA256               = "dd80135e45878d92dee626701ba29bd4cc1d69549d6784c2a91dc276f6a79a51"
+	legacyVListsReferenceReadModelSHA256 = "abf77c39d1591441390e7de5302748b24a4a789e23fe3966daf3f198e5058f2e"
+	VPicsSeedSHA256                      = "671ef38d6341a7a917107c457079dff336b24886369b4a3af339b45559c8312a"
+)
+
+func canonicalSupportRoleSpec(role string) (string, []string, error) {
+	trimmed := strings.TrimSpace(role)
+	if len(trimmed) > 3 && strings.EqualFold(trimmed[len(trimmed)-3:], ".db") {
+		trimmed = trimmed[:len(trimmed)-3]
+	}
+	for _, seed := range DatabaseFamilySeeds {
+		if strings.EqualFold(trimmed, seed.Name) {
+			return seed.Name, seed.tables, nil
+		}
+	}
+	if strings.EqualFold(trimmed, "VPics") {
+		return "VPics", []string{"tblVPics"}, nil
+	}
+	return "", nil, fmt.Errorf("unknown VP08 support database role %q", role)
+}
+
+// CanonicalSupportDatabasePath returns <root>/database-family/<Name>.db with
+// canonical PascalCase naming for any 7-DB VP08 support database role
+// (VPro64, VLists, VUser, VMetaData, VMessageBoard, VPics).
+func CanonicalSupportDatabasePath(root, role string) (string, error) {
+	if strings.TrimSpace(root) == "" {
+		return "", errors.New("root must not be empty")
+	}
+	canonName, _, err := canonicalSupportRoleSpec(role)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(root, DatabaseFamilySubdir, canonName+".db"), nil
+}
+
+func hasRequiredVP08SupportTables(path string, requiredTables []string) bool {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() || !info.Mode().IsRegular() || info.Size() <= 0 {
+		return false
+	}
+	db, err := sqlutil.OpenReadOnly(path)
+	if err != nil {
+		return false
+	}
+	defer db.Close()
+	for _, tbl := range requiredTables {
+		var exists bool
+		if qErr := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND LOWER(name)=LOWER(?))`, tbl).Scan(&exists); qErr != nil || !exists {
+			return false
+		}
+	}
+	return true
+}
+
+// ResolveWorkspaceSupportDatabase resolves an existing 7-DB VP08 support database
+// inside root using identical precedence and schema verification to the R SDK
+// (`vpro_find_support_db`): `<root>/database-family/<Name>.db` is preferred over
+// legacy top-level `<root>/<Name>.db` (plus `<root>/pics/VPics.db` for VPics),
+// and non-VP08 files (such as 2-table `Lists`/`Species` lookup read-models on
+// case-insensitive NTFS/APFS) are rejected.
+func ResolveWorkspaceSupportDatabase(root, role string) (string, error) {
+	if strings.TrimSpace(root) == "" {
+		return "", errors.New("root must not be empty")
+	}
+	canonName, reqTables, err := canonicalSupportRoleSpec(role)
+	if err != nil {
+		return "", err
+	}
+	fileName := canonName + ".db"
+	candidates := []string{
+		filepath.Join(root, DatabaseFamilySubdir, fileName),
+		filepath.Join(root, fileName),
+	}
+	if canonName == "VPics" {
+		candidates = append(candidates, filepath.Join(root, "pics", fileName))
+	}
+	for _, cand := range candidates {
+		if hasRequiredVP08SupportTables(cand, reqTables) {
+			return filepath.Clean(cand), nil
+		}
+	}
+	return "", fmt.Errorf("no valid VP08 %s found in %s", fileName, root)
+}
+
+func normalizeCaseInsensitiveSupportFilename(directory, canonicalFilename string) {
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.Name() == canonicalFilename {
+			return
+		}
+	}
+	destPath := filepath.Join(directory, canonicalFilename)
+	destInfo, err := os.Stat(destPath)
+	if err != nil || !destInfo.Mode().IsRegular() {
+		return
+	}
+	for _, e := range entries {
+		if !strings.EqualFold(e.Name(), canonicalFilename) || !e.Type().IsRegular() {
+			continue
+		}
+		oldPath := filepath.Join(directory, e.Name())
+		oldInfo, sErr := os.Lstat(oldPath)
+		if sErr != nil || !oldInfo.Mode().IsRegular() || !os.SameFile(oldInfo, destInfo) {
+			continue
+		}
+		tmpFile, tErr := os.CreateTemp(directory, ".casefix-*.tmp")
+		if tErr != nil {
+			return
+		}
+		tmpPath := tmpFile.Name()
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpPath)
+		if rErr := os.Rename(oldPath, tmpPath); rErr == nil {
+			if rErr2 := os.Rename(tmpPath, destPath); rErr2 != nil {
+				_ = os.Rename(tmpPath, oldPath)
+			}
+		}
+		return
+	}
+}
+
+func isReplaceableLegacyOrReadModelVLists(existing []byte) bool {
+	sum := fmt.Sprintf("%x", sha256.Sum256(existing))
+	if sum == legacyVListsSeedSHA256 || sum == legacyVListsReferenceReadModelSHA256 {
+		return true
+	}
+	if len(resources.VListsDB) > 0 {
+		readModelSum := fmt.Sprintf("%x", sha256.Sum256(resources.VListsDB))
+		if sum == readModelSum {
+			return true
+		}
+	}
+	return false
+}
 
 // InstallVPicsDatabase installs the canonical VPics.db (tblVPics 5-column schema)
 // inside <root>/database-family/VPics.db without adding VPics to the read-only
 // attached DatabaseFamilySeeds map (preserving len(support) == len(DatabaseFamilySeeds)
 // and allowing owned picture mutations against VPics.db).
 func InstallVPicsDatabase(root string) (string, error) {
-	directory := filepath.Join(root, "database-family")
+	directory := filepath.Join(root, DatabaseFamilySubdir)
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		return "", err
 	}
-	destination := filepath.Join(directory, "VPics.db")
+	fileName := "VPics.db"
+	destination := filepath.Join(directory, fileName)
 	if _, err := os.Stat(destination); errors.Is(err, os.ErrNotExist) {
 		data, err := readVerifiedEmbeddedSeed("resources/database-family/VPics.db", VPicsSeedSHA256, "VPics")
 		if err != nil {
@@ -80,6 +218,8 @@ func InstallVPicsDatabase(root string) (string, error) {
 		}
 	} else if err != nil {
 		return "", err
+	} else {
+		normalizeCaseInsensitiveSupportFilename(directory, fileName)
 	}
 	return destination, nil
 }
@@ -94,7 +234,7 @@ func EnsurePictureDirectory(root string) (string, error) {
 }
 
 func InstallDatabaseFamily(root string) (map[string]string, error) {
-	directory := filepath.Join(root, "database-family")
+	directory := filepath.Join(root, DatabaseFamilySubdir)
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		return nil, err
 	}
@@ -106,9 +246,10 @@ func InstallDatabaseFamily(root string) (map[string]string, error) {
 	}
 	paths := make(map[string]string, len(DatabaseFamilySeeds))
 	for _, seed := range DatabaseFamilySeeds {
-		destination := filepath.Join(directory, seed.Name+".db")
+		fileName := seed.Name + ".db"
+		destination := filepath.Join(directory, fileName)
 		if _, err := os.Stat(destination); errors.Is(err, os.ErrNotExist) {
-			data, err := readVerifiedEmbeddedSeed("resources/database-family/"+seed.Name+".db", seed.Hash, seed.Name)
+			data, err := readVerifiedEmbeddedSeed("resources/database-family/"+fileName, seed.Hash, seed.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -117,14 +258,17 @@ func InstallDatabaseFamily(root string) (map[string]string, error) {
 			}
 		} else if err != nil {
 			return nil, err
-		} else if seed.Name == "VLists" && seed.Hash != legacyVListsSeedSHA256 {
-			if existing, readErr := os.ReadFile(destination); readErr == nil && fmt.Sprintf("%x", sha256.Sum256(existing)) == legacyVListsSeedSHA256 {
-				data, err := readVerifiedEmbeddedSeed("resources/database-family/VLists.db", seed.Hash, seed.Name)
-				if err != nil {
-					return nil, err
-				}
-				if err := sqlutil.ReplaceBundledCatalogueFile(destination, data, 0600); err != nil {
-					return nil, fmt.Errorf("upgrade %s: %w", seed.Name, err)
+		} else {
+			normalizeCaseInsensitiveSupportFilename(directory, fileName)
+			if seed.Name == "VLists" && seed.Hash != legacyVListsSeedSHA256 {
+				if existing, readErr := os.ReadFile(destination); readErr == nil && isReplaceableLegacyOrReadModelVLists(existing) {
+					data, err := readVerifiedEmbeddedSeed("resources/database-family/VLists.db", seed.Hash, seed.Name)
+					if err != nil {
+						return nil, err
+					}
+					if err := sqlutil.ReplaceBundledCatalogueFile(destination, data, 0600); err != nil {
+						return nil, fmt.Errorf("upgrade %s: %w", seed.Name, err)
+					}
 				}
 			}
 		}

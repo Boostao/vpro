@@ -271,21 +271,84 @@ vpro_resolve_table_suffix <- function(tables, requested, suffix, default_prefix 
   hit[[1L]]
 }
 
+.vpro_support_db_required_tables <- function(name) {
+  switch(
+    tolower(basename(as.character(name))),
+    "vlists.db" = "USysAllSpecs",
+    "vuser.db" = "USysUserSpp",
+    "vpro64.db" = "USysEnvTable",
+    "vmetadata.db" = "ProjectMetadata",
+    "vmessageboard.db" = "tblMessageBoard",
+    "vpics.db" = "tblVPics",
+    character()
+  )
+}
+
+.vpro_is_valid_support_db <- function(path, name = basename(path)) {
+  if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(path)) {
+    return(FALSE)
+  }
+  if (!file.exists(path) || dir.exists(path)) {
+    return(FALSE)
+  }
+  sz <- file.info(path)$size
+  if (is.na(sz) || sz <= 0) {
+    return(FALSE)
+  }
+  req_tbls <- .vpro_support_db_required_tables(name)
+  tryCatch(
+    {
+      con <- vpro_sqlite_ro(path)
+      on.exit(if (DBI::dbIsValid(con)) DBI::dbDisconnect(con), add = TRUE)
+      tbls <- DBI::dbGetQuery(
+        con,
+        "SELECT name FROM sqlite_master WHERE type = 'table'"
+      )$name
+      if (length(req_tbls) == 0L) {
+        TRUE
+      } else {
+        all(tolower(req_tbls) %in% tolower(as.character(tbls)))
+      }
+    },
+    error = function(e) FALSE
+  )
+}
+
+vpro_same_dir <- function(a, b) {
+  if (is.null(a) || is.null(b) || !nzchar(a) || !nzchar(b)) {
+    return(FALSE)
+  }
+  na <- normalizePath(a, winslash = "/", mustWork = FALSE)
+  nb <- normalizePath(b, winslash = "/", mustWork = FALSE)
+  if (.Platform$OS.type == "windows" || identical(tolower(Sys.info()[["sysname"]]), "darwin")) {
+    identical(tolower(na), tolower(nb))
+  } else {
+    identical(na, nb)
+  }
+}
+
 vpro_find_support_db <- function(name, data_dir, project_dir = NULL) {
   candidates <- character()
-  if (!is.null(project_dir) && nzchar(project_dir)) {
-    candidates <- c(candidates, file.path(project_dir, name))
-  }
-  if (!is.null(data_dir) && nzchar(data_dir)) {
+  has_data_dir <- !is.null(data_dir) && nzchar(data_dir)
+  has_proj_dir <- !is.null(project_dir) && nzchar(project_dir)
+  if (has_proj_dir && (!has_data_dir || !vpro_same_dir(project_dir, data_dir))) {
     candidates <- c(
       candidates,
-      file.path(data_dir, name),
-      file.path(data_dir, "database-family", name)
+      file.path(project_dir, "database-family", name),
+      file.path(project_dir, name)
     )
   }
-  hit <- candidates[file.exists(candidates) & file.info(candidates)$size > 0]
-  if (length(hit) > 0L) {
-    return(normalizePath(hit[[1L]], winslash = "/", mustWork = TRUE))
+  if (has_data_dir) {
+    candidates <- c(
+      candidates,
+      file.path(data_dir, "database-family", name),
+      file.path(data_dir, name)
+    )
+  }
+  for (cand in unique(candidates)) {
+    if (.vpro_is_valid_support_db(cand, name)) {
+      return(normalizePath(cand, winslash = "/", mustWork = TRUE))
+    }
   }
   vpro_bundled_db(name)
 }
@@ -632,6 +695,7 @@ vpro_list_projects <- function(ws = NULL, path = vpro_data_dir()) {
   support_names <- tolower(c(
     "vpro64.db",
     "vlists.db",
+    "vlists-lookup.db",
     "vuser.db",
     "vmetadata.db",
     "vmessageboard.db",
@@ -640,7 +704,10 @@ vpro_list_projects <- function(ws = NULL, path = vpro_data_dir()) {
     "working-unit.db",
     "site-codes.db",
     "soil-codes.db",
-    "parent-codes.db"
+    "parent-codes.db",
+    "region-codes.db",
+    "geology-codes.db",
+    "plot-quality-site.db"
   ))
   db_files <- db_files[file.exists(db_files) & !(tolower(basename(db_files)) %in% support_names)]
   if (length(db_files) == 0L) {

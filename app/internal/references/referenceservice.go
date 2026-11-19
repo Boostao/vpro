@@ -44,7 +44,21 @@ type ReferenceService struct {
 	db      *sql.DB
 }
 
-const legacyVListsReferenceSHA256 = "abf77c39d1591441390e7de5302748b24a4a789e23fe3966daf3f198e5058f2e"
+const (
+	legacyVListsReferenceSHA256 = "abf77c39d1591441390e7de5302748b24a4a789e23fe3966daf3f198e5058f2e"
+	referenceReadModelSubdir    = "readmodels"
+	referenceReadModelFile      = "vlists-lookup.db"
+)
+
+// ReferenceReadModelPath returns the isolated on-disk path inside dataDir where
+// ReferenceService provisions the embedded 2-table lookup read-model (`Lists`,
+// `Species`). Keeping this file under `readmodels/vlists-lookup.db` guarantees
+// it can never collide with `<dataDir>/VLists.db` or
+// `<dataDir>/database-family/VLists.db` on case-insensitive filesystems
+// (Windows NTFS and macOS APFS).
+func ReferenceReadModelPath(dataDir string) string {
+	return filepath.Join(dataDir, referenceReadModelSubdir, referenceReadModelFile)
+}
 
 func NewReferenceService(dataDir string) (*ReferenceService, error) {
 	if dataDir == "" {
@@ -54,11 +68,11 @@ func NewReferenceService(dataDir string) (*ReferenceService, error) {
 			return nil, fmt.Errorf("determine data dir: %w", err)
 		}
 	}
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+	targetPath := ReferenceReadModelPath(dataDir)
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 		return nil, fmt.Errorf("create reference data dir: %w", err)
 	}
 
-	targetPath := filepath.Join(dataDir, "vlists.db")
 	sqliteMagic := []byte("SQLite format 3\x00")
 	loadValidEmbedded := func() ([]byte, error) {
 		embedded, err := vlistsFiles.ReadFile("resources/vlists.db")
@@ -77,10 +91,10 @@ func NewReferenceService(dataDir string) (*ReferenceService, error) {
 			return nil, err
 		}
 		if err := sqlutil.ReplaceBundledCatalogueFile(targetPath, embedded, 0o644); err != nil {
-			return nil, fmt.Errorf("install vlists.db: %w", err)
+			return nil, fmt.Errorf("install %s: %w", referenceReadModelFile, err)
 		}
 	} else if err != nil {
-		return nil, fmt.Errorf("stat vlists.db: %w", err)
+		return nil, fmt.Errorf("stat %s: %w", referenceReadModelFile, err)
 	} else {
 		needsReplace := !info.Mode().IsRegular() || info.Size() < 100
 		if !needsReplace {
@@ -98,7 +112,7 @@ func NewReferenceService(dataDir string) (*ReferenceService, error) {
 			}
 			if sqlutil.BecHash(embedded) != legacyVListsReferenceSHA256 || info.Size() < 100 {
 				if err := sqlutil.ReplaceBundledCatalogueFile(targetPath, embedded, 0o644); err != nil {
-					return nil, fmt.Errorf("upgrade vlists.db: %w", err)
+					return nil, fmt.Errorf("upgrade %s: %w", referenceReadModelFile, err)
 				}
 			}
 		}
@@ -106,21 +120,21 @@ func NewReferenceService(dataDir string) (*ReferenceService, error) {
 
 	db, err := sqlutil.OpenReadOnly(targetPath)
 	if err != nil {
-		return nil, fmt.Errorf("open vlists.db: %w", err)
+		return nil, fmt.Errorf("open %s: %w", referenceReadModelFile, err)
 	}
-	var speciesTables int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='Species'`).Scan(&speciesTables); err != nil || speciesTables != 1 {
+	var requiredTables int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('Lists', 'Species')`).Scan(&requiredTables); err != nil || requiredTables != 2 {
 		_ = db.Close()
 		embedded, embErr := loadValidEmbedded()
 		if embErr != nil {
-			return nil, fmt.Errorf("verify vlists.db schema: %w", err)
+			return nil, fmt.Errorf("verify %s schema: %w", referenceReadModelFile, embErr)
 		}
 		if repErr := sqlutil.ReplaceBundledCatalogueFile(targetPath, embedded, 0o644); repErr != nil {
-			return nil, fmt.Errorf("repair corrupt vlists.db: %w", repErr)
+			return nil, fmt.Errorf("repair corrupt %s: %w", referenceReadModelFile, repErr)
 		}
 		db, err = sqlutil.OpenReadOnly(targetPath)
 		if err != nil {
-			return nil, fmt.Errorf("reopen vlists.db: %w", err)
+			return nil, fmt.Errorf("reopen %s: %w", referenceReadModelFile, err)
 		}
 	}
 
