@@ -12,6 +12,7 @@ import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"math"
 	"os"
 	"slices"
 	"strings"
@@ -378,6 +379,107 @@ func runLayer1ComplianceFallback(ctx context.Context, s *vprocore.ContextService
 			return fail("Veg bounds", err)
 		}
 
+		// 3c. LMH25 soil bounds on <Project>_Humus and <Project>_Mineral:
+		// UTF-16 code-unit limits (Horizon <= 8, Texture <= 4, Colour <= 14) and canonical
+		// vprocore.ValidateSoilHorizonDepthSign directional/non-negative depth bounds
+		// (including single-sided negative depths, NULL-horizon rows, and non-numeric depth cells).
+		type soilTextBound struct {
+			col      string
+			maxUnits int
+		}
+		soilChecks := []struct {
+			kind      string
+			extraText []soilTextBound
+		}{
+			{kind: "Humus"},
+			{kind: "Mineral", extraText: []soilTextBound{{col: "Texture", maxUnits: 4}, {col: "Colour", maxUnits: 14}}},
+		}
+		for _, sc := range soilChecks {
+			soilCols := map[string]string{}
+			scRows, err := tx.QueryContext(ctx, `SELECT name FROM "project".pragma_table_info(?)`, proj+"_"+sc.kind)
+			if err != nil {
+				return fail(sc.kind+" schema", err)
+			}
+			for scRows.Next() {
+				var name string
+				if err := scRows.Scan(&name); err != nil {
+					scRows.Close()
+					return fail(sc.kind+" schema", err)
+				}
+				soilCols[strings.ToLower(name)] = name
+			}
+			if err := errors.Join(scRows.Err(), scRows.Close()); err != nil {
+				return fail(sc.kind+" schema", err)
+			}
+			for _, reqCol := range []string{"horizon", "upperdepth", "lowerdepth"} {
+				if _, ok := soilCols[reqCol]; !ok {
+					return fail(sc.kind+" schema", fmt.Errorf("missing required column %q", reqCol))
+				}
+			}
+			qHz := quotePGIdent(soilCols["horizon"])
+			qUpper := quotePGIdent(soilCols["upperdepth"])
+			qLower := quotePGIdent(soilCols["lowerdepth"])
+			soilSelect := []string{
+				fmt.Sprintf("CASE WHEN %s IS NULL THEN NULL ELSE CAST(%s AS BLOB) END", qHz, qHz),
+				qUpper,
+				qLower,
+			}
+			var activeExtras []soilTextBound
+			for _, extra := range sc.extraText {
+				if actual, ok := soilCols[strings.ToLower(extra.col)]; ok {
+					qExtra := quotePGIdent(actual)
+					soilSelect = append(soilSelect, fmt.Sprintf("CASE WHEN %s IS NULL THEN NULL ELSE CAST(%s AS BLOB) END", qExtra, qExtra))
+					activeExtras = append(activeExtras, extra)
+				}
+			}
+			sRows, err := tx.QueryContext(ctx, fmt.Sprintf(`SELECT %s FROM "project".%s`, strings.Join(soilSelect, ", "), quotePGIdent(proj+"_"+sc.kind)))
+			if err != nil {
+				return fail(sc.kind+" bounds", err)
+			}
+			for sRows.Next() {
+				var rawHz []byte
+				var rawUpper, rawLower any
+				rawExtras := make([][]byte, len(activeExtras))
+				dest := []any{&rawHz, &rawUpper, &rawLower}
+				for i := range rawExtras {
+					dest = append(dest, &rawExtras[i])
+				}
+				if err := sRows.Scan(dest...); err != nil {
+					sRows.Close()
+					return fail(sc.kind+" bounds", err)
+				}
+				var hzPtr *string
+				if rawHz != nil {
+					hz := string(rawHz)
+					if ValidateUTF16Bound(sc.kind+".Horizon", hz, 8) != nil {
+						boundsErrs++
+					}
+					hzPtr = &hz
+				}
+				for i, extra := range activeExtras {
+					if rawExtras[i] != nil {
+						if ValidateUTF16Bound(sc.kind+"."+extra.col, string(rawExtras[i]), extra.maxUnits) != nil {
+							boundsErrs++
+						}
+					}
+				}
+				upperPtr, okUpper := parseComplianceSoilDepth(rawUpper)
+				lowerPtr, okLower := parseComplianceSoilDepth(rawLower)
+				if !okUpper {
+					boundsErrs++
+				}
+				if !okLower {
+					boundsErrs++
+				}
+				if vprocore.ValidateSoilHorizonDepthSign(sc.kind, hzPtr, upperPtr, lowerPtr) != nil {
+					boundsErrs++
+				}
+			}
+			if err := errors.Join(sRows.Err(), sRows.Close()); err != nil {
+				return fail(sc.kind+" bounds", err)
+			}
+		}
+
 		// 4. Unlisted species check against VLists.USysAllSpecs + VUser.USysUserSpp
 		if err := tx.QueryRowContext(ctx, fmt.Sprintf(`
 			SELECT COUNT(*) FROM "project".%s v
@@ -408,6 +510,25 @@ func runLayer1ComplianceFallback(ctx context.Context, s *vprocore.ContextService
 			ReportJSON:    repJSON,
 		}, nil
 	})
+}
+
+func parseComplianceSoilDepth(raw any) (*float64, bool) {
+	if raw == nil {
+		return nil, true
+	}
+	var value float64
+	switch v := raw.(type) {
+	case float64:
+		value = v
+	case int64:
+		value = float64(v)
+	default:
+		return nil, false
+	}
+	if math.IsNaN(value) || math.IsInf(value, 0) || math.Abs(value) > math.MaxFloat32 {
+		return nil, false
+	}
+	return &value, true
 }
 
 func computeDBWithWALSHA256(path string) (string, error) {

@@ -1,6 +1,8 @@
 package integration
 
 import (
+	"github.com/boostao/vpro/app/internal/classification"
+	"github.com/boostao/vpro/app/internal/projectops"
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/sourceform/sftest"
 	"github.com/boostao/vpro/app/internal/vprocore"
@@ -11,6 +13,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -40,26 +43,49 @@ func TestSIVIIdentityOwnedSaveUnauditedAtEveryStrengthAndTypedRestoration(t *tes
 				id != -2147483648 || physicalBefore != physicalAfter {
 				t.Fatal("application ID assignment changed physical row", id, physicalBefore, physicalAfter, err)
 			}
-			if got := vprotest.HeightTableSnapshot(t, db, "Sample_Audit"); got != audit {
-				t.Fatal("ID inherited phantom source field audits")
+			if strength == 0 {
+				if got := vprotest.HeightTableSnapshot(t, db, "Sample_Audit"); got != audit {
+					t.Fatal("strength 0 identity save wrote an unexpected audit row")
+				}
+			} else {
+				var count int
+				var beforeEdit, afterEdit string
+				var restoreFlag, auditID int64
+				if err := db.QueryRow(`SELECT COUNT(*), COALESCE(MAX(BeforeEdit),''), COALESCE(MAX(AfterEdit),''), COALESCE(MAX(CAST(Restore AS INTEGER)),-99), COALESCE(MAX(ID),0)
+					FROM Sample_Audit WHERE PlotNumber='108050' AND "Table"='_Veg' AND EditField='ID'`).
+					Scan(&count, &beforeEdit, &afterEdit, &restoreFlag, &auditID); err != nil ||
+					count != 1 || beforeEdit != "10000001" || afterEdit != "-2147483648" || restoreFlag != 0 || auditID != 10000001 {
+					t.Fatal("audited identity save did not record exact _Veg.ID provenance", count, beforeEdit, afterEdit, restoreFlag, auditID, err)
+				}
 			}
 			var reservations int
 			if err := db.QueryRow(`SELECT COUNT(*) FROM "__VPRO_ChildIdentity" WHERE ChildTable='"Sample_Veg"' AND ID IN (10000001,-2147483648)`).Scan(&reservations); err != nil || reservations != 2 {
 				t.Fatal("old/new identities were not permanently reserved", reservations, err)
 			}
 			action := vprocore.AuditRestoreRetain
+			expectedPruned := 0
 			if strength%2 == 0 {
 				action = vprocore.AuditRestorePrune
+				if strength > 0 {
+					expectedPruned = 1
+				}
 			}
 			restored, err := sourceform.RestoreSIVIIdentities(service, context.Background(), state.ContextID, "108050", result.HistoryID, action)
-			if err != nil || restored == nil || restored.RestoredRows != 1 || restored.PrunedAuditRows != 0 || restored.CleanedVegRows != 0 {
-				t.Fatal("identity restoration inherited audit pruning/row deletion", restored, err)
+			if err != nil || restored == nil || restored.RestoredRows != 1 || restored.PrunedAuditRows != expectedPruned || restored.CleanedVegRows != 0 {
+				t.Fatal("identity restoration returned unexpected audit/row counts", restored, expectedPruned, err)
 			}
 			if got := vprotest.HeightTableSnapshot(t, db, "Sample_Veg"); got != veg {
 				t.Fatal("typed identity restoration did not preserve the complete original table")
 			}
-			if got := vprotest.HeightTableSnapshot(t, db, "Sample_Audit"); got != audit {
-				t.Fatal("identity restoration changed source audit bytes")
+			if strength == 0 || action == vprocore.AuditRestorePrune {
+				if got := vprotest.HeightTableSnapshot(t, db, "Sample_Audit"); got != audit {
+					t.Fatal("unaudited or pruned identity restoration left residual audit changes")
+				}
+			} else {
+				var restoreFlag int64
+				if err := db.QueryRow(`SELECT CAST(Restore AS INTEGER) FROM Sample_Audit WHERE PlotNumber='108050' AND "Table"='_Veg' AND EditField='ID'`).Scan(&restoreFlag); err != nil || restoreFlag != -1 {
+					t.Fatal("retained identity restoration did not mark Restore=-1", restoreFlag, err)
+				}
 			}
 			beforeRetry := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
 			if again, err := sourceform.RestoreSIVIIdentities(service, context.Background(), state.ContextID, "108050", result.HistoryID, action); err == nil || again != nil {
@@ -462,5 +488,75 @@ func TestSIVIIdentityOwnedRestorationRejectsChangedOrReplacedDuplicatePeer(t *te
 		if restored, err := sourceform.RestoreSIVIIdentities(service, context.Background(), state.ContextID, "108050", result.HistoryID, vprocore.AuditRestorePrune); err != nil || restored == nil {
 			t.Fatal("restored exact peer source did not allow explicit retry", restored, err)
 		}
+	}
+}
+
+// ENG-GO-004 Acceptance #4: deleting max hierarchy node ID=3, running SaveProjectAs, and
+// inserting a new node in the saved project allocates ID=4 (never reuses deleted ID=3).
+func TestSaveProjectAsHierarchyDeleteThreeAllocatesNodeFour(t *testing.T) {
+	svc, state := vprotest.ContextServiceFixture(t)
+	ctx := t.Context()
+
+	created, err := projectops.CreateNewProject(svc, ctx, state.ContextID, projectops.NewProjectRequest{
+		ProjectName:       "HierSrcProj",
+		PresetID:          "LMH25_2023_FS882",
+		ActivateOnSuccess: true,
+	})
+	if err != nil {
+		t.Fatalf("CreateNewProject: %v", err)
+	}
+	cid := created.State.ContextID
+
+	hierCreated, err := classification.CreateHierarchyTable(ctx, svc, cid, classification.CreateHierarchyTableRequest{
+		Name:        "HierSrcProj",
+		Destination: "project",
+		Activate:    true,
+	})
+	if err != nil {
+		t.Fatalf("CreateHierarchyTable: %v", err)
+	}
+	cid = hierCreated.ContextID
+
+	for wantID, name := range []string{"NodeOne", "NodeTwo", "NodeThree"} {
+		added, err := classification.AddHierarchyNode(ctx, svc, cid, classification.HierarchyAddNodeRequest{
+			Name:  name,
+			Level: 1,
+		})
+		if err != nil {
+			t.Fatalf("AddHierarchyNode(%s): %v", name, err)
+		}
+		if added.NodeID != int64(wantID+1) {
+			t.Fatalf("expected node %s ID=%d, got %d", name, wantID+1, added.NodeID)
+		}
+		cid = added.ContextID
+	}
+
+	deleted, err := classification.DeleteHierarchyNode(ctx, svc, cid, classification.HierarchyDeleteNodeRequest{
+		NodeID: 3,
+	})
+	if err != nil {
+		t.Fatalf("DeleteHierarchyNode(3): %v", err)
+	}
+	cid = deleted.ContextID
+
+	dstDir := t.TempDir()
+	saved, err := projectops.SaveProjectAs(svc, ctx, cid, projectops.SaveProjectAsRequest{
+		NewProjectName:    "HierDstProj",
+		DestinationPath:   filepath.Join(dstDir, "HierDstProj.db"),
+		ActivateOnSuccess: true,
+	})
+	if err != nil {
+		t.Fatalf("SaveProjectAs: %v", err)
+	}
+
+	afterSaveAdded, err := classification.AddHierarchyNode(ctx, svc, saved.State.ContextID, classification.HierarchyAddNodeRequest{
+		Name:  "NodeAfterSaveAs",
+		Level: 1,
+	})
+	if err != nil {
+		t.Fatalf("AddHierarchyNode after SaveProjectAs: %v", err)
+	}
+	if afterSaveAdded.NodeID != 4 {
+		t.Fatalf("expected new hierarchy node after SaveProjectAs to allocate ID=4 (never reuse deleted ID=3), got ID=%d", afterSaveAdded.NodeID)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -27,6 +28,7 @@ type SiviIdentityHistory struct {
 	Edits           []SiviHeightEdit
 	Committed       vprocore.ProjectMetadataTable
 	ReturnOccupants []siviIdentityOccupant
+	Audits          []vprocore.AuditEntry
 }
 
 func WithSIVIIdentityWriter[T any](ctx context.Context, service *vprocore.ContextService, contextID, plot, operation string,
@@ -115,13 +117,18 @@ func WriteSIVIIdentities(s *vprocore.ContextService, ctx context.Context, contex
 			if len(assignments) == 0 {
 				return result, false, nil
 			}
+			if err := vprocore.ValidateChildPhysicalText("SIVI audit user", plots.CurrentUser, 100); err != nil {
+				return nil, false, err
+			}
 			planned, err := applySIVIIdentityPlan(veg, assignments)
 			if err != nil {
 				return nil, false, err
 			}
 			event := SiviIdentityHistory{Project: project, Plot: plot, Extended: extended,
 				Before:    vprocore.ProjectMetadataTable{Columns: veg.Columns, Rows: []vprocore.ProjectMetadataRow{}},
-				Committed: vprocore.ProjectMetadataTable{Columns: veg.Columns, Rows: []vprocore.ProjectMetadataRow{}}, Edits: []SiviHeightEdit{}}
+				Committed: vprocore.ProjectMetadataTable{Columns: veg.Columns, Rows: []vprocore.ProjectMetadataRow{}},
+				Edits:     []SiviHeightEdit{},
+				Audits:    []vprocore.AuditEntry{}}
 			event.ReturnOccupants, err = siviIdentityReturnOccupants(veg, assignments)
 			if err != nil {
 				return nil, false, err
@@ -148,16 +155,9 @@ func WriteSIVIIdentities(s *vprocore.ContextService, ctx context.Context, contex
 			if err := writeSIVIIdentityAssignments(ctx, tx, project, plot, assignments); err != nil {
 				return nil, false, err
 			}
-			expected := map[string]vprocore.ProjectMetadataTable{project + "_Veg": planned, SiviIdentityLedger: ledger}
-			after, err := vprocore.EnvironmentSiteUnitTables(ctx, tx)
-			if err != nil {
-				return nil, false, err
-			}
-			if err := vprocore.VerifySiteUnitTransferTables(baseline, after, expected, ""); err != nil {
-				return nil, false, fmt.Errorf("SIVI identity transaction differs from its complete unaudited plan: %w", err)
-			}
-			// Audit identity changes
-			now := time.Now().UTC().Format("2006-01-02 15:04:05")
+			when := time.Now().UTC().Format("2006-01-02 15:04:05")
+			auditTable := vprocore.QuoteHeaderIdentifier(project + "_Audit")
+			var auditRecords []vprocore.AuditEntry
 			for _, assignment := range assignments {
 				beforeVal, err := vprocore.MetadataCellValue(assignment.Before)
 				if err != nil {
@@ -167,18 +167,57 @@ func WriteSIVIIdentities(s *vprocore.ContextService, ctx context.Context, contex
 				if err != nil {
 					return nil, false, err
 				}
-				id, _ := strconv.ParseInt(*assignment.Before.Integer, 10, 64)
-				audits, err := vprocore.AuditChildFieldsTracked(tx, project, "Veg", plot, id,
-					[]vprocore.ChildField{{Column: assignment.Column}}, []any{beforeVal}, []any{afterVal}, plots.CurrentUser, plots.AuditStrength, now)
+				if !vprocore.AuditHeaderChange(beforeVal, afterVal, plots.AuditStrength) {
+					continue
+				}
+				auditID, expectedID, err := siviIdentityAuditID(assignment.Before, assignment.After)
 				if err != nil {
 					return nil, false, err
 				}
-				// Verify audit
-				if len(audits) != 1 {
-					return nil, false, errors.New("SIVI identity audit row not produced")
+				inserted, err := tx.ExecContext(ctx, `INSERT INTO `+auditTable+
+					` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`,
+					project, plots.CurrentUser, plot, "_Veg", assignment.Column, when,
+					vprocore.HeaderAuditValue(beforeVal), vprocore.HeaderAuditValue(afterVal), auditID)
+				if err != nil {
+					return nil, false, err
 				}
+				if count, err := inserted.RowsAffected(); err != nil || count != 1 {
+					return nil, false, errors.Join(err, errors.New("SIVI identity audit did not insert exactly one row"))
+				}
+				auditRowID, err := inserted.LastInsertId()
+				if err != nil {
+					return nil, false, err
+				}
+				actual, err := vprocore.SelectedAuditEntries(tx, project, plot, []int64{auditRowID})
+				if err != nil || len(actual) != 1 {
+					return nil, false, errors.Join(err, errors.New("SIVI identity audit row was not recorded"))
+				}
+				record := actual[0]
+				if record.Table != "_Veg" || record.EditField != assignment.Column ||
+					!reflect.DeepEqual(record.ID, expectedID) || record.User != plots.CurrentUser || record.EditWhen != when ||
+					record.Restore || record.Flag || !vprocore.MetadataAuditTextEqual(record.BeforeEdit, beforeVal) ||
+					!vprocore.MetadataAuditTextEqual(record.AfterEdit, afterVal) {
+					return nil, false, errors.New("SIVI identity inserted audit differs from its typed assignment")
+				}
+				auditRecords = append(auditRecords, record)
 			}
-
+			event.Audits = append(event.Audits, auditRecords...)
+			plannedAudit, err := AppendSIVIPlannedAudits(baseline[project+"_Audit"], auditRecords)
+			if err != nil {
+				return nil, false, err
+			}
+			expected := map[string]vprocore.ProjectMetadataTable{
+				project + "_Veg":   planned,
+				project + "_Audit": plannedAudit,
+				SiviIdentityLedger: ledger,
+			}
+			after, err := vprocore.EnvironmentSiteUnitTables(ctx, tx)
+			if err != nil {
+				return nil, false, err
+			}
+			if err := vprocore.VerifySiteUnitTransferTables(baseline, after, expected, ""); err != nil {
+				return nil, false, fmt.Errorf("SIVI identity transaction differs from its complete plan: %w", err)
+			}
 			proposal, err := json.Marshal(event)
 			if err != nil {
 				return nil, false, err
@@ -313,6 +352,19 @@ func ReserveSourceChildIdentityPlan(ctx context.Context, tx *sql.Tx, project, ki
 	return baseline, expected, nil
 }
 
+func siviIdentityAuditID(before, after vprocore.ProjectMetadataCell) (any, *int64, error) {
+	for _, cell := range []vprocore.ProjectMetadataCell{before, after} {
+		if cell.Storage == "integer" && cell.Integer != nil {
+			parsed, err := strconv.ParseInt(*cell.Integer, 10, 32)
+			if err != nil {
+				return nil, nil, err
+			}
+			return parsed, &parsed, nil
+		}
+	}
+	return nil, nil, nil
+}
+
 func RestoreSIVIIdentities(s *vprocore.ContextService, ctx context.Context, contextID, plot, historyID string, action vprocore.AuditRestoreAction) (*vprocore.AuditRestoreResult, error) {
 	if action != vprocore.AuditRestoreCancel && action != vprocore.AuditRestoreRetain && action != vprocore.AuditRestorePrune {
 		return nil, errors.New("SIVI identity restoration requires cancel, retain or prune")
@@ -338,7 +390,7 @@ func RestoreSIVIIdentities(s *vprocore.ContextService, ctx context.Context, cont
 				return nil, false, errors.New("SIVI identity history was already restored; do not replay")
 			}
 			var event SiviIdentityHistory
-			if err := vprocore.DecodeProfileLifecycleJSON([]byte(proposal), &event, "Project", "Plot", "Extended", "Before", "Edits", "Committed", "ReturnOccupants"); err != nil {
+			if err := vprocore.DecodeProfileLifecycleJSON([]byte(proposal), &event, "Project", "Plot", "Extended", "Before", "Edits", "Committed", "ReturnOccupants", "Audits"); err != nil {
 				return nil, false, err
 			}
 			project := owner.Selection.Project
@@ -351,9 +403,110 @@ func RestoreSIVIIdentities(s *vprocore.ContextService, ctx context.Context, cont
 			if err != nil {
 				return nil, false, err
 			}
+			if len(event.Audits) > len(assignments) {
+				return nil, false, errors.New("SIVI identity history has excess audit entries")
+			}
 			planned, err := applySIVIIdentityPlan(veg, assignments)
 			if err != nil {
 				return nil, false, err
+			}
+			audit := before[project+"_Audit"]
+			auditColumns, err := vprocore.SiteUnitTransferColumns(audit, "Restore")
+			if err != nil {
+				return nil, false, err
+			}
+			audit.Rows = append([]vprocore.ProjectMetadataRow{}, audit.Rows...)
+			prunedAuditRows := 0
+			seenAudits := map[string]bool{}
+			matched := make([]bool, len(assignments))
+			for _, record := range event.Audits {
+				if err := ctx.Err(); err != nil {
+					return nil, false, err
+				}
+				if seenAudits[record.RowID] || record.EditField != "ID" ||
+					record.Restore || record.Flag || record.Project != project || record.PlotNumber != plot {
+					return nil, false, errors.New("SIVI identity audit differs from its physical identity/value")
+				}
+				claimIdx := -1
+				for idx, rev := range assignments {
+					if matched[idx] {
+						continue
+					}
+					origBeforeVal, err := vprocore.MetadataCellValue(rev.After)
+					if err != nil {
+						return nil, false, err
+					}
+					origAfterVal, err := vprocore.MetadataCellValue(rev.Before)
+					if err != nil {
+						return nil, false, err
+					}
+					_, expectedID, err := siviIdentityAuditID(rev.After, rev.Before)
+					if err != nil {
+						return nil, false, err
+					}
+					if reflect.DeepEqual(record.ID, expectedID) &&
+						vprocore.MetadataAuditTextEqual(record.BeforeEdit, origBeforeVal) &&
+						vprocore.MetadataAuditTextEqual(record.AfterEdit, origAfterVal) {
+						claimIdx = idx
+						break
+					}
+				}
+				if claimIdx < 0 {
+					return nil, false, errors.New("SIVI identity history audit does not match any planned assignment")
+				}
+				matched[claimIdx] = true
+				seenAudits[record.RowID] = true
+				auditIDs, err := vprocore.AuditRowIDs([]string{record.RowID})
+				if err != nil {
+					return nil, false, err
+				}
+				actual, err := vprocore.SelectedAuditEntries(tx, project, plot, auditIDs)
+				if err != nil {
+					return nil, false, err
+				}
+				normalize := func(entry vprocore.AuditEntry) (vprocore.AuditEntry, error) {
+					if !strings.EqualFold(entry.Table, "_Veg") && !strings.EqualFold(entry.Table, project+"_Veg") {
+						return vprocore.AuditEntry{}, errors.New("SIVI identity audit has an unavailable restoration table alias")
+					}
+					entry.Table = "_Veg"
+					return entry, nil
+				}
+				observed, err := normalize(actual[0])
+				if err != nil {
+					return nil, false, err
+				}
+				expectedRecord, err := normalize(record)
+				if err != nil || !reflect.DeepEqual(observed, expectedRecord) {
+					return nil, false, errors.Join(err, errors.New("SIVI identity audit changed; no restoration or pruning"))
+				}
+				if err := VerifySIVIPhysicalAudit(before[project+"_Audit"], expectedRecord, project); err != nil {
+					return nil, false, err
+				}
+				query := `UPDATE ` + vprocore.QuoteHeaderIdentifier(project+"_Audit") + ` SET Restore=-1 WHERE rowid=?`
+				if action == vprocore.AuditRestorePrune {
+					query = `DELETE FROM ` + vprocore.QuoteHeaderIdentifier(project+"_Audit") + ` WHERE rowid=?`
+				}
+				changed, err := tx.ExecContext(ctx, query, auditIDs[0])
+				if err != nil {
+					return nil, false, err
+				}
+				if count, err := changed.RowsAffected(); err != nil || count != 1 {
+					return nil, false, errors.Join(err, errors.New("SIVI identity audit restoration did not affect exactly one row"))
+				}
+				for j, row := range audit.Rows {
+					if row.RowID != record.RowID {
+						continue
+					}
+					if action == vprocore.AuditRestorePrune {
+						audit.Rows = append(audit.Rows[:j], audit.Rows[j+1:]...)
+						prunedAuditRows++
+					} else {
+						truth := "-1"
+						audit.Rows[j].Cells = append([]vprocore.ProjectMetadataCell{}, row.Cells...)
+						audit.Rows[j].Cells[auditColumns["Restore"]] = vprocore.ProjectMetadataCell{Storage: "integer", Integer: &truth}
+					}
+					break
+				}
 			}
 			for _, assignment := range assignments {
 				if err := updateSIVIPhysicalIdentity(ctx, tx, project, plot, assignment); err != nil {
@@ -385,12 +538,16 @@ func RestoreSIVIIdentities(s *vprocore.ContextService, ctx context.Context, cont
 				return nil, false, err
 			}
 			if err := vprocore.VerifySiteUnitTransferTables(before, after, map[string]vprocore.ProjectMetadataTable{
-				project + "_Veg": planned, siviIdentityHistoryTable: history,
+				project + "_Veg":         planned,
+				project + "_Audit":       audit,
+				siviIdentityHistoryTable: history,
 			}, ""); err != nil {
 				return nil, false, err
 			}
-			// Neither action prunes source audits: ID was explicitly excluded.
-			return &vprocore.AuditRestoreResult{RestoredRows: len(assignments)}, true, nil
+			return &vprocore.AuditRestoreResult{
+				RestoredRows:    len(assignments),
+				PrunedAuditRows: prunedAuditRows,
+			}, true, nil
 		})
 }
 
