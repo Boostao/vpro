@@ -15,6 +15,23 @@ import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
+type diagnosticWorkbookStyles struct {
+	title         int
+	subtitle      int
+	header        int
+	headerLeft    int
+	sectionBanner int
+	unitBanner    int
+	centerCell    int
+	italicSci     int
+	diagFills     map[string]int
+	warnRow       int
+	highSim       int
+	medSim        int
+	edatopicCore  int
+	edatopicSub   int
+}
+
 // ResolveDiagnosticWorkbookSheets validates Excel worksheet names (31 UTF-16 units, XML safety)
 // and enforces case-insensitive uniqueness via strings.EqualFold matching excelize/v2 (§4.3).
 func ResolveDiagnosticWorkbookSheets(rawNames []string) ([]string, error) {
@@ -109,91 +126,105 @@ func encodeDiagnosticWorkbookBytes(
 		}
 	}
 
-	// Shared BC Gov & BEC Diagnostic styles (#003366 Navy, #FCBA19 Gold,BEC differential fills)
-	titleStyle, err := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 13, Color: "#003366", Family: "Calibri"},
-	})
+	styles, err := initDiagnosticWorkbookStyles(f)
 	if err != nil {
 		return nil, err
 	}
-	subtitleStyle, err := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Italic: true, Size: 10, Color: "#334155", Family: "Calibri"},
-	})
-	if err != nil {
+	if err := writeDiagnosticSummarySheet(ctx, f, sheetNames[0], snap, req, styles); err != nil {
 		return nil, err
 	}
-	headerStyle, err := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 10, Color: "#FFFFFF", Family: "Calibri"},
-		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#003366"}},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
-		Border: []excelize.Border{
-			{Type: "bottom", Color: "#FCBA19", Style: 2},
-		},
-	})
-	if err != nil {
+	if err := writePairwiseSimilaritySheet(f, sheetNames[1], snap, styles); err != nil {
 		return nil, err
 	}
-	headerLeftStyle, err := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 10, Color: "#FFFFFF", Family: "Calibri"},
-		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#003366"}},
-		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
-		Border: []excelize.Border{
-			{Type: "bottom", Color: "#FCBA19", Style: 2},
-		},
-	})
-	if err != nil {
+	if err := writeOutlierQueueSheet(f, sheetNames[2], snap, styles); err != nil {
 		return nil, err
 	}
-	sectionBannerStyle, err := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 10, Color: "#003366", Family: "Calibri"},
-		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#EBF1F8"}},
-		Border: []excelize.Border{
-			{Type: "top", Color: "#9EC3E6", Style: 1},
-			{Type: "bottom", Color: "#9EC3E6", Style: 1},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	unitBannerStyle, err := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 10, Color: "#1E5128", Family: "Calibri"},
-		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#E9F1EB"}},
-		Border: []excelize.Border{
-			{Type: "top", Color: "#B7CFC0", Style: 1},
-			{Type: "bottom", Color: "#B7CFC0", Style: 1},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	centerCellStyle, err := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Size: 10, Family: "Calibri"},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-	})
-	if err != nil {
-		return nil, err
-	}
-	italicSciStyle, err := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Italic: true, Size: 10, Family: "Calibri"},
-	})
-	if err != nil {
+	if err := writeEdatopicGridsSheet(f, sheetNames, snap, req.IncludeUnitEdatopicTabs, styles); err != nil {
 		return nil, err
 	}
 
-	makeDiagFill := func(hexColor string, bold bool) (int, error) {
-		return f.NewStyle(&excelize.Style{
-			Font:      &excelize.Font{Bold: bold, Size: 10, Color: "#313132", Family: "Calibri"},
-			Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{hexColor}},
-			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-			Border: []excelize.Border{
-				{Type: "left", Color: "#D1D5DB", Style: 1},
-				{Type: "right", Color: "#D1D5DB", Style: 1},
-				{Type: "top", Color: "#D1D5DB", Style: 1},
-				{Type: "bottom", Color: "#D1D5DB", Style: 1},
-			},
-		})
+	var buf bytes.Buffer
+	if _, err := f.WriteTo(&buf); err != nil {
+		return nil, err
 	}
-	diagStyles := map[string]int{}
+	return buf.Bytes(), nil
+}
+
+func initDiagnosticWorkbookStyles(f *excelize.File) (diagnosticWorkbookStyles, error) {
+	var st diagnosticWorkbookStyles
+	var err error
+	if st.title, err = f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 13, Color: "#003366", Family: "Calibri"},
+	}); err != nil {
+		return st, err
+	}
+	if st.subtitle, err = f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Italic: true, Size: 10, Color: "#334155", Family: "Calibri"},
+	}); err != nil {
+		return st, err
+	}
+	if st.header, err = newNavyHeaderStyle(f, "center", true); err != nil {
+		return st, err
+	}
+	if st.headerLeft, err = newNavyHeaderStyle(f, "left", false); err != nil {
+		return st, err
+	}
+	if st.sectionBanner, err = newBannerStyle(f, "#003366", "#EBF1F8", "#9EC3E6"); err != nil {
+		return st, err
+	}
+	if st.unitBanner, err = newBannerStyle(f, "#1E5128", "#E9F1EB", "#B7CFC0"); err != nil {
+		return st, err
+	}
+	if st.centerCell, err = f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 10, Family: "Calibri"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	}); err != nil {
+		return st, err
+	}
+	if st.italicSci, err = f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Italic: true, Size: 10, Family: "Calibri"},
+	}); err != nil {
+		return st, err
+	}
+	return populateDiagnosticFillStyles(f, st)
+}
+
+func newNavyHeaderStyle(f *excelize.File, horizontal string, wrap bool) (int, error) {
+	return f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 10, Color: "#FFFFFF", Family: "Calibri"},
+		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#003366"}},
+		Alignment: &excelize.Alignment{Horizontal: horizontal, Vertical: "center", WrapText: wrap},
+		Border:    []excelize.Border{{Type: "bottom", Color: "#FCBA19", Style: 2}},
+	})
+}
+
+func newBannerStyle(f *excelize.File, textHex, fillHex, borderHex string) (int, error) {
+	return f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 10, Color: textHex, Family: "Calibri"},
+		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{fillHex}},
+		Border: []excelize.Border{
+			{Type: "top", Color: borderHex, Style: 1},
+			{Type: "bottom", Color: borderHex, Style: 1},
+		},
+	})
+}
+
+func newDiagFillStyle(f *excelize.File, hexColor string, bold bool) (int, error) {
+	return f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: bold, Size: 10, Color: "#313132", Family: "Calibri"},
+		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{hexColor}},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "left", Color: "#D1D5DB", Style: 1},
+			{Type: "right", Color: "#D1D5DB", Style: 1},
+			{Type: "top", Color: "#D1D5DB", Style: 1},
+			{Type: "bottom", Color: "#D1D5DB", Style: 1},
+		},
+	})
+}
+
+func populateDiagnosticFillStyles(f *excelize.File, st diagnosticWorkbookStyles) (diagnosticWorkbookStyles, error) {
+	st.diagFills = map[string]int{}
 	for k, spec := range map[string]struct {
 		hex  string
 		bold bool
@@ -205,187 +236,47 @@ func encodeDiagnosticWorkbookBytes(
 		"c":     {"#EBF1F8", false}, // Constant (Subtle BC Navy tint)
 		"ic":    {"#F4F6F8", false}, // Important Companion (Neutral canvas)
 	} {
-		stID, sErr := makeDiagFill(spec.hex, spec.bold)
-		if sErr != nil {
-			return nil, sErr
+		stID, err := newDiagFillStyle(f, spec.hex, spec.bold)
+		if err != nil {
+			return st, err
 		}
-		diagStyles[k] = stID
+		st.diagFills[k] = stID
 	}
+	var err error
+	if st.warnRow, err = newDiagFillStyle(f, "#FEF6E0", true); err != nil {
+		return st, err
+	}
+	if st.highSim, err = newDiagFillStyle(f, "#D6E6F5", true); err != nil {
+		return st, err
+	}
+	if st.medSim, err = newDiagFillStyle(f, "#EBF1F8", false); err != nil {
+		return st, err
+	}
+	if st.edatopicCore, err = newDiagFillStyle(f, "#FCBA19", true); err != nil {
+		return st, err
+	}
+	if st.edatopicSub, err = newDiagFillStyle(f, "#E9F1EB", false); err != nil {
+		return st, err
+	}
+	return st, nil
+}
 
-	warnRowStyle, err := makeDiagFill("#FEF6E0", true)
+func writeDiagnosticSummarySheet(
+	ctx context.Context,
+	f *excelize.File,
+	diagSheet string,
+	snap *SynthesisSnapshot,
+	req ExportDiagnosticWorkbookRequest,
+	styles diagnosticWorkbookStyles,
+) error {
+	if err := writeDiagnosticSummaryBanner(f, diagSheet, snap, req.ReportTitle, styles); err != nil {
+		return err
+	}
+	baseCols, totalDiagCols, err := writeDiagnosticSummaryHeaders(f, diagSheet, snap.Units, req.IncludeCommonNames, styles)
 	if err != nil {
-		return nil, err
-	}
-	highSimStyle, err := makeDiagFill("#D6E6F5", true)
-	if err != nil {
-		return nil, err
-	}
-	medSimStyle, err := makeDiagFill("#EBF1F8", false)
-	if err != nil {
-		return nil, err
-	}
-	edatopicCoreStyle, err := makeDiagFill("#FCBA19", true)
-	if err != nil {
-		return nil, err
-	}
-	edatopicSubStyle, err := makeDiagFill("#E9F1EB", false)
-	if err != nil {
-		return nil, err
+		return err
 	}
 
-	// =========================================================================
-	// SHEET 1: Formatted BEC Diagnostic Summary Sheet (Diagnostic10.xla compatible)
-	// =========================================================================
-	diagSheet := sheetNames[0]
-	title := strings.TrimSpace(req.ReportTitle)
-	if title == "" {
-		suLabel := snap.SU
-		if suLabel == "" || strings.EqualFold(suLabel, "None") {
-			suLabel = "UserSiteUnit"
-		}
-		title = fmt.Sprintf("VPro BEC Diagnostic Summary Vegetation Report — %s (%s)", snap.Project, suLabel)
-	}
-	if err := setCellChecked(f, diagSheet, 1, 1, title); err != nil {
-		return nil, err
-	}
-	_ = styleRangeChecked(f, diagSheet, 1, 1, 1, 1, titleStyle)
-
-	subMeta := fmt.Sprintf("Vegetation Table | Classified Plots: %d across %d Site Units | Significance Basis: %s",
-		snap.ClassifiedPlotCount, len(snap.Units), snap.SignificanceBasis)
-	if err := setCellChecked(f, diagSheet, 1, 2, subMeta); err != nil {
-		return nil, err
-	}
-	_ = styleRangeChecked(f, diagSheet, 1, 2, 1, 2, subtitleStyle)
-
-	lumpComment := ""
-	if snap.LumpTableUsed != "" {
-		lumpComment = fmt.Sprintf("Vegetation was lumped using %s table (99%% cover cap)", snap.LumpTableUsed)
-	}
-	if err := setCellChecked(f, diagSheet, 1, 3, lumpComment); err != nil {
-		return nil, err
-	}
-	_ = styleRangeChecked(f, diagSheet, 1, 3, 1, 3, subtitleStyle)
-
-	// Determine fixed columns matching V7mdlReportsShortVeg.DiagSpp + FormatDiagReport Row 5 header
-	fixedHeaders := []string{"Lifeform", "Species", "ScientificName"}
-	if req.IncludeCommonNames {
-		fixedHeaders = append(fixedHeaders, "EnglishName")
-	}
-	fixedHeaders = append(fixedHeaders, "DiagnosticUnit", "Diagnostic")
-	baseCols := len(fixedHeaders)
-
-	// Row 4: nPlots per SiteUnit + BEC legend
-	if err := setCellChecked(f, diagSheet, 2, 4, "nPlots"); err != nil {
-		return nil, err
-	}
-	_ = styleRangeChecked(f, diagSheet, 1, 4, baseCols, 4, subtitleStyle)
-
-	// Row 5: Column headers (3 columns per SiteUnit: Diagnostic10 Pres-Sig code, Presence I-V (%), Cover +..9 (%))
-	for cIdx, h := range fixedHeaders {
-		if err := setCellChecked(f, diagSheet, cIdx+1, 5, h); err != nil {
-			return nil, err
-		}
-		st := headerLeftStyle
-		if h == "Lifeform" || h == "Diagnostic" {
-			st = headerStyle
-		}
-		_ = styleRangeChecked(f, diagSheet, cIdx+1, 5, cIdx+1, 5, st)
-	}
-
-	for uIdx, u := range snap.Units {
-		colStart := baseCols + uIdx*3 + 1
-		if err := setCellChecked(f, diagSheet, colStart, 4, u.PlotCount); err != nil {
-			return nil, err
-		}
-		_ = styleRangeChecked(f, diagSheet, colStart, 4, colStart+2, 4, centerCellStyle)
-
-		if err := setCellChecked(f, diagSheet, colStart, 5, u.SiteUnit); err != nil {
-			return nil, err
-		}
-		if err := setCellChecked(f, diagSheet, colStart+1, 5, u.SiteUnit+" Pres (I-V / %)"); err != nil {
-			return nil, err
-		}
-		if err := setCellChecked(f, diagSheet, colStart+2, 5, u.SiteUnit+" Cov (+..9 / %)"); err != nil {
-			return nil, err
-		}
-		_ = styleRangeChecked(f, diagSheet, colStart, 5, colStart+2, 5, headerStyle)
-	}
-	totalDiagCols := max(baseCols+len(snap.Units)*3, baseCols)
-
-	writeSpeciesRow := func(excelRow int, sp SynthesisSpeciesRow) error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		lfVal := ""
-		if sp.Lifeform != nil {
-			lfVal = fmt.Sprintf("%d (%s)", *sp.Lifeform, sp.StratumGroup)
-		}
-		col := 1
-		if err := setCellChecked(f, diagSheet, col, excelRow, lfVal); err != nil {
-			return err
-		}
-		col++
-		if err := setCellChecked(f, diagSheet, col, excelRow, sp.Species); err != nil {
-			return err
-		}
-		col++
-		sciCol := col
-		if err := setCellChecked(f, diagSheet, col, excelRow, sp.ScientificName); err != nil {
-			return err
-		}
-		_ = styleRangeChecked(f, diagSheet, sciCol, excelRow, sciCol, excelRow, italicSciStyle)
-		col++
-		if req.IncludeCommonNames {
-			if err := setCellChecked(f, diagSheet, col, excelRow, sp.EnglishName); err != nil {
-				return err
-			}
-			col++
-		}
-		if err := setCellChecked(f, diagSheet, col, excelRow, sp.DiagnosticUnit); err != nil {
-			return err
-		}
-		_ = styleRangeChecked(f, diagSheet, col, excelRow, col, excelRow, centerCellStyle)
-		col++
-		if err := setCellChecked(f, diagSheet, col, excelRow, sp.Diagnosis); err != nil {
-			return err
-		}
-		if fk := primaryDiagFillKey(sp.DiagnosticCodes); fk != "" {
-			_ = styleRangeChecked(f, diagSheet, col, excelRow, col, excelRow, diagStyles[fk])
-		} else {
-			_ = styleRangeChecked(f, diagSheet, col, excelRow, col, excelRow, centerCellStyle)
-		}
-
-		for uIdx, cell := range sp.Cells {
-			cStart := baseCols + uIdx*3 + 1
-			if cell.PresentPlots > 0 {
-				presDisplay := fmt.Sprintf("%s (%s%%)", cell.PresenceRoman, cell.PresencePctText)
-				meanText := cell.MeanCoverAllText
-				if snap.SignificanceBasis == "present_plots" {
-					meanText = cell.MeanCoverPresentText
-				}
-				covDisplay := fmt.Sprintf("%s (%s%%)", cell.SignifClass, meanText)
-
-				if err := setCellChecked(f, diagSheet, cStart, excelRow, cell.CrosstabCode); err != nil {
-					return err
-				}
-				if err := setCellChecked(f, diagSheet, cStart+1, excelRow, presDisplay); err != nil {
-					return err
-				}
-				if err := setCellChecked(f, diagSheet, cStart+2, excelRow, covDisplay); err != nil {
-					return err
-				}
-
-				cellStyle := centerCellStyle
-				if fk := primaryDiagFillKey(cell.CellDiagnosticCodes); fk != "" {
-					cellStyle = diagStyles[fk]
-				}
-				_ = styleRangeChecked(f, diagSheet, cStart, excelRow, cStart+2, excelRow, cellStyle)
-			}
-		}
-		return nil
-	}
-
-	curRow := 6
 	diagByUnit := map[string][]SynthesisSpeciesRow{}
 	var nonDiagSpecies []SynthesisSpeciesRow
 	for _, sp := range snap.Species {
@@ -396,35 +287,33 @@ func encodeDiagnosticWorkbookBytes(
 		}
 	}
 
+	curRow := 6
 	for _, u := range snap.Units {
 		unitHeader := "~" + u.SiteUnit
 		if u.LongName != "" {
 			unitHeader = fmt.Sprintf("~%s — %s (n=%d)", u.SiteUnit, u.LongName, u.PlotCount)
 		}
 		if err := setCellChecked(f, diagSheet, 2, curRow, unitHeader); err != nil {
-			return nil, err
+			return err
 		}
-		_ = styleRangeChecked(f, diagSheet, 1, curRow, totalDiagCols, curRow, unitBannerStyle)
+		_ = styleRangeChecked(f, diagSheet, 1, curRow, totalDiagCols, curRow, styles.unitBanner)
 		curRow++
-
 		for _, sp := range diagByUnit[u.SiteUnit] {
-			if err := writeSpeciesRow(curRow, sp); err != nil {
-				return nil, err
+			if err := writeDiagnosticSpeciesRow(ctx, f, diagSheet, curRow, baseCols, sp, snap.SignificanceBasis, req.IncludeCommonNames, styles); err != nil {
+				return err
 			}
 			curRow++
 		}
 	}
 
-	// Non-Diagnostic Species block (matching V7mdlReportsShortVeg.DiagSpp line 2239 & ShadeXlCells)
 	if err := setCellChecked(f, diagSheet, 2, curRow, "Non-Diagnostic Species"); err != nil {
-		return nil, err
+		return err
 	}
-	_ = styleRangeChecked(f, diagSheet, 1, curRow, totalDiagCols, curRow, sectionBannerStyle)
+	_ = styleRangeChecked(f, diagSheet, 1, curRow, totalDiagCols, curRow, styles.sectionBanner)
 	curRow++
-
 	for _, sp := range nonDiagSpecies {
-		if err := writeSpeciesRow(curRow, sp); err != nil {
-			return nil, err
+		if err := writeDiagnosticSpeciesRow(ctx, f, diagSheet, curRow, baseCols, sp, snap.SignificanceBasis, req.IncludeCommonNames, styles); err != nil {
+			return err
 		}
 		curRow++
 	}
@@ -439,58 +328,259 @@ func encodeDiagnosticWorkbookBytes(
 			ActivePane:  "bottomRight",
 		})
 	}
+	return nil
+}
 
-	// =========================================================================
-	// SHEET 2: Pairwise Similarity Matrix Sheet
-	// =========================================================================
-	simSheet := sheetNames[1]
+func writeDiagnosticSummaryBanner(
+	f *excelize.File,
+	diagSheet string,
+	snap *SynthesisSnapshot,
+	reportTitle string,
+	styles diagnosticWorkbookStyles,
+) error {
+	title := strings.TrimSpace(reportTitle)
+	if title == "" {
+		suLabel := snap.SU
+		if suLabel == "" || strings.EqualFold(suLabel, "None") {
+			suLabel = "UserSiteUnit"
+		}
+		title = fmt.Sprintf("VPro BEC Diagnostic Summary Vegetation Report — %s (%s)", snap.Project, suLabel)
+	}
+	if err := setCellChecked(f, diagSheet, 1, 1, title); err != nil {
+		return err
+	}
+	_ = styleRangeChecked(f, diagSheet, 1, 1, 1, 1, styles.title)
+
+	subMeta := fmt.Sprintf("Vegetation Table | Classified Plots: %d across %d Site Units | Significance Basis: %s",
+		snap.ClassifiedPlotCount, len(snap.Units), snap.SignificanceBasis)
+	if err := setCellChecked(f, diagSheet, 1, 2, subMeta); err != nil {
+		return err
+	}
+	_ = styleRangeChecked(f, diagSheet, 1, 2, 1, 2, styles.subtitle)
+
+	lumpComment := ""
+	if snap.LumpTableUsed != "" {
+		lumpComment = fmt.Sprintf("Vegetation was lumped using %s table (99%% cover cap)", snap.LumpTableUsed)
+	}
+	if err := setCellChecked(f, diagSheet, 1, 3, lumpComment); err != nil {
+		return err
+	}
+	_ = styleRangeChecked(f, diagSheet, 1, 3, 1, 3, styles.subtitle)
+	return nil
+}
+
+func writeDiagnosticSummaryHeaders(
+	f *excelize.File,
+	diagSheet string,
+	units []SynthesisUnitSummary,
+	includeCommonNames bool,
+	styles diagnosticWorkbookStyles,
+) (int, int, error) {
+	fixedHeaders := []string{"Lifeform", "Species", "ScientificName"}
+	if includeCommonNames {
+		fixedHeaders = append(fixedHeaders, "EnglishName")
+	}
+	fixedHeaders = append(fixedHeaders, "DiagnosticUnit", "Diagnostic")
+	baseCols := len(fixedHeaders)
+
+	if err := setCellChecked(f, diagSheet, 2, 4, "nPlots"); err != nil {
+		return 0, 0, err
+	}
+	_ = styleRangeChecked(f, diagSheet, 1, 4, baseCols, 4, styles.subtitle)
+
+	for cIdx, h := range fixedHeaders {
+		if err := setCellChecked(f, diagSheet, cIdx+1, 5, h); err != nil {
+			return 0, 0, err
+		}
+		st := styles.headerLeft
+		if h == "Lifeform" || h == "Diagnostic" {
+			st = styles.header
+		}
+		_ = styleRangeChecked(f, diagSheet, cIdx+1, 5, cIdx+1, 5, st)
+	}
+
+	for uIdx, u := range units {
+		colStart := baseCols + uIdx*3 + 1
+		if err := setCellChecked(f, diagSheet, colStart, 4, u.PlotCount); err != nil {
+			return 0, 0, err
+		}
+		_ = styleRangeChecked(f, diagSheet, colStart, 4, colStart+2, 4, styles.centerCell)
+
+		for offset, label := range []string{u.SiteUnit, u.SiteUnit + " Pres (I-V / %)", u.SiteUnit + " Cov (+..9 / %)"} {
+			if err := setCellChecked(f, diagSheet, colStart+offset, 5, label); err != nil {
+				return 0, 0, err
+			}
+		}
+		_ = styleRangeChecked(f, diagSheet, colStart, 5, colStart+2, 5, styles.header)
+	}
+	return baseCols, max(baseCols+len(units)*3, baseCols), nil
+}
+
+func writeDiagnosticSpeciesRow(
+	ctx context.Context,
+	f *excelize.File,
+	diagSheet string,
+	excelRow, baseCols int,
+	sp SynthesisSpeciesRow,
+	significanceBasis string,
+	includeCommonNames bool,
+	styles diagnosticWorkbookStyles,
+) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	lfVal := ""
+	if sp.Lifeform != nil {
+		lfVal = fmt.Sprintf("%d (%s)", *sp.Lifeform, sp.StratumGroup)
+	}
+	col := 1
+	if err := setCellChecked(f, diagSheet, col, excelRow, lfVal); err != nil {
+		return err
+	}
+	col++
+	if err := setCellChecked(f, diagSheet, col, excelRow, sp.Species); err != nil {
+		return err
+	}
+	col++
+	if err := setCellChecked(f, diagSheet, col, excelRow, sp.ScientificName); err != nil {
+		return err
+	}
+	_ = styleRangeChecked(f, diagSheet, col, excelRow, col, excelRow, styles.italicSci)
+	col++
+	if includeCommonNames {
+		if err := setCellChecked(f, diagSheet, col, excelRow, sp.EnglishName); err != nil {
+			return err
+		}
+		col++
+	}
+	if err := setCellChecked(f, diagSheet, col, excelRow, sp.DiagnosticUnit); err != nil {
+		return err
+	}
+	_ = styleRangeChecked(f, diagSheet, col, excelRow, col, excelRow, styles.centerCell)
+	col++
+	if err := setCellChecked(f, diagSheet, col, excelRow, sp.Diagnosis); err != nil {
+		return err
+	}
+	diagColStyle := styles.centerCell
+	if fk := primaryDiagFillKey(sp.DiagnosticCodes); fk != "" {
+		diagColStyle = styles.diagFills[fk]
+	}
+	_ = styleRangeChecked(f, diagSheet, col, excelRow, col, excelRow, diagColStyle)
+
+	return writeDiagnosticSpeciesUnitCells(f, diagSheet, excelRow, baseCols, sp.Cells, significanceBasis, styles)
+}
+
+func writeDiagnosticSpeciesUnitCells(
+	f *excelize.File,
+	diagSheet string,
+	excelRow, baseCols int,
+	cells []SynthesisUnitSpeciesCell,
+	significanceBasis string,
+	styles diagnosticWorkbookStyles,
+) error {
+	for uIdx, cell := range cells {
+		if cell.PresentPlots <= 0 {
+			continue
+		}
+		cStart := baseCols + uIdx*3 + 1
+		presDisplay := fmt.Sprintf("%s (%s%%)", cell.PresenceRoman, cell.PresencePctText)
+		meanText := cell.MeanCoverAllText
+		if significanceBasis == "present_plots" {
+			meanText = cell.MeanCoverPresentText
+		}
+		covDisplay := fmt.Sprintf("%s (%s%%)", cell.SignifClass, meanText)
+		for offset, val := range []any{cell.CrosstabCode, presDisplay, covDisplay} {
+			if err := setCellChecked(f, diagSheet, cStart+offset, excelRow, val); err != nil {
+				return err
+			}
+		}
+		cellStyle := styles.centerCell
+		if fk := primaryDiagFillKey(cell.CellDiagnosticCodes); fk != "" {
+			cellStyle = styles.diagFills[fk]
+		}
+		_ = styleRangeChecked(f, diagSheet, cStart, excelRow, cStart+2, excelRow, cellStyle)
+	}
+	return nil
+}
+
+func writePairwiseSimilaritySheet(
+	f *excelize.File,
+	simSheet string,
+	snap *SynthesisSnapshot,
+	styles diagnosticWorkbookStyles,
+) error {
 	if err := setCellChecked(f, simSheet, 1, 1, "Pairwise Unit Similarity Matrix (Sorensen / Bray-Curtis & BEC Differential Similarity)"); err != nil {
-		return nil, err
+		return err
 	}
-	_ = styleRangeChecked(f, simSheet, 1, 1, 1, 1, titleStyle)
+	_ = styleRangeChecked(f, simSheet, 1, 1, 1, 1, styles.title)
 	if err := setCellChecked(f, simSheet, 1, 2, "Formula: 2 * sum(min(MeanCover_u1, MeanCover_u2)) / sum(MeanCover_u1 + MeanCover_u2)"); err != nil {
-		return nil, err
+		return err
 	}
-	_ = styleRangeChecked(f, simSheet, 1, 2, 1, 2, subtitleStyle)
+	_ = styleRangeChecked(f, simSheet, 1, 2, 1, 2, styles.subtitle)
 
 	if err := setCellChecked(f, simSheet, 1, 4, "SiteUnit"); err != nil {
-		return nil, err
+		return err
 	}
-	_ = styleRangeChecked(f, simSheet, 1, 4, 1, 4, headerLeftStyle)
+	_ = styleRangeChecked(f, simSheet, 1, 4, 1, 4, styles.headerLeft)
 	for j, u := range snap.Units {
 		if err := setCellChecked(f, simSheet, j+2, 4, u.SiteUnit); err != nil {
-			return nil, err
+			return err
 		}
-		_ = styleRangeChecked(f, simSheet, j+2, 4, j+2, 4, headerStyle)
+		_ = styleRangeChecked(f, simSheet, j+2, 4, j+2, 4, styles.header)
 	}
 
 	for i, row := range snap.SimilarityMatrix {
-		rIdx := 5 + i
-		if err := setCellChecked(f, simSheet, 1, rIdx, row.Unit); err != nil {
-			return nil, err
-		}
-		_ = styleRangeChecked(f, simSheet, 1, rIdx, 1, rIdx, sectionBannerStyle)
-		for j, cell := range row.Cells {
-			if err := setCellChecked(f, simSheet, j+2, rIdx, cell.SimilarityPct); err != nil {
-				return nil, err
-			}
-			st := centerCellStyle
-			if i != j {
-				if cell.SimilarityPct >= 70.0 {
-					st = highSimStyle
-				} else if cell.SimilarityPct >= 50.0 {
-					st = medSimStyle
-				}
-			}
-			_ = styleRangeChecked(f, simSheet, j+2, rIdx, j+2, rIdx, st)
+		if err := writeSimilarityMatrixRow(f, simSheet, i, row, styles); err != nil {
+			return err
 		}
 	}
+	if err := writePairwiseDifferentialTable(f, simSheet, 7+len(snap.SimilarityMatrix), snap.PairwiseComparisons, styles); err != nil {
+		return err
+	}
+	_ = f.AutoFitColWidth(simSheet, "A:L")
+	return nil
+}
 
-	pairStartRow := 7 + len(snap.SimilarityMatrix)
-	if err := setCellChecked(f, simSheet, 1, pairStartRow, "Pairwise BEC Differential Potential Summary (do_pairwise)"); err != nil {
-		return nil, err
+func writeSimilarityMatrixRow(
+	f *excelize.File,
+	simSheet string,
+	rowIndex int,
+	row PairwiseMatrixRow,
+	styles diagnosticWorkbookStyles,
+) error {
+	rIdx := 5 + rowIndex
+	if err := setCellChecked(f, simSheet, 1, rIdx, row.Unit); err != nil {
+		return err
 	}
-	_ = styleRangeChecked(f, simSheet, 1, pairStartRow, 1, pairStartRow, titleStyle)
+	_ = styleRangeChecked(f, simSheet, 1, rIdx, 1, rIdx, styles.sectionBanner)
+	for j, cell := range row.Cells {
+		if err := setCellChecked(f, simSheet, j+2, rIdx, cell.SimilarityPct); err != nil {
+			return err
+		}
+		st := styles.centerCell
+		if rowIndex != j {
+			if cell.SimilarityPct >= 70.0 {
+				st = styles.highSim
+			} else if cell.SimilarityPct >= 50.0 {
+				st = styles.medSim
+			}
+		}
+		_ = styleRangeChecked(f, simSheet, j+2, rIdx, j+2, rIdx, st)
+	}
+	return nil
+}
+
+func writePairwiseDifferentialTable(
+	f *excelize.File,
+	simSheet string,
+	pairStartRow int,
+	comparisons []PairwiseUnitComparison,
+	styles diagnosticWorkbookStyles,
+) error {
+	if err := setCellChecked(f, simSheet, 1, pairStartRow, "Pairwise BEC Differential Potential Summary (do_pairwise)"); err != nil {
+		return err
+	}
+	_ = styleRangeChecked(f, simSheet, 1, pairStartRow, 1, pairStartRow, styles.title)
 
 	pairHeaders := []string{
 		"Unit1", "Unit2", "nPlots1", "nPlots2",
@@ -500,11 +590,11 @@ func encodeDiagnosticWorkbookBytes(
 	pairHeaderRow := pairStartRow + 1
 	for cIdx, h := range pairHeaders {
 		if err := setCellChecked(f, simSheet, cIdx+1, pairHeaderRow, h); err != nil {
-			return nil, err
+			return err
 		}
-		_ = styleRangeChecked(f, simSheet, cIdx+1, pairHeaderRow, cIdx+1, pairHeaderRow, headerStyle)
+		_ = styleRangeChecked(f, simSheet, cIdx+1, pairHeaderRow, cIdx+1, pairHeaderRow, styles.header)
 	}
-	for idx, comp := range snap.PairwiseComparisons {
+	for idx, comp := range comparisons {
 		r := pairHeaderRow + 1 + idx
 		topNames := make([]string, 0, min(5, len(comp.DifferentialTaxa)))
 		for k := 0; k < len(comp.DifferentialTaxa) && k < 5; k++ {
@@ -520,24 +610,27 @@ func encodeDiagnosticWorkbookBytes(
 		}
 		for cIdx, v := range vals {
 			if err := setCellChecked(f, simSheet, cIdx+1, r, v); err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
-	_ = f.AutoFitColWidth(simSheet, "A:L")
+	return nil
+}
 
-	// =========================================================================
-	// SHEET 3: Candidate Misplaced Plots (Outlier Queue) Sheet
-	// =========================================================================
-	outSheet := sheetNames[2]
+func writeOutlierQueueSheet(
+	f *excelize.File,
+	outSheet string,
+	snap *SynthesisSnapshot,
+	styles diagnosticWorkbookStyles,
+) error {
 	if err := setCellChecked(f, outSheet, 1, 1, "Candidate Misplaced Plots Queue (Leave-One-Out Centroid Similarity)"); err != nil {
-		return nil, err
+		return err
 	}
-	_ = styleRangeChecked(f, outSheet, 1, 1, 1, 1, titleStyle)
+	_ = styleRangeChecked(f, outSheet, 1, 1, 1, 1, styles.title)
 	if err := setCellChecked(f, outSheet, 1, 2, "Sorted by RivalSimilarity - OwnLOOSimilarity descending; top 5% anomalous and misplaced plots highlighted"); err != nil {
-		return nil, err
+		return err
 	}
-	_ = styleRangeChecked(f, outSheet, 1, 2, 1, 2, subtitleStyle)
+	_ = styleRangeChecked(f, outSheet, 1, 2, 1, 2, styles.subtitle)
 
 	outHeaders := []string{
 		"Rank", "PlotNumber", "AssignedUnit", "UnitPlots",
@@ -546,121 +639,132 @@ func encodeDiagnosticWorkbookBytes(
 	}
 	for cIdx, h := range outHeaders {
 		if err := setCellChecked(f, outSheet, cIdx+1, 4, h); err != nil {
-			return nil, err
+			return err
 		}
-		_ = styleRangeChecked(f, outSheet, cIdx+1, 4, cIdx+1, 4, headerStyle)
+		_ = styleRangeChecked(f, outSheet, cIdx+1, 4, cIdx+1, 4, styles.header)
 	}
 
 	for idx, cand := range snap.OutlierQueue {
 		r := 5 + idx
-		status := "Consistent"
-		switch {
-		case cand.Misplaced && cand.Top5PercentAnomaly:
-			status = "Candidate Misplaced (Top 5%)"
-		case cand.Misplaced:
-			status = "Candidate Misplaced"
-		case cand.SingletonUnit:
-			status = "Singleton Unit"
-		case cand.Top5PercentAnomaly:
-			status = "Top 5% Anomaly"
-		}
 		vals := []any{
 			cand.Rank, cand.PlotNumber, cand.AssignedUnit, cand.AssignedUnitPlots,
 			cand.OwnSimilarityPct, cand.NearestRivalUnit, cand.RivalSimilarityPct, cand.DeltaSimilarityPct,
-			status, cand.MoistureRegime, cand.NutrientRegime, cand.Zone, cand.SubZone, cand.SiteSeries,
+			outlierCandidateStatusLabel(cand), cand.MoistureRegime, cand.NutrientRegime, cand.Zone, cand.SubZone, cand.SiteSeries,
 		}
 		for cIdx, v := range vals {
 			if err := setCellChecked(f, outSheet, cIdx+1, r, v); err != nil {
-				return nil, err
+				return err
 			}
 		}
 		if cand.Misplaced || cand.Top5PercentAnomaly {
-			_ = styleRangeChecked(f, outSheet, 1, r, len(outHeaders), r, warnRowStyle)
+			_ = styleRangeChecked(f, outSheet, 1, r, len(outHeaders), r, styles.warnRow)
 		}
 	}
 	_ = f.AutoFitColWidth(outSheet, "A:N")
+	return nil
+}
 
-	// =========================================================================
-	// SHEET 4: Edatopic Grid (rSMR 0..8 x rSNR A..F) Counts & Prominence Sheet
-	// =========================================================================
+func outlierCandidateStatusLabel(cand OutlierPlotCandidate) string {
+	switch {
+	case cand.Misplaced && cand.Top5PercentAnomaly:
+		return "Candidate Misplaced (Top 5%)"
+	case cand.Misplaced:
+		return "Candidate Misplaced"
+	case cand.SingletonUnit:
+		return "Singleton Unit"
+	case cand.Top5PercentAnomaly:
+		return "Top 5% Anomaly"
+	default:
+		return "Consistent"
+	}
+}
+
+func writeEdatopicGridsSheet(
+	f *excelize.File,
+	sheetNames []string,
+	snap *SynthesisSnapshot,
+	includeUnitTabs bool,
+	styles diagnosticWorkbookStyles,
+) error {
 	edaSheet := sheetNames[3]
 	if err := setCellChecked(f, edaSheet, 1, 1, "Relative Edatopic Grids (rSMR 0..8 x rSNR A..F) — Plot Counts & % Prominence"); err != nil {
-		return nil, err
+		return err
 	}
-	_ = styleRangeChecked(f, edaSheet, 1, 1, 1, 1, titleStyle)
+	_ = styleRangeChecked(f, edaSheet, 1, 1, 1, 1, styles.title)
 
-	writeEdatopicBlock := func(targetSheet string, startRow int, grid EdatopicUnitGrid) (int, error) {
-		hdr := fmt.Sprintf("%s (Plotted: %d / %d, Missing Edatopic: %d)",
-			grid.Label, grid.PlottedEdatopicCount, grid.TotalPlots, grid.MissingEdatopicCount)
-		if err := setCellChecked(f, targetSheet, 1, startRow, hdr); err != nil {
-			return startRow, err
-		}
-		_ = styleRangeChecked(f, targetSheet, 1, startRow, 7, startRow, sectionBannerStyle)
-
-		colHdrRow := startRow + 1
-		if err := setCellChecked(f, targetSheet, 1, colHdrRow, "rSMR \\ rSNR"); err != nil {
-			return startRow, err
-		}
-		_ = styleRangeChecked(f, targetSheet, 1, colHdrRow, 1, colHdrRow, headerStyle)
-		for cIdx, snr := range SNRCols {
-			if err := setCellChecked(f, targetSheet, cIdx+2, colHdrRow, snr); err != nil {
-				return startRow, err
-			}
-			_ = styleRangeChecked(f, targetSheet, cIdx+2, colHdrRow, cIdx+2, colHdrRow, headerStyle)
-		}
-
-		for rIdx, smr := range SMRRows {
-			rowNum := colHdrRow + 1 + rIdx
-			if err := setCellChecked(f, targetSheet, 1, rowNum, smr); err != nil {
-				return startRow, err
-			}
-			_ = styleRangeChecked(f, targetSheet, 1, rowNum, 1, rowNum, sectionBannerStyle)
-
-			for cIdx := range SNRCols {
-				cell := grid.Cells[rIdx*len(SNRCols)+cIdx]
-				display := ""
-				if cell.PlotCount > 0 {
-					display = fmt.Sprintf("%d (%.0f%%)", cell.PlotCount, cell.Prominence)
-				}
-				if err := setCellChecked(f, targetSheet, cIdx+2, rowNum, display); err != nil {
-					return startRow, err
-				}
-				st := centerCellStyle
-				if cell.Prominence >= 25.0 {
-					st = edatopicCoreStyle
-				} else if cell.PlotCount > 0 {
-					st = edatopicSubStyle
-				}
-				_ = styleRangeChecked(f, targetSheet, cIdx+2, rowNum, cIdx+2, rowNum, st)
-			}
-		}
-		return colHdrRow + len(SMRRows) + 2, nil
-	}
-
-	nextEdaRow, err := writeEdatopicBlock(edaSheet, 3, snap.OverallEdatopicGrid)
+	nextEdaRow, err := writeEdatopicBlock(f, edaSheet, 3, snap.OverallEdatopicGrid, styles)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for uIdx, uGrid := range snap.UnitEdatopicGrids {
-		nextEdaRow, err = writeEdatopicBlock(edaSheet, nextEdaRow, uGrid)
+		nextEdaRow, err = writeEdatopicBlock(f, edaSheet, nextEdaRow, uGrid, styles)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		if req.IncludeUnitEdatopicTabs && 4+uIdx < len(sheetNames) {
+		if includeUnitTabs && 4+uIdx < len(sheetNames) {
 			uTab := sheetNames[4+uIdx]
-			if _, err := writeEdatopicBlock(uTab, 2, uGrid); err != nil {
-				return nil, err
+			if _, err := writeEdatopicBlock(f, uTab, 2, uGrid, styles); err != nil {
+				return err
 			}
 			_ = f.AutoFitColWidth(uTab, "A:G")
 		}
 	}
 	_ = f.AutoFitColWidth(edaSheet, "A:G")
+	return nil
+}
 
-	var buf bytes.Buffer
-	if _, err := f.WriteTo(&buf); err != nil {
-		return nil, err
+func writeEdatopicBlock(
+	f *excelize.File,
+	targetSheet string,
+	startRow int,
+	grid EdatopicUnitGrid,
+	styles diagnosticWorkbookStyles,
+) (int, error) {
+	hdr := fmt.Sprintf("%s (Plotted: %d / %d, Missing Edatopic: %d)",
+		grid.Label, grid.PlottedEdatopicCount, grid.TotalPlots, grid.MissingEdatopicCount)
+	if err := setCellChecked(f, targetSheet, 1, startRow, hdr); err != nil {
+		return startRow, err
 	}
-	return buf.Bytes(), nil
+	_ = styleRangeChecked(f, targetSheet, 1, startRow, 7, startRow, styles.sectionBanner)
+
+	colHdrRow := startRow + 1
+	if err := setCellChecked(f, targetSheet, 1, colHdrRow, "rSMR \\ rSNR"); err != nil {
+		return startRow, err
+	}
+	_ = styleRangeChecked(f, targetSheet, 1, colHdrRow, 1, colHdrRow, styles.header)
+	for cIdx, snr := range SNRCols {
+		if err := setCellChecked(f, targetSheet, cIdx+2, colHdrRow, snr); err != nil {
+			return startRow, err
+		}
+		_ = styleRangeChecked(f, targetSheet, cIdx+2, colHdrRow, cIdx+2, colHdrRow, styles.header)
+	}
+
+	for rIdx, smr := range SMRRows {
+		rowNum := colHdrRow + 1 + rIdx
+		if err := setCellChecked(f, targetSheet, 1, rowNum, smr); err != nil {
+			return startRow, err
+		}
+		_ = styleRangeChecked(f, targetSheet, 1, rowNum, 1, rowNum, styles.sectionBanner)
+
+		for cIdx := range SNRCols {
+			cell := grid.Cells[rIdx*len(SNRCols)+cIdx]
+			display := ""
+			if cell.PlotCount > 0 {
+				display = fmt.Sprintf("%d (%.0f%%)", cell.PlotCount, cell.Prominence)
+			}
+			if err := setCellChecked(f, targetSheet, cIdx+2, rowNum, display); err != nil {
+				return startRow, err
+			}
+			st := styles.centerCell
+			if cell.Prominence >= 25.0 {
+				st = styles.edatopicCore
+			} else if cell.PlotCount > 0 {
+				st = styles.edatopicSub
+			}
+			_ = styleRangeChecked(f, targetSheet, cIdx+2, rowNum, cIdx+2, rowNum, st)
+		}
+	}
+	return colHdrRow + len(SMRRows) + 2, nil
 }
 
 func validateEncodedDiagnosticWorkbook(ctx context.Context, data []byte, expectedSheets []string) error {
@@ -700,38 +804,9 @@ func ExportDiagnosticWorkbook(
 	req ExportDiagnosticWorkbookRequest,
 ) (*ExportDiagnosticWorkbookResult, error) {
 	started := time.Now()
-	if ctx == nil {
-		return nil, errors.New("diagnostic workbook export requires a request context")
-	}
-	if err := ctx.Err(); err != nil {
+	outPath, baseSheets, err := validateExportDiagnosticWorkbookRequest(ctx, contexts, req)
+	if err != nil {
 		return nil, err
-	}
-	if contexts == nil {
-		return nil, errors.New("classification context service is unavailable")
-	}
-	outPath := strings.TrimSpace(req.OutputPath)
-	if outPath == "" {
-		return nil, errors.New("outputPath is required for diagnostic workbook export")
-	}
-	if !strings.EqualFold(filepathExt(outPath), ".xlsx") {
-		return nil, errors.New("diagnostic workbook outputPath must end with .xlsx")
-	}
-
-	diagName := strings.TrimSpace(req.DiagnosticSheetName)
-	if diagName == "" {
-		diagName = "Diagnostic Summary"
-	}
-	simName := strings.TrimSpace(req.SimilaritySheetName)
-	if simName == "" {
-		simName = "Pairwise Similarity"
-	}
-	outName := strings.TrimSpace(req.OutlierSheetName)
-	if outName == "" {
-		outName = "Outlier Queue"
-	}
-	edaName := strings.TrimSpace(req.EdatopicSheetName)
-	if edaName == "" {
-		edaName = "Edatopic Grid"
 	}
 
 	return vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (*ExportDiagnosticWorkbookResult, error) {
@@ -741,7 +816,7 @@ func ExportDiagnosticWorkbook(
 			return nil, err
 		}
 
-		rawSheets := []string{diagName, simName, outName, edaName}
+		rawSheets := append([]string(nil), baseSheets...)
 		if req.IncludeUnitEdatopicTabs {
 			for _, u := range snap.Units {
 				rawSheets = append(rawSheets, "Eda_"+u.SiteUnit)
@@ -787,6 +862,42 @@ func ExportDiagnosticWorkbook(
 			LatencyMs:   RoundACE15(latencyMs, 2),
 		}, nil
 	})
+}
+
+func validateExportDiagnosticWorkbookRequest(
+	ctx context.Context,
+	contexts *vprocore.ContextService,
+	req ExportDiagnosticWorkbookRequest,
+) (string, []string, error) {
+	if ctx == nil {
+		return "", nil, errors.New("diagnostic workbook export requires a request context")
+	}
+	if err := ctx.Err(); err != nil {
+		return "", nil, err
+	}
+	if contexts == nil {
+		return "", nil, errors.New("classification context service is unavailable")
+	}
+	outPath := strings.TrimSpace(req.OutputPath)
+	if outPath == "" {
+		return "", nil, errors.New("outputPath is required for diagnostic workbook export")
+	}
+	if !strings.EqualFold(filepathExt(outPath), ".xlsx") {
+		return "", nil, errors.New("diagnostic workbook outputPath must end with .xlsx")
+	}
+	return outPath, []string{
+		defaultSheetName(req.DiagnosticSheetName, "Diagnostic Summary"),
+		defaultSheetName(req.SimilaritySheetName, "Pairwise Similarity"),
+		defaultSheetName(req.OutlierSheetName, "Outlier Queue"),
+		defaultSheetName(req.EdatopicSheetName, "Edatopic Grid"),
+	}, nil
+}
+
+func defaultSheetName(raw, fallback string) string {
+	if trimmed := strings.TrimSpace(raw); trimmed != "" {
+		return trimmed
+	}
+	return fallback
 }
 
 func filepathExt(p string) string {
