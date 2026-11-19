@@ -4,6 +4,7 @@
   import type { PaperControl } from './paperLayout';
   import { CoordinateEditor, coordinateSession, rememberCoordinateSession, coordinateBusy, coordinateControls, coordinateOptions,
     type CoordinateDisplayMode, type CoordinateAxis } from './coordinateEditor';
+  import { createSpatialCoordinatePort, projectNAD83UTMZoneToLatLon } from './coordinateConversion';
 
   let { draft = $bindable(), mode = $bindable(), controls, position, capabilities, disabled,
     onchange, onerror, onvalidation, onbusy, children }: {
@@ -15,22 +16,12 @@
   } = $props();
   const editingEnabled = true;
   const axes = ['latitude', 'longitude'] as const;
-  const serviceModes: Record<CoordinateDisplayMode, CoordinateMode> = {
-    dd: CoordinateMode.CoordinateModeDD,
-    dm: CoordinateMode.CoordinateModeDM,
-    dms: CoordinateMode.CoordinateModeDMS
-  };
   const radioGroup = $props.id();
   let identity = untrack(() => draft);
   const busyIdentity = identity;
   const busyOwner = {};
   const reportBusy = untrack(() => onbusy);
-  const editor = new CoordinateEditor({
-    getMode: () => SpatialService.GetCoordinateMode(),
-    setMode: value => SpatialService.SetCoordinateMode(serviceModes[value]),
-    decompose: (value, valueMode) => SpatialService.DecomposeCoordinate(value, serviceModes[valueMode]),
-    convert: (axis, valueMode, parts) => SpatialService.ConvertCoordinate(axis, serviceModes[valueMode], parts)
-  }, {
+  const editor = new CoordinateEditor(createSpatialCoordinatePort(SpatialService, CoordinateMode), {
     state: next => { view = next; mode = next.mode; rememberCoordinateSession(identity, next); },
     busy: value => reportBusy?.(coordinateBusy(busyIdentity, busyOwner, value)),
     dirty: () => onchange(),
@@ -61,16 +52,10 @@
       let changed = false;
 
       if (lat === null && lon === null && targetDraft.utmZone && targetDraft.easting !== null && targetDraft.northing !== null) {
-        const rawZone = String(targetDraft.utmZone).trim();
-        const zoneMatch = /^0*([0-9]{1,2})[Nn]?$/.exec(rawZone);
-        const zoneNum = zoneMatch ? Number.parseInt(zoneMatch[1], 10) : Number.NaN;
-        if (!Number.isInteger(zoneNum) || zoneNum < 7 || zoneNum > 12) {
-          throw new Error(`Invalid NAD83 UTM zone "${rawZone}" (expected Northern Hemisphere zone 7–12, such as 9 or 10N).`);
-        }
-        const projected = await SpatialService.ProjectNAD83UTMToLatLon(zoneNum, targetDraft.easting, targetDraft.northing);
+        const projected = await projectNAD83UTMZoneToLatLon(SpatialService, targetDraft.utmZone, targetDraft.easting, targetDraft.northing, true);
         if (gen !== auto1Generation || identity !== targetDraft) return;
-        lat = Math.round(projected.latitude * 1e6) / 1e6;
-        lon = Math.round(projected.longitude * 1e6) / 1e6;
+        lat = projected.latitude;
+        lon = projected.longitude;
         if (capabilities.latitude === true) { targetDraft.latitude = lat; changed = true; }
         if (capabilities.longitude === true) { targetDraft.longitude = lon; changed = true; }
         editor.syncDraft(targetDraft.latitude, targetDraft.longitude, targetDraft);

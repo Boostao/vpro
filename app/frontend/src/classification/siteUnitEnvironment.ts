@@ -59,7 +59,7 @@ export function validateSiteUnitEnvironmentReview(review: SiteUnitEnvironmentRev
     }
     const bound = change.field === 'SiteUnitShortName' ? 50 : 100;
     if (change.after.text !== null && (change.after.text.length > bound || change.after.text.includes('\0'))) {
-      throw new Error(`Reverse ${change.field} exceeds the original ${bound} UTF-16-unit bound.`);
+      throw new Error(`Reverse ${change.field} exceeds the ${bound}-character limit.`);
     }
     const unit = units[0].cells![source.get('SiteUnit')!];
     if (change.field === 'UserSiteUnit') {

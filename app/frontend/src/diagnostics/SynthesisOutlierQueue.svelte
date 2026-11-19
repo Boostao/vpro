@@ -80,6 +80,7 @@
     </div>
     <input
       type="search"
+      aria-label="Search candidate outlier plots or units"
       class="outlier-search"
       placeholder="Search plot or unit..."
       value={outlierSearch}

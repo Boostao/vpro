@@ -137,15 +137,15 @@
             {@const dispTotalB = rowShrubCover(row)}
             <tr class="hover:bg-[#F2F2F2]">
               <td class="p-2 font-mono font-bold text-[#003366]">{row.species}</td>
-              <td class="p-2"><input type="text" value={row.layer ?? ''} disabled class="w-10 border border-stone-200 rounded px-1 py-0.5 text-xs text-center" /></td>
-              <td class="p-2"><input type="number" step="0.1" value={row.cover1 ?? ''} disabled class="w-14 border border-stone-200 rounded px-1 py-0.5 text-xs text-right" /></td>
-              <td class="p-2"><input type="number" step="0.1" value={row.cover2 ?? ''} disabled class="w-14 border border-stone-200 rounded px-1 py-0.5 text-xs text-right" /></td>
+              <td class="p-2"><input type="text" aria-label={`Layer for ${row.species}`} value={row.layer ?? ''} disabled class="w-10 border border-stone-200 rounded px-1 py-0.5 text-xs text-center" /></td>
+              <td class="p-2"><input type="number" step="0.1" aria-label={`Cover 1 for ${row.species}`} value={row.cover1 ?? ''} disabled class="w-14 border border-stone-200 rounded px-1 py-0.5 text-xs text-right" /></td>
+              <td class="p-2"><input type="number" step="0.1" aria-label={`Cover 2 for ${row.species}`} value={row.cover2 ?? ''} disabled class="w-14 border border-stone-200 rounded px-1 py-0.5 text-xs text-right" /></td>
               <td class="p-2 font-bold text-stone-800 text-right">{dispTotalA !== null ? dispTotalA.toFixed(1) : '—'}</td>
-              <td class="p-2"><input type="number" step="0.1" value={row.cover4 ?? ''} disabled class="w-14 border border-stone-200 rounded px-1 py-0.5 text-xs text-right" /></td>
-              <td class="p-2"><input type="number" step="0.1" value={row.cover5 ?? ''} disabled class="w-14 border border-stone-200 rounded px-1 py-0.5 text-xs text-right" /></td>
+              <td class="p-2"><input type="number" step="0.1" aria-label={`Cover 4 for ${row.species}`} value={row.cover4 ?? ''} disabled class="w-14 border border-stone-200 rounded px-1 py-0.5 text-xs text-right" /></td>
+              <td class="p-2"><input type="number" step="0.1" aria-label={`Cover 5 for ${row.species}`} value={row.cover5 ?? ''} disabled class="w-14 border border-stone-200 rounded px-1 py-0.5 text-xs text-right" /></td>
               <td class="p-2 font-bold text-stone-800 text-right">{dispTotalB !== null ? dispTotalB.toFixed(1) : '—'}</td>
-              <td class="p-2"><input type="number" step="0.1" value={row.cover6 ?? ''} disabled class="w-14 border border-stone-200 rounded px-1 py-0.5 text-xs text-right" /></td>
-              <td class="p-2"><input type="number" step="0.1" value={row.cover7 ?? ''} disabled class="w-14 border border-stone-200 rounded px-1 py-0.5 text-xs text-right" /></td>
+              <td class="p-2"><input type="number" step="0.1" aria-label={`Cover 6 for ${row.species}`} value={row.cover6 ?? ''} disabled class="w-14 border border-stone-200 rounded px-1 py-0.5 text-xs text-right" /></td>
+              <td class="p-2"><input type="number" step="0.1" aria-label={`Cover 7 for ${row.species}`} value={row.cover7 ?? ''} disabled class="w-14 border border-stone-200 rounded px-1 py-0.5 text-xs text-right" /></td>
               <td class="p-2">
                 <button type="button" onclick={() => void ondeleteveg(row.id)} disabled class="text-red-600 hover:text-red-800 p-1" title="Delete entry">
                   <Trash2 size={14} />

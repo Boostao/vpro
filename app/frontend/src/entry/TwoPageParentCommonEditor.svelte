@@ -4,7 +4,8 @@
   import { ReadRequests } from '../shared/readRequests';
   import type { EditorCloseState } from '../shell/closeLifecycle';
   import TwoPageParentCommonFields from './TwoPageParentCommonFields.svelte';
-  import TwoPageEntryLayout from './TwoPageEntryLayout.svelte';
+  import TwoPageParentReviewSection from './TwoPageParentReviewSection.svelte';
+  import TwoPageParentSourceLayout from './TwoPageParentSourceLayout.svelte';
   import { twoPageEntryValues, type TwoPageEntryChild } from './twoPageEntryProjection';
   import type { PaperControl } from './paperLayout';
   import type { TwoPageParentForm } from './twoPageParentSession';
@@ -122,38 +123,31 @@
   }
 </script>
 
-<section class="space-y-3" aria-label="Two-page common source review">
-  {#if error}<p role="alert" class="text-sm text-red-700">{error}</p>{/if}
-  <div class="flex flex-wrap gap-2">
-    <label class="inline-flex items-center gap-2 rounded border px-2 py-1 text-sm">
-      <input type="checkbox" data-extended-shrubs checked={form === 'FS882-8x6XL-CHARS'}
-        disabled={close.unsaved || close.busy || close.blocked}
-        onchange={event => chooseForm(event.currentTarget.checked ? 'FS882-8x6XL-CHARS' : 'FS882-8x6XL')} />
-      Show extended shrub layers
-    </label>
-    <button type="button" disabled={close.unsaved || close.busy || close.blocked} onclick={closeReview}>Close common-field review</button>
-  </div>
+<TwoPageParentReviewSection
+  ariaLabel="Two-page common source review"
+  {error}
+  {form}
+  locked={close.unsaved || close.busy || close.blocked}
+  closeLabel="Close common-field review"
+  onchooseform={next => void chooseForm(next)}
+  onclose={closeReview}
+>
   <TwoPageParentCommonFields {form} {view} {choices} {choicesBusy} {choicesError} disabled={!editingEnabled}
     readDisabled={!reviewEnabled} canSave={editingEnabled && close.canSave} onstage={stage}
     onoperation={action => void operation(action)} oncancel={cancel} onchoices={() => void loadChoices()}
     children={sourceLayoutEnabled ? completeLayout : undefined} />
-</section>
+</TwoPageParentReviewSection>
 
 {#snippet completeLayout(editor: { columns: readonly string[]; input: Snippet<[PaperControl, string]>; labelled: true })}
   {#if view.original}
-    <p class="text-sm">Common fields are editable in this source layout. Other parent fields and linked records
-      remain read-only during this review; finish and close this scope before editing another.</p>
-    <TwoPageEntryLayout {form} values={twoPageEntryValues(view.original, form)} editors={[{ ...editor, scope: 'common' }]}>
-      {#snippet identity(field)}
-        <label class="form-field"><span class="field-label">Plot number</span>
-          <input data-column={field.column} value={owner.plot} readonly aria-label="Plot number"
-            title="Existing plot identities cannot be renamed here" />
-        </label>
-      {/snippet}
-      {#snippet embedded(child, control)}
-        {#if childContent}{@render childContent(child, control)}
-        {:else}<p>{child.form}: linked records are unavailable in this review.</p>{/if}
-      {/snippet}
-    </TwoPageEntryLayout>
+    <TwoPageParentSourceLayout
+      {form}
+      plot={owner.plot}
+      scope="common"
+      scopeLabel="Common"
+      values={twoPageEntryValues(view.original, form)}
+      {editor}
+      {childContent}
+    />
   {/if}
 {/snippet}

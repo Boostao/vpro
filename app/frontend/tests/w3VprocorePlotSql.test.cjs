@@ -264,6 +264,7 @@ test('UX-ENV-004: CoordinateFields rejects Southern UTM zone 9S and reports out-
     .join('\n')
     .replace('export default function', 'function');
 
+  const coordConvMod = loadTypeScript('coordinateConversion.ts');
   const mountFn = new Function(
     '$',
     'onMount',
@@ -277,6 +278,8 @@ test('UX-ENV-004: CoordinateFields rejects Southern UTM zone 9S and reports out-
     'coordinateBusy',
     'coordinateControls',
     'coordinateOptions',
+    'createSpatialCoordinatePort',
+    'projectNAD83UTMZoneToLatLon',
     code + '\nreturn _unknown_;'
   );
 
@@ -332,7 +335,9 @@ test('UX-ENV-004: CoordinateFields rejects Southern UTM zone 9S and reports out-
     coordMod.rememberCoordinateSession,
     coordMod.coordinateBusy,
     coordMod.coordinateControls,
-    coordMod.coordinateOptions
+    coordMod.coordinateOptions,
+    coordConvMod.createSpatialCoordinatePort,
+    coordConvMod.projectNAD83UTMZoneToLatLon
   );
 
   const dispose = client.effect_root(() =>

@@ -214,6 +214,19 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
       (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined) ||
       (typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined);
   }
+  function emitLongVegWorkbookToast(
+    pub: { outcome?: { status: string; path: string; sha256: string } | null; error?: string; requestedDestination: string } | null | undefined,
+    destFallback: string,
+    ctxTag: string | undefined,
+  ) {
+    if (!pub || typeof notifications === 'undefined') return;
+    const opts = { category: 'reports' as const, source: 'Long Vegetation', contextTag: ctxTag };
+    if (pub.outcome?.status === 'published' && !pub.error) {
+      notifications.success('Long Vegetation workbook exported', pub.outcome.path || pub.requestedDestination || destFallback, opts);
+    } else if (pub.error || pub.outcome) {
+      notifications.error('Long Vegetation workbook export failed', pub.error || `Publication ${pub.outcome?.status ?? 'failed'} for ${pub.requestedDestination || destFallback}`, opts);
+    }
+  }
   function syncWorkbookNotifications() {
     const pub = publication;
     if (!pub || typeof notifications === 'undefined') { lastPubNotificationKey = ''; return; }
@@ -223,18 +236,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     if (!key) { lastPubNotificationKey = ''; return; }
     if (key === lastPubNotificationKey) return;
     lastPubNotificationKey = key;
-    const ctxTag = resolveContextTag();
-    if (pub.outcome?.status === 'published' && !pub.error) {
-      notifications.success('Long Vegetation workbook exported', pub.outcome.path || pub.requestedDestination, {
-        category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
-      });
-    } else if (pub.error || pub.outcome) {
-      notifications.error(
-        'Long Vegetation workbook export failed',
-        pub.error || `Publication ${pub.outcome?.status ?? 'failed'} for ${pub.requestedDestination}`,
-        { category: 'reports', source: 'Long Vegetation', contextTag: ctxTag },
-      );
-    }
+    emitLongVegWorkbookToast(pub, destination, resolveContextTag());
   }
   function syncProjectNotifications() {
     const pv = projectView;
@@ -259,17 +261,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     if (!key) { lastProjPubNotificationKey = ''; return; }
     if (key === lastProjPubNotificationKey) return;
     lastProjPubNotificationKey = key;
-    if (pub.outcome?.status === 'published' && !pub.error) {
-      notifications.success('Long Vegetation workbook exported', pub.outcome.path || pub.requestedDestination, {
-        category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
-      });
-    } else if (pub.error || pub.outcome) {
-      notifications.error(
-        'Long Vegetation workbook export failed',
-        pub.error || `Publication ${pub.outcome?.status ?? 'failed'} for ${pub.requestedDestination}`,
-        { category: 'reports', source: 'Long Vegetation', contextTag: ctxTag },
-      );
-    }
+    emitLongVegWorkbookToast(pub, destination, ctxTag);
   }
   function syncPreferenceNotifications() {
     const v = preferenceView;
@@ -683,40 +675,16 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
       error = '';
       try {
         await projectWorkspace.publishWorkbook(destination);
-        if (typeof syncProjectNotifications === 'function') {
-          syncProjectNotifications();
-        } else {
+        if (typeof syncProjectNotifications === 'function') syncProjectNotifications();
+        else if (typeof notifications !== 'undefined') {
           const settled = projectWorkspace.view?.().publication;
-          if (typeof notifications !== 'undefined' && settled) {
-            if (settled.outcome?.status === 'published' && !settled.error) {
-              const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
-              notifications.success('Long Vegetation workbook exported', exportedPath, {
-                category: 'reports',
-                source: 'Long Vegetation',
-                contextTag: ctxTag,
-              });
-            } else if (settled.error || settled.outcome) {
-              notifications.error(
-                'Long Vegetation workbook export failed',
-                settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
-                {
-                  category: 'reports',
-                  source: 'Long Vegetation',
-                  contextTag: ctxTag,
-                },
-              );
-            }
-          }
+          const opts = { category: 'reports' as const, source: 'Long Vegetation', contextTag: ctxTag };
+          if (settled?.outcome?.status === 'published' && !settled.error) notifications.success('Long Vegetation workbook exported', settled.outcome.path || settled.requestedDestination || destination, opts);
+          else if (settled?.error || settled?.outcome) notifications.error('Long Vegetation workbook export failed', settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`, opts);
         }
       } catch (cause) {
         error = String(cause);
-        if (typeof notifications !== 'undefined') {
-          notifications.error('Long Vegetation workbook export failed', error, {
-            category: 'reports',
-            source: 'Long Vegetation',
-            contextTag: ctxTag,
-          });
-        }
+        if (typeof notifications !== 'undefined') notifications.error('Long Vegetation workbook export failed', error, { category: 'reports', source: 'Long Vegetation', contextTag: ctxTag });
       }
       return;
     }
@@ -726,40 +694,16 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     try {
       await workbookSession.publish(reviewed, destination, request =>
         VegetationReportService.ExportReviewedVegetationWorkbook(contextId, JSON.stringify(request)));
-      if (typeof syncWorkbookNotifications === 'function') {
-        syncWorkbookNotifications();
-      } else {
-        const settled = workbookSession.view();
-        if (typeof notifications !== 'undefined') {
-          if (settled.outcome?.status === 'published' && !settled.error) {
-            const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
-            notifications.success('Long Vegetation workbook exported', exportedPath, {
-              category: 'reports',
-              source: 'Long Vegetation',
-              contextTag: ctxTag,
-            });
-          } else if (settled.error || settled.outcome) {
-            notifications.error(
-              'Long Vegetation workbook export failed',
-              settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
-              {
-                category: 'reports',
-                source: 'Long Vegetation',
-                contextTag: ctxTag,
-              },
-            );
-          }
-        }
+      if (typeof syncWorkbookNotifications === 'function') syncWorkbookNotifications();
+      else if (typeof notifications !== 'undefined') {
+        const s = workbookSession.view();
+        const o = { category: 'reports' as const, source: 'Long Vegetation', contextTag: ctxTag };
+        if (s.outcome?.status === 'published' && !s.error) notifications.success('Long Vegetation workbook exported', s.outcome.path || s.requestedDestination || destination, o);
+        else if (s.error || s.outcome) notifications.error('Long Vegetation workbook export failed', s.error || `Publication ${s.outcome?.status ?? 'failed'} for ${s.requestedDestination || destination}`, o);
       }
     } catch (cause) {
       error = String(cause);
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Long Vegetation workbook export failed', error, {
-          category: 'reports',
-          source: 'Long Vegetation',
-          contextTag: ctxTag,
-        });
-      }
+      if (typeof notifications !== 'undefined') notifications.error('Long Vegetation workbook export failed', error, { category: 'reports', source: 'Long Vegetation', contextTag: ctxTag });
     }
   }
   function acknowledgeWorkbook() {

@@ -1,5 +1,6 @@
 <script module lang="ts">
   import { notifications } from '../shell/notificationService.svelte';
+  import WorkbookPublicationSection from '../shared/WorkbookPublicationSection.svelte';
 </script>
 
 <script lang="ts">
@@ -62,52 +63,10 @@
     ...(effectiveReferences ? { references: {
       showCommon: effectiveCommon, useGuideNames: effectiveGuide } } : {}),
   }));
-  let lastViewError = '';
-  let lastPubKey = '';
-  function syncWorkbookNotifications() {
-    const current = session.view();
-    if (typeof notifications === 'undefined') return;
-    const ctxTag = owned.project || undefined;
-    const vErr = current.error ?? '';
-    if (vErr && vErr !== lastViewError) {
-      notifications.error('Summary Vegetation workbook review failed', vErr, {
-        category: 'reports',
-        source: 'Summary Vegetation',
-        contextTag: ctxTag,
-      });
-    }
-    lastViewError = vErr;
-    const settled = current.publication;
-    if (settled.busy) { lastPubKey = ''; return; }
-    if (!settled.outcome && !settled.error) return;
-    const key = JSON.stringify([settled.outcome?.status ?? '', settled.outcome?.path ?? '', settled.outcome?.sha256 ?? '', settled.error ?? '', settled.requestedDestination ?? '']);
-    if (key === lastPubKey) return;
-    lastPubKey = key;
-    if (settled.outcome?.status === 'published' && !settled.error) {
-      const exportedPath = settled.outcome.path || settled.requestedDestination || viewState.destination;
-      notifications.success('Summary Vegetation workbook exported', exportedPath, {
-        category: 'reports',
-        source: 'Summary Vegetation',
-        contextTag: ctxTag,
-      });
-    } else if (settled.error || settled.outcome) {
-      notifications.error(
-        'Summary Vegetation workbook export failed',
-        settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || viewState.destination}`,
-        {
-          category: 'reports',
-          source: 'Summary Vegetation',
-          contextTag: ctxTag,
-        },
-      );
-    }
-  }
   const unsubscribe = session.subscribe(() => {
     viewState = session.view();
-    syncWorkbookNotifications();
     onBusyChange(session.held());
   });
-  syncWorkbookNotifications();
   function edit(field: 'title' | 'destination', raw: string) {
     if (held) return;
     error = '';
@@ -149,24 +108,14 @@
         review: (contextId, options) => VegetationReportService.GetSummaryVegetationWorkbookReview(contextId, JSON.stringify(options)),
         validationYield: () => new Promise(resolve => setTimeout(resolve, 0)),
       });
-      if (!ok) {
-        const current = session.view();
-        if (current.error && typeof notifications !== 'undefined') {
-          notifications.error('Summary Vegetation workbook review failed', current.error, {
-            category: 'reports',
-            source: 'Summary Vegetation',
-            contextTag: owned.project || undefined,
-          });
-        }
+      if (!ok && typeof notifications !== 'undefined') {
+        const curErr = session.view().error;
+        if (curErr) notifications.error('Summary Vegetation workbook review failed', curErr, { category: 'reports', source: 'Summary Vegetation', contextTag: owned.project || undefined });
       }
     } catch (cause) {
       error = String(cause);
       if (typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation workbook review failed', error, {
-          category: 'reports',
-          source: 'Summary Vegetation',
-          contextTag: owned.project || undefined,
-        });
+        notifications.error('Summary Vegetation workbook review failed', error, { category: 'reports', source: 'Summary Vegetation', contextTag: owned.project || undefined });
       }
     }
   }
@@ -196,26 +145,15 @@
         reviewFromPreferences: contextId => VegetationReportService.GetSummaryVegetationWorkbookReviewFromPreferences(contextId),
         validationYield: () => new Promise(resolve => setTimeout(resolve, 0)),
       });
-      if (loaded) {
-        onPreferencesLoaded?.(loaded.options);
-      } else {
-        const current = session.view();
-        if (current.error && typeof notifications !== 'undefined') {
-          notifications.error('Summary Vegetation workbook review failed', current.error, {
-            category: 'reports',
-            source: 'Summary Vegetation',
-            contextTag: owned.project || undefined,
-          });
-        }
+      if (loaded) onPreferencesLoaded?.(loaded.options);
+      else if (typeof notifications !== 'undefined') {
+        const curErr = session.view().error;
+        if (curErr) notifications.error('Summary Vegetation workbook review failed', curErr, { category: 'reports', source: 'Summary Vegetation', contextTag: owned.project || undefined });
       }
     } catch (cause) {
       error = String(cause);
       if (typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation workbook review failed', error, {
-          category: 'reports',
-          source: 'Summary Vegetation',
-          contextTag: owned.project || undefined,
-        });
+        notifications.error('Summary Vegetation workbook review failed', error, { category: 'reports', source: 'Summary Vegetation', contextTag: owned.project || undefined });
       }
     }
   }
@@ -225,37 +163,16 @@
     try {
       await session.publish(calculation, request =>
         VegetationReportService.ExportReviewedSummaryVegetationWorkbook(owned.contextId, JSON.stringify(request)));
-      if (typeof syncWorkbookNotifications === 'function') {
-        syncWorkbookNotifications();
-      } else if (typeof notifications !== 'undefined') {
-        const settled = session.view().publication;
-        if (settled.outcome?.status === 'published' && !settled.error) {
-          const exportedPath = settled.outcome.path || settled.requestedDestination || viewState.destination;
-          notifications.success('Summary Vegetation workbook exported', exportedPath, {
-            category: 'reports',
-            source: 'Summary Vegetation',
-            contextTag: owned.project || undefined,
-          });
-        } else if (settled.error || settled.outcome) {
-          notifications.error(
-            'Summary Vegetation workbook export failed',
-            settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || viewState.destination}`,
-            {
-              category: 'reports',
-              source: 'Summary Vegetation',
-              contextTag: owned.project || undefined,
-            },
-          );
-        }
+      if (typeof notifications !== 'undefined') {
+        const s = session.view().publication;
+        const opts = { category: 'reports' as const, source: 'Summary Vegetation', contextTag: owned.project || undefined };
+        if (s.outcome?.status === 'published' && !s.error) notifications.success('Summary Vegetation workbook exported', s.outcome.path || s.requestedDestination || viewState.destination, opts);
+        else if (s.error || s.outcome) notifications.error('Summary Vegetation workbook export failed', s.error || `Publication ${s.outcome?.status ?? 'failed'} for ${s.requestedDestination || viewState.destination}`, opts);
       }
     } catch (cause) {
       error = String(cause);
       if (typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation workbook export failed', error, {
-          category: 'reports',
-          source: 'Summary Vegetation',
-          contextTag: owned.project || undefined,
-        });
+        notifications.error('Summary Vegetation workbook export failed', error, { category: 'reports', source: 'Summary Vegetation', contextTag: owned.project || undefined });
       }
     }
   }
@@ -265,27 +182,28 @@
     try { session.acknowledge(); } catch (cause) {
       error = String(cause);
       if (typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation workbook acknowledgement failed', error, {
-          category: 'reports',
-          source: 'Summary Vegetation',
-          contextTag: owned.project || undefined,
-        });
+        notifications.error('Summary Vegetation workbook acknowledgement failed', error, { category: 'reports', source: 'Summary Vegetation', contextTag: owned.project || undefined });
       }
     }
   }
   onDestroy(() => { session.cancel(); unsubscribe(); });
 </script>
 
-<section class="workbook" data-summary-vegetation-workbook aria-label="Summary inspection workbook">
-  <h2>Summary inspection workbook (draft)</h2>
-  {#if viewState.draftError}<p role="alert">{viewState.draftError}</p>{/if}
-  {#if !viewState.publication.outcome && viewState.publication.requestedDestination && !viewState.publication.busy}
-    <p data-summary-workbook-unknown role="alert">Workbook outcome unknown. Retain and inspect
-      {viewState.publication.requestedDestination}; never repeat the destination blindly.</p>
-  {/if}
-  {#if viewState.publication.blocked && !viewState.publication.busy}
-    <button data-summary-workbook-acknowledge onclick={acknowledge}>Acknowledge workbook outcome</button>
-  {/if}
+<WorkbookPublicationSection
+  sectionAttr="data-summary-vegetation-workbook"
+  ariaLabel="Summary inspection workbook"
+  heading="Summary inspection workbook (draft)"
+  sourceName="Summary Vegetation"
+  contextTag={owned.project || undefined}
+  publication={viewState.publication}
+  destinationFallback={viewState.destination}
+  reviewError={viewState.error ?? ''}
+  draftError={viewState.draftError}
+  unknownAttr="data-summary-workbook-unknown"
+  unknownMessageSuffix="; never repeat the destination blindly."
+  acknowledgeAttr="data-summary-workbook-acknowledge"
+  onAcknowledge={acknowledge}
+>
   {#if !enabled}<p>Summary Vegetation workbook export is currently unavailable.</p>{/if}
   <p data-summary-workbook-group>Workbook grouping: {groupLabel}.
     {#if constancy}Uses the loaded presentation Constancy draft: Lifeform grouping, Display Values1 and effective references without common/guide names.
@@ -461,19 +379,16 @@
     option. Existing destinations are never replaced.</p>
   {#if !ancillaryEnabled}<p>Source worksheet export is currently unavailable.</p>{/if}
   {#if !referencesEnabled}<p>Effective reference projection is currently unavailable.</p>{/if}
-</section>
+</WorkbookPublicationSection>
 
 <style>
-  .workbook, .plan { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; }
-  .workbook { padding: 1rem; border: 1px solid #D8D8D8; border-radius: .5rem; background: #FFFFFF; color: #313132; }
-  .workbook h2 { margin: 0; color: #003366; }
+  .plan { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; }
   .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; }
   label { display: flex; flex-direction: column; gap: .35rem; min-width: 0; color: #313132; font-weight: 500; }
   input:not([type="checkbox"]) { width: 100%; box-sizing: border-box; min-width: 0; padding: .5rem; border: 1px solid #D8D8D8; border-radius: .25rem; background: #FFFFFF; color: #313132; }
   .checkbox { flex-direction: row; align-items: center; }
   .actions { display: flex; flex-wrap: wrap; gap: .75rem; }
   button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid #003366; border-radius: .25rem; background: #003366; color: #FFFFFF; cursor: pointer; font-weight: 600; }
-  button:hover:not(:disabled) { background: #002244; border-color: #002244; }
   button:disabled { opacity: .6; cursor: not-allowed; }
   .unit-table { min-width: 0; overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; background: #FFFFFF; }

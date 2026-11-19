@@ -82,6 +82,10 @@
     }
   }
 
+  function formatUserSUError(cause: unknown): string {
+    return String(cause ?? '').replace(/^(?:\s*(?:RuntimeError|Error)\s*:\s*)+/i, '').trim();
+  }
+
   async function submitUserSiteUnitEntry() {
     if (!effectiveContextId || !port.saveUserSiteUnitEntry || !userSUSeries.trim() || mutating) return;
     onMutatingChange(true);
@@ -98,7 +102,7 @@
       resetUserSiteUnitForm();
       await onLoadUserSiteUnitList();
     } catch (err) {
-      onError(`Save UserSiteUnit failed: ${String(err)}`);
+      onError(`Save UserSiteUnit failed: ${formatUserSUError(err)}`);
     } finally {
       onMutatingChange(false);
     }
@@ -114,7 +118,7 @@
       onStatus(`Deleted UserSiteUnit "${entry.siteSeries}".`);
       await onLoadUserSiteUnitList();
     } catch (err) {
-      onError(`Delete UserSiteUnit failed: ${String(err)}`);
+      onError(`Delete UserSiteUnit failed: ${formatUserSUError(err)}`);
     } finally {
       onMutatingChange(false);
     }
@@ -138,7 +142,7 @@
       }
       onStatus('Exported UserSiteUnitList CSV.');
     } catch (err) {
-      onError(`Export UserSiteUnit CSV failed: ${String(err)}`);
+      onError(`Export UserSiteUnit CSV failed: ${formatUserSUError(err)}`);
     } finally {
       onMutatingChange(false);
     }
@@ -163,7 +167,7 @@
       );
       await onLoadUserSiteUnitList();
     } catch (err) {
-      onError(`Import UserSiteUnit CSV failed: ${String(err)}`);
+      onError(`Import UserSiteUnit CSV failed: ${formatUserSUError(err)}`);
     } finally {
       onMutatingChange(false);
     }
@@ -172,7 +176,7 @@
 
 <div class="vpro-cls-user-su-panel" aria-label="User Site Unit List Editor">
   <div class="vpro-cls-subtoolbar">
-    <input type="search" class="vpro-cls-filter" placeholder="Filter UserSiteUnitList..." bind:value={userSUFilter} />
+    <input type="search" aria-label="Filter personal site unit list" class="vpro-cls-filter" placeholder="Filter UserSiteUnitList..." bind:value={userSUFilter} />
     <button type="button" class="vpro-btn-secondary" disabled={userSULoading} onclick={refreshList}>Refresh</button>
     {#if port.exportUserSiteUnitListCSV}
       <button type="button" class="vpro-btn-secondary" disabled={mutating} onclick={exportUserSiteUnitsCSV}>Export CSV</button>
@@ -232,10 +236,10 @@
     <div class="vpro-cls-csv-import">
       <div class="vpro-cls-subtoolbar">
         <label class="vpro-cls-check"><input type="checkbox" bind:checked={userSUOverwrite} /><span>Overwrite matching SiteSeries</span></label>
-        <input type="file" accept=".csv,text/csv" onchange={handleUserSUCSVFile} />
+        <input type="file" aria-label="Choose personal site unit CSV file" accept=".csv,text/csv" onchange={handleUserSUCSVFile} />
         <button type="button" class="vpro-btn-secondary" disabled={mutating || !userSUCSVText.trim()} onclick={importUserSiteUnitsCSV}>Import CSV</button>
       </div>
-      <textarea rows="3" class="vpro-cls-csv-box" placeholder="Paste or load UserSiteUnitList CSV rows..." bind:value={userSUCSVText}></textarea>
+      <textarea rows="3" aria-label="Personal site unit CSV content" class="vpro-cls-csv-box" placeholder="Paste or load UserSiteUnitList CSV rows..." bind:value={userSUCSVText}></textarea>
       {#if userSUImportResult}
         <p class="vpro-cls-preview-note">
           Imported: {userSUImportResult.inserted} inserted · {userSUImportResult.updated}
@@ -245,3 +249,14 @@
     </div>
   {/if}
 </div>
+
+<style>
+  .vpro-cls-actions {
+    white-space: nowrap;
+  }
+
+  .vpro-cls-actions button {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+</style>

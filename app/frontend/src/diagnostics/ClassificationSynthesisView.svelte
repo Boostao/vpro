@@ -549,6 +549,7 @@
         {#if activeTab === 'matrix'}
           <input
             type="search"
+            aria-label="Filter synthesis matrix by species, code, lifeform, or unit"
             class="syn-inline-search"
             placeholder="Filter species, code, lifeform, or unit..."
             value={speciesSearch}
@@ -640,6 +641,12 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
     gap: 0.65rem;
+  }
+
+  @media (max-width: 1200px) {
+    .syn-workspace-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 
   @media (max-width: 960px) {

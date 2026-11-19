@@ -1,5 +1,6 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
+  import ModalDialogTrap from '../shared/ModalDialogTrap.svelte';
   import type { SpeciesItem, VegetationDeletionReview } from '../../bindings/github.com/boostao/vpro/app';
   import NewChild from './NewChild.svelte';
   import PersonalSpeciesFields from './PersonalSpeciesFields.svelte';
@@ -400,13 +401,14 @@
 {:else if region === 'speciesModal'}
   {#if showSpeciesModal}
     <div class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-      <div class="bg-white rounded-lg shadow-xl border border-[#D8D8D8] w-full max-w-lg flex flex-col max-h-[80vh]">
+      <div role="dialog" aria-modal="true" aria-label="BC Master Species Search" class="bg-white rounded-lg shadow-xl border border-[#D8D8D8] w-full max-w-lg flex flex-col max-h-[80vh]">
+        <ModalDialogTrap onEscape={() => { showSpeciesModal = false; }} />
         <div class="p-3 border-b border-[#D8D8D8] flex justify-between items-center bg-[#F2F2F2] rounded-t-lg">
           <h4 class="font-bold text-sm text-[#003366]">BC Master Species Search</h4>
-          <button type="button" onclick={() => { showSpeciesModal = false; }} class="text-[#606060] hover:text-[#313132] p-1"><X size={16} /></button>
+          <button type="button" aria-label="Close species search" onclick={() => { showSpeciesModal = false; }} class="text-[#606060] hover:text-[#313132] p-1"><X size={16} /></button>
         </div>
         <div class="p-3 border-b border-[#D8D8D8] flex flex-wrap gap-2">
-          <input type="text" placeholder="Search code (e.g. ABIE) or name (e.g. fir, spruce)..." bind:value={speciesSearchQuery}
+          <input type="text" aria-label="Search BC master species by code or name" placeholder="Search code (e.g. ABIE) or name (e.g. fir, spruce)..." bind:value={speciesSearchQuery}
             oninput={() => void searchSpecies()} class="min-w-0 flex-1 border border-[#D8D8D8] rounded px-3 py-1.5 text-xs bg-white text-[#313132]" />
           <button type="button" onclick={() => void searchSpecies()} class="px-3 py-1.5 bg-[#003366] text-white rounded text-xs font-medium hover:bg-[#002244]">Search</button>
         </div>

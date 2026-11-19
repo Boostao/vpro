@@ -148,6 +148,10 @@
     onDirtyChange?.(!busy && !mutating && flatDirty);
   });
 
+  function formatExplorerError(cause: unknown): string {
+    return String(cause ?? '').replace(/(?:RuntimeError|Error):\s*/gi, '').trim();
+  }
+
   async function reloadActivePane() {
     if (!effectiveContextId) return;
     if (mode === 'su_tree') {
@@ -175,7 +179,7 @@
         ];
       }
     } catch (err) {
-      if (reqGen === generation) errorMessage = String(err);
+      if (reqGen === generation) errorMessage = formatExplorerError(err);
     } finally {
       if (reqGen === generation) busy = false;
     }
@@ -188,7 +192,7 @@
         port.getPlotInspectorSummary(effectiveContextId, plotNumber)
       );
     } catch (err) {
-      errorMessage = `Plot inspector failed: ${String(err)}`;
+      errorMessage = `Plot inspector failed: ${formatExplorerError(err)}`;
     }
   }
 
@@ -209,7 +213,7 @@
       flatDraftRows = (view.flatRankRows ?? []).map(r => ({ ...r }));
       flatDirty = false;
     } catch (err) {
-      if (reqGen === generation) errorMessage = String(err);
+      if (reqGen === generation) errorMessage = formatExplorerError(err);
     } finally {
       if (reqGen === generation) busy = false;
     }
@@ -270,7 +274,7 @@
         await inspectPlot(inspectedPlot.plotNumber);
       }
     } catch (err) {
-      errorMessage = `Plot assignment failed: ${String(err)}`;
+      errorMessage = `Plot assignment failed: ${formatExplorerError(err)}`;
     } finally {
       mutating = false;
     }
@@ -286,7 +290,7 @@
       statusBanner = `Reverted ${res.changedPlots} plot assignment(s).`;
       await loadSUTreeAndPicker();
     } catch (err) {
-      errorMessage = `Undo failed: ${String(err)}`;
+      errorMessage = `Undo failed: ${formatExplorerError(err)}`;
     } finally {
       mutating = false;
     }
@@ -348,7 +352,7 @@
       statusBanner = `Created and activated ${res.tableName} (${res.plotCount} plot(s)).`;
       await loadSUTreeAndPicker();
     } catch (err) {
-      errorMessage = `Create SU failed: ${String(err)}`;
+      errorMessage = `Create SU failed: ${formatExplorerError(err)}`;
     } finally {
       mutating = false;
     }
@@ -363,7 +367,7 @@
       statusBanner = `Updated breakpoint status: ${res.nodeName}.`;
       await loadHierarchy();
     } catch (err) {
-      errorMessage = `Breakpoint toggle failed: ${String(err)}`;
+      errorMessage = `Breakpoint toggle failed: ${formatExplorerError(err)}`;
     } finally {
       mutating = false;
     }
@@ -381,7 +385,7 @@
       statusBanner = `Synchronized ${res.affectedRows} hierarchy node(s) from flat phytosociological table.`;
       await loadHierarchy();
     } catch (err) {
-      errorMessage = `Save Flat Hierarchy failed: ${String(err)}`;
+      errorMessage = `Save Flat Hierarchy failed: ${formatExplorerError(err)}`;
     } finally {
       mutating = false;
     }
@@ -493,7 +497,7 @@
     <p role="status" class="vpro-cls-status">Sync/operation in progress — some edits are queued.</p>
   {/if}
   {#if errorMessage}
-    <p role="alert" class="vpro-cls-alert">{errorMessage}</p>
+    <p role="alert" class="vpro-cls-alert">{formatExplorerError(errorMessage)}</p>
   {/if}
   {#if statusBanner}
     <p role="status" class="vpro-cls-status">{statusBanner}</p>
@@ -513,7 +517,7 @@
     onClose={() => (activeDialog = 'none')}
     onSubmitCreateSU={submitCreateSU}
     onMutatingChange={v => (mutating = v)}
-    onError={msg => (errorMessage = msg)}
+    onError={msg => (errorMessage = formatExplorerError(msg))}
     onStatus={msg => (statusBanner = msg)}
     onActivated={(cid, st) => {
       effectiveContextId = cid;
@@ -583,7 +587,7 @@
             {onRequestSUSync}
             onAssignPlots={assignPlots}
             onMutatingChange={v => (mutating = v)}
-            onError={msg => (errorMessage = msg)}
+            onError={msg => (errorMessage = formatExplorerError(msg))}
             onStatus={msg => (statusBanner = msg)}
           />
         {:else}
@@ -598,7 +602,7 @@
             bind:reparentTargetId
             {mutating}
             onMutatingChange={v => (mutating = v)}
-            onError={msg => (errorMessage = msg)}
+            onError={msg => (errorMessage = formatExplorerError(msg))}
             onStatus={msg => (statusBanner = msg)}
             onClearSelection={() => (selectedHierarchyNodeId = null)}
             onReloadHierarchy={loadHierarchy}

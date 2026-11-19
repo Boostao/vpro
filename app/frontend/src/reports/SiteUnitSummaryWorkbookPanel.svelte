@@ -3,6 +3,7 @@
   import { EnvironmentReportService } from '../../bindings/github.com/boostao/vpro/app';
   import type { GoogleEarthScope } from '../spatial/googleEarthReview';
   import { ReadRequests } from '../shared/readRequests';
+  import WorkbookPublicationSection from '../shared/WorkbookPublicationSection.svelte';
   import {
     siteUnitSummaryWorkbookPublicationSession, validateSiteUnitSummaryWorkbookReview,
     type ValidatedSiteUnitSummaryWorkbookReview,
@@ -32,7 +33,6 @@
   let review = $state.raw<ValidatedSiteUnitSummaryWorkbookReview | ValidatedExtendedSummaryWorkbookReview | null>(null);
   let destination = $state('');
   let publication = $state(session.view());
-  let lastPubKey = '';
   const validMethod = $derived(method === 1 || method === 2);
   const currentReview = $derived(review !== null && ('environment' in review
     ? sameExtendedSummaryWorkbookOptions(review.options, extendedOptions ?? null)
@@ -45,41 +45,11 @@
     ? (siteUnitType === 3 || (owned.su !== 'None' && (siteUnitType === 2 || owned.su !== 'USysSuTableDynamic')))
     : (owned.su !== 'None' && owned.su !== 'USysSuTableDynamic'));
   function reportBusy() { onBusyChange(busy || publication.busy || publication.blocked); }
-  function syncPublicationNotifications() {
-    const settled = session.view();
-    if (settled.busy) { lastPubKey = ''; return; }
-    if (!settled.outcome && !settled.error) return;
-    const key = JSON.stringify([settled.outcome?.status ?? '', settled.outcome?.path ?? '', settled.outcome?.sha256 ?? '', settled.error ?? '', settled.requestedDestination ?? '']);
-    if (key === lastPubKey) return;
-    lastPubKey = key;
-    if (typeof notifications === 'undefined') return;
-    const ctxTag = owned.project || undefined;
-    if (settled.outcome?.status === 'published' && !settled.error) {
-      const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
-      notifications.success('Summary Environment workbook exported', exportedPath, {
-        category: 'reports',
-        source: 'Summary Environment',
-        contextTag: ctxTag,
-      });
-    } else if (settled.error || settled.outcome) {
-      notifications.error(
-        'Summary Environment workbook export failed',
-        settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
-        {
-          category: 'reports',
-          source: 'Summary Environment',
-          contextTag: ctxTag,
-        },
-      );
-    }
-  }
   const unsubscribe = session.subscribe(() => {
     publication = session.view();
     if (publication.busy) review = null;
-    syncPublicationNotifications();
     reportBusy();
   });
-  syncPublicationNotifications();
   function cancel() {
     generation++; reads.cancelAll(); busy = false; review = null; reportBusy();
   }
@@ -111,11 +81,7 @@
       if (!disposed && requestGeneration === generation && method === requestedMethod) {
         error = `Workbook review unavailable; no file published: ${String(cause)}`;
         if (typeof notifications !== 'undefined') {
-          notifications.error('Summary Environment workbook review failed', error, {
-            category: 'reports',
-            source: 'Summary Environment',
-            contextTag: owned.project || undefined,
-          });
+          notifications.error('Summary Environment workbook review failed', error, { category: 'reports', source: 'Summary Environment', contextTag: owned.project || undefined });
         }
       }
     } finally {
@@ -135,38 +101,17 @@
         await originalSession.publish(review, destination, request =>
           EnvironmentReportService.ExportReviewedSiteUnitSummaryWorkbook(owned.contextId, JSON.stringify(request)), method, configuredScope);
       }
-      if (typeof syncPublicationNotifications === 'function') {
-        syncPublicationNotifications();
-      } else if (!disposed && typeof notifications !== 'undefined') {
-        const settled = activeSession.view();
-        if (settled.outcome?.status === 'published' && !settled.error) {
-          const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
-          notifications.success('Summary Environment workbook exported', exportedPath, {
-            category: 'reports',
-            source: 'Summary Environment',
-            contextTag: owned.project || undefined,
-          });
-        } else if (settled.error || settled.outcome) {
-          notifications.error(
-            'Summary Environment workbook export failed',
-            settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
-            {
-              category: 'reports',
-              source: 'Summary Environment',
-              contextTag: owned.project || undefined,
-            },
-          );
-        }
+      if (!disposed && typeof notifications !== 'undefined') {
+        const s = (activeSession ?? session).view();
+        const opts = { category: 'reports' as const, source: 'Summary Environment', contextTag: owned.project || undefined };
+        if (s.outcome?.status === 'published' && !s.error) notifications.success('Summary Environment workbook exported', s.outcome.path || s.requestedDestination || destination, opts);
+        else if (s.error || s.outcome) notifications.error('Summary Environment workbook export failed', s.error || `Publication ${s.outcome?.status ?? 'failed'} for ${s.requestedDestination || destination}`, opts);
       }
     } catch (cause) {
       if (!disposed) {
         error = String(cause);
         if (typeof notifications !== 'undefined') {
-          notifications.error('Summary Environment workbook export failed', error, {
-            category: 'reports',
-            source: 'Summary Environment',
-            contextTag: owned.project || undefined,
-          });
+          notifications.error('Summary Environment workbook export failed', error, { category: 'reports', source: 'Summary Environment', contextTag: owned.project || undefined });
         }
       }
     }
@@ -177,11 +122,7 @@
     catch (cause) {
       error = String(cause);
       if (typeof notifications !== 'undefined') {
-        notifications.error('Summary Environment workbook acknowledgement failed', error, {
-          category: 'reports',
-          source: 'Summary Environment',
-          contextTag: owned.project || undefined,
-        });
+        notifications.error('Summary Environment workbook acknowledgement failed', error, { category: 'reports', source: 'Summary Environment', contextTag: owned.project || undefined });
       }
     }
   }
@@ -191,15 +132,19 @@
   });
 </script>
 
-<section class="workbook" data-site-unit-workbook aria-label="Summary Environment workbook">
-  <h2>Summary Environment workbook</h2>
-  {#if !publication.outcome && publication.requestedDestination && !publication.busy}
-    <p data-site-unit-workbook-unknown role="alert">Workbook outcome unknown. Retain and inspect
-      {publication.requestedDestination} before acknowledging; never repeat the destination blindly.</p>
-  {/if}
-  {#if publication.blocked && !publication.busy}
-    <button data-site-unit-workbook-acknowledge onclick={acknowledge}>Acknowledge workbook outcome</button>
-  {/if}
+<WorkbookPublicationSection
+  sectionAttr="data-site-unit-workbook"
+  ariaLabel="Summary Environment workbook"
+  heading="Summary Environment workbook"
+  sourceName="Summary Environment"
+  contextTag={owned.project || undefined}
+  {publication}
+  destinationFallback={destination}
+  unknownAttr="data-site-unit-workbook-unknown"
+  unknownMessageSuffix="before acknowledging; never repeat the destination blindly."
+  acknowledgeAttr="data-site-unit-workbook-acknowledge"
+  onAcknowledge={acknowledge}
+>
   {#if !enabled}
     <p>Workbook publication is unavailable. The independent {extended ? 'extended Summary' : 'Summary Environment'} workbook feature is disabled.</p>
   {/if}
@@ -279,12 +224,11 @@
     {:else}Only normal Site Unit layer-cover summaries without species are available.{/if} Enter an explicit .xlsx path;
     it is never trimmed or replaced automatically. Publication is irreversible; acknowledge every returned or unknown outcome
     before navigation, close or another publication. Unavailable workflows remain disabled.</p>
-</section>
+</WorkbookPublicationSection>
 
 <style>
-  .workbook { display: grid; gap: 0.75rem; min-width: 0; padding: 1rem; border: 1px solid #D8D8D8; border-radius: 0.5rem; background: #FFFFFF; color: #313132; }
-  h2, h3, h4, p { margin: 0; }
-  h2, h3, h4 { color: #003366; }
+  h3, h4, p { margin: 0; }
+  h3, h4 { color: #003366; }
   .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
   .plan, .unit { display: grid; gap: 0.75rem; min-width: 0; }
   .summaries { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; align-items: start; }
@@ -296,7 +240,6 @@
   .destination { display: grid; gap: 0.25rem; }
   input { box-sizing: border-box; width: 100%; min-width: 0; padding: 0.45rem; border: 1px solid #D8D8D8; border-radius: 0.25rem; background: #FFFFFF; color: #313132; }
   button { min-height: 2.5rem; padding: 0.45rem 0.85rem; border: 1px solid #003366; border-radius: 0.25rem; background: #003366; color: #FFFFFF; font-weight: 600; cursor: pointer; }
-  button:hover:not(:disabled) { background: #002244; border-color: #002244; }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
   .error { color: #D8292F; overflow-wrap: anywhere; font-weight: 600; }
   .guidance { font-size: 0.875rem; color: #474543; }

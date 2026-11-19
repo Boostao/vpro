@@ -110,9 +110,7 @@ export class SIVICreationUndoSession {
   choose(action: 'retain' | 'prune') {
     this.requireKnown();
     if (!this.state.review || action !== 'retain' && action !== 'prune') throw new Error('Choose exact retain or prune for the retained creation review.');
-    this.state.action = action;
-    this.state.confirmed = false;
-    this.state.error = null;
+    Object.assign(this.state, { action, confirmed: false, error: null });
     this.changed();
   }
   confirm(confirmed: boolean) {
@@ -120,8 +118,7 @@ export class SIVICreationUndoSession {
     if (!this.state.review || !this.state.action || typeof confirmed !== 'boolean') {
       throw new Error('Confirmation requires the retained creation review and explicit audit action.');
     }
-    this.state.confirmed = confirmed;
-    this.state.error = null;
+    Object.assign(this.state, { confirmed, error: null });
     this.changed();
   }
   discard() {
@@ -167,14 +164,8 @@ export class SIVICreationUndoSession {
       const wire = await this.requests.track(operation === 'undo' ? this.port.undo(json) : this.port.receipt(json));
       if (generation !== this.generation) return false;
       if (wire === null && operation === 'lookup') throw new Error('Missing creation Undo receipt is unresolved, not proof that Undo failed.');
-      this.state.receipt = siviCreationUndoReceiptFromWire(wire, review, request, this.owner, operation);
-      this.state.history = null;
-      this.state.review = null;
-      this.state.action = null;
-      this.state.confirmed = false;
-      this.state.blocked = false;
-      this.state.requestId = null;
-      this.state.revision++;
+      const receipt = siviCreationUndoReceiptFromWire(wire, review, request, this.owner, operation);
+      Object.assign(this.state, { receipt, history: null, review: null, action: null, confirmed: false, blocked: false, requestId: null, revision: this.state.revision + 1 });
       this.pending = null;
       return true;
     } catch (cause) {

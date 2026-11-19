@@ -208,33 +208,6 @@
       await preferences.save(request => EnvironmentReportService.SaveLongEnvironmentPreferences(contextId, JSON.stringify(request)));
       if (typeof syncPreferenceNotifications === 'function') {
         syncPreferenceNotifications();
-      } else if (typeof notifications !== 'undefined') {
-        const view = preferences.view();
-        const latest = view.receipts?.at(-1);
-        const ctxTag = (typeof project === 'string' && project) || undefined;
-        if (latest?.kind === 'known') {
-          if (latest.outcome.committed && !latest.outcome.errorMessage) {
-            notifications.success('Long Environment title saved', latest.outcome.changed ? 'Saved report title preference.' : 'No title changes.', {
-              category: 'reports', source: 'Long Environment', contextTag: ctxTag,
-            });
-          } else if (latest.outcome.committed) {
-            notifications.warning('Long Environment title saved with warning', latest.outcome.errorMessage, {
-              category: 'reports', source: 'Long Environment', contextTag: ctxTag,
-            });
-          } else if (latest.outcome.errorMessage) {
-            notifications.error('Long Environment title save failed', latest.outcome.errorMessage, {
-              category: 'reports', source: 'Long Environment', contextTag: ctxTag,
-            });
-          } else {
-            notifications.info('Long Environment title unchanged', 'No title preference changes were needed.', {
-              category: 'reports', source: 'Long Environment', contextTag: ctxTag,
-            });
-          }
-        } else if (view.error) {
-          notifications.error('Long Environment title preference failed', view.error, {
-            category: 'reports', source: 'Long Environment', contextTag: ctxTag,
-          });
-        }
       }
     } catch (cause) {
       error = String(cause);
@@ -283,38 +256,16 @@
     try {
       await workbookSession.publish(workbookReview, destination, request =>
         EnvironmentReportService.ExportReviewedEnvironmentWorkbook(contextId, JSON.stringify(request)));
-      if (typeof syncWorkbookNotifications === 'function') {
-        syncWorkbookNotifications();
-      } else if (typeof notifications !== 'undefined') {
-        const settled = workbookSession.view();
-        if (settled.outcome?.status === 'published' && !settled.error) {
-          const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
-          notifications.success('Long Environment workbook exported', exportedPath, {
-            category: 'reports',
-            source: 'Long Environment',
-            contextTag: ctxTag,
-          });
-        } else if (settled.error || settled.outcome) {
-          notifications.error(
-            'Long Environment workbook export failed',
-            settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
-            {
-              category: 'reports',
-              source: 'Long Environment',
-              contextTag: ctxTag,
-            },
-          );
-        }
+      if (typeof syncWorkbookNotifications === 'function') syncWorkbookNotifications();
+      else if (typeof notifications !== 'undefined') {
+        const s = workbookSession.view();
+        const opts = { category: 'reports' as const, source: 'Long Environment', contextTag: ctxTag };
+        if (s.outcome?.status === 'published' && !s.error) notifications.success('Long Environment workbook exported', s.outcome.path || s.requestedDestination || destination, opts);
+        else if (s.error || s.outcome) notifications.error('Long Environment workbook export failed', s.error || `Publication ${s.outcome?.status ?? 'failed'} for ${s.requestedDestination || destination}`, opts);
       }
     } catch (cause) {
       error = String(cause);
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Long Environment workbook export failed', error, {
-          category: 'reports',
-          source: 'Long Environment',
-          contextTag: ctxTag,
-        });
-      }
+      if (typeof notifications !== 'undefined') notifications.error('Long Environment workbook export failed', error, { category: 'reports', source: 'Long Environment', contextTag: ctxTag });
     }
   }
   function acknowledgeWorkbook() {

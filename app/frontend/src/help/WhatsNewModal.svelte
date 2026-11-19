@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { CheckCircle2, Newspaper, X } from '@lucide/svelte';
+  import ModalDialogTrap from '../shared/ModalDialogTrap.svelte';
   import { defaultHelpPort, type HelpBackendPort, type WhatsNewStatus } from './helpSystem';
 
   let {
@@ -77,16 +78,7 @@
     return index < status.unreadCount;
   }
 
-  function handleKeydown(event: KeyboardEvent) {
-    if (!open) return;
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      onclose();
-    }
-  }
 </script>
-
-<svelte:window onkeydown={handleKeydown} />
 
 {#if open}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" data-whats-new-modal>
@@ -96,6 +88,7 @@
       aria-labelledby="whats-new-modal-title"
       class="flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded border border-slate-300 bg-white text-[#313132] shadow-2xl"
     >
+      <ModalDialogTrap onEscape={onclose} escapeDisabled={acknowledging} initialFocusSelector="[data-whats-new-close]" />
       <header class="flex items-center justify-between gap-3 border-b-[3px] border-b-[#FCBA19] bg-[#003366] px-5 py-3.5 text-white">
         <div class="flex items-center gap-2.5">
           <Newspaper size={18} class="text-[#FCBA19]" />

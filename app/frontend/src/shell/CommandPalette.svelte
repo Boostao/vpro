@@ -1,5 +1,6 @@
 <script lang="ts">
   import { CornerDownLeft, Search, X } from '@lucide/svelte';
+  import ModalDialogTrap from '../shared/ModalDialogTrap.svelte';
   import {
     buildCommandPaletteCatalog,
     searchCommandPalette,
@@ -120,6 +121,7 @@
       aria-label="VPro Quick-Jump Command Palette"
       data-command-palette
     >
+      <ModalDialogTrap trapFocus={true} initialFocusSelector="[data-command-palette-input]" />
       <div class="vpro-cmd-search-row">
         <Search size={17} class="shrink-0 text-[#003366]" />
         <input

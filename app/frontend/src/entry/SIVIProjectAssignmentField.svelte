@@ -12,7 +12,7 @@
 </script>
 
 <dd data-sivi-project-assignment-field class="min-w-0">
-  <select id="sivi-project-assignment" class="w-full min-w-0 rounded border px-2 py-1 text-sm disabled:opacity-50"
+  <select id="sivi-project-assignment" aria-label="SIVI project ID assignment" class="w-full min-w-0 rounded border px-2 py-1 text-sm disabled:opacity-50"
     value={drafts.rowId ?? 'original'} {disabled} aria-invalid={drafts.error !== null}
     onchange={event => onstage(event.currentTarget.value === 'original' ? { kind: 'original' }
       : { kind: 'selection', rowId: event.currentTarget.value })}>

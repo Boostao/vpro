@@ -112,12 +112,16 @@
     }
   }
 
+  function formatInspectorError(cause: unknown): string {
+    return String(cause ?? '').replace(/^(?:\s*(?:RuntimeError|Error)\s*:\s*)+/i, '').trim();
+  }
+
   async function refreshBECPicker() {
     if (!effectiveContextId) return;
     try {
       becChoices = await queryBECChoices();
     } catch (err) {
-      onError(String(err));
+      onError(formatInspectorError(err));
     }
   }
 
@@ -127,7 +131,7 @@
       const entries = await reads.track(port.listUserSiteUnitList(effectiveContextId));
       userSiteUnits = entries ?? [];
     } catch (err) {
-      onError(`Load UserSiteUnitList failed: ${String(err)}`);
+      onError(`Could not load personal site unit list: ${formatInspectorError(err)}`);
     }
   }
 
@@ -225,6 +229,7 @@
     <div class="vpro-cls-picker-filters">
       <input
         type="text"
+        aria-label="Filter BEC units by zone"
         class="vpro-cls-zone-input"
         list="vpro-cls-bec-zone-options"
         placeholder="Zone (e.g. CWH)"
@@ -233,6 +238,7 @@
       />
       <input
         type="text"
+        aria-label="Filter BEC units by subzone"
         class="vpro-cls-zone-input"
         placeholder="SubZone"
         bind:value={becSubZone}
@@ -244,6 +250,7 @@
       </select>
       <input
         type="search"
+        aria-label="Search BEC site series code or name"
         class="vpro-cls-query-input"
         placeholder="Search code or name..."
         bind:value={becQuery}
@@ -253,13 +260,13 @@
     </div>
 
     <div class="vpro-cls-custom-assign">
-      <input type="text" class="mono" placeholder="Custom or ZZZZsssvp/## unit..." bind:value={customTargetUnit} />
+      <input type="text" aria-label="Custom or BEC target site unit" class="mono" placeholder="Custom or ZZZZsssvp/## unit..." bind:value={customTargetUnit} />
       {#if customTargetUnit.trim()}
         <span class="vpro-mask-badge" class:valid={isValidBECUnitMask(customTargetUnit)}>
           {isValidBECUnitMask(customTargetUnit) ? 'BEC Mask OK' : 'Working Unit'}
         </span>
       {/if}
-      <button type="button" class="vpro-btn-primary" disabled={selectedPlots.length === 0 || !customTargetUnit.trim() || mutating} onclick={() => onAssignPlots(selectedPlots, customTargetUnit.trim())}>
+      <button type="button" class="vpro-btn-primary vpro-cls-assign-btn" disabled={selectedPlots.length === 0 || !customTargetUnit.trim() || mutating} onclick={() => onAssignPlots(selectedPlots, customTargetUnit.trim())}>
         Assign ({selectedPlots.length})
       </button>
     </div>
@@ -267,11 +274,11 @@
     <div class="vpro-cls-bec-list">
       {#each becChoices as choice (`${choice.source}::${choice.siteSeries}`)}
         <div class="vpro-cls-bec-row">
-          <div>
+          <div class="vpro-cls-bec-info">
             <strong class="mono">{choice.siteSeries}</strong>
             <span class="vpro-cls-sub">{choice.longName}</span>
           </div>
-          <button type="button" class="vpro-btn-mini" disabled={selectedPlots.length === 0 || mutating} onclick={() => onAssignPlots(selectedPlots, choice.siteSeries)}>
+          <button type="button" class="vpro-btn-mini vpro-cls-assign-btn" disabled={selectedPlots.length === 0 || mutating} onclick={() => onAssignPlots(selectedPlots, choice.siteSeries)}>
             Assign ({selectedPlots.length})
           </button>
         </div>
@@ -296,3 +303,41 @@
     />
   {/if}
 </section>
+
+<style>
+  .vpro-cls-custom-assign {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .vpro-cls-custom-assign input {
+    min-width: 0;
+    flex: 1 1 130px;
+  }
+
+  .vpro-cls-bec-row {
+    min-width: 0;
+    align-items: flex-start;
+  }
+
+  .vpro-cls-bec-info {
+    min-width: 0;
+    flex: 1 1 0%;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    overflow-wrap: anywhere;
+  }
+
+  .vpro-cls-bec-info .vpro-cls-sub {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
+
+  .vpro-cls-assign-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+</style>

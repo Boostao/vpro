@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
+  import ModalDialogTrap from '../shared/ModalDialogTrap.svelte';
   import {
     defaultSIVIParentCreatePort,
     SIVI_PLOT_TYPES,
@@ -65,8 +66,8 @@
     reportBusy();
   }
 
-  const draftErrors = $derived(
-    validateCreateSIVIPlotDraft({
+  function buildDraftFields(includeSuFlag = addToActiveSu) {
+    return {
       plotNumber,
       plotType,
       projectId: projectId || undefined,
@@ -78,9 +79,11 @@
       subZone: subZone || undefined,
       siteSeries: siteSeries || undefined,
       userSiteUnit: userSiteUnit || undefined,
-      addToActiveSu,
-    })
-  );
+      addToActiveSu: includeSuFlag,
+    };
+  }
+
+  const draftErrors = $derived(validateCreateSIVIPlotDraft(buildDraftFields()));
 
   const hasValidationErrors = $derived(Object.keys(draftErrors).length > 0);
 
@@ -112,31 +115,11 @@
     }
   }
 
-  async function submitCreate() {
-    if (busy || operationHeld) {
-      error = 'Wait for the current operation or decision before creating a SIVI plot.';
-      return;
-    }
-    const req = $state.snapshot({
-      requestId: crypto.randomUUID(),
-      plotNumber,
-      plotType,
-      projectId: projectId || undefined,
-      fieldNumber: fieldNumber || undefined,
-      date: date || undefined,
-      siteSurveyor: siteSurveyor || undefined,
-      svPolygonNumber: svPolygonNumber || undefined,
-      zone: zone || undefined,
-      subZone: subZone || undefined,
-      siteSeries: siteSeries || undefined,
-      userSiteUnit: userSiteUnit || undefined,
-      addToActiveSu: activeSu !== 'None' ? addToActiveSu : false,
-    });
-    const errs = validateCreateSIVIPlotDraft(req);
-    if (Object.keys(errs).length > 0) {
-      error = Object.values(errs)[0];
-      return;
-    }
+  async function runPlotMutation<T>(
+    errorPrefix: string,
+    execute: () => Promise<T>,
+    onApplied: (res: T) => void | Promise<void>,
+  ) {
     const gen = ++generation;
     historyGen++;
     historyBusy = false;
@@ -144,23 +127,44 @@
     error = null;
     status = null;
     try {
-      const res = await port.createPlot(contextId, req);
+      const res = await execute();
       if (gen !== generation) return;
-      status = `Created FS1333 SIVI ${res.plotType} plot "${res.plotNumber}" (${res.auditRowCount} audit row(s)).`;
-      plotNumber = '';
-      fieldNumber = '';
       const list = await port.listCreatedPlots(contextId);
       if (gen !== generation) return;
       createdPlots = list ?? [];
       setBusy(false);
-      if (oncreated) await oncreated(res);
+      await onApplied(res);
     } catch (cause) {
-      if (gen === generation) error = `Create SIVI plot failed: ${String(cause)}`;
+      if (gen === generation) error = `${errorPrefix}: ${String(cause)}`;
     } finally {
-      if (gen === generation && busy) {
-        setBusy(false);
-      }
+      if (gen === generation && busy) setBusy(false);
     }
+  }
+
+  async function submitCreate() {
+    if (busy || operationHeld) {
+      error = 'Wait for the current operation or decision before creating a SIVI plot.';
+      return;
+    }
+    const req = $state.snapshot({
+      requestId: crypto.randomUUID(),
+      ...buildDraftFields(activeSu !== 'None' ? addToActiveSu : false),
+    });
+    const errs = validateCreateSIVIPlotDraft(req);
+    if (Object.keys(errs).length > 0) {
+      error = Object.values(errs)[0];
+      return;
+    }
+    await runPlotMutation(
+      'Create SIVI plot failed',
+      () => port.createPlot(contextId, req),
+      async (res) => {
+        status = `Created FS1333 SIVI ${res.plotType} plot "${res.plotNumber}" (${res.auditRowCount} audit row(s)).`;
+        plotNumber = '';
+        fieldNumber = '';
+        if (oncreated) await oncreated(res);
+      },
+    );
   }
 
   async function executeUndo(entry: SIVICreatedPlotEntry) {
@@ -173,34 +177,21 @@
       creationRequestId: entry.requestId,
       plotNumber: entry.plotNumber,
     });
-    const gen = ++generation;
-    historyGen++;
-    historyBusy = false;
-    setBusy(true);
-    error = null;
-    status = null;
-    try {
-      const res = await port.undoCreatePlot(contextId, req);
-      if (gen !== generation) return;
-      confirmUndoId = null;
-      status = `Undid SIVI plot creation "${res.plotNumber}" cleanly.`;
-      const list = await port.listCreatedPlots(contextId);
-      if (gen !== generation) return;
-      createdPlots = list ?? [];
-      setBusy(false);
-      if (onundone) await onundone(res.plotNumber);
-    } catch (cause) {
-      if (gen === generation) error = `Undo SIVI plot creation failed: ${String(cause)}`;
-    } finally {
-      if (gen === generation && busy) {
-        setBusy(false);
-      }
-    }
+    await runPlotMutation(
+      'Undo SIVI plot creation failed',
+      () => port.undoCreatePlot(contextId, req),
+      async (res) => {
+        confirmUndoId = null;
+        status = `Undid SIVI plot creation "${res.plotNumber}" cleanly.`;
+        if (onundone) await onundone(res.plotNumber);
+      },
+    );
   }
 </script>
 
 {#if open}
   <div class="rounded border border-slate-300 bg-white shadow-lg" role="dialog" aria-modal="true" aria-label="Create FS1333 SIVI Parent Plot">
+    <ModalDialogTrap onEscape={() => onclose?.()} escapeDisabled={busy || !onclose} initialFocusSelector="#sivi-create-plot" />
     <header class="flex items-center justify-between border-b-[3px] border-b-[#FCBA19] bg-[#003366] px-5 py-3 text-white">
       <div>
         <p class="text-xs font-semibold uppercase tracking-wider text-[#FCBA19]">FS1333 Site Inspection &amp; Vegetation Inventory</p>

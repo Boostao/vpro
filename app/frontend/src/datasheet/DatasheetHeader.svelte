@@ -88,6 +88,7 @@
 
     <input
       type="search"
+      aria-label="Search all datasheet columns"
       class="vpro-ds-search"
       placeholder="Search all columns..."
       bind:value={globalSearch}

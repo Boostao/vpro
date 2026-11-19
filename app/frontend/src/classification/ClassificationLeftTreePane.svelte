@@ -181,6 +181,7 @@
     <div class="vpro-cls-subtoolbar">
       <input
         type="search"
+        aria-label="Filter site units or plots"
         class="vpro-cls-filter"
         placeholder="Filter units or plots..."
         bind:value={suFilterText}

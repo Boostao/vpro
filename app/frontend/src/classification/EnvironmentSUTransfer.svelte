@@ -45,7 +45,7 @@
       }
       committedFailure = false;
     } catch (cause) {
-      if (request === generation) error = `SU transfer review unavailable; no write applied: ${String(cause)}`;
+      if (request === generation) error = `SU transfer review unavailable; no write applied: ${String(cause).replace(/^(?:\s*(?:RuntimeError|Error)\s*:\s*)+/i, '').trim()}`;
     } finally { if (request === generation) busy = false; }
   }
   async function transfer() {
@@ -69,10 +69,11 @@
         success = `Copied ${result.changedRows} environmental Working Unit values into ${su}_SU; typed transfer history ${result.historyId} retained atomically. No parent, other SU row, original audit or support database changed.`;
       }
     } catch (cause) {
+      const cleaned = String(cause).replace(/^(?:\s*(?:RuntimeError|Error)\s*:\s*)+/i, '').trim();
       if (committed || String(cause).includes('environment/SU transfer committed, but') || String(cause).includes('SU/environment transfer committed, but')) {
         committedFailure = true; review = null;
-        error = `Transfer committed; reload without replaying the completed write: ${String(cause)}`;
-      } else error = `Transfer failed; original data retained and review kept for retry or explicit dismissal: ${String(cause)}`;
+        error = `Transfer committed; reload without replaying the completed write: ${cleaned}`;
+      } else error = `Transfer failed; original data retained and review kept for retry or explicit dismissal: ${cleaned}`;
     } finally { busy = false; }
   }
   function close() {
@@ -88,7 +89,7 @@
 
 <section class="transfer-panel" aria-label={caption} data-environment-su-transfer data-su-environment-transfer={direction === 'reverse' ? '' : undefined}>
   <h3>{caption}: review before copying</h3>
-  {#if error}<p class="failure" role="alert">{error}</p>{/if}
+  {#if error}<p class="failure" role="alert">{error.replace(/(?:RuntimeError|Error):\s*/gi, '')}</p>{/if}
   {#if success}<p role="status">{success}</p>{/if}
   {#if busy}<p role="status">Reading or applying the owned-context transfer...</p>{/if}
   <p>Project {project}; selected SU {su}; owned project file {path}.</p>

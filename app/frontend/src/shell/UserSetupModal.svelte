@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import { CheckCircle2, ShieldAlert, ShieldCheck, UserCog, X } from '@lucide/svelte';
+  import ModalDialogTrap from '../shared/ModalDialogTrap.svelte';
   import {
     defaultUserSetupPort,
     validatePictureOptionsInput,
@@ -147,20 +148,10 @@
     }
   }
 
-  function handleKeydown(event: KeyboardEvent) {
-    if (!open) return;
-    if (event.key === 'Escape' && !saving && !pictureSaving) {
-      event.preventDefault();
-      onclose();
-    }
-  }
-
   onDestroy(() => {
     loadGen++;
   });
 </script>
-
-<svelte:window onkeydown={handleKeydown} />
 
 {#if open}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-3 sm:p-4" data-user-setup-modal>
@@ -170,6 +161,7 @@
       aria-labelledby="user-setup-title"
       class="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded border border-[#D8D8D8] bg-white text-[#313132] shadow-2xl"
     >
+      <ModalDialogTrap onEscape={onclose} escapeDisabled={saving || pictureSaving} initialFocusSelector="[data-user-setup-input]" />
       <header class="flex items-center justify-between gap-3 border-b-[3px] border-b-[#FCBA19] bg-[#003366] px-5 py-3.5 text-white">
         <div class="flex items-center gap-2.5">
           <UserCog size={18} class="shrink-0 text-[#FCBA19]" />

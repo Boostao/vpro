@@ -51,7 +51,7 @@
   let saveAsTargetName = $state('');
   let pendingDeleteTable = $state('');
 
-  // Row editor & USysAllSpecs browser inputs
+  // Row editor & Species Catalogue browser inputs
   let draftLumpCode = $state('');
   let draftSppCode = $state('');
   let draftUse = $state(true);
@@ -61,7 +61,7 @@
   let speciesSearchResults = $state.raw<SpeciesItem[]>([]);
   let speciesSearching = $state(false);
 
-  // Declarative LumpSpec (Auto-5) state
+  // Lumping Presets & Rules state
   let presets = $state.raw<LumpPresetInfo[]>([]);
   let specPreset = $state('BEC_Provincial_Correlation_2026');
   let collapseInfraspecific = $state(true);
@@ -487,7 +487,11 @@
     await selectLumpTable(selectedTable, selectedDbPath);
   }
 
-  async function lookupUSysAllSpecs() {
+  function formatLumpError(cause: unknown): string {
+    return String(cause ?? '').replace(/(?:RuntimeError|Error):\s*/gi, '').trim();
+  }
+
+  async function lookupSpeciesCatalogue() {
     if (!port.searchSpecies || !speciesSearchQuery.trim() || speciesSearching) return;
     speciesSearching = true;
     error = '';
@@ -495,7 +499,7 @@
       const found = await port.searchSpecies(speciesSearchQuery.trim(), 25);
       speciesSearchResults = found ?? [];
     } catch (cause) {
-      error = `Species search failed: ${String(cause)}`;
+      error = `Species search failed: ${formatLumpError(cause)}`;
     } finally {
       speciesSearching = false;
     }
@@ -559,7 +563,7 @@
   </header>
 
   {#if error}
-    <p class="error" role="alert">{error}</p>
+    <p class="error" role="alert">{formatLumpError(error)}</p>
   {/if}
   {#if notice}
     <p class="bcgov-notice" role="status">{notice}</p>
@@ -655,7 +659,7 @@
         <h3>
           {selectedTable || 'No Lump Table Selected'}
           {#if selectedSummary}
-            <span class="badge">{selectedSummary.metadataVersion || 'VP05'}</span>
+            <span class="badge">{selectedSummary.isActiveProject ? 'Project Table' : 'External Table'}</span>
           {/if}
         </h3>
 
@@ -671,7 +675,7 @@
             </label>
             <label class="checkbox-label">
               <input type="checkbox" bind:checked={draftUse} disabled={busy || operationHeld} />
-              <span>Use (-1)</span>
+              <span>Active</span>
             </label>
             <label class="checkbox-label">
               <input type="checkbox" bind:checked={draftAllowUnlisted} disabled={busy || operationHeld} />
@@ -688,22 +692,23 @@
           </div>
 
           {#if port.searchSpecies}
-            <div class="species-picker-panel" aria-label="Searchable USysAllSpecs Species Picker">
+            <div class="species-picker-panel" aria-label="Species Catalogue Picker">
               <div class="inline-row">
                 <input
                   type="search"
+                  aria-label="Search species catalogue by code or scientific name"
                   bind:value={speciesSearchQuery}
-                  placeholder="Search USysAllSpecs code or scientific name..."
+                  placeholder="Search Species Catalogue code or scientific name..."
                   disabled={busy || operationHeld}
-                  onkeydown={e => { if (e.key === 'Enter') void lookupUSysAllSpecs(); }}
+                  onkeydown={e => { if (e.key === 'Enter') void lookupSpeciesCatalogue(); }}
                 />
                 <button
                   type="button"
                   class="bcgov-btn-secondary"
                   disabled={busy || operationHeld || speciesSearching || !speciesSearchQuery.trim()}
-                  onclick={lookupUSysAllSpecs}
+                  onclick={lookupSpeciesCatalogue}
                 >
-                  {speciesSearching ? 'Searching...' : 'Browse USysAllSpecs'}
+                  {speciesSearching ? 'Searching...' : 'Browse Species Catalogue'}
                 </button>
               </div>
               {#if speciesSearchResults.length > 0}
@@ -727,12 +732,12 @@
           {/if}
 
           <div class="toolbar-row">
-            <input type="search" bind:value={filterQuery} placeholder="Filter by code or scientific name..." />
+            <input type="search" aria-label="Filter species lump mappings by code or scientific name" bind:value={filterQuery} placeholder="Filter by code or scientific name..." />
             <button type="button" class="bcgov-btn-secondary" disabled={busy || operationHeld || rows.length === 0} onclick={() => setAllUse(true)}>
-              Enable All (-1)
+              Enable All
             </button>
             <button type="button" class="bcgov-btn-secondary" disabled={busy || operationHeld || rows.length === 0} onclick={() => setAllUse(false)}>
-              Disable All (0)
+              Disable All
             </button>
           </div>
         {/if}
@@ -745,7 +750,7 @@
                 <th>SppCode</th>
                 <th>Scientific Name</th>
                 <th>Catalog</th>
-                <th>Active (Use)</th>
+                <th>Active</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -865,7 +870,7 @@
           <button type="button" class="bcgov-btn-secondary" disabled={busy || operationHeld || !contextId} onclick={runSpecPreview}>
             Preview Lumping Impact
           </button>
-          <input type="text" bind:value={materializeName} placeholder="Target name (e.g. BEC2026)" disabled={busy || operationHeld} />
+          <input type="text" aria-label="Target lump table name" bind:value={materializeName} placeholder="Target name (e.g. BEC2026)" disabled={busy || operationHeld} />
           <label class="checkbox-label">
             <input type="checkbox" bind:checked={replaceExisting} disabled={busy || operationHeld} />
             <span>Overwrite if exists</span>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, tick, untrack } from 'svelte';
   import { CheckCircle2, ChevronLeft, ChevronRight, Compass, RotateCcw, ShieldCheck, X } from '@lucide/svelte';
+  import ModalDialogTrap from '../shared/ModalDialogTrap.svelte';
   import { defaultHelpPort, type HelpBackendPort, type HelpTour } from './helpSystem';
 
   let {
@@ -453,15 +454,6 @@
     onclose();
   }
 
-  function handleKeydown(event: KeyboardEvent) {
-    if (!open) return;
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation?.();
-      dismissTour();
-    }
-  }
-
   onDestroy(() => {
     loadGen++;
     trackGen++;
@@ -469,8 +461,6 @@
     onrestorecontext?.();
   });
 </script>
-
-<svelte:window onkeydown={handleKeydown} />
 
 {#if open}
   {#if activeTour && activeStep}
@@ -493,6 +483,7 @@
       class="fixed z-50 max-sm:inset-x-3 max-sm:bottom-3 rounded border border-[#D8D8D8] border-t-[4px] border-t-[#FCBA19] bg-white text-[#313132] shadow-2xl"
       style={dialogLayout.style}
     >
+      <ModalDialogTrap onEscape={dismissTour} trapFocus={true} initialFocusSelector="[data-tour-next]" />
       <header class="flex items-center justify-between gap-2 bg-[#003366] px-4 py-2.5 text-white">
         <div class="min-w-0">
           <div class="truncate font-mono text-[11px] text-[#FCBA19]">
@@ -578,6 +569,7 @@
         aria-labelledby="onboarding-catalog-title"
         class="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded border border-[#D8D8D8] bg-white text-[#313132] shadow-2xl"
       >
+        <ModalDialogTrap onEscape={dismissTour} trapFocus={true} />
         <header class="flex items-center justify-between gap-3 border-b-[3px] border-b-[#FCBA19] bg-[#003366] px-5 py-3.5 text-white">
           <div class="flex items-center gap-2.5">
             <Compass size={18} class="shrink-0 text-[#FCBA19]" />

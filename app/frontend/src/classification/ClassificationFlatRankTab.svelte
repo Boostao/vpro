@@ -84,6 +84,7 @@
               <td class:breakpoint-cell={cellVal.trim().startsWith('~')}>
                 <input
                   type="text"
+                  aria-label={`${col.label} for row ${idx + 1}`}
                   value={cellVal}
                   placeholder={col.label}
                   oninput={e => {

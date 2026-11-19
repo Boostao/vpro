@@ -233,6 +233,7 @@
                     <td class="p-2 font-mono">{plot.items?.length ?? 0}</td>
                     <td class="p-2">
                       <select
+                        aria-label={`Plot merge resolution for ${plot.plotNumber}`}
                         data-merge-plot-resolution={plot.plotNumber}
                         class="rounded border border-[#9F9F9F] p-1 text-xs"
                         disabled={busy || plot.category === 'Identical' || plot.category === 'TargetOnly'}
@@ -270,6 +271,7 @@
                   <td class="p-2 font-mono">{c.targetVal ?? 'NULL'}</td>
                   <td class="p-2">
                     <select
+                      aria-label={`Field conflict resolution for ${c.plotNumber} ${c.table}.${c.key}`}
                       data-merge-field-resolution={c.conflictId}
                       class="rounded border border-[#9F9F9F] p-1 text-xs"
                       value={mergeFieldResolutions[c.conflictId] ?? mergeDefaultResolution}

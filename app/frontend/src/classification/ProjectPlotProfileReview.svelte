@@ -70,7 +70,7 @@
     if (!mutationAuthorized()) return;
     if (!allowEditing || !draft || busy || committedFailure || creation || deletion !== null) { error = 'Finish the current profile proposal before editing existing rules.'; return; }
     try { draft = stageProfileRule(draft, rowId, name, raw, nullValue); error = null; success = null; result = null; presenceResult = null; }
-    catch (cause) { error = `Profile draft failed; existing drafts retained: ${String(cause)}`; }
+    catch (cause) { error = `Profile draft failed; existing drafts retained: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`; }
   }
   async function saveRules() {
     if (!mutationAuthorized()) return;
@@ -86,10 +86,11 @@
       review = next; draft = { review: next, cells: {} };
       success = 'Profile assignments and typed technical history committed atomically. Historical PlotCount and plot drafts were not changed.';
     } catch (cause) {
+      const cleaned = String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '');
       if (committed || String(cause).includes('Profile rule changes committed, but')) {
         committedFailure = true; draft = null; result = null; lump = null; subvarieties = false;
-        error = `Profile rules committed, but refresh/cleanup failed. Reload before editing; completed writes must not be replayed: ${String(cause)}`;
-      } else error = `Profile save failed; raw drafts retained for correction or retry: ${String(cause)}`;
+        error = `Profile rules committed, but refresh/cleanup failed. Reload before editing; completed writes must not be replayed: ${cleaned}`;
+      } else error = `Profile save failed; raw drafts retained for correction or retry: ${cleaned}`;
     } finally { saving = false; onbusy(false); }
   }
   function close() {
@@ -101,13 +102,13 @@
     if (!mutationAuthorized()) return;
     if (!allowEditing || !allowCreation || busy || blocked || !review) { error = 'Finish existing drafts before proposing one new rule.'; return; }
     try { creation = beginProfileRuleCreation(review); error = null; success = null; result = null; presenceResult = null; }
-    catch (cause) { error = `New rule proposal unavailable; no identity allocated: ${String(cause)}`; }
+    catch (cause) { error = `New rule proposal unavailable; no identity allocated: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`; }
   }
   function stageCreation(name: ProfileField, raw: string, nullValue: boolean) {
     if (!mutationAuthorized()) return;
     if (!creation || busy || committedFailure) { error = 'Review an available new-rule proposal before editing.'; return; }
     try { creation = stageProfileRuleCreation(creation, name, raw, nullValue); error = null; success = null; }
-    catch (cause) { error = `New rule draft failed; proposal retained: ${String(cause)}`; }
+    catch (cause) { error = `New rule draft failed; proposal retained: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`; }
   }
   async function createRule() {
     if (!mutationAuthorized()) return;
@@ -129,10 +130,11 @@
       review = next; draft = { review: next, cells: {} };
       success = `Physical rule ${created.rowId} and typed creation history committed atomically. No Order, criteria, layer or PlotCount was inferred.`;
     } catch (cause) {
+      const cleaned = String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '');
       if (committed || String(cause).includes('Profile rule changes committed, but')) {
         committedFailure = true; creation = null; draft = null; result = null; lump = null; subvarieties = false;
-        error = `Profile creation committed, but refresh/cleanup failed. Reload before another proposal; completed writes must not be replayed: ${String(cause)}`;
-      } else error = `Profile creation failed; nullable/raw proposal retained for retry: ${String(cause)}`;
+        error = `Profile creation committed, but refresh/cleanup failed. Reload before another proposal; completed writes must not be replayed: ${cleaned}`;
+      } else error = `Profile creation failed; nullable/raw proposal retained for retry: ${cleaned}`;
     } finally { saving = false; onbusy(false); }
   }
   function reviewDeletion(rowId: string) {
@@ -161,10 +163,11 @@
       review = next; draft = { review: next, cells: {} };
       success = `Physical rule ${rowId} deleted with full typed history; its identity remains reserved. Surviving rules/counts and plot drafts were not changed.`;
     } catch (cause) {
+      const cleaned = String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '');
       if (committed || String(cause).includes('Profile rule changes committed, but')) {
         committedFailure = true; deletion = null; draft = null; result = null; lump = null; subvarieties = false;
-        error = `Profile deletion committed, but refresh/cleanup failed. Reload before another review; completed writes must not be replayed: ${String(cause)}`;
-      } else error = `Profile deletion failed; original confirmation retained for retry: ${String(cause)}`;
+        error = `Profile deletion committed, but refresh/cleanup failed. Reload before another review; completed writes must not be replayed: ${cleaned}`;
+      } else error = `Profile deletion failed; original confirmation retained for retry: ${cleaned}`;
     } finally { saving = false; onbusy(false); }
   }
 
@@ -209,7 +212,7 @@
         committedFailure = false; success = null;
       }
     } catch (cause) {
-      if (request === generation) error = `Project-local profile review failed; no rules, counts or filters changed: ${String(cause)}`;
+      if (request === generation) error = `Project-local profile review failed; no rules, counts or filters changed: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`;
     } finally {
       if (request === generation) { reading = false; onbusy(false); }
     }
@@ -236,7 +239,7 @@
       const source = validateProjectProfileLump(await reads.track(cancellableLoader));
       if (request === generation) lump = source;
     } catch (cause) {
-      if (request === generation) error = `Project-local lump review failed; no definitions changed: ${String(cause)}`;
+      if (request === generation) error = `Project-local lump review failed; no definitions changed: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`;
     } finally {
       if (request === generation) { reading = false; onbusy(false); }
     }
@@ -261,7 +264,7 @@
         runInput = $state.snapshot(input);
       }
     } catch (cause) {
-      if (request === generation) error = `Profile preview failed; no stored rules, counts or filters changed: ${String(cause)}`;
+      if (request === generation) error = `Profile preview failed; no stored rules, counts or filters changed: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`;
     } finally {
       if (request === generation) { reading = false; running = false; onbusy(false); }
     }
@@ -285,7 +288,7 @@
       const validated = await validateSpeciesPresencePreview(wire, expected);
       if (request === generation) presenceResult = validated;
     } catch (cause) {
-      if (request === generation) error = `Species-only preview failed; no rules, counts, navigation or SU changed: ${String(cause)}`;
+      if (request === generation) error = `Species-only preview failed; no rules, counts, navigation or SU changed: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`;
     } finally {
       if (request === generation) { reading = false; running = false; onbusy(false); }
     }
@@ -297,14 +300,14 @@
     const unavailable = profileFilterUnavailable(result);
     if (unavailable) { error = unavailable; return; }
     try { await onapply(structuredClone($state.snapshot({ input: runInput, preview: result }))); }
-    catch (cause) { error = `Profile navigation was not applied; preview and current filter retained: ${String(cause)}`; }
+    catch (cause) { error = `Profile navigation was not applied; preview and current filter retained: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`; }
   }
   async function reviewSaveSU() {
     if (!allowSaveSU || !allowRun || busy || blocked || !result || !runInput || !onsureview) {
       error = 'Run stored inputs and finish profile drafts before reviewing Save as SU.'; return;
     }
     try { await onsureview(structuredClone($state.snapshot({ input: runInput, preview: result }))); }
-    catch (cause) { error = `Save as SU review failed; preview and drafts retained: ${String(cause)}`; }
+    catch (cause) { error = `Save as SU review failed; preview and drafts retained: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`; }
   }
 </script>
 
@@ -327,7 +330,7 @@
       <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50" disabled={busy || blocked} onclick={close}>Close profile review</button>
     </div>
   </div>
-  {#if error}<p role="alert" class="vpro-prof-alert mt-3">{error}</p>{/if}
+  {#if error}<p role="alert" class="vpro-prof-alert mt-3">{error.replace(/(?:RuntimeError|Error):\s*/gi, '')}</p>{/if}
   {#if allowPresence && subvarieties}<p role="alert" class="vpro-prof-warn mt-3">Species-only subvariety preparation is unavailable. Clear the ordered preview's subvariety selection to preview literal saved species.</p>{/if}
   {#if presenceResult}
     <section aria-label="Readonly species-only matches" class="mt-3 min-w-0">
@@ -384,7 +387,7 @@
         <label class="flex gap-2 items-center"><input type="checkbox" disabled={busy || blocked || (!lump && selectedLumpLocation !== 'None')} checked={subvarieties}
           onchange={event => { subvarieties = event.currentTarget.checked; result = null; presenceResult = null; error = null; }} />Combine source subvarieties</label>
         <label class="flex gap-2 items-center"><input type="checkbox" disabled={busy || blocked} bind:checked={startWithAllPlots}
-          onchange={() => { result = null; error = null; }} />Start with all plots (optResetFilter)</label>
+          onchange={() => { result = null; error = null; }} />Start with all plots</label>
       {/if}
     </div>
   {/if}
@@ -486,7 +489,7 @@
       </div>
     {/each}
   {/if}
-  <p class="vpro-prof-muted mt-3 text-sm">This uses only explicitly selected stored rules and project data, never unsaved plot drafts. Ordered preview runs use isolated SQLite TEMP results and source-scoped Env/Veg/Lump operations (including Lump/Any/=/Add fixed equality semantics and Start with all plots); their text matching supports ASCII literals and simple * / ? patterns only. Unsupported rules fail explicitly. Other-table/external writes require separate current-session authorization; restoration remains unavailable. Save as SU creates only a new SQLite file after its separate opt-in and explicit review. Profile selection, rule creation/deletion and navigation filtering require their separate opt-ins. No stored PlotCount or shipped scratch table is changed.</p>
+  <p class="vpro-prof-muted mt-3 text-sm">This uses only explicitly selected stored rules and project data, never unsaved plot drafts. Ordered preview runs use isolated temporary workspace results and source-scoped Env/Veg/Lump operations (including Lump/Any/=/Add fixed equality semantics and Start with all plots); their text matching supports ASCII literals and simple * / ? patterns only. Unsupported rules fail explicitly. Other-table/external writes require separate current-session authorization; restoration remains unavailable. Save as SU creates only a new VPro project file (.db) after its separate opt-in and explicit review. Profile selection, rule creation/deletion and navigation filtering require their separate opt-ins. No stored PlotCount or shipped scratch table is changed.</p>
 </section>
 
 <style>

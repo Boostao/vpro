@@ -26,6 +26,7 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
   import TwoPageProfilingPanel from './TwoPageProfilingPanel.svelte';
   import { Columns2, FileText } from '@lucide/svelte';
   import FieldCardPreviewModal from './FieldCardPreviewModal.svelte';
+  import CoordinateHelper from './CoordinateHelper.svelte';
   import { buildFieldCardViewModel } from './fieldCardPreview';
   import { notifications } from '../shell/notificationService.svelte';
 
@@ -531,54 +532,6 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
   }
 
   let coordHelperOpen = $state(false);
-  let coordHelperMode = $state<'dm' | 'dms' | 'utm'>('dms');
-  let coordHelperAxis = $state<'latitude' | 'longitude'>('latitude');
-  let coordDeg = $state('');
-  let coordMin = $state('');
-  let coordSec = $state('');
-  let coordDir = $state<'N' | 'S' | 'E' | 'W'>('N');
-  let utmZone = $state('');
-  let utmEasting = $state('');
-  let utmNorthing = $state('');
-  let coordBusy = $state(false);
-  let coordError = $state<string | null>(null);
-
-  async function applyTwoPageCoordConversion() {
-    if (!editingEnabled || close.busy || view.blocked || childBlocked || coordBusy) return;
-    coordBusy = true;
-    coordError = null;
-    try {
-      const { SpatialService, CoordinateMode } = await import('../../bindings/github.com/boostao/vpro/app');
-      if (coordHelperMode === 'utm') {
-        const z = Number.parseInt(utmZone.trim(), 10);
-        const e = Number.parseFloat(utmEasting.trim());
-        const n = Number.parseFloat(utmNorthing.trim());
-        if (!Number.isFinite(z) || !Number.isFinite(e) || !Number.isFinite(n)) {
-          throw new Error('Enter valid NAD83 UTM Zone, Easting, and Northing.');
-        }
-        const projected = await SpatialService.ProjectNAD83UTMToLatLon(z, e, n);
-        stage('Latitude', { kind: 'text', raw: String(Math.round(projected.latitude * 1e6) / 1e6) });
-        stage('Longitude', { kind: 'text', raw: String(Math.round(projected.longitude * 1e6) / 1e6) });
-        const snap = view.snapshot;
-        if (snap?.Fields.some(f => f.column === 'UTMZone')) stage('UTMZone', { kind: 'text', raw: String(z) });
-        if (snap?.Fields.some(f => f.column === 'UTMEasting')) stage('UTMEasting', { kind: 'text', raw: String(Math.round(e * 10) / 10) });
-        if (snap?.Fields.some(f => f.column === 'UTMNorthing')) stage('UTMNorthing', { kind: 'text', raw: String(Math.round(n * 10) / 10) });
-      } else {
-        const deg = coordDeg.trim() === '' ? null : Number(coordDeg);
-        const min = coordMin.trim() === '' ? null : Number(coordMin);
-        const sec = coordHelperMode === 'dms' ? (coordSec.trim() === '' ? null : Number(coordSec)) : null;
-        const negative = coordDir === 'S' || coordDir === 'W';
-        const mode = coordHelperMode === 'dms' ? CoordinateMode.CoordinateModeDMS : CoordinateMode.CoordinateModeDM;
-        const dd = await SpatialService.ConvertCoordinate(coordHelperAxis, mode, { degrees: deg, minutes: min, seconds: sec, negative });
-        if (dd === null || !Number.isFinite(dd)) throw new Error('Coordinate conversion returned empty result.');
-        stage(coordHelperAxis === 'latitude' ? 'Latitude' : 'Longitude', { kind: 'text', raw: String(dd) });
-      }
-    } catch (cause) {
-      coordError = String(cause);
-    } finally {
-      coordBusy = false;
-    }
-  }
 </script>
 
 <svelte:window onkeydown={handleTwoPageKeydown} />
@@ -899,58 +852,29 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
           <button type="button" disabled={unavailable} onclick={() => stage(column, { kind: 'original' })}>Keep original</button>
           {#if column === 'Latitude'}
             <button type="button" data-two-page-coord-toggle
-              onclick={() => { coordHelperOpen = !coordHelperOpen; coordError = null; }}>
+              onclick={() => { coordHelperOpen = !coordHelperOpen; }}>
               {coordHelperOpen ? 'Close DD/DM/DMS/UTM' : 'Coordinate Modes (DM/DMS/UTM)'}
             </button>
           {/if}
         </div>
       {/if}
       {#if column === 'Latitude' && coordHelperOpen}
-        <div class="mt-2 rounded border border-[#D8D8D8] bg-[#F2F2F2] p-2.5 space-y-2 text-xs" data-two-page-coord-helper>
-          <div class="flex flex-wrap items-center gap-2">
-            <label class="font-medium" for="two-page-coord-mode">Mode</label>
-            <select id="two-page-coord-mode" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordHelperMode}>
-              <option value="dm">DM (Deg / Min)</option>
-              <option value="dms">DMS (Deg / Min / Sec)</option>
-              <option value="utm">NAD83 UTM</option>
-            </select>
-            {#if coordHelperMode !== 'utm'}
-              <select aria-label="Coordinate Axis" class="rounded border border-[#D8D8D8] bg-white px-2 py-1"
-                bind:value={coordHelperAxis}
-                onchange={() => { coordDir = coordHelperAxis === 'latitude' ? 'N' : 'W'; }}>
-                <option value="latitude">Latitude</option>
-                <option value="longitude">Longitude</option>
-              </select>
-            {/if}
-          </div>
-          {#if coordHelperMode === 'utm'}
-            <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
-              <input type="text" placeholder="Zone (e.g. 10)" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={utmZone} />
-              <input type="text" placeholder="Easting" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={utmEasting} />
-              <input type="text" placeholder="Northing" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={utmNorthing} />
-            </div>
-          {:else}
-            <div class="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-              <input type="text" placeholder="Deg" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordDeg} />
-              <input type="text" placeholder="Min" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordMin} />
-              {#if coordHelperMode === 'dms'}
-                <input type="text" placeholder="Sec" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordSec} />
-              {/if}
-              <select aria-label="Hemisphere" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordDir}>
-                {#if coordHelperAxis === 'latitude'}
-                  <option value="N">N</option><option value="S">S</option>
-                {:else}
-                  <option value="W">W</option><option value="E">E</option>
-                {/if}
-              </select>
-            </div>
-          {/if}
-          {#if coordError}<p role="alert" class="text-[#D8292F]">{coordError}</p>{/if}
-          <button type="button" class="rounded bg-[#003366] px-2.5 py-1 text-white disabled:opacity-50"
-            disabled={unavailable || coordBusy} onclick={() => void applyTwoPageCoordConversion()}>
-            {coordBusy ? 'Converting...' : 'Apply converted coordinates'}
-          </button>
-        </div>
+        <CoordinateHelper
+          idPrefix="two-page"
+          variant="two-page"
+          disabled={unavailable}
+          onApplyUTM={(projected) => {
+            stage('Latitude', { kind: 'text', raw: String(projected.latitude) });
+            stage('Longitude', { kind: 'text', raw: String(projected.longitude) });
+            const snap = view.snapshot;
+            if (snap?.Fields.some(f => f.column === 'UTMZone')) stage('UTMZone', { kind: 'text', raw: String(projected.zone) });
+            if (snap?.Fields.some(f => f.column === 'UTMEasting')) stage('UTMEasting', { kind: 'text', raw: String(projected.easting) });
+            if (snap?.Fields.some(f => f.column === 'UTMNorthing')) stage('UTMNorthing', { kind: 'text', raw: String(projected.northing) });
+          }}
+          onApplyAxis={(axis, dd) => {
+            stage(axis === 'latitude' ? 'Latitude' : 'Longitude', { kind: 'text', raw: String(dd) });
+          }}
+        />
       {/if}
       {#if column === 'SV_FloodPlain' || column === 'SpeciesListComplete'}<p class="text-xs">Source Yes/No converts NULL to No; choose No explicitly. Unchanged historical NULL is retained.</p>{/if}
       {#if draft?.error}<p id={`${id}-error`} role="alert" class="text-xs text-red-700">{draft.error}</p>{/if}

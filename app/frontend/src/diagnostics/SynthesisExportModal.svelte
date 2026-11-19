@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ModalDialogTrap from '../shared/ModalDialogTrap.svelte';
   import type { ExportDiagnosticWorkbookResult, SynthesisExportDraft } from './classificationSynthesis';
 
   interface Props {
@@ -24,6 +25,7 @@
 
 {#if open}
   <div class="syn-modal-backdrop" role="dialog" aria-modal="true" aria-label="Publish BEC Diagnostic Workbook">
+    <ModalDialogTrap onEscape={onClose} escapeDisabled={exportingWorkbook} />
     <div class="syn-modal">
       <div class="syn-modal-hdr">
         <h3>Publish BEC Diagnostic Synthesis Workbook (.xlsx)</h3>

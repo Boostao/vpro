@@ -1029,7 +1029,7 @@
 
         <details class="xml-check-box">
           <summary>Pre-validate pasted XML snippet</summary>
-          <textarea bind:value={tvXmlSnippet} rows={3} placeholder="<Plot_package><Plots><Plot releve_nr=&quot;1&quot;>..." disabled={busy || operationHeld}></textarea>
+          <textarea aria-label="TurboVeg XML snippet to validate" bind:value={tvXmlSnippet} rows={3} placeholder="<Plot_package><Plots><Plot releve_nr=&quot;1&quot;>..." disabled={busy || operationHeld}></textarea>
           <button type="button" class="btn-secondary" disabled={busy || operationHeld} onclick={checkTurboVegXmlSnippet}>
             Validate XML Snippet
           </button>
@@ -1072,7 +1072,7 @@
         {#if userSppExportResult}
           <div class="receipt-box">
             <strong>{userSppExportResult.rowCount} species | Payload SHA-256: <code>{userSppExportResult.payloadSha256.slice(0, 16)}...</code></strong>
-            <textarea readonly rows={6} value={userSppExportResult.content}></textarea>
+            <textarea aria-label="Exported user species payload" readonly rows={6} value={userSppExportResult.content}></textarea>
           </div>
         {/if}
       </div>
@@ -1159,7 +1159,7 @@
         <div class="sub-box">
           <h4>Long Tidy CSV (PlotNumber, SiteUnit, Layer, Species, ScientificName, Lifeform, Cover, Height, Collected)</h4>
           <div class="form-row">
-            <input type="text" class="grow" bind:value={longCsvDest} placeholder="/path/to/veg_long.csv (optional for preview)" disabled={busy || operationHeld} />
+            <input type="text" aria-label="Long tidy CSV destination file path" class="grow" bind:value={longCsvDest} placeholder="/path/to/veg_long.csv (optional for preview)" disabled={busy || operationHeld} />
             <button type="button" class="btn-secondary" data-save-long-csv disabled={busy || operationHeld} onclick={() => pickFilePath('save', 'Save Long Tidy CSV', 'veg_long.csv', [{ DisplayName: 'CSV (*.csv)', Pattern: '*.csv' }], (p) => { longCsvDest = p; })}>Save As...</button>
             <button type="button" class="btn-primary" disabled={busy || operationHeld || !contextId} onclick={runLongCsvExport}>
               Export Long CSV
@@ -1188,7 +1188,7 @@
             </label>
           </div>
           <div class="form-row">
-            <input type="text" class="grow" bind:value={wideCsvDest} placeholder="/path/to/veg_wide_matrix.csv" disabled={busy || operationHeld} />
+            <input type="text" aria-label="Wide plot by species matrix CSV destination file path" class="grow" bind:value={wideCsvDest} placeholder="/path/to/veg_wide_matrix.csv" disabled={busy || operationHeld} />
             <button type="button" class="btn-secondary" data-save-wide-csv disabled={busy || operationHeld} onclick={() => pickFilePath('save', 'Save Wide Matrix CSV', 'veg_wide_matrix.csv', [{ DisplayName: 'CSV (*.csv)', Pattern: '*.csv' }], (p) => { wideCsvDest = p; })}>Save As...</button>
             <button type="button" class="btn-primary" disabled={busy || operationHeld || !contextId} onclick={runWideCsvExport}>
               Export Wide Matrix CSV
@@ -1199,7 +1199,7 @@
         {#if csvOutcome}
           <div class="receipt-box">
             <strong>{csvOutcome.mode}: {csvOutcome.rowCount} rows x {csvOutcome.columnCount} cols ({csvOutcome.speciesCount} taxa)</strong>
-            <textarea readonly rows={6} value={csvOutcome.previewCsv}></textarea>
+            <textarea aria-label="Exported CSV preview" readonly rows={6} value={csvOutcome.previewCsv}></textarea>
           </div>
         {/if}
       </div>

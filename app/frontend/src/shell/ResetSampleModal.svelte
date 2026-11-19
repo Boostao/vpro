@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ModalDialogTrap from '../shared/ModalDialogTrap.svelte';
+
   let {
     open,
     busy,
@@ -28,6 +30,7 @@
       aria-labelledby="reset-sample-modal-title"
       class="w-full max-w-md overflow-hidden rounded border border-slate-300 bg-white text-[#313132] shadow-2xl"
     >
+      <ModalDialogTrap onEscape={onclose} escapeDisabled={busy || transitionWorking} />
       <header class="border-b-[3px] border-b-[#FCBA19] bg-[#003366] px-4 py-3 text-white">
         <div class="font-mono text-[11px] uppercase tracking-wider text-[#FCBA19]">Safe Non-Destructive Recovery</div>
         <h2 id="reset-sample-modal-title" class="text-sm font-semibold text-white">Reset Workspace to Sample</h2>

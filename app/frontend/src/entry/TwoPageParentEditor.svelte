@@ -4,7 +4,8 @@
   import { ReadRequests } from '../shared/readRequests';
   import type { EditorCloseState } from '../shell/closeLifecycle';
   import TwoPageParentFields from './TwoPageParentFields.svelte';
-  import TwoPageEntryLayout from './TwoPageEntryLayout.svelte';
+  import TwoPageParentReviewSection from './TwoPageParentReviewSection.svelte';
+  import TwoPageParentSourceLayout from './TwoPageParentSourceLayout.svelte';
   import { twoPageEntryValues, type TwoPageEntryChild } from './twoPageEntryProjection';
   import type { PaperControl } from './paperLayout';
   import { TwoPageParentSession, type TwoPageParentForm, type TwoPageParentColumn,
@@ -20,14 +21,11 @@
     onExtendedShrubsChange?: (enabled: boolean) => void;
   } = $props();
   const owner = untrack(() => ({ contextId, project, plot }));
-  const reviewEnabled = true;
-  const editingEnabled = true;
-  const sourceLayoutEnabled = true;
   const reads = new ReadRequests();
-  const key = JSON.stringify(owner);
   const sessions = untrack(() => {
-    const owned = cache.get(key) ?? new Map<TwoPageParentForm, TwoPageParentSession>();
-    cache.set(key, owned);
+    const cacheKey = JSON.stringify(owner);
+    const owned = cache.get(cacheKey) ?? new Map<TwoPageParentForm, TwoPageParentSession>();
+    cache.set(cacheKey, owned);
     return owned;
   });
   let form = $state<TwoPageParentForm>(untrack(() => initialForm));
@@ -79,16 +77,12 @@
   }
   function stage(column: TwoPageParentColumn, input: TwoPageParentInput) {
     try {
-      if (!editingEnabled) throw new Error('Additional-field editing is independently disabled.');
       session.stage(column, input);
       error = session.view().error;
     } catch (cause) { error = `Additional-field draft failed; owned state retained: ${String(cause)}`; }
   }
   async function operation(action: 'load' | 'save' | 'undo' | 'retain' | 'prune') {
     try {
-      if (!reviewEnabled || action !== 'load' && action !== 'undo' && !editingEnabled) {
-        throw new Error('Two-page review/editing is independently disabled.');
-      }
       error = null;
       const ok = action === 'load' ? await session.load() : action === 'save' ? await session.save()
         : action === 'undo' ? await session.undo() : await session.restore(
@@ -109,38 +103,31 @@
   }
 </script>
 
-<section class="space-y-3" aria-label="Two-page source review">
-  {#if error}<p role="alert" class="text-sm text-red-700">{error}</p>{/if}
-  <div class="flex flex-wrap gap-2">
-    <label class="inline-flex items-center gap-2 rounded border px-2 py-1 text-sm">
-      <input type="checkbox" data-extended-shrubs checked={form === 'FS882-8x6XL-CHARS'}
-        disabled={close.unsaved || close.busy || close.blocked}
-        onchange={event => chooseForm(event.currentTarget.checked ? 'FS882-8x6XL-CHARS' : 'FS882-8x6XL')} />
-      Show extended shrub layers
-    </label>
-    <button type="button" disabled={close.unsaved || close.busy || close.blocked} onclick={closeReview}>Close additional-field review</button>
-  </div>
-  <TwoPageParentFields {form} {view} disabled={!editingEnabled} readDisabled={!reviewEnabled}
-    canSave={editingEnabled && close.canSave} onstage={stage}
+<TwoPageParentReviewSection
+  ariaLabel="Two-page source review"
+  {error}
+  {form}
+  locked={close.unsaved || close.busy || close.blocked}
+  closeLabel="Close additional-field review"
+  onchooseform={next => void chooseForm(next)}
+  onclose={closeReview}
+>
+  <TwoPageParentFields {form} {view} disabled={false} readDisabled={false}
+    canSave={close.canSave} onstage={stage}
     onoperation={action => void operation(action)} oncancel={cancel}
-    children={sourceLayoutEnabled ? completeLayout : undefined} />
-</section>
+    children={completeLayout} />
+</TwoPageParentReviewSection>
 
 {#snippet completeLayout(editor: { columns: readonly string[]; input: Snippet<[PaperControl, string]>; labelled: true })}
   {#if view.original}
-    <p class="text-sm">Additional fields are editable in this source layout. Other parent fields and linked records
-      remain read-only during this review; finish and close this scope before editing another.</p>
-    <TwoPageEntryLayout {form} values={twoPageEntryValues(view.original, form)} editors={[{ ...editor, scope: 'extra' }]}>
-      {#snippet identity(field)}
-        <label class="form-field"><span class="field-label">Plot number</span>
-          <input data-column={field.column} value={owner.plot} readonly aria-label="Plot number"
-            title="Existing plot identities cannot be renamed here" />
-        </label>
-      {/snippet}
-      {#snippet embedded(child, control)}
-        {#if childContent}{@render childContent(child, control)}
-        {:else}<p>{child.form}: linked records are unavailable in this review.</p>{/if}
-      {/snippet}
-    </TwoPageEntryLayout>
+    <TwoPageParentSourceLayout
+      {form}
+      plot={owner.plot}
+      scope="extra"
+      scopeLabel="Additional"
+      values={twoPageEntryValues(view.original, form)}
+      {editor}
+      {childContent}
+    />
   {/if}
 {/snippet}

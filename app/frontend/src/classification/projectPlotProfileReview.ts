@@ -27,7 +27,7 @@ export function profileCellLabel(cell: ProjectMetadataCell): string {
       key === 'integer' && (typeof cell.integer !== 'string' || !/^-?(0|[1-9]\d*)$/.test(cell.integer)) ||
       key === 'real' && (typeof cell.real !== 'number' || !Number.isFinite(cell.real)) ||
       key === 'blobHex' && (typeof cell.blobHex !== 'string' || !/^(?:[0-9a-f]{2})*$/.test(cell.blobHex))) {
-    throw new Error('Profile review contains an inconsistent typed SQLite cell; reload without repairing it.');
+    throw new Error('Profile review contains an inconsistent typed cell value; reload without modifying it.');
   }
   const raw = metadataCellText(cell);
   return `${cell.storage}: ${key === 'text' ? JSON.stringify(raw) : raw}`;

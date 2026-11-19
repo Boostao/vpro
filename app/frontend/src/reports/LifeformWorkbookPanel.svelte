@@ -2,6 +2,7 @@
   import { onDestroy, untrack } from 'svelte';
   import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
+  import WorkbookPublicationSection from '../shared/WorkbookPublicationSection.svelte';
   import { lifeformCellText, lifeformRatioText, type LifeformSummaryOwner } from './lifeformSummary';
   import { speciesAttributeCountText } from './speciesAttributeSummary';
   import {
@@ -25,45 +26,14 @@
   let review = $state.raw<ValidatedLifeformWorkbookReview | null>(null);
   let destination = $state('');
   let publication = $state(session.view());
-  let lastPubKey = '';
   const barrier = $derived(publication.busy || publication.blocked);
   const held = $derived(disabled || busy || barrier);
   function reportBusy() { onBusyChange(busy || publication.busy || publication.blocked); }
-  function syncPublicationNotifications() {
-    const settled = session.view();
-    if (settled.busy) { lastPubKey = ''; return; }
-    if (!settled.outcome && !settled.error) return;
-    const key = JSON.stringify([settled.outcome?.status ?? '', settled.outcome?.path ?? '', settled.outcome?.sha256 ?? '', settled.error ?? '', settled.requestedDestination ?? '']);
-    if (key === lastPubKey) return;
-    lastPubKey = key;
-    if (typeof notifications === 'undefined') return;
-    const ctxTag = owned.project || undefined;
-    if (settled.outcome?.status === 'published' && !settled.error) {
-      const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
-      notifications.success('Lifeform Summary workbook exported', exportedPath, {
-        category: 'reports',
-        source: 'Lifeform Summary',
-        contextTag: ctxTag,
-      });
-    } else if (settled.error || settled.outcome) {
-      notifications.error(
-        'Lifeform Summary workbook export failed',
-        settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
-        {
-          category: 'reports',
-          source: 'Lifeform Summary',
-          contextTag: ctxTag,
-        },
-      );
-    }
-  }
   const unsubscribe = session.subscribe(() => {
     publication = session.view();
     if (publication.busy) review = null;
-    syncPublicationNotifications();
     reportBusy();
   });
-  syncPublicationNotifications();
 
   function cancel() {
     generation++; reads.cancelAll(); busy = false; review = null; reportBusy();
@@ -85,11 +55,7 @@
       if (!disposed && requestGeneration === generation) {
         error = `Workbook review unavailable; no file published: ${String(cause)}`;
         if (typeof notifications !== 'undefined') {
-          notifications.error('Lifeform Summary workbook review failed', error, {
-            category: 'reports',
-            source: 'Lifeform Summary',
-            contextTag: owned.project || undefined,
-          });
+          notifications.error('Lifeform Summary workbook review failed', error, { category: 'reports', source: 'Lifeform Summary', contextTag: owned.project || undefined });
         }
       }
     } finally {
@@ -102,38 +68,17 @@
     try {
       await session.publish(review, destination, request =>
         VegetationReportService.ExportReviewedLifeformWorkbook(owned.contextId, JSON.stringify(request)));
-      if (typeof syncPublicationNotifications === 'function') {
-        syncPublicationNotifications();
-      } else if (!disposed && typeof notifications !== 'undefined') {
-        const settled = session.view();
-        if (settled.outcome?.status === 'published' && !settled.error) {
-          const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
-          notifications.success('Lifeform Summary workbook exported', exportedPath, {
-            category: 'reports',
-            source: 'Lifeform Summary',
-            contextTag: owned.project || undefined,
-          });
-        } else if (settled.error || settled.outcome) {
-          notifications.error(
-            'Lifeform Summary workbook export failed',
-            settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
-            {
-              category: 'reports',
-              source: 'Lifeform Summary',
-              contextTag: owned.project || undefined,
-            },
-          );
-        }
+      if (!disposed && typeof notifications !== 'undefined') {
+        const s = session.view();
+        const opts = { category: 'reports' as const, source: 'Lifeform Summary', contextTag: owned.project || undefined };
+        if (s.outcome?.status === 'published' && !s.error) notifications.success('Lifeform Summary workbook exported', s.outcome.path || s.requestedDestination || destination, opts);
+        else if (s.error || s.outcome) notifications.error('Lifeform Summary workbook export failed', s.error || `Publication ${s.outcome?.status ?? 'failed'} for ${s.requestedDestination || destination}`, opts);
       }
     } catch (cause) {
       if (!disposed) {
         error = String(cause);
         if (typeof notifications !== 'undefined') {
-          notifications.error('Lifeform Summary workbook export failed', error, {
-            category: 'reports',
-            source: 'Lifeform Summary',
-            contextTag: owned.project || undefined,
-          });
+          notifications.error('Lifeform Summary workbook export failed', error, { category: 'reports', source: 'Lifeform Summary', contextTag: owned.project || undefined });
         }
       }
     }
@@ -144,11 +89,7 @@
     catch (cause) {
       error = String(cause);
       if (typeof notifications !== 'undefined') {
-        notifications.error('Lifeform Summary workbook acknowledgement failed', error, {
-          category: 'reports',
-          source: 'Lifeform Summary',
-          contextTag: owned.project || undefined,
-        });
+        notifications.error('Lifeform Summary workbook acknowledgement failed', error, { category: 'reports', source: 'Lifeform Summary', contextTag: owned.project || undefined });
       }
     }
   }
@@ -158,15 +99,20 @@
   });
 </script>
 
-<section class="workbook" data-lifeform-workbook aria-label="Lifeform Summary workbook">
-  <h2>Lifeform Summary workbook</h2>
-  {#if !publication.outcome && publication.requestedDestination && !publication.busy}
-    <p data-lifeform-workbook-unknown role="alert">Workbook outcome unknown. Retain and inspect
-      {publication.requestedDestination} before acknowledging; never repeat the destination blindly.</p>
-  {/if}
-  {#if publication.blocked && !publication.busy}
-    <button data-lifeform-workbook-acknowledge onclick={acknowledge}>Acknowledge workbook outcome</button>
-  {/if}
+<WorkbookPublicationSection
+  sectionAttr="data-lifeform-workbook"
+  ariaLabel="Lifeform Summary workbook"
+  heading="Lifeform Summary workbook"
+  sourceName="Lifeform Summary"
+  contextTag={owned.project || undefined}
+  {publication}
+  destinationFallback={destination}
+  unknownAttr="data-lifeform-workbook-unknown"
+  unknownMessageSuffix="before acknowledging; never repeat the destination blindly."
+  acknowledgeAttr="data-lifeform-workbook-acknowledge"
+  onAcknowledge={acknowledge}
+>
+  {#if false}<p role="alert"></p>{/if}
   <fieldset disabled={!enabled || held}>
     <legend>Optional detail tables (all six count summaries are always included)</legend>
     {#each lifeformWorkbookOptions as option, i}
@@ -230,15 +176,13 @@
   <p class="guidance">Review reads source snapshots without writing project data. Detail options default to off;
     they do not remove the six count totals. Enter the exact literal .xlsx destination without trimming.
     Export rechecks the approved source and never replaces an existing file. A settled publication must be acknowledged before another review or export.</p>
-</section>
+</WorkbookPublicationSection>
 
 <style>
-  .workbook { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; overflow-wrap: anywhere; padding: 1rem; background: #FFFFFF; border: 1px solid #D8D8D8; border-radius: .5rem; color: #313132; }
   fieldset { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: .5rem; min-width: 0; border: 1px solid #D8D8D8; border-radius: .35rem; padding: .75rem; }
   .option { display: flex; align-items: center; gap: .5rem; }
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; }
   button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid #003366; border-radius: .25rem; background: #003366; color: #FFFFFF; font-weight: 600; cursor: pointer; }
-  button:hover:not(:disabled) { background: #002244; border-color: #002244; }
   button:disabled { opacity: .6; cursor: not-allowed; }
   input, textarea { box-sizing: border-box; min-width: 0; border: 1px solid #D8D8D8; border-radius: .25rem; padding: .45rem; background: #FFFFFF; color: #313132; }
   textarea { width: 100%; }

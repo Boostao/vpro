@@ -168,6 +168,7 @@ function serverComponent(source, filename, dependencies = {}, _environment = {})
       }
       if (canon === './notificationService.svelte') return noopNotificationsStub;
       if (canon === './readRequests') return serverReads;
+      if (canon === './coordinateConversion') return loadTypeScript('coordinateConversion.ts');
       const qualityDep = resolveDependency('./qualityEditor', dependencies);
       if (canon === './ordinaryEditor') return loadTypeScript('ordinaryEditor.ts', {
         './qualityEditor': qualityDep.found ? qualityDep.value : loadTypeScript('qualityEditor.ts', {

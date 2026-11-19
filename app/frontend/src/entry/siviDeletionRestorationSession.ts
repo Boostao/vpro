@@ -105,9 +105,7 @@ export class SIVIDeletionRestorationSession {
   choose(action: 'retain' | 'prune') {
     this.requireKnown();
     if (!this.state.review || action !== 'retain' && action !== 'prune') throw new Error('Choose exact retain or prune for the retained restoration review.');
-    this.state.action = action;
-    this.state.confirmed = false;
-    this.state.error = null;
+    Object.assign(this.state, { action, confirmed: false, error: null });
     this.changed();
   }
   confirm(confirmed: boolean) {
@@ -115,8 +113,7 @@ export class SIVIDeletionRestorationSession {
     if (!this.state.review || !this.state.action || typeof confirmed !== 'boolean') {
       throw new Error('Restoration confirmation requires the retained review and explicit audit action.');
     }
-    this.state.confirmed = confirmed;
-    this.state.error = null;
+    Object.assign(this.state, { confirmed, error: null });
     this.changed();
   }
   discard() {
@@ -163,14 +160,8 @@ export class SIVIDeletionRestorationSession {
       const wire = await this.requests.track(operation === 'restore' ? this.port.restore(json) : this.port.receipt(json));
       if (generation !== this.generation) return false;
       if (wire === null && operation === 'lookup') throw new Error('Missing restoration history is unresolved, not proof that Restore failed.');
-      this.state.receipt = siviDeletionRestorationReceiptFromWire(wire, review, request, this.owner, operation);
-      this.state.history = null;
-      this.state.review = null;
-      this.state.action = null;
-      this.state.confirmed = false;
-      this.state.blocked = false;
-      this.state.requestId = null;
-      this.state.revision++;
+      const receipt = siviDeletionRestorationReceiptFromWire(wire, review, request, this.owner, operation);
+      Object.assign(this.state, { receipt, history: null, review: null, action: null, confirmed: false, blocked: false, requestId: null, revision: this.state.revision + 1 });
       this.pending = null;
       return true;
     } catch (cause) {

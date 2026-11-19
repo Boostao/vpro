@@ -102,8 +102,10 @@ test('S1.2 / S1.8 / S1.12 / S4.4 TwoPage CRUD, Enter navigation, Coordinate help
   assert.ok(auditPanel.includes('SetTwoPageSourceAuditRestoreSelection'));
   assert.ok(auditPanel.includes('RestoreSelectedTwoPageSourceAudit'));
   assert.ok(metaPanel.includes('onEditMetadata'));
+  const coordConv = readFileSync(srcPath('coordinateConversion.ts'), 'utf8');
   assert.ok(twoPage.includes('onOpenProfileSU'));
-  assert.ok(twoPage.includes('ConvertCoordinate'));
+  assert.ok(twoPage.includes('CoordinateHelper'));
+  assert.ok(coordConv.includes('ConvertCoordinate'));
 
   for (const form of ['SubVegAhtXL', 'SubVegChtXL', 'SubOtherXL', 'SubOther']) {
     assert.ok(enterNav.includes(`'${form}'`), `enterNavigation.ts must include ${form}`);

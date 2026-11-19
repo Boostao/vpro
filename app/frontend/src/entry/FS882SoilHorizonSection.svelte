@@ -1,11 +1,5 @@
 <script lang="ts">
   import { Plus, Trash2 } from '@lucide/svelte';
-  import type {
-    FS882Header,
-    HumusRecord,
-    MineralRecord,
-    SoilSuggestion,
-  } from '../../bindings/github.com/boostao/vpro/app';
   import DrainageFields from './DrainageFields.svelte';
   import GeologyCodeFields from './GeologyCodeFields.svelte';
   import OrdinaryFields from './OrdinaryFields.svelte';
@@ -14,8 +8,8 @@
   import SoilCodeReference from './SoilCodeReference.svelte';
   import SourceChild from './SourceChild.svelte';
   import SourcePage from './SourcePage.svelte';
+  import type { FS882SoilHorizonSectionProps } from './fs882SoilTypes';
   import { embeddedForm } from './paperLayout';
-  import type { SoilDrafts, SoilKind } from './soilChildEditor';
 
   let {
     draft = $bindable(),
@@ -55,45 +49,7 @@
     stageSoilCell,
     deleteSourceChild,
     deleteHumus,
-  }: {
-    draft: FS882Header;
-    original: FS882Header | null;
-    capabilities: Record<string, boolean | undefined>;
-    sourceHeaderValues: Map<string, unknown>;
-    ordinarySoilUnavailable: string | null;
-    historicalSoilUnavailable: string | null;
-    soilEditingEnabled: boolean;
-    soilCodeEditingEnabled: boolean;
-    soilReferenceBusy: boolean;
-    soilReferenceError: string | null;
-    soilEditingDisabled: boolean;
-    soilUnsaved: boolean;
-    headerInputsDisabled: boolean;
-    busy: boolean;
-    headerWorkflowBusy: boolean;
-    coordinateBusy: boolean;
-    workingUnitBusy: boolean;
-    qualityBusy: boolean;
-    siteCodeBusy: boolean;
-    regionCodeBusy: boolean;
-    soilCodeBusy: boolean;
-    geologyCodeBusy: boolean;
-    parentCodeBusy: boolean;
-    drainageBusy: boolean;
-    childRevision: number;
-    soilDrafts: SoilDrafts;
-    soilSuggestions: SoilSuggestion[];
-    humusList: HumusRecord[];
-    mineralList: MineralRecord[];
-    sourceRows: (name: string) => Array<{ id: number; values: Record<string, string | number | boolean | null | undefined> }>;
-    markDirty: () => void;
-    validateHeader: (key: string, message: string | null) => void;
-    loadSoilSuggestions: () => Promise<void>;
-    openNewChild: (kind: 'humus' | 'mineral' | 'other') => void;
-    stageSoilCell: (kind: SoilKind, id: number, column: string, raw: string) => void;
-    deleteSourceChild: (name: string, id: number) => Promise<void>;
-    deleteHumus: (id: number) => Promise<void>;
-  } = $props();
+  }: FS882SoilHorizonSectionProps = $props();
 </script>
 
 {#if ordinarySoilUnavailable}<p role="status" data-soil-ordinary-unavailable>{ordinarySoilUnavailable}</p>{/if}
@@ -205,6 +161,7 @@
                   disabled={soilEditingDisabled || soilUnsaved}
                   class="text-red-600 hover:text-red-800 p-1"
                   title="Delete humus row"
+                  aria-label="Delete humus row"
                 >
                   <Trash2 size={14} />
                 </button>

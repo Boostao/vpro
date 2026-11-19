@@ -149,13 +149,8 @@ export class SIVIDeletionSession {
       const wire = await this.requests.track(operation === 'delete' ? this.port.delete(json) : this.port.receipt(json));
       if (generation !== this.generation) return false;
       if (wire === null && operation === 'lookup') throw new Error('Missing history is unresolved, not proof that deletion failed.');
-      this.state.receipt = siviDeletionReceiptFromWire(wire, request, this.owner, operation);
-      this.state.targets = null;
-      this.state.original = null;
-      this.state.confirmed = false;
-      this.state.blocked = false;
-      this.state.requestId = null;
-      this.state.revision++;
+      const receipt = siviDeletionReceiptFromWire(wire, request, this.owner, operation);
+      Object.assign(this.state, { receipt, targets: null, original: null, confirmed: false, blocked: false, requestId: null, revision: this.state.revision + 1 });
       this.pending = null;
       return true;
     } catch (cause) {

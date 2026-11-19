@@ -1,5 +1,6 @@
 <script lang="ts">
   import { metadataCellText } from '../admin/projectMetadataEditor';
+  import CoordinateHelper from './CoordinateHelper.svelte';
   import { siviParentSharedFieldsFor, siviParentSharedCell, siviParentSharedDirty, type SIVIParentSharedColumn,
     type SIVIParentSharedInput, type SIVIParentSharedView } from './siviParentSharedSession';
   let { view, disabled = true, canSave = false, onstage, onoperation, oncancel, onreferences, extendedShrubs = false, onExtendedShrubsChange,
@@ -32,50 +33,6 @@
   const displayedActiveLayerDepth = $derived(activeLayerDepth ?? projectedEnvCellText('ActiveLayerDepth'));
 
   let coordHelperOpen = $state(false);
-  let coordHelperMode = $state<'dm' | 'dms' | 'utm'>('dms');
-  let coordHelperAxis = $state<'latitude' | 'longitude'>('latitude');
-  let coordDeg = $state('');
-  let coordMin = $state('');
-  let coordSec = $state('');
-  let coordDir = $state<'N' | 'S' | 'E' | 'W'>('N');
-  let utmZone = $state('');
-  let utmEasting = $state('');
-  let utmNorthing = $state('');
-  let coordBusy = $state(false);
-  let coordError = $state<string | null>(null);
-
-  async function applyCoordConversion() {
-    if (disabled || view.busy || view.blocked || coordBusy) return;
-    coordBusy = true;
-    coordError = null;
-    try {
-      const { SpatialService, CoordinateMode } = await import('../../bindings/github.com/boostao/vpro/app');
-      if (coordHelperMode === 'utm') {
-        const z = Number.parseInt(utmZone.trim(), 10);
-        const e = Number.parseFloat(utmEasting.trim());
-        const n = Number.parseFloat(utmNorthing.trim());
-        if (!Number.isFinite(z) || !Number.isFinite(e) || !Number.isFinite(n)) {
-          throw new Error('Enter valid NAD83 UTM Zone, Easting, and Northing.');
-        }
-        const projected = await SpatialService.ProjectNAD83UTMToLatLon(z, e, n);
-        onstage('Latitude', { kind: 'text', raw: String(Math.round(projected.latitude * 1e6) / 1e6) });
-        onstage('Longitude', { kind: 'text', raw: String(Math.round(projected.longitude * 1e6) / 1e6) });
-      } else {
-        const deg = coordDeg.trim() === '' ? null : Number(coordDeg);
-        const min = coordMin.trim() === '' ? null : Number(coordMin);
-        const sec = coordHelperMode === 'dms' ? (coordSec.trim() === '' ? null : Number(coordSec)) : null;
-        const negative = coordDir === 'S' || coordDir === 'W';
-        const mode = coordHelperMode === 'dms' ? CoordinateMode.CoordinateModeDMS : CoordinateMode.CoordinateModeDM;
-        const dd = await SpatialService.ConvertCoordinate(coordHelperAxis, mode, { degrees: deg, minutes: min, seconds: sec, negative });
-        if (dd === null || !Number.isFinite(dd)) throw new Error('Coordinate conversion returned empty result.');
-        onstage(coordHelperAxis === 'latitude' ? 'Latitude' : 'Longitude', { kind: 'text', raw: String(dd) });
-      }
-    } catch (cause) {
-      coordError = String(cause);
-    } finally {
-      coordBusy = false;
-    }
-  }
   const groups = [
     { label: 'Plot & survey', scope: 'plot' },
     { label: 'Site description', scope: 'site' },
@@ -190,58 +147,25 @@
                   onclick={() => onstage(field.column, { kind: 'original' })}>Retain original</button>
                 {#if field.column === 'Latitude'}
                   <button type="button" data-sivi-coord-toggle
-                    onclick={() => { coordHelperOpen = !coordHelperOpen; coordError = null; }}>
+                    onclick={() => { coordHelperOpen = !coordHelperOpen; }}>
                     {coordHelperOpen ? 'Close DD/DM/DMS/UTM' : 'Coordinate Modes (DM/DMS/UTM)'}
                   </button>
                 {/if}
                 <span data-storage={value.storage}>{value.storage === 'text' && value.text === '' ? 'empty text' : value.storage}</span>
               </div>
               {#if field.column === 'Latitude' && coordHelperOpen}
-                <div class="mt-2 rounded border border-[#D8D8D8] bg-[#F2F2F2] p-2.5 space-y-2 text-xs" data-sivi-coord-helper>
-                  <div class="flex flex-wrap items-center gap-2">
-                    <label class="font-medium" for="sivi-coord-mode">Mode</label>
-                    <select id="sivi-coord-mode" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordHelperMode}>
-                      <option value="dm">DM (Deg / Min)</option>
-                      <option value="dms">DMS (Deg / Min / Sec)</option>
-                      <option value="utm">NAD83 UTM</option>
-                    </select>
-                    {#if coordHelperMode !== 'utm'}
-                      <select aria-label="Axis" class="rounded border border-[#D8D8D8] bg-white px-2 py-1"
-                        bind:value={coordHelperAxis}
-                        onchange={() => { coordDir = coordHelperAxis === 'latitude' ? 'N' : 'W'; }}>
-                        <option value="latitude">Latitude</option>
-                        <option value="longitude">Longitude</option>
-                      </select>
-                    {/if}
-                  </div>
-                  {#if coordHelperMode === 'utm'}
-                    <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
-                      <input type="text" placeholder="Zone (e.g. 10)" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={utmZone} />
-                      <input type="text" placeholder="Easting" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={utmEasting} />
-                      <input type="text" placeholder="Northing" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={utmNorthing} />
-                    </div>
-                  {:else}
-                    <div class="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-                      <input type="text" placeholder="Deg" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordDeg} />
-                      <input type="text" placeholder="Min" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordMin} />
-                      {#if coordHelperMode === 'dms'}
-                        <input type="text" placeholder="Sec" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordSec} />
-                      {/if}
-                      <select aria-label="Hemisphere" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordDir}>
-                        {#if coordHelperAxis === 'latitude'}
-                          <option value="N">N</option><option value="S">S</option>
-                        {:else}
-                          <option value="W">W</option><option value="E">E</option>
-                        {/if}
-                      </select>
-                    </div>
-                  {/if}
-                  {#if coordError}<p role="alert" class="text-[#D8292F]">{coordError}</p>{/if}
-                  <button type="button" class="rounded bg-[#003366] px-2.5 py-1 text-white disabled:opacity-50"
-                    disabled={disabled || view.busy || view.blocked || coordBusy} onclick={() => void applyCoordConversion()}>
-                    {coordBusy ? 'Converting...' : 'Apply converted coordinates'}
-                  </button>
-                </div>
+                <CoordinateHelper
+                  idPrefix="sivi"
+                  variant="sivi"
+                  disabled={disabled || view.busy || view.blocked}
+                  onApplyUTM={(projected) => {
+                    onstage('Latitude', { kind: 'text', raw: String(projected.latitude) });
+                    onstage('Longitude', { kind: 'text', raw: String(projected.longitude) });
+                  }}
+                  onApplyAxis={(axis, dd) => {
+                    onstage(axis === 'latitude' ? 'Latitude' : 'Longitude', { kind: 'text', raw: String(dd) });
+                  }}
+                />
               {/if}
               {#if draft?.error}<p id={`${id}-error`} role="alert" class="text-sm text-red-700">{draft.error}</p>{/if}
             </div>

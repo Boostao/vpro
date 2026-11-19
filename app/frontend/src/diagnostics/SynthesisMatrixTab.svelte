@@ -173,3 +173,53 @@
     </table>
   {/if}
 </div>
+
+<style>
+  .sticky-col.col-code {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    width: 78px;
+    max-width: 86px;
+    white-space: nowrap;
+    background: #ffffff;
+  }
+
+  .sticky-col.col-sci {
+    position: sticky;
+    left: 78px;
+    z-index: 2;
+    max-width: 175px;
+    overflow-wrap: anywhere;
+    background: #ffffff;
+  }
+
+  thead th.sticky-col {
+    z-index: 4;
+    background: #003366;
+  }
+
+  .col-lf {
+    max-width: 76px;
+    white-space: nowrap;
+  }
+
+  .col-diag {
+    max-width: 135px;
+  }
+
+  @media (max-width: 1200px) {
+    .sticky-col.col-sci {
+      position: static;
+      max-width: 145px;
+    }
+
+    .col-lf {
+      max-width: 68px;
+    }
+
+    .col-diag {
+      max-width: 118px;
+    }
+  }
+</style>
