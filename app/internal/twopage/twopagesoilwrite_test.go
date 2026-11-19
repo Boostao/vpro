@@ -548,3 +548,228 @@ func TestTwoPageSoilWriteStrictRequestAndInvalidGoValues(t *testing.T) {
 		t.Fatal("invalid raw/direct-Go inputs changed source")
 	}
 }
+
+// ENG-GO-005 / UX-SOIL-002 / UX-SOIL-003 / UX-SOIL-004: end-to-end Two-Page Soil validation
+// for numbered/Roman discontinuity prefixes (2Of1, 2L, IXAh, XAh), wetland organic horizons
+// (Hydric, Limno, Cumulo), negative and NULL-horizon depths, untouched legacy negative rows,
+// and Save on out-of-rowid-order wetland profiles returned by ReadTwoPageSoilOriginal.
+func TestTwoPageSoilLMH25DiscontinuityWetlandAndNegativeValidation(t *testing.T) {
+	ctx := context.Background()
+	service, state, db, _ := soilWriteFixture(t, false, "SoilHumusXL", 3)
+	for _, column := range soilPlanSourceFields["SoilMineralXL"] {
+		if column == "Horizon" || column == "UpperDepth" || column == "Comment" {
+			continue
+		}
+		_, _ = db.Exec(`ALTER TABLE "Sample_Mineral" ADD COLUMN ` + vprocore.QuoteHeaderIdentifier(column))
+	}
+	if _, err := db.Exec(`
+		DELETE FROM Sample_Humus;
+		DELETE FROM Sample_Mineral;
+		INSERT INTO Sample_Humus (rowid, ID, PlotNumber, Horizon, UpperDepth, LowerDepth, Comment) VALUES
+			(1, 1, '108050', 'Oh', 45, 80, NULL),
+			(2, 2, '108050', 'Om', 15, 45, NULL),
+			(3, 3, '108050', 'Of', 0, 15, NULL),
+			(4, 4, '108050', 'L', -2, -5, 'legacy');
+		INSERT INTO Sample_Mineral (rowid, ID, PlotNumber, Horizon, UpperDepth, LowerDepth, Comments) VALUES
+			(10, 10, '108050', 'Ah', 0, 15, NULL);
+	`); err != nil {
+		t.Fatal(err)
+	}
+	facade := soilFacade(t, service)
+
+	makeEdit := func(orig *twoPageSoilOriginal, rowID, col string, val vprocore.ProjectMetadataCell) twoPageSoilEdit {
+		t.Helper()
+		cols, err := vprocore.SiteUnitTransferColumns(orig.Records, col)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range orig.Records.Rows {
+			if r.RowID == rowID {
+				return twoPageSoilEdit{
+					ContextID: orig.ContextID,
+					Form:      orig.Form,
+					RowID:     rowID,
+					Column:    col,
+					Expected:  r.Cells[cols[col]],
+					Value:     val,
+				}
+			}
+		}
+		t.Fatalf("row %s not found", rowID)
+		return twoPageSoilEdit{}
+	}
+
+	uuidSeq := 10
+	nextUUID := func() string {
+		uuidSeq++
+		return fmt.Sprintf("f4b1aa00-1234-4123-8123-%012d", uuidSeq)
+	}
+
+	// 1. Out-of-rowid-order wetland profile loads [L(-2), Of(0), Om(15), Oh(45)], and untouched legacy negative row 4 allows Comment edit!
+	humOrig, err := facade.GetOriginal(ctx, state.ContextID, "108050", "SoilHumusXL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqOK := twoPageSoilRequest{
+		RequestID: nextUUID(),
+		Original:  humOrig,
+		Edits:     []twoPageSoilEdit{makeEdit(humOrig, "4", "Comment", vprotest.MetadataText("legacy kept"))},
+	}
+	rawOK, _ := json.Marshal(reqOK)
+	if res, err := facade.Save(ctx, state.ContextID, string(rawOK)); err != nil || res == nil || !res.DidCommit {
+		t.Fatalf("expected Comment edit on untouched legacy negative row + LMH25-ordered original to succeed, got %v, %v", res, err)
+	}
+
+	// 2. Reject wrong-sign discontinuity, wetland, and negative Humus drafts (zero SQLite mutations).
+	humOrig, err = facade.GetOriginal(ctx, state.ContextID, "108050", "SoilHumusXL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidHumusCases := []struct {
+		name string
+		hz   *string
+		up   *float64
+		lo   *float64
+	}{
+		{"2Of1_inverted", strRef("2Of1"), fltRef(10), fltRef(0)},
+		{"2L_inverted", strRef("2L"), fltRef(0), fltRef(10)},
+		{"Hydric_inverted", strRef("Hydric"), fltRef(10), fltRef(0)},
+		{"Limno_inverted", strRef("Limno"), fltRef(10), fltRef(0)},
+		{"Cumulo_inverted", strRef("Cumulo"), fltRef(10), fltRef(0)},
+		{"L_negative", strRef("L"), fltRef(-2), fltRef(-5)},
+		{"Of1_negative", strRef("Of1"), fltRef(-10), fltRef(-5)},
+		{"L_single_sided_negative", strRef("L"), fltRef(-5), nil},
+		{"NULL_hz_negative", nil, fltRef(-2), fltRef(-5)},
+	}
+	beforeBytes := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
+	for _, tc := range invalidHumusCases {
+		hzCell := vprocore.ProjectMetadataCell{Storage: "null"}
+		if tc.hz != nil {
+			hzCell = vprotest.MetadataText(*tc.hz)
+		}
+		upCell := vprocore.ProjectMetadataCell{Storage: "null"}
+		if tc.up != nil {
+			upCell = vprotest.SiviReal(*tc.up)
+		}
+		loCell := vprocore.ProjectMetadataCell{Storage: "null"}
+		if tc.lo != nil {
+			loCell = vprotest.SiviReal(*tc.lo)
+		}
+		req := twoPageSoilRequest{
+			RequestID: nextUUID(),
+			Original:  humOrig,
+			Edits: []twoPageSoilEdit{
+				makeEdit(humOrig, "3", "Horizon", hzCell),
+				makeEdit(humOrig, "3", "UpperDepth", upCell),
+				makeEdit(humOrig, "3", "LowerDepth", loCell),
+			},
+		}
+		raw, _ := json.Marshal(req)
+		if res, err := facade.Save(ctx, state.ContextID, string(raw)); err == nil || res != nil {
+			t.Fatalf("%s: expected rejection, got res=%v err=%v", tc.name, res, err)
+		}
+	}
+	if afterBytes := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments); !reflect.DeepEqual(beforeBytes, afterBytes) {
+		t.Fatal("rejected Humus saves mutated database")
+	}
+
+	// 3. Accept valid Hydric, Limno, Cumulo, 2Of1 (downward 0..10) and 2L (upward 10..0).
+	for _, validHz := range []struct {
+		hz     string
+		up, lo float64
+	}{
+		{"Hydric", 0, 10},
+		{"Limno", 0, 10},
+		{"Cumulo", 0, 10},
+		{"2Of1", 0, 10},
+		{"2L", 10, 0},
+	} {
+		cur, err := facade.GetOriginal(ctx, state.ContextID, "108050", "SoilHumusXL")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var edits []twoPageSoilEdit
+		for _, e := range []twoPageSoilEdit{
+			makeEdit(cur, "3", "Horizon", vprotest.MetadataText(validHz.hz)),
+			makeEdit(cur, "3", "UpperDepth", vprotest.SiviReal(validHz.up)),
+			makeEdit(cur, "3", "LowerDepth", vprotest.SiviReal(validHz.lo)),
+		} {
+			if !reflect.DeepEqual(e.Expected, e.Value) {
+				edits = append(edits, e)
+			}
+		}
+		raw, _ := json.Marshal(twoPageSoilRequest{RequestID: nextUUID(), Original: cur, Edits: edits})
+		if res, err := facade.Save(ctx, state.ContextID, string(raw)); err != nil || res == nil || !res.DidCommit {
+			t.Fatalf("valid %s (%g..%g) failed: %v", validHz.hz, validHz.up, validHz.lo, err)
+		}
+	}
+
+	// 4. Reject IXAh (10..0), XAh (10..0), Ah (-5..15), and NULL-horizon Mineral (30..10), then accept IXAh (0..10) and XAh (0..12).
+	minOrig, err := facade.GetOriginal(ctx, state.ContextID, "108050", "SoilMineralXL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeMin := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
+	for _, tc := range []struct {
+		name   string
+		hz     *string
+		up, lo float64
+	}{
+		{"IXAh_inverted", strRef("IXAh"), 10, 0},
+		{"XAh_inverted", strRef("XAh"), 10, 0},
+		{"Ah_negative", strRef("Ah"), -5, 15},
+		{"NULL_mineral_inverted", nil, 30, 10},
+	} {
+		hzCell := vprocore.ProjectMetadataCell{Storage: "null"}
+		if tc.hz != nil {
+			hzCell = vprotest.MetadataText(*tc.hz)
+		}
+		var edits []twoPageSoilEdit
+		for _, e := range []twoPageSoilEdit{
+			makeEdit(minOrig, "10", "Horizon", hzCell),
+			makeEdit(minOrig, "10", "UpperDepth", vprotest.SiviReal(tc.up)),
+			makeEdit(minOrig, "10", "LowerDepth", vprotest.SiviReal(tc.lo)),
+		} {
+			if !reflect.DeepEqual(e.Expected, e.Value) {
+				edits = append(edits, e)
+			}
+		}
+		raw, _ := json.Marshal(twoPageSoilRequest{RequestID: nextUUID(), Original: minOrig, Edits: edits})
+		if res, err := facade.Save(ctx, state.ContextID, string(raw)); err == nil || res != nil {
+			t.Fatalf("%s: expected rejection, got res=%v err=%v", tc.name, res, err)
+		}
+	}
+	if afterMin := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments); !reflect.DeepEqual(beforeMin, afterMin) {
+		t.Fatal("rejected Mineral saves mutated database")
+	}
+
+	for _, validMin := range []struct {
+		hz     string
+		up, lo float64
+	}{
+		{"IXAh", 0, 10},
+		{"XAh", 0, 12},
+	} {
+		cur, err := facade.GetOriginal(ctx, state.ContextID, "108050", "SoilMineralXL")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var edits []twoPageSoilEdit
+		for _, e := range []twoPageSoilEdit{
+			makeEdit(cur, "10", "Horizon", vprotest.MetadataText(validMin.hz)),
+			makeEdit(cur, "10", "UpperDepth", vprotest.SiviReal(validMin.up)),
+			makeEdit(cur, "10", "LowerDepth", vprotest.SiviReal(validMin.lo)),
+		} {
+			if !reflect.DeepEqual(e.Expected, e.Value) {
+				edits = append(edits, e)
+			}
+		}
+		raw, _ := json.Marshal(twoPageSoilRequest{RequestID: nextUUID(), Original: cur, Edits: edits})
+		if res, err := facade.Save(ctx, state.ContextID, string(raw)); err != nil || res == nil || !res.DidCommit {
+			t.Fatalf("valid mineral %s (%g..%g) failed: %v", validMin.hz, validMin.up, validMin.lo, err)
+		}
+	}
+}
+
+func strRef(s string) *string   { return &s }
+func fltRef(v float64) *float64 { return &v }

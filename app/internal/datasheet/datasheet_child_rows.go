@@ -223,10 +223,8 @@ func InsertDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextServ
 				return errors.New("Veg.Species is required when inserting a vegetation row")
 			}
 			if target.key == "Humus" || target.key == "Mineral" {
-				if effHorizon.Text != nil {
-					if sErr := validateSoilHorizonDepthSign(target.key, *effHorizon.Text, cellFloat64Ptr(effUpper), cellFloat64Ptr(effLower)); sErr != nil {
-						return sErr
-					}
+				if sErr := validateSoilHorizonDepthSign(target.key, cellTextPtr(effHorizon), cellFloat64Ptr(effUpper), cellFloat64Ptr(effLower)); sErr != nil {
+					return sErr
 				}
 			}
 			if !hasFlag {

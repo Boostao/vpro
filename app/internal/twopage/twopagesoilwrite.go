@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"time"
 	"unicode/utf8"
@@ -443,7 +444,7 @@ func WriteTwoPageSoilObserved(s *vprocore.ContextService, ctx context.Context, c
 				return errors.New("two-page soil mutation requires a physical soil table")
 			}
 			fresh, err := vprocore.ReadSQLiteLiteralTextRows(ctx, tx, "main", original.Table, "PlotNumber", original.Plot, "")
-			if err != nil || !reflect.DeepEqual(fresh, original.Records) {
+			if err != nil || !equalTwoPageSoilTablesByRowID(fresh, original.Records) {
 				return errors.Join(err, errors.New("two-page soil complete original/schema changed; cancel and reload"))
 			}
 			edits := request.Edits
@@ -605,4 +606,48 @@ func WriteTwoPageSoilObserved(s *vprocore.ContextService, ctx context.Context, c
 		}
 		return result, nil
 	})
+}
+
+func canonicalizeSoilRowsByRowID(rows []vprocore.ProjectMetadataRow) ([]vprocore.ProjectMetadataRow, bool) {
+	type parsedRow struct {
+		id  int64
+		row vprocore.ProjectMetadataRow
+	}
+	parsed := make([]parsedRow, len(rows))
+	for i, row := range rows {
+		id, err := strconv.ParseInt(row.RowID, 10, 64)
+		if err != nil || strconv.FormatInt(id, 10) != row.RowID {
+			return nil, false
+		}
+		parsed[i] = parsedRow{id: id, row: row}
+	}
+	slices.SortFunc(parsed, func(a, b parsedRow) int {
+		if a.id < b.id {
+			return -1
+		}
+		if a.id > b.id {
+			return 1
+		}
+		return 0
+	})
+	sorted := make([]vprocore.ProjectMetadataRow, len(parsed))
+	for i := range parsed {
+		if i > 0 && parsed[i].id == parsed[i-1].id {
+			return nil, false
+		}
+		sorted[i] = parsed[i].row
+	}
+	return sorted, true
+}
+
+func equalTwoPageSoilTablesByRowID(a, b vprocore.ProjectMetadataTable) bool {
+	if !reflect.DeepEqual(a.Columns, b.Columns) || len(a.Rows) != len(b.Rows) {
+		return false
+	}
+	if len(a.Rows) == 0 {
+		return true
+	}
+	sa, okA := canonicalizeSoilRowsByRowID(a.Rows)
+	sb, okB := canonicalizeSoilRowsByRowID(b.Rows)
+	return okA && okB && reflect.DeepEqual(sa, sb)
 }

@@ -116,7 +116,9 @@
       for (r in seq_len(nrow(h_df))) {
         hz_raw <- h_df[["Horizon"]][[r]]
         hz <- toupper(trimws(ifelse(is.na(hz_raw), "", as.character(hz_raw))))
-        h_kind <- vpro_classify_humus_lmh25(hz, soil_grp)
+        hz_stripped <- trimws(sub("^[0-9IVXivx ]+", "", trimws(ifelse(is.na(hz_raw), "", as.character(hz_raw)))))
+        hz_base <- toupper(hz_stripped)
+        h_kind <- vpro_classify_humus_lmh25(hz_base, soil_grp)
 
         # 6. von_post
         if ("vonPost" %in% names(h_df)) {
@@ -124,11 +126,11 @@
           if (!is.na(vp) && is.finite(vp)) {
             if (vp < 1 || vp > 10) {
               add_issue(pnum, "von_post", "error", sprintf("Horizon %s has vonPost = %g outside valid 1..10 scale.", hz, vp))
-            } else if (grepl("^[0-9]*OF", hz) && (vp < 1 || vp > 4)) {
+            } else if (startsWith(hz_base, "OF") && (vp < 1 || vp > 4)) {
               add_issue(pnum, "von_post", "warning", sprintf("Fibric horizon %s has vonPost = %g (LMH25 Table 2.23 expects 1..4).", hz, vp))
-            } else if (grepl("^[0-9]*OM", hz) && (vp < 5 || vp > 6)) {
+            } else if (startsWith(hz_base, "OM") && (vp < 5 || vp > 6)) {
               add_issue(pnum, "von_post", "warning", sprintf("Mesic peat horizon %s has vonPost = %g (LMH25 Table 2.23 expects 5..6).", hz, vp))
-            } else if (grepl("^[0-9]*OH", hz) && (vp < 7 || vp > 10)) {
+            } else if (startsWith(hz_base, "OH") && (vp < 7 || vp > 10)) {
               add_issue(pnum, "von_post", "warning", sprintf("Humic peat horizon %s has vonPost = %g (LMH25 Table 2.23 expects 7..10).", hz, vp))
             }
           }
@@ -152,10 +154,9 @@
             up_valid[[length(up_valid) + 1L]] <- list(hz = hz, up = up_d, lo = lo_d)
             thick <- up_d - lo_d
             upland_tot <- upland_tot + thick
-            if (grepl("^[0-9]*H", hz)) upland_h <- upland_h + thick
+            if (startsWith(hz_base, "H")) upland_h <- upland_h + thick
           }
         } else if (identical(h_kind, "wetland")) {
-          has_peaty <- TRUE
           if (up_d < 0 || lo_d < 0 || up_d >= lo_d) {
             add_issue(
               pnum,
@@ -164,6 +165,7 @@
               sprintf("Wetland organic horizon %s (%.1f to %.1f cm) must have 0 <= UpperDepth < LowerDepth.", hz, up_d, lo_d)
             )
           } else {
+            has_peaty <- TRUE
             wet_valid[[length(wet_valid) + 1L]] <- list(hz = hz, up = up_d, lo = lo_d)
             peat_tot <- peat_tot + (lo_d - up_d)
             t_s <- max(0.0, up_d)
@@ -171,27 +173,30 @@
             if (t_e > t_s) {
               sp <- t_e - t_s
               peat_u40 <- peat_u40 + sp
-              if (grepl("^[0-9]*OF", hz)) {
+              if (startsWith(hz_base, "OF")) {
                 peat_of_u40 <- peat_of_u40 + sp
               }
-              if (grepl("^[0-9]*OM", hz)) peat_om_u40 <- peat_om_u40 + sp
+              if (startsWith(hz_base, "OM")) peat_om_u40 <- peat_om_u40 + sp
             }
           }
         }
       }
     }
 
-    # 5. humus_thickness (> 2 cm discrepancy between _Admin.HumusThickness and max(UpperDepth) of upland L/F/H)
+    # 5. humus_thickness (> 2 cm discrepancy between _Admin.HumusThickness and upland L/F/H span max(UpperDepth) - min(LowerDepth))
     if (length(up_valid) > 0L && "HumusThickness" %in% names(erow)) {
       hdr_ht <- suppressWarnings(as.double(erow[["HumusThickness"]][[1L]]))
       if (!is.na(hdr_ht) && is.finite(hdr_ht)) {
         max_up <- max(vapply(up_valid, `[[`, numeric(1), "up"))
-        if (abs(hdr_ht - max_up) > 2.0) {
+        min_lo <- min(vapply(up_valid, `[[`, numeric(1), "lo"))
+        derived_ht <- vpro_round_ace(max_up - min_lo, 2L)
+        diff_ht <- vpro_round_ace(hdr_ht - derived_ht, 2L)
+        if (abs(diff_ht) > 2.0) {
           add_issue(
             pnum,
             "humus_thickness",
             "warning",
-            sprintf("Header HumusThickness (%.1f cm) differs from max upland L/F/H UpperDepth (%.1f cm) by %.1f cm.", hdr_ht, max_up, hdr_ht - max_up)
+            sprintf("Header HumusThickness (%.1f cm) differs from upland L/F/H horizon span (%.1f cm) by %+.1f cm.", hdr_ht, derived_ht, diff_ht)
           )
         }
       }
@@ -218,30 +223,32 @@
       for (r in seq_len(nrow(m_df))) {
         mz_raw <- ifelse(is.na(m_df[["Horizon"]][[r]]), "", trimws(as.character(m_df[["Horizon"]][[r]])))
         mz <- toupper(mz_raw)
-        mz_low <- tolower(mz_raw)
+        mz_stripped <- trimws(sub("^[0-9IVXivx ]+", "", mz_raw))
+        mz_base <- toupper(mz_stripped)
+        mz_low <- tolower(mz_stripped)
         up_d <- suppressWarnings(as.double(m_df[["UpperDepth"]][[r]]))
         lo_d <- suppressWarnings(as.double(m_df[["LowerDepth"]][[r]]))
 
-        if (grepl("g", mz_low, fixed = TRUE) || startsWith(mz, "W")) {
+        if (grepl("g", mz_low, fixed = TRUE) || startsWith(mz_base, "W")) {
           has_gley <- TRUE
           if (!is.na(up_d) && is.finite(up_d) && (min_gley_depth < 0 || up_d < min_gley_depth)) {
             min_gley_depth <- up_d
           }
         }
-        if (grepl("u", mz_low, fixed = TRUE) || (startsWith(mz, "A") && grepl("b", mz_low, fixed = TRUE))) {
+        if (grepl("u", mz_low, fixed = TRUE) || (startsWith(mz_base, "A") && grepl("b", mz_low, fixed = TRUE))) {
           has_turbation <- TRUE
         }
-        if (grepl("sa", mz_low, fixed = TRUE) || (startsWith(mz, "B") && grepl("n", mz_low, fixed = TRUE))) {
+        if (grepl("sa", mz_low, fixed = TRUE) || (startsWith(mz_base, "B") && grepl("n", mz_low, fixed = TRUE))) {
           has_saline <- TRUE
         }
         if ("MineralFormpH" %in% names(m_df)) {
           mph <- suppressWarnings(as.double(m_df[["MineralFormpH"]][[r]]))
           if (!is.na(mph) && is.finite(mph) && mph > 8.2) has_saline <- TRUE
         }
-        if (startsWith(mz, "R") && !is.na(up_d) && is.finite(up_d)) {
+        if (startsWith(mz_base, "R") && !is.na(up_d) && is.finite(up_d)) {
           if (lithic_depth < 0 || up_d < lithic_depth) lithic_depth <- up_d
         }
-        if (startsWith(mz, "B") && "Colour" %in% names(m_df)) {
+        if (startsWith(mz_base, "B") && "Colour" %in% names(m_df)) {
           mval <- vpro_parse_munsell_value(m_df[["Colour"]][[r]])
           if (!is.na(mval)) {
             if (mval <= 3.0) {
@@ -269,10 +276,10 @@
         if (lo_d > max_min_lower) {
           max_min_lower <- lo_d
         }
-        if (grepl("^[0-9]*(AH|AP)", mz)) {
+        if (startsWith(mz_base, "AH") || startsWith(mz_base, "AP")) {
           ah_depth <- ah_depth + thick
         }
-        if (grepl("^[0-9]*AE", mz)) {
+        if (startsWith(mz_base, "AE")) {
           ae_depth <- ae_depth + thick
         }
 

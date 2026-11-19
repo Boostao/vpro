@@ -477,7 +477,7 @@
   {/if}
   {#if view.original}
     {#if depthOrder?.diagnostic}<p role="alert">{depthOrder.diagnostic}</p>
-    {:else}<p role="status">Depth Up {form === 'SoilHumusXL' ? 'descending (NULL last)' : 'ascending (NULL first)'}. Ties retain physical reader order.</p>{/if}
+    {:else}<p role="status">{depthOrder?.status}</p>{/if}
     <div class="flex flex-wrap gap-2" aria-label={`${form} physical rows`}>
       {#each depthOrder?.rows ?? [] as physical (physical.rowId)}
         <button type="button" class="min-w-0 break-words rounded border p-2 text-left" aria-pressed={row?.rowId === physical.rowId}

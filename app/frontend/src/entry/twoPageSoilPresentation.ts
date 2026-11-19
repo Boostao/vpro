@@ -41,7 +41,11 @@ export function twoPageSoilRowDiagnostic(original: TwoPageSoilOriginal, rowId: s
 export function twoPageSoilDepthOrder(original: TwoPageSoilOriginal) {
   const rows = original.records.rows.slice();
   const index = original.records.columns.findIndex(column => column.name === 'UpperDepth');
-  const fallback = (reason: string) => ({ rows, diagnostic: `${reason} Physical reader order is shown without coercion.` });
+  const fallback = (reason: string) => ({
+    rows,
+    diagnostic: `${reason} Physical reader order is shown without coercion.`,
+    status: null as string | null,
+  });
   if (index < 0) return fallback('Depth order unavailable: UpperDepth is missing.');
   const values = new Map<string, bigint | number | null>();
   for (const row of rows) {
@@ -56,11 +60,18 @@ export function twoPageSoilDepthOrder(original: TwoPageSoilOriginal) {
   // O*/Hydric/Limno/Cumulo by UpperDepth ASC (mirrors Go vprocore.HumusOrderBySQL).
   const horizonIndex = original.records.columns.findIndex(column => column.name === 'Horizon');
   const wetland = new Map<string, boolean>();
+  let hasWetland = false;
+  let hasUpland = false;
   for (const row of rows) {
     const cell = horizonIndex < 0 ? null : row.cells[horizonIndex];
     const code = cell && cell.storage === 'text' && cell.text !== null
       ? cell.text.trim().toUpperCase().replace(/^[0-9IVX ]+/, '') : '';
-    wetland.set(row.rowId, humus && /^(O|HYDRIC|LIMNO|CUMULO)/.test(code));
+    const isWet = humus && /^(O|HYDRIC|LIMNO|CUMULO)/.test(code);
+    wetland.set(row.rowId, isWet);
+    if (humus) {
+      if (isWet) hasWetland = true;
+      else hasUpland = true;
+    }
   }
   rows.sort((left, right) => {
     const a = values.get(left.rowId), b = values.get(right.rowId);
@@ -72,5 +83,12 @@ export function twoPageSoilDepthOrder(original: TwoPageSoilOriginal) {
     const comparison = a < b ? -1 : a > b ? 1 : 0;
     return wa ? comparison : -comparison;
   });
-  return { rows, diagnostic: null };
+  const status = !humus
+    ? 'Depth Up ascending (NULL first). Ties retain physical reader order.'
+    : hasWetland && hasUpland
+      ? 'Upland descending, then wetland ascending (NULL last). Ties retain physical reader order.'
+      : hasWetland
+        ? 'Depth Down ascending (NULL last). Ties retain physical reader order.'
+        : 'Depth Up descending (NULL last). Ties retain physical reader order.';
+  return { rows, diagnostic: null as string | null, status };
 }

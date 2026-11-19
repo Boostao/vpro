@@ -128,7 +128,7 @@ func TestTwoPageSoilCreationAtomicWriterAndRecovery(t *testing.T) {
 						}
 					}
 					original, err := service.GetOriginal(context.Background(), state.ContextID, "108050", form)
-					if err != nil || !reflect.DeepEqual(original.Records, result.History.Committed) ||
+					if err != nil || !equalTwoPageSoilTablesByRowID(original.Records, result.History.Committed) ||
 						len(original.Records.Rows) != len(request.Original.Records.Rows)+1 {
 						t.Fatal("reopened complete rows differ", original, err)
 					}

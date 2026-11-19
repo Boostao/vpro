@@ -89,10 +89,18 @@ func isOrganicOrderGroup(code string) bool {
 		return false
 	}
 }
+func stripDiscontinuityRaw(raw string) string {
+	return strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(raw), "0123456789IVXivx"))
+}
+
+func stripDiscontinuityPrefix(code string) string {
+	return strings.ToUpper(stripDiscontinuityRaw(code))
+}
+
 func classifyHumusHorizon(h string, organicSoilOrder bool, soilClassGroup string) (isUpland, isWetland, isSurface bool) {
 	// Strip a lithologic-discontinuity prefix (2L, 2Of, IIOf) before classifying, matching
 	// vprocore.ClassifySoilHorizon and the R validator (ENG-XCUT-005).
-	u := strings.TrimSpace(strings.TrimLeft(strings.ToUpper(strings.TrimSpace(h)), "0123456789IVX"))
+	u := stripDiscontinuityPrefix(h)
 	if u == "" {
 		return false, false, false
 	}
@@ -227,7 +235,7 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 	if res.SubstratePopulated > 0 {
 		roundedSum := roundACE2(subSum)
 		res.SubstrateSum = &roundedSum
-		if math.Abs(subSum-100.0) > 0.01 {
+		if math.Abs(subSum-100.0) > 1.0 {
 			res.SubstrateValid = false
 			res.Issues = append(res.Issues, DiagnosticIssue{
 				Code:      "SUBSTRATE_SUM_NOT_100",
@@ -253,6 +261,7 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 
 	for _, hr := range humus {
 		hCode := trimUpper(hr.Horizon)
+		hBase := stripDiscontinuityPrefix(hCode)
 		idCopy := hr.ID
 		isUpland, isWetland, _ := classifyHumusHorizon(hCode, res.IsOrganicSoilOrder, soilGroup)
 
@@ -270,7 +279,7 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 					Message:   fmt.Sprintf("Horizon %s has von Post = %d; valid von Post scale is 1..10.", hCode, vp),
 					LMH25Ref:  "LMH25 (2023) Table 2.23 p. 73",
 				})
-			} else if strings.HasPrefix(hCode, "OF") && (vp < 1 || vp > 4) {
+			} else if strings.HasPrefix(hBase, "OF") && (vp < 1 || vp > 4) {
 				res.Issues = append(res.Issues, DiagnosticIssue{
 					Code:      "VONPOST_OUT_OF_RANGE_OF",
 					Severity:  SeverityWarning,
@@ -282,7 +291,7 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 					Suggested: "1..4",
 					LMH25Ref:  "LMH25 (2023) Table 2.23 p. 73",
 				})
-			} else if strings.HasPrefix(hCode, "OM") && (vp < 5 || vp > 6) {
+			} else if strings.HasPrefix(hBase, "OM") && (vp < 5 || vp > 6) {
 				res.Issues = append(res.Issues, DiagnosticIssue{
 					Code:      "VONPOST_OUT_OF_RANGE_OM",
 					Severity:  SeverityWarning,
@@ -294,7 +303,7 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 					Suggested: "5..6",
 					LMH25Ref:  "LMH25 (2023) Table 2.23 p. 73",
 				})
-			} else if strings.HasPrefix(hCode, "OH") && (vp < 7 || vp > 10) {
+			} else if strings.HasPrefix(hBase, "OH") && (vp < 7 || vp > 10) {
 				res.Issues = append(res.Issues, DiagnosticIssue{
 					Code:      "VONPOST_OUT_OF_RANGE_OH",
 					Severity:  SeverityWarning,
@@ -342,12 +351,11 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 				}
 				thick := up - lo
 				uplandTotalThickness += thick
-				if strings.HasPrefix(hCode, "H") {
+				if strings.HasPrefix(hBase, "H") {
 					uplandHThickness += thick
 				}
 			}
 		} else if isWetland {
-			hasPeatyHorizons = true
 			if up >= lo || up < 0 {
 				res.Issues = append(res.Issues, DiagnosticIssue{
 					Code:      "HORIZON_SIGN_WETLAND_O",
@@ -360,6 +368,7 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 					LMH25Ref:  "LMH25 (2023) Sec. 2 Item 17 p. 71",
 				})
 			} else {
+				hasPeatyHorizons = true
 				wetlandHorizons = append(wetlandHorizons, hr)
 				peatTotalThickness += (lo - up)
 				// Compute overlap with upper 40 cm tier (0..40 cm)
@@ -368,9 +377,9 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 				if tEnd > tStart {
 					span := tEnd - tStart
 					peatUpper40Total += span
-					if strings.HasPrefix(hCode, "OF") {
+					if strings.HasPrefix(hBase, "OF") {
 						peatOfUpper40 += span
-					} else if strings.HasPrefix(hCode, "OM") {
+					} else if strings.HasPrefix(hBase, "OM") {
 						peatOmUpper40 += span
 					}
 				}
@@ -394,7 +403,7 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 		} else {
 			diff := roundACE2(*header.HumusThickness - derived)
 			res.HumusThicknessDiff = &diff
-			if math.Abs(diff) > 0.05 {
+			if math.Abs(diff) > 2.0 {
 				res.Issues = append(res.Issues, DiagnosticIssue{
 					Code:      "HUMUS_THICKNESS_MISMATCH",
 					Severity:  SeverityWarning,
@@ -508,29 +517,31 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 
 	for _, mr := range mineral {
 		mCode := trimUpper(mr.Horizon)
+		mStripped := stripDiscontinuityRaw(derefStr(mr.Horizon))
+		mBase := strings.ToUpper(mStripped)
+		mLower := strings.ToLower(mStripped)
 		idCopy := mr.ID
-		if strings.Contains(strings.ToLower(strings.TrimSpace(derefStr(mr.Horizon))), "g") || strings.HasPrefix(mCode, "W") {
+		if strings.Contains(mLower, "g") || strings.HasPrefix(mBase, "W") {
 			hasGleying = true
 			if mr.UpperDepth != nil && (minGleyDepth < 0 || *mr.UpperDepth < minGleyDepth) {
 				minGleyDepth = *mr.UpperDepth
 			}
 		}
-		rawLower := strings.ToLower(strings.TrimSpace(derefStr(mr.Horizon)))
-		if strings.Contains(rawLower, "u") || strings.Contains(rawLower, "b") && strings.HasPrefix(mCode, "A") {
+		if strings.Contains(mLower, "u") || strings.Contains(mLower, "b") && strings.HasPrefix(mBase, "A") {
 			hasTurbation = true
 		}
-		if strings.Contains(rawLower, "sa") || (strings.HasPrefix(mCode, "B") && strings.Contains(rawLower, "n")) {
+		if strings.Contains(mLower, "sa") || (strings.HasPrefix(mBase, "B") && strings.Contains(mLower, "n")) {
 			hasSalineHorizon = true
 		}
 		if mr.MineralFormpH != nil && *mr.MineralFormpH > 8.2 {
 			hasSalineHorizon = true
 		}
-		if strings.HasPrefix(mCode, "R") && mr.UpperDepth != nil {
+		if strings.HasPrefix(mBase, "R") && mr.UpperDepth != nil {
 			if lithicDepth < 0 || *mr.UpperDepth < lithicDepth {
 				lithicDepth = *mr.UpperDepth
 			}
 		}
-		if strings.HasPrefix(mCode, "B") && mr.Colour != nil {
+		if strings.HasPrefix(mBase, "B") && mr.Colour != nil {
 			if val, ok := parseMunsellValue(*mr.Colour); ok {
 				if val <= 3.0 {
 					bDark = true
@@ -563,10 +574,10 @@ func EvaluatePlotDiagnostics(header vprocore.FS882Header, humus []vprocore.Humus
 		if lo > maxMineralLower {
 			maxMineralLower = lo
 		}
-		if strings.HasPrefix(mCode, "AH") || strings.HasPrefix(mCode, "AP") {
+		if strings.HasPrefix(mBase, "AH") || strings.HasPrefix(mBase, "AP") {
 			ahDepth += thick
 		}
-		if strings.HasPrefix(mCode, "AE") {
+		if strings.HasPrefix(mBase, "AE") {
 			aeDepth += thick
 		}
 		if mr.PercentCoarseFragsTotal != nil && up < 100 {

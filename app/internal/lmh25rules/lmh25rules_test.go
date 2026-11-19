@@ -200,3 +200,114 @@ func TestACE15SigDigitCalibratedDecimalRounding(t *testing.T) {
 		t.Fatalf("expected SubstrateSum(35.855) == 35.86, got %v", diag.SubstrateSum)
 	}
 }
+
+// ENG-XCUT-005: Go <-> R parity on TST01, lithological discontinuity prefixes (Arabic & Roman IVX)
+// across Mineral and Humus rules, +/-1.0% SubstrateSum tolerance, and >2.0 cm HumusThickness span tolerance.
+func TestDiscontinuityHorizonsAndTolerancesParity(t *testing.T) {
+	// 1. Exact TST01 repro scenario: SubstrateSum=99.5% (within +/-1%), HumusThickness=11.0 vs L 10..0 (+1.0 cm <= 2.0 cm),
+	// inverted '2Of' (30..10 cm -> error), and 15 cm dark '2Ah' (0..15 cm, 10YR 2/1, SL -> KeyedSNR = "D").
+	tst01 := lmh25rules.EvaluatePlotDiagnostics(
+		vprocore.FS882Header{
+			PlotNumber:             "TST01",
+			SubstrateDecWood:       fltPtr(99.5),
+			SubstrateBedRock:       fltPtr(0),
+			SubstrateRocks:         fltPtr(0),
+			SubstrateMineralSoil:   fltPtr(0),
+			SubstrateOrganicMatter: fltPtr(0),
+			SubstrateWater:         fltPtr(0),
+			HumusThickness:         fltPtr(11.0),
+			SoilClassGroup:         strPtr("DYB"),
+			MoistureRegime:         strPtr("4"),
+			NutrientRegime:         strPtr("C"),
+		},
+		[]vprocore.HumusRecord{
+			{ID: 99001, PlotNumber: "TST01", Horizon: strPtr("L"), UpperDepth: fltPtr(10.0), LowerDepth: fltPtr(0.0)},
+			{ID: 99002, PlotNumber: "TST01", Horizon: strPtr("2Of"), UpperDepth: fltPtr(30.0), LowerDepth: fltPtr(10.0)},
+		},
+		[]vprocore.MineralRecord{
+			{ID: 99003, PlotNumber: "TST01", Horizon: strPtr("2Ah"), UpperDepth: fltPtr(0.0), LowerDepth: fltPtr(15.0), Texture: strPtr("SL"), Colour: strPtr("10YR 2/1")},
+		},
+	)
+	if !tst01.SubstrateValid {
+		t.Fatalf("expected TST01 SubstrateSum=99.5%% to pass +/-1%% tolerance, got issues=%+v", tst01.Issues)
+	}
+	if len(tst01.Issues) != 1 || tst01.Issues[0].Code != "HORIZON_SIGN_WETLAND_O" {
+		t.Fatalf("expected exactly 1 issue (HORIZON_SIGN_WETLAND_O) on TST01, got %+v", tst01.Issues)
+	}
+	if tst01.KeyedSNR != "D" || tst01.SNRDivergent {
+		t.Fatalf("expected 15 cm '2Ah' on TST01 to infer KeyedSNR=\"D\" without divergence, got %q (trace=%+v)", tst01.KeyedSNR, tst01.SNRTrace)
+	}
+
+	// 2. Discontinuity prefixes on von Post (2Of1, IIOm, XOh), Folisol 2H dominance, IXAh/XAh/2Ae/IIR/IIW/2Bn.
+	prefixedBog := lmh25rules.EvaluatePlotDiagnostics(
+		vprocore.FS882Header{
+			PlotNumber:     "PBOG",
+			SoilClassGroup: strPtr("M"),
+			MesoSlopePos:   strPtr("DP"),
+			Slope:          fltPtr(0.5),
+			SoilDrainage:   strPtr("v"),
+		},
+		[]vprocore.HumusRecord{
+			{ID: 1, PlotNumber: "PBOG", Horizon: strPtr("2Of1"), UpperDepth: fltPtr(0), LowerDepth: fltPtr(25), VonPost: intPtr(6)},
+			{ID: 2, PlotNumber: "PBOG", Horizon: strPtr("IIOm"), UpperDepth: fltPtr(25), LowerDepth: fltPtr(50), VonPost: intPtr(2)},
+			{ID: 3, PlotNumber: "PBOG", Horizon: strPtr("XOh"), UpperDepth: fltPtr(50), LowerDepth: fltPtr(80), VonPost: intPtr(5)},
+		},
+		nil,
+	)
+	for _, code := range []string{"VONPOST_OUT_OF_RANGE_OF", "VONPOST_OUT_OF_RANGE_OM", "VONPOST_OUT_OF_RANGE_OH"} {
+		if !hasIssue(prefixedBog.Issues, code) {
+			t.Fatalf("expected %s for discontinuity-prefixed peat horizons, got %+v", code, prefixedBog.Issues)
+		}
+	}
+	// 2Of1 spans 25/40 cm (>=50%) of upper 40 cm tier -> Of dominant -> KeyedSNR = "A-B"
+	if prefixedBog.KeyedSNR != "A-B" {
+		t.Fatalf("expected 2Of1 dominance in upper 40 cm to yield KeyedSNR=\"A-B\", got %q", prefixedBog.KeyedSNR)
+	}
+
+	// Folisol with 2H dominant (>= 50% of upland thickness) and IIR at 25 cm (total 45 cm >= 30 cm -> KeyedSNR = "C")
+	folisol := lmh25rules.EvaluatePlotDiagnostics(
+		vprocore.FS882Header{
+			PlotNumber:     "FOL01",
+			SoilClassGroup: strPtr("FO"),
+			MesoSlopePos:   strPtr("UP"),
+			Slope:          fltPtr(20),
+		},
+		[]vprocore.HumusRecord{
+			{ID: 1, PlotNumber: "FOL01", Horizon: strPtr("2L"), UpperDepth: fltPtr(20), LowerDepth: fltPtr(15)},
+			{ID: 2, PlotNumber: "FOL01", Horizon: strPtr("2H"), UpperDepth: fltPtr(15), LowerDepth: fltPtr(0)},
+		},
+		[]vprocore.MineralRecord{
+			{ID: 3, PlotNumber: "FOL01", Horizon: strPtr("IIR"), UpperDepth: fltPtr(25), LowerDepth: fltPtr(30)},
+		},
+	)
+	if folisol.KeyedSNR != "C" {
+		t.Fatalf("expected Folisol with 2H dominant and IIR=25 cm to yield KeyedSNR=\"C\", got %q (trace=%+v)", folisol.KeyedSNR, folisol.SNRTrace)
+	}
+
+	// Roman IXAh / XAh and non-zero min_lo HumusThickness span check (L 10..4 => span 6.0 cm vs Header 10.0 cm => +4.0 > 2.0 cm)
+	romanMin := lmh25rules.EvaluatePlotDiagnostics(
+		vprocore.FS882Header{
+			PlotNumber:           "ROM01",
+			SubstrateDecWood:     fltPtr(98.5), // 98.5% -> |98.5 - 100| = 1.5 > 1.0 -> warning
+			HumusThickness:       fltPtr(10.0), // span is 10 - 4 = 6.0 cm -> diff = +4.0 > 2.0 -> warning
+			RootZoneParticleSize: strPtr("C"),
+		},
+		[]vprocore.HumusRecord{
+			{ID: 1, PlotNumber: "ROM01", Horizon: strPtr("L"), UpperDepth: fltPtr(10.0), LowerDepth: fltPtr(4.0)},
+		},
+		[]vprocore.MineralRecord{
+			{ID: 2, PlotNumber: "ROM01", Horizon: strPtr("IXAh"), UpperDepth: fltPtr(0.0), LowerDepth: fltPtr(4.0), Texture: strPtr("C")},
+			{ID: 3, PlotNumber: "ROM01", Horizon: strPtr("XAh"), UpperDepth: fltPtr(4.0), LowerDepth: fltPtr(10.0), Texture: strPtr("C")},
+		},
+	)
+	if !hasIssue(romanMin.Issues, "SUBSTRATE_SUM_NOT_100") {
+		t.Fatalf("expected SUBSTRATE_SUM_NOT_100 at 98.5%%, got %+v", romanMin.Issues)
+	}
+	if !hasIssue(romanMin.Issues, "HUMUS_THICKNESS_MISMATCH") {
+		t.Fatalf("expected HUMUS_THICKNESS_MISMATCH for Header 10.0 vs L 10..4 (span 6.0 cm), got %+v", romanMin.Issues)
+	}
+	// Fine-textured upland with IXAh (4 cm) + XAh (6 cm) = 10 cm > 5 cm -> KeyedSNR = "E"
+	if romanMin.KeyedSNR != "E" {
+		t.Fatalf("expected IXAh+XAh (10 cm) on fine-textured soil to yield KeyedSNR=\"E\", got %q", romanMin.KeyedSNR)
+	}
+}

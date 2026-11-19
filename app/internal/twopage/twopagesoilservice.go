@@ -6,6 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"math/big"
+	"slices"
+	"strconv"
 	"unicode/utf8"
 
 	"github.com/boostao/vpro/app/internal/sourceform"
@@ -155,10 +159,145 @@ func ReadTwoPageSoilOriginal(s *vprocore.ContextService, ctx context.Context, co
 			if err != nil {
 				return nil, fmt.Errorf("two-page soil original %s storage: %w", kind, err)
 			}
+			records = orderTwoPageSoilRecords(kind, records)
 			return &twoPageSoilOriginal{ContextID: contextID, Project: project, Plot: plot, Form: form,
 				RecordSource: source, Table: table, Records: records}, nil
 		})
 	})
+}
+
+type twoPageNumericDepth struct {
+	isNull  bool
+	isInt   bool
+	intVal  int64
+	realVal float64
+}
+
+func parseTwoPageNumericDepth(cell vprocore.ProjectMetadataCell) (twoPageNumericDepth, bool) {
+	switch cell.Storage {
+	case "null":
+		return twoPageNumericDepth{isNull: true}, true
+	case "integer":
+		if cell.Integer == nil {
+			return twoPageNumericDepth{}, false
+		}
+		v, err := strconv.ParseInt(*cell.Integer, 10, 64)
+		if err != nil {
+			return twoPageNumericDepth{}, false
+		}
+		return twoPageNumericDepth{isInt: true, intVal: v}, true
+	case "real":
+		if cell.Real == nil || math.IsNaN(*cell.Real) || math.IsInf(*cell.Real, 0) {
+			return twoPageNumericDepth{}, false
+		}
+		return twoPageNumericDepth{realVal: *cell.Real}, true
+	default:
+		return twoPageNumericDepth{}, false
+	}
+}
+
+func compareTwoPageNonNullDepth(a, b twoPageNumericDepth) int {
+	if a.isInt && b.isInt {
+		if a.intVal < b.intVal {
+			return -1
+		}
+		if a.intVal > b.intVal {
+			return 1
+		}
+		return 0
+	}
+	if !a.isInt && !b.isInt {
+		if a.realVal < b.realVal {
+			return -1
+		}
+		if a.realVal > b.realVal {
+			return 1
+		}
+		return 0
+	}
+	ra := new(big.Rat)
+	if a.isInt {
+		ra.SetInt64(a.intVal)
+	} else {
+		ra.SetFloat64(a.realVal)
+	}
+	rb := new(big.Rat)
+	if b.isInt {
+		rb.SetInt64(b.intVal)
+	} else {
+		rb.SetFloat64(b.realVal)
+	}
+	return ra.Cmp(rb)
+}
+
+// orderTwoPageSoilRecords orders soil rows in canonical LMH25 top-to-bottom profile order
+// (AGENTS.md §3.4, ENG-GO-005): upland L/F/H humus UpperDepth DESC, wetland O*/Hydric/Limno/Cumulo
+// humus UpperDepth ASC, and mineral UpperDepth ASC, with NULL depths last and ties preserving rowid.
+// If UpperDepth is absent or contains historical non-numeric text/blob cells, physical rowid order is preserved.
+func orderTwoPageSoilRecords(kind string, records vprocore.ProjectMetadataTable) vprocore.ProjectMetadataTable {
+	if len(records.Rows) <= 1 {
+		return records
+	}
+	upperIdx, horizonIdx := -1, -1
+	for i, col := range records.Columns {
+		switch col.Name {
+		case "UpperDepth":
+			upperIdx = i
+		case "Horizon":
+			horizonIdx = i
+		}
+	}
+	if upperIdx < 0 {
+		return records
+	}
+	type rowSortMeta struct {
+		row     vprocore.ProjectMetadataRow
+		depth   twoPageNumericDepth
+		wetland bool
+	}
+	meta := make([]rowSortMeta, len(records.Rows))
+	for i, row := range records.Rows {
+		d, ok := parseTwoPageNumericDepth(row.Cells[upperIdx])
+		if !ok {
+			return records
+		}
+		wetland := false
+		if kind == "Humus" && horizonIdx >= 0 {
+			hCell := row.Cells[horizonIdx]
+			if hCell.Storage == "text" && hCell.Text != nil {
+				wetland = vprocore.ClassifySoilHorizon("Humus", *hCell.Text) == vprocore.SoilHorizonWetland
+			}
+		}
+		meta[i] = rowSortMeta{row: row, depth: d, wetland: wetland}
+	}
+	slices.SortStableFunc(meta, func(a, b rowSortMeta) int {
+		if kind == "Humus" && a.wetland != b.wetland {
+			if a.wetland {
+				return 1
+			}
+			return -1
+		}
+		if a.depth.isNull || b.depth.isNull {
+			if a.depth.isNull && b.depth.isNull {
+				return 0
+			}
+			if a.depth.isNull {
+				return 1
+			}
+			return -1
+		}
+		cmp := compareTwoPageNonNullDepth(a.depth, b.depth)
+		if kind == "Humus" && !a.wetland {
+			return -cmp
+		}
+		return cmp
+	})
+	ordered := make([]vprocore.ProjectMetadataRow, len(meta))
+	for i := range meta {
+		ordered[i] = meta[i].row
+	}
+	records.Rows = ordered
+	return records
 }
 
 func requireTwoPageSoilReadScope(ctx context.Context, tx *sql.Tx, project, table, plot string) error {

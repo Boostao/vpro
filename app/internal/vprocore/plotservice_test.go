@@ -204,3 +204,58 @@ func TestPlotService_ChildCRUD(t *testing.T) {
 		t.Errorf("expected 0 veg rows after deletion, got %d", len(vegListAfter))
 	}
 }
+
+// ENG-XCUT-005 / ENG-GO-005 / UX-SOIL-001: ListHumusRecords returns wetland Of/Om/Oh
+// horizons top-to-bottom (UpperDepth ASC), upland L/F/H horizons UpperDepth DESC, and
+// mixed profiles with upland L/F/H preceding wetland O*/Hydric/Limno/Cumulo.
+func TestPlotService_ListHumusRecordsWetlandAndMixedOrdering(t *testing.T) {
+	tempDir := t.TempDir()
+	projects, err := NewProjectServiceWithConfig(tempDir, tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plotService := NewPlotService(projects)
+	for _, p := range []string{"WET01", "UP01", "MIX01"} {
+		if err := plotService.SavePlot(FS882Header{PlotNumber: p}); err != nil {
+			t.Fatalf("SavePlot(%s): %v", p, err)
+		}
+	}
+	s := func(v string) *string { return &v }
+	f := func(v float64) *float64 { return &v }
+	for _, rec := range []HumusRecord{
+		{PlotNumber: "WET01", Horizon: s("Oh"), UpperDepth: f(50), LowerDepth: f(90)},
+		{PlotNumber: "WET01", Horizon: s("Of"), UpperDepth: f(0), LowerDepth: f(20)},
+		{PlotNumber: "WET01", Horizon: s("Om"), UpperDepth: f(20), LowerDepth: f(50)},
+		{PlotNumber: "UP01", Horizon: s("Fm"), UpperDepth: f(2), LowerDepth: f(0)},
+		{PlotNumber: "UP01", Horizon: s("Lv"), UpperDepth: f(6), LowerDepth: f(2)},
+		{PlotNumber: "MIX01", Horizon: s("2Oh"), UpperDepth: f(30), LowerDepth: f(50)},
+		{PlotNumber: "MIX01", Horizon: s("H"), UpperDepth: f(5), LowerDepth: f(0)},
+		{PlotNumber: "MIX01", Horizon: s("Hydric"), UpperDepth: f(15), LowerDepth: f(30)},
+		{PlotNumber: "MIX01", Horizon: s("L"), UpperDepth: f(10), LowerDepth: f(5)},
+		{PlotNumber: "MIX01", Horizon: s("Of1"), UpperDepth: f(0), LowerDepth: f(15)},
+	} {
+		if err := plotService.SaveHumusRecord(rec); err != nil {
+			t.Fatalf("SaveHumusRecord(%s %s): %v", rec.PlotNumber, *rec.Horizon, err)
+		}
+	}
+
+	checkOrder := func(plot string, want []string) {
+		t.Helper()
+		list, err := plotService.ListHumusRecords(plot)
+		if err != nil {
+			t.Fatalf("ListHumusRecords(%s): %v", plot, err)
+		}
+		if len(list) != len(want) {
+			t.Fatalf("%s: got %d records, want %d", plot, len(list), len(want))
+		}
+		for i, w := range want {
+			if list[i].Horizon == nil || *list[i].Horizon != w {
+				t.Fatalf("%s[%d] = %v, want %q", plot, i, list[i].Horizon, w)
+			}
+		}
+	}
+
+	checkOrder("WET01", []string{"Of", "Om", "Oh"})
+	checkOrder("UP01", []string{"Lv", "Fm"})
+	checkOrder("MIX01", []string{"L", "H", "Of1", "Hydric", "2Oh"})
+}

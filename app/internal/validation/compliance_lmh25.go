@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/boostao/vpro/app/internal/vprocore"
+	"math"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -408,98 +409,103 @@ func checkProjectBounds(
 		return err
 	}
 
-	// Check LMH25 soil horizon directional depth signs:
-	// Upland L/F/H humus horizons measure upward from 0 cm (UpperDepth > LowerDepth);
-	// Wetland Of/Om/Oh and Mineral A/B/C/R/W measure downward (UpperDepth < LowerDepth).
-	humusTbl := `"project".` + vprocore.QuoteHeaderIdentifier(project+"_Humus")
-	hWhere := ` WHERE t."UpperDepth" IS NOT NULL AND t."LowerDepth" IS NOT NULL`
-	var hArgs []any
-	if useSU {
-		if pre, args := buildSUPlotInPreFilter(`t."PlotNumber"`, humusTypes["plotnumber"], suPlotList); pre != "" {
-			hWhere += ` AND ` + pre
-			hArgs = append(hArgs, args...)
+	// Check LMH25 soil horizon directional depth signs and non-negative bounds via the
+	// single canonical vprocore.ValidateSoilHorizonDepthSign rule (ENG-GO-005):
+	// Upland L/F/H humus horizons measure upward from 0 cm (UpperDepth > LowerDepth >= 0);
+	// Wetland O*/Hydric/Limno/Cumulo and all Mineral rows measure downward (0 <= UpperDepth < LowerDepth).
+	for _, soilTbl := range []struct {
+		kind         string
+		plotAffinity string
+	}{
+		{"Humus", humusTypes["plotnumber"]},
+		{"Mineral", minTypes["plotnumber"]},
+	} {
+		tbl := `"project".` + vprocore.QuoteHeaderIdentifier(project+"_"+soilTbl.kind)
+		where := ` WHERE (t."UpperDepth" IS NOT NULL OR t."LowerDepth" IS NOT NULL)`
+		var sArgs []any
+		if useSU {
+			if pre, args := buildSUPlotInPreFilter(`t."PlotNumber"`, soilTbl.plotAffinity, suPlotList); pre != "" {
+				where += ` AND ` + pre
+				sArgs = append(sArgs, args...)
+			}
 		}
-	}
-	hRows, err := tx.QueryContext(ctx, `SELECT t.rowid, typeof(t."PlotNumber"), CAST(t."PlotNumber" AS BLOB), COALESCE(CAST(t."PlotNumber" AS TEXT), ''), COALESCE(CAST(t."Horizon" AS TEXT), ''), t."UpperDepth", t."LowerDepth"
-		FROM `+humusTbl+` t`+hWhere+` ORDER BY t.rowid`, hArgs...)
-	if err != nil {
-		return err
-	}
-	for hRows.Next() {
-		var rid int64
-		var plotType, plot, hz string
-		var rawPlot []byte
-		var upper, lower float64
-		if err := hRows.Scan(&rid, &plotType, &rawPlot, &plot, &hz, &upper, &lower); err != nil {
-			hRows.Close()
+		sRows, err := tx.QueryContext(ctx, `SELECT t.rowid, typeof(t."PlotNumber"), CAST(t."PlotNumber" AS BLOB), COALESCE(CAST(t."PlotNumber" AS TEXT), ''), CAST(t."Horizon" AS TEXT), t."UpperDepth", t."LowerDepth"
+			FROM `+tbl+` t`+where+` ORDER BY t.rowid`, sArgs...)
+		if err != nil {
 			return err
 		}
-		if useSU {
-			if plotType != "text" {
-				continue
+		for sRows.Next() {
+			var rid int64
+			var plotType, plot string
+			var rawPlot []byte
+			var hz sql.NullString
+			var rawUpper, rawLower any
+			if err := sRows.Scan(&rid, &plotType, &rawPlot, &plot, &hz, &rawUpper, &rawLower); err != nil {
+				sRows.Close()
+				return err
 			}
-			if _, ok := suTextPlots[string(rawPlot)]; !ok {
-				continue
+			if useSU {
+				if plotType != "text" {
+					continue
+				}
+				if _, ok := suTextPlots[string(rawPlot)]; !ok {
+					continue
+				}
+			}
+			var hzPtr *string
+			hzLabel := ""
+			if hz.Valid {
+				hzText := hz.String
+				hzPtr = &hzText
+				hzLabel = strings.TrimSpace(hzText)
+			}
+			upPtr, upDisplay := parseComplianceDepthValue(rawUpper)
+			loPtr, loDisplay := parseComplianceDepthValue(rawLower)
+			if err := vprocore.ValidateSoilHorizonDepthSign(soilTbl.kind, hzPtr, upPtr, loPtr); err != nil {
+				field := "UpperDepth"
+				if upPtr == nil && loPtr != nil {
+					field = "LowerDepth"
+				}
+				report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
+					Table: soilTbl.kind, PlotNumber: plot, RowID: rid, Field: field,
+					Value: fmt.Sprintf("%s..%s (%s)", upDisplay, loDisplay, hzLabel),
+					Rule:  err.Error(),
+				})
 			}
 		}
-		// ENG-GO-005: classify with the single shared LMH25 rule.
-		hzText := hz
-		if err := vprocore.ValidateSoilHorizonDepthSign("Humus", &hzText, &upper, &lower); err != nil {
-			report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
-				Table: "Humus", PlotNumber: plot, RowID: rid, Field: "UpperDepth",
-				Value: fmt.Sprintf("%g..%g (%s)", upper, lower, strings.TrimSpace(hz)),
-				Rule:  err.Error(),
-			})
+		if err := errors.Join(sRows.Err(), sRows.Close()); err != nil {
+			return err
 		}
 	}
-	if err := errors.Join(hRows.Err(), hRows.Close()); err != nil {
-		return err
-	}
+	return nil
+}
 
-	minTbl := `"project".` + vprocore.QuoteHeaderIdentifier(project+"_Mineral")
-	mWhere := ` WHERE t."UpperDepth" IS NOT NULL AND t."LowerDepth" IS NOT NULL AND (t."UpperDepth" < 0 OR t."LowerDepth" < 0 OR t."UpperDepth" >= t."LowerDepth")`
-	var mArgs []any
-	if useSU {
-		if pre, args := buildSUPlotInPreFilter(`t."PlotNumber"`, minTypes["plotnumber"], suPlotList); pre != "" {
-			mWhere += ` AND ` + pre
-			mArgs = append(mArgs, args...)
-		}
+func parseComplianceDepthValue(raw any) (*float64, string) {
+	if raw == nil {
+		return nil, "NULL"
 	}
-	mRows, err := tx.QueryContext(ctx, `SELECT t.rowid, typeof(t."PlotNumber"), CAST(t."PlotNumber" AS BLOB), COALESCE(CAST(t."PlotNumber" AS TEXT), ''), COALESCE(CAST(t."Horizon" AS TEXT), ''), t."UpperDepth", t."LowerDepth"
-		FROM `+minTbl+` t`+mWhere+` ORDER BY t.rowid`, mArgs...)
-	if err != nil {
-		return err
+	switch v := raw.(type) {
+	case float64:
+		val := v
+		return &val, fmt.Sprintf("%g", val)
+	case int64:
+		val := float64(v)
+		return &val, strconv.FormatInt(v, 10)
+	case string:
+		if parsed, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil {
+			return &parsed, v
+		}
+		nan := math.NaN()
+		return &nan, v
+	case []byte:
+		s := string(v)
+		if parsed, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil {
+			return &parsed, s
+		}
+		nan := math.NaN()
+		return &nan, fmt.Sprintf("0x%x", v)
+	default:
+		nan := math.NaN()
+		return &nan, fmt.Sprintf("%v", v)
 	}
-	for mRows.Next() {
-		var rid int64
-		var plotType, plot, hz string
-		var rawPlot []byte
-		var upper, lower float64
-		if err := mRows.Scan(&rid, &plotType, &rawPlot, &plot, &hz, &upper, &lower); err != nil {
-			mRows.Close()
-			return err
-		}
-		if useSU {
-			if plotType != "text" {
-				continue
-			}
-			if _, ok := suTextPlots[string(rawPlot)]; !ok {
-				continue
-			}
-		}
-		if upper < 0 || lower < 0 {
-			report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
-				Table: "Mineral", PlotNumber: plot, RowID: rid, Field: "UpperDepth",
-				Value: fmt.Sprintf("%g..%g (%s)", upper, lower, strings.TrimSpace(hz)),
-				Rule:  "LMH25 mineral horizon depths must be >= 0 cm (0 <= UpperDepth < LowerDepth)",
-			})
-		} else if upper >= lower {
-			report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
-				Table: "Mineral", PlotNumber: plot, RowID: rid, Field: "UpperDepth",
-				Value: fmt.Sprintf("%g..%g (%s)", upper, lower, strings.TrimSpace(hz)),
-				Rule:  "LMH25 mineral horizons measure downward (UpperDepth < LowerDepth)",
-			})
-		}
-	}
-	return errors.Join(mRows.Err(), mRows.Close())
 }

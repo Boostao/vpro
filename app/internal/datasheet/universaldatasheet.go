@@ -304,18 +304,19 @@ func ApplyDatasheetEdits(ctx context.Context, contexts *vprocore.ContextService,
 						}
 					}
 					if soilDepthTouched {
-						hIdx, hasH := colIndexByLower["horizon"]
-						uIdx, hasU := colIndexByLower["upperdepth"]
-						lIdx, hasL := colIndexByLower["lowerdepth"]
-						if hasH && hasU && hasL && projectedCells[hIdx].Text != nil {
-							if err := validateSoilHorizonDepthSign(
-								target.key,
-								*projectedCells[hIdx].Text,
-								cellFloat64Ptr(projectedCells[uIdx]),
-								cellFloat64Ptr(projectedCells[lIdx]),
-							); err != nil {
-								return err
-							}
+						var effHz *string
+						if hIdx, hasH := colIndexByLower["horizon"]; hasH {
+							effHz = cellTextPtr(projectedCells[hIdx])
+						}
+						var effUp, effLo *float64
+						if uIdx, hasU := colIndexByLower["upperdepth"]; hasU {
+							effUp = cellFloat64Ptr(projectedCells[uIdx])
+						}
+						if lIdx, hasL := colIndexByLower["lowerdepth"]; hasL {
+							effLo = cellFloat64Ptr(projectedCells[lIdx])
+						}
+						if err := validateSoilHorizonDepthSign(target.key, effHz, effUp, effLo); err != nil {
+							return err
 						}
 					}
 				}

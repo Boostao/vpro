@@ -299,10 +299,17 @@ func PreviewDatasheetFindReplace(ctx context.Context, contexts *vprocore.Context
 					valErr = fmt.Sprintf("plot %q is locked (Flag = -1); unlock the plot before editing its cells", plotVal)
 				}
 			}
-			if valErr == "" && checkSoilDepth && soilHorizonIdx >= 0 && soilUpperIdx >= 0 && soilLowerIdx >= 0 {
-				effHorizon := row.Cells[soilHorizonIdx]
-				effUpper := row.Cells[soilUpperIdx]
-				effLower := row.Cells[soilLowerIdx]
+			if valErr == "" && checkSoilDepth && (soilUpperIdx >= 0 || soilLowerIdx >= 0) {
+				var effHorizon, effUpper, effLower vprocore.ProjectMetadataCell
+				if soilHorizonIdx >= 0 {
+					effHorizon = row.Cells[soilHorizonIdx]
+				}
+				if soilUpperIdx >= 0 {
+					effUpper = row.Cells[soilUpperIdx]
+				}
+				if soilLowerIdx >= 0 {
+					effLower = row.Cells[soilLowerIdx]
+				}
 				switch colMeta.Name {
 				case "Horizon":
 					effHorizon = normalizedCell
@@ -311,10 +318,8 @@ func PreviewDatasheetFindReplace(ctx context.Context, contexts *vprocore.Context
 				case "LowerDepth":
 					effLower = normalizedCell
 				}
-				if effHorizon.Text != nil {
-					if sErr := validateSoilHorizonDepthSign(target.key, *effHorizon.Text, cellFloat64Ptr(effUpper), cellFloat64Ptr(effLower)); sErr != nil {
-						valErr = sErr.Error()
-					}
+				if sErr := validateSoilHorizonDepthSign(target.key, cellTextPtr(effHorizon), cellFloat64Ptr(effUpper), cellFloat64Ptr(effLower)); sErr != nil {
+					valErr = sErr.Error()
 				}
 			}
 			if valErr == "" && checkHierarchyCycle && hierIDIdx >= 0 && hierIDIdx < len(row.Cells) && row.Cells[hierIDIdx].Integer != nil {

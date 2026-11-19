@@ -51,23 +51,29 @@ func TestTwoPageSoilOriginalPhysicalRowsAndNoMutations(t *testing.T) {
 					t.Fatalf("complete physical schema = %#v", got.Records.Columns)
 				}
 				var rowIDs []string
+				byRowID := map[string]vprocore.ProjectMetadataRow{}
 				for _, row := range got.Records.Rows {
 					rowIDs = append(rowIDs, row.RowID)
+					byRowID[row.RowID] = row
 				}
-				if !reflect.DeepEqual(rowIDs, []string{"-7", "3", "4", "5"}) {
-					t.Fatalf("physical rowid scope/order = %v", rowIDs)
+				wantOrder := []string{"5", "4", "-7", "3"}
+				if test.form == "SoilMineralXL" {
+					wantOrder = []string{"-7", "4", "5", "3"}
+				}
+				if !reflect.DeepEqual(rowIDs, wantOrder) {
+					t.Fatalf("%s LMH25 scope/order = %v, want %v", test.form, rowIDs, wantOrder)
 				}
 				blobHex := "ff00"
 				want := []vprocore.ProjectMetadataCell{
 					{Storage: "null"}, vprotest.MetadataText("108050"), vprotest.SiviReal(-10.25), vprotest.MetadataText(""),
 					{Storage: "null"}, {Storage: "blob", BlobHex: &blobHex},
 				}
-				if !reflect.DeepEqual(got.Records.Rows[0].Cells, want) {
-					t.Fatalf("NULL/empty/real/BLOB original cells = %#v", got.Records.Rows[0].Cells)
+				if !reflect.DeepEqual(byRowID["-7"].Cells, want) {
+					t.Fatalf("NULL/empty/real/BLOB original cells = %#v", byRowID["-7"].Cells)
 				}
-				if got.Records.Rows[1].Cells[0].Storage != "integer" || *got.Records.Rows[1].Cells[0].Integer != "0" ||
-					got.Records.Rows[2].Cells[0].Storage != "text" || *got.Records.Rows[2].Cells[0].Text != "01" ||
-					*got.Records.Rows[3].Cells[0].Integer != "-2147483648" {
+				if byRowID["3"].Cells[0].Storage != "integer" || *byRowID["3"].Cells[0].Integer != "0" ||
+					byRowID["4"].Cells[0].Storage != "text" || *byRowID["4"].Cells[0].Text != "01" ||
+					*byRowID["5"].Cells[0].Integer != "-2147483648" {
 					t.Fatal("historical nullable/noninteger/signed identities were repaired")
 				}
 			}
@@ -363,5 +369,83 @@ func TestTwoPageSoilOriginalInFlightCancellationRetainsCoordinator(t *testing.T)
 	}
 	if got, err := ReadTwoPageSoilOriginal(service, context.Background(), state.ContextID, "108050", "SoilHumusXL"); err != nil || got == nil {
 		t.Fatalf("read after cancellation lost context attachments/TEMP views: %v, %v", got, err)
+	}
+}
+
+// ENG-GO-005 / UX-SOIL-001: ReadTwoPageSoilOriginal returns wetland, upland, mixed, and mineral
+// horizons in canonical LMH25 top-to-bottom profile order rather than physical rowid order.
+func TestTwoPageSoilOriginalLMH25ProfileOrdering(t *testing.T) {
+	service, state, db := vprotest.TwoPageSoilReadFixture(t, false, "TEXT")
+	if _, err := db.Exec(`
+		INSERT INTO Sample_Env(PlotNumber) VALUES ('WET01'), ('UP01'), ('MIX01');
+		INSERT INTO Sample_Admin(Plot) VALUES ('WET01'), ('UP01'), ('MIX01');
+		INSERT INTO Sample_Humus(rowid, ID, PlotNumber, Horizon, UpperDepth) VALUES
+			(10, 1, 'WET01', 'Oh', 45),
+			(11, 2, 'WET01', 'Om', 15),
+			(12, 3, 'WET01', 'Of', 0),
+			(20, 1, 'UP01', 'Fm', 2),
+			(21, 2, 'UP01', 'Lv', 6),
+			(30, 1, 'MIX01', 'Oh', 15),
+			(31, 2, 'MIX01', 'H', 5),
+			(32, 3, 'MIX01', 'Cumulo', 95),
+			(33, 4, 'MIX01', 'L', 10),
+			(34, 5, 'MIX01', 'Of1', 0),
+			(35, 6, 'MIX01', '2Of', 60),
+			(36, 7, 'MIX01', 'Hydric', 40),
+			(37, 8, 'MIX01', 'Limno', 80);
+		INSERT INTO Sample_Mineral(rowid, ID, PlotNumber, Horizon, UpperDepth) VALUES
+			(40, 1, 'UP01', 'BC', 25),
+			(41, 2, 'UP01', 'Ah', 0),
+			(42, 3, 'UP01', 'Bm', 15);
+	`); err != nil {
+		t.Fatal(err)
+	}
+	// If SU attachment filters plots, include WET01/UP01/MIX01 in Report_SU when present.
+	_, _ = db.Exec(`INSERT INTO Report_SU(PlotNumber, SiteUnit) VALUES ('WET01','01'),('UP01','01'),('MIX01','01')`)
+
+	extractHorizons := func(orig *twoPageSoilOriginal) []string {
+		t.Helper()
+		cols, err := vprocore.SiteUnitTransferColumns(orig.Records, "Horizon")
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := make([]string, len(orig.Records.Rows))
+		for i, r := range orig.Records.Rows {
+			out[i] = *r.Cells[cols["Horizon"]].Text
+		}
+		return out
+	}
+
+	wet, err := ReadTwoPageSoilOriginal(service, context.Background(), state.ContextID, "WET01", "SoilHumusXL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := extractHorizons(wet); !reflect.DeepEqual(got, []string{"Of", "Om", "Oh"}) {
+		t.Fatalf("WET01 order = %v, want [Of Om Oh]", got)
+	}
+
+	up, err := ReadTwoPageSoilOriginal(service, context.Background(), state.ContextID, "UP01", "SoilHumusXL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := extractHorizons(up); !reflect.DeepEqual(got, []string{"Lv", "Fm"}) {
+		t.Fatalf("UP01 order = %v, want [Lv Fm]", got)
+	}
+
+	mix, err := ReadTwoPageSoilOriginal(service, context.Background(), state.ContextID, "MIX01", "SoilHumusXL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantMix := []string{"L", "H", "Of1", "Oh", "Hydric", "2Of", "Limno", "Cumulo"}
+	if got := extractHorizons(mix); !reflect.DeepEqual(got, wantMix) {
+		t.Fatalf("MIX01 order = %v, want %v", got, wantMix)
+	}
+
+	minOrig, err := ReadTwoPageSoilOriginal(service, context.Background(), state.ContextID, "UP01", "SoilMineralXL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := extractHorizons(minOrig); !reflect.DeepEqual(got, []string{"Ah", "Bm", "BC"}) {
+		t.Fatalf("UP01 Mineral order = %v, want [Ah Bm BC]", got)
 	}
 }

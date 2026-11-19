@@ -347,8 +347,16 @@ func datasheetCellsSemanticallyEqual(a, b vprocore.ProjectMetadataCell, colMeta 
 }
 
 // validateSoilHorizonDepthSign delegates to the single LMH25 rule in vprocore (ENG-GO-005).
-func validateSoilHorizonDepthSign(tableKey string, horizon string, upper, lower *float64) error {
-	return vprocore.ValidateSoilHorizonDepthSign(tableKey, &horizon, upper, lower)
+func validateSoilHorizonDepthSign(tableKey string, horizon *string, upper, lower *float64) error {
+	return vprocore.ValidateSoilHorizonDepthSign(tableKey, horizon, upper, lower)
+}
+
+func cellTextPtr(cell vprocore.ProjectMetadataCell) *string {
+	if cell.Storage == "null" || cell.Text == nil {
+		return nil
+	}
+	s := *cell.Text
+	return &s
 }
 func cellFloat64Ptr(cell vprocore.ProjectMetadataCell) *float64 {
 	if cell.Storage == "null" {
