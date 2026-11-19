@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { SpatialWorkbenchPayload } from '../../bindings/github.com/boostao/vpro/app';
   import {
+    buildDefaultGeoPackageExportPath,
     summarizeArchiveResolution,
     type MapLayerVisibility,
     type SpatialComputeBackendInfo,
@@ -120,8 +121,7 @@
       data-gpkg-export-shortcut
       disabled={loading || mutating || gpkgExporting || !contextId}
       onclick={() => {
-        const safeProj = (project || 'vpro').replace(/[^A-Za-z0-9_-]+/g, '_');
-        onToggleGpkgPanel(`${safeProj}_plots.gpkg`);
+        onToggleGpkgPanel(buildDefaultGeoPackageExportPath(project, payload?.projectPath));
       }}
     >
       Export .gpkg...

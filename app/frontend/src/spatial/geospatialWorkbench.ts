@@ -167,35 +167,95 @@ export function buildBECZoneMatchExpression(): any[] {
   return expr;
 }
 
+type PMTilesArchiveStatusExt = NonNullable<PMTilesManifest['archives']>[string] & {
+  warning?: string;
+};
+
+export function buildOfflineGraticuleGeoJSON(): {
+  type: 'FeatureCollection';
+  features: Array<{
+    type: 'Feature';
+    properties: { label: string };
+    geometry: { type: 'LineString'; coordinates: Array<[number, number]> };
+  }>;
+} {
+  const features: Array<{
+    type: 'Feature';
+    properties: { label: string };
+    geometry: { type: 'LineString'; coordinates: Array<[number, number]> };
+  }> = [];
+  for (let lon = -140; lon <= -110; lon += 5) {
+    features.push({
+      type: 'Feature',
+      properties: { label: `${Math.abs(lon)}W` },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [lon, 45],
+          [lon, 65],
+        ],
+      },
+    });
+  }
+  for (let lat = 48; lat <= 62; lat += 2) {
+    features.push({
+      type: 'Feature',
+      properties: { label: `${lat}N` },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [-142, lat],
+          [-110, lat],
+        ],
+      },
+    });
+  }
+  return { type: 'FeatureCollection', features };
+}
+
 /**
  * Builds the offline-first MapLibre GL JS v6 style specification backed by local PMTiles
  * byte-range sources and optional BC OpenMaps WMS orthoimagery.
  */
 export function buildMapLibreGeospatialStyle(
   manifest: PMTilesManifest | null | undefined,
-  visibility: MapLayerVisibility
+  visibility: MapLayerVisibility,
+  options?: { forceGraticuleFallback?: boolean }
 ): Record<string, any> {
-  const bgcArchive = manifest?.archives?.['bc-bgc-v13.pmtiles'];
-  const adminArchive = manifest?.archives?.['bc-admin-ecosections-districts.pmtiles'];
+  const bgcArchive = manifest?.archives?.['bc-bgc-v13.pmtiles'] as PMTilesArchiveStatusExt | undefined;
+  const adminArchive = manifest?.archives?.['bc-admin-ecosections-districts.pmtiles'] as
+    | PMTilesArchiveStatusExt
+    | undefined;
+  const bgcAvailable = !options?.forceGraticuleFallback && bgcArchive?.available !== false;
+  const adminAvailable = !options?.forceGraticuleFallback && adminArchive?.available !== false;
   const bgcMaxZoom = bgcArchive?.maxZoom && bgcArchive.maxZoom > 0 ? bgcArchive.maxZoom : 6;
   const adminMaxZoom = adminArchive?.maxZoom && adminArchive.maxZoom > 0 ? adminArchive.maxZoom : 6;
 
   const sources: Record<string, any> = {
-    bc_bgc_pmtiles: {
+    vpro_offline_graticule: {
+      type: 'geojson',
+      data: buildOfflineGraticuleGeoJSON(),
+    },
+  };
+
+  if (bgcAvailable) {
+    sources.bc_bgc_pmtiles = {
       type: 'vector',
       url: 'pmtiles:///maps/bc-bgc-v13.pmtiles',
       minzoom: 3,
       maxzoom: bgcMaxZoom,
       attribution: 'BC Ministry of Forests BEC v13',
-    },
-    bc_admin_pmtiles: {
+    };
+  }
+  if (adminAvailable) {
+    sources.bc_admin_pmtiles = {
       type: 'vector',
       url: 'pmtiles:///maps/bc-admin-ecosections-districts.pmtiles',
       minzoom: 3,
       maxzoom: adminMaxZoom,
       attribution: 'GeoBC Ecosections & NR Districts',
-    },
-  };
+    };
+  }
 
   if (visibility.bcOpenMapsWMS) {
     sources.bc_openmaps_wms = {
@@ -217,62 +277,83 @@ export function buildMapLibreGeospatialStyle(
       },
     },
     {
-      id: 'bgc-zones-fill',
-      type: 'fill',
-      source: 'bc_bgc_pmtiles',
-      'source-layer': 'bgc',
-      layout: {
-        visibility: visibility.bgcFill ? 'visible' : 'none',
-      },
-      paint: {
-        'fill-color': buildBECZoneMatchExpression(),
-        'fill-opacity': visibility.hillshade3D ? 0.62 : 0.48,
-      },
-    },
-    {
-      id: 'bgc-subzone-outline',
+      id: 'vpro-offline-graticule-lines',
       type: 'line',
-      source: 'bc_bgc_pmtiles',
-      'source-layer': 'bgc',
-      layout: {
-        visibility: visibility.bgcFill ? 'visible' : 'none',
-      },
+      source: 'vpro_offline_graticule',
       paint: {
-        'line-color': '#003366',
-        'line-width': ['interpolate', ['linear'], ['zoom'], 4, 0.35, 9, 1.1],
-        'line-opacity': 0.55,
-      },
-    },
-    {
-      id: 'ecosections-outline',
-      type: 'line',
-      source: 'bc_admin_pmtiles',
-      'source-layer': 'ecosections',
-      layout: {
-        visibility: visibility.ecosections ? 'visible' : 'none',
-      },
-      paint: {
-        'line-color': '#1A5A96',
-        'line-width': 1.4,
-        'line-dasharray': [3, 2],
-        'line-opacity': 0.85,
-      },
-    },
-    {
-      id: 'nr-districts-outline',
-      type: 'line',
-      source: 'bc_admin_pmtiles',
-      'source-layer': 'nr_districts',
-      layout: {
-        visibility: visibility.nrDistricts ? 'visible' : 'none',
-      },
-      paint: {
-        'line-color': '#FCBA19',
-        'line-width': 1.8,
-        'line-opacity': 0.9,
+        'line-color': visibility.hillshade3D ? '#1A5A96' : '#D8D8D8',
+        'line-width': 0.8,
+        'line-dasharray': [2, 3],
+        'line-opacity': 0.65,
       },
     },
   ];
+
+  if (bgcAvailable) {
+    layers.push(
+      {
+        id: 'bgc-zones-fill',
+        type: 'fill',
+        source: 'bc_bgc_pmtiles',
+        'source-layer': 'bgc',
+        layout: {
+          visibility: visibility.bgcFill ? 'visible' : 'none',
+        },
+        paint: {
+          'fill-color': buildBECZoneMatchExpression(),
+          'fill-opacity': visibility.hillshade3D ? 0.62 : 0.48,
+        },
+      },
+      {
+        id: 'bgc-subzone-outline',
+        type: 'line',
+        source: 'bc_bgc_pmtiles',
+        'source-layer': 'bgc',
+        layout: {
+          visibility: visibility.bgcFill ? 'visible' : 'none',
+        },
+        paint: {
+          'line-color': '#003366',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 4, 0.35, 9, 1.1],
+          'line-opacity': 0.55,
+        },
+      }
+    );
+  }
+
+  if (adminAvailable) {
+    layers.push(
+      {
+        id: 'ecosections-outline',
+        type: 'line',
+        source: 'bc_admin_pmtiles',
+        'source-layer': 'ecosections',
+        layout: {
+          visibility: visibility.ecosections ? 'visible' : 'none',
+        },
+        paint: {
+          'line-color': '#1A5A96',
+          'line-width': 1.4,
+          'line-dasharray': [3, 2],
+          'line-opacity': 0.85,
+        },
+      },
+      {
+        id: 'nr-districts-outline',
+        type: 'line',
+        source: 'bc_admin_pmtiles',
+        'source-layer': 'nr_districts',
+        layout: {
+          visibility: visibility.nrDistricts ? 'visible' : 'none',
+        },
+        paint: {
+          'line-color': '#FCBA19',
+          'line-width': 1.8,
+          'line-opacity': 0.9,
+        },
+      }
+    );
+  }
 
   if (visibility.bcOpenMapsWMS) {
     layers.push({
@@ -291,14 +372,79 @@ export function buildMapLibreGeospatialStyle(
   };
 }
 
+export function summarizePMTilesManifestWarnings(
+  manifest: PMTilesManifest | null | undefined
+): string | null {
+  if (!manifest?.archives) return null;
+  const warnings: string[] = [];
+  for (const raw of Object.values(manifest.archives)) {
+    const item = raw as PMTilesArchiveStatusExt | undefined;
+    const warn = typeof item?.warning === 'string' ? item.warning.trim() : '';
+    if (warn && !warnings.includes(warn)) {
+      warnings.push(warn);
+    }
+  }
+  return warnings.length > 0 ? warnings.join(' ') : null;
+}
+
 export function summarizeArchiveResolution(payload: SpatialWorkbenchPayload | null): string {
   if (!payload?.manifest?.archives) return 'Resolving local map layers...';
-  const bgc = payload.manifest.archives['bc-bgc-v13.pmtiles'];
+  const bgc = payload.manifest.archives['bc-bgc-v13.pmtiles'] as PMTilesArchiveStatusExt | undefined;
   if (!bgc) return 'Built-in Overview Map (z3..6)';
+  const minZ = bgc.minZoom > 0 ? bgc.minZoom : 3;
+  const maxZ = bgc.maxZoom > 0 ? bgc.maxZoom : 6;
   if (bgc.fullResolution) {
-    return `Full-Resolution Provincial Map (z${bgc.minZoom}..${bgc.maxZoom})`;
+    return `Full-Resolution Provincial Map (z${minZ}..${maxZ})`;
   }
-  return `Built-in Overview Fallback (z${bgc.minZoom}..${bgc.maxZoom})`;
+  if (bgc.warning) {
+    return `Built-in Overview Fallback (z${minZ}..${maxZ}, local archive unreadable)`;
+  }
+  return `Built-in Overview Fallback (z${minZ}..${maxZ})`;
+}
+
+export function classifyPMTilesMapError(event: unknown): string | null {
+  if (!event || typeof event !== 'object') return null;
+  const rec = event as Record<string, any>;
+  const sourceId = typeof rec.sourceId === 'string' ? rec.sourceId : '';
+  const errObj = rec.error;
+  const errMsg =
+    errObj instanceof Error
+      ? errObj.message
+      : typeof errObj?.message === 'string'
+        ? errObj.message
+        : typeof rec.message === 'string'
+          ? rec.message
+          : '';
+  const errUrl =
+    typeof errObj?.url === 'string'
+      ? errObj.url
+      : typeof rec.url === 'string'
+        ? rec.url
+        : '';
+  const lowerMsg = errMsg.toLowerCase();
+  const lowerUrl = errUrl.toLowerCase();
+  const isPMTilesSource =
+    sourceId === 'bc_bgc_pmtiles' ||
+    sourceId === 'bc_admin_pmtiles' ||
+    lowerUrl.includes('.pmtiles') ||
+    lowerMsg.includes('pmtiles') ||
+    lowerMsg.includes('bad header') ||
+    lowerMsg.includes('wrong magic');
+  if (!isPMTilesSource) return null;
+  if (
+    lowerMsg.includes('pmtiles') ||
+    lowerMsg.includes('header') ||
+    lowerMsg.includes('magic') ||
+    lowerMsg.includes('corrupt') ||
+    lowerMsg.includes('decompress') ||
+    lowerMsg.includes('range') ||
+    lowerMsg.includes('fetch') ||
+    lowerMsg.includes('404') ||
+    lowerMsg.includes('status')
+  ) {
+    return 'A local PMTiles map archive could not be decoded. Switched to the built-in offline map fallback.';
+  }
+  return null;
 }
 
 export function classifyWMSMapError(
@@ -446,6 +592,97 @@ export function computeViewportAOIRectangle(
   ];
 }
 
+export function isAbsoluteFilesystemPath(rawPath: string): boolean {
+  const trimmed = rawPath.trim();
+  if (!trimmed) return false;
+  return (
+    trimmed.startsWith('/') ||
+    /^[A-Za-z]:[\\/]/.test(trimmed) ||
+    trimmed.startsWith('\\\\')
+  );
+}
+
+function resolveProjectExportsDir(projectPath?: string | null): { dir: string; sep: '/' | '\\' } | null {
+  const raw = typeof projectPath === 'string' ? projectPath.trim() : '';
+  if (!raw || !isAbsoluteFilesystemPath(raw)) return null;
+  const sep: '/' | '\\' = raw.includes('\\') && !raw.includes('/') ? '\\' : '/';
+  const cleaned = raw.replace(/[\\/]+$/, '');
+  const lastSep = Math.max(cleaned.lastIndexOf('/'), cleaned.lastIndexOf('\\'));
+  if (lastSep <= 0) return null;
+  const parentDir = cleaned.slice(0, lastSep);
+  if (!isAbsoluteFilesystemPath(parentDir)) return null;
+  const parentSep = Math.max(parentDir.lastIndexOf('/'), parentDir.lastIndexOf('\\'));
+  const parentBase = parentSep >= 0 ? parentDir.slice(parentSep + 1) : parentDir;
+  if (parentBase.toLowerCase() === 'projects' && parentSep > 0) {
+    const dataDir = parentDir.slice(0, parentSep);
+    if (isAbsoluteFilesystemPath(dataDir)) {
+      return { dir: `${dataDir}${sep}exports`, sep };
+    }
+  }
+  return { dir: `${parentDir}${sep}exports`, sep };
+}
+
+export function buildDefaultGeoPackageExportPath(
+  project: string,
+  projectPath?: string | null
+): string {
+  const safeProj = (project || 'vpro').replace(/[^A-Za-z0-9_-]+/g, '_') || 'vpro';
+  const fileName = `${safeProj}_plots.gpkg`;
+  const exportsDir = resolveProjectExportsDir(projectPath);
+  if (!exportsDir) return '';
+  return `${exportsDir.dir}${exportsDir.sep}${fileName}`;
+}
+
+export function resolveGeoPackageDestinationPath(
+  rawDest: string,
+  project: string,
+  projectPath?: string | null
+): string | null {
+  const trimmed = rawDest.trim();
+  if (!trimmed) return null;
+  const withExt = trimmed.toLowerCase().endsWith('.gpkg') ? trimmed : `${trimmed}.gpkg`;
+  if (isAbsoluteFilesystemPath(withExt)) {
+    return withExt;
+  }
+  const segments = withExt.split(/[\\/]+/).filter(Boolean);
+  if (segments.length === 0 || segments.some((s) => s === '.' || s === '..')) {
+    return null;
+  }
+  const exportsDir = resolveProjectExportsDir(projectPath);
+  if (!exportsDir) {
+    return null;
+  }
+  return `${exportsDir.dir}${exportsDir.sep}${segments.join(exportsDir.sep)}`;
+}
+
+export function hasInvalidOrDiagnosticQACoordinates(row: {
+  diagnostics?: string[] | null;
+  latitude?: number | null;
+  longitude?: number | null;
+}): boolean {
+  if (Array.isArray(row.diagnostics) && row.diagnostics.length > 0) {
+    return true;
+  }
+  const lat = row.latitude;
+  const lon = row.longitude;
+  if (lat != null && lon != null) {
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      (lat === 0 && lon === 0) ||
+      lat < -90 ||
+      lat > 90 ||
+      lon < -180 ||
+      lon > 180
+    ) {
+      return true;
+    }
+  } else if ((lat != null) !== (lon != null)) {
+    return true;
+  }
+  return false;
+}
+
 export function initQASelectedPlots(
   rows: Array<{
     plotNumber: string;
@@ -478,6 +715,9 @@ export function filterSpatialQARows<
     elevationFlagged?: boolean;
     storedGisBgc?: string;
     suggestedGisBgc?: string;
+    diagnostics?: string[] | null;
+    latitude?: number | null;
+    longitude?: number | null;
   },
 >(rows: T[], onlyIssues: boolean): T[] {
   if (!onlyIssues) return rows;
@@ -487,7 +727,8 @@ export function filterSpatialQARows<
       r.divergenceFlagged ||
       r.longitudeSignFlipped ||
       r.elevationFlagged ||
-      (!r.storedGisBgc && !!r.suggestedGisBgc)
+      (!r.storedGisBgc && !!r.suggestedGisBgc) ||
+      hasInvalidOrDiagnosticQACoordinates(r)
   );
 }
 
@@ -531,24 +772,137 @@ export function syncMapAOIOverlay(
   });
 }
 
+const DEFAULT_BC_BOUNDS: [[number, number], [number, number]] = [
+  [-139.06, 48.2],
+  [-114.05, 60.0],
+];
+
+function computeShortestLongitudeArc(lons: number[]): [number, number] {
+  const sorted = [...lons].sort((a, b) => a - b);
+  if (sorted.length === 1) return [sorted[0], sorted[0]];
+  let maxGap = -1;
+  let gapAfterIdx = sorted.length - 1;
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const gap = sorted[i + 1] - sorted[i];
+    if (gap > maxGap) {
+      maxGap = gap;
+      gapAfterIdx = i;
+    }
+  }
+  const wrapGap = sorted[0] + 360 - sorted[sorted.length - 1];
+  if (wrapGap >= maxGap) {
+    return [sorted[0], sorted[sorted.length - 1]];
+  }
+  const west = sorted[gapAfterIdx + 1];
+  const east = sorted[gapAfterIdx] + 360;
+  return [west, east];
+}
+
+export function computeMapFitBounds(
+  payload: SpatialWorkbenchPayload | null
+):
+  | { kind: 'jump'; center: [number, number]; zoom: number }
+  | { kind: 'bounds'; bounds: [[number, number], [number, number]] }
+  | null {
+  if (!payload || payload.plottableCount === 0) return null;
+
+  const lons = payload.geoArrow?.lon;
+  const lats = payload.geoArrow?.lat;
+  const n = payload.geoArrow?.count ?? 0;
+
+  if (n > 0 && Array.isArray(lons) && Array.isArray(lats) && lons.length >= n && lats.length >= n) {
+    const regionalLons: number[] = [];
+    const regionalLats: number[] = [];
+    const allLons: number[] = [];
+    const allLats: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const lon = lons[i];
+      const lat = lats[i];
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+      allLons.push(lon);
+      allLats.push(lat);
+      if (lat >= 45.0 && lat <= 85.0 && lon >= -170.0 && lon <= -100.0) {
+        regionalLons.push(lon);
+        regionalLats.push(lat);
+      }
+    }
+    const useLons = regionalLons.length > 0 ? regionalLons : allLons;
+    const useLats = regionalLats.length > 0 ? regionalLats : allLats;
+    if (useLons.length > 0) {
+      const [westLon, eastLon] = computeShortestLongitudeArc(useLons);
+      let minLat = Infinity;
+      let maxLat = -Infinity;
+      for (const lat of useLats) {
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+      }
+      const lonSpan = eastLon - westLon;
+      const latSpan = maxLat - minLat;
+      if (lonSpan < 0.005 && latSpan < 0.005) {
+        const normCenterLon = westLon > 180 ? westLon - 360 : westLon;
+        return { kind: 'jump', center: [normCenterLon, minLat], zoom: 9.5 };
+      }
+      if (lonSpan > 70 || latSpan > 50) {
+        return { kind: 'bounds', bounds: DEFAULT_BC_BOUNDS };
+      }
+      return {
+        kind: 'bounds',
+        bounds: [
+          [westLon, minLat],
+          [eastLon, maxLat],
+        ],
+      };
+    }
+  }
+
+  if (!Array.isArray(payload.boundingBox) || payload.boundingBox.length < 4) return null;
+  let [minLon, minLat, maxLon, maxLat] = payload.boundingBox;
+  if (!Number.isFinite(minLon) || !Number.isFinite(maxLon) || !Number.isFinite(minLat) || !Number.isFinite(maxLat)) {
+    return null;
+  }
+  const directSpan = Math.abs(maxLon - minLon);
+  const antimeridianSpan = minLon + 360 - maxLon;
+  if (directSpan > 180 && antimeridianSpan > 0 && antimeridianSpan <= 60) {
+    const west = maxLon;
+    const east = minLon + 360;
+    if (antimeridianSpan < 0.005 && Math.abs(maxLat - minLat) < 0.005) {
+      return { kind: 'jump', center: [west > 180 ? west - 360 : west, minLat], zoom: 9.5 };
+    }
+    return {
+      kind: 'bounds',
+      bounds: [
+        [west, minLat],
+        [east, maxLat],
+      ],
+    };
+  }
+  if (directSpan > 70 || Math.abs(maxLat - minLat) > 50) {
+    return { kind: 'bounds', bounds: DEFAULT_BC_BOUNDS };
+  }
+  if (directSpan < 0.005 && Math.abs(maxLat - minLat) < 0.005) {
+    return { kind: 'jump', center: [minLon, minLat], zoom: 9.5 };
+  }
+  return {
+    kind: 'bounds',
+    bounds: [
+      [minLon, minLat],
+      [maxLon, maxLat],
+    ],
+  };
+}
+
 export function fitMapToPayloadBounds(
   mapInstance: any,
   payload: SpatialWorkbenchPayload | null
 ): void {
-  if (!mapInstance || !payload || payload.plottableCount === 0) return;
-  const [minLon, minLat, maxLon, maxLat] = payload.boundingBox;
-  if (!Number.isFinite(minLon) || !Number.isFinite(maxLon)) return;
-  if (Math.abs(maxLon - minLon) < 0.005 && Math.abs(maxLat - minLat) < 0.005) {
-    mapInstance.jumpTo({ center: [minLon, minLat], zoom: 9.5 });
+  if (!mapInstance) return;
+  const target = computeMapFitBounds(payload);
+  if (!target) return;
+  if (target.kind === 'jump') {
+    mapInstance.jumpTo({ center: target.center, zoom: target.zoom });
     return;
   }
-  mapInstance.fitBounds(
-    [
-      [minLon, minLat],
-      [maxLon, maxLat],
-    ],
-    { padding: 48, maxZoom: 10, duration: 500 }
-  );
+  mapInstance.fitBounds(target.bounds, { padding: 48, maxZoom: 10, duration: 500 });
 }
 
 export function buildSpatialDeckLayers(params: {

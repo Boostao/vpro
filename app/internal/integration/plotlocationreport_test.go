@@ -54,8 +54,11 @@ func TestPlotLocationsNumericNegationPreservesHistoricalValuesAndRejectsCoercion
 		cell vprocore.ProjectMetadataCell
 		want string
 	}{
-		{vprotest.SiviReal(0), "-0"}, {vprotest.SiviReal(math.Copysign(0, -1)), "0"},
-		{vprotest.SiviReal(-200), "-200"}, {vprotest.MetadataInteger("9007199254740993"), "-9007199254740993"},
+		{vprotest.SiviReal(0), "0"}, {vprotest.SiviReal(math.Copysign(0, -1)), "-0"},
+		{vprotest.SiviReal(125.4), "-125.4"}, {vprotest.SiviReal(-125.4), "-125.4"},
+		{vprotest.SiviReal(179.9), "179.9"}, {vprotest.SiviReal(-179.9), "-179.9"},
+		{vprotest.SiviReal(-200), "-200"}, {vprotest.MetadataInteger("125"), "-125"},
+		{vprotest.MetadataInteger("9007199254740993"), "9007199254740993"},
 		{vprotest.MetadataInteger("-9223372036854775807"), "-9223372036854775807"},
 	} {
 		got, err := vprocore.NegateLocationLongitude(test.cell)
@@ -85,12 +88,12 @@ func TestPlotLocationsNumericNegationPreservesHistoricalValuesAndRejectsCoercion
 	if err != nil || *got.Rows[1].Values[5].Real != 100 || *got.Rows[1].Values[6].Real != -200 {
 		t.Fatal("historical ranges silently clamped/dropped", got, err)
 	}
-	zero, err := vprocore.NegateLocationLongitude(vprotest.SiviReal(0))
+	negZero, err := vprocore.NegateLocationLongitude(vprotest.SiviReal(math.Copysign(0, -1)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !math.Signbit(*zero.Real) {
-		t.Fatal("source zero sign was repaired")
+	if !math.Signbit(*negZero.Real) {
+		t.Fatal("source negative zero sign was repaired")
 	}
 }
 

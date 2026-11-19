@@ -16,24 +16,28 @@ export type ValidatedPlotLocationReview = Omit<PlotLocationReview, 'report'> & {
   };
 };
 
+export const WESTERN_BC_MIN_ABS_LON = 100.0;
+export const WESTERN_BC_MAX_ABS_LON = 170.0;
+
 export function normalizeWesternLongitudeReal(value: number): number {
-  return value < 0 ? value : -value;
+  return value >= WESTERN_BC_MIN_ABS_LON && value <= WESTERN_BC_MAX_ABS_LON ? -value : value;
 }
 
 export function exactLongitudeNegation(original: ProjectMetadataCell, converted: ProjectMetadataCell): boolean {
   if (original.storage === 'real' && converted.storage === 'real' && original.real !== null && converted.real !== null) {
-    // Negative western BC longitudes are already signed West and must never flip positive (-(-lon) -> +lon).
-    if (original.real < 0) {
-      return Object.is(converted.real, original.real);
-    }
-    return Object.is(converted.real, -original.real);
+    // Only unsigned positive magnitudes in the Western BC / Alaska / Canadian North span [100, 170]
+    // are negated; already-negative longitudes (-125.4, -179.9) and Eastern Hemisphere / out-of-range
+    // values (+179.9, 0, +200) are preserved verbatim without silent antimeridian flipping.
+    const expected = normalizeWesternLongitudeReal(original.real);
+    return Object.is(converted.real, expected);
   }
   if (original.storage === 'integer' && converted.storage === 'integer' && original.integer !== null && converted.integer !== null) {
     if (original.integer === '-9223372036854775808') return false;
     const parsed = BigInt(original.integer);
-    return parsed < 0n
-      ? converted.integer === original.integer
-      : converted.integer === (-parsed).toString();
+    const shouldNegate = parsed >= 100n && parsed <= 170n;
+    return shouldNegate
+      ? converted.integer === (-parsed).toString()
+      : converted.integer === original.integer;
   }
   return false;
 }

@@ -66,7 +66,7 @@
       No data, audits, configuration or output files written.</p>
     <div class="table-scroll">
       <table>
-        <caption>Source location report fields: latitude then western-hemisphere longitude</caption>
+        <caption>Source location report fields: latitude then signed decimal longitude</caption>
         <thead><tr>{#each review.report.fields as field}<th id={`location-${field.key}`} scope="col">{field.label}</th>{/each}</tr></thead>
         <tbody>{#each rows as row (row.envRowId)}
           <tr data-plot-location-row={row.envRowId}>{#each review.report.fields as field, i}

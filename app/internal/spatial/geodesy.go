@@ -21,8 +21,8 @@ const (
 	utmFalseEasting    = 500000.0
 	utmFalseNorthing   = 0.0
 
-	MinSupportedUTMZone = 7
-	MaxSupportedUTMZone = 11
+	MinSupportedUTMZone = 2
+	MaxSupportedUTMZone = 15
 )
 
 var (
@@ -390,28 +390,40 @@ func EvaluatePlotGeodesy(input PlotGeodesyInput) PlotGeodesyEvaluation {
 		Diagnostics:     []string{},
 	}
 
-	if input.Latitude != nil && input.Longitude != nil &&
-		!math.IsNaN(*input.Latitude) && !math.IsInf(*input.Latitude, 0) &&
-		!math.IsNaN(*input.Longitude) && !math.IsInf(*input.Longitude, 0) &&
-		(*input.Latitude != 0 || *input.Longitude != 0) {
-		normLat, normLon, flipped, inBounds := NormalizeBCWesternCoordinates(*input.Latitude, *input.Longitude)
-		eval.HasLatLon = true
-		eval.NormalizedLat = &normLat
-		eval.NormalizedLon = &normLon
-		eval.LongitudeSignFlipped = flipped
-		if flipped {
-			eval.Diagnostics = append(eval.Diagnostics, fmt.Sprintf("Normalized unsigned Western longitude %.5f to %.5f", *input.Longitude, normLon))
-		}
-		if !inBounds {
+	if (input.Latitude != nil) != (input.Longitude != nil) {
+		eval.OutOfBounds = true
+		eval.Diagnostics = append(eval.Diagnostics, "Incomplete Latitude/Longitude pair (both coordinates are required)")
+	} else if input.Latitude != nil && input.Longitude != nil {
+		if math.IsNaN(*input.Latitude) || math.IsInf(*input.Latitude, 0) ||
+			math.IsNaN(*input.Longitude) || math.IsInf(*input.Longitude, 0) {
 			eval.OutOfBounds = true
-			eval.Diagnostics = append(eval.Diagnostics, fmt.Sprintf("Latitude/Longitude (%.5f, %.5f) is outside standard BC/Arctic bounds", normLat, normLon))
+			eval.Diagnostics = append(eval.Diagnostics, "Latitude/Longitude must be finite decimal degrees")
+		} else if *input.Latitude == 0 && *input.Longitude == 0 {
+			eval.OutOfBounds = true
+			eval.Diagnostics = append(eval.Diagnostics, "Zero placeholder coordinates (0, 0) require valid field Latitude/Longitude")
+		} else {
+			normLat, normLon, flipped, inBounds := NormalizeBCWesternCoordinates(*input.Latitude, *input.Longitude)
+			eval.HasLatLon = true
+			eval.NormalizedLat = &normLat
+			eval.NormalizedLon = &normLon
+			eval.LongitudeSignFlipped = flipped
+			if flipped {
+				eval.Diagnostics = append(eval.Diagnostics, fmt.Sprintf("Normalized unsigned Western longitude %.5f to %.5f", *input.Longitude, normLon))
+			}
+			if normLat < -90.0 || normLat > 90.0 || normLon < -180.0 || normLon > 180.0 {
+				eval.OutOfBounds = true
+				eval.Diagnostics = append(eval.Diagnostics, fmt.Sprintf("Latitude/Longitude (%.5f, %.5f) exceeds valid geographic bounds [-90..90, -180..180]", normLat, normLon))
+			} else if !inBounds {
+				eval.OutOfBounds = true
+				eval.Diagnostics = append(eval.Diagnostics, fmt.Sprintf("Latitude/Longitude (%.5f, %.5f) is outside standard BC/Arctic bounds", normLat, normLon))
+			}
+			if z, e, n, err := ProjectNAD83LatLonToUTM(normLat, normLon); err == nil {
+				eval.ComputedUTMZone = &z
+				eval.ComputedUTMEasting = &e
+				eval.ComputedUTMNorthing = &n
+			}
+			eval.BCGSMapSheet = ComputeBCGSMapSheet(normLat, normLon)
 		}
-		if z, e, n, err := ProjectNAD83LatLonToUTM(normLat, normLon); err == nil {
-			eval.ComputedUTMZone = &z
-			eval.ComputedUTMEasting = &e
-			eval.ComputedUTMNorthing = &n
-		}
-		eval.BCGSMapSheet = ComputeBCGSMapSheet(normLat, normLon)
 	}
 
 	if input.UTMZone != nil && strings.TrimSpace(*input.UTMZone) != "" && input.UTMEasting != nil && input.UTMNorthing != nil {

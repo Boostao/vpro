@@ -62,9 +62,10 @@ func NormalizeWesternBCCoordinates(lat, lon float64) (normLat, normLon float64, 
 }
 
 // NegateLocationLongitude returns the signed Western Hemisphere display longitude for stored numeric coordinates:
-// positive stored magnitudes (Access convention, e.g. 125.4) are negated to -125.4, whereas already-negative
-// western longitudes (e.g. -125.4 normalized by 3D Geospatial Workbench) are preserved as negative and never
-// flipped back into the Eastern Hemisphere.
+// positive stored magnitudes within the Western-BC / Alaska / Canadian North span [100.0, 170.0]
+// (Access unsigned-West convention, e.g. 125.4) are negated to -125.4, whereas already-negative longitudes
+// (e.g. -125.4, -179.9) and Eastern Hemisphere / out-of-range longitudes (e.g. +179.9, 0, +200) are preserved
+// without silent antimeridian flipping or clamping.
 func NegateLocationLongitude(cell ProjectMetadataCell) (ProjectMetadataCell, error) {
 	if _, err := MetadataCellValue(cell); err != nil {
 		return ProjectMetadataCell{}, err
@@ -75,19 +76,19 @@ func NegateLocationLongitude(cell ProjectMetadataCell) (ProjectMetadataCell, err
 		if err != nil || value == math.MinInt64 {
 			return ProjectMetadataCell{}, errors.New("location longitude negation exceeds exact signed64 representation; original storage unchanged")
 		}
-		if value < 0 {
-			text := strconv.FormatInt(value, 10)
+		if value >= int64(-WesternBCMaxLon) && value <= int64(-WesternBCMinLon) {
+			text := strconv.FormatInt(-value, 10)
 			return ProjectMetadataCell{Storage: "integer", Integer: &text}, nil
 		}
-		text := strconv.FormatInt(-value, 10)
+		text := strconv.FormatInt(value, 10)
 		return ProjectMetadataCell{Storage: "integer", Integer: &text}, nil
 	case "real":
 		value := *cell.Real
-		if value < 0 {
-			return ProjectMetadataCell{Storage: "real", Real: &value}, nil
+		if value >= -WesternBCMaxLon && value <= -WesternBCMinLon {
+			negated := -value
+			return ProjectMetadataCell{Storage: "real", Real: &negated}, nil
 		}
-		negated := -value
-		return ProjectMetadataCell{Storage: "real", Real: &negated}, nil
+		return ProjectMetadataCell{Storage: "real", Real: &value}, nil
 	default:
 		return ProjectMetadataCell{}, errors.New("location longitude requires original numeric storage; no text/BLOB coercion or inferred coordinates")
 	}

@@ -78,8 +78,8 @@ test('Earth transport rejects foreign scopes, malformed pages/cells, repeated pa
   await assert.rejects(validate(flipped));
 
   const zeros = document();
-  zeros.rows[0].storedLongitude = cell('real', 0); zeros.rows[0].longitude = cell('real', -0);
-  zeros.rows[1].storedLongitude = cell('real', -0); zeros.rows[1].longitude = cell('real', 0);
+  zeros.rows[0].storedLongitude = cell('real', 0); zeros.rows[0].longitude = cell('real', 0);
+  zeros.rows[1].storedLongitude = cell('real', -0); zeros.rows[1].longitude = cell('real', -0);
   await assert.rejects(validate(zeros));
 });
 

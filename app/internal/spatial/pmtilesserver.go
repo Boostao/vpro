@@ -2,8 +2,10 @@ package spatial
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -38,6 +40,7 @@ type PMTilesArchiveStatus struct {
 	MinZoom          int    `json:"minZoom"`
 	MaxZoom          int    `json:"maxZoom"`
 	SizeBytes        int64  `json:"sizeBytes"`
+	Warning          string `json:"warning,omitempty"`
 }
 
 // PMTilesManifest reports available offline PMTiles archives to the Svelte 5 MapLibre workbench.
@@ -57,6 +60,7 @@ type resolvedPMTilesSource struct {
 	fallbackOverview bool
 	minZoom          int
 	maxZoom          int
+	warning          string
 }
 
 func validatePMTilesBasename(raw string) (string, bool) {
@@ -78,26 +82,105 @@ func validatePMTilesBasename(raw string) (string, bool) {
 	return base, true
 }
 
-func inspectPMTilesZoomBoundsFromBytes(header []byte) (minZ, maxZ int) {
-	if len(header) >= 102 && string(header[:7]) == "PMTiles" && header[7] == 3 {
-		_ = binary.LittleEndian.Uint64(header[8:16])
-		return int(header[100]), int(header[101])
+const maxPMTilesRootDirBytes = 16 * 1024 * 1024
+
+func validatePMTilesHeaderAndRootDir(
+	hdr pmtilesHeaderV3,
+	totalBytes int64,
+	readChunk func(offset, length uint64) ([]byte, error),
+) (minZ, maxZ int, err error) {
+	if totalBytes < 127 {
+		return 0, 0, errors.New("PMTiles archive is shorter than 127-byte header")
 	}
-	return 0, 0
+	uSize := uint64(totalBytes)
+	if hdr.minZoom > hdr.maxZoom || hdr.maxZoom > 30 {
+		return 0, 0, fmt.Errorf("invalid PMTiles zoom bounds z%d..z%d", hdr.minZoom, hdr.maxZoom)
+	}
+	if hdr.internalCompression != 1 && hdr.internalCompression != 2 {
+		return 0, 0, fmt.Errorf("unsupported PMTiles internal compression %d", hdr.internalCompression)
+	}
+	if hdr.tileCompression < 1 || hdr.tileCompression > 4 {
+		return 0, 0, fmt.Errorf("unsupported PMTiles tile compression %d", hdr.tileCompression)
+	}
+	if hdr.rootDirOffset < 127 || hdr.rootDirBytes == 0 || hdr.rootDirBytes > maxPMTilesRootDirBytes ||
+		hdr.rootDirOffset > uSize || hdr.rootDirBytes > uSize-hdr.rootDirOffset {
+		return 0, 0, errors.New("PMTiles root directory range is out of bounds")
+	}
+	if hdr.jsonMetadataBytes > 0 && (hdr.jsonMetadataOffset < 127 || hdr.jsonMetadataOffset > uSize || hdr.jsonMetadataBytes > uSize-hdr.jsonMetadataOffset) {
+		return 0, 0, errors.New("PMTiles metadata range is out of bounds")
+	}
+	if hdr.leafDirsBytes > 0 && (hdr.leafDirsOffset < 127 || hdr.leafDirsOffset > uSize || hdr.leafDirsBytes > uSize-hdr.leafDirsOffset) {
+		return 0, 0, errors.New("PMTiles leaf directory range is out of bounds")
+	}
+	if hdr.tileDataBytes == 0 || hdr.tileDataOffset < 127 || hdr.tileDataOffset > uSize || hdr.tileDataBytes > uSize-hdr.tileDataOffset {
+		return 0, 0, errors.New("PMTiles tile data range is out of bounds")
+	}
+	rootRaw, err := readChunk(hdr.rootDirOffset, hdr.rootDirBytes)
+	if err != nil {
+		return 0, 0, fmt.Errorf("read PMTiles root directory: %w", err)
+	}
+	rootDecomp, err := decompressPMTilesChunk(rootRaw, hdr.internalCompression)
+	if err != nil {
+		return 0, 0, fmt.Errorf("decompress PMTiles root directory: %w", err)
+	}
+	entries, err := parsePMTilesDirectory(rootDecomp)
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse PMTiles root directory: %w", err)
+	}
+	if len(entries) == 0 {
+		return 0, 0, errors.New("PMTiles root directory contains zero tile entries")
+	}
+	return int(hdr.minZoom), int(hdr.maxZoom), nil
 }
 
-func inspectPMTilesZoomBoundsFromFile(path string) (minZ, maxZ int) {
+func validatePMTilesArchiveBytes(data []byte) (minZ, maxZ int, err error) {
+	if len(data) < 127 {
+		return 0, 0, errors.New("PMTiles archive buffer is shorter than 127 bytes")
+	}
+	hdr, err := parsePMTilesHeaderV3(data[:127])
+	if err != nil {
+		return 0, 0, err
+	}
+	return validatePMTilesHeaderAndRootDir(hdr, int64(len(data)), func(offset, length uint64) ([]byte, error) {
+		return data[offset : offset+length], nil
+	})
+}
+
+func validatePMTilesArchiveFile(path string) (sizeBytes int64, modTime time.Time, minZ, maxZ int, err error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0, time.Time{}, 0, 0, err
+	}
+	if !info.Mode().IsRegular() {
+		return 0, time.Time{}, 0, 0, errors.New("PMTiles path is not a regular file")
+	}
+	if info.Size() < 127 {
+		return info.Size(), info.ModTime().UTC(), 0, 0, errors.New("PMTiles file is shorter than 127 bytes")
+	}
 	f, err := os.Open(path)
 	if err != nil {
-		return 0, 0
+		return info.Size(), info.ModTime().UTC(), 0, 0, err
 	}
 	defer f.Close()
-	var buf [127]byte
-	n, err := f.Read(buf[:])
-	if err != nil || n < 102 {
-		return 0, 0
+	var hdrBuf [127]byte
+	if _, err := io.ReadFull(f, hdrBuf[:]); err != nil {
+		return info.Size(), info.ModTime().UTC(), 0, 0, err
 	}
-	return inspectPMTilesZoomBoundsFromBytes(buf[:n])
+	hdr, err := parsePMTilesHeaderV3(hdrBuf[:])
+	if err != nil {
+		return info.Size(), info.ModTime().UTC(), 0, 0, err
+	}
+	minZ, maxZ, err = validatePMTilesHeaderAndRootDir(hdr, info.Size(), func(offset, length uint64) ([]byte, error) {
+		buf := make([]byte, length)
+		if _, rErr := f.ReadAt(buf, int64(offset)); rErr != nil {
+			return nil, rErr
+		}
+		return buf, nil
+	})
+	if err != nil {
+		return info.Size(), info.ModTime().UTC(), 0, 0, err
+	}
+	return info.Size(), info.ModTime().UTC(), minZ, maxZ, nil
 }
 
 // ResolveSpatialExtraDirs discovers optional offline PMTiles directories from
@@ -157,21 +240,24 @@ func resolvePMTilesArchive(name, dataDir string, extraDirs []string) (resolvedPM
 		return resolvedPMTilesSource{}, false
 	}
 	isOverviewName := strings.EqualFold(clean, PMTilesOverviewArchiveName)
+	hadCorruptLocal := false
 
 	// 1. Check <dataDir>/maps/<name>.pmtiles
 	if strings.TrimSpace(dataDir) != "" {
 		candidate := filepath.Join(dataDir, "maps", clean)
-		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() && info.Size() >= 127 {
-			minZ, maxZ := inspectPMTilesZoomBoundsFromFile(candidate)
-			return resolvedPMTilesSource{
-				filePath:       candidate,
-				modTime:        info.ModTime().UTC(),
-				sizeBytes:      info.Size(),
-				source:         "dataDir",
-				fullResolution: !isOverviewName && maxZ > 6,
-				minZoom:        minZ,
-				maxZoom:        maxZ,
-			}, true
+		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
+			if sizeBytes, modTime, minZ, maxZ, vErr := validatePMTilesArchiveFile(candidate); vErr == nil {
+				return resolvedPMTilesSource{
+					filePath:       candidate,
+					modTime:        modTime,
+					sizeBytes:      sizeBytes,
+					source:         "dataDir",
+					fullResolution: !isOverviewName && maxZ > 6,
+					minZoom:        minZ,
+					maxZoom:        maxZ,
+				}, true
+			}
+			hadCorruptLocal = true
 		}
 	}
 
@@ -182,39 +268,58 @@ func resolvePMTilesArchive(name, dataDir string, extraDirs []string) (resolvedPM
 			continue
 		}
 		for _, candidate := range []string{filepath.Join(dir, clean), filepath.Join(dir, "maps", clean)} {
-			if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() && info.Size() >= 127 {
-				minZ, maxZ := inspectPMTilesZoomBoundsFromFile(candidate)
-				return resolvedPMTilesSource{
-					filePath:       candidate,
-					modTime:        info.ModTime().UTC(),
-					sizeBytes:      info.Size(),
-					source:         "extraDir",
-					fullResolution: !isOverviewName && maxZ > 6,
-					minZoom:        minZ,
-					maxZoom:        maxZ,
-				}, true
+			if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
+				if sizeBytes, modTime, minZ, maxZ, vErr := validatePMTilesArchiveFile(candidate); vErr == nil {
+					warn := ""
+					if hadCorruptLocal {
+						warn = fmt.Sprintf("Local map archive %s in your maps folder is unreadable or incomplete; loaded valid map archive from configured map assets instead.", clean)
+					}
+					return resolvedPMTilesSource{
+						filePath:       candidate,
+						modTime:        modTime,
+						sizeBytes:      sizeBytes,
+						source:         "extraDir",
+						fullResolution: !isOverviewName && maxZ > 6,
+						minZoom:        minZ,
+						maxZoom:        maxZ,
+						warning:        warn,
+					}, true
+				}
+				hadCorruptLocal = true
 			}
 		}
 	}
 
-	// 3. Embedded overview fallback for bc-overview.pmtiles or absent provincial archives on fresh install
+	// 3. Embedded overview fallback for bc-overview.pmtiles or absent/corrupt provincial archives
 	canFallbackToEmbedded := isOverviewName ||
 		strings.EqualFold(clean, PMTilesBGCArchiveName) ||
 		strings.EqualFold(clean, PMTilesAdminArchiveName)
-	if canFallbackToEmbedded && len(resources.BCOverviewPMTiles) >= 127 {
-		minZ, maxZ := inspectPMTilesZoomBoundsFromBytes(resources.BCOverviewPMTiles)
-		return resolvedPMTilesSource{
-			embedded:         resources.BCOverviewPMTiles,
-			modTime:          time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-			sizeBytes:        int64(len(resources.BCOverviewPMTiles)),
-			source:           "embedded-overview",
-			fullResolution:   false,
-			fallbackOverview: !isOverviewName,
-			minZoom:          minZ,
-			maxZoom:          maxZ,
-		}, true
+	if canFallbackToEmbedded {
+		if minZ, maxZ, vErr := validatePMTilesArchiveBytes(resources.BCOverviewPMTiles); vErr == nil {
+			warn := ""
+			if hadCorruptLocal {
+				warn = fmt.Sprintf("Local map archive %s is unreadable or incomplete; using the built-in BC overview map (z%d..%d) instead.", clean, minZ, maxZ)
+			}
+			return resolvedPMTilesSource{
+				embedded:         resources.BCOverviewPMTiles,
+				modTime:          time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+				sizeBytes:        int64(len(resources.BCOverviewPMTiles)),
+				source:           "embedded-overview",
+				fullResolution:   false,
+				fallbackOverview: !isOverviewName,
+				minZoom:          minZ,
+				maxZoom:          maxZ,
+				warning:          warn,
+			}, true
+		}
 	}
 
+	if hadCorruptLocal {
+		return resolvedPMTilesSource{
+			source:  "missing",
+			warning: fmt.Sprintf("Local map archive %s is unreadable or incomplete.", clean),
+		}, false
+	}
 	return resolvedPMTilesSource{}, false
 }
 
@@ -259,8 +364,9 @@ func BuildPMTilesManifest(dataDir string, extraDirs ...string) PMTilesManifest {
 	for _, name := range sortedNames {
 		resolved, ok := resolvePMTilesArchive(name, dataDir, extraDirs)
 		status := PMTilesArchiveStatus{
-			Name: name,
-			URL:  "/maps/" + name,
+			Name:    name,
+			URL:     "/maps/" + name,
+			Warning: resolved.warning,
 		}
 		if ok {
 			status.Source = resolved.source

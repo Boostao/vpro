@@ -31,16 +31,16 @@ test('location review keeps source order, leading zeros, NULL/empty and duplicat
   assert.equal(JSON.stringify(await validate(empty)),JSON.stringify(empty));
 });
 
-test('location longitude normalization preserves already-negative western longitudes and negates non-negative inputs',async()=>{
+test('location longitude normalization preserves already-negative and Eastern longitudes while negating [100, 170] inputs',async()=>{
   for(const [storage,original,converted] of [
-    ['real',0,-0],['real',-0,0],['real',-125.4,-125.4],['real',125.4,-125.4],['real',-190,-190],['integer','0','0'],
-    ['integer','9223372036854775807','-9223372036854775807'],['integer','-9007199254740993','-9007199254740993']]) {
+    ['real',0,0],['real',-0,-0],['real',-125.4,-125.4],['real',125.4,-125.4],['real',179.9,179.9],['real',-179.9,-179.9],['real',-190,-190],['integer','0','0'],
+    ['integer','125','-125'],['integer','9223372036854775807','9223372036854775807'],['integer','-9007199254740993','-9007199254740993']]) {
     const value=document();value.report.rows[0].storedLongitude=cell(storage,original);
     value.report.rows[0].values[6]=cell(storage,converted);
     const result=await validate(value);
     assert.ok(Object.is(result.report.rows[0].values[6][storage],converted));
   }
-  for(const [original,converted] of [[0,0],[-0,-0],[-123,123],[-190,190],[123,123]]) {
+  for(const [original,converted] of [[0,-0],[-0,0],[-123,123],[-190,190],[123,123],[179.9,-179.9]]) {
     const value=document();value.report.rows[0].storedLongitude=cell('real',original);
     value.report.rows[0].values[6]=cell('real',converted);
     await assert.rejects(validate(value));

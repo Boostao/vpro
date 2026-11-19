@@ -180,7 +180,7 @@ func TestGoogleEarthLocationsRawDescriptionsAndRejectedInputs(t *testing.T) {
 	env.Rows[0].Cells[5] = vprotest.SiviReal(100)
 	env.Rows[0].Cells[6] = vprotest.SiviReal(200)
 	got, err := planGoogleEarthLocations(context.Background(), "Project", "Subset", "Zone", env, su)
-	if err != nil || *got.Rows[0].Longitude.Real != -200 || *got.Rows[0].Latitude.Real != 100 {
+	if err != nil || *got.Rows[0].Longitude.Real != 200 || *got.Rows[0].Latitude.Real != 100 {
 		t.Fatal("historical coordinate ranges must not be clamped during raw preparation", got, err)
 	}
 }

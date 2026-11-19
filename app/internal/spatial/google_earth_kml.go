@@ -70,13 +70,21 @@ func prepareGoogleEarthKML(ctx context.Context, title string, points []googleEar
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
+		plotLabel := fmt.Sprintf("plot %q", point.Name)
+		if strings.TrimSpace(point.Name) == "" {
+			plotLabel = fmt.Sprintf("unnamed plot (#%d)", i+1)
+		}
 		for _, field := range []struct{ name, value string }{{"name", point.Name}, {"description", point.Description}} {
 			if err := validateGoogleEarthXMLText(field.value); err != nil {
-				return nil, fmt.Errorf("Google Earth point %d %s: %w", i, field.name, err)
+				return nil, fmt.Errorf("Google Earth KML %s %s: %w", plotLabel, field.name, err)
 			}
 		}
 		if err := validateGoogleEarthKMLCoordinates(point.Longitude, point.Latitude); err != nil {
-			return nil, fmt.Errorf("Google Earth point %d %w", i, err)
+			return nil, fmt.Errorf("Google Earth KML %s coordinates (latitude %s, longitude %s): %w",
+				plotLabel,
+				strconv.FormatFloat(point.Latitude, 'f', -1, 64),
+				strconv.FormatFloat(point.Longitude, 'f', -1, 64),
+				err)
 		}
 	}
 	var buffer bytes.Buffer
@@ -170,36 +178,61 @@ func planGoogleEarthKMLPoints(ctx context.Context, rows []googleEarthLocation) (
 		return nil, err
 	}
 	points := make([]googleEarthKMLPoint, 0, len(rows))
+	var badCoordSummaries []string
+	var firstCoordErr error
 	for i, row := range rows {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		fail := func(field string, err error) ([]googleEarthKMLPoint, error) {
-			return nil, fmt.Errorf("Google Earth point %d Env row %q membership %q %s: %w", i, row.EnvRowID, row.MembershipRowID, field, err)
-		}
 		name, err := googleEarthKMLText(row.PlotNumber)
 		if err != nil {
-			return fail("PlotNumber", err)
+			return nil, fmt.Errorf("Google Earth KML plot number (#%d) PlotNumber: %w", i+1, err)
+		}
+		plotLabel := fmt.Sprintf("plot %q", name)
+		if strings.TrimSpace(name) == "" {
+			plotLabel = fmt.Sprintf("unnamed plot (#%d)", i+1)
 		}
 		description, err := googleEarthKMLText(row.Description)
 		if err != nil {
-			return fail("description", err)
+			return nil, fmt.Errorf("Google Earth KML %s description: %w", plotLabel, err)
 		}
 		longitude, err := googleEarthKMLNumber(row.Longitude)
 		if err != nil {
-			return fail("Longitude", err)
+			return nil, fmt.Errorf("Google Earth KML %s Longitude: %w", plotLabel, err)
 		}
 		latitude, err := googleEarthKMLNumber(row.Latitude)
 		if err != nil {
-			return fail("Latitude", err)
+			return nil, fmt.Errorf("Google Earth KML %s Latitude: %w", plotLabel, err)
 		}
 		if err := validateGoogleEarthKMLCoordinates(longitude, latitude); err != nil {
-			return fail("coordinates", err)
+			if firstCoordErr == nil {
+				firstCoordErr = err
+			}
+			badCoordSummaries = append(badCoordSummaries, fmt.Sprintf(
+				"%s (latitude %s, longitude %s)",
+				plotLabel,
+				strconv.FormatFloat(latitude, 'f', -1, 64),
+				strconv.FormatFloat(longitude, 'f', -1, 64),
+			))
+			continue
 		}
 		points = append(points, googleEarthKMLPoint{Name: name, Description: description, Longitude: longitude, Latitude: latitude})
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if len(badCoordSummaries) > 0 {
+		shown := badCoordSummaries
+		suffix := ""
+		if len(shown) > 5 {
+			suffix = fmt.Sprintf(" (and %d more)", len(shown)-5)
+			shown = shown[:5]
+		}
+		if len(badCoordSummaries) == 1 {
+			return nil, fmt.Errorf("Google Earth KML cannot export %s because its coordinates are out of range (%w)", shown[0], firstCoordErr)
+		}
+		return nil, fmt.Errorf("Google Earth KML cannot export %d plots with out-of-range coordinates [%s]%s (%w)",
+			len(badCoordSummaries), strings.Join(shown, "; "), suffix, firstCoordErr)
 	}
 	return points, nil
 }

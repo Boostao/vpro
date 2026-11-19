@@ -39,7 +39,7 @@
       </div>
 
       <dl class="wb-kv-grid">
-        <div><dt>NAD83 Lat, Western Lon</dt><dd>{selectedPlot.lat.toFixed(5)}, {selectedPlot.lon.toFixed(5)}</dd></div>
+        <div><dt>NAD83 Lat, Lon</dt><dd>{selectedPlot.lat.toFixed(5)}, {selectedPlot.lon.toFixed(5)}</dd></div>
         <div><dt>Active SiteUnit</dt><dd>{selectedPlot.siteUnit || 'Unassigned'}</dd></div>
         <div><dt>Field BGC</dt><dd>{selectedPlot.fieldBgc || 'Blank'}</dd></div>
         <div>
@@ -65,9 +65,13 @@
       {:else if selectedSuggestion}
         <div class="wb-suggestion-box">
           <strong>Map Overlay Suggestion ({selectedSuggestion.bgcSource || 'overview'} z{selectedSuggestion.bgcZoom}):</strong>
-          <div>BGC: {selectedSuggestion.gisBgc} ({selectedSuggestion.zoneName || 'BC'})</div>
-          <div>NAD83 UTM Zone {selectedSuggestion.utmZone}: {selectedSuggestion.utmEasting.toFixed(1)} E, {selectedSuggestion.utmNorthing.toFixed(1)} N</div>
-          <div>BCGS 1:20k Sheet: {selectedSuggestion.ntsMapSheet} | District: {selectedSuggestion.fsRegionDistrict}</div>
+          <div>BGC: {selectedSuggestion.gisBgc || '-'} ({selectedSuggestion.zoneName || 'BC'})</div>
+          {#if selectedSuggestion.utmZone > 0}
+            <div>NAD83 UTM Zone {selectedSuggestion.utmZone}: {selectedSuggestion.utmEasting.toFixed(1)} E, {selectedSuggestion.utmNorthing.toFixed(1)} N</div>
+          {:else}
+            <div>NAD83 UTM: Outside supported Canadian / BC UTM zones</div>
+          {/if}
+          <div>BCGS 1:20k Sheet: {selectedSuggestion.ntsMapSheet || '-'} | District: {selectedSuggestion.fsRegionDistrict || '-'}</div>
           {#if selectedSuggestion.terrainSanityNote}
             <div class="wb-muted">{selectedSuggestion.terrainSanityNote}</div>
           {/if}

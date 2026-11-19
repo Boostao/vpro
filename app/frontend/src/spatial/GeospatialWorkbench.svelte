@@ -22,10 +22,12 @@
   } from '../../bindings/github.com/boostao/vpro/app';
   import type { GeoPackageExportOutcome } from '../../bindings/github.com/boostao/vpro/app/internal/interchange/models';
   import {
-    DEFAULT_BC_VIEW_STATE, buildMapLibreGeospatialStyle, buildSpatialDeckLayers, classifyWMSMapError,
-    computeViewportAOIRectangle, decodeFlatGeobufPoints, detectSpatialComputeBackend, executeSpatialFilterKernel,
-    extractDistinctZones, filterWorkbenchPlots, fitMapToPayloadBounds, initQASelectedPlots,
-    materializeWorkbenchPlots, pointInPolygonRing, syncMapAOIOverlay,
+    DEFAULT_BC_VIEW_STATE, buildDefaultGeoPackageExportPath, buildMapLibreGeospatialStyle, buildSpatialDeckLayers,
+    classifyPMTilesMapError, classifyWMSMapError, computeViewportAOIRectangle, decodeFlatGeobufPoints,
+    detectSpatialComputeBackend, executeSpatialFilterKernel, extractDistinctZones, filterWorkbenchPlots,
+    fitMapToPayloadBounds, hasInvalidOrDiagnosticQACoordinates, initQASelectedPlots, isAbsoluteFilesystemPath,
+    materializeWorkbenchPlots, pointInPolygonRing, resolveGeoPackageDestinationPath, summarizePMTilesManifestWarnings,
+    syncMapAOIOverlay,
     type DiscrepancyVectorSegment, type MapLayerVisibility, type SpatialAOICommitInput,
     type SpatialComputeBackendInfo, type SpatialGpkgExportInput, type SpatialStampOptions, type WorkbenchPlotPoint,
   } from './geospatialWorkbench';
@@ -57,6 +59,8 @@
   let statusMsg = $state('');
   let mapRenderWarning = $state('');
   let wmsOfflineWarning = $state('');
+  let pmtilesArchiveWarning = $state('');
+  let pmtilesGraticuleFallback = $state(false);
   let computeInfo = $state<SpatialComputeBackendInfo>({
     backend: 'webgl2-cpu', available: false, adapterLabel: 'Probing GPU compute...', maxComputeWorkgroupSizeX: 0, fallbackReason: null,
   });
@@ -93,6 +97,13 @@
   const aoiMatchedSet = $derived(new Set(aoiPreview?.plotNumbers ?? []));
   const filteredPoints = $derived(filterWorkbenchPlots(plotPoints, zoneFilter, plotSearch));
   const distinctZones = $derived(extractDistinctZones(plotPoints));
+  const qaCoordinateDiagnosticRows = $derived(
+    (qaReport?.rows ?? []).filter(
+      (r) =>
+        hasInvalidOrDiagnosticQACoordinates(r) &&
+        !(r.bgcMismatch && (r.diagnostics?.length ?? 0) === 1 && (r.diagnostics?.[0] ?? '').startsWith('Field BGC'))
+    )
+  );
 
   const setBusyState = (nextBusy: boolean) => onBusyChange?.(nextBusy);
 
@@ -138,7 +149,10 @@
       wmsOfflineWarning = nextWarn;
     } else wmsOfflineWarning = '';
     if (!mapInstance) return;
-    const style = buildMapLibreGeospatialStyle(payload?.manifest, $state.snapshot(visibility));
+    const forceGraticule = typeof pmtilesGraticuleFallback !== 'undefined' ? pmtilesGraticuleFallback : false;
+    const style = forceGraticule
+      ? buildMapLibreGeospatialStyle(payload?.manifest, $state.snapshot(visibility), { forceGraticuleFallback: true })
+      : buildMapLibreGeospatialStyle(payload?.manifest, $state.snapshot(visibility));
     mapInstance.setStyle(style as any);
     mapInstance.easeTo({ pitch: visibility.hillshade3D ? 52 : 0, bearing: visibility.hillshade3D ? -14 : 0, duration: 450 });
     mapInstance.once('styledata', () => { syncMapAOIOverlay(mapInstance, aoiVertices); refreshDeckOverlay(); });
@@ -194,6 +208,28 @@
             });
           }
           wmsOfflineWarning = wmsWarn;
+          return;
+        }
+        if (typeof classifyPMTilesMapError === 'function') {
+          const pmWarn = classifyPMTilesMapError(evt);
+          if (pmWarn) {
+            if (typeof pmtilesArchiveWarning !== 'undefined' && pmWarn !== pmtilesArchiveWarning && typeof notifications !== 'undefined') {
+              notifications.warning('Local map archive unreadable', pmWarn, {
+                category: 'background',
+                source: '3D Map',
+                contextTag: project || undefined,
+                toast: true,
+              });
+            }
+            if (typeof pmtilesArchiveWarning !== 'undefined') pmtilesArchiveWarning = pmWarn;
+            if (typeof pmtilesGraticuleFallback !== 'undefined' && !pmtilesGraticuleFallback) {
+              pmtilesGraticuleFallback = true;
+              const fallbackStyle = buildMapLibreGeospatialStyle(payload?.manifest, $state.snapshot(visibility), {
+                forceGraticuleFallback: true,
+              });
+              map.setStyle(fallbackStyle as any);
+            }
+          }
         }
       });
       map.on('click', (evt) => {
@@ -228,6 +264,20 @@
       ]);
       if (!alive || gen !== loadGeneration) return;
       payload = wb;
+      pmtilesGraticuleFallback = false;
+      const manifestWarn = summarizePMTilesManifestWarnings(wb?.manifest) ?? '';
+      if (manifestWarn && manifestWarn !== pmtilesArchiveWarning && typeof notifications !== 'undefined') {
+        notifications.warning('Local map archive unreadable', manifestWarn, {
+          category: 'background',
+          source: '3D Map',
+          contextTag: project || undefined,
+          toast: true,
+        });
+      }
+      pmtilesArchiveWarning = manifestWarn;
+      if (wb?.projectPath && (!gpkgDestPath.trim() || !isAbsoluteFilesystemPath(gpkgDestPath))) {
+        gpkgDestPath = buildDefaultGeoPackageExportPath(wb.project || project, wb.projectPath);
+      }
       const mat = materializeWorkbenchPlots(wb?.geoArrow);
       plotPoints = mat.points; plotCoordsF32 = mat.coordsFloat32; discrepancySegments = mat.discrepancyVectors;
       flatGeobufCount = decodeFlatGeobufPoints(fgbRaw).length;
@@ -416,7 +466,22 @@
       }
       return;
     }
-    const destinationPath = rawDest.toLowerCase().endsWith('.gpkg') ? rawDest : `${rawDest}.gpkg`;
+    const resolvedDest =
+      typeof resolveGeoPackageDestinationPath === 'function'
+        ? resolveGeoPackageDestinationPath(rawDest, project, payload?.projectPath)
+        : rawDest.startsWith('/') || /^[A-Za-z]:[\\/]/.test(rawDest) || rawDest.startsWith('\\\\')
+          ? rawDest.toLowerCase().endsWith('.gpkg')
+            ? rawDest
+            : `${rawDest}.gpkg`
+          : null;
+    if (!resolvedDest) {
+      errorMsg = 'Enter an absolute destination folder path (not a bare relative filename) before exporting GeoPackage.';
+      if (typeof notifications !== 'undefined') {
+        notifications.error('GeoPackage destination required', errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
+      }
+      return;
+    }
+    const destinationPath = resolvedDest;
     gpkgExporting = true; errorMsg = ''; statusMsg = ''; setBusyState(true);
     try {
       const outcome = await ImportExportService.ExportGeoPackage(contextId, { ...opts, destinationPath });
@@ -492,8 +557,19 @@
     onRefreshDeck={refreshDeckOverlay}
     onFitBounds={() => fitMapToPayloadBounds(mapInstance, payload)}
     onRefreshStream={() => void loadWorkbenchData()}
-    onToggleGpkgPanel={(defaultPath) => { if (!gpkgDestPath.trim()) gpkgDestPath = defaultPath; gpkgPanelOpen = !gpkgPanelOpen; }}
+    onToggleGpkgPanel={(defaultPath) => {
+      if (defaultPath && (!gpkgDestPath.trim() || !isAbsoluteFilesystemPath(gpkgDestPath))) {
+        gpkgDestPath = defaultPath;
+      }
+      gpkgPanelOpen = !gpkgPanelOpen;
+    }}
   />
+
+  {#if pmtilesArchiveWarning}
+    <div class="wb-alert wb-alert-warn" role="alert" data-pmtiles-fallback-warning>
+      {pmtilesArchiveWarning}
+    </div>
+  {/if}
 
   {#if gpkgPanelOpen}
     <SpatialGpkgExportPanel
@@ -550,6 +626,27 @@
           {qaReport} bind:qaSelectedPlots {loading} {mutating}
           onReaudit={loadBatchAuditQA} onApplyStamp={applyAuto1SpatialStamp} {onOpenPlot}
         />
+        {#if qaCoordinateDiagnosticRows.length > 0}
+          <div class="wb-panel-body wb-coord-diag-wrap" data-qa-coordinate-diagnostics>
+            <div class="wb-card">
+              <h3>Coordinate Diagnostics ({qaCoordinateDiagnosticRows.length})</h3>
+              <ul class="wb-diag-list">
+                {#each qaCoordinateDiagnosticRows.slice(0, 60) as row (row.plotNumber)}
+                  <li>
+                    <button
+                      type="button"
+                      class="wb-link-btn mono"
+                      onclick={() => onOpenPlot?.(row.plotNumber)}
+                    >
+                      {row.plotNumber}
+                    </button>:
+                    {(row.diagnostics ?? []).join('; ') || 'Invalid or incomplete plot coordinates'}
+                  </li>
+                {/each}
+              </ul>
+            </div>
+          </div>
+        {/if}
       {/if}
     </aside>
   </div>
@@ -567,5 +664,33 @@
   .geospatial-workbench :global(.wb-badge-gold) {
     background: #FCBA19;
     color: #003366;
+  }
+  .wb-alert-warn {
+    background: #F2F2F2;
+    border: 1px solid #D8D8D8;
+    border-left: 4px solid #FCBA19;
+    color: #003366;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    margin: 0.35rem 0;
+  }
+  .wb-coord-diag-wrap {
+    padding-top: 0;
+  }
+  .wb-coord-diag-wrap h3 {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #003366;
+    margin: 0 0 0.4rem 0;
+  }
+  .wb-diag-list {
+    margin: 0;
+    padding-left: 1rem;
+    font-size: 0.8125rem;
+    color: #313132;
+  }
+  .wb-diag-list li {
+    margin-bottom: 0.25rem;
   }
 </style>

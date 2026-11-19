@@ -88,8 +88,8 @@ func TestGoogleEarthKMLPointsRejectsUnavailableAndMalformedCells(t *testing.T) {
 				rows[1].Description = cell
 			}
 			points, err := planGoogleEarthKMLPoints(context.Background(), rows)
-			if err == nil || points != nil || !strings.Contains(err.Error(), `Env row "-1" membership "3" `+field) {
-				t.Fatal("unsupported/malformed text produced partial points or lost physical error context", field, cell, err)
+			if err == nil || points != nil || !strings.Contains(err.Error(), field) || strings.Contains(err.Error(), "Env row") {
+				t.Fatal("unsupported/malformed text produced partial points or exposed internal rowid", field, cell, err)
 			}
 		}
 	}
