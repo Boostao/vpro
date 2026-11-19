@@ -14,6 +14,10 @@
     validateProjectNameInput,
     parseSessionPortInput,
     parseAuditChainLimitInput,
+    formatAuditChainStatusMessage,
+    getRememberedSessionOverrides,
+    setRememberedSessionOverrides,
+    clearRememberedSessionOverrides,
     buildSubsetFilterDraft,
     canUploadStagingSubmission,
     buildInitialCloudMergeFieldResolutions,
@@ -193,6 +197,20 @@
         if (mountGen !== generation || !status) return;
         configStatus = status;
         selectedRoleMode = status.activeRoleMode;
+        if (status.sessionOverride) {
+          const remembered = getRememberedSessionOverrides();
+          if (remembered) {
+            overrideHost = remembered.host;
+            overridePort = remembered.port !== '' ? remembered.port : status.port > 0 ? String(status.port) : '5432';
+            overrideDatabase = remembered.database !== '' ? remembered.database : status.database || '';
+            overrideSslMode = remembered.sslMode !== '' ? remembered.sslMode : status.sslMode || 'require';
+            overrideUser = remembered.user;
+            overrideAdminUser = remembered.adminUser;
+            return;
+          }
+        } else {
+          clearRememberedSessionOverrides();
+        }
         if (status.port > 0) overridePort = String(status.port);
         if (status.database) overrideDatabase = status.database;
         if (status.sslMode) overrideSslMode = status.sslMode;
@@ -244,34 +262,63 @@
       }
       parsedPort = portParsed.port;
     }
+    const trimmedHost = overrideHost.trim();
+    const trimmedDb = overrideDatabase.trim();
+    const trimmedSsl = overrideSslMode.trim();
+    const trimmedUser = overrideUser.trim();
+    const trimmedAdminUser = overrideAdminUser.trim();
     const req = $state.snapshot(
       clearOverrides
         ? { roleMode: selectedRoleMode, clearOverrides: true }
         : {
             roleMode: selectedRoleMode,
-            host: overrideHost.trim() || undefined,
+            host: trimmedHost || undefined,
             port: parsedPort,
-            database: overrideDatabase.trim() || undefined,
-            sslMode: overrideSslMode.trim() || undefined,
-            user: overrideUser.trim() || undefined,
+            database: trimmedDb || undefined,
+            sslMode: trimmedSsl || undefined,
+            user: trimmedUser || undefined,
             password: overridePassword !== '' ? overridePassword : undefined,
-            adminUser: overrideAdminUser.trim() || undefined,
+            adminUser: trimmedAdminUser || undefined,
             adminPassword: overrideAdminPassword !== '' ? overrideAdminPassword : undefined,
           }
     );
     await runCloudOp('Configure cloud session', 'changing cloud session settings', async (isCurrent, capturedSecrets) => {
+      const prevRemembered = getRememberedSessionOverrides();
       const status = await port.configureCloudSyncSession(req);
       if (!isCurrent()) return;
-      overrideHost = '';
       overridePassword = '';
       overrideAdminPassword = '';
       if (clearOverrides) {
+        clearRememberedSessionOverrides();
+        overrideHost = '';
         overrideUser = '';
         overrideAdminUser = '';
+        overridePort = status.port > 0 ? String(status.port) : '5432';
+        overrideDatabase = status.database || '';
+        overrideSslMode = status.sslMode || 'require';
+      } else {
+        // Preserve non-secret session override inputs (and surface any still-active backend override if left blank).
+        overrideHost = trimmedHost || (status.sessionOverride ? prevRemembered?.host ?? '' : '');
+        overrideDatabase = trimmedDb || status.database || '';
+        overrideSslMode = trimmedSsl || status.sslMode || 'require';
+        overrideUser = trimmedUser || (status.sessionOverride ? prevRemembered?.user ?? '' : '');
+        overrideAdminUser = trimmedAdminUser || (status.sessionOverride ? prevRemembered?.adminUser ?? '' : '');
+        if (status.sessionOverride) {
+          setRememberedSessionOverrides({
+            host: overrideHost,
+            port: parsedPort !== undefined ? String(parsedPort) : prevRemembered?.port ?? '',
+            database: overrideDatabase,
+            sslMode: overrideSslMode,
+            user: overrideUser,
+            adminUser: overrideAdminUser,
+          });
+        } else {
+          clearRememberedSessionOverrides();
+        }
       }
       configStatus = status;
       selectedRoleMode = status.activeRoleMode;
-      if (connectionReport && connectionReport.activeRoleMode !== status.activeRoleMode) connectionReport = null;
+      connectionReport = null;
       statusMessage = sanitizeCloudText(
         clearOverrides
           ? `Cleared session credential overrides (active role: ${status.activeRoleMode}).`
@@ -284,28 +331,41 @@
 
   async function switchRoleAndConnect() {
     await runCloudOp('Cloud connection probe', 'probing cloud status', async (isCurrent, capturedSecrets) => {
-      const currentRole = configStatus?.activeRoleMode ?? connectionReport?.activeRoleMode;
-      if (currentRole !== selectedRoleMode) {
-        const status = await port.configureCloudSyncSession($state.snapshot({ roleMode: selectedRoleMode }));
+      try {
+        const currentRole = configStatus?.activeRoleMode ?? connectionReport?.activeRoleMode;
+        if (currentRole !== selectedRoleMode) {
+          const status = await port.configureCloudSyncSession($state.snapshot({ roleMode: selectedRoleMode }));
+          if (!isCurrent()) return;
+          configStatus = status;
+          connectionReport = null;
+        }
+        const report = await port.testCloudConnection();
         if (!isCurrent()) return;
-        configStatus = status;
+        if (report.connected) {
+          connectionReport = report;
+          selectedRoleMode = report.activeRoleMode;
+        } else {
+          connectionReport = null;
+          if (report.activeRoleMode) selectedRoleMode = report.activeRoleMode;
+        }
+        statusMessage = sanitizeCloudText(
+          report.connected
+            ? `Connected to ${report.database} as ${report.activeRoleMode} (${report.latencyMs} ms, ${report.becmasterPlotCount} BECMaster plots).`
+            : 'Cloud connection probe completed: server reported not connected.',
+          capturedSecrets,
+        );
+        notifyCloud(
+          report.connected ? 'success' : 'warning',
+          report.connected ? `Connected to ${report.database}` : 'Cloud server not connected',
+          statusMessage,
+          capturedSecrets,
+        );
+      } catch (cause) {
+        if (isCurrent()) {
+          connectionReport = null;
+        }
+        throw cause;
       }
-      const report = await port.testCloudConnection();
-      if (!isCurrent()) return;
-      connectionReport = report;
-      selectedRoleMode = report.activeRoleMode;
-      statusMessage = sanitizeCloudText(
-        report.connected
-          ? `Connected to ${report.database} as ${report.activeRoleMode} (${report.latencyMs} ms, ${report.becmasterPlotCount} BECMaster plots).`
-          : 'Cloud connection probe completed: server reported not connected.',
-        capturedSecrets,
-      );
-      notifyCloud(
-        report.connected ? 'success' : 'warning',
-        report.connected ? `Connected to ${report.database}` : 'Cloud server not connected',
-        statusMessage,
-        capturedSecrets,
-      );
     });
   }
 
@@ -478,21 +538,23 @@
     }
     const parsedLimit = limitParsed.limit;
     await runCloudOp('Verify Audit Chain', 'verifying BECMaster audit hash chain', async (isCurrent, capturedSecrets) => {
-      const res = await port.verifyBECMasterAuditChain(parsedLimit);
-      if (!isCurrent()) return;
-      auditChainResult = res;
-      statusMessage = sanitizeCloudText(
-        res.valid
-          ? `BECMaster audit chain verified across ${res.verifiedRows} row(s) (tail ${res.tailHash ? res.tailHash.slice(0, 16) : 'empty'}).`
-          : `BECMaster audit chain verification FAILED across ${res.verifiedRows} row(s).`,
-        capturedSecrets,
-      );
-      notifyCloud(
-        res.valid ? 'success' : 'error',
-        res.valid ? 'BECMaster audit chain verified' : 'BECMaster audit chain verification failed',
-        statusMessage,
-        capturedSecrets,
-      );
+      try {
+        const res = await port.verifyBECMasterAuditChain(parsedLimit);
+        if (!isCurrent()) return;
+        auditChainResult = res;
+        statusMessage = sanitizeCloudText(formatAuditChainStatusMessage(res), capturedSecrets);
+        notifyCloud(
+          res.valid ? 'success' : 'error',
+          res.valid ? 'BECMaster audit chain verified' : 'BECMaster audit chain verification failed',
+          statusMessage,
+          capturedSecrets,
+        );
+      } catch (cause) {
+        if (isCurrent()) {
+          auditChainResult = null;
+        }
+        throw cause;
+      }
     });
   }
 

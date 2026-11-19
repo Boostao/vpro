@@ -1,9 +1,10 @@
 <script lang="ts">
-  import type {
-    AuditChainVerification,
-    PublishStandardsResult,
-    SchemaBootstrapResult,
-    SeedBaselineResult,
+  import {
+    formatAuditChainBannerSummary,
+    type AuditChainVerification,
+    type PublishStandardsResult,
+    type SchemaBootstrapResult,
+    type SeedBaselineResult,
   } from './cloudSyncWorkbench';
 
   export interface PublishStandardsDraft {
@@ -70,10 +71,7 @@
     class={`rounded border-l-4 p-2.5 text-xs ${auditChainResult.valid ? 'border-[#2E8540] bg-[#EBF5ED] text-[#313132]' : 'border-[#D8292F] bg-[#FBEAEA] text-[#D8292F]'}`}
   >
     <strong>Audit Hash Chain {auditChainResult.valid ? 'VALID' : 'INVALID'}</strong>:
-    <span class="font-mono font-semibold">{auditChainResult.verifiedRows}</span> row(s) checked
-    {#if auditChainResult.partialWindow}
-      (partial window)
-    {/if}
+    <span class="font-mono font-semibold">{formatAuditChainBannerSummary(auditChainResult)}</span>
     &middot; Tail hash: <span class="font-mono">{auditChainResult.tailHash || 'none'}</span>
   </div>
 {/if}

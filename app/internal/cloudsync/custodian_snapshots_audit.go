@@ -282,92 +282,298 @@ func (m *Manager) ListBECMasterDownloadLog(ctx context.Context, limit int) ([]Do
 	return out, nil
 }
 
-// VerifyBECMasterAuditChain verifies the SHA-256 hash chain over the most recent limit rows in becmaster.audit,
-// anchoring the window's first row against either GenesisAuditHash (at the start of the ledger) or its immediate predecessor.
+const defaultAuditVerifyBatchSize = 50000
+
+type auditRowScanner interface {
+	Next() bool
+	Values() ([]any, error)
+	Err() error
+	Close()
+}
+
+type auditChainStore interface {
+	CountAuditRows(ctx context.Context) (int64, error)
+	PredecessorBeforeOffset(ctx context.Context, offset int) (seq int64, rowHash string, err error)
+	QueryAuditBatch(ctx context.Context, hasAfterSeq bool, afterSeq int64, batchLimit int) (auditRowScanner, error)
+}
+
+type pgAuditChainStore struct {
+	tx pgx.Tx
+}
+
+func (s pgAuditChainStore) CountAuditRows(ctx context.Context) (int64, error) {
+	var total int64
+	err := s.tx.QueryRow(ctx, `SELECT COUNT(*) FROM becmaster.audit`).Scan(&total)
+	return total, err
+}
+
+func (s pgAuditChainStore) PredecessorBeforeOffset(ctx context.Context, offset int) (int64, string, error) {
+	var seq int64
+	var rowHash string
+	err := s.tx.QueryRow(ctx, `SELECT audit_seq, row_hash FROM becmaster.audit ORDER BY audit_seq DESC OFFSET $1 LIMIT 1`, offset).Scan(&seq, &rowHash)
+	return seq, rowHash, err
+}
+
+func buildAuditBatchSelectSQL(hasAfterSeq bool) string {
+	cols := quotedColumnCSV(VP08AuditColumns)
+	if hasAfterSeq {
+		return fmt.Sprintf(`
+			SELECT audit_seq, %s, COALESCE(merge_tx_id::text, ''), prev_hash, row_hash
+			FROM becmaster.audit
+			WHERE audit_seq > $1
+			ORDER BY audit_seq ASC
+			LIMIT $2
+		`, cols)
+	}
+	return fmt.Sprintf(`
+		SELECT audit_seq, %s, COALESCE(merge_tx_id::text, ''), prev_hash, row_hash
+		FROM becmaster.audit
+		ORDER BY audit_seq ASC
+		LIMIT $1
+	`, cols)
+}
+
+func (s pgAuditChainStore) QueryAuditBatch(ctx context.Context, hasAfterSeq bool, afterSeq int64, batchLimit int) (auditRowScanner, error) {
+	query := buildAuditBatchSelectSQL(hasAfterSeq)
+	if hasAfterSeq {
+		return s.tx.Query(ctx, query, afterSeq, batchLimit)
+	}
+	return s.tx.Query(ctx, query, batchLimit)
+}
+
+func coerceAuditSeq(raw any) (int64, error) {
+	switch v := raw.(type) {
+	case int64:
+		return v, nil
+	case int32:
+		return int64(v), nil
+	case int16:
+		return int64(v), nil
+	case int:
+		return int64(v), nil
+	default:
+		return 0, fmt.Errorf("unexpected audit_seq type %T", raw)
+	}
+}
+
+func coerceAuditString(raw any) string {
+	switch v := raw.(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	case []byte:
+		return string(v)
+	default:
+		return fmt.Sprint(v)
+	}
+}
+
+// VerifyBECMasterAuditChain verifies the SHA-256 hash chain in becmaster.audit.
+// When limit == 0, every row from genesis (GenesisAuditHash) through head is streamed in bounded batches.
+// When limit > 0, the latest limit rows are verified and anchored against their immediate predecessor
+// (or GenesisAuditHash when limit >= totalRows).
 func (m *Manager) VerifyBECMasterAuditChain(ctx context.Context, limit int) (AuditChainVerification, error) {
-	if limit <= 0 {
-		limit = 1000
+	if limit < 0 {
+		return AuditChainVerification{}, errors.New("audit limit must be >= 0 (0 = full chain)")
 	}
 	pool, creds, err := m.AcquirePool(ctx, "")
 	if err != nil {
 		return AuditChainVerification{}, err
 	}
-	query := fmt.Sprintf(`
-		SELECT * FROM (
-			SELECT audit_seq, %s, COALESCE(merge_tx_id::text, ''), prev_hash, row_hash
-			FROM becmaster.audit
-			ORDER BY audit_seq DESC
-			LIMIT $1
-		) sub
-		ORDER BY audit_seq ASC
-	`, quotedColumnCSV(VP08AuditColumns))
-
-	rows, err := pool.Query(ctx, query, limit)
+	tx, err := pool.BeginTx(ctx, pgx.TxOptions{
+		IsoLevel:   pgx.RepeatableRead,
+		AccessMode: pgx.ReadOnly,
+	})
 	if err != nil {
-		return AuditChainVerification{}, wrapRedactedError("verify becmaster.audit hash chain", err, creds)
+		return AuditChainVerification{}, wrapRedactedError("begin read-only audit verification snapshot", err, creds)
 	}
-	defer rows.Close()
+	defer func() { _ = tx.Rollback(ctx) }()
 
-	var count int64
-	var firstSeq int64
-	var firstPrevHash string
-	expectedPrev := ""
-	tailHash := GenesisAuditHash
-	for rows.Next() {
-		vals, vErr := rows.Values()
-		if vErr != nil {
-			return AuditChainVerification{}, wrapRedactedError("scan becmaster.audit row", vErr, creds)
-		}
-		seq, _ := vals[0].(int64)
-		vp08Row := make([]any, len(VP08AuditColumns))
-		for i, col := range VP08AuditColumns {
-			cc := pgValueToCloudCell(col, vals[1+i])
-			vp08Row[i] = cc.pgParam(col)
-		}
-		mergeTx, _ := vals[12].(string)
-		prevHash, _ := vals[13].(string)
-		rowHash, _ := vals[14].(string)
+	return verifyAuditChainWithStore(ctx, pgAuditChainStore{tx: tx}, creds, limit, defaultAuditVerifyBatchSize)
+}
 
-		if count == 0 {
-			firstSeq = seq
-			firstPrevHash = prevHash
-		} else if prevHash != expectedPrev {
-			return AuditChainVerification{VerifiedRows: count, Valid: false, TailHash: tailHash}, fmt.Errorf("audit hash chain broken at seq=%d: prev_hash=%s != expected=%s", seq, prevHash, expectedPrev)
-		}
-		computed := ComputeAuditRowHash(prevHash, mergeTx, vp08Row)
-		if computed != rowHash {
-			return AuditChainVerification{VerifiedRows: count, Valid: false, TailHash: tailHash}, fmt.Errorf("audit row_hash tampered at seq=%d: computed=%s != stored=%s", seq, computed, rowHash)
-		}
-		expectedPrev = rowHash
-		tailHash = rowHash
-		count++
+func verifyAuditChainWithStore(
+	ctx context.Context,
+	store auditChainStore,
+	creds *ResolvedCredentials,
+	limit int,
+	batchSize int,
+) (AuditChainVerification, error) {
+	if limit < 0 {
+		return AuditChainVerification{}, errors.New("audit limit must be >= 0 (0 = full chain)")
 	}
-	if err := rows.Err(); err != nil {
-		return AuditChainVerification{}, wrapRedactedError("iterate becmaster.audit chain", err, creds)
+	if batchSize <= 0 {
+		batchSize = defaultAuditVerifyBatchSize
 	}
-	rows.Close()
+
+	totalRows, err := store.CountAuditRows(ctx)
+	if err != nil {
+		return AuditChainVerification{}, wrapRedactedError("count becmaster.audit rows", err, creds)
+	}
+	if totalRows == 0 {
+		return AuditChainVerification{
+			VerifiedRows:  0,
+			TotalRows:     0,
+			Valid:         true,
+			PartialWindow: false,
+			TailHash:      GenesisAuditHash,
+		}, nil
+	}
 
 	partialWindow := false
-	if count > 0 {
-		var predHash string
-		pErr := pool.QueryRow(ctx, `SELECT row_hash FROM becmaster.audit WHERE audit_seq < $1 ORDER BY audit_seq DESC LIMIT 1`, firstSeq).Scan(&predHash)
+	hasAfterSeq := false
+	var afterSeq int64
+	expectedPrev := GenesisAuditHash
+
+	if limit > 0 && int64(limit) < totalRows {
+		predSeq, predHash, pErr := store.PredecessorBeforeOffset(ctx, limit)
 		if errors.Is(pErr, pgx.ErrNoRows) {
-			// Window starts at the first surviving row in becmaster.audit -> must anchor to GenesisAuditHash!
-			if firstPrevHash != GenesisAuditHash {
-				return AuditChainVerification{VerifiedRows: count, Valid: false, TailHash: tailHash}, fmt.Errorf("initial audit row seq=%d does not anchor to GenesisAuditHash (deleted prefix detected)", firstSeq)
-			}
+			partialWindow = false
 		} else if pErr != nil {
 			return AuditChainVerification{}, wrapRedactedError("verify audit chain predecessor anchor", pErr, creds)
 		} else {
 			partialWindow = true
-			if firstPrevHash != predHash {
-				return AuditChainVerification{VerifiedRows: count, Valid: false, PartialWindow: true, TailHash: tailHash}, fmt.Errorf("audit window boundary broken at seq=%d: prev_hash=%s != predecessor=%s", firstSeq, firstPrevHash, predHash)
+			hasAfterSeq = true
+			afterSeq = predSeq
+			expectedPrev = predHash
+		}
+	}
+
+	var count int64
+	tailHash := GenesisAuditHash
+	if partialWindow {
+		tailHash = expectedPrev
+	}
+	vp08Row := make([]any, len(VP08AuditColumns))
+	expectedCols := 4 + len(VP08AuditColumns)
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return AuditChainVerification{}, wrapRedactedError("verify becmaster.audit hash chain", err, creds)
+		}
+		batchLimit := batchSize
+		if partialWindow {
+			remaining := int64(limit) - count
+			if remaining <= 0 {
+				break
+			}
+			if remaining < int64(batchLimit) {
+				batchLimit = int(remaining)
 			}
 		}
+
+		rows, qErr := store.QueryAuditBatch(ctx, hasAfterSeq, afterSeq, batchLimit)
+		if qErr != nil {
+			return AuditChainVerification{}, wrapRedactedError("verify becmaster.audit hash chain", qErr, creds)
+		}
+
+		var batchCount int
+		for rows.Next() {
+			vals, vErr := rows.Values()
+			if vErr != nil {
+				rows.Close()
+				return AuditChainVerification{}, wrapRedactedError("scan becmaster.audit row", vErr, creds)
+			}
+			if len(vals) < expectedCols {
+				rows.Close()
+				return AuditChainVerification{}, fmt.Errorf("unexpected becmaster.audit column count %d (want %d)", len(vals), expectedCols)
+			}
+			seq, sErr := coerceAuditSeq(vals[0])
+			if sErr != nil {
+				rows.Close()
+				return AuditChainVerification{}, sErr
+			}
+			for i, col := range VP08AuditColumns {
+				cc := pgValueToCloudCell(col, vals[1+i])
+				vp08Row[i] = cc.pgParam(col)
+			}
+			mergeTx := coerceAuditString(vals[1+len(VP08AuditColumns)])
+			prevHash := coerceAuditString(vals[2+len(VP08AuditColumns)])
+			rowHash := coerceAuditString(vals[3+len(VP08AuditColumns)])
+
+			if count == 0 {
+				computed := ComputeAuditRowHash(prevHash, mergeTx, vp08Row)
+				if computed != rowHash {
+					rows.Close()
+					return AuditChainVerification{
+						VerifiedRows:  count,
+						TotalRows:     totalRows,
+						Valid:         false,
+						PartialWindow: partialWindow,
+						TailHash:      tailHash,
+					}, fmt.Errorf("audit row_hash tampered at seq=%d: computed=%s != stored=%s", seq, computed, rowHash)
+				}
+				if partialWindow {
+					if prevHash != expectedPrev {
+						rows.Close()
+						return AuditChainVerification{
+							VerifiedRows:  count,
+							TotalRows:     totalRows,
+							Valid:         false,
+							PartialWindow: true,
+							TailHash:      tailHash,
+						}, fmt.Errorf("audit window boundary broken at seq=%d: prev_hash=%s != predecessor=%s", seq, prevHash, expectedPrev)
+					}
+				} else if prevHash != GenesisAuditHash {
+					rows.Close()
+					return AuditChainVerification{
+						VerifiedRows:  count,
+						TotalRows:     totalRows,
+						Valid:         false,
+						PartialWindow: false,
+						TailHash:      tailHash,
+					}, fmt.Errorf("initial audit row seq=%d does not anchor to GenesisAuditHash (deleted prefix detected)", seq)
+				}
+			} else {
+				if prevHash != expectedPrev {
+					rows.Close()
+					return AuditChainVerification{
+						VerifiedRows:  count,
+						TotalRows:     totalRows,
+						Valid:         false,
+						PartialWindow: partialWindow,
+						TailHash:      tailHash,
+					}, fmt.Errorf("audit hash chain broken at seq=%d: prev_hash=%s != expected=%s", seq, prevHash, expectedPrev)
+				}
+				computed := ComputeAuditRowHash(prevHash, mergeTx, vp08Row)
+				if computed != rowHash {
+					rows.Close()
+					return AuditChainVerification{
+						VerifiedRows:  count,
+						TotalRows:     totalRows,
+						Valid:         false,
+						PartialWindow: partialWindow,
+						TailHash:      tailHash,
+					}, fmt.Errorf("audit row_hash tampered at seq=%d: computed=%s != stored=%s", seq, computed, rowHash)
+				}
+			}
+
+			expectedPrev = rowHash
+			tailHash = rowHash
+			afterSeq = seq
+			hasAfterSeq = true
+			count++
+			batchCount++
+		}
+		if rErr := rows.Err(); rErr != nil {
+			rows.Close()
+			return AuditChainVerification{}, wrapRedactedError("iterate becmaster.audit chain", rErr, creds)
+		}
+		rows.Close()
+
+		if batchCount < batchLimit {
+			break
+		}
+	}
+
+	if count > totalRows {
+		totalRows = count
 	}
 
 	return AuditChainVerification{
 		VerifiedRows:  count,
+		TotalRows:     totalRows,
 		Valid:         true,
 		PartialWindow: partialWindow,
 		TailHash:      tailHash,

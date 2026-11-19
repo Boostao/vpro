@@ -221,6 +221,7 @@ type DownloadLogEntry struct {
 // AuditChainVerification reports cryptographic verification of becmaster.audit hash chaining.
 type AuditChainVerification struct {
 	VerifiedRows  int64  `json:"verifiedRows"`
+	TotalRows     int64  `json:"totalRows"`
 	Valid         bool   `json:"valid"`
 	PartialWindow bool   `json:"partialWindow"`
 	TailHash      string `json:"tailHash"`

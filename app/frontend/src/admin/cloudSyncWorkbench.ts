@@ -418,9 +418,84 @@ export interface DownloadLogEntry {
 
 export interface AuditChainVerification {
   verifiedRows: number;
+  totalRows?: number;
   valid: boolean;
   partialWindow: boolean;
   tailHash: string;
+}
+
+export interface RememberedSessionOverrides {
+  host: string;
+  port: string;
+  database: string;
+  sslMode: string;
+  user: string;
+  adminUser: string;
+}
+
+let rememberedSessionOverrides: RememberedSessionOverrides | null = null;
+
+export function getRememberedSessionOverrides(): RememberedSessionOverrides | null {
+  return rememberedSessionOverrides ? { ...rememberedSessionOverrides } : null;
+}
+
+export function setRememberedSessionOverrides(next: RememberedSessionOverrides): void {
+  rememberedSessionOverrides = {
+    host: next.host,
+    port: next.port,
+    database: next.database,
+    sslMode: next.sslMode,
+    user: next.user,
+    adminUser: next.adminUser,
+  };
+}
+
+export function clearRememberedSessionOverrides(): void {
+  rememberedSessionOverrides = null;
+}
+
+export function formatAuditChainBannerSummary(res: AuditChainVerification): string {
+  const verified = Math.max(0, Math.trunc(Number(res.verifiedRows) || 0));
+  const total =
+    typeof res.totalRows === 'number' && Number.isFinite(res.totalRows) && res.totalRows >= verified
+      ? Math.trunc(res.totalRows)
+      : null;
+  if (res.valid) {
+    if (res.partialWindow) {
+      if (total !== null && total > 0) {
+        return `Verified latest ${verified.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} rows (partial window)`;
+      }
+      return `Verified latest ${verified.toLocaleString('en-US')} rows (partial window)`;
+    }
+    if (verified === 0) {
+      return 'Verified 0 rows (empty ledger anchored to genesis)';
+    }
+    return `Verified all ${verified.toLocaleString('en-US')} rows from genesis`;
+  }
+  const totalPart = total !== null && total > 0 ? ` of ${total.toLocaleString('en-US')}` : '';
+  return `Verification failed after ${verified.toLocaleString('en-US')}${totalPart} rows (${res.partialWindow ? 'partial window' : 'full chain'})`;
+}
+
+export function formatAuditChainStatusMessage(res: AuditChainVerification): string {
+  const verified = Math.max(0, Math.trunc(Number(res.verifiedRows) || 0));
+  const total =
+    typeof res.totalRows === 'number' && Number.isFinite(res.totalRows) && res.totalRows >= verified
+      ? Math.trunc(res.totalRows)
+      : null;
+  const tailShort = res.tailHash ? res.tailHash.slice(0, 16) : 'empty';
+  if (!res.valid) {
+    return `BECMaster audit chain verification FAILED across ${verified.toLocaleString('en-US')} row(s).`;
+  }
+  if (res.partialWindow) {
+    if (total !== null && total > 0) {
+      return `BECMaster audit chain verified: latest ${verified.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} row(s) valid (partial window, tail ${tailShort}).`;
+    }
+    return `BECMaster audit chain verified: latest ${verified.toLocaleString('en-US')} row(s) valid (partial window, tail ${tailShort}).`;
+  }
+  if (verified === 0) {
+    return `BECMaster audit chain verified: 0 rows in ledger (anchored to genesis, tail ${tailShort}).`;
+  }
+  return `BECMaster audit chain verified from genesis: all ${verified.toLocaleString('en-US')} row(s) valid (tail ${tailShort}).`;
 }
 
 export interface CloudSyncPort {

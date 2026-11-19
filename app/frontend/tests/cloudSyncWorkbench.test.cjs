@@ -341,6 +341,12 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
       error,
       statusMessage,
       activeRoleMode,
+      overrideHost,
+      overridePort,
+      overrideDatabase,
+      overrideSslMode,
+      overrideUser,
+      overrideAdminUser,
       overridePassword,
       overrideAdminPassword,
       configStatus,
@@ -361,6 +367,8 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
       if (vals.roleMode !== undefined) selectedRoleMode = vals.roleMode;
       if (vals.host !== undefined) overrideHost = vals.host;
       if ('port' in vals) overridePort = vals.port;
+      if (vals.database !== undefined) overrideDatabase = vals.database;
+      if (vals.sslMode !== undefined) overrideSslMode = vals.sslMode;
       if (vals.user !== undefined) overrideUser = vals.user;
       if (vals.password !== undefined) overridePassword = vals.password;
       if (vals.adminUser !== undefined) overrideAdminUser = vals.adminUser;
@@ -444,6 +452,8 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
   const switchedStates = [];
   let preflightPasses = false;
   let heldConnectionResolver = null;
+  let nextConnectionError = null;
+  let nextAuditError = null;
 
   function assertClonableArgs(method, args) {
     for (const arg of args) {
@@ -485,6 +495,11 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
     },
     async testCloudConnection() {
       assertClonableArgs('testCloudConnection', []);
+      if (nextConnectionError) {
+        const err = nextConnectionError;
+        nextConnectionError = null;
+        throw err;
+      }
       if (heldConnectionResolver) {
         return new Promise(resolve => {
           heldConnectionResolver = resolve;
@@ -530,8 +545,14 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
     },
     async verifyBECMasterAuditChain(limit) {
       assertClonableArgs('verifyBECMasterAuditChain', [limit]);
+      if (nextAuditError) {
+        const err = nextAuditError;
+        nextAuditError = null;
+        throw err;
+      }
       return {
         verifiedRows: limit > 0 ? limit : 597277,
+        totalRows: 597277,
         valid: true,
         partialWindow: limit > 0,
         tailHash: 'abcdef0123456789fedcba9876543210',
@@ -884,6 +905,9 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
     client.flush();
     await api.applySessionConfig(false);
     client.flush();
+    assert.equal(api.getState().overrideHost, 'db.internal.example', 'UX-CLOUD-005: Server Host override must stay visible after Apply Session Override');
+    assert.equal(api.getState().overrideUser, 'ecologist', 'Contributor user override must stay visible');
+    assert.equal(api.getState().overrideAdminUser, 'custodian', 'Custodian admin user override must stay visible');
     assert.equal(api.getState().overridePassword, '', 'contributor password must clear immediately');
     assert.equal(api.getState().overrideAdminPassword, '', 'admin password must clear immediately');
     assert.equal(String(api.getState().statusMessage).includes(testSecretA), false);
@@ -1035,7 +1059,9 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
     client.flush();
     assert.equal(api.getState().auditChainResult.valid, true);
     assert.equal(api.getState().auditChainResult.verifiedRows, 100);
+    assert.equal(api.getState().auditChainResult.totalRows, 597277);
     assert.equal(api.getState().auditChainResult.partialWindow, true);
+    assert.match(api.getState().statusMessage, /latest 100 of 597,277 row\(s\) valid \(partial window/);
 
     for (const emptyOrZeroAudit of [0, '0', null, undefined, '', '   ']) {
       api.setAuditChainLimit(emptyOrZeroAudit);
@@ -1045,7 +1071,20 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
       assert.equal(api.getState().error, null);
       assert.equal(dispatches.at(-1)[0], 'verifyBECMasterAuditChain');
       assert.equal(dispatches.at(-1)[1], 0);
+      assert.equal(api.getState().auditChainResult.verifiedRows, 597277);
+      assert.equal(api.getState().auditChainResult.totalRows, 597277);
+      assert.equal(api.getState().auditChainResult.partialWindow, false);
+      assert.match(api.getState().statusMessage, /verified from genesis: all 597,277 row\(s\) valid/);
     }
+
+    // UX-CLOUD-004: failed/tampered audit check clears previous green auditChainResult
+    nextAuditError = new Error('audit row_hash tampered at seq=49');
+    api.setAuditChainLimit(0);
+    client.flush();
+    await api.runVerifyAuditChain();
+    client.flush();
+    assert.equal(api.getState().auditChainResult, null, 'failed audit verification must clear stale valid auditChainResult');
+    assert.match(api.getState().error, /audit row_hash tampered at seq=49/);
 
     for (const badAudit of [-1, -5, '-5', Number.NaN, 1.5]) {
       const countBeforeBadAudit = dispatches.length;
@@ -1056,6 +1095,54 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
       assert.equal(dispatches.length, countBeforeBadAudit);
       assert.equal(api.getState().error, 'Audit limit must be a non-negative integer (0 = all).');
     }
+
+    // 6b. UX-CLOUD-005: Failed Test Connection clears stale Connected state, and Apply/Clear Session Override preserve/reset Server Host
+    assert.equal(api.getState().connectionReport.connected, true);
+    nextConnectionError = new Error('connect to PostgreSQL: lookup <pg-host>: no such host');
+    await api.switchRoleAndConnect();
+    client.flush();
+    assert.equal(api.getState().connectionReport, null, 'UX-CLOUD-005: failed Test Connection must clear stale Connected report');
+    assert.match(api.getState().error, /Cloud connection probe failed/);
+
+    // Reconnect -> green Connected again
+    await api.switchRoleAndConnect();
+    client.flush();
+    assert.equal(api.getState().connectionReport.connected, true);
+
+    // Apply Session Override clears unprobed connectionReport while preserving overrideHost
+    api.setSessionInputs({
+      roleMode: 'custodian',
+      host: '  nonexistent-qa1117.invalid  ',
+      sslMode: 'verify-full',
+    });
+    client.flush();
+    await api.applySessionConfig(false);
+    client.flush();
+    assert.equal(api.getState().overrideHost, 'nonexistent-qa1117.invalid');
+    assert.equal(api.getState().overrideSslMode, 'verify-full');
+    assert.equal(api.getState().connectionReport, null, 'UX-CLOUD-005: applying new session override clears stale connection status until probed');
+
+    // Editing another field (sslMode -> prefer) without re-typing host still retains and sends overrideHost
+    api.setSessionInputs({ sslMode: 'prefer' });
+    client.flush();
+    await api.applySessionConfig(false);
+    client.flush();
+    assert.equal(dispatches.at(-1)[0], 'configureCloudSyncSession');
+    assert.equal(dispatches.at(-1)[1].host, 'nonexistent-qa1117.invalid');
+    assert.equal(api.getState().overrideHost, 'nonexistent-qa1117.invalid');
+
+    // Clear Session Override resets host/users to '' and restores defaults from status
+    await api.applySessionConfig(true);
+    client.flush();
+    assert.equal(api.getState().overrideHost, '');
+    assert.equal(api.getState().overrideUser, '');
+    assert.equal(api.getState().overrideAdminUser, '');
+    assert.equal(api.getState().overrideSslMode, 'require');
+
+    // Reconnect for remaining Custodian tests & onDestroy check
+    await api.switchRoleAndConnect();
+    client.flush();
+    assert.equal(api.getState().connectionReport.connected, true);
     await api.runPublishStandards();
     api.setSeedPath('/data/BECMaster_fixing.db');
     client.flush();
@@ -1183,4 +1270,123 @@ test('ProjectAdminWorkbench, Navigation, and App wire Cloud BECMaster Sync clean
   assert.match(appSrc, /onopencloudsync=\{\(\)\s*=>\s*\{\s*void requestTransition\(/);
   assert.match(appSrc, /projectAdminTab = 'cloudsync'/);
   assert.match(appSrc, /initialTab=\{projectAdminTab\}/);
+});
+
+test('UX-CLOUD-004 & UX-CLOUD-005: Custodian audit banner distinguishes full-chain genesis vs partial tail window and AuthPanel renders offline badge when connectionReport is cleared', () => {
+  const stdSrc = read('CloudSyncCustodianStandardsPanel.svelte');
+  assert.doesNotMatch(stdSrc, /[\u{1F300}-\u{1FAFF}]/u, 'CloudSyncCustodianStandardsPanel must contain zero emojis');
+  const compiledStd = compile(stdSrc, { filename: 'CloudSyncCustodianStandardsPanel.svelte', generate: 'client' });
+  assert.deepEqual(compiledStd.warnings, []);
+
+  const StdComponent = serverComponent(stdSrc, 'CloudSyncCustodianStandardsPanel.svelte', {
+    './cloudSyncWorkbench': cloudSync,
+  });
+
+  const fullChainHtml = render(StdComponent, {
+    props: {
+      busy: false,
+      operationHeld: false,
+      auditChainResult: {
+        verifiedRows: 597360,
+        totalRows: 597360,
+        valid: true,
+        partialWindow: false,
+        tailHash: '4bb62176078f7bb990232fd463e1ecaea79f266d7200ed0202a20f9112d81c93',
+      },
+      bootstrapResult: null,
+      publishStandardsResult: null,
+      seedSourceDbPath: '',
+      seedBaselineResult: null,
+      onPublishStandards: () => {},
+      onSeedBaseline: () => {},
+    },
+  }).body;
+  assert.match(fullChainHtml, /data-audit-chain-banner/);
+  assert.match(fullChainHtml, /Audit Hash Chain VALID/);
+  assert.match(fullChainHtml, /Verified all 597,360 rows from genesis/);
+  assert.doesNotMatch(fullChainHtml, /partial window/);
+
+  const partialHtml = render(StdComponent, {
+    props: {
+      busy: false,
+      operationHeld: false,
+      auditChainResult: {
+        verifiedRows: 1000,
+        totalRows: 597360,
+        valid: true,
+        partialWindow: true,
+        tailHash: '4bb62176078f7bb990232fd463e1ecaea79f266d7200ed0202a20f9112d81c93',
+      },
+      bootstrapResult: null,
+      publishStandardsResult: null,
+      seedSourceDbPath: '',
+      seedBaselineResult: null,
+      onPublishStandards: () => {},
+      onSeedBaseline: () => {},
+    },
+  }).body;
+  assert.match(partialHtml, /Verified latest 1,000 of 597,360 rows \(partial window\)/);
+
+  const emptyHtml = render(StdComponent, {
+    props: {
+      busy: false,
+      operationHeld: false,
+      auditChainResult: {
+        verifiedRows: 0,
+        totalRows: 0,
+        valid: true,
+        partialWindow: false,
+        tailHash: '0'.repeat(64),
+      },
+      bootstrapResult: null,
+      publishStandardsResult: null,
+      seedSourceDbPath: '',
+      seedBaselineResult: null,
+      onPublishStandards: () => {},
+      onSeedBaseline: () => {},
+    },
+  }).body;
+  assert.match(emptyHtml, /Verified 0 rows \(empty ledger anchored to genesis\)/);
+
+  // AuthPanel offline state after failed Test Connection (connectionReport = null) + retained overrideHost
+  const AuthComponent = serverComponent(read('CloudSyncAuthPanel.svelte'), 'CloudSyncAuthPanel.svelte', {
+    './cloudSyncWorkbench': cloudSync,
+  });
+  const authOfflineHtml = render(AuthComponent, {
+    props: {
+      busy: false,
+      operationHeld: false,
+      activeRoleMode: 'contributor',
+      configStatus: {
+        configured: true,
+        configSource: 'session',
+        envFileDetected: true,
+        activeRoleMode: 'contributor',
+        hasContributorCreds: true,
+        hasCustodianCreds: true,
+        sessionOverride: true,
+        port: 5432,
+        database: 'becmaster',
+        sslMode: 'verify-full',
+      },
+      connectionReport: null,
+      pullStandardsResult: null,
+      selectedRoleMode: 'contributor',
+      overrideHost: 'nonexistent-qa1117.invalid',
+      overridePort: '5432',
+      overrideDatabase: 'becmaster',
+      overrideSslMode: 'verify-full',
+      overrideUser: 'bec_contributor',
+      overridePassword: '',
+      overrideAdminUser: '',
+      overrideAdminPassword: '',
+      onSwitchRoleAndConnect: () => {},
+      onSyncProvincialStandards: () => {},
+      onApplySessionConfig: () => {},
+    },
+  }).body;
+  assert.match(authOfflineHtml, /data-cloud-status-badge="offline"/);
+  assert.match(authOfflineHtml, /Offline \/ Unprobed/);
+  assert.doesNotMatch(authOfflineHtml, /data-cloud-status-badge="connected"/);
+  assert.match(authOfflineHtml, /nonexistent-qa1117\.invalid/);
 });
