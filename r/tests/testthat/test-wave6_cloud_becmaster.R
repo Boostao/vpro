@@ -479,6 +479,7 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
       'FROM becmaster.env e',
       'JOIN becmaster.admin a ON a."Plot" = e."PlotNumber"',
       'WHERE e."PlotNumber" = \'0112931\'',
+      '  AND e."Latitude" IS NOT NULL AND e."Longitude" IS NOT NULL',
       '  AND (a."StrataCoverTotal" IS NULL OR (a."StrataCoverTotal" >= 0 AND a."StrataCoverTotal" < 100))',
       'LIMIT 1'
     )
@@ -490,6 +491,7 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
         'SELECT e."PlotNumber", e."Zone", e."SubZone", e."SiteNotes", a."BECSiteUnit"',
         'FROM becmaster.env e JOIN becmaster.admin a ON a."Plot" = e."PlotNumber"',
         'WHERE length(e."PlotNumber") <= 7',
+        '  AND e."Latitude" IS NOT NULL AND e."Longitude" IS NOT NULL',
         '  AND (a."StrataCoverTotal" IS NULL OR (a."StrataCoverTotal" >= 0 AND a."StrataCoverTotal" < 100))',
         'ORDER BY e."PlotNumber" LIMIT 1'
       )
@@ -547,6 +549,10 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
         clean_con$conn,
         'DELETE FROM becmaster.veg WHERE "PlotNumber" = $1 AND "Species" = \'RQASPP1\'',
         params = list(target_plot)
+      )
+      DBI::dbExecute(
+        clean_con$conn,
+        'DELETE FROM standards.usys_spp_attributes WHERE "Code" = \'RQASPP1\''
       )
       DBI::dbExecute(
         clean_con$conn,
@@ -616,6 +622,30 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
   )
 
   # 2. Direct Cloud Readers, Standards Sync, and Seamless Diagnostics Integration
+  # Verify fail-closed redaction if standards.usys_spp_attributes initially has 0 Red/Blue rows,
+  # then seed test Red-listed species 'RQASPP1' so Contributor reads/pulls have conservation metadata.
+  init_rb_n <- DBI::dbGetQuery(
+    admin_con$conn,
+    paste(
+      "SELECT COUNT(*)::int AS n FROM standards.usys_spp_attributes",
+      vpro:::.vpro_sensitive_attr_where_sql()
+    )
+  )$n[[1L]]
+  if (identical(as.integer(init_rb_n), 0L)) {
+    expect_error(
+      vpro_master_env(contrib_con, zones = target_zone, plots = target_plot),
+      "0 Red/Blue-listed species rows"
+    )
+  }
+  DBI::dbExecute(
+    admin_con$conn,
+    'DELETE FROM standards.usys_spp_attributes WHERE "Code" = \'RQASPP1\''
+  )
+  DBI::dbExecute(
+    admin_con$conn,
+    'INSERT INTO standards.usys_spp_attributes ("Flag", "Code", "Codetype", "RedBlueList", "ID") VALUES (0, \'RQASPP1\', \'U\', \'R\', -988801)'
+  )
+
   env_sub <- vpro_master_env(contrib_con, zones = target_zone, plots = target_plot)
   expect_equal(nrow(env_sub), 1L)
   expect_type(env_sub$PlotNumber, "character")
@@ -878,14 +908,28 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
   rds_env <- vpro_env(rds_proj, scope = "project")
   expect_true(all(c(target_plot, leading_zero_plot) %in% rds_env$PlotNumber))
 
-  # 7b. Verify S6.6 redact_sensitive = TRUE redacts sensitive plots across ALL 4 snapshot formats (sqlite, gpkg, rds, csv)
+  # 7b. Verify S6.6 redact_sensitive = TRUE generalizes sensitive plots to ~10 km grid (preserving UTMZone) across ALL 4 snapshot formats (sqlite, gpkg, rds, csv)
+  unred_hit <- rds_env[rds_env$PlotNumber == target_plot, , drop = FALSE]
+  exp_red <- vpro:::.vpro_redact_coord_df(unred_hit, target_plot)
+  norm_zone <- function(z) if (length(z) == 0L || is.na(z[[1L]])) NA_character_ else trimws(as.character(z[[1L]]))
+  assert_redacted_coords <- function(hit_df, check_xy = TRUE) {
+    cols <- c("Latitude", "Longitude", "UTMEasting", "UTMNorthing")
+    if (isTRUE(check_xy)) {
+      cols <- c(cols, "XCoord", "YCoord")
+    }
+    for (cc in intersect(cols, names(hit_df))) {
+      expect_equal(as.double(hit_df[[cc]][[1L]]), as.double(exp_red[[cc]][[1L]]), tolerance = 1e-9)
+    }
+    expect_identical(norm_zone(hit_df$UTMZone), norm_zone(unred_hit$UTMZone))
+  }
+
   red_vlists_dir <- file.path(tmp_work, "redacted_vlists")
   dir.create(red_vlists_dir)
   file.copy(vpro:::vpro_bundled_db("VLists.db"), file.path(red_vlists_dir, "VLists.db"))
   vred_con <- DBI::dbConnect(RSQLite::SQLite(), file.path(red_vlists_dir, "VLists.db"))
   DBI::dbExecute(
     vred_con,
-    "INSERT OR REPLACE INTO \"USysSppAttributes\" (\"Code\", \"RedBlueList\") VALUES ('RQASPP1', 'Red')"
+    "INSERT OR REPLACE INTO \"USysSppAttributes\" (\"Code\", \"Codetype\", \"RedBlueList\") VALUES ('RQASPP1', 'U', 'R')"
   )
   DBI::dbDisconnect(vred_con)
 
@@ -907,28 +951,30 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
   sqlite_red_ws <- vpro_connect(pub_red$artifacts$path[pub_red$artifacts$format == "sqlite"][[1L]])
   sqlite_red_env <- vpro_env(sqlite_red_ws, scope = "project")
   sq_hit <- sqlite_red_env[sqlite_red_env$PlotNumber == target_plot, , drop = FALSE]
-  expect_true(all(is.na(c(sq_hit$Latitude, sq_hit$Longitude, sq_hit$UTMEasting, sq_hit$UTMNorthing))))
-  expect_true(is.na(sq_hit$UTMZone))
+  assert_redacted_coords(sq_hit, check_xy = TRUE)
+  sq_non_sens <- sqlite_red_env[sqlite_red_env$PlotNumber == leading_zero_plot, , drop = FALSE]
+  expect_equal(as.double(sq_non_sens$Latitude[[1L]]), 54.65, tolerance = 1e-9)
+  expect_equal(as.double(sq_non_sens$Longitude[[1L]]), -127.05, tolerance = 1e-9)
 
   rds_red_env <- vpro_env(vpro_import_rds(pub_red$artifacts$path[pub_red$artifacts$format == "rds"][[1L]]), scope = "project")
   rds_hit <- rds_red_env[rds_red_env$PlotNumber == target_plot, , drop = FALSE]
-  expect_true(all(is.na(c(rds_hit$Latitude, rds_hit$Longitude, rds_hit$UTMEasting, rds_hit$UTMNorthing))))
-  expect_true(is.na(rds_hit$UTMZone))
+  assert_redacted_coords(rds_hit, check_xy = TRUE)
 
   if ("gpkg" %in% snap_fmts) {
     gpkg_red_path <- pub_red$artifacts$path[pub_red$artifacts$format == "gpkg"][[1L]]
     gpkg_plots_sf <- sf::st_read(gpkg_red_path, layer = "plots", quiet = TRUE)
-    expect_false(target_plot %in% as.character(gpkg_plots_sf$PlotNumber))
+    expect_true(target_plot %in% as.character(gpkg_plots_sf$PlotNumber))
+    gpkg_hit <- gpkg_plots_sf[as.character(gpkg_plots_sf$PlotNumber) == target_plot, , drop = FALSE]
+    assert_redacted_coords(gpkg_hit, check_xy = FALSE)
   }
 
   csv_untar_dir <- file.path(tmp_work, "csv_red_untar")
   dir.create(csv_untar_dir)
   utils::untar(pub_red$artifacts$path[pub_red$artifacts$format == "csv"][[1L]], exdir = csv_untar_dir)
   csv_env_file <- list.files(csv_untar_dir, pattern = "^env\\.csv$", recursive = TRUE, full.names = TRUE)[[1L]]
-  csv_env <- utils::read.csv(csv_env_file, colClasses = c(PlotNumber = "character"), na.strings = c("NA", ""), stringsAsFactors = FALSE)
+  csv_env <- utils::read.csv(csv_env_file, colClasses = c(PlotNumber = "character", UTMZone = "character"), na.strings = c("NA", ""), stringsAsFactors = FALSE)
   csv_hit <- csv_env[csv_env$PlotNumber == target_plot, , drop = FALSE]
-  expect_true(all(is.na(c(csv_hit$Latitude, csv_hit$Longitude, csv_hit$UTMEasting, csv_hit$UTMNorthing))))
-  expect_true(is.na(csv_hit$UTMZone))
+  assert_redacted_coords(csv_hit, check_xy = TRUE)
 
   # Run cleanup explicitly inside the test body too and assert exact 71,567-plot zero-drift restoration!
   DBI::dbExecute(admin_con$conn, 'DELETE FROM becmaster.env WHERE "PlotNumber" = $1', params = list(leading_zero_plot))
@@ -941,6 +987,10 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
     admin_con$conn,
     'DELETE FROM becmaster.veg WHERE "PlotNumber" = $1 AND "Species" = \'RQASPP1\'',
     params = list(target_plot)
+  )
+  DBI::dbExecute(
+    admin_con$conn,
+    'DELETE FROM standards.usys_spp_attributes WHERE "Code" = \'RQASPP1\''
   )
   DBI::dbExecute(
     admin_con$conn,

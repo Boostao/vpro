@@ -29,9 +29,11 @@ Defaults to \code{provenance$snapshot_tag} when present, or the file stem of
 \item{compress}{Compression codec passed to \code{\link[base:saveRDS]{base::saveRDS()}}: \code{"xz"}
 (default maximum compression) or \code{"gzip"} (faster write).}
 
-\item{redact_sensitive}{Logical; if \code{TRUE}, redacts coordinates (\code{Latitude},
-\code{Longitude}, \code{UTMEasting}, \code{UTMNorthing}, \code{UTMZone}) to \code{NA} on plots
-containing sensitive (\code{USysSppAttributes.RedBlueList}) species. Defaults to
+\item{redact_sensitive}{Logical; if \code{TRUE}, generalizes coordinates
+(\code{Latitude}, \code{Longitude}, \code{UTMEasting}, \code{UTMNorthing}, \code{XCoord}, \code{YCoord})
+to an ~10 km grid while preserving \code{UTMZone} on plots containing Red- or
+Blue-listed (\code{USysSppAttributes.RedBlueList}) species, and aborts if
+conservation status metadata is missing or unpopulated. Defaults to
 \code{isTRUE(attr(ws, "cloud_redacted"))}.}
 }
 \value{

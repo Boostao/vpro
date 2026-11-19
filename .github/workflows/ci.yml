@@ -129,11 +129,11 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ci_pg_superuser_pw
-          POSTGRES_DB: becmaster_ci
+          POSTGRES_DB: becmaster_ci_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U postgres -d becmaster_ci"
+          --health-cmd="pg_isready -U postgres -d becmaster_ci_test"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=10
@@ -141,12 +141,13 @@ jobs:
       CGO_ENABLED: '1'
       VPRO_PG_HOST: '127.0.0.1'
       VPRO_PG_PORT: '5432'
-      VPRO_PG_DBNAME: 'becmaster_ci'
+      VPRO_PG_DBNAME: 'becmaster_ci_test'
       VPRO_PG_SSLMODE: 'disable'
       VPRO_PG_USER: 'vpro_contrib'
       VPRO_PG_PASSWORD: 'ci_contrib_pw_2026'
       VPRO_PG_ADMIN_USER: 'vpro_custodian'
       VPRO_PG_ADMIN_PASSWORD: 'ci_custodian_pw_2026'
+      VPRO_RUN_LIVE_PG_TESTS: 'true'
     steps:
       - uses: actions/checkout@v7
       - name: Install GTK4, WebKitGTK 6.0, and PostgreSQL client headers
@@ -160,11 +161,11 @@ jobs:
           PGPASSWORD: ci_pg_superuser_pw
         run: |
           set -euo pipefail
-          psql -h 127.0.0.1 -p 5432 -U postgres -d becmaster_ci -v ON_ERROR_STOP=1 <<'SQL'
+          psql -h 127.0.0.1 -p 5432 -U postgres -d becmaster_ci_test -v ON_ERROR_STOP=1 <<'SQL'
           CREATE ROLE vpro_contrib LOGIN PASSWORD 'ci_contrib_pw_2026' NOSUPERUSER NOCREATEDB NOCREATEROLE;
           CREATE ROLE vpro_custodian LOGIN PASSWORD 'ci_custodian_pw_2026' NOSUPERUSER NOCREATEDB CREATEROLE;
-          GRANT CONNECT, CREATE, TEMPORARY ON DATABASE becmaster_ci TO vpro_custodian;
-          GRANT CONNECT, TEMPORARY ON DATABASE becmaster_ci TO vpro_contrib;
+          GRANT CONNECT, CREATE, TEMPORARY ON DATABASE becmaster_ci_test TO vpro_custodian;
+          GRANT CONNECT, TEMPORARY ON DATABASE becmaster_ci_test TO vpro_contrib;
           CREATE EXTENSION IF NOT EXISTS pgcrypto;
           SQL
       - uses: actions/setup-go@v7
@@ -241,11 +242,11 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ci_pg_superuser_pw
-          POSTGRES_DB: becmaster_ci
+          POSTGRES_DB: becmaster_ci_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U postgres -d becmaster_ci"
+          --health-cmd="pg_isready -U postgres -d becmaster_ci_test"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=10
@@ -255,12 +256,14 @@ jobs:
       _R_CHECK_FORCE_SUGGESTS_: 'false'
       VPRO_PG_HOST: '127.0.0.1'
       VPRO_PG_PORT: '5432'
-      VPRO_PG_DBNAME: 'becmaster_ci'
+      VPRO_PG_DBNAME: 'becmaster_ci_test'
       VPRO_PG_SSLMODE: 'disable'
       VPRO_PG_USER: 'vpro_contrib'
       VPRO_PG_PASSWORD: 'ci_contrib_pw_2026'
       VPRO_PG_ADMIN_USER: 'vpro_custodian'
       VPRO_PG_ADMIN_PASSWORD: 'ci_custodian_pw_2026'
+      VPRO_RUN_LIVE_PG_TESTS: 'true'
+      VPRO_LIVE_PG_DESTRUCTIVE_DB: 'becmaster_ci_test'
     steps:
       - uses: actions/checkout@v7
       - name: Bootstrap PostgreSQL roles for Wave 6 Cloud BECMaster tests
@@ -270,11 +273,11 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends postgresql-client
-          psql -h 127.0.0.1 -p 5432 -U postgres -d becmaster_ci -v ON_ERROR_STOP=1 <<'SQL'
+          psql -h 127.0.0.1 -p 5432 -U postgres -d becmaster_ci_test -v ON_ERROR_STOP=1 <<'SQL'
           CREATE ROLE vpro_contrib LOGIN PASSWORD 'ci_contrib_pw_2026' NOSUPERUSER NOCREATEDB NOCREATEROLE;
           CREATE ROLE vpro_custodian LOGIN PASSWORD 'ci_custodian_pw_2026' NOSUPERUSER NOCREATEDB CREATEROLE;
-          GRANT CONNECT, CREATE, TEMPORARY ON DATABASE becmaster_ci TO vpro_custodian;
-          GRANT CONNECT, TEMPORARY ON DATABASE becmaster_ci TO vpro_contrib;
+          GRANT CONNECT, CREATE, TEMPORARY ON DATABASE becmaster_ci_test TO vpro_custodian;
+          GRANT CONNECT, TEMPORARY ON DATABASE becmaster_ci_test TO vpro_contrib;
           CREATE EXTENSION IF NOT EXISTS pgcrypto;
           SQL
       - uses: quarto-dev/quarto-actions/setup@v2
@@ -320,11 +323,21 @@ jobs:
 
           DBI::dbExecute(
             con$conn,
+            'DELETE FROM standards.usys_spp_attributes WHERE "Code" = \'CARE_RARE_CI\''
+          )
+          DBI::dbExecute(
+            con$conn,
+            'INSERT INTO standards.usys_spp_attributes ("Flag", "Code", "Codetype", "RedBlueList", "ID") VALUES (0, \'CARE_RARE_CI\', \'U\', \'R\', -988800)'
+          )
+
+          DBI::dbExecute(
+            con$conn,
             paste(
               'INSERT INTO becmaster.env ("PlotNumber", "ProjectID", "Zone", "SubZone", "SiteSeries",',
               '"MoistureRegime", "NutrientRegime", "Elevation", "Latitude", "Longitude",',
+              '"UTMEasting", "UTMNorthing", "UTMZone", "XCoord", "YCoord",',
               '"SiteNotes", "SpeciesListComplete", "Flag")',
-              "VALUES ('9624781', 'BECM_CI', 'SBS', 'dk', '01', '4', 'C', 720, 54.60, -126.95, 'Baseline CI plot', -1, 0)",
+              "VALUES ('9624781', 'BECM_CI', 'SBS', 'dk', '01', '4', 'C', 720, 54.64321, -126.95432, 632345.6, 6056789.1, '9', 632345.6, 6056789.1, 'Baseline CI plot', -1, 0)",
               'ON CONFLICT ("PlotNumber") DO NOTHING'
             )
           )

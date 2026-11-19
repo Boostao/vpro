@@ -1,5 +1,5 @@
 test_that("TST01 LMH25 audit matches Go diagnostics on discontinuity prefixes and tolerances (ENG-XCUT-005)", {
-  sample_src <- normalizePath(file.path("..", "..", "..", "app", "resources", "Sample.db"), mustWork = TRUE)
+  sample_src <- vpro_connect("Sample")$project_path
   tmp_db <- tempfile(fileext = ".db")
   on.exit(unlink(tmp_db), add = TRUE)
   file.copy(sample_src, tmp_db)
@@ -35,7 +35,7 @@ test_that("TST01 LMH25 audit matches Go diagnostics on discontinuity prefixes an
 })
 
 test_that("lmh25_audit strips Arabic and Roman IVX discontinuity prefixes across Humus and Mineral and enforces max_up - min_lo HumusThickness span", {
-  sample_src <- normalizePath(file.path("..", "..", "..", "app", "resources", "Sample.db"), mustWork = TRUE)
+  sample_src <- vpro_connect("Sample")$project_path
   tmp_db <- tempfile(fileext = ".db")
   on.exit(unlink(tmp_db), add = TRUE)
   file.copy(sample_src, tmp_db)

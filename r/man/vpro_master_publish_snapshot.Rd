@@ -49,9 +49,10 @@ in \code{EPSG:4326} or an \code{sf} \code{bbox} object).}
 \item{overwrite}{Logical; if \code{TRUE}, replaces existing local artifacts and
 updates an existing \code{snapshot_tag} row in \code{becmaster.snapshots}.}
 
-\item{redact_sensitive}{Logical; if \code{TRUE}, redacts coordinates on plots
-containing sensitive (\code{USysSppAttributes.RedBlueList}) species across
-generated artifacts.}
+\item{redact_sensitive}{Logical; if \code{TRUE}, generalizes coordinates to an
+~10 km grid (preserving \code{UTMZone}) on plots containing Red- or Blue-listed
+(\code{USysSppAttributes.RedBlueList}) species across generated artifacts, and
+aborts if conservation status metadata is missing or unpopulated.}
 }
 \value{
 A structured list with \code{snapshot_tag}, \code{created_at}, \code{created_by},
