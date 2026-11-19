@@ -205,4 +205,68 @@ func TestUXSoil005SoilChildAndHeaderBoundsWithLegacyTolerance(t *testing.T) {
 	}}); err != nil {
 		t.Fatalf("expected unrelated Texture edit on LEG999 (legacy out-of-range soil row) to succeed, got %v", err)
 	}
+
+	// 4. Direct ContextService.SaveMineralRecord & UpdateMineralRecord (saveChildWithChecks) coarse-fragment consistency:
+	if err := service.SaveMineralRecord(state.ContextID, vprocore.MineralRecord{
+		PlotNumber:               "UX005A",
+		Horizon:                  str("BC"),
+		UpperDepth:               flt(30),
+		LowerDepth:               flt(50),
+		PercentCoarseFragsGravel: intP(60),
+		PercentCoarseFragsCobbles: intP(60),
+		PercentCoarseFragsStones: intP(60),
+		PercentCoarseFragsTotal:  intP(80),
+	}); err == nil || !strings.Contains(err.Error(), "cannot exceed 100%") {
+		t.Fatalf("SaveMineralRecord with 60+60+60/80 should fail, got %v", err)
+	}
+	if err := service.SaveMineralRecord(state.ContextID, vprocore.MineralRecord{
+		PlotNumber:               "UX005A",
+		Horizon:                  str("BC"),
+		UpperDepth:               flt(30),
+		LowerDepth:               flt(50),
+		PercentCoarseFragsGravel: intP(30),
+		PercentCoarseFragsCobbles: intP(30),
+		PercentCoarseFragsTotal:  intP(50),
+	}); err == nil || !strings.Contains(err.Error(), "PercentCoarseFragsTotal") {
+		t.Fatalf("SaveMineralRecord with 30+30 > Total 50 should fail, got %v", err)
+	}
+	// Partial UpdateMineralRecord merging against stored row 601 (Gravel=20, Stones=5, Total=40): Cobbles=25 -> sum=50 > Total 40
+	if err := service.UpdateMineralRecord(state.ContextID, vprocore.MineralRecord{
+		ID:                        601,
+		PlotNumber:                "UX005A",
+		Horizon:                   str("Ah"),
+		UpperDepth:                flt(0),
+		LowerDepth:                flt(15),
+		PercentCoarseFragsGravel:  intP(20),
+		PercentCoarseFragsCobbles: intP(25),
+		PercentCoarseFragsStones:  intP(5),
+		PercentCoarseFragsTotal:   intP(40),
+	}); err == nil || !strings.Contains(err.Error(), "PercentCoarseFragsTotal") {
+		t.Fatalf("UpdateMineralRecord exceeding stored Total should fail, got %v", err)
+	}
+	// Unchanged legacy coarse fragments on LEG999 (60+60/150, ASP=12, pH=16) allow unrelated Texture edit via UpdateMineralRecord
+	if err := service.UpdateMineralRecord(state.ContextID, vprocore.MineralRecord{
+		ID:                        603,
+		PlotNumber:                "LEG999",
+		Horizon:                   str("Bm"),
+		UpperDepth:                flt(0),
+		LowerDepth:                flt(20),
+		ASP:                       intP(12),
+		Texture:                   str("SCL"),
+		PercentCoarseFragsGravel:  intP(60),
+		PercentCoarseFragsCobbles: intP(60),
+		PercentCoarseFragsTotal:   intP(150),
+		MineralFormpH:             flt(16),
+	}); err != nil {
+		t.Fatalf("expected UpdateMineralRecord unrelated Texture edit on LEG999 to succeed, got %v", err)
+	}
+
+	// 5. Non-ContextScoped PlotService also enforces parent soil quantitative bounds while preserving unchanged legacy rows.
+	nonScopedPlots, _ := vprotest.HeaderFixture(t)
+	if err := nonScopedPlots.CreatePlot(vprocore.FS882Header{
+		PlotNumber:   "NSNEG",
+		RootingDepth: intP(-5),
+	}); err == nil || !strings.Contains(err.Error(), ">= 0 cm") {
+		t.Fatalf("non-ContextScoped CreatePlot with negative RootingDepth should fail, got %v", err)
+	}
 }

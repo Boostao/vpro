@@ -71,9 +71,10 @@ vpro_standards <- function(vlists_path = NULL) {
 #'   methods.
 #' @export
 vpro_status <- function(ws = NULL, data_dir = vpro_data_dir(), config_dir = vpro_config_dir()) {
+  ws_data_dir_default <- missing(data_dir)
   if (!is.null(ws)) {
     vpro_assert_workspace(ws)
-    if (missing(data_dir) && !is.null(ws$data_dir) && nzchar(ws$data_dir)) {
+    if (ws_data_dir_default && !is.null(ws$data_dir) && nzchar(ws$data_dir)) {
       data_dir <- ws$data_dir
     }
     if (missing(config_dir) && !is.null(ws$config_dir) && nzchar(ws$config_dir)) {
@@ -127,37 +128,38 @@ vpro_status <- function(ws = NULL, data_dir = vpro_data_dir(), config_dir = vpro
   }
 
   family_names <- c("VPro64.db", "VLists.db", "VUser.db", "VMetaData.db", "VMessageBoard.db", "VPics.db")
+  resolve_family_db <- function(nm) {
+    candidates <- c(
+      file.path(data_dir, "database-family", nm),
+      file.path(data_dir, nm),
+      file.path(data_dir, "pics", nm)
+    )
+    for (cand in unique(candidates)) {
+      if (.vpro_is_valid_support_db(cand, nm)) {
+        return(normalizePath(cand, winslash = "/", mustWork = FALSE))
+      }
+    }
+    NA_character_
+  }
+  family_paths <- vapply(family_names, resolve_family_db, character(1))
   family_tbl <- tibble::tibble(
     database = family_names,
-    workspace_path = vapply(
-      family_names,
-      function(nm) {
-        candidates <- c(
-          file.path(data_dir, nm),
-          file.path(data_dir, "database-family", nm),
-          file.path(data_dir, "pics", nm)
-        )
-        hit <- candidates[file.exists(candidates)]
-        if (length(hit) > 0L) normalizePath(hit[[1L]], winslash = "/", mustWork = FALSE) else NA_character_
-      },
-      character(1)
-    ),
-    present_in_workspace = !is.na(vapply(
-      family_names,
-      function(nm) {
-        candidates <- c(
-          file.path(data_dir, nm),
-          file.path(data_dir, "database-family", nm),
-          file.path(data_dir, "pics", nm)
-        )
-        hit <- candidates[file.exists(candidates)]
-        if (length(hit) > 0L) hit[[1L]] else NA_character_
-      },
-      character(1)
-    ))
+    workspace_path = family_paths,
+    present_in_workspace = !is.na(family_paths)
   )
 
-  ws_vlists <- family_tbl$workspace_path[family_tbl$database == "VLists.db"]
+  ws_vlists <- if (
+    !is.null(ws) &&
+      ws_data_dir_default &&
+      is.character(ws$vlists_path) &&
+      length(ws$vlists_path) == 1L &&
+      !is.na(ws$vlists_path) &&
+      .vpro_is_valid_support_db(ws$vlists_path, "VLists.db")
+  ) {
+    normalizePath(ws$vlists_path, winslash = "/", mustWork = FALSE)
+  } else {
+    family_tbl$workspace_path[family_tbl$database == "VLists.db"]
+  }
   standards <- vpro_standards(if (!is.na(ws_vlists)) ws_vlists else NULL)
 
   ecosystem_pkgs <- c(

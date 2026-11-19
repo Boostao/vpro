@@ -162,4 +162,28 @@ test_that("ENG-R-003: PG canonicalizers, audit row hash, and edatopic tables use
   built <- vpro:::vpro_build_edatopic_tables(pg_grid, veg_ed, min_constancy_pct = 0)
   expect_equal(built$cells$aSMR_mean[[1L]], 1.01)
   expect_equal(built$species$mean_cover[[1L]], 1.01)
+
+  # Custodian diff snapshot half-away rounding & negative-zero normalization on SMALLINT / BIGINT (cloud_custodian_diff.R)
+  env_snap_df <- data.frame(
+    PlotNumber = c("P1", "P2", "P3", "P4", "P5", "P6", "P7"),
+    Elevation = c(0.5, 2.5, -0.5, -2.5, -0.1, 0.0, NA_real_),
+    stringsAsFactors = FALSE
+  )
+  snap <- vpro:::vpro_build_cloud_snapshot("source", list(Env = env_snap_df))
+  elev_comp <- vapply(c("P1", "P2", "P3", "P4", "P5", "P6", "P7"), function(p) {
+    snap$comp$Env[[p]]$Elevation[[1L]]
+  }, character(1L), USE.NAMES = FALSE)
+  elev_raw <- vapply(c("P1", "P2", "P3", "P4", "P5", "P6", "P7"), function(p) {
+    snap$raw$Env[[p]]$Elevation[[1L]]
+  }, numeric(1L), USE.NAMES = FALSE)
+  elev_hash <- vapply(c("P1", "P2", "P3", "P4", "P5", "P6", "P7"), function(p) {
+    attr(snap$raw$Env[[p]], "hash_df")$Elevation[[1L]]
+  }, character(1L), USE.NAMES = FALSE)
+  expect_identical(elev_comp, c("1", "3", "-1", "-3", "0", "0", NA_character_))
+  expect_identical(elev_raw, c(1.0, 3.0, -1.0, -3.0, 0.0, 0.0, NA_real_))
+  expect_identical(elev_hash, c("int:1", "int:3", "int:-1", "int:-3", "int:0", "int:0", "null"))
+  # -0.1 and +0.0 both round to 0 and must produce identical snapshot digests (never "int:-0")
+  p5_only <- vpro:::vpro_build_cloud_snapshot("source", list(Env = data.frame(PlotNumber = "PX", Elevation = -0.1, stringsAsFactors = FALSE)))
+  p6_only <- vpro:::vpro_build_cloud_snapshot("source", list(Env = data.frame(PlotNumber = "PX", Elevation = 0.0, stringsAsFactors = FALSE)))
+  expect_identical(vpro:::vpro_hash_cloud_snapshot(p5_only), vpro:::vpro_hash_cloud_snapshot(p6_only))
 })

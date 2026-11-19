@@ -103,14 +103,22 @@ func TestOrdinaryNumericPhysicalDomainsAllSaveRoutes(t *testing.T) {
 				t.Fatal(err)
 			}
 			if field.IsInteger {
-				for _, value := range []int{-32768, -1, 0, 32767} {
+				validInts := []int{-32768, -1, 0, 32767}
+				if vprocore.NonNegativeParentIntegerColumns[field.Name] {
+					validInts = []int{0, 1, 32767}
+				}
+				for _, value := range validInts {
 					setOrdinaryTestValue(&h, field.Name, &value)
 					if err := s.UpdatePlot(h); err != nil {
 						t.Fatal(err)
 					}
 				}
 			} else {
-				for _, value := range []float64{-1, 0, 100, 101, 1.1234567890123, math.MaxFloat32} {
+				validFloats := []float64{-1, 0, 100, 101, 1.1234567890123, math.MaxFloat32}
+				if vprocore.NonNegativeParentSingleColumns[field.Name] {
+					validFloats = []float64{0, 100, 101, 1.1234567890123, math.MaxFloat32}
+				}
+				for _, value := range validFloats {
 					setOrdinaryTestValue(&h, field.Name, &value)
 					if err := s.SavePlot(h); err != nil {
 						t.Fatal(err)
@@ -122,28 +130,42 @@ func TestOrdinaryNumericPhysicalDomainsAllSaveRoutes(t *testing.T) {
 				}
 			}
 			before := vprotest.SubstrateSnapshot(t, db)
-			next := h
-			var invalid any
+			var invalids []any
 			if field.IsInteger {
-				value := 32768
-				invalid = &value
+				badInts := []int{32768}
+				if vprocore.NonNegativeParentIntegerColumns[field.Name] {
+					badInts = []int{-32768, -1, 32768}
+				}
+				for _, v := range badInts {
+					val := v
+					invalids = append(invalids, &val)
+				}
 			} else {
-				value := math.MaxFloat64
-				invalid = &value
-			}
-			setOrdinaryTestValue(&next, field.Name, invalid)
-			for _, save := range []func(vprocore.FS882Header) error{s.UpdatePlot, s.SavePlot} {
-				if err := save(next); err == nil {
-					t.Fatal("numeric overflow accepted")
+				badFloats := []float64{math.MaxFloat64}
+				if vprocore.NonNegativeParentSingleColumns[field.Name] {
+					badFloats = []float64{-1, math.MaxFloat64}
 				}
-				vprotest.AssertSubstrateSnapshot(t, db, before)
-			}
-			next.PlotNumber = "O-NEW"
-			for _, create := range []func(vprocore.FS882Header) error{s.CreatePlot, s.SavePlot} {
-				if err := create(next); err == nil {
-					t.Fatal("numeric overflow created")
+				for _, v := range badFloats {
+					val := v
+					invalids = append(invalids, &val)
 				}
-				vprotest.AssertSubstrateSnapshot(t, db, before)
+			}
+			for _, invalid := range invalids {
+				next := h
+				setOrdinaryTestValue(&next, field.Name, invalid)
+				for _, save := range []func(vprocore.FS882Header) error{s.UpdatePlot, s.SavePlot} {
+					if err := save(next); err == nil {
+						t.Fatalf("invalid numeric value accepted for %s", field.Name)
+					}
+					vprotest.AssertSubstrateSnapshot(t, db, before)
+				}
+				next.PlotNumber = "O-NEW"
+				for _, create := range []func(vprocore.FS882Header) error{s.CreatePlot, s.SavePlot} {
+					if err := create(next); err == nil {
+						t.Fatalf("invalid numeric value created for %s", field.Name)
+					}
+					vprotest.AssertSubstrateSnapshot(t, db, before)
+				}
 			}
 			setOrdinaryTestValue(&h, field.Name, nil)
 			if err := s.UpdatePlot(h); err != nil {

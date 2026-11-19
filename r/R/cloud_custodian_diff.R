@@ -113,7 +113,8 @@ vpro_build_cloud_snapshot <- function(label, tables_list) {
           suppressWarnings(as.double(col_v))
         }
         num[!is.finite(num)] <- NA_real_
-        rnd <- round(num)
+        rnd <- vpro_go_round(num)
+        rnd[!is.na(rnd) & rnd == 0] <- 0.0
         raw_cols[[ci]] <- rnd
         int_str <- ifelse(is.na(rnd), NA_character_, sprintf("%.0f", rnd))
         comp_cols[[ci]] <- int_str

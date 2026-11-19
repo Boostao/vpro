@@ -397,10 +397,8 @@ func (s *PlotService) saveHeader(h FS882Header, mode headerSaveMode) error {
 	if err := s.validateOrdinaryHeaderBeforeTransaction(db, project, h, mode); err != nil {
 		return err
 	}
-	if s.ContextScoped {
-		if err := validateCodeHeaderBeforeTransaction(db, project, h, mode, validateParentSoilQuantitativeHeaderValues); err != nil {
-			return err
-		}
+	if err := validateCodeHeaderBeforeTransaction(db, project, h, mode, validateParentSoilQuantitativeHeaderValues); err != nil {
+		return err
 	}
 	if err := s.validateSoilDrainageBeforeTransaction(db, project, h, mode); err != nil {
 		return err
@@ -492,10 +490,8 @@ func (s *PlotService) saveHeader(h FS882Header, mode headerSaveMode) error {
 	if err := s.validateOrdinaryHeaderValues(h, qualityOld); err != nil {
 		return err
 	}
-	if s.ContextScoped {
-		if err := validateParentSoilQuantitativeHeaderValues(h, qualityOld); err != nil {
-			return err
-		}
+	if err := validateParentSoilQuantitativeHeaderValues(h, qualityOld); err != nil {
+		return err
 	}
 	if err := s.validateSoilDrainageHeaderValues(h, qualityOld); err != nil {
 		return err

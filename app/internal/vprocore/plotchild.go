@@ -692,6 +692,69 @@ func (s *PlotService) saveChildWithChecks(kind string, record any, mode childSav
 			}
 		}
 	}
+	if kind == "Mineral" && !deleting {
+		cfModified := creating
+		if !cfModified {
+			for _, field := range fields {
+				if MineralCoarseFragColumns[field.Column] {
+					cfModified = true
+					break
+				}
+			}
+		}
+		if cfModified {
+			effCF := make(map[string]*int, 4)
+			if creating {
+				for col := range MineralCoarseFragColumns {
+					if mVal := value.FieldByName(col); mVal.Kind() == reflect.Pointer && !mVal.IsNil() {
+						v := int(mVal.Elem().Int())
+						effCF[col] = &v
+					}
+				}
+			} else {
+				cfCols := []string{"PercentCoarseFragsGravel", "PercentCoarseFragsCobbles", "PercentCoarseFragsStones", "PercentCoarseFragsTotal"}
+				var selCols []string
+				var dests []any
+				var activeCols []string
+				for _, col := range cfCols {
+					if caps[strings.ToLower(col)] {
+						selCols = append(selCols, `CAST(`+QuoteHeaderIdentifier(col)+` AS INTEGER)`)
+						dests = append(dests, new(sql.NullInt64))
+						activeCols = append(activeCols, col)
+					}
+				}
+				if len(selCols) > 0 {
+					if err := tx.QueryRow(`SELECT `+strings.Join(selCols, ",")+` FROM `+table+` WHERE "PlotNumber" = ? AND "ID" = ?`, plot, id).Scan(dests...); err != nil {
+						return err
+					}
+					for i, col := range activeCols {
+						if nv := dests[i].(*sql.NullInt64); nv.Valid {
+							v := int(nv.Int64)
+							effCF[col] = &v
+						}
+					}
+				}
+				for i, field := range fields {
+					if MineralCoarseFragColumns[field.Column] {
+						if after[i] == nil {
+							effCF[field.Column] = nil
+						} else {
+							v := after[i].(int)
+							effCF[field.Column] = &v
+						}
+					}
+				}
+			}
+			if err := ValidateMineralCoarseFragments(
+				effCF["PercentCoarseFragsGravel"],
+				effCF["PercentCoarseFragsCobbles"],
+				effCF["PercentCoarseFragsStones"],
+				effCF["PercentCoarseFragsTotal"],
+			); err != nil {
+				return fmt.Errorf("Mineral identity (%q, %d): %w", plot, id, err)
+			}
+		}
+	}
 	unquotedTable := project + "_" + kind
 	if _, err := tx.Exec(`INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable","ID")
 		SELECT ?, ? WHERE NOT EXISTS (

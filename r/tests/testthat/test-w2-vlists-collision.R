@@ -260,3 +260,63 @@ test_that("ENG-XCUT-001 + UX-SHELL-002: vpro_master_standards_sync() targets dat
   )
   expect_identical(tolower(vpro:::vpro_sha256_file(fam_vl)), cloud_sha)
 })
+
+test_that("ENG-XCUT-001 + UX-SHELL-002: vpro_status() prefers database-family/VLists.db over stale top-level VLists.db and ignores 2-table vlists.db", {
+  td <- tempfile("vpro-w2-status-")
+  cfg <- tempfile("vpro-w2-statuscfg-")
+  dir.create(file.path(td, "database-family"), recursive = TRUE)
+  dir.create(file.path(td, "projects"), recursive = TRUE)
+  dir.create(cfg, recursive = TRUE)
+  on.exit(unlink(c(td, cfg), recursive = TRUE, force = TRUE), add = TRUE)
+
+  sample_ws <- vpro_connect("Sample")
+  bundled_vlists <- vpro:::vpro_bundled_db("VLists.db")
+  bundled_vuser <- vpro:::vpro_bundled_db("VUser.db")
+  file.copy(sample_ws$project_path, file.path(td, "projects", "Sample.db"))
+
+  # Canonical 2026 VLists.db & VUser.db in database-family/
+  fam_vlists <- file.path(td, "database-family", "VLists.db")
+  fam_vuser <- file.path(td, "database-family", "VUser.db")
+  file.copy(bundled_vlists, fam_vlists)
+  file.copy(bundled_vuser, fam_vuser)
+
+  # Stale/diverging top-level VLists.db (simulating runs/_seed_realstate/data/VLists.db)
+  stale_top <- file.path(td, "VLists.db")
+  file.copy(bundled_vlists, stale_top)
+  con_top <- DBI::dbConnect(RSQLite::SQLite(), stale_top)
+  DBI::dbExecute(
+    con_top,
+    "INSERT INTO \"USysAllSpecs\" (\"Code\", \"ScientificName\", \"Lifeform\", \"Codetype\") VALUES ('STALESPP', 'Staleus topensis', 1, 'V')"
+  )
+  DBI::dbDisconnect(con_top)
+  expect_false(identical(vpro:::vpro_sha256_file(stale_top), vpro:::vpro_sha256_file(fam_vlists)))
+
+  ws <- vpro_connect("Sample", data_dir = td, config_dir = cfg)
+  st_ws <- vpro_status(ws)
+  expect_true(st_ws$standards$verified)
+  expect_identical(
+    normalizePath(st_ws$standards$vlists_path, winslash = "/", mustWork = TRUE),
+    normalizePath(fam_vlists, winslash = "/", mustWork = TRUE)
+  )
+  expect_identical(
+    normalizePath(st_ws$family$workspace_path[st_ws$family$database == "VLists.db"], winslash = "/", mustWork = TRUE),
+    normalizePath(fam_vlists, winslash = "/", mustWork = TRUE)
+  )
+
+  st_dir <- vpro_status(data_dir = td, config_dir = cfg)
+  expect_true(st_dir$standards$verified)
+  expect_identical(
+    normalizePath(st_dir$standards$vlists_path, winslash = "/", mustWork = TRUE),
+    normalizePath(fam_vlists, winslash = "/", mustWork = TRUE)
+  )
+
+  # Case-insensitive 2-table vlists.db read-model without database-family/ falls back cleanly to bundled VLists.db
+  td_rm <- tempfile("vpro-w2-status-rm-")
+  dir.create(td_rm, recursive = TRUE)
+  on.exit(unlink(td_rm, recursive = TRUE, force = TRUE), add = TRUE)
+  .w2_create_readmodel_vlists(file.path(td_rm, "vlists.db"))
+  .w2_alias_case_insensitive(td_rm, "vlists.db", "VLists.db")
+  st_rm <- vpro_status(data_dir = td_rm, config_dir = cfg)
+  expect_false(st_rm$family$present_in_workspace[st_rm$family$database == "VLists.db"])
+  expect_true(st_rm$standards$verified)
+})

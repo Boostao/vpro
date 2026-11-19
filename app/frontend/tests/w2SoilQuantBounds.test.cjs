@@ -164,7 +164,20 @@ test('UX-SOIL-005 FS882 ordinary soil header and SIVI parent enforce pit depth a
   setCell(legacyRev, 'SV_SoilDepth', { storage: 'real', text: null, integer: null, real: -5, blobHex: null });
   let siviDrafts = siviEditor.stageSIVIParent(legacyRev, {}, 'SV_SoilDepth', { kind: 'original' });
   siviDrafts = siviEditor.stageSIVIParent(legacyRev, siviDrafts, 'SV_PolygonNumber', { kind: 'text', raw: 'POLY-1' });
-  const prop = siviEditor.siviParentProposal(legacyRev, siviDrafts);
-  assert.equal(prop.scalars.length, 0);
-  assert.equal(prop.text.length, 1);
+  const siviProp = siviEditor.siviParentProposal(legacyRev, siviDrafts);
+  assert.equal(siviProp.scalars.length, 0);
+  assert.equal(siviProp.text.length, 1);
+
+  // FS882Form.svelte wires mineralList into both soilErrors(soilDrafts, mineralList) and soilUpdates(soilDrafts, mineralList)
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const fs882Src = fs.readFileSync(path.join(__dirname, '..', 'src', 'entry', 'FS882Form.svelte'), 'utf8');
+  assert.match(fs882Src, /soilErrors\(soilDrafts,\s*mineralList\)/);
+  assert.match(fs882Src, /soilUpdates\(soilDrafts,\s*mineralList\)/);
+  let partialDraft = {};
+  partialDraft = soil.stageSoil(partialDraft, 'Mineral', 42, soil.soilField('Mineral', 'PercentCoarseFragsCobbles'), '60', null);
+  assert.throws(
+    () => soil.soilUpdates(partialDraft, [{ id: 42, percentCoarseFragsGravel: 60 }]),
+    /120%.*cannot exceed 100%/,
+  );
 });
