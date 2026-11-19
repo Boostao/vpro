@@ -384,7 +384,7 @@
 </script>
 
 <section bind:this={panel} class="two-page-soil-panel min-w-0 space-y-3 rounded border bg-white p-3" aria-label={`${form} linked soil`} data-two-page-soil-panel={form} data-soil-current-row={row?.rowId} data-help-id={form === 'SoilHumusXL' ? 'humus.upper_lower_depth' : 'mineral.horizon'}>
-  <div class="vpro-sticky-subbar sticky top-0 z-15 bg-white/95 border-b border-stone-200 pb-2 space-y-2" data-soil-sticky-bar>
+  <div class="vpro-sticky-subbar sticky top-0 z-15 bg-white/95 border-b border-vpro-border pb-2 space-y-2" data-soil-sticky-bar>
     <h4 class="font-semibold">{form === 'SoilHumusXL' ? 'Humus' : 'Mineral soil'}</h4>
     <div class="flex flex-wrap gap-2">
       <button type="button" disabled={parentBlocked || close.unsaved || view.busy || referenceView.busy || close.blocked} onclick={() => operation('load')}>Load {twoPageSoilKind(form)}</button>
@@ -417,41 +417,41 @@
   {#if view.noCommitCertificate}<p role="status">Server certified no commit for {view.noCommitCertificate.requestId}. Drafts remain for correction or Undo; another Save needs a new request.</p>{/if}
   {#if Object.keys(view.drafts).length}<p role="status">{Object.keys(view.drafts).length} retained field draft(s). Save applies all retained edits together, including other physical rows.</p>{/if}
   {#if deleteConfirmRowId && row && deleteConfirmRowId === row.rowId && view.original}
-    <fieldset class="min-w-0 space-y-2 rounded border border-red-300 border-t-[3px] border-t-[#FCBA19] bg-red-50/40 p-3" data-soil-delete-confirm>
-      <legend class="text-sm font-semibold text-[#003366]">Confirm guarded {twoPageSoilKind(form)} horizon deletion</legend>
-      <p class="text-xs text-slate-800">
+    <fieldset class="min-w-0 space-y-2 rounded border border-red-300 border-t-[3px] border-t-vpro-gold bg-red-50/40 p-3" data-soil-delete-confirm>
+      <legend class="text-sm font-semibold text-vpro-navy">Confirm guarded {twoPageSoilKind(form)} horizon deletion</legend>
+      <p class="text-xs text-vpro-ink">
         Delete Horizon <span class="font-mono font-semibold">{twoPageSoilStoredText(view.original, row.rowId, 'Horizon')}</span>
         (ID <span class="font-mono font-semibold">{twoPageSoilStoredText(view.original, row.rowId, 'ID')}</span>) from plot <span class="font-mono">{plot}</span>?
         Its child ID remains permanently reserved and full history is recorded in <span class="font-mono">{project}_Audit</span>.
       </p>
       <div class="flex flex-wrap gap-2">
         <button type="button" data-soil-confirm-delete-btn disabled={deleteRestoreBusy || view.busy}
-          class="rounded bg-[#003366] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#002244]"
+          class="rounded bg-vpro-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-vpro-navy-dark"
           onclick={confirmDeleteHorizon}>Confirm delete horizon</button>
         <button type="button" disabled={deleteRestoreBusy}
-          class="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs"
+          class="rounded border border-vpro-border bg-white px-3 py-1.5 text-xs"
           onclick={() => { deleteConfirmRowId = null; }}>Cancel</button>
       </div>
     </fieldset>
   {/if}
   {#if deletedHistoryOpen && (twoPageSoilCreationEnabled || soilDeleteRestorePort)}
-    <fieldset class="min-w-0 space-y-2 rounded border border-slate-300 border-t-[3px] border-t-[#FCBA19] p-3" data-soil-deleted-history>
-      <legend class="text-sm font-semibold text-[#003366]">Deleted {twoPageSoilKind(form)} horizons ({plot})</legend>
+    <fieldset class="min-w-0 space-y-2 rounded border border-vpro-border border-t-[3px] border-t-vpro-gold p-3" data-soil-deleted-history>
+      <legend class="text-sm font-semibold text-vpro-navy">Deleted {twoPageSoilKind(form)} horizons ({plot})</legend>
       {#if deletedHorizons.length === 0}
-        <p class="text-xs text-slate-600">No deleted {twoPageSoilKind(form)} horizons recorded for {plot}.</p>
+        <p class="text-xs text-vpro-ink-secondary">No deleted {twoPageSoilKind(form)} horizons recorded for {plot}.</p>
       {:else}
         <div class="space-y-1">
           {#each deletedHorizons as entry (entry.deleteRequestId)}
-            <div class="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 p-2 text-xs">
+            <div class="flex flex-wrap items-center justify-between gap-2 rounded border border-vpro-border p-2 text-xs">
               <span>
                 Horizon <span class="font-mono font-semibold">{entry.horizon || '(NULL)'}</span> | ID <span class="font-mono">{entry.deletedId}</span> | {entry.deletedAt} by {entry.deletedBy}
               </span>
               {#if entry.restored}
-                <span class="text-slate-500">Restored</span>
+                <span class="text-vpro-ink-muted">Restored</span>
               {:else}
                 <button type="button" data-soil-restore-btn={entry.deleteRequestId}
                   disabled={parentBlocked || view.busy || deleteRestoreBusy || close.unsaved || close.blocked}
-                  class="rounded border border-[#003366] bg-white px-2.5 py-1 font-semibold text-[#003366] hover:bg-slate-50"
+                  class="rounded border border-vpro-navy bg-white px-2.5 py-1 font-semibold text-vpro-navy hover:bg-vpro-surface-subtle"
                   onclick={() => restoreDeletedHorizon(entry.deleteRequestId)}>Restore horizon</button>
               {/if}
             </div>
@@ -524,7 +524,7 @@
                     {label}: NULL (not empty text)
                   </label>
                   {#if draft?.error}<p id={`${id}-error`} role="alert" class="text-sm text-red-700">{draft.error}</p>{/if}
-                  {#if !draft}<p class="text-xs text-gray-600">Stored {source.storage}</p>{/if}
+                  {#if !draft}<p class="text-xs text-vpro-ink-secondary">Stored {source.storage}</p>{/if}
                   {#if reference}<SoilReferenceChoices field={reference} {label} disabled={fieldsDisabled}
                     onchoose={(definitionId, value) => chooseReference(column, plannedRow, definitionId, value)} />{/if}
                 </div>
@@ -539,11 +539,11 @@
     <p role="alert">Physical row {draft.rowId}, {draft.column}: {draft.error}. Select that row to correct it or Undo.</p>
   {/each}
   {#if view.receipts.length}<p role="status">{view.receipts.length} immutable committed soil receipt(s) retained across remounts.</p>{/if}
-  <p class="text-xs text-gray-600">LMH25 pedon horizon editor: upland L/F/H depths measure upward from 0 cm; wetland Of/Om/Oh and mineral A/B/C/R/W measure downward. Press Enter to move to the next horizon without auto-saving; use Save to commit changes, or New horizon / Delete to manage child rows while preserving permanent IDs.</p>
+  <p class="text-xs text-vpro-ink-secondary">LMH25 pedon horizon editor: upland L/F/H depths measure upward from 0 cm; wetland Of/Om/Oh and mineral A/B/C/R/W measure downward. Press Enter to move to the next horizon without auto-saving; use Save to commit changes, or New horizon / Delete to manage child rows while preserving permanent IDs.</p>
 </section>
 
 <style>
-  .two-page-soil-panel { max-width: 100%; overflow-x: clip; border-color: var(--vpro-border, #d1d5db); border-top: 3px solid var(--vpro-gold, #fcba19); font-variant-numeric: tabular-nums; }
-  .two-page-soil-panel :global(input[type="text"]), .two-page-soil-panel :global(textarea) { border-color: var(--vpro-forest-border, #D8D8D8); font-variant-numeric: tabular-nums; }
-  .two-page-soil-panel :global(input[type="text"]:focus), .two-page-soil-panel :global(textarea:focus) { outline: 2px solid var(--vpro-focus-ring, #1a5a96); outline-offset: 1px; }
+  .two-page-soil-panel { max-width: 100%; overflow-x: clip; border-color: var(--vpro-border); border-top: 3px solid var(--vpro-gold); font-variant-numeric: tabular-nums; }
+  .two-page-soil-panel :global(input[type="text"]), .two-page-soil-panel :global(textarea) { border-color: var(--vpro-forest-border); font-variant-numeric: tabular-nums; }
+  .two-page-soil-panel :global(input[type="text"]:focus), .two-page-soil-panel :global(textarea:focus) { outline: 2px solid var(--vpro-focus-ring); outline-offset: 1px; }
 </style>

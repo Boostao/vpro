@@ -110,13 +110,13 @@ test('all 5 admin/datasheet/rsidecar workbenches compile with 0 warnings, pass t
       name: 'ProjectAdminWorkbench.svelte',
       comp: serverComponent(adminSrc, 'admin/ProjectAdminWorkbench.svelte', { './projectAdminWorkbench': adminMod }),
       props: { contextId: 'ctx-1', activeProject: 'Sample', activeSu: 'Sample' },
-      borderRe: /border-stone-200/,
+      borderRe: /border-(?:vpro-border|stone-200)/,
     },
     {
       name: 'CloudSyncWorkbench.svelte',
       comp: serverComponent(cloudSrc, 'admin/CloudSyncWorkbench.svelte', { './cloudSyncWorkbench': cloudMod }),
       props: { contextId: 'ctx-1', activeProject: 'Sample', activeSu: 'Sample', port: {} },
-      borderRe: /border-stone-200/,
+      borderRe: /border-(?:vpro-border|stone-200)/,
     },
     {
       name: 'ProjectMetadataEditor.svelte',
@@ -129,19 +129,19 @@ test('all 5 admin/datasheet/rsidecar workbenches compile with 0 warnings, pass t
         },
       }),
       props: { client: {}, contextId: 'ctx-1', plot: '00337', onclosed() {}, onbusy() {}, oncommitted: async () => {} },
-      borderRe: /border-stone-200/,
+      borderRe: /border-(?:vpro-border|stone-200)/,
     },
     {
       name: 'UniversalDatasheetGrid.svelte',
       comp: serverComponent(dsSrc, 'datasheet/UniversalDatasheetGrid.svelte', { './universalDatasheetGrid': gridMod }),
       props: { contextId: 'ctx-1', project: 'Sample', su: 'Sample', hierarchy: 'Sample' },
-      borderRe: /border-stone-200/,
+      borderRe: /border-(?:vpro-border|stone-200)/,
     },
     {
       name: 'RSidecarWorkbench.svelte',
       comp: serverComponent(rSrc, 'rsidecar/RSidecarWorkbench.svelte', { './rSidecarWorkbench': rMod }),
       props: { contextId: 'ctx-1', activeProject: 'Sample', activeSu: 'Sample' },
-      borderRe: /border-\[#D8D8D8\]/,
+      borderRe: /border-(?:vpro-border|\[#D8D8D8\])/,
     },
   ];
 

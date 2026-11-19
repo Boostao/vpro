@@ -62,8 +62,8 @@ test('Unified BC Gov tokens, offline fonts, Surface background, and zero Forest 
     '--vpro-success: #2e8540',
     '--vpro-error: #d8292f',
     '--vpro-forest: #1e5128',
-    '--bcgov-navy:',
-    '--bcgov-gold:',
+    '--color-vpro-navy: var(--vpro-navy)',
+    '--color-vpro-gold: var(--vpro-gold)',
   ]) {
     assert.ok(css.includes(token), `tokens.css/vpro.css must declare canonical BC Gov token "${token}"`);
   }

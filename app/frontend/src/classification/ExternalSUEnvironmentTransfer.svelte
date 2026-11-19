@@ -114,13 +114,13 @@
 </section>
 
 <style>
-  .external-transfer { min-width: 0; padding: 1rem; border: 1px solid #d8d8d8; border-top: 3px solid #003366; border-radius: .5rem; background: #ffffff; color: #313132; }
-  h3 { font-weight: 600; color: #003366; } p, dl { margin: .75rem 0; } [role="alert"] { color: #d8292f; }
-  .scope { display: grid; grid-template-columns: minmax(0, 1fr); gap: .25rem; } dt { font-weight: 600; color: #003366; }
+  .external-transfer { min-width: 0; padding: 1rem; border: 1px solid var(--vpro-border); border-top: 3px solid var(--vpro-navy); border-radius: .5rem; background: var(--vpro-surface); color: var(--vpro-ink); }
+  h3 { font-weight: 600; color: var(--vpro-navy); } p, dl { margin: .75rem 0; } [role="alert"] { color: var(--vpro-error); }
+  .scope { display: grid; grid-template-columns: minmax(0, 1fr); gap: .25rem; } dt { font-weight: 600; color: var(--vpro-navy); }
   dd { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
   .toolbar { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
-  button { max-width: 100%; padding: .5rem .75rem; border: 1px solid #003366; border-radius: .375rem; background: #ffffff; color: #003366; }
+  button { max-width: 100%; padding: .5rem .75rem; border: 1px solid var(--vpro-navy); border-radius: .375rem; background: var(--vpro-surface); color: var(--vpro-navy); }
   button:disabled { opacity: .5; } .table-scroll { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; } th, td { padding: .5rem; border-bottom: 1px solid #d8d8d8; text-align: left; overflow-wrap: anywhere; }
-  thead th { background: #003366; color: #ffffff; }
+  table { width: 100%; border-collapse: collapse; } th, td { padding: .5rem; border-bottom: 1px solid var(--vpro-border); text-align: left; overflow-wrap: anywhere; }
+  thead th { background: var(--vpro-navy); color: var(--vpro-surface); }
 </style>

@@ -104,7 +104,7 @@
     >
       <header class="vpro-notif-header">
         <div class="vpro-notif-header-title">
-          <Bell size={17} class="text-[#FCBA19]" />
+          <Bell size={17} class="text-vpro-gold" />
           <div>
             <div class="vpro-notif-eyebrow">Session Activity &amp; Advisories</div>
             <h2 id="vpro-notif-drawer-title">Notification Center</h2>
@@ -160,8 +160,8 @@
       <div class="vpro-notif-list" role={filtered.length > 0 ? 'list' : undefined}>
         {#if filtered.length === 0}
           <div class="vpro-notif-empty">
-            <p class="font-semibold text-[#313132]">No notifications in this view</p>
-            <p class="mt-1 text-xs text-[#4B5563]">
+            <p class="font-semibold text-vpro-ink">No notifications in this view</p>
+            <p class="mt-1 text-xs text-vpro-ink-secondary">
               Completed saves, exports, LMH25 pedon/edatopic advisories, R/Quarto jobs, and Access import logs appear here.
             </p>
           </div>
@@ -246,17 +246,17 @@
     width: min(27rem, 100vw);
     height: 100dvh;
     max-height: 100vh;
-    background: var(--vpro-surface, #ffffff);
-    border-left: 1px solid var(--vpro-border, #d1d5db);
+    background: var(--vpro-surface);
+    border-left: 1px solid var(--vpro-border);
     box-shadow: var(--vpro-shadow-lg, 0 14px 34px rgba(0, 34, 68, 0.24));
     display: flex;
     flex-direction: column;
     min-height: 0;
   }
   .vpro-notif-header {
-    background: var(--vpro-navy, #003366);
-    color: #ffffff;
-    border-bottom: 3px solid var(--vpro-gold, #fcba19);
+    background: var(--vpro-navy);
+    color: var(--vpro-surface);
+    border-bottom: 3px solid var(--vpro-gold);
     padding: 0.8rem 1rem;
     display: flex;
     align-items: center;
@@ -273,13 +273,13 @@
     font-size: 0.65rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--vpro-gold, #fcba19);
+    color: var(--vpro-gold);
   }
   .vpro-notif-header h2 {
     margin: 0;
     font-size: 0.95rem;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--vpro-surface);
   }
   .vpro-notif-close {
     display: inline-grid;
@@ -289,15 +289,15 @@
     border-radius: 4px;
     border: 1px solid rgba(255, 255, 255, 0.3);
     background: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
+    color: var(--vpro-surface);
   }
   .vpro-notif-close:hover {
     background: rgba(255, 255, 255, 0.2);
   }
   .vpro-notif-toolbar {
     padding: 0.65rem 0.85rem;
-    border-bottom: 1px solid var(--vpro-border, #d1d5db);
-    background: var(--vpro-surface-subtle, #f8fafb);
+    border-bottom: 1px solid var(--vpro-border);
+    background: var(--vpro-surface-subtle);
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -310,16 +310,16 @@
   .vpro-notif-filters button {
     padding: 0.3rem 0.55rem;
     border-radius: 4px;
-    border: 1px solid var(--vpro-border, #d1d5db);
-    background: #ffffff;
-    color: var(--vpro-ink-secondary, #4b5563);
+    border: 1px solid var(--vpro-border);
+    background: var(--vpro-surface);
+    color: var(--vpro-ink-secondary);
     font-size: 0.72rem;
     font-weight: 600;
   }
   .vpro-notif-filters button.active {
-    background: var(--vpro-navy, #003366);
-    border-color: var(--vpro-navy, #003366);
-    color: #ffffff;
+    background: var(--vpro-navy);
+    border-color: var(--vpro-navy);
+    color: var(--vpro-surface);
   }
   .vpro-notif-actions {
     display: flex;
@@ -333,9 +333,9 @@
     gap: 0.3rem;
     padding: 0.28rem 0.55rem;
     border-radius: 4px;
-    border: 1px solid var(--vpro-border, #d1d5db);
-    background: #ffffff;
-    color: var(--vpro-ink, #313132);
+    border: 1px solid var(--vpro-border);
+    background: var(--vpro-surface);
+    color: var(--vpro-ink);
     font-size: 0.72rem;
   }
   .vpro-notif-actions button:disabled {
@@ -353,9 +353,9 @@
   .vpro-notif-empty {
     padding: 2.25rem 1.25rem;
     text-align: center;
-    border: 1px dashed var(--vpro-border, #d1d5db);
+    border: 1px dashed var(--vpro-border);
     border-radius: 6px;
-    background: var(--vpro-surface-subtle, #f8fafb);
+    background: var(--vpro-surface-subtle);
   }
   .vpro-notif-item {
     width: 100%;
@@ -364,9 +364,9 @@
     gap: 0.45rem;
     padding: 0.65rem 0.75rem;
     border-radius: 5px;
-    border: 1px solid var(--vpro-border, #d1d5db);
+    border: 1px solid var(--vpro-border);
     border-left-width: 3px;
-    background: #ffffff;
+    background: var(--vpro-surface);
     font-size: 0.78rem;
   }
   .vpro-notif-item-main {
@@ -383,36 +383,36 @@
     cursor: pointer;
   }
   .vpro-notif-item-main:focus-visible {
-    outline: 2px solid var(--vpro-focus-ring, #1a5a96);
+    outline: 2px solid var(--vpro-focus-ring);
     outline-offset: 2px;
     border-radius: 3px;
   }
   .vpro-notif-item.unread {
-    background: var(--vpro-navy-tint, #ebf1f8);
+    background: var(--vpro-navy-tint);
   }
   .vpro-notif-error {
-    border-left-color: var(--vpro-error, #d8292f);
+    border-left-color: var(--vpro-error);
   }
   .vpro-notif-error .vpro-notif-item-icon {
-    color: var(--vpro-error, #d8292f);
+    color: var(--vpro-error);
   }
   .vpro-notif-warning {
-    border-left-color: var(--vpro-warning-border, #d99b26);
+    border-left-color: var(--vpro-warning-border);
   }
   .vpro-notif-warning .vpro-notif-item-icon {
-    color: var(--vpro-warning, #9a6700);
+    color: var(--vpro-warning);
   }
   .vpro-notif-success {
-    border-left-color: var(--vpro-success, #2e8540);
+    border-left-color: var(--vpro-success);
   }
   .vpro-notif-success .vpro-notif-item-icon {
-    color: var(--vpro-success, #2e8540);
+    color: var(--vpro-success);
   }
   .vpro-notif-info {
-    border-left-color: var(--vpro-info, #1a5a96);
+    border-left-color: var(--vpro-info);
   }
   .vpro-notif-info .vpro-notif-item-icon {
-    color: var(--vpro-info, #1a5a96);
+    color: var(--vpro-info);
   }
   .vpro-notif-item-meta {
     display: flex;
@@ -420,7 +420,7 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.68rem;
-    color: var(--vpro-ink-muted, #5f6b7a);
+    color: var(--vpro-ink-muted);
   }
   .vpro-notif-source-group {
     display: inline-flex;
@@ -441,9 +441,9 @@
     line-height: 1.3;
     padding: 0.05rem 0.35rem;
     border-radius: 999px;
-    background: var(--vpro-navy-tint, #ebf1f8);
-    border: 1px solid var(--vpro-info-border, #9ec3e6);
-    color: var(--vpro-navy, #003366);
+    background: var(--vpro-navy-tint);
+    border: 1px solid var(--vpro-info-border);
+    color: var(--vpro-navy);
     text-transform: none;
     max-width: 100%;
     overflow-wrap: anywhere;
@@ -457,26 +457,26 @@
     align-items: center;
     gap: 0.4rem;
     margin-top: 0.15rem;
-    color: var(--vpro-ink, #313132);
+    color: var(--vpro-ink);
   }
   .vpro-notif-count {
     font-family: var(--vpro-font-mono, monospace);
     font-size: 0.68rem;
     padding: 0.05rem 0.35rem;
     border-radius: 999px;
-    background: #ffffff;
-    border: 1px solid var(--vpro-border, #d1d5db);
+    background: var(--vpro-surface);
+    border: 1px solid var(--vpro-border);
   }
   .vpro-notif-unread-dot {
     width: 7px;
     height: 7px;
     border-radius: 999px;
-    background: var(--vpro-navy, #003366);
+    background: var(--vpro-navy);
     flex: none;
   }
   .vpro-notif-item-content p {
     margin: 0.25rem 0 0;
-    color: var(--vpro-ink-secondary, #4b5563);
+    color: var(--vpro-ink-secondary);
     line-height: 1.4;
     overflow-wrap: anywhere;
   }
@@ -491,19 +491,19 @@
     gap: 0.25rem;
     padding: 0.22rem 0.55rem;
     border-radius: var(--vpro-radius-sm, 4px);
-    border: 1px solid var(--vpro-navy, #003366);
-    background: #ffffff;
-    color: var(--vpro-navy, #003366);
+    border: 1px solid var(--vpro-navy);
+    background: var(--vpro-surface);
+    color: var(--vpro-navy);
     font-size: 0.72rem;
     font-weight: 600;
     cursor: pointer;
   }
   .vpro-notif-action-btn:hover {
-    background: var(--vpro-navy, #003366);
-    color: #ffffff;
+    background: var(--vpro-navy);
+    color: var(--vpro-surface);
   }
   .vpro-notif-action-btn:focus-visible {
-    outline: 2px solid var(--vpro-focus-ring, #1a5a96);
+    outline: 2px solid var(--vpro-focus-ring);
     outline-offset: 2px;
   }
   @media (pointer: coarse) {

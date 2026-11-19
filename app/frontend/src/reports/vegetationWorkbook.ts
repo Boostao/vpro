@@ -86,7 +86,7 @@ export function validateWorkbookVersionEvidence(summary: Pick<NonNullable<Vegeta
   }
 }
 
-export function validVegetationWorkbookScope(scope: unknown): scope is string {
+function validVegetationWorkbookScope(scope: unknown): scope is string {
   if (typeof scope !== 'string' || !scope) return false;
   if (scope === 'unlumped') return true;
   if (!scope.startsWith('lump:')) return false;

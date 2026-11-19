@@ -10,12 +10,12 @@ const categoricalFunctions = new Set(['SVStructureStage', 'SVSuccessional', 'SVS
   'SVRootRestrictingType', 'SVSoilClassSubGroup', 'SVSoilClassGroup', 'SVRootZonePartSize',
   'SVSurficialMaterialSurf', 'SVExposure', 'SVBioGeoClimaticZone', 'SVSmr', 'SVBioGeoClimaticUnit', 'SVAspect']);
 
-export interface SummaryEnvironmentalRow<V = FieldListCell> { field: FieldListRow; labelColumn: number; values: V[] }
-export interface SummaryEnvironmentalPreview<V = FieldListCell> {
+interface SummaryEnvironmentalRow<V = FieldListCell> { field: FieldListRow; labelColumn: number; values: V[] }
+interface SummaryEnvironmentalPreview<V = FieldListCell> {
   vegetation: SummaryVegetationPreview; fieldList: FieldListTable; rows: SummaryEnvironmentalRow<V>[];
   sourcePath: string; envSourcePath: string; source: string;
 }
-export interface SummaryEnvironmentalRead extends PromiseLike<unknown> { cancel?(): void }
+interface SummaryEnvironmentalRead extends PromiseLike<unknown> { cancel?(): void }
 export interface SummaryEnvironmentalPort {
   preview(contextId: string): SummaryEnvironmentalRead;
   validationYield?(): PromiseLike<void>;
@@ -32,7 +32,7 @@ export async function validateSummaryEnvironmental(value: unknown, owner: Summar
 }
 
 export const summaryEnvironmentalNumericSource = 'one owned SQLite snapshot: raw Summary units, physical SU counts, selected field-list and needed Env; literal scope adaptation; explicit numeric Empty; no formatted workbook';
-export const summaryEnvironmentalLifeformSource = 'one owned SQLite snapshot: raw Summary units/Veg/master, physical SU counts, selected field-list and needed Env; source-qualified QuickVeg/lifeform arguments1 through13; literal scope adaptation; explicit numeric Empty; no formatted workbook';
+const summaryEnvironmentalLifeformSource = 'one owned SQLite snapshot: raw Summary units/Veg/master, physical SU counts, selected field-list and needed Env; source-qualified QuickVeg/lifeform arguments1 through13; literal scope adaptation; explicit numeric Empty; no formatted workbook';
 export interface SummaryEnvironmentalLifeformPreview extends SummaryEnvironmentalPreview<SummaryEnvironmentalValue> {
   masterSourcePath: string;
 }

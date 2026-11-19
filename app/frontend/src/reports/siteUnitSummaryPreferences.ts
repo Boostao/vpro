@@ -4,8 +4,8 @@ import { ownedScope, type GoogleEarthScope } from '../spatial/googleEarthReview'
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { validateSiteUnitSummaryOptions } from './siteUnitSummary';
 
-export interface SummaryPreferenceValues { method: number; siteUnitType: number; }
-export interface SummaryPreferenceRequest { expected: SummaryPreferenceValues; proposed: SummaryPreferenceValues; }
+interface SummaryPreferenceValues { method: number; siteUnitType: number; }
+interface SummaryPreferenceRequest { expected: SummaryPreferenceValues; proposed: SummaryPreferenceValues; }
 type Receipt =
   | { kind: 'known'; request: SummaryPreferenceRequest; outcome: SiteUnitSummaryPreferencesOutcome }
   | { kind: 'unknown'; request: SummaryPreferenceRequest; errorMessage: string };
@@ -107,7 +107,7 @@ export function siteUnitSummaryPreferencesSession(scope: GoogleEarthScope): Site
 }
 
 export type SummaryFullPreferenceValues = SiteUnitSummaryFullPreferenceValues;
-export interface SummaryFullPreferenceRequest {
+interface SummaryFullPreferenceRequest {
   expected: SummaryFullPreferenceValues;
   proposed: SummaryFullPreferenceValues;
 }
@@ -131,7 +131,7 @@ const fullKeys: (keyof SummaryFullPreferenceValues)[] = [
 const fullEqual = (a: SummaryFullPreferenceValues, b: SummaryFullPreferenceValues) =>
   fullKeys.every(key => a[key] === b[key]);
 
-export function validateSummaryFullPreferenceValues(value: unknown, su: string): string {
+function validateSummaryFullPreferenceValues(value: unknown, su: string): string {
   if (!value || typeof value !== 'object') return 'Full summary preferences are missing.';
   const v = value as Record<string, unknown>;
   if (![1, 2].includes(v.method as number)) return 'Summary method must be Mean (1) or Interquartile (2).';
@@ -150,7 +150,7 @@ export function validateSummaryFullPreferenceValues(value: unknown, su: string):
   return '';
 }
 
-export class SiteUnitSummaryFullPreferencesSession {
+class SiteUnitSummaryFullPreferencesSession {
   private state: FullView = {
     draft: null, saved: null, busy: false, blocked: false,
     authorityUnknown: false, error: '', draftError: '', receipts: [],

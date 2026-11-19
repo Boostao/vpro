@@ -25,14 +25,14 @@ export interface LumpRow {
   ruleOrigin?: string;
 }
 
-export interface LumpRowInput {
+interface LumpRowInput {
   lumpCode: string;
   sppCode: string;
   use: boolean;
   allowUnlisted?: boolean;
 }
 
-export interface LumpGroupImpact {
+interface LumpGroupImpact {
   lumpCode: string;
   sourceSpecies: string[];
   plotCount: number;
@@ -142,7 +142,7 @@ export const defaultLumpEditorPort: LumpEditorPort = {
 const LUMP_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
 const RESERVED_LUMP_NAMES = new Set(['none', 'combinedspp', 'attribute']);
 
-export function hasWellFormedUnicode(value: string): boolean {
+function hasWellFormedUnicode(value: string): boolean {
   for (let i = 0; i < value.length; i++) {
     const code = value.charCodeAt(i);
     if (code === 0) return false;

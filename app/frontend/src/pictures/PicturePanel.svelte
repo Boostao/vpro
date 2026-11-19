@@ -372,18 +372,18 @@
 
 <style>
   .pictures { display: grid; gap: .65rem; min-width: 0; padding: .75rem; }
-  .pictures h3 { font-weight: 600; color: #003366; }
+  .pictures h3 { font-weight: 600; color: var(--vpro-navy); }
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-  button, select { border: 1px solid #9F9F9F; border-radius: .25rem; padding: .35rem .5rem; color: #313132; background: #FFFFFF; min-width: 0; }
+  button, select { border: 1px solid var(--vpro-border-strong); border-radius: .25rem; padding: .35rem .5rem; color: var(--vpro-ink); background: var(--vpro-surface); min-width: 0; }
   button:disabled, select:disabled { opacity: .5; }
   select { min-width: 0; max-width: 100%; }
   .metadata { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr)); gap: .5rem; }
-  dt { font-weight: 600; color: #313132; }
+  dt { font-weight: 600; color: var(--vpro-ink); }
   dd { white-space: pre-wrap; overflow-wrap: anywhere; }
   .preview { width: fit-content; max-width: 100%; }
   img { max-width: 100%; height: auto; }
-  .guidance { font-size: .8rem; color: #474543; }
+  .guidance { font-size: .8rem; color: var(--vpro-ink-secondary); }
   .viewer::backdrop { background: rgba(0, 34, 68, 0.55); }
-  .viewer { background: #FFFFFF; padding: 1rem; max-width: calc(100% - 2rem); max-height: calc(100% - 2rem); overflow: auto; border: 1px solid #D8D8D8; border-radius: .25rem; }
+  .viewer { background: var(--vpro-surface); padding: 1rem; max-width: calc(100% - 2rem); max-height: calc(100% - 2rem); overflow: auto; border: 1px solid var(--vpro-border); border-radius: .25rem; }
   .viewer[open] { display: grid; gap: .75rem; }
 </style>

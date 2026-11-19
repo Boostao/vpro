@@ -48,19 +48,19 @@
   dialog {
     max-width: min(38rem, calc(100vw - 2rem));
     padding: 0;
-    border: 1px solid var(--vpro-border, #d1d5db);
+    border: 1px solid var(--vpro-border);
     border-radius: var(--vpro-radius-lg, 8px);
     box-shadow: var(--vpro-shadow-lg, 0 14px 34px rgba(0, 34, 68, 0.2));
-    background: var(--vpro-surface, #ffffff);
-    color: var(--vpro-ink, #313132);
+    background: var(--vpro-surface);
+    color: var(--vpro-ink);
     overflow: hidden;
   }
   dialog::backdrop { background: rgba(0, 34, 68, 0.45); }
   .dialog-header {
-    background: var(--vpro-navy, #003366);
-    color: #ffffff;
+    background: var(--vpro-navy);
+    color: var(--vpro-surface);
     padding: 0.9rem 1.25rem;
-    border-bottom: 3px solid var(--vpro-gold, #fcba19);
+    border-bottom: 3px solid var(--vpro-gold);
   }
   .dialog-eyebrow {
     font-family: var(--vpro-font-mono, monospace);
@@ -68,14 +68,14 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--vpro-gold, #fcba19);
+    color: var(--vpro-gold);
     margin-bottom: 0.2rem;
   }
   h2 {
     font-size: 1.05rem;
     font-weight: 700;
     margin: 0;
-    color: #ffffff;
+    color: var(--vpro-surface);
   }
   .dialog-body {
     padding: 1.15rem 1.25rem 1.25rem;
@@ -84,22 +84,22 @@
     margin: 0 0 0.75rem;
     font-size: 0.9rem;
     line-height: 1.5;
-    color: var(--vpro-ink, #313132);
+    color: var(--vpro-ink);
   }
   [role="alert"] {
     padding: 0.55rem 0.75rem;
     border-radius: var(--vpro-radius-sm, 4px);
-    background: var(--vpro-error-bg, #fbeaea);
-    border: 1px solid var(--vpro-error-border, #e59ba0);
-    color: var(--vpro-error-ink, #a61b20);
+    background: var(--vpro-error-bg);
+    border: 1px solid var(--vpro-error-border);
+    color: var(--vpro-error-ink);
     font-weight: 600;
   }
   [role="status"] {
     padding: 0.55rem 0.75rem;
     border-radius: var(--vpro-radius-sm, 4px);
-    background: var(--vpro-warning-bg, #fef6e0);
-    border: 1px solid var(--vpro-warning-border, #d99b26);
-    color: var(--vpro-warning-ink, #704b00);
+    background: var(--vpro-warning-bg);
+    border: 1px solid var(--vpro-warning-border);
+    color: var(--vpro-warning-ink);
   }
   .actions {
     display: flex;
@@ -108,7 +108,7 @@
     gap: 0.6rem;
     margin-top: 1rem;
     padding-top: 0.85rem;
-    border-top: 1px solid var(--vpro-border, #d1d5db);
+    border-top: 1px solid var(--vpro-border);
   }
   button {
     min-height: 36px;
@@ -119,29 +119,29 @@
     font-weight: 600;
   }
   .btn-secondary {
-    border: 1px solid var(--vpro-border-strong, #9ca3af);
-    background: var(--vpro-surface, #ffffff);
-    color: var(--vpro-ink, #313132);
+    border: 1px solid var(--vpro-border-strong);
+    background: var(--vpro-surface);
+    color: var(--vpro-ink);
   }
   .btn-secondary:hover:not(:disabled) {
-    background: var(--vpro-surface-subtle, #f8fafb);
+    background: var(--vpro-surface-subtle);
   }
   .btn-primary {
-    border: 1px solid var(--vpro-navy, #003366);
-    background: var(--vpro-navy, #003366);
-    color: #ffffff;
+    border: 1px solid var(--vpro-navy);
+    background: var(--vpro-navy);
+    color: var(--vpro-surface);
   }
   .btn-primary:hover:not(:disabled) {
-    background: var(--vpro-navy-hover, #0a4480);
+    background: var(--vpro-navy-hover);
   }
   .btn-danger {
-    border: 1px solid var(--vpro-error-border, #e59ba0);
-    background: var(--vpro-error-bg, #fbeaea);
-    color: var(--vpro-error-ink, #a61b20);
+    border: 1px solid var(--vpro-error-border);
+    background: var(--vpro-error-bg);
+    color: var(--vpro-error-ink);
   }
   .btn-danger:hover:not(:disabled) {
     background: #f6d5d7;
   }
   button:disabled { opacity: 0.5; }
-  button:focus-visible { outline: 2px solid var(--vpro-focus-ring, #1a5a96); outline-offset: 2px; }
+  button:focus-visible { outline: 2px solid var(--vpro-focus-ring); outline-offset: 2px; }
 </style>

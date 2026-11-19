@@ -1,7 +1,7 @@
 import { Dialogs, Events } from '@wailsio/runtime';
 import { ImportExportService } from '../../bindings/github.com/boostao/vpro/app';
 
-export const ACCESS_IMPORT_PROGRESS_EVENT = 'vpro:access-import-progress';
+const ACCESS_IMPORT_PROGRESS_EVENT = 'vpro:access-import-progress';
 
 export interface AccessImportProgressPayload {
   contextId?: string;
@@ -32,7 +32,7 @@ export interface FileDialogFilter {
   Pattern: string;
 }
 
-export interface VenusProjectCandidate {
+interface VenusProjectCandidate {
   projectId: string;
   projectName: string;
   suggestedTarget: string;
@@ -51,7 +51,7 @@ export interface VenusSourceInspection {
   projects: VenusProjectCandidate[];
 }
 
-export interface VenusImportRequest {
+interface VenusImportRequest {
   sourcePath: string;
   sourceProject?: string;
   targetProject: string;
@@ -75,7 +75,7 @@ export interface VenusImportResult {
   state?: Record<string, unknown> | null;
 }
 
-export interface TurboVegExportRequest {
+interface TurboVegExportRequest {
   format: 'xml' | 'sqlite';
   destinationPath: string;
   lumpTable?: string;
@@ -91,7 +91,7 @@ export interface TurboVegExportOutcome {
   observationCount: number;
 }
 
-export interface TurboVegImportRequest {
+interface TurboVegImportRequest {
   sourcePath: string;
   format?: 'xml' | 'sqlite' | '';
   targetProject: string;
@@ -113,7 +113,7 @@ export interface TurboVegImportOutcome {
   state?: Record<string, unknown> | null;
 }
 
-export interface UserSpeciesRecord {
+interface UserSpeciesRecord {
   code: string;
   scientificName: string | null;
   lifeForm: number | null;
@@ -123,7 +123,7 @@ export interface UserSpeciesRecord {
   codetype?: string | null;
 }
 
-export interface UserSpeciesExportRequest {
+interface UserSpeciesExportRequest {
   format: 'json' | 'csv';
   destinationPath?: string;
 }
@@ -140,14 +140,14 @@ export interface UserSpeciesExportResult {
 
 export type UserSpeciesCollisionPolicy = 'skip' | 'overwrite';
 
-export interface UserSpeciesImportRequest {
+interface UserSpeciesImportRequest {
   sourcePath?: string;
   format?: 'json' | 'csv' | '';
   content?: string;
   collisionPolicy: UserSpeciesCollisionPolicy;
 }
 
-export interface UserSpeciesImportItemReview {
+interface UserSpeciesImportItemReview {
   code: string;
   scientificName: string;
   lifeForm?: number | null;
@@ -172,13 +172,13 @@ export interface UserSpeciesImportResult {
   skippedCount: number;
 }
 
-export interface LongTidyCSVRequest {
+interface LongTidyCSVRequest {
   destinationPath?: string;
   lumpTable?: string;
   lumpDbPath?: string;
 }
 
-export interface WideMatrixCSVRequest {
+interface WideMatrixCSVRequest {
   destinationPath?: string;
   layerMode: 'rollup_all' | 'strata_4' | 'species_layer';
   zeroFill: boolean;
@@ -198,13 +198,13 @@ export interface CSVExportOutcome {
   previewCsv: string;
 }
 
-export interface RDSExportRequest {
+interface RDSExportRequest {
   destinationPath: string;
   lumpTable?: string;
   lumpDbPath?: string;
 }
 
-export interface RDSTableSummary {
+interface RDSTableSummary {
   name: string;
   rowCount: number;
   columnCount: number;
@@ -218,7 +218,7 @@ export interface RDSExportOutcome {
   tables: RDSTableSummary[];
 }
 
-export interface GeoPackageExportRequest {
+interface GeoPackageExportRequest {
   destinationPath: string;
   crs: 'EPSG:3005' | 'EPSG:4326';
   includeAttributeTables: boolean;

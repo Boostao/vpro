@@ -218,7 +218,7 @@
 </script>
 
 <section class="labels" data-plot-label-preview aria-label="VPro Plot Labels">
-  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-stone-200" data-workbench-sticky-bar>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border" data-workbench-sticky-bar>
     <h1>VPro Plot Labels</h1>
     <p>Owned project {project}. Preview an exact saved plot, not unsaved form controls.</p>
     <form onsubmit={event => { event.preventDefault(); void load(); }}>
@@ -293,15 +293,15 @@
     min-width: 0;
     max-width: 58rem;
     font-family: var(--vpro-font-sans, "BC Sans", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
-    color: var(--vpro-ink, #313132);
+    color: var(--vpro-ink);
   }
 
   h1 {
     margin: 0 0 0.5rem;
     font-size: 1.5rem;
     font-weight: 700;
-    color: var(--vpro-navy, #003366);
-    border-bottom: 3px solid var(--vpro-gold, #FCBA19);
+    color: var(--vpro-navy);
+    border-bottom: 3px solid var(--vpro-gold);
     display: inline-block;
     padding-bottom: 0.2rem;
   }
@@ -310,7 +310,7 @@
     margin: 0;
     font-size: 1.2rem;
     font-weight: 700;
-    color: var(--vpro-navy, #003366);
+    color: var(--vpro-navy);
   }
 
   form {
@@ -320,9 +320,9 @@
     gap: 0.75rem;
     margin: 1rem 0;
     padding: 0.9rem 1rem;
-    background: var(--vpro-surface, #FFFFFF);
-    border: 1px solid var(--vpro-border, #D1D5DB);
-    border-top: 3px solid var(--vpro-navy, #003366);
+    background: var(--vpro-surface);
+    border: 1px solid var(--vpro-border);
+    border-top: 3px solid var(--vpro-navy);
     border-radius: var(--vpro-radius-md, 6px);
     box-shadow: var(--vpro-shadow-sm, 0 1px 2px rgba(0, 34, 68, 0.06));
   }
@@ -334,14 +334,14 @@
     flex: 1 1 13rem;
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--vpro-navy, #003366);
+    color: var(--vpro-navy);
   }
 
   input,
   button {
     min-width: 0;
     min-height: 40px;
-    border: 1px solid var(--vpro-border-strong, #9CA3AF);
+    border: 1px solid var(--vpro-border-strong);
     border-radius: var(--vpro-radius-sm, 4px);
     padding: 0.45rem 0.75rem;
     font: inherit;
@@ -349,41 +349,41 @@
   }
 
   input {
-    background: var(--vpro-surface, #FFFFFF);
-    color: var(--vpro-ink, #313132);
+    background: var(--vpro-surface);
+    color: var(--vpro-ink);
     font-family: var(--vpro-font-mono, "IBM Plex Mono", ui-monospace, monospace);
     font-variant-numeric: tabular-nums;
   }
 
   button {
-    background: var(--vpro-surface, #FFFFFF);
-    border-color: var(--vpro-navy, #003366);
-    color: var(--vpro-navy, #003366);
+    background: var(--vpro-surface);
+    border-color: var(--vpro-navy);
+    color: var(--vpro-navy);
     font-weight: 600;
   }
 
   button:hover:not(:disabled) {
-    background: var(--vpro-navy-tint, #EBF1F8);
+    background: var(--vpro-navy-tint);
   }
 
   button[type="submit"],
   .btn-primary {
-    background: var(--vpro-navy, #003366);
-    border-color: var(--vpro-navy, #003366);
-    color: var(--vpro-surface, #FFFFFF);
+    background: var(--vpro-navy);
+    border-color: var(--vpro-navy);
+    color: var(--vpro-surface);
     font-weight: 700;
   }
 
   button[type="submit"]:hover:not(:disabled),
   .btn-primary:hover:not(:disabled) {
-    background: var(--vpro-navy-dark, #002244);
-    border-color: var(--vpro-navy-dark, #002244);
+    background: var(--vpro-navy-dark);
+    border-color: var(--vpro-navy-dark);
   }
 
   input:focus-visible,
   button:focus-visible,
   summary:focus-visible {
-    outline: 2px solid var(--vpro-gold, #FCBA19);
+    outline: 2px solid var(--vpro-gold);
     outline-offset: 2px;
   }
 
@@ -393,9 +393,9 @@
   }
 
   .label {
-    background: var(--vpro-surface, #FFFFFF);
-    border: 1px solid var(--vpro-border-strong, #9CA3AF);
-    border-top: 4px solid var(--vpro-navy, #003366);
+    background: var(--vpro-surface);
+    border: 1px solid var(--vpro-border-strong);
+    border-top: 4px solid var(--vpro-navy);
     border-radius: var(--vpro-radius-sm, 4px);
     padding: 1.05rem 1.2rem;
     margin: 1rem 0;
@@ -436,9 +436,9 @@
     font-variant-numeric: tabular-nums;
     font-size: 0.85rem;
     font-weight: 700;
-    color: var(--vpro-forest, #1E5128);
-    background: var(--vpro-forest-surface, #E9F1EB);
-    border: 1px solid var(--vpro-forest-border, #D8D8D8);
+    color: var(--vpro-forest);
+    background: var(--vpro-forest-surface);
+    border: 1px solid var(--vpro-forest-border);
     border-radius: var(--vpro-radius-xs, 3px);
     padding: 0.12rem 0.5rem;
   }
@@ -450,11 +450,11 @@
     gap: 0.5rem;
     margin-top: 0.3rem;
     padding-top: 0.55rem;
-    border-top: 1px dashed var(--vpro-border, #D1D5DB);
+    border-top: 1px dashed var(--vpro-border);
     font-family: var(--vpro-font-mono, "IBM Plex Mono", ui-monospace, monospace);
     font-variant-numeric: tabular-nums;
     font-size: 0.82rem;
-    color: var(--vpro-ink-secondary, #4B5563);
+    color: var(--vpro-ink-secondary);
   }
 
   footer span {
@@ -466,15 +466,15 @@
   details {
     margin: 0.85rem 0;
     padding: 0.75rem 1rem;
-    background: var(--vpro-surface-subtle, #F8FAFB);
-    border: 1px solid var(--vpro-border, #D1D5DB);
+    background: var(--vpro-surface-subtle);
+    border: 1px solid var(--vpro-border);
     border-radius: var(--vpro-radius-sm, 4px);
   }
 
   summary {
     cursor: pointer;
     font-weight: 600;
-    color: var(--vpro-navy, #003366);
+    color: var(--vpro-navy);
   }
 
   .pdf {
@@ -484,9 +484,9 @@
     min-width: 0;
     margin-top: 1rem;
     padding: 1rem 1.15rem;
-    background: var(--vpro-surface, #FFFFFF);
-    border: 1px solid var(--vpro-border, #D1D5DB);
-    border-left: 4px solid var(--vpro-forest, #1E5128);
+    background: var(--vpro-surface);
+    border: 1px solid var(--vpro-border);
+    border-left: 4px solid var(--vpro-forest);
     border-radius: var(--vpro-radius-sm, 4px);
   }
 
@@ -510,15 +510,15 @@
   dl > div {
     margin: 0;
     padding: 0.3rem 0.5rem;
-    background: var(--vpro-surface, #FFFFFF);
-    border: 1px solid var(--vpro-border, #D1D5DB);
+    background: var(--vpro-surface);
+    border: 1px solid var(--vpro-border);
     border-radius: var(--vpro-radius-xs, 3px);
   }
 
   dt {
     font-size: 0.76rem;
     font-weight: 700;
-    color: var(--vpro-ink-secondary, #4B5563);
+    color: var(--vpro-ink-secondary);
   }
 
   dd {
@@ -526,12 +526,12 @@
     font-family: var(--vpro-font-mono, "IBM Plex Mono", ui-monospace, monospace);
     font-variant-numeric: tabular-nums;
     font-size: 0.84rem;
-    color: var(--vpro-ink, #313132);
+    color: var(--vpro-ink);
   }
 
   .guidance {
     margin-top: 0.85rem;
     font-size: 0.8rem;
-    color: var(--vpro-ink-secondary, #4B5563);
+    color: var(--vpro-ink-secondary);
   }
 </style>

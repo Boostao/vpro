@@ -191,8 +191,8 @@ test('all 5 Svelte 5 Help/Tour/Modal components compile cleanly with zero warnin
   ]) {
     const source = readSrc(file);
     assert.doesNotMatch(source, emojiPattern, `${file} must contain zero emojis`);
-    assert.match(source, /#003366/, `${file} must apply BC Navy header hierarchy`);
-    assert.match(source, /#FCBA19/, `${file} must apply BC Gold accent rule`);
+    assert.match(source, /#003366|vpro-navy/, `${file} must apply BC Navy header hierarchy`);
+    assert.match(source, /#FCBA19|vpro-gold/i, `${file} must apply BC Gold accent rule`);
     const compiled = compile(source, { filename: file, generate: 'client' });
     assert.deepEqual(compiled.warnings, [], `${file} emitted compiler warnings`);
   }

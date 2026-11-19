@@ -68,7 +68,7 @@
         <button type="button" disabled={busy || attributeReferenceBusy || headerWorkflowBusy} onclick={() => void loadAttributeSuggestions()}>Retry attribute references</button>
       {/if}
     {:else}
-      <p class="mb-3 text-xs text-stone-500">Stored vegetation attributes are read-only; their editing workflow is not enabled.</p>
+      <p class="mb-3 text-xs text-vpro-ink-muted">Stored vegetation attributes are read-only; their editing workflow is not enabled.</p>
     {/if}
     <SourcePage name="Veg Other" values={sourceHeaderValues}>
       {#snippet embedded(control)}
@@ -78,7 +78,7 @@
       {/snippet}
     </SourcePage>
     {#if attributeEditingEnabled}
-      <div class="mt-3 text-xs text-stone-600">
+      <div class="mt-3 text-xs text-vpro-ink-secondary">
         <p>Suggestions retain source definitions, including duplicates. AF is free numeric entry; species and row creation remain unavailable here.</p>
         <button type="button" class="mt-2 px-2 py-1 border rounded" disabled={busy || attributeReferenceBusy || headerWorkflowBusy}
           onclick={() => void loadAttributeSuggestions()}>Reload attribute references</button>
@@ -96,24 +96,24 @@
     {/snippet}
   </SourcePage>
   <div class="space-y-3">
-    <h3 class="font-bold text-xs uppercase tracking-wider text-stone-600">Auxiliary Data ({otherList.length})</h3>
-    <div class="border border-stone-200 rounded overflow-x-auto bg-white">
+    <h3 class="font-bold text-xs uppercase tracking-wider text-vpro-ink-secondary">Auxiliary Data ({otherList.length})</h3>
+    <div class="border border-vpro-border rounded overflow-x-auto bg-white">
       <table class="w-full text-left text-xs">
-        <thead class="bg-stone-100 border-b border-stone-200 text-stone-600 font-semibold">
+        <thead class="bg-vpro-canvas border-b border-vpro-border text-vpro-ink-secondary font-semibold">
           <tr>
             <th class="p-2">Data Name</th>
             <th class="p-2">Value</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-stone-100">
+        <tbody class="divide-y divide-vpro-rail">
           {#each otherList as o (o.id)}
-            <tr class="hover:bg-stone-50">
+            <tr class="hover:bg-vpro-surface-subtle">
               <td class="p-2 font-medium">{o.dataName ?? '—'}</td>
               <td class="p-2">{o.dataItem ?? '—'}</td>
             </tr>
           {:else}
             <tr>
-              <td colspan="2" class="p-4 text-center text-stone-400">No auxiliary data items.</td>
+              <td colspan="2" class="p-4 text-center text-vpro-ink-muted">No auxiliary data items.</td>
             </tr>
           {/each}
         </tbody>

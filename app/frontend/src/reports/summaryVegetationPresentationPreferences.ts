@@ -3,7 +3,7 @@ import { lifeformShape } from './lifeformSummary';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { ReportPreferencesSession, reportPreferencesRegistry, type ReportPreferenceRequest, type ReportTitlePreferencesOutcome } from './reportTitlePreferences';
 
-export interface SummaryVegetationPresentationPreferenceValues {
+interface SummaryVegetationPresentationPreferenceValues {
   title: string;
   showCommon: boolean;
   showGuide: boolean;
@@ -20,16 +20,16 @@ export interface SummaryVegetationPresentationPreferencesReview extends GoogleEa
   values: SummaryVegetationPresentationPreferenceValues;
   source: string;
 }
-export interface SummaryVegetationPresentationPreferenceDraft extends SummaryVegetationPresentationPreferenceValues {
+interface SummaryVegetationPresentationPreferenceDraft extends SummaryVegetationPresentationPreferenceValues {
   constancyApplied: boolean;
 }
-export interface SummaryVegetationPresentationPreferencesRequest extends ReportPreferenceRequest<SummaryVegetationPresentationPreferenceValues> {
+interface SummaryVegetationPresentationPreferencesRequest extends ReportPreferenceRequest<SummaryVegetationPresentationPreferenceValues> {
   constancyApplied: boolean;
 }
 const booleanKeys = ['showCommon', 'showGuide', 'hierarchyHeader', 'includeEnv', 'createSummary', 'combineVariants', 'constancy'] as const;
 type BooleanField = typeof booleanKeys[number];
 const valueKeys = ['title', ...booleanKeys, 'groupBy', 'display', 'valueLimit'];
-export const summaryVegetationPresentationSource =
+const summaryVegetationPresentationSource =
   'owned native YAML saved Summary presentation; explicit Save adaptation; constancy-on forces Group by3/Display1/common names off without clearing limit; no guide renames, field-list writes or report-consumer parity';
 function valid(value: unknown): value is SummaryVegetationPresentationPreferenceValues {
   return lifeformShape(value, valueKeys) && typeof value.title === 'string' && wellFormedUTF16(value.title) &&

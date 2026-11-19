@@ -24,7 +24,7 @@
   }
 </script>
 
-<section class="space-y-4 rounded border border-stone-200 p-4" data-sivi-collected-panel aria-label="SIVI Collected source cycles">
+<section class="space-y-4 rounded border border-vpro-border p-4" data-sivi-collected-panel aria-label="SIVI Collected source cycles">
   <h2 class="font-semibold">SIVI Collected (?) cycles</h2>
   {#if view.error}<p class="text-sm text-red-700" role="alert">{view.error}</p>{/if}
   {#if view.blocked}<p class="text-sm text-red-700" role="alert">Acknowledgement or refresh is unresolved. Undo/reload explicitly; never replay Save or restoration.</p>{/if}
@@ -48,16 +48,16 @@
     {#each view.review as group, index (group.Query)}
       <section class="space-y-3" data-sivi-collected-group={group.Form} aria-label={groups[index]}>
         <h3 class="font-semibold">{groups[index]}</h3>
-        {#if group.Rows.length === 0}<p class="text-sm text-stone-600">No cover-driven source rows.</p>{/if}
+        {#if group.Rows.length === 0}<p class="text-sm text-vpro-ink-secondary">No cover-driven source rows.</p>{/if}
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {#each group.Rows as row (row.rowId)}
             {@const original = row.cells[group.Columns.indexOf('Collected')]}
             {@const value = view.drafts[row.rowId]?.value ?? original}
             {@const valueText = value.storage === 'null' ? 'NULL' : metadataCellText(value)}
             {@const id = `sivi-collected-${row.rowId}`}
-            <article class="min-w-0 space-y-2 rounded border border-stone-200 p-3" data-sivi-collected-row={row.rowId}>
+            <article class="min-w-0 space-y-2 rounded border border-vpro-border p-3" data-sivi-collected-row={row.rowId}>
               <h4 class="break-words font-medium">Species: {text(group, row, 'Species')}</h4>
-              <p class="text-xs text-stone-500">Physical row {row.rowId}; ID {text(group, row, 'ID')}</p>
+              <p class="text-xs text-vpro-ink-muted">Physical row {row.rowId}; ID {text(group, row, 'ID')}</p>
               {#if owners.get(row.rowId) === group.Form}
                 <label for={id} class="block text-sm font-medium">Collected (?)</label>
                 <button {id} type="button" class="w-full min-w-0 break-words rounded border px-3 py-2 disabled:opacity-50"
@@ -69,7 +69,7 @@
                 {/if}
               {:else}
                 <dl><dt class="text-sm font-medium">Collected (?)</dt><dd class="break-words">{valueText}</dd></dl>
-                <p class="text-xs text-stone-600">The same physical field is edited in its first source group above.</p>
+                <p class="text-xs text-vpro-ink-secondary">The same physical field is edited in its first source group above.</p>
               {/if}
             </article>
           {/each}
@@ -77,10 +77,10 @@
       </section>
     {/each}
   {:else if !view.busy}
-    <p class="text-sm text-stone-600">Load all three owned source groups before cycling.</p>
+    <p class="text-sm text-vpro-ink-secondary">Load all three owned source groups before cycling.</p>
   {/if}
   <SIVIChildSourceNotices notices={view.sourceNotices ?? []} saved={view.sourceNoticesSaved ?? false} />
-  <p class="text-xs text-stone-600">Click cycles NULL, C, V, then NULL. Other stored text remains unchanged.
+  <p class="text-xs text-vpro-ink-secondary">Click cycles NULL, C, V, then NULL. Other stored text remains unchanged.
     One live control owns each physical field, even when a row appears in multiple source groups.
     Save applies reviewed cycle intent only; Species, covers, heights, IDs, metadata and creation/deletion are not editable here.</p>
 </section>

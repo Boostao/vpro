@@ -99,25 +99,25 @@
   onDestroy(cancel);
 </script>
 
-<section class="min-w-0 space-y-3 rounded border border-[#D8D8D8] bg-white p-3" aria-label="VPro Data History"
+<section class="min-w-0 space-y-3 rounded border border-vpro-border bg-white p-3" aria-label="VPro Data History"
   data-two-page-audit-panel data-source-form="USysAuditXL" data-source-parent-form={owner.form}>
-  <h3 class="font-semibold text-[#003366]">VPro Data History</h3>
-  <p class="break-words text-sm text-[#313132]">Owned project {owner.project}; literal plot {JSON.stringify(owner.plot)}.</p>
-  {#if error}<p role="alert" class="break-words text-sm text-[#D8292F]">{error}</p>{/if}
-  {#if statusMsg}<p role="status" class="break-words text-sm text-[#2E8540]">{statusMsg}</p>{/if}
+  <h3 class="font-semibold text-vpro-navy">VPro Data History</h3>
+  <p class="break-words text-sm text-vpro-ink">Owned project {owner.project}; literal plot {JSON.stringify(owner.plot)}.</p>
+  {#if error}<p role="alert" class="break-words text-sm text-vpro-error">{error}</p>{/if}
+  {#if statusMsg}<p role="status" class="break-words text-sm text-vpro-success">{statusMsg}</p>{/if}
   <div class="flex flex-wrap gap-2">
-    <button type="button" class="rounded border border-[#003366] bg-[#003366] px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+    <button type="button" class="rounded border border-vpro-navy bg-vpro-navy px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
       disabled={busy || restoreBusy} onclick={load}>Load source audit history</button>
-    {#if busy}<button type="button" class="rounded border border-[#D8D8D8] bg-white px-3 py-1 text-xs text-[#313132]" onclick={cancel}>Cancel audit read</button><p role="status">Reading owned history...</p>{/if}
+    {#if busy}<button type="button" class="rounded border border-vpro-border bg-white px-3 py-1 text-xs text-vpro-ink" onclick={cancel}>Cancel audit read</button><p role="status">Reading owned history...</p>{/if}
     {#if review && review.records.rows.length > 0}
       <button type="button" data-audit-restore-retain
-        class="rounded border border-[#2E8540] bg-[#EBF5ED] px-3 py-1 text-xs font-medium text-[#1F5C2C] disabled:opacity-50"
+        class="rounded border border-vpro-success bg-vpro-success-bg px-3 py-1 text-xs font-medium text-vpro-forest disabled:opacity-50"
         disabled={busy || restoreBusy || selectedIds.length === 0}
         onclick={() => void restoreSelected(AuditRestoreAction.AuditRestoreRetain)}>
         Restore selected (Retain history)
       </button>
       <button type="button" data-audit-restore-prune
-        class="rounded border border-[#D8292F] bg-[#FCEAEA] px-3 py-1 text-xs font-medium text-[#D8292F] disabled:opacity-50"
+        class="rounded border border-vpro-error bg-vpro-error-bg px-3 py-1 text-xs font-medium text-vpro-error disabled:opacity-50"
         disabled={busy || restoreBusy || selectedIds.length === 0}
         onclick={() => void restoreSelected(AuditRestoreAction.AuditRestorePrune)}>
         Restore selected (Prune history)
@@ -125,12 +125,12 @@
     {/if}
   </div>
   {#if review}
-    <p role="status" class="text-xs text-[#313132]">{review.records.rows.length} physical audit rows ({selectedIds.length} marked for restore). Ascending SQLite EditWhen storage order; ties retain physical row order.</p>
+    <p role="status" class="text-xs text-vpro-ink">{review.records.rows.length} physical audit rows ({selectedIds.length} marked for restore). Ascending SQLite EditWhen storage order; ties retain physical row order.</p>
     {#each review.records.rows as row (row.rowId)}
-      <article class="min-w-0 rounded border border-[#D8D8D8] p-3" data-source-audit-row={row.rowId} aria-label={`Physical audit row ${row.rowId}`}>
+      <article class="min-w-0 rounded border border-vpro-border p-3" data-source-audit-row={row.rowId} aria-label={`Physical audit row ${row.rowId}`}>
         <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h4 class="break-words font-medium text-[#003366]">Physical audit row {row.rowId}</h4>
-          <label class="flex items-center gap-1.5 text-xs font-medium text-[#313132]">
+          <h4 class="break-words font-medium text-vpro-navy">Physical audit row {row.rowId}</h4>
+          <label class="flex items-center gap-1.5 text-xs font-medium text-vpro-ink">
             <input type="checkbox" checked={selectedIds.includes(row.rowId)} disabled={busy || restoreBusy}
               onchange={event => void toggleRestoreRow(row.rowId, event.currentTarget.checked)} />
             Select for restore
@@ -146,7 +146,7 @@
       </article>
     {:else}<p>No audit history for this literal plot.</p>{/each}
   {/if}
-  <p class="text-xs text-stone-600">Adaptation of USysAuditXL / UsysAuditTrail.
+  <p class="text-xs text-vpro-ink-secondary">Adaptation of USysAuditXL / UsysAuditTrail.
     NULL, empty text, child identity and stored BOOLEAN values remain distinct.
     Use the row checkboxes to persist Restore flags and explicitly choose Retain or Prune restoration.</p>
 </section>

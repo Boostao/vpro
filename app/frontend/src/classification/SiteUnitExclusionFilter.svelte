@@ -456,13 +456,13 @@
     display: flex;
     flex-direction: column;
     gap: 0.65rem;
-    background: #f2f2f2;
-    border: 1px solid #d8d8d8;
-    border-left: 4px solid #003366;
+    background: var(--vpro-canvas);
+    border: 1px solid var(--vpro-border);
+    border-left: 4px solid var(--vpro-navy);
     border-radius: 4px;
     padding: 0.85rem 1rem;
     min-width: 0;
-    color: #313132;
+    color: var(--vpro-ink);
   }
   .vpro-sux-header {
     display: flex;
@@ -476,13 +476,13 @@
     font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.08em;
-    color: #003366;
+    color: var(--vpro-navy);
   }
   .vpro-sux-title {
     margin: 0.1rem 0 0;
     font-size: 0.96rem;
     font-weight: 700;
-    color: #003366;
+    color: var(--vpro-navy);
   }
   .vpro-sux-actions {
     display: flex;
@@ -499,26 +499,26 @@
     align-items: center;
     gap: 0.35rem;
     padding: 0.25rem 0.5rem;
-    background: #ffffff;
-    border: 1px solid #003366;
+    background: var(--vpro-surface);
+    border: 1px solid var(--vpro-navy);
     border-radius: 999px;
     font-size: 0.78rem;
   }
   .vpro-sux-chip.disabled {
     opacity: 0.55;
-    border-color: #d8d8d8;
+    border-color: var(--vpro-border);
   }
   .vpro-sux-mode-tag {
     font-size: 0.66rem;
-    background: #d8d8d8;
-    color: #313132;
+    background: var(--vpro-border);
+    color: var(--vpro-ink);
     padding: 0.05rem 0.35rem;
     border-radius: 3px;
   }
   .vpro-sux-remove {
     border: 0;
     background: transparent;
-    color: #d8292f;
+    color: var(--vpro-error);
     font-weight: 700;
     padding: 0 2px;
   }
@@ -536,21 +536,21 @@
     gap: 0.2rem;
     font-size: 0.76rem;
     font-weight: 600;
-    color: #003366;
+    color: var(--vpro-navy);
   }
   .vpro-sux-add-row input,
   .vpro-sux-add-row select,
   .vpro-sux-bp-opts select {
     min-height: 30px;
     padding: 0.2rem 0.45rem;
-    border: 1px solid #d8d8d8;
+    border: 1px solid var(--vpro-border);
     border-radius: 3px;
     font-size: 0.8rem;
-    background: #ffffff;
-    color: #313132;
+    background: var(--vpro-surface);
+    color: var(--vpro-ink);
   }
   .vpro-sux-breakpoints {
-    border-top: 1px solid #d8d8d8;
+    border-top: 1px solid var(--vpro-border);
     padding-top: 0.5rem;
     display: grid;
     gap: 0.45rem;
@@ -561,12 +561,12 @@
     align-items: center;
     gap: 0.4rem !important;
     font-size: 0.8rem;
-    color: #313132;
+    color: var(--vpro-ink);
   }
   .vpro-sux-summary {
-    background: #ffffff;
-    border: 1px solid #d8d8d8;
-    border-top: 2px solid #fcba19;
+    background: var(--vpro-surface);
+    border: 1px solid var(--vpro-border);
+    border-top: 2px solid var(--vpro-gold);
     padding: 0.55rem 0.75rem;
     border-radius: 4px;
     font-size: 0.8rem;
@@ -586,17 +586,17 @@
     margin: 0;
     padding: 0.45rem 0.7rem;
     background: rgba(216, 41, 47, 0.08);
-    border-left: 4px solid #d8292f;
-    color: #d8292f;
+    border-left: 4px solid var(--vpro-error);
+    color: var(--vpro-error);
     font-size: 0.8rem;
   }
   .vpro-btn-primary {
     min-height: 32px;
     padding: 0.3rem 0.75rem;
-    background: #003366;
-    color: #ffffff;
-    border: 1px solid #003366;
-    border-bottom: 2px solid #fcba19;
+    background: var(--vpro-navy);
+    color: var(--vpro-surface);
+    border: 1px solid var(--vpro-navy);
+    border-bottom: 2px solid var(--vpro-gold);
     border-radius: 4px;
     font-size: 0.8rem;
     font-weight: 600;
@@ -604,9 +604,9 @@
   .vpro-btn-secondary {
     min-height: 32px;
     padding: 0.3rem 0.65rem;
-    background: #ffffff;
-    color: #003366;
-    border: 1px solid #003366;
+    background: var(--vpro-surface);
+    color: var(--vpro-navy);
+    border: 1px solid var(--vpro-navy);
     border-radius: 4px;
     font-size: 0.8rem;
   }

@@ -25,9 +25,9 @@ import type { TwoPageParentCommonSessionCache } from './twoPageParentCommonSessi
 import type { TwoPageEntrySessionCache } from './twoPageEntrySession';
 import type { EditorCloseState } from '../shell/closeLifecycle';
 
-export type SiviLifecycleOwner = 'creation' | 'deletion' | 'restoration' | 'creationUndo';
+type SiviLifecycleOwner = 'creation' | 'deletion' | 'restoration' | 'creationUndo';
 
-export interface SiviSessionStateBundle {
+interface SiviSessionStateBundle {
   siviParentSession: SIVIParentReadSession | null;
   siviParentSourceSession: SIVIParentSourceSession | null;
   siviParentWriteSession: SIVIParentWriteSession | null;
@@ -42,7 +42,7 @@ export interface SiviSessionStateBundle {
   siviIdentitySession: SIVIIdentitySession | null;
 }
 
-export interface SiviReadsBundle {
+interface SiviReadsBundle {
   siviParentReads: ReadRequests;
   siviParentSourceReads: ReadRequests;
   siviParentWriteReads: ReadRequests;
@@ -182,7 +182,7 @@ export async function refreshTwoPagePeersImpl(params: {
 }
 
 /** Extract unique trimmed ProjectID options from wire choices. */
-export function extractProjectIdChoices(choices: SIVIProjectChoices | null | undefined): string[] {
+function extractProjectIdChoices(choices: SIVIProjectChoices | null | undefined): string[] {
   const rows = choices?.Choices?.rows;
   if (!rows?.length) return [];
   return [...new Set(rows.map(r => (r.cells?.[0]?.storage === 'text' ? (r.cells[0].text ?? '').trim() : '')).filter(Boolean))];

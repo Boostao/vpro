@@ -33,7 +33,7 @@
 </script>
 
 <section aria-label="Two-page common-field editor" data-two-page-common-panel={form}
-  class="space-y-4 rounded border border-stone-200 bg-white p-4">
+  class="space-y-4 rounded border border-vpro-border bg-white p-4">
   <h3 class="font-semibold">{form} common fields beyond XL</h3>
   {#if view.error}<p role="alert" class="text-sm text-red-700">{view.error}</p>{/if}
   {#if view.blocked}<p role="alert">Write outcome or refresh is unresolved. Undo / reload before continuing; never replay Save.</p>{/if}
@@ -70,7 +70,7 @@
     {/each}
     {/if}
   {/if}
-  <p class="text-xs text-stone-600">{fields.length} common source-bound fields use typed audited storage.
+  <p class="text-xs text-vpro-ink-secondary">{fields.length} common source-bound fields use typed audited storage.
     PlotType choices are suggestions, not the SIVI five-option action. Literal TEXT10 remains editable when choices are unavailable.
     Explicit Save/restoration and a single age editor are desktop adaptations, not complete two-page event parity.</p>
 </section>
@@ -136,7 +136,7 @@
               {#if field.policy.kind === 'boolean'}<p class="text-xs">Source Yes/No converts NULL to No; choose No explicitly. Unchanged historical NULL is retained.</p>{/if}
               {#if draft?.error}<p id={`${id}-error`} role="alert" class="text-sm text-red-700">{draft.error}</p>{/if}
               {#if field.sourceInstances.length > 1}
-                <p class="text-xs text-stone-600">Both source Est/Meas controls bind Stand Age. One shared editor preserves that binding; it does not edit Stand Height.</p>
+                <p class="text-xs text-vpro-ink-secondary">Both source Est/Meas controls bind Stand Age. One shared editor preserves that binding; it does not edit Stand Height.</p>
               {/if}
             </div>
   {/if}

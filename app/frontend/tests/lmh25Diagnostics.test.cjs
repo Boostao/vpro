@@ -86,8 +86,8 @@ test('normalizeDiagnosticsWire rejects malformed payloads and default port calls
 test('LMH25DiagnosticsBar.svelte compiles cleanly, contains zero emojis, and renders BC Gov banner', () => {
   const source = readFileSync(srcPath('LMH25DiagnosticsBar.svelte'), 'utf8');
   assert.equal(/\p{Extended_Pictographic}/u.test(source), false);
-  assert.match(source, /#003366/);
-  assert.match(source, /#fcba19/i);
+  assert.match(source, /#003366|vpro-navy/);
+  assert.match(source, /#fcba19|vpro-gold/i);
 
   const Component = serverComponent(source, 'LMH25DiagnosticsBar.svelte', {
     './lmh25Diagnostics': diag,

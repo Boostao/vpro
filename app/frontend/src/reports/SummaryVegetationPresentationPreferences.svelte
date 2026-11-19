@@ -234,22 +234,22 @@
 </section>
 
 <style>
-  .summary-presentation { min-width: 0; margin: 0.75rem 0; color: #313132; }
-  fieldset { min-width: 0; border: 1px solid #D8D8D8; border-radius: 0.5rem; padding: 0.75rem; background: #FFFFFF; }
-  legend { font-weight: 600; color: #003366; }
+  .summary-presentation { min-width: 0; margin: 0.75rem 0; color: var(--vpro-ink); }
+  fieldset { min-width: 0; border: 1px solid var(--vpro-border); border-radius: 0.5rem; padding: 0.75rem; background: var(--vpro-surface); }
+  legend { font-weight: 600; color: var(--vpro-navy); }
   .title { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.25rem; }
-  .title input { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid #D8D8D8; border-radius: 0.25rem; padding: 0.5rem; background: #FFFFFF; color: #313132; }
+  .title input { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid var(--vpro-border); border-radius: 0.25rem; padding: 0.5rem; background: var(--vpro-surface); color: var(--vpro-ink); }
   .flags { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 1rem; margin-top: 0.75rem; }
   .flags label { display: flex; align-items: flex-start; gap: 0.5rem; min-width: 0; min-height: 2.75rem; overflow-wrap: anywhere; }
   .flags input { flex: none; margin-top: 0.25rem; }
   dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 1rem; margin-top: 0.75rem; }
   dl div { min-width: 0; overflow-wrap: anywhere; }
-  dt { font-weight: 600; color: #003366; }
+  dt { font-weight: 600; color: var(--vpro-navy); }
   dd { margin: 0; }
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
-  button { min-height: 2.75rem; max-width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #003366; border-radius: 0.25rem; background: #FFFFFF; color: #003366; font-weight: 600; }
+  button { min-height: 2.75rem; max-width: 100%; padding: 0.5rem 0.75rem; border: 1px solid var(--vpro-navy); border-radius: 0.25rem; background: var(--vpro-surface); color: var(--vpro-navy); font-weight: 600; }
   button:disabled { opacity: 0.55; }
-  .error { color: #D8292F; overflow-wrap: anywhere; margin-bottom: 0.5rem; font-weight: 600; }
-  .guidance { font-size: 0.875rem; margin-top: 0.75rem; overflow-wrap: anywhere; color: #474543; }
+  .error { color: var(--vpro-error); overflow-wrap: anywhere; margin-bottom: 0.5rem; font-weight: 600; }
+  .guidance { font-size: 0.875rem; margin-top: 0.75rem; overflow-wrap: anywhere; color: var(--vpro-ink-secondary); }
   @media (max-width: 640px) { .flags, dl { grid-template-columns: minmax(0, 1fr); } }
 </style>

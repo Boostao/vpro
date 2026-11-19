@@ -289,7 +289,7 @@ export function validateOrdinarySoilRecordIds<T extends { id: number }>(
   return { records: rows, reason: null };
 }
 
-export async function executeReviewedSIVISessionOperation(
+async function executeReviewedSIVISessionOperation(
   owner: {
     load: () => Promise<boolean>;
     save: () => Promise<boolean>;
@@ -314,7 +314,7 @@ export function firstMatch<T>(guards: Array<[() => boolean, T]>): T | null {
   return null;
 }
 
-export type ReviewedSiviKind =
+type ReviewedSiviKind =
   | 'parentWrite'
   | 'parentAction'
   | 'projectAssignment'
@@ -328,7 +328,7 @@ export type ReviewedSiviKind =
 
 export type ReviewedSiviOperation = 'load' | 'save' | 'undo' | 'retain' | 'prune';
 
-export type SiviChildOwner =
+type SiviChildOwner =
   | 'height'
   | 'cover'
   | 'combined'
@@ -348,7 +348,7 @@ interface ReviewedSiviDescriptor {
   failMsg: string;
 }
 
-export const REVIEWED_SIVI_DESCRIPTORS: Record<ReviewedSiviKind, ReviewedSiviDescriptor> = {
+const REVIEWED_SIVI_DESCRIPTORS: Record<ReviewedSiviKind, ReviewedSiviDescriptor> = {
   parentWrite: {
     guardMsg: 'SIVI parent edits require a clean unlocked parent and no conflicting operation; resolve acknowledgements explicitly.',
     saveMsg: 'SIVI directly bound parent fields saved and independently reloaded.',
@@ -421,7 +421,7 @@ export const REVIEWED_SIVI_DESCRIPTORS: Record<ReviewedSiviKind, ReviewedSiviDes
   },
 };
 
-export interface ReviewedSiviOwner {
+interface ReviewedSiviOwner {
   load: () => Promise<boolean>;
   save: () => Promise<boolean>;
   undo: () => Promise<boolean>;

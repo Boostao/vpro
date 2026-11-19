@@ -87,26 +87,6 @@
   --vpro-shadow-sm: 0 1px 2px rgba(0, 34, 68, 0.06);
   --vpro-shadow-md: 0 6px 18px rgba(0, 34, 68, 0.12);
   --vpro-shadow-lg: 0 14px 34px rgba(0, 34, 68, 0.2);
-
-  /* Cross-Artifact Aliases (Release Portal & Quarto Parity) */
-  --bcgov-navy: var(--vpro-navy);
-  --bcgov-navy-dark: var(--vpro-navy-dark);
-  --bcgov-navy-tint: var(--vpro-navy-tint);
-  --bcgov-gold: var(--vpro-gold);
-  --bcgov-surface: var(--vpro-surface);
-  --bcgov-neutral: var(--vpro-canvas);
-  --bcgov-border: var(--vpro-border);
-  --bcgov-border-strong: var(--vpro-border-strong);
-  --bcgov-text: var(--vpro-ink);
-  --bcgov-text-secondary: var(--vpro-ink-secondary);
-  --bcgov-link: var(--vpro-info);
-  --bcgov-verified: var(--vpro-success);
-  --bcgov-verified-bg: var(--vpro-success-bg);
-  --bcgov-advisory-bg: var(--vpro-warning-bg);
-  --bcgov-alert: var(--vpro-error);
-  --bcgov-alert-bg: var(--vpro-error-bg);
-  --bcgov-bec-forest: var(--vpro-forest);
-  --bcgov-bec-forest-bg: var(--vpro-forest-surface);
 }
 
 .tabular-nums {

@@ -15,7 +15,7 @@
   const unavailable = $derived(disabled || view.busy || view.blocked);
 </script>
 
-<section class="my-3 min-w-0 space-y-3 rounded border border-stone-300 p-3"
+<section class="my-3 min-w-0 space-y-3 rounded border border-vpro-border p-3"
   data-sivi-restoration-panel aria-label="SIVI deleted row restoration">
   <h2 class="font-semibold">Restore a reviewed deleted SIVI row</h2>
   {#if view.error}<p role="alert" class="break-words text-sm text-red-700">{view.error}</p>{/if}
@@ -90,7 +90,7 @@
       {view.receipt.replayed ? 'Observed an earlier commit; no restoration was repeated.' : 'One exact historical row was restored.'}
     </p>
   {/if}
-  <p class="text-xs text-stone-600">Typed deleted-row restoration is a desktop safety adaptation, not original Access undelete.
+  <p class="text-xs text-vpro-ink-secondary">Typed deleted-row restoration is a desktop safety adaptation, not original Access undelete.
     It preserves historical values and permanent ID reservations without allocating replacement identities or running destructive plot cleanup.
     A changed review token, occupied identity or changed schema refuses restoration.</p>
 </section>

@@ -103,7 +103,7 @@
       {/each}
     </details>
   {/if}
-  <p class="text-xs text-stone-600">Explicit saved-data read, never parent Save, editable datasheet or registry/toolbar mutation.
+  <p class="text-xs text-vpro-ink-secondary">Explicit saved-data read, never parent Save, editable datasheet or registry/toolbar mutation.
     NULL/empty text and all physical originals stay distinct. Unbound/computed controls and loaded-form runtime state are unavailable.
     Each page reads a fresh snapshot and saved target; concurrent changes can affect later pages.</p>
 </section>

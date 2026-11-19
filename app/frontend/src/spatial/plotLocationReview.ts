@@ -7,7 +7,7 @@ export const plotLocationFieldDefinitions = [
   ['LocationAccuracy', 'Accuracy'], ['Latitude', 'Latitude'], ['Longitude', 'Longitude'], ['Elevation', 'Elevation'],
 ] as const;
 
-export type ValidatedPlotLocationRow = Omit<PlotLocationRow, 'values' | 'membershipRowIds'> & {
+type ValidatedPlotLocationRow = Omit<PlotLocationRow, 'values' | 'membershipRowIds'> & {
   values: ProjectMetadataCell[]; membershipRowIds: string[];
 };
 export type ValidatedPlotLocationReview = Omit<PlotLocationReview, 'report'> & {
@@ -16,10 +16,10 @@ export type ValidatedPlotLocationReview = Omit<PlotLocationReview, 'report'> & {
   };
 };
 
-export const WESTERN_BC_MIN_ABS_LON = 100.0;
-export const WESTERN_BC_MAX_ABS_LON = 170.0;
+const WESTERN_BC_MIN_ABS_LON = 100.0;
+const WESTERN_BC_MAX_ABS_LON = 170.0;
 
-export function normalizeWesternLongitudeReal(value: number): number {
+function normalizeWesternLongitudeReal(value: number): number {
   return value >= WESTERN_BC_MIN_ABS_LON && value <= WESTERN_BC_MAX_ABS_LON ? -value : value;
 }
 

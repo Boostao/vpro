@@ -190,9 +190,13 @@ test('all 6 report hosts render sticky command bar with heading and primary acti
     assert.ok(match, `${host.file} must render <header data-report-sticky-bar>`);
     const attrs = match[1];
     const inner = match[2];
-    for (const cls of ['sticky', 'top-0', 'z-20', 'bg-white/95', 'backdrop-blur-xs', 'py-2', 'border-b', 'border-[#D8D8D8]']) {
+    for (const cls of ['sticky', 'top-0', 'z-20', 'bg-white/95', 'backdrop-blur-xs', 'py-2', 'border-b']) {
       assert.ok(attrs.includes(cls), `${host.file} sticky header missing class "${cls}"`);
     }
+    assert.ok(
+      attrs.includes('border-vpro-border') || attrs.includes('border-[#D8D8D8]'),
+      `${host.file} sticky header missing border-vpro-border token class`,
+    );
     assert.match(inner, new RegExp(`<h1[^>]*>${host.heading}<\\/h1>`), `${host.file} sticky header must contain <h1>${host.heading}</h1>`);
     assert.match(inner, host.actionPattern, `${host.file} sticky header must contain primary action control`);
   }

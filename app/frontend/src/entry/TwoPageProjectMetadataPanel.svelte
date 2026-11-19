@@ -51,11 +51,11 @@
     terminal ASCII spaces without modifying original text. General ACE locale parity is unverified.
     At most100000 physical metadata rows; pages contain up to50 matching rows in physical-row order.</p>
   <div class="flex flex-wrap gap-2">
-    <button type="button" class="rounded border border-[#D8D8D8] bg-white px-3 py-1.5 text-xs font-medium text-[#313132] disabled:opacity-50"
+    <button type="button" class="rounded border border-vpro-border bg-white px-3 py-1.5 text-xs font-medium text-vpro-ink disabled:opacity-50"
       disabled={busy} onclick={() => load()}>Load saved project metadata</button>
     {#if onEditMetadata}
       <button type="button" data-two-page-metadata-edit-link
-        class="rounded border border-[#003366] bg-[#003366] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+        class="rounded border border-vpro-navy bg-vpro-navy px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
         disabled={busy || editDisabled} onclick={onEditMetadata}>
         Edit project metadata
       </button>
@@ -109,7 +109,7 @@
       {/each}
     </details>
   {/if}
-  <p class="text-xs text-stone-600">Explicit saved-data review, never metadata Save, Add/copy, template lookup, attachment
+  <p class="text-xs text-vpro-ink-secondary">Explicit saved-data review, never metadata Save, Add/copy, template lookup, attachment
     or source callback execution. NULL/empty text, historical IDs and all physical originals stay distinct.
     Source-bound labels retain74 fields; missing historical columns remain explicitly unavailable.
     Each page reads a fresh owned snapshot; concurrent changes can affect later pages.</p>

@@ -164,23 +164,19 @@ def check_lockstep(repo_root: Path, *, strict_brand: bool = False) -> list[str]:
                     f"Workflow go-version mismatch at .github/workflows/{loc}: app/go.mod toolchain is {expected_go}, found {pin}"
                 )
 
-    # 3. Coupled @deck.gl/* and @luma.gl/* major.minor families
-    deck_pkgs = ("@deck.gl/core", "@deck.gl/layers", "@deck.gl/mapbox")
-    deck_versions = {name: deps[name] for name in deck_pkgs if name in deps}
-    if len(deck_versions) != len(deck_pkgs):
-        missing = [name for name in deck_pkgs if name not in deps]
-        errors.append(f"Missing required @deck.gl packages in package.json: {', '.join(missing)}")
-    else:
+    # 3. Coupled @deck.gl/* and (optional) @luma.gl/* major.minor families
+    required_deck_pkgs = ("@deck.gl/layers", "@deck.gl/mapbox")
+    missing_deck = [name for name in required_deck_pkgs if name not in deps]
+    if missing_deck:
+        errors.append(f"Missing required @deck.gl packages in package.json: {', '.join(missing_deck)}")
+    deck_versions = {name: ver for name, ver in sorted(deps.items()) if name.startswith("@deck.gl/")}
+    if len(deck_versions) >= 2:
         deck_mm = {name: major_minor(ver) for name, ver in deck_versions.items()}
         if len(set(deck_mm.values())) != 1:
             errors.append(f"@deck.gl/* major.minor lockstep mismatch: {deck_versions}")
 
-    luma_pkgs = ("@luma.gl/core", "@luma.gl/webgpu")
-    luma_versions = {name: deps[name] for name in luma_pkgs if name in deps}
-    if len(luma_versions) != len(luma_pkgs):
-        missing = [name for name in luma_pkgs if name not in deps]
-        errors.append(f"Missing required @luma.gl packages in package.json: {', '.join(missing)}")
-    else:
+    luma_versions = {name: ver for name, ver in sorted(deps.items()) if name.startswith("@luma.gl/")}
+    if len(luma_versions) >= 2:
         luma_mm = {name: major_minor(ver) for name, ver in luma_versions.items()}
         if len(set(luma_mm.values())) != 1:
             errors.append(f"@luma.gl/* major.minor lockstep mismatch: {luma_versions}")

@@ -31,7 +31,7 @@
   }
 </script>
 
-<section class="space-y-4 rounded border border-stone-200 p-4" data-sivi-combined-panel aria-label="Combined SIVI source covers and heights">
+<section class="space-y-4 rounded border border-vpro-border p-4" data-sivi-combined-panel aria-label="Combined SIVI source covers and heights">
   <h2 class="font-semibold">SIVI covers and heights: one owned child draft</h2>
   {#if view.error}<p class="text-sm text-red-700" role="alert">{view.error}</p>{/if}
   {#if view.blocked}<p class="text-sm text-red-700" role="alert">Acknowledgement or refresh is unresolved. Undo/reload explicitly; never replay Save or restoration.</p>{/if}
@@ -56,14 +56,14 @@
     {#each view.review as group, index (group.Query)}
       <section class="space-y-3" data-sivi-combined-group={group.Form} aria-label={groups[index]}>
         <h3 class="font-semibold">{groups[index]}</h3>
-        {#if group.Rows.length === 0}<p class="text-sm text-stone-600">No cover-driven source rows.</p>{/if}
+        {#if group.Rows.length === 0}<p class="text-sm text-vpro-ink-secondary">No cover-driven source rows.</p>{/if}
         {#each group.Rows as row (row.rowId)}
-          <article class="min-w-0 space-y-3 rounded border border-stone-200 p-3" data-sivi-combined-row={row.rowId}>
+          <article class="min-w-0 space-y-3 rounded border border-vpro-border p-3" data-sivi-combined-row={row.rowId}>
             <header class="flex flex-wrap items-baseline justify-between gap-2">
               <h4 class="font-medium">{groups[index]}: {text(group, row, 'Species')}</h4>
-              <span class="text-xs text-stone-500">Physical row {row.rowId}; ID {text(group, row, 'ID')}</span>
+              <span class="text-xs text-vpro-ink-muted">Physical row {row.rowId}; ID {text(group, row, 'ID')}</span>
             </header>
-            <dl><dt class="text-xs text-stone-600">Collected (?)</dt><dd>{text(group, row, 'Collected')}</dd></dl>
+            <dl><dt class="text-xs text-vpro-ink-secondary">Collected (?)</dt><dd>{text(group, row, 'Collected')}</dd></dl>
             {#each siviCombinedGroups(index, view.extended) as columns}
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5" data-sivi-combined-field-group>
                 {#each columns as column (column)}
@@ -75,7 +75,7 @@
                   <div class="min-w-0" data-sivi-combined-field={column}>
                     <label for={id} class="mb-1 block text-sm font-medium">{label(column)}{column === 'HeightB' ? ' (literal text)' : ''}</label>
                     {#if column === 'HeightB'}
-                      <textarea {id} rows="2" value={raw} class="w-full min-w-0 rounded border border-stone-300 px-3 py-2"
+                      <textarea {id} rows="2" value={raw} class="w-full min-w-0 rounded border border-vpro-border px-3 py-2"
                         data-sivi-combined-column={column} data-sivi-combined-identity={row.rowId}
                         aria-label={`${label(column)} for ${text(group, row, 'Species')}, physical row ${row.rowId}`}
                         aria-invalid={Boolean(draft?.error)} aria-describedby={draft?.error ? `${id}-error` : undefined}
@@ -88,7 +88,7 @@
                         NULL (distinct from empty text)
                       </label>
                     {:else}
-                      <input {id} type="text" value={raw} class="w-full min-w-0 rounded border border-stone-300 px-3 py-2"
+                      <input {id} type="text" value={raw} class="w-full min-w-0 rounded border border-vpro-border px-3 py-2"
                         data-sivi-combined-column={column} data-sivi-combined-identity={row.rowId}
                         aria-label={`${label(column)} for ${text(group, row, 'Species')}, physical row ${row.rowId}`}
                         aria-invalid={Boolean(draft?.error)} aria-describedby={draft?.error ? `${id}-error` : undefined}
@@ -104,12 +104,12 @@
       </section>
     {/each}
   {:else if !view.busy}
-    <p class="text-sm text-stone-600">Load all three owned source groups before editing.</p>
+    <p class="text-sm text-vpro-ink-secondary">Load all three owned source groups before editing.</p>
   {/if}
   <SIVIChildSourceNotices notices={view.sourceNotices ?? []} saved={view.sourceNoticesSaved ?? false} />
-  <p class="text-xs text-stone-600">One atomic child Save covers source-bound covers/totals and aggregate heights.
+  <p class="text-xs text-vpro-ink-secondary">One atomic child Save covers source-bound covers/totals and aggregate heights.
     Numeric fields may clear to NULL; cover values remain strictly less than100, while heights retain their own accepted domains.
     Ht B retains literal TEXT255 with distinct NULL/empty values. Species, Collected, IDs, creation/deletion, parent actions and automatic totals remain unavailable here.</p>
-  <p class="text-xs text-stone-600">Changing extended presentation never resets drafts, errors or this session's isolated history.
+  <p class="text-xs text-vpro-ink-secondary">Changing extended presentation never resets drafts, errors or this session's isolated history.
     Undo reloads originals; it does not reverse a committed write. Restoration consumes only this verified combined history.</p>
 </section>

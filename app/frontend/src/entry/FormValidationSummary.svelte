@@ -21,7 +21,7 @@
   >
     <div class="vpro-validation-header">
       <div class="vpro-validation-lead">
-        <AlertCircle size={15} class="shrink-0 text-[#D8292F]" />
+        <AlertCircle size={15} class="shrink-0 text-vpro-error" />
         <strong class="tabular-nums">
           {items.length} validation {items.length === 1 ? 'issue blocks' : 'issues block'} Save &amp; Lock
         </strong>
@@ -65,10 +65,10 @@
     position: sticky;
     top: 0;
     z-index: 15;
-    background: var(--vpro-error-bg, #fbeaea);
-    border-bottom: 2px solid var(--vpro-error, #d8292f);
+    background: var(--vpro-error-bg);
+    border-bottom: 2px solid var(--vpro-error);
     padding: 0.45rem 0.85rem;
-    color: var(--vpro-error-ink, #a61b20);
+    color: var(--vpro-error-ink);
     font-size: 0.75rem;
   }
   .vpro-validation-header {
@@ -85,7 +85,7 @@
     gap: 0.45rem;
   }
   .vpro-validation-hint {
-    color: var(--vpro-ink-secondary, #4b5563);
+    color: var(--vpro-ink-secondary);
     font-size: 0.72rem;
   }
   .vpro-validation-toggle {
@@ -94,9 +94,9 @@
     gap: 0.25rem;
     padding: 0.2rem 0.5rem;
     border-radius: 4px;
-    border: 1px solid var(--vpro-error-border, #e59ba0);
-    background: #ffffff;
-    color: var(--vpro-error-ink, #a61b20);
+    border: 1px solid var(--vpro-error-border);
+    background: var(--vpro-surface);
+    color: var(--vpro-error-ink);
     font-size: 0.7rem;
     font-weight: 600;
   }
@@ -113,14 +113,14 @@
     max-width: 100%;
     padding: 0.25rem 0.55rem;
     border-radius: 4px;
-    border: 1px solid var(--vpro-error-border, #e59ba0);
-    background: #ffffff;
-    color: var(--vpro-ink, #313132);
+    border: 1px solid var(--vpro-error-border);
+    background: var(--vpro-surface);
+    color: var(--vpro-ink);
     font-size: 0.72rem;
     text-align: left;
   }
   .vpro-validation-pill:hover {
-    border-color: var(--vpro-error, #d8292f);
+    border-color: var(--vpro-error);
     background: #fff8f8;
   }
   .vpro-validation-tab {
@@ -129,13 +129,13 @@
     font-weight: 700;
     padding: 0.05rem 0.3rem;
     border-radius: 3px;
-    background: var(--vpro-navy, #003366);
-    color: #ffffff;
+    background: var(--vpro-navy);
+    color: var(--vpro-surface);
     white-space: nowrap;
   }
   .vpro-validation-field {
     font-weight: 700;
-    color: var(--vpro-error-ink, #a61b20);
+    color: var(--vpro-error-ink);
     white-space: nowrap;
   }
   .vpro-validation-msg {

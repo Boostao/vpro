@@ -94,13 +94,13 @@
   {/if}
 {/snippet}
 <style>
-  .ordinary-control { width: 100%; min-width: 0; min-height: 40px; border: 1px solid #D8D8D8; border-radius: 4px; padding: .5rem .65rem; background: white; color: #313132; font: inherit; line-height: 1.4; }
-  .ordinary-control:disabled { color: #606060; background: #F2F2F2; }
-  .ordinary-control:focus { outline: 2px solid #003366; outline-offset: 1px; }
-  .ordinary-control[aria-invalid="true"] { border-color: #D8292F; }
+  .ordinary-control { width: 100%; min-width: 0; min-height: 40px; border: 1px solid var(--vpro-border); border-radius: 4px; padding: .5rem .65rem; background: white; color: var(--vpro-ink); font: inherit; line-height: 1.4; }
+  .ordinary-control:disabled { color: var(--vpro-ink-muted); background: var(--vpro-canvas); }
+  .ordinary-control:focus { outline: 2px solid var(--vpro-navy); outline-offset: 1px; }
+  .ordinary-control[aria-invalid="true"] { border-color: var(--vpro-error); }
   .nullable-flag { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; min-height: 40px; }
-  .nullable-flag input { width: 1.25rem; height: 1.25rem; accent-color: #003366; }
-  .nullable-flag button { padding: .25rem .5rem; border: 1px solid #D8D8D8; border-radius: 4px; background: white; color: #313132; }
-  .nullable-flag button:disabled { color: #606060; background: #F2F2F2; }
-  p { color: #D8292F; font-size: .75rem; }
+  .nullable-flag input { width: 1.25rem; height: 1.25rem; accent-color: var(--vpro-navy); }
+  .nullable-flag button { padding: .25rem .5rem; border: 1px solid var(--vpro-border); border-radius: 4px; background: white; color: var(--vpro-ink); }
+  .nullable-flag button:disabled { color: var(--vpro-ink-muted); background: var(--vpro-canvas); }
+  p { color: var(--vpro-error); font-size: .75rem; }
 </style>

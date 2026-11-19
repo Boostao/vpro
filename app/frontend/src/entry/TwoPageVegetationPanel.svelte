@@ -343,34 +343,34 @@
   }
 </script>
 
-<section bind:this={panel} class="two-page-veg-panel min-w-0 space-y-3 rounded border border-[#D8D8D8] bg-white p-3" aria-label={`${form} linked vegetation`}
+<section bind:this={panel} class="two-page-veg-panel min-w-0 space-y-3 rounded border border-vpro-border bg-white p-3" aria-label={`${form} linked vegetation`}
   data-two-page-vegetation-panel={form} data-vegetation-current-row={row?.rowId}>
-  <div class="vpro-sticky-subbar sticky top-0 z-15 bg-white/95 border-b border-stone-200 pb-2 pt-1 space-y-2" data-veg-sticky-bar>
-    <h4 class="font-semibold text-[#003366]">{form === 'SubVegCXL' ? 'Herb' : form === 'SubVegDXL' ? 'Moss/Lichen' : 'Tree/Shrubs'}</h4>
+  <div class="vpro-sticky-subbar sticky top-0 z-15 bg-white/95 border-b border-vpro-border pb-2 pt-1 space-y-2" data-veg-sticky-bar>
+    <h4 class="font-semibold text-vpro-navy">{form === 'SubVegCXL' ? 'Herb' : form === 'SubVegDXL' ? 'Moss/Lichen' : 'Tree/Shrubs'}</h4>
     <div class="flex flex-wrap gap-2">
-      <button type="button" class="rounded border border-[#D8D8D8] bg-white px-2.5 py-1 text-xs font-medium text-[#313132] disabled:opacity-50"
+      <button type="button" class="rounded border border-vpro-border bg-white px-2.5 py-1 text-xs font-medium text-vpro-ink disabled:opacity-50"
         disabled={parentBlocked || close.unsaved || view.busy || close.blocked || crudBusy} onclick={() => operation('load')}>Load vegetation</button>
-      <button type="button" class="rounded border border-[#D8D8D8] bg-white px-2.5 py-1 text-xs font-medium text-[#313132] disabled:opacity-50"
+      <button type="button" class="rounded border border-vpro-border bg-white px-2.5 py-1 text-xs font-medium text-vpro-ink disabled:opacity-50"
         disabled={parentBlocked || view.busy || view.blocked || view.acknowledgementRequired || crudBusy}
         onclick={() => operation('references')}>Review Species definitions (read only)</button>
-      <button type="button" class="rounded border border-[#003366] bg-[#003366] px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
+      <button type="button" class="rounded border border-vpro-navy bg-vpro-navy px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
         disabled={parentBlocked || !close.canSave || crudBusy} onclick={() => operation('save')}>Save vegetation</button>
-      <button type="button" class="rounded border border-[#D8D8D8] bg-white px-2.5 py-1 text-xs font-medium text-[#313132] disabled:opacity-50"
+      <button type="button" class="rounded border border-vpro-border bg-white px-2.5 py-1 text-xs font-medium text-vpro-ink disabled:opacity-50"
         disabled={view.busy || view.blocked || view.acknowledgementRequired || !Object.keys(view.drafts).length || crudBusy} onclick={() => operation('undo')}>Undo vegetation drafts</button>
       <button type="button" data-veg-create-toggle
-        class="rounded border border-[#003366] bg-white px-2.5 py-1 text-xs font-medium text-[#003366] disabled:opacity-50"
+        class="rounded border border-vpro-navy bg-white px-2.5 py-1 text-xs font-medium text-vpro-navy disabled:opacity-50"
         disabled={fieldsDisabled || close.unsaved || close.blocked || crudBusy || !view.original}
         onclick={() => { createOpen = !createOpen; error = null; }}>
         {createOpen ? 'Cancel Add Row' : 'Add species row'}
       </button>
       <button type="button" data-veg-delete-btn
-        class="rounded border border-[#D8292F] bg-white px-2.5 py-1 text-xs font-medium text-[#D8292F] disabled:opacity-50"
+        class="rounded border border-vpro-error bg-white px-2.5 py-1 text-xs font-medium text-vpro-error disabled:opacity-50"
         disabled={fieldsDisabled || close.unsaved || close.blocked || crudBusy || !row}
         onclick={() => { if (row) deleteConfirmRowId = deleteConfirmRowId === row.rowId ? null : row.rowId; }}>
         Delete selected row
       </button>
       <button type="button" data-veg-deleted-list-btn
-        class="rounded border border-[#D8D8D8] bg-white px-2.5 py-1 text-xs font-medium text-[#313132] disabled:opacity-50"
+        class="rounded border border-vpro-border bg-white px-2.5 py-1 text-xs font-medium text-vpro-ink disabled:opacity-50"
         disabled={parentBlocked || view.busy || crudBusy}
         onclick={() => { if (deletedHistoryOpen) deletedHistoryOpen = false; else void loadDeletedRows(); }}>
         {deletedHistoryOpen ? 'Hide deleted rows' : 'Deleted rows'}
@@ -381,39 +381,39 @@
     </div>
   </div>
   {#if parentBlocked}<p role="status">Finish actual parent/other-owner drafts and unlock the plot before new vegetation staging.</p>{/if}
-  {#if error}<p role="alert" class="break-words text-sm text-[#D8292F]">{error}</p>{/if}
-  {#if view.error && view.error !== error}<p role="alert" class="break-words text-sm text-[#D8292F]">{view.error}</p>{/if}
-  {#if view.referenceError && view.referenceError !== error}<p role="alert" class="break-words text-sm text-[#D8292F]">{view.referenceError}</p>{/if}
+  {#if error}<p role="alert" class="break-words text-sm text-vpro-error">{error}</p>{/if}
+  {#if view.error && view.error !== error}<p role="alert" class="break-words text-sm text-vpro-error">{view.error}</p>{/if}
+  {#if view.referenceError && view.referenceError !== error}<p role="alert" class="break-words text-sm text-vpro-error">{view.referenceError}</p>{/if}
   {#if view.blocked}<p role="alert">Save outcome unresolved. Recover the exact retained request; do not repeat Save.</p>{/if}
   {#if view.noCommitCertificate}<p role="status" class="break-words">Server certified no commit for {view.noCommitCertificate.requestId}. Correct or Undo retained drafts; another Save needs a new request.</p>{/if}
   {#if Object.keys(view.drafts).length}<p role="status">{Object.keys(view.drafts).length} retained field draft(s). Save applies all retained edits together, including other physical rows.</p>{/if}
   {#if createOpen}
-    <div class="rounded border border-[#003366]/30 bg-[#F2F2F2] p-3 space-y-2" data-veg-create-panel>
-      <p class="text-xs font-semibold text-[#003366]">Add Vegetation Row ({form})</p>
+    <div class="rounded border border-vpro-navy/30 bg-vpro-canvas p-3 space-y-2" data-veg-create-panel>
+      <p class="text-xs font-semibold text-vpro-navy">Add Vegetation Row ({form})</p>
       <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <div class="min-w-0">
-          <label class="block text-xs font-medium text-[#313132]" for={`${form}-create-species`}>Species Code *</label>
-          <input id={`${form}-create-species`} type="text" class="w-full rounded border border-[#D8D8D8] bg-white px-2 py-1.5 text-sm"
+          <label class="block text-xs font-medium text-vpro-ink" for={`${form}-create-species`}>Species Code *</label>
+          <input id={`${form}-create-species`} type="text" class="w-full rounded border border-vpro-border bg-white px-2 py-1.5 text-sm"
             bind:value={createSpecies} disabled={crudBusy} placeholder="e.g. PSEUMEN" />
         </div>
         <div class="min-w-0">
-          <label class="block text-xs font-medium text-[#313132]" for={`${form}-create-layer`}>Layer (optional)</label>
-          <input id={`${form}-create-layer`} type="text" class="w-full rounded border border-[#D8D8D8] bg-white px-2 py-1.5 text-sm"
+          <label class="block text-xs font-medium text-vpro-ink" for={`${form}-create-layer`}>Layer (optional)</label>
+          <input id={`${form}-create-layer`} type="text" class="w-full rounded border border-vpro-border bg-white px-2 py-1.5 text-sm"
             bind:value={createLayer} disabled={crudBusy} placeholder="e.g. A1, B1, C, D" />
         </div>
         <div class="min-w-0">
-          <label class="block text-xs font-medium text-[#313132]" for={`${form}-create-collected`}>Collected (optional)</label>
-          <input id={`${form}-create-collected`} type="text" class="w-full rounded border border-[#D8D8D8] bg-white px-2 py-1.5 text-sm"
+          <label class="block text-xs font-medium text-vpro-ink" for={`${form}-create-collected`}>Collected (optional)</label>
+          <input id={`${form}-create-collected`} type="text" class="w-full rounded border border-vpro-border bg-white px-2 py-1.5 text-sm"
             bind:value={createCollected} disabled={crudBusy} placeholder="C or V" />
         </div>
       </div>
       <div class="flex flex-wrap gap-2">
         <button type="button" data-veg-create-submit
-          class="rounded bg-[#003366] px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+          class="rounded bg-vpro-navy px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
           disabled={crudBusy || !createSpecies.trim()} onclick={() => void submitCreateRow()}>
           Create row
         </button>
-        <button type="button" class="rounded border border-[#D8D8D8] bg-white px-3 py-1 text-xs text-[#313132]"
+        <button type="button" class="rounded border border-vpro-border bg-white px-3 py-1 text-xs text-vpro-ink"
           disabled={crudBusy} onclick={() => { createOpen = false; }}>
           Cancel
         </button>
@@ -421,31 +421,31 @@
     </div>
   {/if}
   {#if view.original && row && deleteConfirmRowId === row.rowId}
-    <div class="rounded border border-[#D8292F] bg-[#FCEAEA] p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-[#313132]" data-veg-delete-confirm>
+    <div class="rounded border border-vpro-error bg-vpro-error-bg p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-vpro-ink" data-veg-delete-confirm>
       <span>Delete vegetation row {twoPageVegetationStoredText(view.original, row.rowId, 'ID')} ({twoPageVegetationStoredText(view.original, row.rowId, 'Species')})? Can be restored from Deleted rows.</span>
       <div class="flex gap-2">
-        <button type="button" data-veg-delete-confirm-btn class="rounded bg-[#D8292F] px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
+        <button type="button" data-veg-delete-confirm-btn class="rounded bg-vpro-error px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
           disabled={crudBusy} onclick={() => void confirmDeleteRow()}>Confirm delete</button>
-        <button type="button" class="rounded border border-[#D8D8D8] bg-white px-2.5 py-1 text-xs text-[#313132]"
+        <button type="button" class="rounded border border-vpro-border bg-white px-2.5 py-1 text-xs text-vpro-ink"
           disabled={crudBusy} onclick={() => { deleteConfirmRowId = null; }}>Cancel</button>
       </div>
     </div>
   {/if}
   {#if deletedHistoryOpen}
-    <div class="rounded border border-[#D8D8D8] bg-[#F2F2F2] p-3 space-y-2" data-veg-deleted-panel>
-      <p class="text-xs font-semibold text-[#003366]">Deleted Vegetation Rows ({deletedRows.length})</p>
+    <div class="rounded border border-vpro-border bg-vpro-canvas p-3 space-y-2" data-veg-deleted-panel>
+      <p class="text-xs font-semibold text-vpro-navy">Deleted Vegetation Rows ({deletedRows.length})</p>
       {#if deletedRows.length === 0}
-        <p class="text-xs text-[#606060]">No deleted rows recorded for this form.</p>
+        <p class="text-xs text-vpro-ink-muted">No deleted rows recorded for this form.</p>
       {:else}
         <div class="space-y-1.5">
           {#each deletedRows as entry (entry.deleteRequestId)}
-            <div class="flex flex-wrap items-center justify-between gap-2 rounded border border-[#D8D8D8] bg-white p-2 text-xs">
+            <div class="flex flex-wrap items-center justify-between gap-2 rounded border border-vpro-border bg-white p-2 text-xs">
               <span>ID {entry.deletedId} · <strong>{entry.species}</strong> {entry.layer ? `(${entry.layer})` : ''} · Deleted {entry.deletedAt} by {entry.deletedBy}</span>
               {#if entry.restored}
-                <span class="rounded bg-[#EBF5ED] px-2 py-0.5 text-[#1F5C2C]">Restored</span>
+                <span class="rounded bg-vpro-success-bg px-2 py-0.5 text-vpro-forest">Restored</span>
               {:else}
                 <button type="button" data-veg-restore-btn={entry.deleteRequestId}
-                  class="rounded border border-[#003366] bg-[#003366] px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
+                  class="rounded border border-vpro-navy bg-vpro-navy px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
                   disabled={crudBusy || fieldsDisabled || close.unsaved || close.blocked}
                   onclick={() => void restoreDeletedRow(entry.deleteRequestId)}>Restore row</button>
               {/if}
@@ -505,9 +505,9 @@
                 {@const nullValue = draft?.nullValue ?? source.storage === 'null'}
                 {@const id = `${form}-${row.rowId}-${column}`}
                 {@const plannedRow = row.rowId}
-                <div class="min-w-0 space-y-1 focus-within:bg-[#FFF9E6]" data-vegetation-column={column}>
+                <div class="min-w-0 space-y-1 focus-within:bg-vpro-gold-surface" data-vegetation-column={column}>
                   <label class="block text-sm font-medium" for={id}>{label}</label>
-                  <input {id} class="w-full min-w-0 rounded border border-[#D8D8D8] p-2" type="text" value={nullValue ? '' : raw}
+                  <input {id} class="w-full min-w-0 rounded border border-vpro-border p-2" type="text" value={nullValue ? '' : raw}
                     disabled={fieldsDisabled} placeholder={nullValue ? 'NULL' : undefined}
                     aria-invalid={!!draft?.error} aria-describedby={draft?.error ? `${id}-error` : undefined}
                     onkeydown={event => void enterRecord(event, column)}
@@ -516,13 +516,13 @@
                     <input type="checkbox" checked={nullValue} disabled={fieldsDisabled} onchange={event => stage(column, raw, event.currentTarget.checked)} />
                     {label}: NULL (not empty text)
                   </label>
-                  {#if draft?.error}<p id={`${id}-error`} role="alert" class="text-sm text-[#D8292F]">{draft.error}</p>{/if}
-                  {#if !draft}<p class="text-xs text-[#606060]">Stored {source.storage}</p>{/if}
+                  {#if draft?.error}<p id={`${id}-error`} role="alert" class="text-sm text-vpro-error">{draft.error}</p>{/if}
+                  {#if !draft}<p class="text-xs text-vpro-ink-muted">Stored {source.storage}</p>{/if}
                   {#if column === 'Collected'}
                     <button type="button" disabled={fieldsDisabled || !!draft?.error ||
                       (draft?.value ?? source).storage !== 'null' && (draft?.value ?? source).storage !== 'text'}
                       onclick={event => cycleCollected(plannedRow, event)}>Cycle Collected: NULL / C / V</button>
-                    <p class="text-xs text-[#606060]">C = Collected; V = Verified. Manual values remain distinct.</p>
+                    <p class="text-xs text-vpro-ink-muted">C = Collected; V = Verified. Manual values remain distinct.</p>
                   {/if}
                 </div>
               {:else}<p role="alert">Source field {column} unavailable; row is read only.</p>{/if}
@@ -537,11 +537,11 @@
   {/each}
   {#if view.receipts.length}<p role="status">{view.receipts.length} immutable committed vegetation receipt(s) retained across remounts.</p>{/if}
   {#if view.references}<VegetationSpeciesReferences references={view.references} />{/if}
-  <p class="text-xs text-[#606060]">LMH25 2-Page vegetation strata &amp; species editor: cover values validate against calibrated single-precision (&lt; 100%) bounds while leaving untouched historical values intact. Save commits species, cover, and voucher changes atomically.</p>
+  <p class="text-xs text-vpro-ink-muted">LMH25 2-Page vegetation strata &amp; species editor: cover values validate against calibrated single-precision (&lt; 100%) bounds while leaving untouched historical values intact. Save commits species, cover, and voucher changes atomically.</p>
 </section>
 
 <style>
-  .two-page-veg-panel { max-width: 100%; overflow-x: clip; border-color: var(--vpro-border, #d1d5db); border-top: 3px solid var(--vpro-gold, #fcba19); font-variant-numeric: tabular-nums; }
-  .two-page-veg-panel :global(input[type="text"]), .two-page-veg-panel :global(select) { border-color: var(--vpro-forest-border, #D8D8D8); font-variant-numeric: tabular-nums; }
-  .two-page-veg-panel :global(input[type="text"]:focus), .two-page-veg-panel :global(select:focus) { outline: 2px solid var(--vpro-focus-ring, #1a5a96); outline-offset: 1px; }
+  .two-page-veg-panel { max-width: 100%; overflow-x: clip; border-color: var(--vpro-border); border-top: 3px solid var(--vpro-gold); font-variant-numeric: tabular-nums; }
+  .two-page-veg-panel :global(input[type="text"]), .two-page-veg-panel :global(select) { border-color: var(--vpro-forest-border); font-variant-numeric: tabular-nums; }
+  .two-page-veg-panel :global(input[type="text"]:focus), .two-page-veg-panel :global(select:focus) { outline: 2px solid var(--vpro-focus-ring); outline-offset: 1px; }
 </style>

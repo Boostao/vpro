@@ -124,7 +124,7 @@
       <textarea class="box-border w-full min-w-0" rows="10" readonly value={review.kml} data-saved-plot-kml></textarea>
     </label>
   {/if}
-  <p class="text-xs text-stone-600">Explicit preview of saved data, not an implicit Save.
+  <p class="text-xs text-vpro-ink-secondary">Explicit preview of saved data, not an implicit Save.
     Temporary preview options never change saved preferences. Longitude retains its original storage and is negated only in KML.
     Configured-file overwrite, publication, remote icons and external Google Earth launch are unavailable.</p>
 </section>

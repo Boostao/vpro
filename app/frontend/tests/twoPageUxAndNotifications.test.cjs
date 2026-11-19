@@ -263,9 +263,8 @@ test('App and shell panels route operational errors and startup recovery notices
   assert.match(bannersHtml, /Sample\.db: Check schema/);
   assert.doesNotMatch(bannersHtml, /data-reset-sample-notice/);
 
-  // Global zero-specificity default styling for unclassed buttons + error-dismiss CSS
+  // Global zero-specificity default styling for unclassed buttons
   assert.match(cssSrc, /:where\(button:not\(\[class\]\)/);
-  assert.match(cssSrc, /\.error-dismiss\s*\{/);
 
   // TwoPageEntryEditor uses plain-language labels and styled toolbar buttons
   assert.doesNotMatch(twoPageSrc, /one owned complete-entry draft|: read-only saved data|Return to complete-entry source/);

@@ -1,4 +1,4 @@
-export const fieldListSource = 'owned imported SQLite VPro64.USysShortVegSummaryFieldList; complete physical rows; Label read-only';
+const fieldListSource = 'owned imported SQLite VPro64.USysShortVegSummaryFieldList; complete physical rows; Label read-only';
 export const fieldListLimits = Object.freeze({ rows: 10000, actions: 4096, receipts: 128, jsonUnits: 16 * 1024 * 1024 });
 const columnNames = ['Order', 'Source', 'Label', 'Item', 'Report', 'FunctionName', 'FieldNumber'];
 const ownerKeys = ['contextId', 'project', 'projectPath', 'su', 'suPath', 'sourcePath'];
@@ -12,18 +12,18 @@ export interface FieldListCell {
 export interface FieldListRow { rowId: string; cells: FieldListCell[] }
 export interface FieldListTable { columns: { name: string; declaredType: string }[]; rows: FieldListRow[] }
 export interface FieldListReview extends FieldListOwner { source: string; physical: FieldListTable }
-export interface FieldListAction { kind: 'row' | 'all' | 'none'; rowId: string; selected: boolean }
-export interface FieldListPlan {
+interface FieldListAction { kind: 'row' | 'all' | 'none'; rowId: string; selected: boolean }
+interface FieldListPlan {
   original: FieldListTable; proposed: FieldListTable;
   assignments: { before: FieldListRow; after: FieldListRow }[];
 }
-export interface FieldListRequest { requestId: string; review: FieldListReview; actions: FieldListAction[] }
-export interface FieldListOutcome {
+interface FieldListRequest { requestId: string; review: FieldListReview; actions: FieldListAction[] }
+interface FieldListOutcome {
   contextId: string; requestId: string; changed: boolean; committed: boolean; replayed: boolean;
   verified: boolean; plan: FieldListPlan | null; errorMessage: string;
 }
-export interface FieldListIndex { visible: string[]; selected: string[]; error: string }
-export interface FieldListReceipt {
+interface FieldListIndex { visible: string[]; selected: string[]; error: string }
+interface FieldListReceipt {
   kind: 'known' | 'unknown'; request: FieldListRequest; outcome: FieldListOutcome | null;
   error: string; reconciliation: FieldListReview | null; acknowledged: boolean;
 }

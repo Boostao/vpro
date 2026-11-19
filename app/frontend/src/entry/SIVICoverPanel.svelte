@@ -29,7 +29,7 @@
   }
 </script>
 
-<section class="space-y-4 rounded border border-stone-200 p-4" data-sivi-cover-panel aria-label="SIVI covers and totals">
+<section class="space-y-4 rounded border border-vpro-border p-4" data-sivi-cover-panel aria-label="SIVI covers and totals">
   <header><h2 class="font-semibold">SIVI covers and totals</h2></header>
   {#if view.error}<p class="text-sm text-red-700" role="alert">{view.error}</p>{/if}
   {#if view.blocked}<p class="text-sm text-red-700" role="alert">Acknowledgement or refresh is unresolved. Undo/reload explicitly; do not replay Save or restoration.</p>{/if}
@@ -51,14 +51,14 @@
     {#each view.review as group, index (group.Query)}
       <section class="space-y-3" data-sivi-cover-group={group.Form} aria-label={groups[index]}>
         <h3 class="font-semibold">{groups[index]}</h3>
-        {#if group.Rows.length === 0}<p class="text-sm text-stone-600">No cover-driven source rows.</p>{/if}
+        {#if group.Rows.length === 0}<p class="text-sm text-vpro-ink-secondary">No cover-driven source rows.</p>{/if}
         {#each group.Rows as row (row.rowId)}
-          <article class="min-w-0 space-y-3 rounded border border-stone-200 p-3" data-sivi-cover-row={row.rowId}>
+          <article class="min-w-0 space-y-3 rounded border border-vpro-border p-3" data-sivi-cover-row={row.rowId}>
             <header class="flex flex-wrap items-baseline justify-between gap-2">
               <h4 class="font-medium">{groups[index]}: {text(group, row, 'Species')}</h4>
-              <span class="text-xs text-stone-500">Physical row {row.rowId}; application ID {text(group, row, 'ID')}</span>
+              <span class="text-xs text-vpro-ink-muted">Physical row {row.rowId}; application ID {text(group, row, 'ID')}</span>
             </header>
-            <dl><dt class="text-xs text-stone-600">Collected (?)</dt><dd>{text(group, row, 'Collected')}</dd></dl>
+            <dl><dt class="text-xs text-vpro-ink-secondary">Collected (?)</dt><dd>{text(group, row, 'Collected')}</dd></dl>
             {#each siviCoverGroups(index, view.extended) as columns}
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {#each columns as column (column)}
@@ -68,7 +68,7 @@
                   {@const id = `sivi-cover-${row.rowId}-${column}`}
                   <div class="min-w-0">
                     <label for={id} class="mb-1 block text-sm font-medium">{siviCoverLabels[column]}{column.startsWith('Total') ? ' total' : ' cover'}</label>
-                    <input {id} type="text" value={raw} class="w-full min-w-0 rounded border border-stone-300 px-3 py-2"
+                    <input {id} type="text" value={raw} class="w-full min-w-0 rounded border border-vpro-border px-3 py-2"
                       data-sivi-cover-column={column} data-sivi-cover-identity={row.rowId}
                       aria-label={`${siviCoverLabels[column]} for ${text(group, row, 'Species')}, physical row ${row.rowId}`}
                       aria-invalid={Boolean(draft?.error)} disabled={unavailable}
@@ -82,9 +82,9 @@
       </section>
     {/each}
   {:else if !view.busy}
-    <p class="text-sm text-stone-600">Load the original source rows before editing.</p>
+    <p class="text-sm text-vpro-ink-secondary">Load the original source rows before editing.</p>
   {/if}
   <SIVIChildSourceNotices notices={view.sourceNotices ?? []} saved={view.sourceNoticesSaved ?? false} />
-  <p class="text-xs text-stone-600">Source-scoped cover adaptation only: species, application ID, Collected and heights remain read-only. Changed numbers must be finite Access Single values from 0 up to, but not including, 100. Clear a field to NULL. No totals are calculated automatically.</p>
-  <p class="text-xs text-stone-600">Extended presentation adds B3/B4/B5 without resetting drafts, errors or this session's isolated cover history. Save and restoration refresh the whole source. Undo discards drafts and reloads; it does not reverse a committed write.</p>
+  <p class="text-xs text-vpro-ink-secondary">Source-scoped cover adaptation only: species, application ID, Collected and heights remain read-only. Changed numbers must be finite Access Single values from 0 up to, but not including, 100. Clear a field to NULL. No totals are calculated automatically.</p>
+  <p class="text-xs text-vpro-ink-secondary">Extended presentation adds B3/B4/B5 without resetting drafts, errors or this session's isolated cover history. Save and restoration refresh the whole source. Undo discards drafts and reloads; it does not reverse a committed write.</p>
 </section>

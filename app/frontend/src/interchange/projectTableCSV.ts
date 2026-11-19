@@ -39,7 +39,7 @@ function csvRecords(data: string): string[][] {
   return records;
 }
 
-export async function tableCSVSHA256(data: string): Promise<string> {
+async function tableCSVSHA256(data: string): Promise<string> {
   const bytes = new TextEncoder().encode(data);
   const hash = await crypto.subtle.digest('SHA-256', bytes);
   return [...new Uint8Array(hash)].map(value => value.toString(16).padStart(2, '0')).join('');

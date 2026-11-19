@@ -99,8 +99,8 @@
   dd { margin: 0; overflow-wrap: anywhere; }
   .table-scroll { max-width: 100%; overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { padding: .5rem; text-align: left; border-bottom: 1px solid #D8D8D8; white-space: pre-wrap; overflow-wrap: anywhere; }
-  th { background: #F2F2F2; color: #003366; }
+  th, td { padding: .5rem; text-align: left; border-bottom: 1px solid var(--vpro-border); white-space: pre-wrap; overflow-wrap: anywhere; }
+  th { background: var(--vpro-canvas); color: var(--vpro-navy); }
   caption { text-align: left; font-weight: 600; }
   .guidance { margin-block-start: 1rem; }
 </style>

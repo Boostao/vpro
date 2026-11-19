@@ -57,7 +57,7 @@
         {#snippet embedded(control)}
           {@const child = childLink(control)}
           {#if child.availability === 'unavailable' && !(pictureReaderAvailable && child.form === 'frmVPicsXL')}
-            <div class="rounded border p-3 text-sm text-stone-600" data-source-form={child.form}
+            <div class="rounded border p-3 text-sm text-vpro-ink-secondary" data-source-form={child.form}
               aria-label="Pictures unavailable">
               Pictures: source storage is mapped; the picture workflow remains unavailable.
             </div>

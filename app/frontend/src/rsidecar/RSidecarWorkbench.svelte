@@ -498,7 +498,7 @@
     </div>
   </header>
 
-  <div data-workbench-sticky-bar class="tab-bar sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8]" role="tablist" aria-label="R Companion Sections">
+  <div data-workbench-sticky-bar class="tab-bar sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border" role="tablist" aria-label="R Companion Sections">
     <button
       type="button" role="tab" aria-selected={activeTab === 'runtime'}
       class:active={activeTab === 'runtime'} onclick={() => (activeTab = 'runtime')}

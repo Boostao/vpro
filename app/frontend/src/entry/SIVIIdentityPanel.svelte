@@ -18,7 +18,7 @@
   const names = ['Tree/Shrubs', 'Herb', 'Moss/Lichen'];
 </script>
 
-<section class="space-y-4 rounded border border-stone-200 p-4" data-sivi-identity-panel aria-label="SIVI physical-row ID editing">
+<section class="space-y-4 rounded border border-vpro-border p-4" data-sivi-identity-panel aria-label="SIVI physical-row ID editing">
   <h2 class="font-semibold">SIVI vegetation IDs</h2>
   {#if view.error}<p class="text-sm text-red-700" role="alert">{view.error}</p>{/if}
   {#if view.blocked}<p class="text-sm text-red-700" role="alert">Acknowledgement or refresh is unresolved. Undo/reload explicitly; never replay Save or restoration.</p>{/if}
@@ -39,7 +39,7 @@
     {/if}
   </div>
   {#if view.review}
-    {#if rows.length === 0}<p class="text-sm text-stone-600">No cover-driven source rows.</p>{/if}
+    {#if rows.length === 0}<p class="text-sm text-vpro-ink-secondary">No cover-driven source rows.</p>{/if}
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {#each rows as owner (owner.row.rowId)}
         {@const row = owner.row}
@@ -49,9 +49,9 @@
         {@const nullValue = draft?.nullValue ?? original.storage === 'null'}
         {@const editable = siviIdentityEditable(original)}
         {@const id = `sivi-identity-${row.rowId}`}
-        <article class="min-w-0 space-y-2 rounded border border-stone-200 p-3" data-sivi-identity-row={row.rowId}>
+        <article class="min-w-0 space-y-2 rounded border border-vpro-border p-3" data-sivi-identity-row={row.rowId}>
           <h3 class="break-words font-medium">Species: {row.cells[2].storage === 'null' ? 'NULL' : metadataCellText(row.cells[2])}</h3>
-          <p class="text-xs text-stone-500">Physical row {row.rowId}; {owner.contexts.map(context => names[context.index]).join(', ')}</p>
+          <p class="text-xs text-vpro-ink-muted">Physical row {row.rowId}; {owner.contexts.map(context => names[context.index]).join(', ')}</p>
           <label for={id} class="block text-sm font-medium">ID</label>
           <input {id} type="text" inputmode="numeric" class="w-full min-w-0 rounded border px-3 py-2 disabled:opacity-50"
             value={raw} disabled={unavailable || !editable || nullValue}
@@ -68,10 +68,10 @@
       {/each}
     </div>
   {:else if !view.busy}
-    <p class="text-sm text-stone-600">Load all three owned source groups before editing IDs.</p>
+    <p class="text-sm text-vpro-ink-secondary">Load all three owned source groups before editing IDs.</p>
   {/if}
   <SIVIChildSourceNotices notices={view.sourceNotices ?? []} saved={view.sourceNoticesSaved ?? false} />
-  <p class="text-xs text-stone-600">ID is a nullable signed32 value, not the physical row identifier.
+  <p class="text-xs text-vpro-ink-secondary">ID is a nullable signed32 value, not the physical row identifier.
     New collisions, swaps and deleted/reserved reuse are refused; unchanged historical duplicates are preserved.
     ID changes have separate technical restoration history, not ordinary field audits.
     Restoration does not prune source audits or delete vegetation. Species, covers, heights, parent identity and creation/deletion are unavailable here.</p>

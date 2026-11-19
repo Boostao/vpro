@@ -4,8 +4,8 @@ import { notifications } from '../shell/notificationService.svelte';
 
 export { notifications };
 
-export const CANDIDATE_PREFIX_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,13}$/;
-export const SU_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
+const CANDIDATE_PREFIX_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,13}$/;
+const SU_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
 
 export type ClimateRefPeriod = '1961_1990' | '1991_2020';
 export type ClimateGroupBy = 'bgc' | 'site_unit';
@@ -31,7 +31,7 @@ export function usesBetaParameter(method: ClusteringMethod): boolean {
   return method === 'BETA_FLEXIBLE';
 }
 
-export interface RPackageStatus {
+interface RPackageStatus {
   name: string;
   installed: boolean;
   version: string;
@@ -116,7 +116,7 @@ export interface EdatopicGridMatrix {
   cells: EdatopicGridCell[];
 }
 
-export interface DualUnitEdatopicSummary {
+interface DualUnitEdatopicSummary {
   groupKey: string;
   bgc: string;
   siteUnit: string;
@@ -130,7 +130,7 @@ export interface DualUnitEdatopicSummary {
   actualGrid: EdatopicGridMatrix;
 }
 
-export interface ClimateEdatopicRequest {
+interface ClimateEdatopicRequest {
   refPeriod: ClimateRefPeriod;
   groupBy?: ClimateGroupBy;
   bgcFilter?: string;
@@ -158,7 +158,7 @@ export interface ClimateEdatopicResult {
   plots: PlotClimateRow[];
 }
 
-export interface ClusterIndicatorSpecies {
+interface ClusterIndicatorSpecies {
   species: string;
   scientificName: string;
   englishName: string;
@@ -168,7 +168,7 @@ export interface ClusterIndicatorSpecies {
   indVal: number;
 }
 
-export interface ClusterUnitSummary {
+interface ClusterUnitSummary {
   clusterUnit: string;
   isNoise: boolean;
   plotCount: number;
@@ -177,7 +177,7 @@ export interface ClusterUnitSummary {
   indicators: ClusterIndicatorSpecies[];
 }
 
-export interface ClusterPlotMembership {
+interface ClusterPlotMembership {
   plotNumber: string;
   clusterUnit: string;
   membership: number;
@@ -186,14 +186,14 @@ export interface ClusterPlotMembership {
   speciesRichness: number;
 }
 
-export interface DendrogramSegment {
+interface DendrogramSegment {
   x1: number;
   y1: number;
   x2: number;
   y2: number;
 }
 
-export interface DendrogramLeaf {
+interface DendrogramLeaf {
   plotNumber: string;
   x: number;
   order: number;
@@ -201,7 +201,7 @@ export interface DendrogramLeaf {
   isNoise: boolean;
 }
 
-export interface DendrogramGeometry {
+interface DendrogramGeometry {
   maxHeight: number;
   cutHeight: number;
   newick: string;
@@ -209,7 +209,7 @@ export interface DendrogramGeometry {
   leaves: DendrogramLeaf[];
 }
 
-export interface ClusteringRequest {
+interface ClusteringRequest {
   method: ClusteringMethod;
   distance: EcologicalDistance;
   linkage: HierarchicalLinkage;
@@ -252,7 +252,7 @@ export interface ClusteringResult {
   dendrogram: DendrogramGeometry;
 }
 
-export interface PromoteCandidateSURequest {
+interface PromoteCandidateSURequest {
   candidateSuName: string;
   targetSuName: string;
   excludeNoise: boolean;
@@ -272,7 +272,7 @@ export interface PromoteCandidateSUResult {
   newState?: unknown;
 }
 
-export interface QuartoVegSummaryRow {
+interface QuartoVegSummaryRow {
   layer: string;
   species: string;
   scientificName: string;
@@ -282,7 +282,7 @@ export interface QuartoVegSummaryRow {
   meanCover: number;
 }
 
-export interface QuartoGuideRequest {
+interface QuartoGuideRequest {
   guideType: QuartoGuideType;
   title?: string;
   targetUnit?: string;
@@ -462,7 +462,7 @@ export function indexEdatopicCells(matrix: EdatopicGridMatrix | null | undefined
   return { byKey, maxCount };
 }
 
-export interface ScaledDendrogramLayout {
+interface ScaledDendrogramLayout {
   width: number;
   height: number;
   cutLineY: number;

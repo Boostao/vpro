@@ -14,7 +14,7 @@
   const unavailable = $derived(disabled || view.busy || view.blocked);
 </script>
 
-<section class="my-3 min-w-0 space-y-3 rounded border border-stone-300 p-3"
+<section class="my-3 min-w-0 space-y-3 rounded border border-vpro-border p-3"
   data-sivi-creation-undo-panel aria-label="SIVI historical creation Undo">
   <h2 class="font-semibold">Undo a reviewed historical SIVI creation</h2>
   {#if view.error}<p role="alert" class="break-words text-sm text-red-700">{view.error}</p>{/if}
@@ -95,7 +95,7 @@
       {view.receipt.replayed ? 'Observed an earlier commit; no Undo was repeated.' : 'One exact historical created row was removed.'}
     </p>
   {/if}
-  <p class="text-xs text-stone-600">Historical creation Undo is an independent private safety adaptation, not a create/delete grant.
+  <p class="text-xs text-vpro-ink-secondary">Historical creation Undo is an independent private safety adaptation, not a create/delete grant.
     Parent Save or Save-and-close must never submit it implicitly. Changed rows, source audits or review authority refuse Undo.
     Cancel stops acknowledgement delivery, not necessarily SQL; unknown requests can only be resolved read-only.</p>
 </section>

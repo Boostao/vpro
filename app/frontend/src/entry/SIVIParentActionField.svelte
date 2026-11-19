@@ -31,7 +31,7 @@
     {/if}
   </select>
   {#if column === 'SpeciesListComplete'}<p class="text-xs">Source Yes/No converts NULL to No; choose Part. (No) explicitly. Unchanged historical NULL is retained.</p>{/if}
-  <p id={`${id}-original`} class="text-xs text-stone-600 whitespace-pre-wrap break-words">Original:
+  <p id={`${id}-original`} class="text-xs text-vpro-ink-secondary whitespace-pre-wrap break-words">Original:
     {original.storage === 'null' ? 'NULL' : original.storage === 'text' && original.text === '' ? '(empty text)' : metadataCellText(original)}
     ({original.storage}). Selection stages only this source action; initialization never writes.</p>
   {#if draft?.error}<p role="alert" class="text-sm text-red-700">{draft.error}</p>{/if}

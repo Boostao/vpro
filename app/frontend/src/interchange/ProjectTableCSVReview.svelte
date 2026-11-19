@@ -165,7 +165,7 @@
 </script>
 
 <section class="table-review" data-project-table-csv-review aria-label="Project table CSV review">
-  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-stone-200" data-workbench-sticky-bar>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border" data-workbench-sticky-bar>
     <h1>Project table CSV review</h1>
     <div class="actions">
       <label for="csv-core-table">Physical core table
@@ -244,20 +244,20 @@
 
 <style>
   .table-review { padding: 1rem; max-width: 100%; min-width: 0; }
-  h1 { font-size: 1.5rem; margin-bottom: .75rem; color: #003366; }
-  h2 { color: #003366; }
+  h1 { font-size: 1.5rem; margin-bottom: .75rem; color: var(--vpro-navy); }
+  h2 { color: var(--vpro-navy); }
   .actions { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin: 1rem 0; }
   .actions label { display: flex; flex-direction: column; gap: .3rem; min-width: 0; flex: 1 1 12rem; }
-  select, button, textarea { border: 1px solid #9F9F9F; border-radius: .25rem; padding: .4rem .6rem; color: #313132; background: #FFFFFF; min-width: 0; }
+  select, button, textarea { border: 1px solid var(--vpro-border-strong); border-radius: .25rem; padding: .4rem .6rem; color: var(--vpro-ink); background: var(--vpro-surface); min-width: 0; }
   button:disabled { opacity: .5; }
   textarea { display: block; width: 100%; box-sizing: border-box; margin-top: .4rem; font-family: monospace; }
   dl > div { margin: .6rem 0; }
-  dt { font-weight: 600; color: #313132; }
+  dt { font-weight: 600; color: var(--vpro-ink); }
   dd, p { overflow-wrap: anywhere; }
   details { margin: .75rem 0; }
-  pre { overflow: auto; max-height: 24rem; padding: .5rem; background: #F2F2F2; border: 1px solid #D8D8D8; }
-  .notice { color: #474543; }
-  .error { color: #D8292F; background: #FBEAEA; border: 1px solid #D8292F; padding: .5rem; border-radius: .25rem; }
-  .receipt { border: 1px solid #D8D8D8; background: #FFFFFF; padding: .75rem; margin: .75rem 0; border-radius: .25rem; }
+  pre { overflow: auto; max-height: 24rem; padding: .5rem; background: var(--vpro-canvas); border: 1px solid var(--vpro-border); }
+  .notice { color: var(--vpro-ink-secondary); }
+  .error { color: var(--vpro-error); background: var(--vpro-error-bg); border: 1px solid var(--vpro-error); padding: .5rem; border-radius: .25rem; }
+  .receipt { border: 1px solid var(--vpro-border); background: var(--vpro-surface); padding: .75rem; margin: .75rem 0; border-radius: .25rem; }
   .receipt p { white-space: pre-wrap; }
 </style>

@@ -505,7 +505,7 @@
 </script>
 
 <section class="summary" data-site-unit-summary aria-label="Summary Environment">
-  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8] report-sticky-bar" data-report-sticky-bar>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border report-sticky-bar" data-report-sticky-bar>
     <h1>Summary Environment</h1>
     <div class="sticky-actions">
       <button data-source-control="btnCreateReport" disabled={busy || workbookBusy || preferenceBarrier || speciesBarrier || !ready || !scopeAllowed} onclick={show}>Create Report</button>
@@ -686,28 +686,28 @@
 </section>
 
 <style>
-  .summary { display: grid; gap: 1rem; padding: 1rem; max-width: 90rem; margin: auto; background: #F2F2F2; color: #313132; min-width: 0; }
+  .summary { display: grid; gap: 1rem; padding: 1rem; max-width: 90rem; margin: auto; background: var(--vpro-canvas); color: var(--vpro-ink); min-width: 0; }
   .report-sticky-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding-inline: .75rem; border-radius: .35rem; }
   .report-sticky-bar h1 { margin: 0; }
   .sticky-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-  h1, h2, h3 { font-weight: 600; margin: .8rem 0; color: #003366; }
+  h1, h2, h3 { font-weight: 600; margin: .8rem 0; color: var(--vpro-navy); }
   h1 { font-size: 1.5rem; } h2 { font-size: 1.2rem; }
-  fieldset, .actions { display: flex; flex-wrap: wrap; gap: 1rem; margin: .5rem 0; padding: .75rem; background: #FFFFFF; border: 1px solid #D8D8D8; border-radius: .5rem; }
-  fieldset legend { font-weight: 600; color: #003366; padding: 0 .35rem; }
-  label { display: flex; align-items: center; gap: .5rem; color: #313132; }
-  button, summary { min-height: 2.5rem; border: 1px solid #003366; border-radius: .25rem; padding: .5rem .85rem; background: #003366; color: #FFFFFF; font-weight: 600; cursor: pointer; }
-  button:hover:not(:disabled), summary:hover { background: #002244; border-color: #002244; }
+  fieldset, .actions { display: flex; flex-wrap: wrap; gap: 1rem; margin: .5rem 0; padding: .75rem; background: var(--vpro-surface); border: 1px solid var(--vpro-border); border-radius: .5rem; }
+  fieldset legend { font-weight: 600; color: var(--vpro-navy); padding: 0 .35rem; }
+  label { display: flex; align-items: center; gap: .5rem; color: var(--vpro-ink); }
+  button, summary { min-height: 2.5rem; border: 1px solid var(--vpro-navy); border-radius: .25rem; padding: .5rem .85rem; background: var(--vpro-navy); color: var(--vpro-surface); font-weight: 600; cursor: pointer; }
+  button:hover:not(:disabled), summary:hover { background: var(--vpro-navy-dark); border-color: var(--vpro-navy-dark); }
   button:disabled { opacity: .5; cursor: not-allowed; }
-  article { border: 1px solid #D8D8D8; border-radius: .5rem; padding: 1rem; margin-top: 1rem; background: #FFFFFF; min-width: 0; }
+  article { border: 1px solid var(--vpro-border); border-radius: .5rem; padding: 1rem; margin-top: 1rem; background: var(--vpro-surface); min-width: 0; }
   dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: .5rem 1rem; }
-  dl > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .5rem; padding: .45rem .6rem; background: #F2F2F2; border-radius: .25rem; }
-  dt { font-weight: 600; color: #003366; } dd, li, h2 { white-space: pre-wrap; overflow-wrap: anywhere; }
-  details { margin-top: .8rem; } .guidance { font-size: .9rem; margin: .4rem 0; color: #474543; }
-  .error { color: #D8292F; white-space: pre-wrap; font-weight: 600; }
+  dl > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .5rem; padding: .45rem .6rem; background: var(--vpro-canvas); border-radius: .25rem; }
+  dt { font-weight: 600; color: var(--vpro-navy); } dd, li, h2 { white-space: pre-wrap; overflow-wrap: anywhere; }
+  details { margin-top: .8rem; } .guidance { font-size: .9rem; margin: .4rem 0; color: var(--vpro-ink-secondary); }
+  .error { color: var(--vpro-error); white-space: pre-wrap; font-weight: 600; }
   .species-table { overflow-x: auto; max-width: 100%; }
-  table { width: 100%; border-collapse: collapse; margin: .5rem 0; background: #FFFFFF; }
-  th, td { padding: .5rem; border-bottom: 1px solid #D8D8D8; text-align: left; overflow-wrap: anywhere; }
-  thead th { background: #F2F2F2; color: #003366; }
-  select, input:not([type="radio"]):not([type="checkbox"]) { max-width: 100%; min-width: 0; border: 1px solid #D8D8D8; border-radius: .25rem; padding: .4rem; background: #FFFFFF; color: #313132; }
+  table { width: 100%; border-collapse: collapse; margin: .5rem 0; background: var(--vpro-surface); }
+  th, td { padding: .5rem; border-bottom: 1px solid var(--vpro-border); text-align: left; overflow-wrap: anywhere; }
+  thead th { background: var(--vpro-canvas); color: var(--vpro-navy); }
+  select, input:not([type="radio"]):not([type="checkbox"]) { max-width: 100%; min-width: 0; border: 1px solid var(--vpro-border); border-radius: .25rem; padding: .4rem; background: var(--vpro-surface); color: var(--vpro-ink); }
   @media (max-width: 640px) { dl > div { grid-template-columns: minmax(0, 1fr); } }
 </style>

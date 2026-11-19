@@ -2,16 +2,16 @@ import { ownedScope, type GoogleEarthScope } from '../spatial/googleEarthReview'
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { ReportPreferencesSession, reportPreferencesRegistry } from './reportTitlePreferences';
 
-export interface LongVegetationSelectedFieldPreferenceValues { mode: number; selectedField: string }
-export interface LongVegetationSelectedFieldDefinition { name: string; declaredType: string }
-export interface LongVegetationSelectedFieldPreferencesReview extends GoogleEarthScope {
+interface LongVegetationSelectedFieldPreferenceValues { mode: number; selectedField: string }
+interface LongVegetationSelectedFieldDefinition { name: string; declaredType: string }
+interface LongVegetationSelectedFieldPreferencesReview extends GoogleEarthScope {
   values: LongVegetationSelectedFieldPreferenceValues;
   source: string;
   definitions: LongVegetationSelectedFieldDefinition[] | null;
 }
-export interface LongVegetationSelectedFieldDraft { mode: string; selectedField: string }
+interface LongVegetationSelectedFieldDraft { mode: string; selectedField: string }
 export const longVegetationSelectedFieldSuggestions = ['RedBlueList', 'Wetland_Ind', 'WeedStatus'] as const;
-export const longVegetationSelectedFieldDefinitionsSource =
+const longVegetationSelectedFieldDefinitionsSource =
   'configured-owned-imported-SQLite VLists.USysAllSpecs physical columns; source Value List suggestions are not mandatory membership';
 const mode = (value: unknown): value is 0 | 1 | 2 | 4 => value === 0 || value === 1 || value === 2 || value === 4;
 function draftMode(value: unknown): 0 | 1 | 2 | 4 | null {

@@ -75,7 +75,7 @@ export interface SynthesisLumpTableOption {
   activeCount: number;
 }
 
-export interface PairwiseParams {
+interface PairwiseParams {
   minConstancy?: number;
   noiseConstancy?: number;
   minPlots?: number;
@@ -97,13 +97,13 @@ export interface SynthesisOptions {
   pairwise?: PairwiseParams;
 }
 
-export interface ExcludedUnitSummary {
+interface ExcludedUnitSummary {
   siteUnit: string;
   matchedPattern: string;
   plotCount: number;
 }
 
-export interface SynthesisUnitPlot {
+interface SynthesisUnitPlot {
   plotNumber: string;
   fieldNumber: string;
   siteUnit: string;
@@ -115,7 +115,7 @@ export interface SynthesisUnitPlot {
   nutrientRegime: string;
 }
 
-export interface SynthesisUnitSummary {
+interface SynthesisUnitSummary {
   siteUnit: string;
   longName: string;
   plotCount: number;
@@ -126,7 +126,7 @@ export interface SynthesisUnitSummary {
   plots: SynthesisUnitPlot[];
 }
 
-export interface SynthesisUnitSpeciesCell {
+interface SynthesisUnitSpeciesCell {
   siteUnit: string;
   presentPlots: number;
   plotCount: number;
@@ -146,7 +146,7 @@ export interface SynthesisUnitSpeciesCell {
   cellDiagnosticCodes: string[];
 }
 
-export interface SynthesisSpeciesRow {
+interface SynthesisSpeciesRow {
   species: string;
   scientificName: string;
   englishName: string;
@@ -162,7 +162,7 @@ export interface SynthesisSpeciesRow {
   cells: SynthesisUnitSpeciesCell[];
 }
 
-export interface PairwiseMatrixCell {
+interface PairwiseMatrixCell {
   unit: string;
   similarity: number;
   similarityPct: number;
@@ -171,12 +171,12 @@ export interface PairwiseMatrixCell {
   becSimMeanPct: number;
 }
 
-export interface PairwiseMatrixRow {
+interface PairwiseMatrixRow {
   unit: string;
   cells: PairwiseMatrixCell[];
 }
 
-export interface PairwiseDifferentialTaxon {
+interface PairwiseDifferentialTaxon {
   species: string;
   scientificName: string;
   constancyUnit1: number;
@@ -248,7 +248,7 @@ export interface EdatopicUnitGrid {
   cells: EdatopicCell[];
 }
 
-export interface SynthesisUndoEntry {
+interface SynthesisUndoEntry {
   historyId: number;
   plotNumber: string;
   beforeSiteUnit: string;
@@ -287,18 +287,18 @@ export interface SynthesisSnapshot {
   latestUndo?: SynthesisUndoEntry;
 }
 
-export interface ReassignSynthesisPlotRequest {
+interface ReassignSynthesisPlotRequest {
   plotNumber: string;
   targetSiteUnit: string;
   options: SynthesisOptions;
 }
 
-export interface UndoSynthesisReassignmentRequest {
+interface UndoSynthesisReassignmentRequest {
   historyId?: number;
   options: SynthesisOptions;
 }
 
-export interface ReassignSynthesisPlotResult {
+interface ReassignSynthesisPlotResult {
   contextId: string;
   su: string;
   tableName: string;
@@ -311,7 +311,7 @@ export interface ReassignSynthesisPlotResult {
   snapshot: SynthesisSnapshot;
 }
 
-export interface ExportDiagnosticWorkbookRequest {
+interface ExportDiagnosticWorkbookRequest {
   outputPath: string;
   reportTitle?: string;
   includeCommonNames: boolean;
@@ -702,7 +702,7 @@ export function edatopicHeatLevel(prominence: number, plotCount: number): number
   return 1;
 }
 
-export function sanitizeExcelSheetPreviewName(raw: string): string {
+function sanitizeExcelSheetPreviewName(raw: string): string {
   const trimmed = raw.trim().slice(0, 31);
   return trimmed.replace(/[:/\\[\]*?]/g, '-');
 }

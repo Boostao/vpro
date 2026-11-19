@@ -5,7 +5,7 @@ import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { validateQualityMinimumReference } from './qualityMinimumReference';
 import { ReportPreferencesSession, reportPreferencesRegistry, type ReportPreferenceRequest, type ReportTitlePreferencesOutcome } from './reportTitlePreferences';
 
-export interface SummaryVegetationQualityPreferenceValues {
+interface SummaryVegetationQualityPreferenceValues {
   enforce: boolean;
   siteMinimum: string;
   vegMinimum: string;
@@ -16,7 +16,7 @@ export interface SummaryVegetationQualityPreferenceValues {
   soilIncludeNulls: boolean;
   becIncludeNulls: boolean;
 }
-export interface SummaryVegetationQualityReference {
+interface SummaryVegetationQualityReference {
   source: string;
   qualityDefinitions: ProjectMetadataTable;
   becDefinitions: ProjectMetadataTable;
@@ -40,7 +40,7 @@ type MinimumField = typeof summaryVegetationQualityMinimumFields[number]['key'];
 type NullField = typeof summaryVegetationQualityNullFields[number]['key'];
 const keys = ['enforce', ...summaryVegetationQualityMinimumFields.map(field => field.key),
   ...summaryVegetationQualityNullFields.map(field => field.key)];
-export const summaryVegetationQualitySource =
+const summaryVegetationQualitySource =
   'configured-owned-imported-SQLite VLists.USysTableOfLists; PlotQualitySite and BEC_Use; ItemOrder then physical rowid; suggestions only, not DataQuality qualification';
 function valid(value: unknown): value is SummaryVegetationQualityPreferenceValues {
   return lifeformShape(value, keys) && typeof value.enforce === 'boolean' &&

@@ -29,7 +29,7 @@
           aria-controls={id} onclick={() => focusSpecies(id)}>Focus read-only Species</button>
       </div>
     {/each}
-    <p class="text-xs text-stone-600">Informational, not a Save rejection. Species remains read-only.
+    <p class="text-xs text-vpro-ink-secondary">Informational, not a Save rejection. Species remains read-only.
       Access event popups and automatic focus are adapted to persistent feedback and an explicit focus action.</p>
   </aside>
 {/if}

@@ -21,7 +21,7 @@
   const draftAllowed = $derived(!view.draft || !allowedForms || allowedForms.includes(view.draft.form));
 </script>
 
-<section class="my-3 space-y-3 rounded border border-stone-300 p-3" data-sivi-creation-panel aria-label="SIVI source row creation">
+<section class="my-3 space-y-3 rounded border border-vpro-border p-3" data-sivi-creation-panel aria-label="SIVI source row creation">
   <h2 class="font-semibold">Create a source-bound SIVI row</h2>
   {#if view.error}<p role="alert" class="break-words text-sm text-red-700">{view.error}</p>{/if}
   {#if !draftAllowed}
@@ -64,7 +64,7 @@
       history {view.receipt.historyId}. {view.receipt.replayed ? 'Observed an earlier commit; no mutation was repeated.' : 'One reviewed row was committed.'}
     </p>
   {/if}
-  <p class="text-xs text-stone-600">Creation assigns only exact parent, Species and reviewed source covers/totals.
+  <p class="text-xs text-vpro-ink-secondary">Creation assigns only exact parent, Species and reviewed source covers/totals.
     Untouched fields stay NULL, Flag stays false, and no heights or automatic sums are inferred.
     Positive signed32 identity allocation is a desktop adaptation, not Access random-number equivalence.
     Deletion and historical creation Undo are separate, independently gated workflows.</p>

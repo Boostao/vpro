@@ -16,7 +16,7 @@
   const unavailable = $derived(disabled || view.busy || view.blocked);
 </script>
 
-<section class="my-3 min-w-0 space-y-3 rounded border border-stone-300 p-3"
+<section class="my-3 min-w-0 space-y-3 rounded border border-vpro-border p-3"
   data-sivi-deletion-panel aria-label="SIVI source row deletion">
   <h2 class="font-semibold">Delete a reviewed SIVI vegetation row</h2>
   {#if view.error}<p role="alert" class="break-words text-sm text-red-700">{view.error}</p>{/if}
@@ -67,7 +67,7 @@
       {view.receipt.replayed ? 'Observed an earlier commit; no deletion was repeated.' : 'One reviewed physical row was deleted.'}
     </p>
   {/if}
-  <p class="text-xs text-stone-600">Deletion preserves complete typed historical evidence and permanently reserves the application ID.
+  <p class="text-xs text-vpro-ink-secondary">Deletion preserves complete typed historical evidence and permanently reserves the application ID.
     No historical value is trimmed, normalized or repaired. Deleted-row restoration requires a separate reviewed workflow;
     original Access audit restoration does not undelete missing rows.</p>
 </section>

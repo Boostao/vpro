@@ -163,7 +163,7 @@
 </script>
 
 <section class="matrix" data-subzone-matrix-report aria-label="Subzone Matrix of Units">
-  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8] report-sticky-bar" data-report-sticky-bar>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border report-sticky-bar" data-report-sticky-bar>
     <h1>Subzone Matrix of Units</h1>
     <div class="actions">
       <button type="button" data-matrix-read disabled={busy || barrier || !available} onclick={() => show()}>Review matrix</button>
@@ -239,7 +239,7 @@
   input { box-sizing: border-box; width: 100%; min-width: 0; }
   .table-scroll { max-width: 100%; overflow-x: auto; }
   table { border-collapse: collapse; min-width: 100%; }
-  th, td { min-width: 5rem; max-width: 24rem; padding: .5rem; text-align: left; border-bottom: 1px solid #D8D8D8; white-space: pre-wrap; overflow-wrap: anywhere; }
+  th, td { min-width: 5rem; max-width: 24rem; padding: .5rem; text-align: left; border-bottom: 1px solid var(--vpro-border); white-space: pre-wrap; overflow-wrap: anywhere; }
   caption { text-align: left; font-weight: 600; }
   .workbook { margin-block: 1rem; }
   .workbook button { justify-self: start; }

@@ -12,11 +12,11 @@ import { validateEnvironmentWorkbookOutcome } from './environmentWorkbook';
 export const summaryVegetationWorkbookScope = 'Explicit read-only normal-SU layer inspection; literal XLSX, not original NewShortVeg orchestration, saved callbacks, ancillary sheets or formatting/printing parity';
 export const summaryVegetationAncillaryWorkbookScope = 'Explicit read-only normal-SU layer inspection with SU Table and optional ReportSummary; literal XLSX, not original NewShortVeg preflight/callbacks or formatting/printing parity';
 export const summaryVegetationEffectiveReferencesScope = 'Explicit read-only normal-SU layer inspection with projected attribute/common/guide references; literal comparison and XLSX, not original Report callbacks, Access collation or formatting/printing parity';
-export const summaryVegetationEffectiveAncillaryScope = 'Explicit read-only normal-SU layer inspection with projected attribute/common/guide references, SU Table and optional ReportSummary; literal comparison and XLSX, not original Report callbacks, Access collation or formatting/printing parity';
+const summaryVegetationEffectiveAncillaryScope = 'Explicit read-only normal-SU layer inspection with projected attribute/common/guide references, SU Table and optional ReportSummary; literal comparison and XLSX, not original Report callbacks, Access collation or formatting/printing parity';
 export const summaryVegetationGroupedWorkbookScope = 'Explicit read-only normal-SU Strata/Lifeform/None inspection; typed XLSX, not grouped common/guide references, ancillary worksheets, original Report callbacks or formatting/printing parity';
 export const summaryVegetationStrataReferencesScope = 'Explicit read-only normal-SU Strata effective-reference inspection; typed XLSX, not Lifeform/None common names, grouped ancillary worksheets, original Report callbacks or formatting/printing parity';
 export const summaryVegetationGroupedAttributesScope = 'Explicit read-only normal-SU Lifeform/None effective-attribute inspection; typed XLSX, no common/guide names, grouped ancillary worksheets, original Report callbacks or formatting/printing parity';
-export const summaryVegetationGroupedAncillaryScope = 'Explicit read-only normal-SU Strata/Lifeform/None inspection with optional effective references, SU Table and optional ReportSummary; typed XLSX, no Lifeform/None common names, original Report callbacks or formatting/printing parity';
+const summaryVegetationGroupedAncillaryScope = 'Explicit read-only normal-SU Strata/Lifeform/None inspection with optional effective references, SU Table and optional ReportSummary; typed XLSX, no Lifeform/None common names, original Report callbacks or formatting/printing parity';
 export const summaryVegetationConstancyScope = 'Explicit read-only normal-SU Constancy inspection with numeric lifeform and raw-species grouping; typed XLSX with optional environment/ancillary composition, adapted raw-code tie ordering, not original Report callbacks or formatting/printing parity';
 export const summaryVegetationUnanimousCommonScope = 'Explicit read-only normal-SU Lifeform/None unanimous common-name inspection; typed XLSX with optional environment/ancillary composition, source First empty-to-NULL output and explicit mixed-name refusal, not original Report/guide callbacks, Access collation or formatting/printing parity';
 type SummaryVegetationWorkbookScopeOptions = {
@@ -51,18 +51,18 @@ type SummaryWorkbookReportSummary = Omit<SummaryVegetationWorkbookReportSummary,
 type SummaryWorkbookAncillaryReview = Omit<SummaryVegetationWorkbookAncillaryReview, 'sheets' | 'summary'> & {
   sheets: string[]; summary: SummaryWorkbookReportSummary | null;
 };
-export interface ValidatedSummaryVegetationWorkbookReview {
+interface ValidatedSummaryVegetationWorkbookReview {
   preview: SummaryVegetationPreview; environment: SummaryEnvironmentalLifeformPreview | null;
   options: SummaryVegetationWorkbookOptions; scope: string; sheet: string; firstVegetationRow: number;
   approvalHash: string; workbookSHA256: string; bytes: number;
   ancillary?: SummaryWorkbookAncillaryReview;
 }
-export type SummaryVegetationWorkbookExportRequest = {
+type SummaryVegetationWorkbookExportRequest = {
   options: SummaryVegetationWorkbookOptions; approvalHash: string; destination: string;
   createdAt?: string;
 };
-export interface SummaryWorkbookRead extends PromiseLike<unknown> { cancel?(): void }
-export interface SummaryWorkbookPort {
+interface SummaryWorkbookRead extends PromiseLike<unknown> { cancel?(): void }
+interface SummaryWorkbookPort {
   review(contextId: string, options: SummaryVegetationWorkbookOptions): SummaryWorkbookRead;
   reviewFromPreferences?(contextId: string): SummaryWorkbookRead;
   validationYield(): PromiseLike<void>;

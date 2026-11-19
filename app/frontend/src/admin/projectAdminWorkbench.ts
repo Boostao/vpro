@@ -5,12 +5,12 @@ import type { ProjectMetadataPreset } from './projectMetadataPresets';
 
 export { notifications };
 
-export const PROJECT_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
+const PROJECT_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
 
 export type MergeResolutionChoice = 'keep_target' | 'accept_source';
 export type { ProjectMetadataPreset };
 
-export interface NewProjectRequest {
+interface NewProjectRequest {
   projectName: string;
   projectId?: string;
   projectTitle?: string;
@@ -28,7 +28,7 @@ export interface NewProjectResult {
   state?: unknown;
 }
 
-export interface SaveProjectAsRequest {
+interface SaveProjectAsRequest {
   newProjectName: string;
   destinationPath?: string;
   activateOnSuccess: boolean;
@@ -45,7 +45,7 @@ export interface SaveProjectAsResult {
   state?: unknown;
 }
 
-export interface ExportSplinterRequest {
+interface ExportSplinterRequest {
   splinterProject: string;
   destinationPath?: string;
   useActiveSu: boolean;
@@ -66,7 +66,7 @@ export interface ExportSplinterResult {
   state?: unknown;
 }
 
-export interface CompareProjectsRequest {
+interface CompareProjectsRequest {
   sourcePath?: string;
   sourceProject?: string;
   targetPath: string;
@@ -83,7 +83,7 @@ export interface FieldDiff {
   targetVal: string | null;
 }
 
-export interface PlotDiff {
+interface PlotDiff {
   plotNumber: string;
   status: 'Added' | 'Removed' | 'Identical' | 'Modified';
   diffCount: number;
@@ -106,11 +106,11 @@ export interface CompareProjectsResult {
   metadataDiffs?: FieldDiff[] | null;
 }
 
-export interface ComplianceOptions {
+interface ComplianceOptions {
   useActiveSu: boolean;
 }
 
-export interface ComplianceSummaryCounts {
+interface ComplianceSummaryCounts {
   envCodeErrors: number;
   boundsErrors: number;
   envAdminMismatches: number;
@@ -122,14 +122,14 @@ export interface ComplianceSummaryCounts {
   plotsWithoutVeg: number;
 }
 
-export interface EnvironmentCodeFinding {
+interface EnvironmentCodeFinding {
   listName: string;
   field: string;
   plotNumber: string;
   value: string;
 }
 
-export interface BoundsFinding {
+interface BoundsFinding {
   table: string;
   plotNumber: string;
   rowId: number;
@@ -138,25 +138,25 @@ export interface BoundsFinding {
   rule: string;
 }
 
-export interface EnvAdminCompletenessFinding {
+interface EnvAdminCompletenessFinding {
   plotNumber: string;
   issue: string;
 }
 
-export interface OrphanChildFinding {
+interface OrphanChildFinding {
   table: string;
   plotNumber: string;
   rowCount: number;
 }
 
-export interface DuplicateVegSpeciesFinding {
+interface DuplicateVegSpeciesFinding {
   plotNumber: string;
   species: string;
   rowCount: number;
   overlappingLayers: string[];
 }
 
-export interface TaxonomyComplianceFinding {
+interface TaxonomyComplianceFinding {
   rowId: number;
   id: number;
   plotNumber: string;
@@ -165,7 +165,7 @@ export interface TaxonomyComplianceFinding {
   suggestedCode?: string;
 }
 
-export interface SkippedListDefinition {
+interface SkippedListDefinition {
   listName: string;
   field: string;
   reason: string;
@@ -187,11 +187,11 @@ export interface ComplianceValidationReport {
   taxonomyFindings: TaxonomyComplianceFinding[];
 }
 
-export interface QuarantineOrphanRequest {
+interface QuarantineOrphanRequest {
   tables?: string[];
 }
 
-export interface QuarantinedTableSummary {
+interface QuarantinedTableSummary {
   table: string;
   quarantineTable: string;
   movedRows: number;
@@ -207,12 +207,12 @@ export interface QuarantineOrphanResult {
   tables: QuarantinedTableSummary[];
 }
 
-export interface OptimizeVegOptions {
+interface OptimizeVegOptions {
   plotNumbers?: string[];
   custodianAuditOverride?: boolean;
 }
 
-export interface OptimizeVegConflict {
+interface OptimizeVegConflict {
   plotNumber: string;
   species: string;
   field: string;
@@ -222,7 +222,7 @@ export interface OptimizeVegConflict {
   overrideable?: boolean;
 }
 
-export interface OptimizeVegAuditRef {
+interface OptimizeVegAuditRef {
   plotNumber: string;
   species: string;
   retiredId: number;
@@ -231,7 +231,7 @@ export interface OptimizeVegAuditRef {
   editWhen: string;
 }
 
-export interface OptimizeVegGroup {
+interface OptimizeVegGroup {
   plotNumber: string;
   species: string;
   sourceRowCount: number;
@@ -264,7 +264,7 @@ export interface OptimizeVegPreview {
   auditReferences?: OptimizeVegAuditRef[] | null;
 }
 
-export interface ApplyOptimizeVegRequest {
+interface ApplyOptimizeVegRequest {
   plotNumbers?: string[];
   expectedDigest?: string;
   custodianAuditOverride?: boolean;
@@ -281,7 +281,7 @@ export interface OptimizeVegResult {
   groups: OptimizeVegGroup[];
 }
 
-export interface ThreeWayMergePreviewRequest {
+interface ThreeWayMergePreviewRequest {
   sourcePath: string;
   sourceProject?: string;
   targetPath?: string;
@@ -291,7 +291,7 @@ export interface ThreeWayMergePreviewRequest {
   caseInsensitiveText?: boolean;
 }
 
-export interface MergeConflictItem {
+interface MergeConflictItem {
   conflictId: string;
   plotNumber: string;
   table: string;
@@ -304,7 +304,7 @@ export interface MergeConflictItem {
   defaultResolution: MergeResolutionChoice;
 }
 
-export interface MergePlotPreview {
+interface MergePlotPreview {
   plotNumber: string;
   category: 'Added' | 'Identical' | 'FastForward' | 'Conflict' | 'TargetOnly' | 'SourceDelete';
   items: MergeConflictItem[];
@@ -330,7 +330,7 @@ export interface ThreeWayMergePreview {
   metadataItems?: MergeConflictItem[] | null;
 }
 
-export interface ThreeWayMergeExecuteRequest {
+interface ThreeWayMergeExecuteRequest {
   sourcePath: string;
   sourceProject?: string;
   targetPath?: string;

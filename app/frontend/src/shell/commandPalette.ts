@@ -1,6 +1,6 @@
-export type CommandPaletteCategory = 'plots' | 'context' | 'views' | 'help';
+type CommandPaletteCategory = 'plots' | 'context' | 'views' | 'help';
 
-export interface CommandPalettePlotCandidate {
+interface CommandPalettePlotCandidate {
   plotNumber: string;
   siteUnit?: string | null;
   zone?: string | null;
@@ -8,7 +8,7 @@ export interface CommandPalettePlotCandidate {
   location?: string | null;
 }
 
-export interface CommandPaletteProjectCandidate {
+interface CommandPaletteProjectCandidate {
   name: string;
   path?: string;
   file?: string;
@@ -17,7 +17,7 @@ export interface CommandPaletteProjectCandidate {
   active?: boolean;
 }
 
-export interface CommandPaletteSUCandidate {
+interface CommandPaletteSUCandidate {
   index: number;
   name: string;
   path?: string;
@@ -26,7 +26,7 @@ export interface CommandPaletteSUCandidate {
   active?: boolean;
 }
 
-export interface CommandPaletteHelpCandidate {
+interface CommandPaletteHelpCandidate {
   id: string;
   title: string;
   subtitle: string;
@@ -270,7 +270,7 @@ export function buildCommandPaletteCatalog(input: BuildCommandPaletteInput): Com
   return items;
 }
 
-export function scoreCommandItem(item: CommandPaletteItem, rawQuery: string): number {
+function scoreCommandItem(item: CommandPaletteItem, rawQuery: string): number {
   const q = rawQuery.trim().toLowerCase();
   if (!q) {
     if (item.category === 'views') return 50;

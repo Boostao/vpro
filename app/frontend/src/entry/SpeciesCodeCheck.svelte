@@ -205,31 +205,31 @@ import type { SpeciesCodeCheckRow } from '../../bindings/github.com/boostao/vpro
   }
 </script>
 
-<section class="species-code-check min-w-0 mb-3 rounded border border-[#D8D8D8] bg-[#F2F2F2] p-3 text-sm text-[#313132]" aria-label="Species code check">
-  <h3 class="font-semibold text-[#003366]">Species code check - explicit scope and replacements</h3>
+<section class="species-code-check min-w-0 mb-3 rounded border border-vpro-border bg-vpro-canvas p-3 text-sm text-vpro-ink" aria-label="Species code check">
+  <h3 class="font-semibold text-vpro-navy">Species code check - explicit scope and replacements</h3>
   {#if session}
     <p class="mt-2" role="status">Project: {session.review.project}. Working unit: {session.review.su === 'None' ? 'None - entire project' : session.review.su}.
       {session.review.rows.length} physical rows reviewed; {unresolved.length} unresolved ({unresolvedSynonyms} old-code synonyms); {session.ignored.length} ignored locally.</p>
   {/if}
   {#if busy}<p role="status">Waiting for the owned context operation...</p>{/if}
-  {#if error}<p class="mt-2 font-medium text-[#D8292F]" role="alert">{error}</p>{/if}
-  {#if success}<p class="mt-2 font-medium text-[#2E8540]" role="status">{success}</p>{/if}
-  {#each errors as message}<p class="mt-2 text-[#D8292F]" role="alert">{message}</p>{/each}
+  {#if error}<p class="mt-2 font-medium text-vpro-error" role="alert">{error}</p>{/if}
+  {#if success}<p class="mt-2 font-medium text-vpro-success" role="status">{success}</p>{/if}
+  {#each errors as message}<p class="mt-2 text-vpro-error" role="alert">{message}</p>{/each}
   <div class="my-3 flex flex-wrap gap-2">
     <button type="button" class="primary-btn" disabled={busy || committedFailure || !!metadata || !pending || errors.length > 0} onclick={() => void save()}>Save reviewed replacements</button>
     <button type="button" disabled={busy || committedFailure || !!metadata || pending > 0} onclick={() => void reload()}>Reload species-check scope</button>
     <button type="button" disabled={saving} onclick={undo}>{metadata ? 'Cancel personal entry' : 'Discard proposals and close review'}</button>
   </div>
   {#if metadata}
-    <section class="personal-species-draft rounded border border-[#FCBA19] bg-[#FFF9E6] p-3" aria-label="New personal species definition" data-personal-editor="codecheck">
+    <section class="personal-species-draft rounded border border-vpro-gold bg-vpro-gold-surface p-3" aria-label="New personal species definition" data-personal-editor="codecheck">
       <p class="mb-2">Separate Save writes only the user definition and its audit. Project replacements have their own transaction.</p>
-      {#each metadataErrors as message}<p class="text-[#D8292F]" role="alert">{message}</p>{/each}
+      {#each metadataErrors as message}<p class="text-vpro-error" role="alert">{message}</p>{/each}
       <PersonalSpeciesFields draft={metadata} disabled={busy} onchange={value => { metadata = value; error = null; success = null; }} />
       <button type="button" class="primary-btn mt-2" disabled={busy || committedFailure || metadataErrors.length > 0} onclick={() => void savePersonal()}>Save personal definition only</button>
     </section>
   {/if}
   {#if session}
-    <div class="table-scroll overflow-x-auto rounded border border-[#D8D8D8] bg-white">
+    <div class="table-scroll overflow-x-auto rounded border border-vpro-border bg-white">
       <table class="w-full">
         <thead><tr><th scope="col">Plot / physical ID</th><th scope="col">Original code &amp; suggestion</th><th scope="col">Literal replacement and review</th><th scope="col">Actions</th></tr></thead>
         <tbody>
@@ -240,10 +240,10 @@ import type { SpeciesCodeCheckRow } from '../../bindings/github.com/boostao/vpro
               <td>{row.plotNumber} / {row.id}</td>
               <td>
                 <div class="font-mono">{row.code === null ? 'NULL' : JSON.stringify(row.code)}</div>
-                <div class="mt-1 text-xs text-[#606060]">Status: {row.status}</div>
+                <div class="mt-1 text-xs text-vpro-ink-muted">Status: {row.status}</div>
                 {#if row.suggestedCode && suggestedCodeForRow(row)}
                   <div class="mt-1 flex flex-wrap items-center gap-1.5" data-suggested-code={row.suggestedCode}>
-                    <span class="rounded bg-[#FFF9E6] px-1.5 py-0.5 text-xs font-medium text-[#313132] border border-[#FCBA19]">Suggested: {row.suggestedCode}</span>
+                    <span class="rounded bg-vpro-gold-surface px-1.5 py-0.5 text-xs font-medium text-vpro-ink border border-vpro-gold">Suggested: {row.suggestedCode}</span>
                     <button type="button" class="text-xs" data-use-suggested-id={row.id} disabled={busy || !!metadata || committedFailure}
                       onclick={() => void applySuggested(row)}>Use suggested ({row.suggestedCode})</button>
                   </div>
@@ -255,17 +255,17 @@ import type { SpeciesCodeCheckRow } from '../../bindings/github.com/boostao/vpro
                     aria-invalid={!!cell?.error} oninput={event => stage(row.id, event.currentTarget.value)} />
                 </label>
                 {#if cell && cell.reviewed === cell.raw && cell.raw !== row.code}
-                  <p class="mt-1 text-xs font-medium text-[#2E8540]">Reviewed replacement ready to save: {JSON.stringify(cell.reviewed)}</p>
+                  <p class="mt-1 text-xs font-medium text-vpro-success">Reviewed replacement ready to save: {JSON.stringify(cell.reviewed)}</p>
                 {/if}
                 <button type="button" class="mt-1" disabled={busy || !!metadata || committedFailure || !cell} onclick={() => void reviewTarget(row.id)}>Review literal target</button>
                 {#if target && target.entered === cell?.raw}
-                  <div class="mt-2 rounded border border-[#D8D8D8] bg-[#F2F2F2] p-2 text-xs" aria-label={`Target definitions, row ${row.id}`}>
+                  <div class="mt-2 rounded border border-vpro-border bg-vpro-canvas p-2 text-xs" aria-label={`Target definitions, row ${row.id}`}>
                     {#each target.options as option}
                       <p>{option.source}: {JSON.stringify(option.code)}; scientific {option.scientificName === null ? 'NULL' : JSON.stringify(option.scientificName)};
                         English {option.englishName === null ? 'NULL' : JSON.stringify(option.englishName)};
                         Lifeform {option.lifeform ?? 'NULL'}; Codetype {option.codeType === null ? 'NULL' : JSON.stringify(option.codeType)}.</p>
                     {/each}
-                    <p class="mt-1 text-[#003366]">Replacing an old code where the target species already exists on the same plot/layer combines covers safely (capped at 99%).</p>
+                    <p class="mt-1 text-vpro-navy">Replacing an old code where the target species already exists on the same plot/layer combines covers safely (capped at 99%).</p>
                     <div class="mt-1.5 flex flex-wrap gap-1.5">
                       <button type="button" disabled={busy || !!metadata || committedFailure} onclick={() => accept(row.id, false)}>Use for this physical row</button>
                       <button type="button" disabled={busy || !!metadata || committedFailure} onclick={() => accept(row.id, true)}>Use for matching originals in this scope</button>
@@ -297,11 +297,11 @@ import type { SpeciesCodeCheckRow } from '../../bindings/github.com/boostao/vpro
 </section>
 
 <style>
-  th, td { padding: .5rem; text-align: left; vertical-align: top; border-bottom: 1px solid #D8D8D8; }
-  th { background: #F2F2F2; color: #003366; font-weight: 600; }
-  input { display: block; min-height: 40px; width: 100%; padding: .5rem; border: 1px solid #D8D8D8; border-radius: 4px; background: white; color: #313132; }
-  input:focus { outline: 2px solid #003366; outline-offset: 1px; }
-  button { min-height: 40px; padding: .4rem .6rem; border: 1px solid #D8D8D8; border-radius: 4px; background: white; color: #313132; }
-  .primary-btn { background: #003366; border-color: #003366; color: white; font-weight: 600; }
+  th, td { padding: .5rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--vpro-border); }
+  th { background: var(--vpro-canvas); color: var(--vpro-navy); font-weight: 600; }
+  input { display: block; min-height: 40px; width: 100%; padding: .5rem; border: 1px solid var(--vpro-border); border-radius: 4px; background: white; color: var(--vpro-ink); }
+  input:focus { outline: 2px solid var(--vpro-navy); outline-offset: 1px; }
+  button { min-height: 40px; padding: .4rem .6rem; border: 1px solid var(--vpro-border); border-radius: 4px; background: white; color: var(--vpro-ink); }
+  .primary-btn { background: var(--vpro-navy); border-color: var(--vpro-navy); color: white; font-weight: 600; }
   button:disabled { opacity: .5; }
 </style>

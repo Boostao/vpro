@@ -64,9 +64,9 @@
 {/if}
 
 <style>
-  .soil-code-reference { display: grid; gap: .3rem; margin-bottom: .5rem; padding: .5rem; border: 1px solid #d6d3d1; font-size: .75rem; }
+  .soil-code-reference { display: grid; gap: .3rem; margin-bottom: .5rem; padding: .5rem; border: 1px solid var(--vpro-border); font-size: .75rem; }
   .soil-code-reference p { margin: 0; }
-  .soil-code-reference button { padding: .2rem .4rem; border: 1px solid #a8a29e; background: white; }
+  .soil-code-reference button { padding: .2rem .4rem; border: 1px solid var(--vpro-border-strong); background: white; }
   .soil-code-reference dl { display: grid; grid-template-columns: max-content 1fr; gap: .1rem .6rem; }
   .soil-code-reference dd { margin: 0; overflow-wrap: anywhere; }
 </style>

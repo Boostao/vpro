@@ -15,13 +15,13 @@ export interface SiteUnitExclusionRule {
   enabled: boolean;
 }
 
-export interface ExcludedSiteUnitInfo {
+interface ExcludedSiteUnitInfo {
   siteUnit: string;
   matchedPattern: string;
   plotCount: number;
 }
 
-export interface RetainedSiteUnitInfo {
+interface RetainedSiteUnitInfo {
   siteUnit: string;
   plotCount: number;
 }
@@ -35,8 +35,8 @@ export interface SiteUnitExclusionSummary {
   excludedUnits: ExcludedSiteUnitInfo[];
 }
 
-export type BreakpointPolicy = 'lowest' | 'highest';
-export type UnbrokenUnitPolicy = 'keep_original' | 'exclude_unbroken';
+type BreakpointPolicy = 'lowest' | 'highest';
+type UnbrokenUnitPolicy = 'keep_original' | 'exclude_unbroken';
 
 export interface HierarchyBreakpointOptions {
   breakpointPolicy: BreakpointPolicy;
@@ -44,7 +44,7 @@ export interface HierarchyBreakpointOptions {
   stripTildePrefix: boolean;
 }
 
-export interface HierarchyBreakpointUnitMapping {
+interface HierarchyBreakpointUnitMapping {
   originalUnit: string;
   effectiveUnit: string;
   rolledUp: boolean;
@@ -53,7 +53,7 @@ export interface HierarchyBreakpointUnitMapping {
   plotCount: number;
 }
 
-export interface HierarchyBreakpointBucket {
+interface HierarchyBreakpointBucket {
   breakpointUnit: string;
   sourceUnits: string[];
   plotCount: number;
@@ -73,7 +73,7 @@ export interface HierarchyBreakpointResolution {
   buckets: HierarchyBreakpointBucket[];
 }
 
-export interface SiteUnitExclusionPreviewRequest {
+interface SiteUnitExclusionPreviewRequest {
   rules: SiteUnitExclusionRule[];
   useDefaultPresets: boolean;
   useHierarchyBreakpoints: boolean;
@@ -89,7 +89,7 @@ export interface SiteUnitExclusionPreview {
   breakpoints?: HierarchyBreakpointResolution;
 }
 
-export interface SummaryVegetationExclusionRequest {
+interface SummaryVegetationExclusionRequest {
   average: number;
   display: number;
   showClass: number;
@@ -106,7 +106,7 @@ export interface SummaryVegetationExclusionPreview {
   breakpoints?: HierarchyBreakpointResolution;
 }
 
-export interface LongVegetationExclusionRequest {
+interface LongVegetationExclusionRequest {
   rules: SiteUnitExclusionRule[];
   useDefaultPresets: boolean;
   useHierarchyBreakpoints: boolean;
@@ -172,7 +172,7 @@ export function createDefaultBreakpointOptions(): HierarchyBreakpointOptions {
   };
 }
 
-export function wildcardMatchCaseInsensitive(pattern: string, target: string): boolean {
+function wildcardMatchCaseInsensitive(pattern: string, target: string): boolean {
   const p = Array.from(pattern.toLowerCase());
   const s = Array.from(target.toLowerCase());
   let pi = 0;

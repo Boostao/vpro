@@ -2,7 +2,7 @@ import { wellFormedUTF16 } from './qualityEditor';
 import type { SpeciesCodeCheckOption, SpeciesCodeCheckReview, SpeciesCodeCheckUpdate } from '../../bindings/github.com/boostao/vpro/app';
 import type { SpeciesCodeCheckRow } from '../../bindings/github.com/boostao/vpro/app/internal/validation/models';
 
-export interface CodeCheckCell {
+interface CodeCheckCell {
   row: SpeciesCodeCheckRow;
   raw: string;
   error: string | null;
@@ -14,8 +14,8 @@ export interface CodeCheckDraft {
   ignored: number[];
 }
 
-export const CODE_CHECK_STATUSES = ['master', 'user', 'missing', 'unlisted', 'synonym'] as const;
-export const UNRESOLVED_CODE_CHECK_STATUSES = ['unlisted', 'missing', 'synonym'] as const;
+const CODE_CHECK_STATUSES = ['master', 'user', 'missing', 'unlisted', 'synonym'] as const;
+const UNRESOLVED_CODE_CHECK_STATUSES = ['unlisted', 'missing', 'synonym'] as const;
 
 export function beginCodeCheck(review: SpeciesCodeCheckReview): CodeCheckDraft {
   if (!review.project || !review.su || !Array.isArray(review.rows)) throw new Error('Species check needs an explicit project/working-unit scope and complete rows.');

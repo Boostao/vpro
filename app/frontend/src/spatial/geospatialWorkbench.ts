@@ -3,7 +3,7 @@ import type {
   SpatialWorkbenchPayload,
 } from '../../bindings/github.com/boostao/vpro/app';
 
-export type SpatialGeoArrowColumns = SpatialWorkbenchPayload['geoArrow'];
+type SpatialGeoArrowColumns = SpatialWorkbenchPayload['geoArrow'];
 
 
 export {
@@ -158,7 +158,7 @@ export function materializeWorkbenchPlots(cols: SpatialGeoArrowColumns | null | 
   return { points, coordsFloat32, discrepancyVectors };
 }
 
-export function buildBECZoneMatchExpression(): any[] {
+function buildBECZoneMatchExpression(): any[] {
   const expr: any[] = ['match', ['get', 'ZONE']];
   for (const [zone, hex] of Object.entries(BEC_ZONE_PALETTE)) {
     expr.push(zone, hex);
@@ -171,7 +171,7 @@ type PMTilesArchiveStatusExt = NonNullable<PMTilesManifest['archives']>[string] 
   warning?: string;
 };
 
-export function buildOfflineGraticuleGeoJSON(): {
+function buildOfflineGraticuleGeoJSON(): {
   type: 'FeatureCollection';
   features: Array<{
     type: 'Feature';
@@ -540,7 +540,7 @@ export function extractDistinctZones(plotPoints: WorkbenchPlotPoint[]): string[]
   return [...set].sort();
 }
 
-export function buildAOIGeoJSONFeatureCollection(aoiVertices: Array<[number, number]>) {
+function buildAOIGeoJSONFeatureCollection(aoiVertices: Array<[number, number]>) {
   const features: any[] = [];
   if (aoiVertices.length >= 3) {
     const closed = [...aoiVertices, aoiVertices[0]];

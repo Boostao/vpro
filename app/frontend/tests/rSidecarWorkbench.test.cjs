@@ -352,8 +352,8 @@ test('RSidecarWorkbench SSR renders BC Gov #003366/#FCBA19 styling, 4 tabs, and 
     props: { contextId: 'ctx-ssr', activeProject: 'Sample', activeSu: 'Sample' },
   }).body;
 
-  assert.match(html, /#003366/);
-  assert.match(html, /#FCBA19/);
+  assert.match(html, /#003366|vpro-navy/);
+  assert.match(html, /#FCBA19|vpro-gold/i);
   assert.match(html, /1\. Runtime &amp; climr Climate Normals/);
   assert.match(html, /2\. Dual rSMR vs aSMR Edatopic Grids/);
   assert.match(html, /3\. R Clustering &amp; Dendrogram/);

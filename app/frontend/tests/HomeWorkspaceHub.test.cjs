@@ -15,8 +15,8 @@ test('HomeWorkspaceHub compiles cleanly with BC Gov styling, zero emojis, and st
   const source = readFileSync(srcPath('HomeWorkspaceHub.svelte'), 'utf8');
   assert.doesNotMatch(source, /[\u{1F300}-\u{1FAFF}]/u, 'must contain zero emojis');
   assert.doesNotMatch(source, /disposable|during migration|Not yet a complete Access replacement/i);
-  assert.match(source, /#003366/);
-  assert.match(source, /#FCBA19/);
+  assert.match(source, /#003366|vpro-navy/);
+  assert.match(source, /#FCBA19|vpro-gold/i);
 
   const compiled = compile(source, { filename: 'HomeWorkspaceHub.svelte', generate: 'client' });
   assert.deepEqual(compiled.warnings, []);

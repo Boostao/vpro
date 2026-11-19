@@ -81,7 +81,7 @@
 </script>
 
 <section class="lifeform-summary" data-lifeform-summary aria-label="Lifeform Summary">
-  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8] report-sticky-bar" data-report-sticky-bar>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border report-sticky-bar" data-report-sticky-bar>
     <h1>Lifeform Summary</h1>
     <div class="actions">
       {#if unitScope === 'su'}
@@ -169,24 +169,24 @@
 </section>
 
 <style>
-  .lifeform-summary { display: grid; gap: 1rem; padding: 1rem; background: #F2F2F2; color: #313132; min-width: 0; }
+  .lifeform-summary { display: grid; gap: 1rem; padding: 1rem; background: var(--vpro-canvas); color: var(--vpro-ink); min-width: 0; }
   .report-sticky-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding-inline: .75rem; border-radius: .35rem; }
-  h1, h2 { margin: 0; color: #003366; }
+  h1, h2 { margin: 0; color: var(--vpro-navy); }
   p { margin: 0; }
-  .scope-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: .75rem; background: #FFFFFF; padding: .85rem; border: 1px solid #D8D8D8; border-radius: .5rem; }
-  .scope-controls label { display: flex; flex-direction: column; gap: .35rem; min-width: 0; font-weight: 500; color: #313132; }
-  .scope-controls select { box-sizing: border-box; width: 100%; min-width: 0; padding: .5rem; border: 1px solid #D8D8D8; border-radius: .25rem; background: #FFFFFF; color: #313132; }
+  .scope-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: .75rem; background: var(--vpro-surface); padding: .85rem; border: 1px solid var(--vpro-border); border-radius: .5rem; }
+  .scope-controls label { display: flex; flex-direction: column; gap: .35rem; min-width: 0; font-weight: 500; color: var(--vpro-ink); }
+  .scope-controls select { box-sizing: border-box; width: 100%; min-width: 0; padding: .5rem; border: 1px solid var(--vpro-border); border-radius: .25rem; background: var(--vpro-surface); color: var(--vpro-ink); }
   .actions { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; }
-  .actions button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid #003366; border-radius: .25rem; background: #003366; color: #FFFFFF; font-weight: 600; cursor: pointer; }
-  .actions button:hover:not(:disabled) { background: #002244; border-color: #002244; }
+  .actions button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid var(--vpro-navy); border-radius: .25rem; background: var(--vpro-navy); color: var(--vpro-surface); font-weight: 600; cursor: pointer; }
+  .actions button:hover:not(:disabled) { background: var(--vpro-navy-dark); border-color: var(--vpro-navy-dark); }
   .actions button:disabled { opacity: .6; cursor: not-allowed; }
-  article { display: grid; gap: .75rem; padding: 1rem; background: #FFFFFF; border: 1px solid #D8D8D8; border-radius: .5rem; min-width: 0; }
+  article { display: grid; gap: .75rem; padding: 1rem; background: var(--vpro-surface); border: 1px solid var(--vpro-border); border-radius: .5rem; min-width: 0; }
   dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: .75rem; margin: 0; }
-  dt { font-weight: 600; color: #003366; } dd { margin: .25rem 0 0; }
+  dt { font-weight: 600; color: var(--vpro-navy); } dd { margin: .25rem 0 0; }
   .table-scroll { overflow-x: auto; max-width: 100%; }
-  table { border-collapse: collapse; width: 100%; background: #FFFFFF; }
-  th, td { padding: .5rem; border-bottom: 1px solid #D8D8D8; text-align: left; }
-  thead th { background: #F2F2F2; color: #003366; }
-  caption { text-align: left; padding-bottom: .5rem; font-weight: 600; color: #003366; }
-  .guidance { font-size: .9rem; color: #474543; }
+  table { border-collapse: collapse; width: 100%; background: var(--vpro-surface); }
+  th, td { padding: .5rem; border-bottom: 1px solid var(--vpro-border); text-align: left; }
+  thead th { background: var(--vpro-canvas); color: var(--vpro-navy); }
+  caption { text-align: left; padding-bottom: .5rem; font-weight: 600; color: var(--vpro-navy); }
+  .guidance { font-size: .9rem; color: var(--vpro-ink-secondary); }
 </style>

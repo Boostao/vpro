@@ -115,16 +115,16 @@
 </section>
 
 <style>
-  .environmental { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; color: #313132; }
+  .environmental { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; color: var(--vpro-ink); }
   .actions { display: flex; flex-wrap: wrap; gap: .75rem; }
-  button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid #003366; border-radius: .25rem; background: #FFFFFF; color: #003366; font-weight: 600; cursor: pointer; }
-  button:hover:not(:disabled) { background: #F2F2F2; }
+  button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid var(--vpro-navy); border-radius: .25rem; background: var(--vpro-surface); color: var(--vpro-navy); font-weight: 600; cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--vpro-canvas); }
   button:disabled { opacity: .6; cursor: not-allowed; }
-  .paths { overflow-wrap: anywhere; color: #474543; }
+  .paths { overflow-wrap: anywhere; color: var(--vpro-ink-secondary); }
   .table-scroll { max-width: 100%; overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; background: #FFFFFF; }
-  th, td { padding: .5rem; border: 1px solid #D8D8D8; text-align: left; vertical-align: top; white-space: pre-wrap; }
-  thead th { background: #F2F2F2; color: #003366; }
-  small { display: block; font-weight: normal; color: #474543; }
+  table { width: 100%; border-collapse: collapse; background: var(--vpro-surface); }
+  th, td { padding: .5rem; border: 1px solid var(--vpro-border); text-align: left; vertical-align: top; white-space: pre-wrap; }
+  thead th { background: var(--vpro-canvas); color: var(--vpro-navy); }
+  small { display: block; font-weight: normal; color: var(--vpro-ink-secondary); }
   article { min-width: 0; }
 </style>

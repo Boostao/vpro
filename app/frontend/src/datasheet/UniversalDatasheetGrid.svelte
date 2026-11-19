@@ -446,7 +446,7 @@
 <svelte:window onkeydown={handleWindowKeydown} onmouseup={() => { isMouseSelecting = false; }} />
 
 <section bind:this={workbenchEl} class="vpro-datasheet-workbench" data-tour="datasheet-grid-root" aria-label="Universal Project Datasheet Grid" oncopy={handleCopySelection}>
-  <div data-workbench-sticky-bar class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-stone-200 space-y-2">
+  <div data-workbench-sticky-bar class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border space-y-2">
     <DatasheetHeader
       {project} {su} {hierarchy} {tables} {activeTableKey} {page}
       {activeTableReadOnly} {activeChildTableEditable}

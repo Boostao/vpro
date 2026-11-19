@@ -150,10 +150,10 @@
         <dt>Subzone</dt><dd>{selected.subZone ?? '—'}</dd>
         <dt>Site series</dt><dd class="tabular-nums">{selected.siteSeries ?? '—'}</dd>
       </dl>
-      <div class="mt-4 pt-3 border-t border-slate-200">
+      <div class="mt-4 pt-3 border-t border-vpro-border">
         <button
           type="button"
-          class="w-full py-2 px-3 bg-[#1E5128] hover:bg-[#153B1D] text-white rounded text-xs font-semibold"
+          class="w-full py-2 px-3 bg-vpro-forest hover:bg-vpro-forest-dark text-white rounded text-xs font-semibold"
           onclick={onopenfs882}
         >
           Open in FS882 Editor
@@ -161,7 +161,7 @@
         <button
           type="button"
           data-twopage-open
-          class="mt-2 w-full py-2 px-3 border border-[#003366] bg-white hover:bg-[#EBF1F8] text-[#003366] rounded text-xs font-semibold"
+          class="mt-2 w-full py-2 px-3 border border-vpro-navy bg-white hover:bg-vpro-navy-tint text-vpro-navy rounded text-xs font-semibold"
           disabled={busy || editorBusy || transitionWorking || pendingTransition !== null}
           onclick={onopentwopage}
         >
@@ -171,23 +171,23 @@
           <button
             type="button"
             data-sivi-standalone-open
-            class="mt-2 w-full py-2 px-3 border border-[#003366] text-[#003366] hover:bg-[#EBF1F8] rounded text-xs font-semibold"
+            class="mt-2 w-full py-2 px-3 border border-vpro-navy text-vpro-navy hover:bg-vpro-navy-tint rounded text-xs font-semibold"
             disabled={busy || editorBusy || transitionWorking || pendingTransition !== null}
             onclick={onopensivi}
           >Open SIVI / FS1333</button>
         {/if}
 
         {#if oncopyplot || onremoveplot}
-          <details class="mt-3 rounded border border-slate-200 bg-slate-50 p-2.5 text-xs" data-plot-identity-actions>
-            <summary class="cursor-pointer font-semibold text-[#003366]">Rename or Remove Plot</summary>
-            <div class="mt-2 space-y-2.5 text-slate-700">
+          <details class="mt-3 rounded border border-vpro-border bg-vpro-surface-subtle p-2.5 text-xs" data-plot-identity-actions>
+            <summary class="cursor-pointer font-semibold text-vpro-navy">Rename or Remove Plot</summary>
+            <div class="mt-2 space-y-2.5 text-vpro-ink-secondary">
               {#if actionError}
-                <p role="alert" class="rounded border border-[#D8292F] bg-[#FBEAEA] p-1.5 text-[11px] text-[#A61B20]">{actionError}</p>
+                <p role="alert" class="rounded border border-vpro-error bg-vpro-error-bg p-1.5 text-[11px] text-vpro-error-ink">{actionError}</p>
               {/if}
 
               {#if oncopyplot}
                 <div class="space-y-1">
-                  <label for="inspector-copy-plot-input" class="block text-[11px] font-semibold text-slate-700">
+                  <label for="inspector-copy-plot-input" class="block text-[11px] font-semibold text-vpro-ink-secondary">
                     Copy to corrected Plot Number (up to 7 characters)
                   </label>
                   <div class="flex gap-1.5">
@@ -196,7 +196,7 @@
                       type="text"
                       maxlength="7"
                       data-copy-plot-input
-                      class="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 font-mono text-xs"
+                      class="min-w-0 flex-1 rounded border border-vpro-border bg-white px-2 py-1 font-mono text-xs"
                       placeholder="New plot #"
                       bind:value={targetPlotDraft}
                       disabled={busy || editorBusy || actionBusy}
@@ -204,7 +204,7 @@
                     <button
                       type="button"
                       data-copy-plot-btn
-                      class="rounded bg-[#003366] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#002244] disabled:opacity-50"
+                      class="rounded bg-vpro-navy px-2.5 py-1 text-xs font-semibold text-white hover:bg-vpro-navy-dark disabled:opacity-50"
                       disabled={busy || editorBusy || actionBusy || !targetPlotDraft.trim()}
                       onclick={() => void submitCopyPlot()}
                     >
@@ -215,22 +215,22 @@
               {/if}
 
               {#if onremoveplot}
-                <div class="space-y-1 border-t border-slate-200 pt-2">
+                <div class="space-y-1 border-t border-vpro-border pt-2">
                   {#if canUndoSelectedPlot}
-                    <p class="text-[11px] text-slate-600">
+                    <p class="text-[11px] text-vpro-ink-secondary">
                       This newly created SIVI plot has no child rows and can be deleted directly.
                     </p>
                     <button
                       type="button"
                       data-undo-sivi-plot-btn
-                      class="w-full rounded border border-[#D8292F] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#D8292F] hover:bg-[#FBEAEA] disabled:opacity-50"
+                      class="w-full rounded border border-vpro-error bg-white px-2.5 py-1.5 text-xs font-semibold text-vpro-error hover:bg-vpro-error-bg disabled:opacity-50"
                       disabled={busy || editorBusy || actionBusy}
                       onclick={() => void submitRemovePlot()}
                     >
                       Delete Newly Created Plot
                     </button>
                   {:else}
-                    <label for="inspector-clean-project-input" class="block text-[11px] font-semibold text-slate-700">
+                    <label for="inspector-clean-project-input" class="block text-[11px] font-semibold text-vpro-ink-secondary">
                       Remove plot into clean project copy (keeps original .db backup)
                     </label>
                     <input
@@ -238,7 +238,7 @@
                       type="text"
                       maxlength="30"
                       data-exclude-plot-project-input
-                      class="w-full rounded border border-slate-300 bg-white px-2 py-1 font-mono text-xs"
+                      class="w-full rounded border border-vpro-border bg-white px-2 py-1 font-mono text-xs"
                       placeholder="Clean project name"
                       bind:value={cleanProjectDraft}
                       disabled={busy || editorBusy || actionBusy}
@@ -246,7 +246,7 @@
                     <button
                       type="button"
                       data-exclude-plot-splinter-btn
-                      class="w-full rounded border border-[#D8292F] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#D8292F] hover:bg-[#FBEAEA] disabled:opacity-50"
+                      class="w-full rounded border border-vpro-error bg-white px-2.5 py-1.5 text-xs font-semibold text-vpro-error hover:bg-vpro-error-bg disabled:opacity-50"
                       disabled={busy || editorBusy || actionBusy || !cleanProjectDraft.trim()}
                       onclick={() => void submitRemovePlot()}
                     >
@@ -281,8 +281,8 @@
         <dt>Plot Profile</dt><dd>{$projectState?.plotProfile?.source?.name ?? 'None'}</dd>
         <dt>Plots in Scope</dt><dd class="tabular-nums">{page?.total ?? 0}</dd>
       </dl>
-      <p class="mt-4 text-xs text-slate-600 leading-relaxed">
-        Select a plot row to inspect BEC attributes, or press <kbd class="px-1 py-0.5 rounded border border-slate-300 bg-slate-50 font-mono text-[11px]">Ctrl+K</kbd> to jump directly to any plot, report, or LMH25 topic.
+      <p class="mt-4 text-xs text-vpro-ink-secondary leading-relaxed">
+        Select a plot row to inspect BEC attributes, or press <kbd class="px-1 py-0.5 rounded border border-vpro-border bg-vpro-surface-subtle font-mono text-[11px]">Ctrl+K</kbd> to jump directly to any plot, report, or LMH25 topic.
       </p>
     </aside>
   {/if}
@@ -293,7 +293,7 @@
       <button
         type="button"
         data-open-classification-explorer
-        class="rounded border border-[#003366] bg-white px-3 py-1.5 text-xs font-semibold text-[#003366] hover:bg-[#EBF1F6]"
+        class="rounded border border-vpro-navy bg-white px-3 py-1.5 text-xs font-semibold text-vpro-navy hover:bg-vpro-navy-tint"
         onclick={onopenexplorer}
       >
         Open SU &amp; Hierarchy Explorer

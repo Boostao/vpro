@@ -490,7 +490,7 @@
 </script>
 
 <section data-summary-vegetation aria-label="Summary Vegetation" class="summary-vegetation">
-  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8] report-sticky-bar" data-report-sticky-bar>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border report-sticky-bar" data-report-sticky-bar>
     <h1>Summary Vegetation</h1>
     <div class="actions">
       <button onclick={previewReport} disabled={!enabled || unavailableScope || viewState.busy || operationHeld || fieldListHeld || preferenceHeld || preferenceInvalid ||
@@ -776,29 +776,29 @@
 </section>
 
 <style>
-  .summary-vegetation { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; padding: 1rem; background: #F2F2F2; color: #313132; min-width: 0; }
+  .summary-vegetation { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; padding: 1rem; background: var(--vpro-canvas); color: var(--vpro-ink); min-width: 0; }
   .report-sticky-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding-inline: .75rem; border-radius: .35rem; }
-  .summary-vegetation h1, .summary-vegetation h2 { margin: 0; color: #003366; }
-  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; background: #FFFFFF; padding: .9rem; border: 1px solid #D8D8D8; border-radius: .5rem; }
-  .scope-toggles { display: flex; flex-wrap: wrap; gap: 1rem; padding: .65rem .9rem; background: #FFFFFF; border: 1px solid #D8D8D8; border-radius: .5rem; }
+  .summary-vegetation h1, .summary-vegetation h2 { margin: 0; color: var(--vpro-navy); }
+  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; background: var(--vpro-surface); padding: .9rem; border: 1px solid var(--vpro-border); border-radius: .5rem; }
+  .scope-toggles { display: flex; flex-wrap: wrap; gap: 1rem; padding: .65rem .9rem; background: var(--vpro-surface); border: 1px solid var(--vpro-border); border-radius: .5rem; }
   .checkbox-inline { display: flex; flex-direction: row; align-items: center; gap: .5rem; font-weight: 500; }
   .lump-picker { display: flex; gap: .5rem; align-items: stretch; min-width: 0; }
   .lump-picker select { flex: 1; min-width: 0; }
-  label { display: flex; flex-direction: column; gap: .35rem; min-width: 0; color: #313132; font-weight: 500; }
-  select, input:not([type="checkbox"]) { box-sizing: border-box; width: 100%; min-width: 0; padding: .5rem; border: 1px solid #D8D8D8; border-radius: .25rem; background: #FFFFFF; color: #313132; }
-  .owner, .scope-meta { overflow-wrap: anywhere; color: #474543; }
-  .scope-guidance { margin: 0; padding: .6rem .85rem; border-left: 4px solid #003366; background: #FFFFFF; color: #313132; border-radius: .25rem; }
-  .qc-summary { padding: .5rem .75rem; border-left: 4px solid #FCBA19; background: #FFFFFF; color: #003366; font-weight: 600; }
+  label { display: flex; flex-direction: column; gap: .35rem; min-width: 0; color: var(--vpro-ink); font-weight: 500; }
+  select, input:not([type="checkbox"]) { box-sizing: border-box; width: 100%; min-width: 0; padding: .5rem; border: 1px solid var(--vpro-border); border-radius: .25rem; background: var(--vpro-surface); color: var(--vpro-ink); }
+  .owner, .scope-meta { overflow-wrap: anywhere; color: var(--vpro-ink-secondary); }
+  .scope-guidance { margin: 0; padding: .6rem .85rem; border-left: 4px solid var(--vpro-navy); background: var(--vpro-surface); color: var(--vpro-ink); border-radius: .25rem; }
+  .qc-summary { padding: .5rem .75rem; border-left: 4px solid var(--vpro-gold); background: var(--vpro-surface); color: var(--vpro-navy); font-weight: 600; }
   .linked-field-list, .exclusion-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; }
   .actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
-  button, summary { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid #003366; border-radius: .25rem; background: #003366; color: #FFFFFF; font-weight: 600; cursor: pointer; }
-  button:hover:not(:disabled), summary:hover { background: #002244; border-color: #002244; }
+  button, summary { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid var(--vpro-navy); border-radius: .25rem; background: var(--vpro-navy); color: var(--vpro-surface); font-weight: 600; cursor: pointer; }
+  button:hover:not(:disabled), summary:hover { background: var(--vpro-navy-dark); border-color: var(--vpro-navy-dark); }
   button:disabled { opacity: .6; cursor: not-allowed; }
-  .error { color: #D8292F; font-weight: 600; }
+  .error { color: var(--vpro-error); font-weight: 600; }
   .table-scroll { overflow-x: auto; max-width: 100%; }
-  table { border-collapse: collapse; width: 100%; background: #FFFFFF; }
-  th, td { padding: .5rem; border: 1px solid #D8D8D8; text-align: left; vertical-align: top; }
-  thead th { background: #F2F2F2; color: #003366; }
+  table { border-collapse: collapse; width: 100%; background: var(--vpro-surface); }
+  th, td { padding: .5rem; border: 1px solid var(--vpro-border); text-align: left; vertical-align: top; }
+  thead th { background: var(--vpro-canvas); color: var(--vpro-navy); }
   article, details { min-width: 0; }
   @media (max-width: 960px) { .summary-vegetation { padding: .75rem; } .lump-picker { flex-direction: column; } }
 </style>

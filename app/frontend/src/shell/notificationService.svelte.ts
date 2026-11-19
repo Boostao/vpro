@@ -1,15 +1,15 @@
 import { writable } from 'svelte/store';
 
-export type NotificationSeverity = 'info' | 'success' | 'warning' | 'error';
+type NotificationSeverity = 'info' | 'success' | 'warning' | 'error';
 export type NotificationCategory = 'general' | 'entry' | 'lmh25' | 'reports' | 'admin' | 'background';
 export type NotificationFilter = 'all' | 'errors' | 'entry' | 'lmh25' | 'reports' | 'background';
 
-export interface NotificationAction {
+interface NotificationAction {
   label: string;
   onTrigger: () => void;
 }
 
-export interface NotificationEntry {
+interface NotificationEntry {
   id: string;
   severity: NotificationSeverity;
   category: NotificationCategory;
@@ -24,7 +24,7 @@ export interface NotificationEntry {
   repeatCount: number;
 }
 
-export interface ActiveToast {
+interface ActiveToast {
   id: string;
   entryId: string;
   severity: NotificationSeverity;
@@ -48,7 +48,7 @@ export interface NotificationStateSnapshot {
   badgeSeverity: 'error' | 'warning' | 'info' | 'none';
 }
 
-export interface PushNotificationInput {
+interface PushNotificationInput {
   severity: NotificationSeverity;
   category?: NotificationCategory;
   title: string;
@@ -60,12 +60,12 @@ export interface PushNotificationInput {
   durationMs?: number;
 }
 
-export const DEFAULT_TOAST_DURATION_MS = 4500;
-export const DEDUPE_WINDOW_MS = 2500;
-export const MAX_HISTORY_ENTRIES = 150;
-export const MAX_VISIBLE_TOASTS = 4;
+const DEFAULT_TOAST_DURATION_MS = 4500;
+const DEDUPE_WINDOW_MS = 2500;
+const MAX_HISTORY_ENTRIES = 150;
+const MAX_VISIBLE_TOASTS = 4;
 
-export function computeUnreadSummary(entries: readonly NotificationEntry[]) {
+function computeUnreadSummary(entries: readonly NotificationEntry[]) {
   let unreadCount = 0;
   let unreadErrorCount = 0;
   let unreadWarningCount = 0;

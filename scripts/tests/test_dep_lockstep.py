@@ -78,6 +78,22 @@ class DepLockstepTests(unittest.TestCase):
             errs = MOD.check_lockstep(root)
             self.assertTrue(any("@deck.gl/* major.minor lockstep mismatch" in e for e in errs), errs)
 
+    def test_pruned_direct_deckgl_without_unused_luma_passes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = make_fixture_repo(Path(td))
+            pkg_path = root / "app" / "frontend" / "package.json"
+            pkg_path.write_text(
+                json.dumps({
+                    "dependencies": {
+                        "@wailsio/runtime": "3.1.0",
+                        "@deck.gl/layers": "^9.4.1",
+                        "@deck.gl/mapbox": "^9.4.1",
+                    }
+                }),
+                encoding="utf-8",
+            )
+            self.assertEqual(MOD.check_lockstep(root), [])
+
     def test_real_repo_passes_strict_brand(self):
         repo_root = Path(__file__).resolve().parents[2]
         self.assertEqual(MOD.check_lockstep(repo_root, strict_brand=True), [])

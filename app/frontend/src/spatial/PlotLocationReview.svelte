@@ -51,7 +51,7 @@
 </script>
 
 <section class="locations" data-plot-location-review aria-label="Plot location review">
-  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8]" data-workbench-sticky-bar>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border" data-workbench-sticky-bar>
     <h1>Plot location review</h1>
     <div class="actions">
       <button type="button" data-plot-location-read disabled={busy} onclick={show}>Review plot locations</button>
@@ -93,18 +93,18 @@
 </section>
 
 <style>
-  .locations { padding: 1rem; min-width: 0; max-width: 100%; color: #313132; background: #FFFFFF; }
-  h1 { font-size: 1.5rem; margin-bottom: .75rem; color: #003366; }
+  .locations { padding: 1rem; min-width: 0; max-width: 100%; color: var(--vpro-ink); background: var(--vpro-surface); }
+  h1 { font-size: 1.5rem; margin-bottom: .75rem; color: var(--vpro-navy); }
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin: 1rem 0; }
-  button { border: 1px solid #003366; border-radius: .25rem; padding: .4rem .6rem; background: #FFFFFF; color: #003366; font-weight: 600; }
+  button { border: 1px solid var(--vpro-navy); border-radius: .25rem; padding: .4rem .6rem; background: var(--vpro-surface); color: var(--vpro-navy); font-weight: 600; }
   button:disabled { opacity: .5; }
   dl > div { margin: .6rem 0; }
-  dt { font-weight: 600; color: #003366; }
+  dt { font-weight: 600; color: var(--vpro-navy); }
   dd, p { overflow-wrap: anywhere; }
   .table-scroll { overflow-x: auto; max-width: 100%; }
   table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #D8D8D8; padding: .4rem .6rem; text-align: left; vertical-align: top; white-space: pre-wrap; }
-  th { background: #F2F2F2; color: #003366; }
-  caption { text-align: left; margin-bottom: .5rem; color: #474543; }
-  .notice { color: #474543; }
+  th, td { border: 1px solid var(--vpro-border); padding: .4rem .6rem; text-align: left; vertical-align: top; white-space: pre-wrap; }
+  th { background: var(--vpro-canvas); color: var(--vpro-navy); }
+  caption { text-align: left; margin-bottom: .5rem; color: var(--vpro-ink-secondary); }
+  .notice { color: var(--vpro-ink-secondary); }
 </style>

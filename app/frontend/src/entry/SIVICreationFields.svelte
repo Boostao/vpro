@@ -28,11 +28,11 @@
   }
 </script>
 
-<section class="space-y-3 rounded border border-stone-200 p-3" data-sivi-creation-fields aria-label="New SIVI source row fields">
+<section class="space-y-3 rounded border border-vpro-border p-3" data-sivi-creation-fields aria-label="New SIVI source row fields">
   <h3 class="font-semibold">New {draft.form} row</h3>
   {#if error}<p role="alert" class="text-sm text-red-700">{error}</p>{/if}
   {#each errors as message}<p role="alert" class="text-sm text-red-700">{message}</p>{/each}
-  <p class="break-words text-xs text-stone-600">Exact parent {JSON.stringify(draft.plot)}. No application or physical identity has been assigned.</p>
+  <p class="break-words text-xs text-vpro-ink-secondary">Exact parent {JSON.stringify(draft.plot)}. No application or physical identity has been assigned.</p>
   <div>
     <label for={`sivi-creation-${draft.form}-species`} class="mb-1 block text-sm font-medium">Species</label>
     <input id={`sivi-creation-${draft.form}-species`} list={`sivi-creation-${draft.form}-species-list`}
@@ -88,7 +88,7 @@
       {/each}
     </div>
   {/each}
-  <p class="text-xs text-stone-600">Enter at least one explicit non-NULL source cover/total; zero is valid. Omitted values remain NULL.
+  <p class="text-xs text-vpro-ink-secondary">Enter at least one explicit non-NULL source cover/total; zero is valid. Omitted values remain NULL.
     No heights, Layer or totals are inferred. Literal numeric bounds and exact Species decisions match the existing source editors.
     Identity is assigned only by a separately verified transactional creation operation; these fields do not write data.</p>
 </section>

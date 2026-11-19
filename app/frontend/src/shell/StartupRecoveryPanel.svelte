@@ -527,7 +527,7 @@
       type="button"
       data-startup-browse-project
       disabled={recoveryWorking || busy}
-      class="px-3 py-1.5 border rounded text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
+      class="px-3 py-1.5 border rounded text-xs font-medium hover:bg-vpro-surface-subtle disabled:opacity-50"
       onclick={() => void browseStartupDatabase('project')}
     >
       Browse .db...
@@ -569,7 +569,7 @@
       <button
         type="button"
         disabled={recoveryWorking || busy}
-        class="px-3 py-1.5 border rounded text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
+        class="px-3 py-1.5 border rounded text-xs font-medium hover:bg-vpro-surface-subtle disabled:opacity-50"
         onclick={() => void browseStartupDatabase('su')}
       >
         Browse SU .db...
@@ -591,7 +591,7 @@
       <button
         type="button"
         disabled={recoveryWorking || busy}
-        class="px-3 py-1.5 border rounded text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
+        class="px-3 py-1.5 border rounded text-xs font-medium hover:bg-vpro-surface-subtle disabled:opacity-50"
         onclick={() => void browseStartupDatabase('hierarchy')}
       >
         Browse Hierarchy .db...
@@ -604,7 +604,7 @@
       type="submit"
       data-startup-relocate-open
       disabled={recoveryWorking || busy || !recoveryProjectPath.trim()}
-      class="px-3.5 py-1.5 rounded border border-[#003366] text-[#003366] text-xs font-semibold hover:bg-slate-50 disabled:opacity-50"
+      class="px-3.5 py-1.5 rounded border border-vpro-navy text-vpro-navy text-xs font-semibold hover:bg-vpro-surface-subtle disabled:opacity-50"
     >
       {recoveryWorking ? 'Opening...' : submitLabel}
     </button>
@@ -626,7 +626,7 @@
     {@const issue = derivedMeta.supportDatabaseIssue}
     {@const targetLabel = issue.allFileNames.length > 1 ? 'support databases' : issue.fileName}
     <div
-      class="p-3.5 border border-amber-300 rounded bg-amber-50/70 space-y-1.5 text-xs text-slate-800"
+      class="p-3.5 border border-amber-300 rounded bg-amber-50/70 space-y-1.5 text-xs text-vpro-ink"
       data-startup-support-db-callout
     >
       <div class="font-semibold">
@@ -638,14 +638,14 @@
         </div>
       {/if}
       {#if issue.hasPersonalUserEntries}
-        <p class="text-slate-700">
+        <p class="text-vpro-ink-secondary">
           <code>VUser.db</code> stores custom user species codes and personal site unit lists. Before
           restoring a clean built-in copy, VPro saves your existing file untouched as
           <code>VUser.corrupt-&lt;timestamp&gt;.db</code> in the same folder so no custom entries are
           silently lost.
         </p>
       {:else}
-        <p class="text-slate-700">
+        <p class="text-vpro-ink-secondary">
           Before restoring a clean built-in copy, VPro saves the unreadable file untouched as
           <code>{issue.role}.corrupt-&lt;timestamp&gt;.db</code> in the same folder.
         </p>
@@ -653,7 +653,7 @@
     </div>
   {/if}
 
-  <p class="text-xs text-slate-600">
+  <p class="text-xs text-vpro-ink-secondary">
     Your saved preferences in <code>{startupFailure.configPath}</code> and existing project files have not been modified yet.
     Choose an option below — VPro will automatically save a backup copy before making any changes.
   </p>
@@ -664,9 +664,9 @@
   {#if derivedMeta.supportDatabaseIssue}
     {@const issue = derivedMeta.supportDatabaseIssue}
     {@const targetLabel = issue.allFileNames.length > 1 ? 'support databases' : issue.fileName}
-    <div class="p-3.5 border rounded bg-slate-50 space-y-2" data-startup-repair-support-panel>
+    <div class="p-3.5 border rounded bg-vpro-surface-subtle space-y-2" data-startup-repair-support-panel>
       <h2 class="text-sm font-semibold">Option 1: Back up &amp; restore {targetLabel}</h2>
-      <p class="text-xs text-slate-700">
+      <p class="text-xs text-vpro-ink-secondary">
         Saves a timestamped backup copy of the unreadable support database, installs a clean built-in
         copy, and opens
         {#if recoveryProjectPath.trim() && !derivedMeta.hasMissingDatabase}
@@ -681,7 +681,7 @@
         type="button"
         data-startup-repair-support
         disabled={recoveryWorking || busy}
-        class="px-3.5 py-1.5 rounded bg-[#003366] text-white text-xs font-semibold hover:bg-[#002244] disabled:opacity-50"
+        class="px-3.5 py-1.5 rounded bg-vpro-navy text-white text-xs font-semibold hover:bg-vpro-navy-dark disabled:opacity-50"
         onclick={() => void repairSupportAndOpenProject()}
       >
         {recoveryWorking
@@ -694,7 +694,7 @@
       <h2 class="text-sm font-semibold">
         Option 2: Restore {targetLabel} &amp; switch to Sample project
       </h2>
-      <p class="text-xs text-slate-700">
+      <p class="text-xs text-vpro-ink-secondary">
         Backs up both the unreadable support database and your current settings, installs a clean
         built-in copy, and opens VPro with the built-in <strong>Sample</strong> project.
       </p>
@@ -702,7 +702,7 @@
         type="button"
         data-startup-fallback-sample
         disabled={recoveryWorking || busy}
-        class="px-3.5 py-1.5 rounded border border-[#003366] text-[#003366] text-xs font-semibold hover:bg-slate-50 disabled:opacity-50"
+        class="px-3.5 py-1.5 rounded border border-vpro-navy text-vpro-navy text-xs font-semibold hover:bg-vpro-surface-subtle disabled:opacity-50"
         onclick={() => void fallbackStartupToSample()}
       >
         {recoveryWorking
@@ -728,9 +728,9 @@
       </form>
     </details>
   {:else}
-    <div class="p-3.5 border rounded bg-slate-50 space-y-2">
+    <div class="p-3.5 border rounded bg-vpro-surface-subtle space-y-2">
       <h2 class="text-sm font-semibold">Option 1: Open built-in Sample project</h2>
-      <p class="text-xs text-slate-700">
+      <p class="text-xs text-vpro-ink-secondary">
         Backs up your current settings and opens VPro immediately with the built-in <strong>Sample</strong> project.
         None of your existing <code>.db</code> project files are deleted or altered.
       </p>
@@ -738,7 +738,7 @@
         type="button"
         data-startup-fallback-sample
         disabled={recoveryWorking || busy}
-        class="px-3.5 py-1.5 rounded bg-[#003366] text-white text-xs font-semibold hover:bg-[#002244] disabled:opacity-50"
+        class="px-3.5 py-1.5 rounded bg-vpro-navy text-white text-xs font-semibold hover:bg-vpro-navy-dark disabled:opacity-50"
         onclick={() => void fallbackStartupToSample()}
       >
         {recoveryWorking ? 'Recovering...' : 'Switch to Sample project (back up settings)'}
@@ -755,7 +755,7 @@
           : 'Option 2: Repair settings & open project'}
       </h2>
       {#if !derivedMeta.hasMissingDatabase}
-        <p class="text-xs text-slate-700">
+        <p class="text-xs text-vpro-ink-secondary">
           Updates your saved preferences while keeping your valid settings and opening the selected project.
         </p>
       {/if}

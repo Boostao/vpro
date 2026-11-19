@@ -4,12 +4,12 @@ import { HelpService } from '../../bindings/github.com/boostao/vpro/app';
 export type HelpDrawerTab = 'inspector' | 'keys' | 'guides';
 export type HelpMenuAction = 'guide' | 'tours' | 'shortcuts' | 'whats-new' | 'reset-sample' | 'about';
 
-export interface HelpCodeOption {
+interface HelpCodeOption {
   code: string;
   label: string;
 }
 
-export interface HelpFieldTopic {
+interface HelpFieldTopic {
   id: string;
   code: string;
   section: string;
@@ -23,7 +23,7 @@ export interface HelpFieldTopic {
   codes: HelpCodeOption[];
 }
 
-export interface HelpDecisionStep {
+interface HelpDecisionStep {
   step: number;
   prompt: string;
   yes?: string;
@@ -38,7 +38,7 @@ export interface HelpDecisionKey {
   steps: HelpDecisionStep[];
 }
 
-export interface HelpGuideSection {
+interface HelpGuideSection {
   heading: string;
   body: string;
 }
@@ -52,7 +52,7 @@ export interface HelpGuide {
   sections: HelpGuideSection[];
 }
 
-export interface HelpTourStep {
+interface HelpTourStep {
   target: string;
   view: string;
   title: string;
@@ -73,7 +73,7 @@ export interface HelpShortcut {
   action: string;
 }
 
-export interface HelpWhatsNewEntry {
+interface HelpWhatsNewEntry {
   version: string;
   date: string;
   channel: string;
@@ -88,7 +88,7 @@ export interface HelpDataUseAgreement {
   clauses: string[];
 }
 
-export interface StandardsSourceStamp {
+interface StandardsSourceStamp {
   archiveName: string;
   archiveSha256: string;
   extractedName: string;
@@ -96,13 +96,13 @@ export interface StandardsSourceStamp {
   version: string;
 }
 
-export interface StandardsArtifactStamp {
+interface StandardsArtifactStamp {
   path: string;
   sha256: string;
   counts: Record<string, number>;
 }
 
-export interface HelpLibraryStamps {
+interface HelpLibraryStamps {
   schemaVersion: number;
   generator: string;
   becVersion: string;
@@ -349,7 +349,7 @@ const COLUMN_TO_HELP_ID: Record<string, string> = {
   plottype: 'sivi.plot_type',
 };
 
-export function mapColumnToHelpId(
+function mapColumnToHelpId(
   column: string | null | undefined,
   domain?: 'site' | 'humus' | 'mineral' | 'veg' | 'sivi'
 ): string | null {
@@ -383,7 +383,7 @@ export function mapColumnToHelpId(
   return null;
 }
 
-export function defaultHelpTopicForView(view: string, entryForm: 'fs882' | 'sivi' | 'fs882-twopage' = 'fs882'): string {
+function defaultHelpTopicForView(view: string, entryForm: 'fs882' | 'sivi' | 'fs882-twopage' = 'fs882'): string {
   if ((view === 'fs882' || view === 'fs882-twopage') && entryForm === 'sivi') return 'sivi.plot_type';
   switch (view) {
     case 'fs882':
@@ -414,7 +414,7 @@ export function defaultHelpTopicForView(view: string, entryForm: 'fs882' | 'sivi
   }
 }
 
-export interface HelpInspectableElement {
+interface HelpInspectableElement {
   parentElement?: HelpInspectableElement | null;
   getAttribute?(name: string): string | null;
   closest?(selector: string): HelpInspectableElement | null;
@@ -546,7 +546,7 @@ export function resolveContextualHelpTarget(
   return defaultHelpTopicForView(view, entryForm);
 }
 
-export function isEditableTarget(
+function isEditableTarget(
   target: { tagName?: string; isContentEditable?: boolean; getAttribute?: (name: string) => string | null } | null | undefined
 ): boolean {
   if (!target) return false;
@@ -583,7 +583,7 @@ export function classifyGlobalHelpShortcut(
   return null;
 }
 
-export interface DecisionKeyHistoryItem {
+interface DecisionKeyHistoryItem {
   step: number;
   prompt: string;
   choice: 'yes' | 'no';
@@ -654,14 +654,14 @@ export function answerDecisionKeyStep(
   };
 }
 
-export interface CoverPatchRect {
+interface CoverPatchRect {
   x: number;
   y: number;
   w: number;
   h: number;
 }
 
-export interface CoverComparisonBlock {
+interface CoverComparisonBlock {
   percent: number;
   label: string;
   areaM2: string;

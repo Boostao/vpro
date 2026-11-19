@@ -112,7 +112,7 @@
       {/if}
     </details>
   {/if}
-  <p class="text-xs text-stone-600">Read-only saved inputs: no scratch reset, physical count writes, profile selection,
+  <p class="text-xs text-vpro-ink-secondary">Read-only saved inputs: no scratch reset, physical count writes, profile selection,
     editing, Run, species-only, form filters, SU creation, attachment or Help launch.
     Stored Plot Count is historical data, not a newly computed result; project/result totals are unavailable.
     NULL/empty, historical duplicate Order and extra originals are retained.

@@ -3,21 +3,21 @@ import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { ReportPreferencesSession, reportPreferencesRegistry, type ReportPreferenceRequest,
   type ReportTitlePreferencesOutcome } from './reportTitlePreferences';
 
-export interface LongVegetationEnforcementPreferenceValues { enforce: boolean; unitGroups: number }
-export interface PrinterObservation { names: string[] | null; default: string | null; source: string }
-export interface LongVegetationEnforcementPreferencesReview extends GoogleEarthScope {
+interface LongVegetationEnforcementPreferenceValues { enforce: boolean; unitGroups: number }
+interface PrinterObservation { names: string[] | null; default: string | null; source: string }
+interface LongVegetationEnforcementPreferencesReview extends GoogleEarthScope {
   values: LongVegetationEnforcementPreferenceValues;
   printers: PrinterObservation;
 }
-export interface LongVegetationEnforcementPreferencesOutcome extends ReportTitlePreferencesOutcome {
+interface LongVegetationEnforcementPreferencesOutcome extends ReportTitlePreferencesOutcome {
   printers: PrinterObservation | null;
 }
-export interface LongVegetationEnforcementDraft { enforce: boolean | null; unitGroups: number | null }
-export const printerObservationSource = 'installed printers and current default observed read-only; separate host reads, not an atomic snapshot or permission to change the default';
+interface LongVegetationEnforcementDraft { enforce: boolean | null; unitGroups: number | null }
+const printerObservationSource = 'installed printers and current default observed read-only; separate host reads, not an atomic snapshot or permission to change the default';
 const groups = (value: unknown): value is 1 | 2 | 3 => value === 1 || value === 2 || value === 3;
 const printerName = (value: unknown): value is string => typeof value === 'string' && value.length > 0 &&
   wellFormedUTF16(value) && !value.includes('\0');
-export function validatePrinterObservation(value: PrinterObservation | null): PrinterObservation & { names: string[] } {
+function validatePrinterObservation(value: PrinterObservation | null): PrinterObservation & { names: string[] } {
   if (!value || !Array.isArray(value.names) || !value.names.every(printerName) ||
       value.default !== null && !printerName(value.default) || value.source !== printerObservationSource) {
     throw new Error('Read-only printer observation is missing or malformed; no printer names or default were inferred.');

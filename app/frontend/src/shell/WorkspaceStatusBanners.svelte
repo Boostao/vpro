@@ -39,13 +39,13 @@
 {#if region === 'badge'}
   {#if buildMode === 'dev'}
     <button type="button" data-build-tier-badge="dev" title="Local developer build — open About VPro & diagnostics"
-      class="ml-1.5 rounded border border-[#FCBA19] bg-[#003366] px-2 py-0.5 font-mono text-[11px] font-semibold tracking-tight text-[#FCBA19] hover:bg-[#002244]"
+      class="ml-1.5 rounded border border-vpro-gold bg-vpro-navy px-2 py-0.5 font-mono text-[11px] font-semibold tracking-tight text-vpro-gold hover:bg-vpro-navy-dark"
       onclick={() => { if (!startupFailed) onopenabout(); }}>
       DEV BUILD · v{appVersion || '2.0.0-dev'}{shortBuildCommit ? ` · ${shortBuildCommit}` : ''}
     </button>
   {:else if buildMode === 'alpha'}
     <button type="button" data-build-tier-badge="alpha" title="Alpha preview build — open About VPro & verification details"
-      class="ml-1.5 rounded border border-[#003366] bg-[#FCBA19] px-2 py-0.5 font-mono text-[11px] font-bold tracking-tight text-[#003366] hover:brightness-95"
+      class="ml-1.5 rounded border border-vpro-navy bg-vpro-gold px-2 py-0.5 font-mono text-[11px] font-bold tracking-tight text-vpro-navy hover:brightness-95"
       onclick={() => { if (!startupFailed) onopenabout(); }}>
       ALPHA PREVIEW (v{appVersion})
     </button>
@@ -59,15 +59,15 @@
 {:else}
   {#if !startupFailed && whatsNewStatus?.hasUnread && !whatsNewPromptDismissed}
     <section aria-label="Unread release notes" data-whats-new-banner
-      class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded border border-[#003366] border-l-[4px] border-l-[#FCBA19] bg-white px-3.5 py-2.5 text-xs text-[#313132]">
+      class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded border border-vpro-navy border-l-[4px] border-l-vpro-gold bg-white px-3.5 py-2.5 text-xs text-vpro-ink">
       <div>
-        <strong class="font-semibold text-[#003366]">What's New in VPro v{whatsNewStatus.latestVersion}:</strong>
+        <strong class="font-semibold text-vpro-navy">What's New in VPro v{whatsNewStatus.latestVersion}:</strong>
         <span> {whatsNewStatus.unreadCount} unread release update{whatsNewStatus.unreadCount === 1 ? '' : 's'} available.</span>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <button type="button" class="rounded bg-[#003366] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#002244]" onclick={onopenwhatsnew}>Read Release Notes</button>
-        <button type="button" class="rounded border border-[#003366] bg-white px-2.5 py-1 text-xs font-semibold text-[#003366] hover:bg-slate-50" onclick={onacknowledgewhatsnew}>Mark as Read</button>
-        <button type="button" class="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50" onclick={ondismisswhatsnew}>Dismiss</button>
+        <button type="button" class="rounded bg-vpro-navy px-2.5 py-1 text-xs font-semibold text-white hover:bg-vpro-navy-dark" onclick={onopenwhatsnew}>Read Release Notes</button>
+        <button type="button" class="rounded border border-vpro-navy bg-white px-2.5 py-1 text-xs font-semibold text-vpro-navy hover:bg-vpro-surface-subtle" onclick={onacknowledgewhatsnew}>Mark as Read</button>
+        <button type="button" class="rounded border border-vpro-border bg-white px-2 py-1 text-xs text-vpro-ink-secondary hover:bg-vpro-surface-subtle" onclick={ondismisswhatsnew}>Dismiss</button>
       </div>
     </section>
   {/if}

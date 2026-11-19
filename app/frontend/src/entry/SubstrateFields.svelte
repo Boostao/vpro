@@ -63,9 +63,9 @@
   {/each}
 {/snippet}
 <style>
-  .substrate-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; padding: .35rem .5rem; margin-bottom: .5rem; border: 1px solid var(--vpro-error-border, #e59ba0); background: var(--vpro-error-bg, #fbeaea); color: var(--vpro-error-ink, #a61b20); border-radius: 4px; font-size: .75rem; }
-  .substrate-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid var(--vpro-forest-border, #D8D8D8); border-radius: 4px; padding: .5rem .65rem; background: var(--vpro-surface, white); color: var(--vpro-ink, #313132); font: inherit; font-family: var(--vpro-font-mono, monospace); font-variant-numeric: tabular-nums; line-height: 1.4; }
-  .substrate-control:disabled { color: var(--vpro-ink-muted, #5f6b7a); background: var(--vpro-surface-subtle, #f8fafb); }
-  .substrate-control:focus { outline: 2px solid var(--vpro-focus-ring, #1a5a96); outline-offset: 1px; }
-  .substrate-control[aria-invalid="true"] { border-color: var(--vpro-error, #d8292f); }
+  .substrate-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; padding: .35rem .5rem; margin-bottom: .5rem; border: 1px solid var(--vpro-error-border); background: var(--vpro-error-bg); color: var(--vpro-error-ink); border-radius: 4px; font-size: .75rem; }
+  .substrate-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid var(--vpro-forest-border); border-radius: 4px; padding: .5rem .65rem; background: var(--vpro-surface, white); color: var(--vpro-ink); font: inherit; font-family: var(--vpro-font-mono, monospace); font-variant-numeric: tabular-nums; line-height: 1.4; }
+  .substrate-control:disabled { color: var(--vpro-ink-muted); background: var(--vpro-surface-subtle); }
+  .substrate-control:focus { outline: 2px solid var(--vpro-focus-ring); outline-offset: 1px; }
+  .substrate-control[aria-invalid="true"] { border-color: var(--vpro-error); }
 </style>

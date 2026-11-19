@@ -148,14 +148,14 @@
 {@render children(becInputs)}
 
 <style>
-  .bec-toolbar { display: flex; flex-direction: column; gap: .25rem; margin-bottom: .5rem; font-size: .75rem; color: #606060; }
-  .bec-toolbar [role="alert"] { color: #D8292F; }
-  .bec-toolbar button { align-self: flex-start; border: 1px solid #D8D8D8; border-radius: 2px; background: white; color: #313132; padding: 0 .25rem; }
-  .bec-warnings { padding-left: 1rem; color: #92400e; }
+  .bec-toolbar { display: flex; flex-direction: column; gap: .25rem; margin-bottom: .5rem; font-size: .75rem; color: var(--vpro-ink-muted); }
+  .bec-toolbar [role="alert"] { color: var(--vpro-error); }
+  .bec-toolbar button { align-self: flex-start; border: 1px solid var(--vpro-border); border-radius: 2px; background: white; color: var(--vpro-ink); padding: 0 .25rem; }
+  .bec-warnings { padding-left: 1rem; color: var(--vpro-warning-ink); }
   .bec-acknowledgement { display: flex; align-items: center; gap: .35rem; }
   .bec-definitions ul { padding-left: 1rem; }
   .bec-definitions dl { display: grid; grid-template-columns: max-content 1fr; gap: .1rem .5rem; }
-  .bec-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #D8D8D8; border-radius: 4px; padding: .5rem .65rem; background: white; color: #313132; font: inherit; line-height: 1.4; }
-  .bec-control:focus { outline: 2px solid #003366; outline-offset: 1px; }
-  .bec-control:disabled { color: #606060; background: #F2F2F2; }
+  .bec-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid var(--vpro-border); border-radius: 4px; padding: .5rem .65rem; background: white; color: var(--vpro-ink); font: inherit; line-height: 1.4; }
+  .bec-control:focus { outline: 2px solid var(--vpro-navy); outline-offset: 1px; }
+  .bec-control:disabled { color: var(--vpro-ink-muted); background: var(--vpro-canvas); }
 </style>

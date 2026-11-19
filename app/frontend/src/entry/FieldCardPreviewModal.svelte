@@ -648,9 +648,9 @@
     flex-direction: column;
     width: min(1240px, 96vw);
     height: min(92vh, 1080px);
-    background: var(--vpro-canvas, #f2f4f6);
-    border: 1px solid var(--vpro-navy, #003366);
-    border-top: 4px solid var(--vpro-gold, #fcba19);
+    background: var(--vpro-canvas);
+    border: 1px solid var(--vpro-navy);
+    border-top: 4px solid var(--vpro-gold);
     border-radius: 6px;
     box-shadow: var(--vpro-shadow-lg, 0 14px 34px rgba(0, 34, 68, 0.28));
     overflow: hidden;
@@ -663,8 +663,8 @@
     width: 100%;
     height: 100%;
     max-height: 100%;
-    background: var(--vpro-canvas, #f2f4f6);
-    border-left: 2px solid var(--vpro-navy, #003366);
+    background: var(--vpro-canvas);
+    border-left: 2px solid var(--vpro-navy);
     overflow: hidden;
   }
 
@@ -676,9 +676,9 @@
     justify-content: space-between;
     gap: 0.6rem;
     padding: 0.6rem 0.9rem;
-    background: var(--vpro-navy, #003366);
-    color: #ffffff;
-    border-bottom: 2px solid var(--vpro-gold, #fcba19);
+    background: var(--vpro-navy);
+    color: var(--vpro-surface);
+    border-bottom: 2px solid var(--vpro-gold);
   }
 
   .fc-toolbar-title {
@@ -692,14 +692,14 @@
     margin: 0;
     font-size: 0.92rem;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--vpro-surface);
     line-height: 1.25;
   }
 
   .fc-toolbar-sub {
     display: block;
     font-size: 0.72rem;
-    color: #dbe7f3;
+    color: var(--vpro-navy-tint);
     font-variant-numeric: tabular-nums;
   }
 
@@ -708,8 +708,8 @@
     align-items: center;
     padding: 0.15rem 0.5rem;
     border-radius: 3px;
-    background: var(--vpro-gold, #fcba19);
-    color: #111827;
+    background: var(--vpro-gold);
+    color: var(--vpro-ink);
     font-family: var(--vpro-font-mono, monospace);
     font-size: 0.68rem;
     font-weight: 700;
@@ -736,7 +736,7 @@
     border: 0;
     border-right: 1px solid rgba(255, 255, 255, 0.22);
     background: rgba(255, 255, 255, 0.08);
-    color: #e6eef7;
+    color: var(--vpro-navy-tint);
     font-size: 0.72rem;
     font-weight: 600;
     white-space: nowrap;
@@ -747,8 +747,8 @@
   }
 
   .fc-segmented button.active {
-    background: #ffffff;
-    color: var(--vpro-navy, #003366);
+    background: var(--vpro-surface);
+    color: var(--vpro-navy);
   }
 
   .fc-action-btn {
@@ -759,15 +759,15 @@
     border-radius: 4px;
     border: 1px solid rgba(255, 255, 255, 0.4);
     background: rgba(255, 255, 255, 0.12);
-    color: #ffffff;
+    color: var(--vpro-surface);
     font-size: 0.73rem;
     font-weight: 600;
     white-space: nowrap;
   }
 
   .fc-print-btn {
-    background: var(--vpro-forest, #1e5128);
-    border-color: #65a373;
+    background: var(--vpro-forest);
+    border-color: var(--vpro-forest-border);
   }
 
   .fc-action-btn:hover {
@@ -775,7 +775,7 @@
   }
 
   .fc-print-btn:hover {
-    background: var(--vpro-forest-dark, #153b1d);
+    background: var(--vpro-forest-dark);
   }
 
   .fc-close-btn {
@@ -786,12 +786,12 @@
     border-radius: 4px;
     border: 1px solid rgba(255, 255, 255, 0.35);
     background: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
+    color: var(--vpro-surface);
   }
 
   .fc-close-btn:hover {
-    background: var(--vpro-error, #d8292f);
-    border-color: #ffffff;
+    background: var(--vpro-error);
+    border-color: var(--vpro-surface);
   }
 
   .field-card-scroll {

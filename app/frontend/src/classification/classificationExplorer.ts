@@ -29,7 +29,7 @@ export const PHYTOSOCIOLOGICAL_RANK_COLUMNS = [
 
 export type PhytosociologicalRankKey = (typeof PHYTOSOCIOLOGICAL_RANK_COLUMNS)[number]['key'];
 
-export interface SUPlotLeaf {
+interface SUPlotLeaf {
   plotNumber: string;
   fieldNumber: string;
   zone: string;
@@ -45,7 +45,7 @@ export interface SUPlotLeaf {
   locked: boolean;
 }
 
-export interface SUUnitBucket {
+interface SUUnitBucket {
   siteUnit: string;
   longName: string;
   origin: string;
@@ -68,7 +68,7 @@ export interface SUPlotTree {
   totalUnassigned: number;
 }
 
-export interface PlotInspectorSpecies {
+interface PlotInspectorSpecies {
   species: string;
   scientificName: string;
   englishName: string;
@@ -101,7 +101,7 @@ export interface PlotInspectorSummary {
   topSpecies: PlotInspectorSpecies[];
 }
 
-export interface BECUnitPickerRequest {
+interface BECUnitPickerRequest {
   query: string;
   zone: string;
   subZone: string;
@@ -120,7 +120,7 @@ export interface BECUnitPickerChoice {
   maskValid: boolean;
 }
 
-export interface CreateSUTableRequest {
+interface CreateSUTableRequest {
   name: string;
   destination: 'project' | 'new_file';
   filePath: string;
@@ -129,7 +129,7 @@ export interface CreateSUTableRequest {
   activate: boolean;
 }
 
-export interface SaveSUTableAsRequest {
+interface SaveSUTableAsRequest {
   sourceSu: string;
   newName: string;
   destination: 'project' | 'new_file';
@@ -137,7 +137,7 @@ export interface SaveSUTableAsRequest {
   activate: boolean;
 }
 
-export interface SUTableLifecycleResult {
+interface SUTableLifecycleResult {
   contextId: string;
   name: string;
   tableName: string;
@@ -147,13 +147,13 @@ export interface SUTableLifecycleResult {
   newState?: unknown;
 }
 
-export interface AssignPlotsToSiteUnitRequest {
+interface AssignPlotsToSiteUnitRequest {
   plotNumbers: string[];
   targetSiteUnit: string | null;
   removeFromSuWhenUnassigned: boolean;
 }
 
-export interface AssignPlotsToSiteUnitResult {
+interface AssignPlotsToSiteUnitResult {
   contextId: string;
   su: string;
   tableName: string;
@@ -163,7 +163,7 @@ export interface AssignPlotsToSiteUnitResult {
 
 export type SUFromEnvMode = 'overwrite' | 'fill_unassigned_only' | 'new_table';
 
-export interface CreateSUFromEnvFieldsRequest {
+interface CreateSUFromEnvFieldsRequest {
   fields: string[];
   separator: string;
   fieldSeparators?: string[];
@@ -178,7 +178,7 @@ export interface CreateSUFromEnvFieldsRequest {
   activate: boolean;
 }
 
-export interface SUFromEnvPlotPreview {
+interface SUFromEnvPlotPreview {
   plotNumber: string;
   beforeSiteUnit: string;
   afterSiteUnit: string;
@@ -232,7 +232,7 @@ export interface FlatHierarchyRow {
   breakpointRank?: string;
 }
 
-export interface HierarchyDiagnostics {
+interface HierarchyDiagnostics {
   totalNodes: number;
   rootNodes: number;
   breakpointNodes: number;
@@ -253,14 +253,14 @@ export interface HierarchyExplorerView {
   diagnostics: HierarchyDiagnostics;
 }
 
-export interface CreateHierarchyTableRequest {
+interface CreateHierarchyTableRequest {
   name: string;
   destination: 'project' | 'new_file';
   filePath: string;
   activate: boolean;
 }
 
-export interface HierarchyTableLifecycleResult {
+interface HierarchyTableLifecycleResult {
   contextId: string;
   name: string;
   tableName: string;
@@ -269,7 +269,7 @@ export interface HierarchyTableLifecycleResult {
   newState?: unknown;
 }
 
-export interface HierarchyAddNodeRequest {
+interface HierarchyAddNodeRequest {
   name: string;
   parentId: number | null;
   level: number;
@@ -277,23 +277,23 @@ export interface HierarchyAddNodeRequest {
   isBreakpoint: boolean;
 }
 
-export interface HierarchyRenameNodeRequest {
+interface HierarchyRenameNodeRequest {
   nodeId: number;
   newName: string;
 }
 
-export interface HierarchyReparentNodeRequest {
+interface HierarchyReparentNodeRequest {
   nodeId: number;
   newParentId: number | null;
   newLevel?: number | null;
 }
 
-export interface HierarchyDeleteNodeRequest {
+interface HierarchyDeleteNodeRequest {
   nodeId: number;
   cascadeChildren: boolean;
 }
 
-export interface HierarchyMutationResult {
+interface HierarchyMutationResult {
   contextId: string;
   hierarchy: string;
   tableName: string;
@@ -302,7 +302,7 @@ export interface HierarchyMutationResult {
   affectedRows: number;
 }
 
-export interface SaveFlatHierarchyRequest {
+interface SaveFlatHierarchyRequest {
   rows: FlatHierarchyRow[];
 }
 
@@ -393,7 +393,7 @@ export interface ClassificationBackendPort {
   ): Promise<HierarchyMutationResult>;
 }
 
-export function becSiteSeriesToPickerChoice(row: BECSiteSeries): BECUnitPickerChoice {
+function becSiteSeriesToPickerChoice(row: BECSiteSeries): BECUnitPickerChoice {
   const code = (
     row.mergedBGC ||
     row.ssCode ||
@@ -641,7 +641,7 @@ export function flattenVisibleHierarchyTree(
   return out;
 }
 
-export interface AriaTreeAction {
+interface AriaTreeAction {
   type: 'focus' | 'expand' | 'collapse' | 'select';
   targetId: string;
 }

@@ -420,15 +420,15 @@
   </OrdinaryFields>
 {/if}
 {#if vegetationMode === 'height'}
-  <p class="mt-2 text-xs text-stone-500">{numberEditingEnabled ? 'Cover and height values validate against LMH25 (< 100%) single-precision bounds; use Save or Cancel to commit or discard drafts.' : 'Cover/height cells are read-only.'} Switching view does not save or alter data.</p>
+  <p class="mt-2 text-xs text-vpro-ink-muted">{numberEditingEnabled ? 'Cover and height values validate against LMH25 (< 100%) single-precision bounds; use Save or Cancel to commit or discard drafts.' : 'Cover/height cells are read-only.'} Switching view does not save or alter data.</p>
 {/if}
 {#if collectedEditingEnabled}
-  <p class="mt-2 text-xs text-stone-500">Collected buttons cycle NULL -> C -> V -> NULL using persistent drafts. Other historical values remain unchanged, as in the source click event. Use Save or Cancel; {creationEnabled ? 'new rows use a separate explicit source creation draft.' : 'new-row workflows remain unavailable in the source grids.'}</p>
+  <p class="mt-2 text-xs text-vpro-ink-muted">Collected buttons cycle NULL -> C -> V -> NULL using persistent drafts. Other historical values remain unchanged, as in the source click event. Use Save or Cancel; {creationEnabled ? 'new rows use a separate explicit source creation draft.' : 'new-row workflows remain unavailable in the source grids.'}</p>
 {/if}
 {#if numberEditingEnabled}
-  <p class="mt-2 text-xs text-stone-500">All source cover/total and height fields share persistent drafts. Switching grids retains raw errors and original values; Save checks each field's original source row and commits changes/audits atomically. Clearing cover may remove a row from a source view, never delete the vegetation record.</p>
+  <p class="mt-2 text-xs text-vpro-ink-muted">All source cover/total and height fields share persistent drafts. Switching grids retains raw errors and original values; Save checks each field's original source row and commits changes/audits atomically. Clearing cover may remove a row from a source view, never delete the vegetation record.</p>
 {/if}
-<p class="mt-2 text-xs text-stone-500">{speciesEditingEnabled ? `Species selection uses canonical source lists and explicit old-code replace/keep or existing personal-code decisions. Decisions stage the source UCase event; Save remains separate. ${personalSpeciesEnabled ? 'Unknown-code personal definitions use a separate explicit user-database save; plot Save and Undo remain independent.' : 'Personal-list creation remains unavailable.'}` : 'Species editing remains read-only pending native verification.'}</p>
+<p class="mt-2 text-xs text-vpro-ink-muted">{speciesEditingEnabled ? `Species selection uses canonical source lists and explicit old-code replace/keep or existing personal-code decisions. Decisions stage the source UCase event; Save remains separate. ${personalSpeciesEnabled ? 'Unknown-code personal definitions use a separate explicit user-database save; plot Save and Undo remain independent.' : 'Personal-list creation remains unavailable.'}` : 'Species editing remains read-only pending native verification.'}</p>
 <FS882StratumSummary {vegList} {totalTreeCover} {totalShrubCover} {totalHerbCover} {totalMossCover}
   onopenspeciesmodal={() => { showSpeciesModal = true; }} ondeleteveg={deleteVeg} />
 <FS882ChildCreateModal region="speciesModal" bind:showSpeciesModal bind:speciesSearchQuery

@@ -35,7 +35,7 @@ export const ALL_DATASHEET_KEYS: readonly DatasheetTableKey[] = [
   'Metadata',
 ];
 
-export const EDITABLE_CHILD_TABLE_KEYS: readonly DatasheetTableKey[] = [
+const EDITABLE_CHILD_TABLE_KEYS: readonly DatasheetTableKey[] = [
   'Veg',
   'Humus',
   'Mineral',
@@ -95,7 +95,7 @@ export interface DatasheetFilterSpec {
   value: string;
 }
 
-export interface DatasheetPageRequest {
+interface DatasheetPageRequest {
   tableKey: string;
   offset: number;
   limit: number;
@@ -136,12 +136,12 @@ export interface DatasheetCellEdit {
   after: DatasheetStorageCell;
 }
 
-export interface DatasheetEditRequest {
+interface DatasheetEditRequest {
   tableKey: string;
   edits: DatasheetCellEdit[];
 }
 
-export interface DatasheetEditResult {
+interface DatasheetEditResult {
   contextId: string;
   tableKey: string;
   tableName: string;
@@ -150,7 +150,7 @@ export interface DatasheetEditResult {
   auditRows: number;
 }
 
-export interface DatasheetFindReplaceRequest {
+interface DatasheetFindReplaceRequest {
   tableKey: string;
   column: string;
   findText: string;
@@ -163,7 +163,7 @@ export interface DatasheetFindReplaceRequest {
   maxPreview: number;
 }
 
-export interface DatasheetFindReplaceItem {
+interface DatasheetFindReplaceItem {
   rowId: string;
   pinnedIdentity: string;
   column: string;
@@ -187,13 +187,13 @@ export interface DatasheetFindReplacePreview {
   truncated: boolean;
 }
 
-export interface DatasheetInsertChildRowRequest {
+interface DatasheetInsertChildRowRequest {
   tableKey: string;
   plotNumber: string;
   cells: Record<string, DatasheetStorageCell>;
 }
 
-export interface DatasheetInsertChildRowResult {
+interface DatasheetInsertChildRowResult {
   contextId: string;
   tableKey: string;
   tableName: string;
@@ -203,14 +203,14 @@ export interface DatasheetInsertChildRowResult {
   auditRows: number;
 }
 
-export interface DatasheetDeleteChildRowRequest {
+interface DatasheetDeleteChildRowRequest {
   tableKey: string;
   rowId: string;
   expectedPlotNumber?: string;
   expectedId?: number | null;
 }
 
-export interface DatasheetDeleteChildRowResult {
+interface DatasheetDeleteChildRowResult {
   contextId: string;
   tableKey: string;
   tableName: string;
@@ -256,7 +256,7 @@ export const defaultDatasheetBackendPort: DatasheetBackendPort = {
     (DatasheetService.DeleteDatasheetChildRow(contextId, request as never) as never),
 };
 
-export interface VirtualWindowSlice {
+interface VirtualWindowSlice {
   startIndex: number;
   endIndex: number;
   topSpacerPx: number;
@@ -302,7 +302,7 @@ export function formatCellForEditor(cell: DatasheetStorageCell | undefined, col:
   return '';
 }
 
-export interface ParsedCellResult {
+interface ParsedCellResult {
   cell: DatasheetStorageCell | null;
   error: string;
 }
@@ -627,12 +627,12 @@ export function toggleMultiColumnSort(
   return copy;
 }
 
-export interface GridNavigationCoords {
+interface GridNavigationCoords {
   row: number;
   col: number;
 }
 
-export type GridNavigationKey = 'Enter' | 'Tab' | 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight';
+type GridNavigationKey = 'Enter' | 'Tab' | 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight';
 
 export function shouldNavigateOnArrowKey(
   key: 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight',

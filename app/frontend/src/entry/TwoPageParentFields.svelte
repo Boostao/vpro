@@ -28,7 +28,7 @@
 </script>
 
 <section aria-label="Two-page additional-field editor" data-two-page-parent-panel={form}
-  class="space-y-4 rounded border border-stone-200 bg-white p-4">
+  class="space-y-4 rounded border border-vpro-border bg-white p-4">
   <h3 class="font-semibold">{form} additional fields</h3>
   {#if view.error}<p role="alert" class="text-sm text-red-700">{view.error}</p>{/if}
   {#if view.blocked}
@@ -70,7 +70,7 @@
     {/each}
     {/if}
   {/if}
-  <p class="text-xs text-stone-600">{fields.length} additional source-bound fields use typed audited storage.
+  <p class="text-xs text-vpro-ink-secondary">{fields.length} additional source-bound fields use typed audited storage.
     Explicit Save and restoration are desktop safety adaptations, not full two-page event parity.
     Existing parent fields, source actions and pictures are outside this panel.</p>
 </section>

@@ -141,15 +141,15 @@
 </section>
 
 <style>
-  h3 { font-weight: 600; color: #003366; }
-  .failure { color: #D8292F; }
+  h3 { font-weight: 600; color: var(--vpro-navy); }
+  .failure { color: var(--vpro-error); }
   .toolbar { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
-  button { border: 1px solid #9F9F9F; border-radius: .35rem; padding: .5rem .75rem; margin: .25rem; overflow-wrap: anywhere; color: #003366; background: #FFFFFF; font-weight: 600; }
+  button { border: 1px solid var(--vpro-border-strong); border-radius: .35rem; padding: .5rem .75rem; margin: .25rem; overflow-wrap: anywhere; color: var(--vpro-navy); background: var(--vpro-surface); font-weight: 600; }
   button:disabled { opacity: .5; }
-  fieldset { border: 1px solid #D8D8D8; padding: .75rem; min-width: 0; }
+  fieldset { border: 1px solid var(--vpro-border); padding: .75rem; min-width: 0; }
   .table-scroll { max-width: 100%; overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-  th, td { border: 1px solid #D8D8D8; padding: .5rem; text-align: left; overflow-wrap: anywhere; }
-  th { background: #F2F2F2; color: #003366; }
+  th, td { border: 1px solid var(--vpro-border); padding: .5rem; text-align: left; overflow-wrap: anywhere; }
+  th { background: var(--vpro-canvas); color: var(--vpro-navy); }
   td { min-width: 8rem; }
 </style>

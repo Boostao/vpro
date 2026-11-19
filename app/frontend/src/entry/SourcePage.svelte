@@ -83,7 +83,7 @@
                   disabled aria-label={label} />
                 {#if sourcePage && control.type === 'CheckBox' && stored != null && stored !== true && stored !== false
                   && stored !== 0 && stored !== '0' && stored !== -1 && stored !== '-1'}
-                  <span class="text-xs text-stone-600">Historical {String(stored)}</span>
+                  <span class="text-xs text-vpro-ink-secondary">Historical {String(stored)}</span>
                 {/if}
               {:else if control.type === 'TextBox' || control.type === 'ComboBox' || control.type === 'OptionGroup'}
                 {#if wideControl(control)}
@@ -112,8 +112,8 @@
 
 <style>
   .responsive-form { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: .85rem; align-items: start; grid-auto-flow: row dense; }
-  .form-group { grid-column: 1 / -1; margin: 0; border-color: var(--vpro-border, #d1d5db); border-top: 3px solid var(--vpro-gold, #fcba19); background: var(--vpro-surface, #ffffff); }
-  .form-group :global(legend) { color: var(--vpro-navy, #003366); }
+  .form-group { grid-column: 1 / -1; margin: 0; border-color: var(--vpro-border); border-top: 3px solid var(--vpro-gold); background: var(--vpro-surface); }
+  .form-group :global(legend) { color: var(--vpro-navy); }
   .veg-other-legend { grid-column: 1 / -1; margin-top: .5rem; }
   .unmigrated-source-stub, .unmigrated-group { display: none; }
   @container fs882-fields (min-width: 960px) {

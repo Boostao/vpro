@@ -234,18 +234,18 @@
 </section>
 
 <style>
-  .summary-quality { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; color: #313132; }
-  fieldset { min-width: 0; border: 1px solid #D8D8D8; border-radius: .4rem; padding: .75rem; background: #FFFFFF; }
-  legend { padding: 0 .35rem; font-weight: 600; color: #003366; }
+  .summary-quality { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; color: var(--vpro-ink); }
+  fieldset { min-width: 0; border: 1px solid var(--vpro-border); border-radius: .4rem; padding: .75rem; background: var(--vpro-surface); }
+  legend { padding: 0 .35rem; font-weight: 600; color: var(--vpro-navy); }
   .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .75rem; margin-top: .75rem; }
   label { display: grid; grid-template-columns: minmax(0, 1fr); gap: .3rem; min-width: 0; }
-  input[type="text"] { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid #D8D8D8; border-radius: .3rem; padding: .45rem; background: #FFFFFF; color: #313132; }
+  input[type="text"] { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid var(--vpro-border); border-radius: .3rem; padding: .45rem; background: var(--vpro-surface); color: var(--vpro-ink); }
   .flag { display: flex; gap: .5rem; align-items: center; }
   .null-options, .actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
   .null-options { margin-top: .75rem; }
-  button { border: 1px solid #003366; border-radius: .4rem; padding: .5rem .75rem; background: #FFFFFF; color: #003366; font-weight: 600; }
+  button { border: 1px solid var(--vpro-navy); border-radius: .4rem; padding: .5rem .75rem; background: var(--vpro-surface); color: var(--vpro-navy); font-weight: 600; }
   button:disabled, input:disabled { opacity: .5; }
-  .error { color: #D8292F; overflow-wrap: anywhere; font-weight: 600; }
+  .error { color: var(--vpro-error); overflow-wrap: anywhere; font-weight: 600; }
   p, li { overflow-wrap: anywhere; }
-  .guidance { color: #474543; font-size: .85rem; }
+  .guidance { color: var(--vpro-ink-secondary); font-size: .85rem; }
 </style>

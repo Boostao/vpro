@@ -9,11 +9,11 @@ export interface LongVegetationQualityMinimumPreferenceValues {
   vegMinimum: string;
   soilMinimum: string;
 }
-export interface LongVegetationQualityMinimumReference {
+interface LongVegetationQualityMinimumReference {
   source: string;
   definitions: ProjectMetadataTable;
 }
-export interface LongVegetationQualityMinimumPreferencesReview extends GoogleEarthScope, LongVegetationQualityMinimumReference {
+interface LongVegetationQualityMinimumPreferencesReview extends GoogleEarthScope, LongVegetationQualityMinimumReference {
   values: LongVegetationQualityMinimumPreferenceValues;
 }
 export const longVegetationQualityMinimumFields = [
@@ -21,7 +21,7 @@ export const longVegetationQualityMinimumFields = [
   { key: 'vegMinimum', control: 'VegPlotQuality', label: 'Veg >=' },
   { key: 'soilMinimum', control: 'SoilPlotQuality', label: 'Soil >=' },
 ] as const;
-export const longVegetationQualityMinimumSource =
+const longVegetationQualityMinimumSource =
   'configured-owned-imported-SQLite VLists.USysTableOfLists; PlotQualitySite; ItemOrder then physical rowid; suggestions only';
 const literal = (value: unknown): value is string => typeof value === 'string' && wellFormedUTF16(value);
 const valid = (values: LongVegetationQualityMinimumPreferenceValues | null): values is LongVegetationQualityMinimumPreferenceValues =>

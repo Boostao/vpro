@@ -5,7 +5,7 @@ import { profileCellLabel, type ValidatedProjectPlotProfileReview, type ProfileR
 
 export const profileEditableFields = ['Order', 'Table', 'Field', 'Operator', 'Layer', 'Species', 'Criteria', 'Operation'] as const;
 export type ProfileField = typeof profileEditableFields[number];
-export const profileLayers = ['SumAll', 'SumA', 'SumB', 'Any', '1', '2', '3', '4', '5', '5a', '5b', '5c', '6', '7'];
+const profileLayers = ['SumAll', 'SumA', 'SumB', 'Any', '1', '2', '3', '4', '5', '5a', '5b', '5c', '6', '7'];
 export interface ProfileRulesDraft {
   review: ValidatedProjectPlotProfileReview;
   cells: Record<string, Partial<Record<ProfileField, MetadataDraftCell>>>;

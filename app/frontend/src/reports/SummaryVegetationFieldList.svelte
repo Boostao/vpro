@@ -208,25 +208,25 @@
 </section>
 
 <style>
-  .field-list { min-width: 0; max-width: 100%; margin: 0.75rem 0; color: #313132; }
-  h3 { font-weight: 600; color: #003366; }
+  .field-list { min-width: 0; max-width: 100%; margin: 0.75rem 0; color: var(--vpro-ink); }
+  h3 { font-weight: 600; color: var(--vpro-navy); }
   .field-list p, small, summary { overflow-wrap: anywhere; }
   .safety { min-width: 0; }
-  .safety [role="alert"] { color: #D8292F; margin-bottom: 0.5rem; font-weight: 600; }
-  table { width: 100%; table-layout: fixed; border-collapse: collapse; background: #FFFFFF; }
+  .safety [role="alert"] { color: var(--vpro-error); margin-bottom: 0.5rem; font-weight: 600; }
+  table { width: 100%; table-layout: fixed; border-collapse: collapse; background: var(--vpro-surface); }
   .report-column { width: 7rem; }
-  th, td { padding: 0.5rem; text-align: left; vertical-align: top; border-bottom: 1px solid #D8D8D8; overflow-wrap: anywhere; }
-  thead th { background: #F2F2F2; color: #003366; }
+  th, td { padding: 0.5rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--vpro-border); overflow-wrap: anywhere; }
+  thead th { background: var(--vpro-canvas); color: var(--vpro-navy); }
   input { min-width: 1.25rem; min-height: 1.25rem; }
   .literal { white-space: pre-wrap; font-weight: normal; }
-  small { display: block; font-weight: normal; color: #474543; }
+  small { display: block; font-weight: normal; color: var(--vpro-ink-secondary); }
   details { min-width: 0; margin-top: 0.5rem; }
   pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
   .actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; margin-top: 0.5rem; }
-  button { min-width: 0; min-height: 2.75rem; max-width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #003366; border-radius: 0.25rem; background: #FFFFFF; color: #003366; font-weight: 600; cursor: pointer; overflow-wrap: anywhere; white-space: normal; }
-  button:hover:not(:disabled) { background: #F2F2F2; }
+  button { min-width: 0; min-height: 2.75rem; max-width: 100%; padding: 0.5rem 0.75rem; border: 1px solid var(--vpro-navy); border-radius: 0.25rem; background: var(--vpro-surface); color: var(--vpro-navy); font-weight: 600; cursor: pointer; overflow-wrap: anywhere; white-space: normal; }
+  button:hover:not(:disabled) { background: var(--vpro-canvas); }
   button:disabled { opacity: 0.55; cursor: not-allowed; }
-  .guidance { font-size: 0.875rem; margin-top: 0.75rem; color: #474543; }
+  .guidance { font-size: 0.875rem; margin-top: 0.75rem; color: var(--vpro-ink-secondary); }
   @media (max-width: 800px) { .actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 480px) { .actions { grid-template-columns: minmax(0, 1fr); } .report-column { width: 6rem; } }
 </style>
