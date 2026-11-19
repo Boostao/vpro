@@ -1,4 +1,4 @@
-import xl from '../../../resources/fs882-xl-layout.json';
+import { fs882XlBoundColumns } from './fs882FormLayoutBindings';
 import { twoPageParentFields, twoPageParentSource, type TwoPageParentForm } from './twoPageParentSession';
 import { twoPageParentCommonFields, validateTwoPageParentCommonOriginal } from './twoPageParentCommonSession';
 import { sourcePaperPage, type CoordinateDisplayMode } from './paperLayout';
@@ -95,9 +95,7 @@ export function twoPageEntryProjection(form: TwoPageParentForm, coordinateMode: 
     throw new Error('Two-page Plot Profiling lost its exact source control/caption/callback.');
   }
   const profilingAction = { controlId: profiling.controlId, caption: profiling.properties.Caption.value };
-  const root = xl.forms.find(source => source.name === xl.root);
-  if (!root) throw new Error('Accepted XL source closure is unavailable.');
-  const xlColumns = new Set(root.fields.flatMap(field => field.binding ? [field.binding] : []));
+  const xlColumns = fs882XlBoundColumns;
   const common = twoPageParentCommonFields(form);
   const extra = twoPageParentFields(form);
   const fields = new Map<string, TwoPageEntryField>();

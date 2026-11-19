@@ -1,6 +1,15 @@
-import { siviMetadataTableFromWire } from '../entry/siviParentTransport';
+import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
+import { siviMetadataTableFromWire } from '../entry/siviMetadataWire';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
-export { twoPageVegetationTableCellLabel as userLogCellLabel } from '../datasheet/twoPageVegetationTable';
+
+export function userLogCellLabel(cell: ProjectMetadataCell): string {
+  if (cell.storage === 'null') return '(NULL)';
+  if (cell.storage === 'text') return cell.text === '' ? '(empty text)' : cell.text ?? '';
+  if (cell.storage === 'integer') return cell.integer ?? '';
+  if (cell.storage === 'real') return String(cell.real);
+  if (cell.storage === 'blob') return `hex:${cell.blobHex}`;
+  return '';
+}
 
 export const userLogFields = [
   { name: 'User', caption: 'User' }, { name: 'InTime', caption: 'Login' },

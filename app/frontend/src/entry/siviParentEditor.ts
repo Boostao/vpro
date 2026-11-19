@@ -1,6 +1,6 @@
 import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import type { ProjectMetadataColumn } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
-import source from '../../../resources/fs1333-sivi-layout.json';
+import { siviParentLayoutForm } from './fs882FormLayoutBindings';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 import { equalCell, metadataCellText } from '../admin/projectMetadataEditor';
 import { wellFormedUTF16 } from './qualityEditor';
@@ -97,7 +97,7 @@ export interface SIVIParentProposal {
 }
 
 function computeParentLayout() {
-  const parent = source.forms[0];
+  const parent = siviParentLayoutForm;
   return {
     parent,
     direct: parent.fields.filter(field => field.binding),

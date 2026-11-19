@@ -1,4 +1,4 @@
-import source from '../../../resources/fs1333-sivi-layout.json';
+import { siviParentLayoutForm } from './fs882FormLayoutBindings';
 import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import { ordinaryField, ordinaryNumberValue, ordinaryTextError } from './ordinaryEditor';
 import { coordinateDecimalValue } from './coordinateEditor';
@@ -6,7 +6,7 @@ import { siviDateTimestampError } from './siviDateTimestamp';
 import { equalCell, metadataCellText } from '../admin/projectMetadataEditor';
 import { validateSIVIParentOriginal, type SIVIParentOriginal } from './siviParentEditor';
 import { SIVIParentScopedWriteSession, type SIVIParentWritePort, type SIVIParentWriteView } from './siviParentWriteSession';
-import type { SIVIParentOwner } from './siviParentTransport';
+import type { SIVIParentOwner } from './siviMetadataWire';
 import { siviReferencePolicies, siviReferenceIssue, siviReferencesFromWire,
   type SIVIReferenceColumn, type SIVIReferences } from './referenceEditor';
 
@@ -70,7 +70,7 @@ function isSIVIParentSharedColumn(value: string, referencesEnabled = false): val
 
 export const siviParentSharedFields = siviParentSharedColumns.map(column => {
   const binding = column === 'SiteNotes' ? 'siteNotes' : column;
-  const fields = source.forms[0].fields.filter(field => field.binding === binding);
+  const fields = siviParentLayoutForm.fields.filter(field => field.binding === binding);
   const sharedPolicy = sharedTextPolicies.find(field => field.column === column) ??
     sharedNumberPolicies.find(field => field.column === column) ??
     (column === 'Date' ? sharedDatePolicy : undefined);
@@ -78,20 +78,20 @@ export const siviParentSharedFields = siviParentSharedColumns.map(column => {
     : ordinaryField(column);
   if (fields.length !== 1 || !policy) throw new Error(`SIVI shared field ${column} has no unique source/proven policy.`);
   const separateLabel = column === 'RootRestrictingDepth'
-    ? source.forms[0].fields.find(field => field.controlName === 'Label601' && field.type === 'Label') : null;
+    ? siviParentLayoutForm.fields.find(field => field.controlName === 'Label601' && field.type === 'Label') : null;
   if (column === 'RootRestrictingDepth' && !separateLabel?.caption) {
     throw new Error('SIVI root-restricting depth requires its original separate label.');
   }
   const owner: 'Env' | 'Admin' = column === 'HumusThickness' || column === 'StartDate' ? 'Admin' : 'Env';
   return { column, binding, owner, controlId: fields[0].controlId,
-    label: separateLabel?.caption || fields[0].caption || fields[0].controlName,
-    page: 'pageId' in fields[0] ? fields[0].pageId : null, policy };
+    label: separateLabel?.caption || fields[0].caption || fields[0].controlName || column,
+    page: fields[0].pageId ?? null, policy };
 });
 const sharedReferenceFields = siviReferencePolicies.map(policy => {
-  const controls = source.forms[0].fields.filter(field => field.binding === policy.column);
+  const controls = siviParentLayoutForm.fields.filter(field => field.binding === policy.column);
   if (controls.length !== 1 || controls[0].type !== 'ComboBox') throw new Error(`SIVI reference ${policy.column} has no unique source control.`);
   return { column: policy.column, binding: policy.column, owner: 'Env' as const, controlId: controls[0].controlId,
-    label: policy.label, page: 'pageId' in controls[0] ? controls[0].pageId : null,
+    label: policy.label, page: controls[0].pageId ?? null,
     policy: { ...policy, kind: 'reference' as const } };
 });
 export function siviParentSharedFieldsFor(referencesEnabled = false) {

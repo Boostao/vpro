@@ -23,7 +23,7 @@
   import type { GeoPackageExportOutcome } from '../../bindings/github.com/boostao/vpro/app/internal/interchange/models';
   import {
     DEFAULT_BC_VIEW_STATE, buildDefaultGeoPackageExportPath, buildMapLibreGeospatialStyle, buildSpatialDeckLayers,
-    classifyPMTilesMapError, classifyWMSMapError, computeViewportAOIRectangle, decodeFlatGeobufPoints,
+    classifyPMTilesMapError, classifyWMSMapError, computeViewportAOIRectangle,
     detectSpatialComputeBackend, executeSpatialFilterKernel, extractDistinctZones, filterWorkbenchPlots,
     fitMapToPayloadBounds, hasInvalidOrDiagnosticQACoordinates, initQASelectedPlots, isAbsoluteFilesystemPath,
     materializeWorkbenchPlots, pointInPolygonRing, resolveGeoPackageDestinationPath, summarizePMTilesManifestWarnings,
@@ -258,10 +258,7 @@
     const gen = ++loadGeneration;
     loading = true; errorMsg = ''; setBusyState(true);
     try {
-      const [wb, fgbRaw] = await Promise.all([
-        SpatialService.GetSpatialWorkbenchPayload(contextId),
-        SpatialService.GetSpatialPlotsFlatGeobuf(contextId),
-      ]);
+      const wb = await SpatialService.GetSpatialWorkbenchPayload(contextId);
       if (!alive || gen !== loadGeneration) return;
       payload = wb;
       pmtilesGraticuleFallback = false;
@@ -280,7 +277,7 @@
       }
       const mat = materializeWorkbenchPlots(wb?.geoArrow);
       plotPoints = mat.points; plotCoordsF32 = mat.coordsFloat32; discrepancySegments = mat.discrepancyVectors;
-      flatGeobufCount = decodeFlatGeobufPoints(fgbRaw).length;
+      flatGeobufCount = wb?.plottableCount ?? mat.points.length;
       if (su && su !== 'None') aoiTargetMode = 'update_active';
       else { aoiTargetMode = 'create_project_su'; if (!aoiSUName) aoiSUName = `${project}_AOI`; }
       if (mapInstance) { applyLayerVisibilities(); fitMapToPayloadBounds(mapInstance, payload); }
