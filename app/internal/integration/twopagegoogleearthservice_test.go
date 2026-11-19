@@ -252,10 +252,13 @@ func TestTwoPageGoogleEarthCoordinateBoundariesAndIntegerStorage(t *testing.T) {
 		longitude, latitude any
 		integer             bool
 	}{
-		{"zero-north", "-0,90,0", 0.0, 90.0, false},
+		{"zero-north", "0,90,0", 0.0, 90.0, false},
 		{"negative-west", "-123.25,53.5,0", -123.25, 53.5, false},
-		{"west-south", "-180,-90,0", 180.0, -90.0, false},
-		{"integer-west-north", "-180,90,0", int64(180), int64(90), true},
+		{"unsigned-bc-west", "-125,53.5,0", 125.0, 53.5, false},
+		{"east-antimeridian-south", "180,-90,0", 180.0, -90.0, false},
+		{"west-antimeridian-south", "-180,-90,0", -180.0, -90.0, false},
+		{"integer-east-north", "180,90,0", int64(180), int64(90), true},
+		{"integer-bc-west-north", "-125,55,0", int64(125), int64(55), true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			service, state, db := twoPageGoogleEarthFixture(t, false)

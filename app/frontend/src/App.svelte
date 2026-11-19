@@ -13,11 +13,9 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   import { notifications, type NotificationStateSnapshot } from './shell/notificationService.svelte';
   import type { BuildCommandPaletteInput, CommandPaletteAction } from './shell/commandPalette';
   import HomeWorkspaceHub from './shell/HomeWorkspaceHub.svelte';
-  import StartupRecoveryPanel from './shell/StartupRecoveryPanel.svelte';
   import WorkspaceSidebar from './shell/WorkspaceSidebar.svelte';
   import PlotProfilePanel from './shell/PlotProfilePanel.svelte';
   import PlotsBrowserPanel from './shell/PlotsBrowserPanel.svelte';
-  import ResetSampleModal from './shell/ResetSampleModal.svelte';
   import WorkspaceStatusBanners from './shell/WorkspaceStatusBanners.svelte';
   import { summaryVegetationPreferenceSession } from './reports/summaryVegetationPreferences';
   import { summaryVegetationQualityPreferenceSession } from './reports/summaryVegetationQualityPreferences';
@@ -1497,7 +1495,9 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         {profileIndex} {stateReads} {requestTransition} {loadPlots} {navigateProfilePlot} {clearProfileNavigation} {cancelAllReads} />
       <WorkspaceStatusBanners region="banners" startupFailed={true} diagnostics={$projectState?.diagnostics ?? []} />
       {#if startupFailure}
-        <StartupRecoveryPanel {startupFailure} {busy} onrecovered={async (notice) => { startupBackupNotice = notice; if (notice && typeof notifications !== 'undefined') notifications.success('Startup recovery complete', notice, { source: 'Startup Recovery' }); startupFailure = null; await refresh(); }} />
+        {#await import('./shell/StartupRecoveryPanel.svelte') then { default: StartupRecoveryPanel }}
+          <StartupRecoveryPanel {startupFailure} {busy} onrecovered={async (notice) => { startupBackupNotice = notice; if (notice && typeof notifications !== 'undefined') notifications.success('Startup recovery complete', notice, { source: 'Startup Recovery' }); startupFailure = null; await refresh(); }} />
+        {/await}
       {:else if view === 'home'}
         <div class="content-heading"><div><div class="eyebrow">VPro</div><h1>Home</h1></div></div>
         <HomeWorkspaceHub activeProject={$projectState?.activeProject ?? 'No project selected'} projectPath={$projectState?.projectPath ?? ''}
@@ -1788,8 +1788,12 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     {/if}
   </div>
 
-  <ResetSampleModal open={resetSampleConfirmOpen && !startupFailure} {busy} {editorBusy} {companionPanelBusy} {transitionWorking}
-    contextAvailable={!!$projectState?.contextId} onconfirm={() => void confirmResetWorkspaceToSample()} onclose={() => { resetSampleConfirmOpen = false; }} />
+  {#if resetSampleConfirmOpen && !startupFailure}
+    {#await import('./shell/ResetSampleModal.svelte') then { default: ResetSampleModal }}
+      <ResetSampleModal open={resetSampleConfirmOpen && !startupFailure} {busy} {editorBusy} {companionPanelBusy} {transitionWorking}
+        contextAvailable={!!$projectState?.contextId} onconfirm={() => void confirmResetWorkspaceToSample()} onclose={() => { resetSampleConfirmOpen = false; }} />
+    {/await}
+  {/if}
 
   {#if helpDrawerOpen && !startupFailure}
     {#await import('./help/HelpDrawer.svelte') then { default: HelpDrawer }}
