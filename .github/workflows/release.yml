@@ -52,6 +52,55 @@ jobs:
           RELEASE_SCOPE: ${{ inputs.scope }}
           RELEASE_PRERELEASE: ${{ inputs.prerelease }}
         run: python scripts/release.py version
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: app/frontend/package-lock.json
+      - name: Verify dependency lockstep, OKF hygiene, docs-src sync, whats_new, and release verifier
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_SCOPE: ${{ steps.version.outputs.scope }}
+        run: |
+          set -euo pipefail
+          python3 scripts/check-dep-lockstep.py --strict-brand
+          python3 scripts/check-okf-hygiene.py
+          node scripts/build-docs-src.mjs
+          git diff --exit-code -- docs-src app/resources/help_bundle.json
+          python3 scripts/release.py whats-new --scope "$RELEASE_SCOPE"
+          node site/build.mjs
+          node --test scripts/tests/downloadPortal.test.cjs
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+      - name: Install GTK4 and WebKitGTK 6.0 dev headers
+        if: steps.version.outputs.scope == 'full'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev libx11-dev pkg-config build-essential
+      - uses: actions/setup-go@v7
+        if: steps.version.outputs.scope == 'full'
+        with:
+          go-version: '1.27.4'
+          cache-dependency-path: app/go.sum
+      - name: Run frontend unit tests, svelte-check, and production bundle
+        if: steps.version.outputs.scope == 'full'
+        working-directory: app/frontend
+        run: |
+          set -euo pipefail
+          npm ci
+          npm test
+          npm run check
+          npm run build
+      - name: Run Go backend test suite
+        if: steps.version.outputs.scope == 'full'
+        working-directory: app
+        env:
+          CGO_ENABLED: '1'
+          TMPDIR: /dev/shm
+        run: |
+          set -euo pipefail
+          mapfile -t pkgs < <(go list ./... | grep -v '/internal/rsidecar$')
+          go test -skip 'Scale|Perf|71k' -timeout 20m "${pkgs[@]}"
 
   build-windows:
     needs: validate
@@ -323,7 +372,7 @@ jobs:
           if [ "$RELEASE_SCOPE" = "r-only" ]; then
             gh release create "$RELEASE_TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "vpro R SDK $RELEASE_TAG" --notes "Checked R companion SDK source package (vpro-r-sdk.tar.gz) and SHA256SUMS.txt." "${flags[@]}"
           else
-            gh release create "$RELEASE_TAG" "${assets[@]}" release-assets/release-manifest.json --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "VPro $RELEASE_TAG" --notes "Windows amd64/arm64 EXE, ZIP and NSIS; macOS universal DMG and ZIP; Linux amd64/arm64 AppImage, deb and tar; R Companion SDK source tarball (vpro-r-sdk.tar.gz). Verify downloads against SHA256SUMS.txt and release-manifest.json. macOS VPro.app is ad-hoc signed, not notarized." "${flags[@]}"
+            gh release create "$RELEASE_TAG" "${assets[@]}" release-assets/release-manifest.json --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "VPro $RELEASE_TAG" --notes "Windows amd64/arm64 EXE, ZIP and NSIS; macOS universal DMG and ZIP; Linux amd64/arm64 rpm, deb and tar.gz; R Companion SDK source tarball (vpro-r-sdk.tar.gz). Verify downloads against SHA256SUMS.txt and release-manifest.json. macOS VPro.app is ad-hoc signed, not notarized." "${flags[@]}"
           fi
       - name: Verify remotely attached names and bytes
         run: |
@@ -360,6 +409,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     env:
+      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
       RELEASE_SCOPE: ${{ needs.validate.outputs.scope }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
@@ -390,9 +440,12 @@ jobs:
           set -euo pipefail
           if [ "$RELEASE_SCOPE" = "full" ]; then
             cp release-manifest/release-manifest.json site/release-manifest.json
+            python scripts/release.py metadata --target r --scope full
           else
             python scripts/release.py sync-release-manifest --base-manifest site/release-manifest.json --output site/release-manifest.json
+            python scripts/release.py metadata --target r --scope r-only
           fi
+          R CMD INSTALL --no-multiarch --with-keep.source r
           node scripts/build-docs-src.mjs
           node site/build.mjs
           (cd r && Rscript -e "pkgdown::build_site()")

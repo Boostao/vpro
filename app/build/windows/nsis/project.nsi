@@ -11,11 +11,11 @@ Unicode true
 ## > wails build --target windows/amd64 --nsis
 ## Then you can call makensis on this file with specifying the path to your binary:
 ## For a AMD64 only installer:
-## > makensis -DARG_WAILS_AMD64_BINARY=..\..\bin\app.exe
+## > makensis -DARG_WAILS_AMD64_BINARY=..\..\..\bin\VPro.exe project.nsi
 ## For a ARM64 only installer:
-## > makensis -DARG_WAILS_ARM64_BINARY=..\..\bin\app.exe
+## > makensis -DARG_WAILS_ARM64_BINARY=..\..\..\bin\VPro.exe project.nsi
 ## For a installer with both architectures:
-## > makensis -DARG_WAILS_AMD64_BINARY=..\..\bin\app-amd64.exe -DARG_WAILS_ARM64_BINARY=..\..\bin\app-arm64.exe
+## > makensis -DARG_WAILS_AMD64_BINARY=..\..\..\bin\VPro-amd64.exe -DARG_WAILS_ARM64_BINARY=..\..\..\bin\VPro-arm64.exe project.nsi
 ####
 ## The following information is taken from the wails_tools.nsh file, but they can be overwritten here.
 ####

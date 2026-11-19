@@ -99,22 +99,44 @@ def rpm(arch, version="2.3.4"):
     return bytes(data)
 
 
+def _rpm_header_block(string_tags):
+    index = bytearray()
+    store = bytearray()
+    for tag, value in sorted(string_tags.items()):
+        offset = len(store)
+        store.extend(value.encode("utf-8") + b"\x00")
+        index.extend(struct.pack(">IIII", tag, 6, offset, 1))
+    header = bytearray(b"\x8e\xad\xe8\x01\x00\x00\x00\x00")
+    header.extend(struct.pack(">II", len(string_tags), len(store)))
+    header.extend(index)
+    header.extend(store)
+    return bytes(header)
+
+
+def nfpm_rpm(arch, rpm_ver="2.3.4", *, license_name="Apache-2.0", pkg_name="vpro", rel="1"):
+    rpm_arch = "x86_64" if arch == "amd64" else "aarch64"
+    lead = bytearray(96)
+    lead[:4] = b"\xed\xab\xee\xdb"
+    lead_str = f"{pkg_name}-{rpm_ver}-{rel}".encode("utf-8")[:65]
+    lead[10:10 + len(lead_str)] = lead_str
+    sig = _rpm_header_block({273: "0" * 64})
+    pad = ((len(sig) + 7) & ~7) - len(sig)
+    meta = _rpm_header_block({
+        1000: pkg_name,
+        1001: rpm_ver,
+        1002: rel,
+        1014: license_name,
+        1022: rpm_arch,
+    })
+    return bytes(lead) + sig + (b"\x00" * pad) + meta + b"\x00" * 32
+
+
 def elf(arch, appimage=False):
     data = bytearray(128)
     data[:6] = b"\x7fELF\x02\x01"
     struct.pack_into("<H", data, 18, 62 if arch == "amd64" else 183)
     if appimage:
         data[8:11] = b"AI\x02"
-    return bytes(data)
-
-
-def rpm(arch, version="2.3.4"):
-    rpm_arch = "x86_64" if arch == "amd64" else "aarch64"
-    data = bytearray(256)
-    data[:4] = b"\xed\xab\xee\xdb"
-    name = f"vpro-{version}-1.{rpm_arch}".encode("utf-8")[:65]
-    data[10:10 + len(name)] = name
-    data[96:100] = b"\x8e\xad\xe8\x01"
     return bytes(data)
 
 
@@ -125,16 +147,6 @@ def universal():
         struct.pack_into(">IIIII", data, 8 + index * 20, machine, 0, offset, 64, 0)
         data[offset:offset + 4] = b"\xcf\xfa\xed\xfe"
         struct.pack_into("<I", data, offset + 4, machine)
-    return bytes(data)
-
-
-def rpm(arch, version="2.3.4"):
-    rpm_arch = "x86_64" if arch == "amd64" else "aarch64"
-    data = bytearray(256)
-    data[:4] = b"\xed\xab\xee\xdb"
-    name = f"vpro-{version}-1.{rpm_arch}".encode("utf-8")[:65]
-    data[10:10 + len(name)] = name
-    data[96:100] = b"\x8e\xad\xe8\x01"
     return bytes(data)
 
 
@@ -163,16 +175,6 @@ def deb(arch, version="2.3.4"):
     return bytes(data)
 
 
-def rpm(arch, version="2.3.4"):
-    rpm_arch = "x86_64" if arch == "amd64" else "aarch64"
-    data = bytearray(256)
-    data[:4] = b"\xed\xab\xee\xdb"
-    name = f"vpro-{version}-1.{rpm_arch}".encode("utf-8")[:65]
-    data[10:10 + len(name)] = name
-    data[96:100] = b"\x8e\xad\xe8\x01"
-    return bytes(data)
-
-
 def bundle_info(numeric="2.3.4"):
     return plistlib.dumps({"CFBundleVersion": numeric, "CFBundleShortVersionString": numeric})
 
@@ -184,14 +186,20 @@ def r_tarball(numeric="2.3.4"):
 
 def asset_fixture(directory, full_version="2.3.4"):
     numeric = full_version.split("-", 1)[0].split("+", 1)[0]
-    deb_ver = full_version.replace("-", "~")
+    core_pre, *meta = full_version.split("+", 1)
+    deb_ver = (core_pre.replace("-", "~", 1) if "-" in core_pre else core_pre) + (f"+{meta[0]}" if meta else "")
+    if "-" in core_pre:
+        c_part, p_part = core_pre.split("-", 1)
+        rpm_ver = f"{c_part}~{p_part.replace('-', '_')}" + (f"+{meta[0]}" if meta else "")
+    else:
+        rpm_ver = full_version
     for arch in ("amd64", "arm64"):
         (directory / f"vpro-windows-{arch}.exe").write_bytes(pe(arch))
         (directory / f"vpro-windows-{arch}-installer.exe").write_bytes(b"installer fixture")
         with zipfile.ZipFile(directory / f"vpro-windows-{arch}.zip", "w") as archive:
             archive.writestr("VPro.exe", pe(arch))
         (directory / f"vpro-linux-{arch}.deb").write_bytes(deb(arch, deb_ver))
-        (directory / f"vpro-linux-{arch}.rpm").write_bytes(rpm(arch, full_version))
+        (directory / f"vpro-linux-{arch}.rpm").write_bytes(nfpm_rpm(arch, rpm_ver))
         (directory / f"vpro-linux-{arch}.tar.gz").write_bytes(tar_bytes([("VPro", elf(arch))]))
     (directory / "vpro-macos-universal.dmg").write_bytes(b"DMG fixture")
     with zipfile.ZipFile(directory / "vpro-macos-universal.zip", "w") as archive:
@@ -472,6 +480,135 @@ class ReleaseTests(unittest.TestCase):
         for data in (b"", deb("arm64")[:-4], deb("arm64") + b"junk"):
             with self.assertRaises((ValueError, UnicodeError)):
                 release.deb_members(data)
+
+    def test_rpm_prerelease_tilde_arch_lead_truncation_and_license(self):
+        nfpm_cfg = (ROOT / "app/build/linux/nfpm/nfpm.yaml").read_text(encoding="utf-8")
+        self.assertIn('license: "Apache-2.0"', nfpm_cfg)
+        self.assertNotIn('license: "MIT"', nfpm_cfg)
+
+        cases = (
+            ("2.0.0", "2.0.0"),
+            ("2.1.0-alpha.1", "2.1.0~alpha.1"),
+            ("2.1.0-alpha-2.1", "2.1.0~alpha_2.1"),
+            ("2.3.4-rc.1+build.7", "2.3.4~rc.1+build.7"),
+            ("2.3.4-rc.1+build-7", "2.3.4~rc.1+build-7"),
+            ("2.3.4+build-7", "2.3.4+build-7"),
+        )
+        rpm_path = self.root / "pkg.rpm"
+        for semver_in, expected_rpm_ver in cases:
+            self.assertEqual(release.rpm_version(semver_in), expected_rpm_ver)
+            for arch in ("amd64", "arm64"):
+                other_arch = "arm64" if arch == "amd64" else "amd64"
+                # 1) nFPM/rpmpack format (lead without .arch, metadata header with RPMTAG_ARCH=1022)
+                rpm_path.write_bytes(nfpm_rpm(arch, expected_rpm_ver))
+                release.validate_rpm(rpm_path, arch, semver_in)
+                with self.assertRaisesRegex(ValueError, "rpm header arch mismatch"):
+                    release.validate_rpm(rpm_path, other_arch, semver_in)
+
+                # 2) rpmbuild lead format (lead with .x86_64 / .aarch64)
+                rpm_path.write_bytes(rpm(arch, expected_rpm_ver))
+                release.validate_rpm(rpm_path, arch, semver_in)
+                with self.assertRaisesRegex(ValueError, "rpm lead arch mismatch"):
+                    release.validate_rpm(rpm_path, other_arch, semver_in)
+
+        # Un-normalized SemVer hyphen in prerelease RPM lead must fail closed.
+        rpm_path.write_bytes(rpm("amd64", "2.1.0-alpha.1"))
+        with self.assertRaisesRegex(ValueError, "rpm lead name mismatch"):
+            release.validate_rpm(rpm_path, "amd64", "2.1.0-alpha.1")
+
+        # Wrong RPMTAG_LICENSE (e.g. MIT) must fail closed.
+        rpm_path.write_bytes(nfpm_rpm("amd64", "2.1.0~alpha.1", license_name="MIT"))
+        with self.assertRaisesRegex(ValueError, "rpm header License mismatch"):
+            release.validate_rpm(rpm_path, "amd64", "2.1.0-alpha.1")
+
+        # Lead without .arch AND without RPMTAG_ARCH header must fail closed.
+        no_arch_lead = bytearray(256)
+        no_arch_lead[:4] = b"\xed\xab\xee\xdb"
+        no_arch_lead[10:30] = b"vpro-2.1.0~alpha.1-1"
+        no_arch_lead[96:100] = b"\x8e\xad\xe8\x01"
+        rpm_path.write_bytes(bytes(no_arch_lead))
+        with self.assertRaisesRegex(ValueError, "rpm lead arch mismatch"):
+            release.validate_rpm(rpm_path, "amd64", "2.1.0-alpha.1")
+
+        # 66-byte RPM lead size & truncation guards:
+        # a) File truncated at or before 96-byte lead boundary fails closed.
+        valid_nfpm = nfpm_rpm("amd64", "2.1.0~alpha.1")
+        for cut in (0, 10, 66, 76, 96):
+            rpm_path.write_bytes(valid_nfpm[:cut])
+            with self.assertRaisesRegex(ValueError, "Expected RPM package"):
+                release.validate_rpm(rpm_path, "amd64", "2.1.0-alpha.1")
+
+        # b) Non-NUL-terminated 66-byte lead name buffer (data[10:76]) fails closed.
+        overflow_lead = bytearray(valid_nfpm)
+        overflow_lead[10:76] = b"v" * 66
+        rpm_path.write_bytes(bytes(overflow_lead))
+        with self.assertRaisesRegex(ValueError, "Unterminated 66-byte RPM lead name"):
+            release.validate_rpm(rpm_path, "amd64", "2.1.0-alpha.1")
+
+        # c) Long prerelease (>65-char prefix) preserves 65-char lead truncation guard while
+        #    checking full RPMTAG_VERSION and strict RPMTAG_ARCH.
+        long_ver = "2.1.0-alpha." + ("x" * 60)
+        long_rpm_ver = "2.1.0~alpha." + ("x" * 60)
+        rpm_path.write_bytes(nfpm_rpm("arm64", long_rpm_ver))
+        release.validate_rpm(rpm_path, "arm64", long_ver)
+        with self.assertRaisesRegex(ValueError, "rpm header arch mismatch"):
+            release.validate_rpm(rpm_path, "amd64", long_ver)
+        rpm_path.write_bytes(rpm("amd64", long_rpm_ver))
+        release.validate_rpm(rpm_path, "amd64", long_ver)
+
+        # d) Boundary version (len(expected_prefix) == 62 -> '.x8' vs '.aa' at 65 chars).
+        boundary_ver = "2.1.0-alpha." + ("b" * 43)
+        boundary_rpm_ver = "2.1.0~alpha." + ("b" * 43)
+        rpm_path.write_bytes(rpm("amd64", boundary_rpm_ver))
+        release.validate_rpm(rpm_path, "amd64", boundary_ver)
+        with self.assertRaisesRegex(ValueError, "rpm lead arch mismatch"):
+            release.validate_rpm(rpm_path, "arm64", boundary_ver)
+
+        # e) Real wails3 nFPM end-to-end packaging check when wails3 is installed locally.
+        wails_bin = (
+            shutil.which("wails3")
+            or str(Path.home() / "go/bin/wails3")
+            if (Path.home() / "go/bin/wails3").is_file()
+            else shutil.which("wails3")
+        )
+        if wails_bin:
+            pkg_dir = self.root / "wails3-nfpm"
+            (pkg_dir / "bin").mkdir(parents=True)
+            (pkg_dir / "build/linux/nfpm/scripts").mkdir(parents=True)
+            shutil.copyfile(ROOT / "app/build/appicon.png", pkg_dir / "build/appicon.png")
+            shutil.copyfile(ROOT / "app/build/linux/VPro.desktop", pkg_dir / "build/linux/VPro.desktop")
+            shutil.copyfile(
+                ROOT / "app/build/linux/nfpm/scripts/postinstall.sh",
+                pkg_dir / "build/linux/nfpm/scripts/postinstall.sh",
+            )
+            stamped_nfpm = nfpm_cfg.replace('version: "2.0.0"', 'version: "2.1.0-alpha.1"', 1)
+            (pkg_dir / "nfpm.yaml").write_text(stamped_nfpm, encoding="utf-8")
+            for arch in ("amd64", "arm64"):
+                (pkg_dir / "bin/VPro").write_bytes(elf(arch))
+                (pkg_dir / "bin/VPro").chmod(0o755)
+                out_dir = pkg_dir / f"out-{arch}"
+                out_dir.mkdir()
+                env = {
+                    **os.environ,
+                    "GOARCH": arch,
+                    "GIT_COMMITTER_NAME": "VPro",
+                    "GIT_COMMITTER_EMAIL": "noreply@github.com",
+                }
+                for fmt in ("rpm", "deb"):
+                    subprocess.run(
+                        [wails_bin, "tool", "package", "-name", "VPro", "-format", fmt, "-config", "./nfpm.yaml", "-out", str(out_dir)],
+                        cwd=pkg_dir,
+                        env=env,
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                    )
+                built_rpm = next(out_dir.glob("*.rpm"))
+                built_deb = next(out_dir.glob("*.deb"))
+                release.validate_rpm(built_rpm, arch, "2.1.0-alpha.1")
+                release.validate_deb(built_deb, arch, "2.1.0-alpha.1")
+                other = "arm64" if arch == "amd64" else "amd64"
+                with self.assertRaisesRegex(ValueError, "arch mismatch"):
+                    release.validate_rpm(built_rpm, other, "2.1.0-alpha.1")
 
     def test_manifest_exact_contract_and_download_verification(self):
         asset_fixture(self.root)
@@ -882,15 +1019,114 @@ class ReleaseTests(unittest.TestCase):
         self.assertIsNone(cleared["channels"]["stable"])
         self.assertIsNone(cleared["channels"]["preview"])
 
+    def test_whats_new_gate_for_full_and_r_only_scopes(self):
+        repo_fixture = self.root / "whats-new-repo"
+        (repo_fixture / "docs-src").mkdir(parents=True)
+        (repo_fixture / "app/resources").mkdir(parents=True)
+        entries = [
+            {
+                "version": "2.1.0-alpha.1",
+                "date": "2026-11-19",
+                "channel": "preview",
+                "highlights": ["Updated field plot validation before cloud sync."],
+            }
+        ]
+        (repo_fixture / "docs-src/whats_new.json").write_text(json.dumps(entries), encoding="utf-8")
+        (repo_fixture / "app/resources/help_bundle.json").write_text(
+            json.dumps({"schemaVersion": 1, "whatsNew": entries}),
+            encoding="utf-8",
+        )
+        with patch.dict(os.environ, {"RELEASE_VERSION": "v2.1.0-alpha.1", "RELEASE_SCOPE": "full"}):
+            release.validate_whats_new(repo_fixture, scope="full")
+            with patch("sys.argv", ["release.py", "whats-new", "--scope", "full", "--root", str(repo_fixture)]):
+                release.main()
+
+        # Numeric entry ("2.1.0") also satisfies prerelease "2.1.0-alpha.1".
+        numeric_entries = [{**entries[0], "version": "2.1.0"}]
+        (repo_fixture / "docs-src/whats_new.json").write_text(json.dumps(numeric_entries), encoding="utf-8")
+        (repo_fixture / "app/resources/help_bundle.json").write_text(
+            json.dumps({"schemaVersion": 1, "whatsNew": numeric_entries}),
+            encoding="utf-8",
+        )
+        with patch.dict(os.environ, {"RELEASE_VERSION": "v2.1.0-alpha.1", "RELEASE_SCOPE": "full"}):
+            release.validate_whats_new(repo_fixture, scope="full")
+
+        # Stale version at index 0 fails closed on full desktop release, but r-only skips desktop whats_new.
+        with patch.dict(os.environ, {"RELEASE_VERSION": "v2.2.0", "RELEASE_SCOPE": "full"}):
+            with self.assertRaisesRegex(ValueError, r"whats_new\.json\[0\]\.version"):
+                release.validate_whats_new(repo_fixture, scope="full")
+        with patch.dict(os.environ, {"RELEASE_VERSION": "r-v2.2.0", "RELEASE_SCOPE": "r-only"}):
+            release.validate_whats_new(repo_fixture, scope="r-only")
+
+        # Drift between docs-src/whats_new.json and app/resources/help_bundle.json fails closed.
+        (repo_fixture / "app/resources/help_bundle.json").write_text(
+            json.dumps({"schemaVersion": 1, "whatsNew": []}),
+            encoding="utf-8",
+        )
+        with patch.dict(os.environ, {"RELEASE_VERSION": "v2.1.0-alpha.1", "RELEASE_SCOPE": "full"}):
+            with self.assertRaisesRegex(ValueError, "out of sync"):
+                release.validate_whats_new(repo_fixture, scope="full")
+
+    def test_linux_and_windows_taskfile_signing_and_once_invariants(self):
+        nsi = (ROOT / "app/build/windows/nsis/project.nsi").read_text(encoding="utf-8")
+        self.assertIn('OutFile "..\\..\\..\\bin\\${INFO_PROJECTNAME}-${ARCH}-installer.exe"', nsi)
+        win_tf = (ROOT / "app/build/windows/Taskfile.yml").read_text(encoding="utf-8")
+        sign_installer = win_tf.split("  sign:installer:", 1)[1]
+        self.assertNotIn("build/windows/nsis/{{.APP_NAME}}-installer.exe", win_tf)
+        self.assertIn('--input "bin/{{.APP_NAME}}-{{.ARCH}}-installer.exe"', sign_installer)
+        self.assertIn("ARCH: '{{.ARCH | default ARCH}}'", sign_installer)
+
+        linux_tf = (ROOT / "app/build/linux/Taskfile.yml").read_text(encoding="utf-8")
+        linux_build = linux_tf.split("  build:", 1)[1].split("  build:native:", 1)[0]
+        self.assertIn("    run: once\n", linux_build)
+        create_rpm = linux_tf.split("  create:rpm:", 1)[1].split("  create:aur:", 1)[0]
+        for forwarded in (
+            "ARCH: '{{.ARCH}}'",
+            "VERSION: '{{.VERSION}}'",
+            "BUILD_MODE: '{{.BUILD_MODE}}'",
+            "GIT_COMMIT: '{{.GIT_COMMIT}}'",
+            "EXTRA_TAGS: '{{.EXTRA_TAGS}}'",
+        ):
+            self.assertIn(forwarded, create_rpm)
+
+        # Ensure scripts/release.py contains no Python 3.12-only nested quotes inside f-strings,
+        # remaining valid on Python 3.10-3.13.
+        release_src = (ROOT / "scripts/release.py").read_text(encoding="utf-8")
+        for line_no, line in enumerate(release_src.splitlines(), 1):
+            for match in re.finditer(r'\bf"([^"]*)"', line):
+                # Inside f"...", any double quote before the closing quote would have split match.group(1)
+                # leaving unclosed '{' inside group(1).
+                expr = match.group(1)
+                self.assertEqual(
+                    expr.count("{") - expr.count("{{"),
+                    expr.count("}") - expr.count("}}"),
+                    f"Nested double-quote inside double-quoted f-string at release.py:{line_no}: {line}",
+                )
+
     def test_workflow_contract(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text()
         self.assertNotIn("|| true", workflow)
         self.assertNotIn("continue-on-error", workflow)
+        self.assertNotIn("AppImage", workflow)
+        self.assertIn("Linux amd64/arm64 rpm, deb and tar.gz", workflow)
         self.assertNotIn("darwin:package:dmg", workflow)
         self.assertNotIn("macos-14", workflow)
         self.assertIn("runs-on: macos-15-intel", workflow)
         self.assertNotIn("go-version: '1.26'", workflow)
-        self.assertEqual(workflow.count("go-version: '1.27.4'"), 3)
+        self.assertEqual(workflow.count("go-version: '1.27.4'"), 4)
+        validate_job = workflow.split("  validate:", 1)[1].split("  build-windows:", 1)[0]
+        self.assertIn("python3 scripts/check-dep-lockstep.py --strict-brand", validate_job)
+        self.assertIn("python3 scripts/check-okf-hygiene.py", validate_job)
+        self.assertIn("node scripts/build-docs-src.mjs", validate_job)
+        self.assertIn("git diff --exit-code -- docs-src app/resources/help_bundle.json", validate_job)
+        self.assertIn('python3 scripts/release.py whats-new --scope "$RELEASE_SCOPE"', validate_job)
+        self.assertIn("npm test", validate_job)
+        self.assertIn("npm run check", validate_job)
+        self.assertIn("go test -skip 'Scale|Perf|71k'", validate_job)
+        deploy_pages_job = workflow.split("  deploy-pages:", 1)[1]
+        self.assertIn("RELEASE_VERSION: ${{ needs.validate.outputs.version }}", deploy_pages_job)
+        self.assertIn("python scripts/release.py metadata --target r --scope r-only", deploy_pages_job)
+        self.assertIn("python scripts/release.py metadata --target r --scope full", deploy_pages_job)
         self.assertIn("task darwin:package:universal", workflow)
         self.assertIn("task darwin:create:dmg", workflow)
         self.assertIn("runner: ubuntu-24.04-arm", workflow)

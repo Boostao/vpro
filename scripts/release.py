@@ -440,20 +440,92 @@ def validate_deb(path, arch, full_version):
     cpu(tar_payload(members[payload[0]], "usr/bin/VPro"), "elf", arch)
 
 
+RPM_HEADER_MAGIC = b"\x8e\xad\xe8\x01\x00\x00\x00\x00"
+
+
+def rpm_version(full_version):
+    core_and_pre, *meta = full_version.split("+", 1)
+    if "-" in core_and_pre:
+        core, pre = core_and_pre.split("-", 1)
+        pre_norm = pre.replace("-", "_")
+        core_and_pre = f"{core}~{pre_norm}"
+    return f"{core_and_pre}+{meta[0]}" if meta else core_and_pre
+
+
+def _rpm_header_strings(data, offset):
+    if offset + 16 > len(data) or data[offset:offset + 8] != RPM_HEADER_MAGIC:
+        return None, None, None
+    nindex, hsize = struct.unpack_from(">II", data, offset + 8)
+    require(nindex <= 4096 and hsize <= 16 * 1024 * 1024, "Oversized RPM header")
+    store_start = offset + 16 + nindex * 16
+    store_end = store_start + hsize
+    require(store_end <= len(data), "Truncated RPM header")
+    strings = {}
+    for index in range(nindex):
+        tag, kind, val_offset, _ = struct.unpack_from(">IIII", data, offset + 16 + index * 16)
+        if kind == 6:  # RPM_STRING_TYPE
+            require(val_offset < hsize, "Out-of-bounds RPM header string")
+            end = data.find(b"\x00", store_start + val_offset, store_end)
+            require(end != -1, "Unterminated RPM header string")
+            strings[tag] = data[store_start + val_offset:end].decode("utf-8", errors="strict")
+    next_aligned = store_start + ((hsize + 7) & ~7)
+    return strings, next_aligned, store_end
+
+
 def validate_rpm(path, arch, full_version):
+    require(arch in ARCHES, f"Unsupported RPM CPU: {arch}")
     data = path.read_bytes()
     require(len(data) > 96 and data[:4] == b"\xed\xab\xee\xdb",
             f"Expected RPM package: {path}")
+    require(b"\x00" in data[10:76],
+            f"Unterminated 66-byte RPM lead name: {path}")
     require(b"\x8e\xad\xe8\x01" in data[96:1024],
             f"Missing RPM header magic: {path}")
     lead_name = data[10:76].split(b"\x00", 1)[0].decode("utf-8", errors="replace")
     rpm_arch = "x86_64" if arch == "amd64" else "aarch64"
-    expected_prefix = f"vpro-{full_version}-1"
-    require(lead_name.startswith(expected_prefix),
-            f"rpm lead name mismatch: {lead_name!r}, expected prefix {expected_prefix!r}")
+    rpm_ver = rpm_version(full_version)
+    expected_prefix = f"vpro-{rpm_ver}-1"
+    lead_prefix = expected_prefix[:65]
+    require(lead_name.startswith(lead_prefix),
+            f"rpm lead name mismatch: {lead_name!r}, expected prefix {lead_prefix!r}")
+
+    sig_strings, next_aligned, store_end = _rpm_header_strings(data, 96)
+    meta_strings = None
+    for candidate in (next_aligned, store_end):
+        if candidate is not None:
+            meta_strings, _, _ = _rpm_header_strings(data, candidate)
+            if meta_strings is not None:
+                break
+    header_tags = meta_strings or sig_strings or {}
+
+    if 1000 in header_tags:
+        require(header_tags[1000] == "vpro",
+                f"rpm header Package mismatch: {header_tags[1000]!r}, expected 'vpro'")
+    if 1001 in header_tags:
+        require(header_tags[1001] == rpm_ver,
+                f"rpm header Version mismatch: {header_tags[1001]!r}, expected {rpm_ver!r}")
+    if 1002 in header_tags:
+        require(header_tags[1002] == "1",
+                f"rpm header Release mismatch: {header_tags[1002]!r}, expected '1'")
+    if 1014 in header_tags:
+        require(header_tags[1014] == "Apache-2.0",
+                f"rpm header License mismatch: {header_tags[1014]!r}, expected 'Apache-2.0'")
+    if 1022 in header_tags:
+        require(header_tags[1022] == rpm_arch,
+                f"rpm header arch mismatch: {header_tags[1022]!r}, expected {rpm_arch!r}")
+
+    # nFPM/rpmpack writes 'vpro-<ver>-1' without '.<arch>' in the 66-byte C char name[66]
+    # lead (storing arch in RPMTAG_ARCH=1022), whereas rpmbuild appends '.<arch>' up to
+    # the 65-char NUL-terminated lead limit.
+    if lead_name == lead_prefix and 1022 in header_tags:
+        return
     if len(expected_prefix) + 1 + len(rpm_arch) <= 65:
-        require(lead_name.endswith(f".{rpm_arch}"),
+        require(lead_name == f"{expected_prefix}.{rpm_arch}",
                 f"rpm lead arch mismatch: {lead_name!r}, expected .{rpm_arch}")
+    else:
+        expected_truncated = f"{expected_prefix}.{rpm_arch}"[:65]
+        require(lead_name == expected_truncated,
+                f"rpm lead arch mismatch: {lead_name!r}, expected {expected_truncated!r}")
 
 
 def check_bundle(bundle, numeric):
@@ -971,11 +1043,40 @@ def sync_release_manifest(output, *, base_manifest=None, releases_json=None,
     return doc
 
 
+def validate_whats_new(root, *, scope=None):
+    resolved_scope = release_scope(scope)
+    if resolved_scope == "r-only":
+        return
+    full, numeric = release_version(resolved_scope)
+    whats_new_path = root / "docs-src/whats_new.json"
+    help_bundle_path = root / "app/resources/help_bundle.json"
+    require(whats_new_path.is_file(), f"Missing {whats_new_path}")
+    require(help_bundle_path.is_file(), f"Missing {help_bundle_path}")
+    whats_new = json.loads(whats_new_path.read_text(encoding="utf-8"))
+    require(isinstance(whats_new, list) and len(whats_new) >= 1 and isinstance(whats_new[0], dict),
+            "docs-src/whats_new.json must contain at least one release entry object")
+    latest = whats_new[0]
+    latest_version = latest.get("version")
+    require(latest_version in (full, numeric),
+            f"docs-src/whats_new.json[0].version is {latest_version!r}, "
+            f"expected {full!r} or {numeric!r} before tagging a desktop release")
+    highlights = latest.get("highlights")
+    require(isinstance(highlights, list) and len(highlights) >= 1 and
+            all(isinstance(item, str) and item.strip() for item in highlights),
+            "docs-src/whats_new.json[0].highlights must be a non-empty list of strings")
+    bundle = json.loads(help_bundle_path.read_text(encoding="utf-8"))
+    require(isinstance(bundle, dict) and bundle.get("whatsNew") == whats_new,
+            "app/resources/help_bundle.json whatsNew is out of sync with docs-src/whats_new.json")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     ver_cmd = commands.add_parser("version")
     ver_cmd.add_argument("--scope", choices=SCOPES)
+    whats_new_cmd = commands.add_parser("whats-new")
+    whats_new_cmd.add_argument("--scope", choices=SCOPES)
+    whats_new_cmd.add_argument("--root", type=Path)
     src_cmd = commands.add_parser("source-tag")
     src_cmd.add_argument("--scope", choices=SCOPES)
     meta_cmd = commands.add_parser("metadata")
@@ -1021,6 +1122,8 @@ def main():
             output.write(f"version={full}\ntag={tag}\nbuild_mode={mode}\n")
             if args.scope is not None or "RELEASE_SCOPE" in os.environ:
                 output.write(f"numeric={numeric}\nscope={resolved_scope}\n")
+    elif args.command == "whats-new":
+        validate_whats_new(args.root or Path.cwd(), scope=args.scope)
     elif args.command == "toolchain":
         print(json.dumps(windows_toolchain(args.arch), sort_keys=True))
     elif args.command == "source-tag":

@@ -16,6 +16,7 @@ vars:
 tasks:
   build:
     summary: Builds the application for Linux
+    run: once
     cmds:
       # Linux requires CGO - use Docker when:
       # 1. Cross-compiling from non-Linux, OR
@@ -117,11 +118,41 @@ tasks:
     summary: Packages the application for Linux
     deps:
       - task: build
+        vars:
+          ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION}}'
+          BUILD_MODE: '{{.BUILD_MODE}}'
+          GIT_COMMIT: '{{.GIT_COMMIT}}'
+          EXTRA_TAGS: '{{.EXTRA_TAGS}}'
     cmds:
       - task: create:appimage
+        vars:
+          ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION}}'
+          BUILD_MODE: '{{.BUILD_MODE}}'
+          GIT_COMMIT: '{{.GIT_COMMIT}}'
+          EXTRA_TAGS: '{{.EXTRA_TAGS}}'
       - task: create:deb
+        vars:
+          ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION}}'
+          BUILD_MODE: '{{.BUILD_MODE}}'
+          GIT_COMMIT: '{{.GIT_COMMIT}}'
+          EXTRA_TAGS: '{{.EXTRA_TAGS}}'
       - task: create:rpm
+        vars:
+          ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION}}'
+          BUILD_MODE: '{{.BUILD_MODE}}'
+          GIT_COMMIT: '{{.GIT_COMMIT}}'
+          EXTRA_TAGS: '{{.EXTRA_TAGS}}'
       - task: create:aur
+        vars:
+          ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION}}'
+          BUILD_MODE: '{{.BUILD_MODE}}'
+          GIT_COMMIT: '{{.GIT_COMMIT}}'
+          EXTRA_TAGS: '{{.EXTRA_TAGS}}'
 
   create:appimage:
     summary: Creates an AppImage
@@ -162,6 +193,12 @@ tasks:
     summary: Creates a rpm package
     deps:
       - task: build
+        vars:
+          ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION}}'
+          BUILD_MODE: '{{.BUILD_MODE}}'
+          GIT_COMMIT: '{{.GIT_COMMIT}}'
+          EXTRA_TAGS: '{{.EXTRA_TAGS}}'
     cmds:
       - task: generate:dotdesktop
       - task: generate:rpm
@@ -170,6 +207,12 @@ tasks:
     summary: Creates a arch linux packager package
     deps:
       - task: build
+        vars:
+          ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION}}'
+          BUILD_MODE: '{{.BUILD_MODE}}'
+          GIT_COMMIT: '{{.GIT_COMMIT}}'
+          EXTRA_TAGS: '{{.EXTRA_TAGS}}'
     cmds:
       - task: generate:dotdesktop
       - task: generate:aur
@@ -191,6 +234,7 @@ tasks:
 
   generate:dotdesktop:
     summary: Generates a `.desktop` file
+    run: once
     dir: build
     cmds:
       - mkdir -p {{.ROOT_DIR}}/build/linux/appimage
@@ -217,6 +261,12 @@ tasks:
       Password is retrieved from system keychain (run: wails3 setup signing)
     deps:
       - task: create:deb
+        vars:
+          ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION}}'
+          BUILD_MODE: '{{.BUILD_MODE}}'
+          GIT_COMMIT: '{{.GIT_COMMIT}}'
+          EXTRA_TAGS: '{{.EXTRA_TAGS}}'
     cmds:
       # PGP_KEY is optional: if unset, `wails3 tool sign` falls back to the key
       # configured globally via `wails3 setup`.
@@ -231,6 +281,12 @@ tasks:
       Password is retrieved from system keychain (run: wails3 setup signing)
     deps:
       - task: create:rpm
+        vars:
+          ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION}}'
+          BUILD_MODE: '{{.BUILD_MODE}}'
+          GIT_COMMIT: '{{.GIT_COMMIT}}'
+          EXTRA_TAGS: '{{.EXTRA_TAGS}}'
     cmds:
       - wails3 tool sign --input "{{.BIN_DIR}}/{{.APP_NAME}}*.rpm" {{if .PGP_KEY}}--pgp-key "{{.PGP_KEY}}"{{end}}
 
@@ -243,4 +299,19 @@ tasks:
       Password is retrieved from system keychain (run: wails3 setup signing)
     cmds:
       - task: sign:deb
+        vars:
+          ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION}}'
+          BUILD_MODE: '{{.BUILD_MODE}}'
+          GIT_COMMIT: '{{.GIT_COMMIT}}'
+          EXTRA_TAGS: '{{.EXTRA_TAGS}}'
+          PGP_KEY: '{{.PGP_KEY}}'
+          SIGN_ROLE: '{{.SIGN_ROLE}}'
       - task: sign:rpm
+        vars:
+          ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION}}'
+          BUILD_MODE: '{{.BUILD_MODE}}'
+          GIT_COMMIT: '{{.GIT_COMMIT}}'
+          EXTRA_TAGS: '{{.EXTRA_TAGS}}'
+          PGP_KEY: '{{.PGP_KEY}}'
