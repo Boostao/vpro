@@ -60,14 +60,25 @@ vpro_is_bundled_package_path <- function(path) {
     return(FALSE)
   }
   norm_target <- normalizePath(path, winslash = "/", mustWork = FALSE)
-  roots <- character()
   pkg_dir <- system.file(package = "vpro")
   if (nzchar(pkg_dir)) {
-    roots <- c(roots, normalizePath(pkg_dir, winslash = "/", mustWork = FALSE))
+    norm_pkg <- normalizePath(pkg_dir, winslash = "/", mustWork = FALSE)
+    if (identical(norm_target, norm_pkg)) {
+      return(TRUE)
+    }
+  }
+  roots <- character()
+  pkg_ext_dir <- system.file("extdata", package = "vpro")
+  if (nzchar(pkg_ext_dir)) {
+    roots <- c(roots, normalizePath(pkg_ext_dir, winslash = "/", mustWork = FALSE))
   }
   ext_dir <- vpro_bundled_file("extdata", must_work = FALSE)
   if (nzchar(ext_dir)) {
     roots <- c(roots, normalizePath(ext_dir, winslash = "/", mustWork = FALSE))
+  }
+  cache_dir <- file.path(tempdir(), "vpro-extdata-cache")
+  if (nzchar(cache_dir)) {
+    roots <- c(roots, normalizePath(cache_dir, winslash = "/", mustWork = FALSE))
   }
   roots <- unique(roots[nzchar(roots)])
   for (rt in roots) {

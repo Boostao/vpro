@@ -1,7 +1,7 @@
 new_wave2c_scratch_dir <- function(prefix = "w2c") {
   dir_path <- file.path(
-    getwd(),
-    sprintf(".vpro-%s-%d-%06d", prefix, Sys.getpid(), sample.int(999999L, 1L))
+    tempdir(),
+    sprintf("vpro-%s-%d-%06d", prefix, Sys.getpid(), sample.int(999999L, 1L))
   )
   dir.create(dir_path, recursive = TRUE, showWarnings = FALSE)
   normalizePath(dir_path, winslash = "/", mustWork = TRUE)
