@@ -229,7 +229,8 @@ vpro_pg_load_cloud_taxonomy <- function(pg, resolve_synonyms = TRUE) {
     if (nrow(non_syn) > 0L) {
       ord <- order(
         non_syn$Code,
-        ifelse(!is.na(non_syn$Codetype) & toupper(trimws(non_syn$Codetype)) == "U", 0L, 1L)
+        ifelse(!is.na(non_syn$Codetype) & toupper(trimws(non_syn$Codetype)) == "U", 0L, 1L),
+        method = "radix"
       )
       non_syn <- non_syn[ord, , drop = FALSE]
       non_syn <- non_syn[!duplicated(non_syn$Code), , drop = FALSE]
@@ -267,6 +268,11 @@ vpro_pg_load_cloud_taxonomy <- function(pg, resolve_synonyms = TRUE) {
 #'   two-column `data.frame(SppCode, LumpCode)` (with optional `Use` column).
 #' @param resolve_synonyms Logical; if `TRUE` (default), resolves `OldCode -> Code`
 #'   synonyms from `standards.usys_all_specs` (falling back to bundled `VLists.db`).
+#' @param cover_precedence Stratum cover precedence when combining `A`/`B`
+#'   sublayers alongside `TotalA`/`TotalB`: `"strata_totals"` (default, where
+#'   populated `TotalA`/`TotalB` overrides sublayers) or `"sublayer_sum"`
+#'   (matching BEC diagnostics where `TotalA`/`TotalB` is used only when
+#'   sublayers are absent).
 #' @return A tibble matching [vpro_veg()] column names and types identically.
 #' @export
 vpro_master_veg <- function(
@@ -280,12 +286,14 @@ vpro_master_veg <- function(
   combine = c("pielou", "sum"),
   lump = NULL,
   resolve_synonyms = TRUE,
+  cover_precedence = c("strata_totals", "sublayer_sum"),
   limit = NULL,
   allow_full = FALSE
 ) {
   vpro_assert_pg_conn(pg, require_custodian = FALSE)
   strata <- match.arg(strata)
   combine <- match.arg(combine)
+  cover_precedence <- match.arg(cover_precedence)
   resolve_synonyms <- vpro_pg_validate_flag(resolve_synonyms, "resolve_synonyms")
   allow_full <- vpro_pg_validate_flag(allow_full, "allow_full")
   limit_int <- vpro_pg_validate_limit(limit, allow_null = TRUE)
@@ -334,27 +342,8 @@ vpro_master_veg <- function(
     action = "query becmaster.veg"
   )
 
-  empty_out <- function() {
-    base <- list(
-      PlotNumber = character(),
-      SiteUnit = character(),
-      Species = character()
-    )
-    if (strata == "raw") {
-      base$Layer <- character()
-      base$Strata <- character()
-    } else if (strata == "abcd") {
-      base$Strata <- character()
-    }
-    base$Cover <- numeric()
-    base$ScientificName <- character()
-    base$EnglishName <- character()
-    base$Lifeform <- integer()
-    tibble::as_tibble(base)
-  }
-
   if (nrow(raw_df) == 0L) {
-    return(empty_out())
+    return(.vpro_empty_veg_tibble(strata))
   }
 
   raw_df$PlotNumber <- as.character(raw_df$PlotNumber)
@@ -362,7 +351,7 @@ vpro_master_veg <- function(
   valid_sp <- !is.na(raw_df$Species) & nzchar(raw_df$Species)
   raw_df <- raw_df[valid_sp, , drop = FALSE]
   if (nrow(raw_df) == 0L) {
-    return(empty_out())
+    return(.vpro_empty_veg_tibble(strata))
   }
 
   su_vals <- if ("__SiteUnit" %in% names(raw_df)) {
@@ -373,237 +362,19 @@ vpro_master_veg <- function(
   su_keep <- !duplicated(raw_df$PlotNumber)
   su_map <- stats::setNames(su_vals[su_keep], raw_df$PlotNumber[su_keep])
 
-  layer_defs <- c(
-    "1" = "Cover1",
-    "2" = "Cover2",
-    "3" = "Cover3",
-    "A" = "TotalA",
-    "4" = "Cover4",
-    "5" = "Cover5",
-    "5a" = "Cover5a",
-    "5b" = "Cover5b",
-    "5c" = "Cover5c",
-    "B" = "TotalB",
-    "6" = "Cover6",
-    "7" = "Cover7",
-    "8" = "Cover8",
-    "9" = "Cover9",
-    "10" = "Cover10"
-  )
-  present_layers <- layer_defs[layer_defs %in% names(raw_df)]
-  cov_cols <- unname(present_layers)
-
-  dt <- data.table::as.data.table(raw_df[, c("PlotNumber", "Species", cov_cols), drop = FALSE])
-
-  # IEEE-754 float32 narrowing and [0, 100] bounds calibration
-  for (cc in cov_cols) {
-    v <- vpro_narrow_float32(as.numeric(dt[[cc]]))
-    v[!is.na(v) & v > 100] <- 100
-    v[!is.na(v) & v < 0] <- NA_real_
-    data.table::set(dt, j = cc, value = v)
-  }
-
-  max_na <- function(x) {
-    ok <- x[!is.na(x)]
-    if (length(ok) == 0L) NA_real_ else max(ok)
-  }
-  if (anyDuplicated(dt, by = c("PlotNumber", "Species")) > 0L) {
-    dt <- dt[, lapply(.SD, max_na), by = c("PlotNumber", "Species"), .SDcols = cov_cols]
-  }
-
-  combine_cols <- function(mat) {
-    if (ncol(mat) == 0L) {
-      return(rep(NA_real_, nrow(mat)))
-    }
-    has_any <- rowSums(!is.na(mat)) > 0L
-    m0 <- mat
-    m0[is.na(m0)] <- 0.0
-    res <- rep(NA_real_, nrow(mat))
-    if (identical(combine, "pielou")) {
-      m_clamped <- pmin(pmax(m0, 0.0), 100.0)
-      comp <- 1.0 - (m_clamped / 100.0)
-      prod_comp <- exp(rowSums(log(pmax(comp, 1e-15))))
-      zero_100 <- rowSums(m_clamped >= 100.0) > 0L
-      val <- 100.0 * (1.0 - prod_comp)
-      val[zero_100] <- 100.0
-      res[has_any] <- val[has_any]
-    } else {
-      res[has_any] <- pmin(rowSums(m0)[has_any], 99.0)
-    }
-    res
-  }
-
-  if (strata != "raw") {
-    sub_a <- intersect(c("Cover1", "Cover2", "Cover3"), names(dt))
-    eff_a <- combine_cols(as.matrix(dt[, sub_a, with = FALSE]))
-    if ("TotalA" %in% names(dt)) {
-      ta <- dt[["TotalA"]]
-      use_ta <- !is.na(ta) & (ta > 0 | is.na(eff_a))
-      eff_a[use_ta] <- ta[use_ta]
-    }
-    sub_b <- intersect(c("Cover4", "Cover5", "Cover5a", "Cover5b", "Cover5c"), names(dt))
-    eff_b <- combine_cols(as.matrix(dt[, sub_b, with = FALSE]))
-    if ("TotalB" %in% names(dt)) {
-      tb <- dt[["TotalB"]]
-      use_tb <- !is.na(tb) & (tb > 0 | is.na(eff_b))
-      eff_b[use_tb] <- tb[use_tb]
-    }
-    eff_c <- if ("Cover6" %in% names(dt)) dt[["Cover6"]] else rep(NA_real_, nrow(dt))
-    sub_d <- intersect(c("Cover7", "Cover8", "Cover9", "Cover10"), names(dt))
-    eff_d <- combine_cols(as.matrix(dt[, sub_d, with = FALSE]))
-    data.table::set(dt, j = "__eff_A", value = eff_a)
-    data.table::set(dt, j = "__eff_B", value = eff_b)
-    data.table::set(dt, j = "__eff_C", value = eff_c)
-    data.table::set(dt, j = "__eff_D", value = eff_d)
-    cov_cols <- c(cov_cols, "__eff_A", "__eff_B", "__eff_C", "__eff_D")
-  }
-
   tax_bundle <- vpro_pg_load_cloud_taxonomy(pg, resolve_synonyms = resolve_synonyms)
-  syn_map <- tax_bundle$syn_map
-  tax <- tax_bundle$tax
 
-  lmap <- if (nrow(lump_tbl) > 0L) stats::setNames(lump_tbl$LumpCode, lump_tbl$SppCode) else character()
-  if (length(lmap) > 0L && length(syn_map) > 0L) {
-    syn_spp <- unname(syn_map[names(lmap)])
-    extra <- !is.na(syn_spp) & !(syn_spp %in% names(lmap))
-    if (any(extra)) {
-      extra_map <- stats::setNames(unname(lmap[extra]), syn_spp[extra])
-      extra_map <- extra_map[!duplicated(names(extra_map))]
-      lmap <- c(lmap, extra_map)
-    }
-  }
-
-  if (length(lmap) > 0L) {
-    m_lmp <- lmap[dt$Species]
-    hit <- !is.na(m_lmp)
-    if (any(hit)) dt$Species[hit] <- unname(m_lmp[hit])
-  }
-  if (length(syn_map) > 0L) {
-    m_syn <- syn_map[dt$Species]
-    hit <- !is.na(m_syn)
-    if (any(hit)) dt$Species[hit] <- unname(m_syn[hit])
-  }
-  if (length(lmap) > 0L) {
-    m_lmp2 <- lmap[dt$Species]
-    hit2 <- !is.na(m_lmp2)
-    if (any(hit2)) dt$Species[hit2] <- unname(m_lmp2[hit2])
-  }
-
-  if (anyDuplicated(dt, by = c("PlotNumber", "Species")) > 0L) {
-    sum_cap99 <- function(x) {
-      ok <- x[!is.na(x)]
-      if (length(ok) == 0L) {
-        NA_real_
-      } else if (length(ok) == 1L) {
-        ok
-      } else {
-        min(sum(ok), 99.0)
-      }
-    }
-    dt <- dt[, lapply(.SD, sum_cap99), by = c("PlotNumber", "Species"), .SDcols = cov_cols]
-  }
-
-  strata_of_layer <- c(
-    "1" = "A",
-    "2" = "A",
-    "3" = "A",
-    "A" = "A",
-    "4" = "B",
-    "5" = "B",
-    "5a" = "B",
-    "5b" = "B",
-    "5c" = "B",
-    "B" = "B",
-    "6" = "C",
-    "7" = "D",
-    "8" = "D",
-    "9" = "D",
-    "10" = "D"
+  .vpro_fold_veg_records(
+    raw_df = raw_df,
+    strata = strata,
+    combine = combine,
+    cover_precedence = cover_precedence,
+    lump_tbl = lump_tbl,
+    syn_map = tax_bundle$syn_map,
+    tax = tax_bundle$tax,
+    su_df = NULL,
+    su_map = su_map
   )
-
-  attach_meta <- function(res_dt) {
-    data.table::set(res_dt, j = "SiteUnit", value = unname(su_map[res_dt[["PlotNumber"]]]))
-    ix <- match(res_dt$Species, tax$Code)
-    data.table::set(res_dt, j = "ScientificName", value = tax$ScientificName[ix])
-    data.table::set(res_dt, j = "EnglishName", value = tax$EnglishName[ix])
-    data.table::set(res_dt, j = "Lifeform", value = as.integer(tax$Lifeform[ix]))
-    res_dt
-  }
-
-  if (strata == "raw") {
-    long_parts <- lapply(names(present_layers), function(lyr) {
-      cc <- present_layers[[lyr]]
-      v <- dt[[cc]]
-      ok <- !is.na(v)
-      if (!any(ok)) {
-        return(NULL)
-      }
-      data.table::data.table(
-        PlotNumber = dt$PlotNumber[ok],
-        Species = dt$Species[ok],
-        Layer = rep(lyr, sum(ok)),
-        Strata = rep(unname(strata_of_layer[[lyr]]), sum(ok)),
-        Cover = v[ok]
-      )
-    })
-    long_dt <- data.table::rbindlist(Filter(Negate(is.null), long_parts))
-    if (nrow(long_dt) == 0L) {
-      return(empty_out())
-    }
-    long_dt <- attach_meta(long_dt)
-    data.table::setorderv(long_dt, c("PlotNumber", "Species", "Layer"))
-    cols <- c("PlotNumber", "SiteUnit", "Species", "Layer", "Strata", "Cover", "ScientificName", "EnglishName", "Lifeform")
-    return(tibble::as_tibble(long_dt[, cols, with = FALSE]))
-  }
-
-  cov_a <- dt[["__eff_A"]]
-  cov_b <- dt[["__eff_B"]]
-  cov_c <- dt[["__eff_C"]]
-  cov_d <- dt[["__eff_D"]]
-
-  if (strata == "abcd") {
-    abcd_list <- list(A = cov_a, B = cov_b, C = cov_c, D = cov_d)
-    parts <- lapply(names(abcd_list), function(st) {
-      v <- abcd_list[[st]]
-      ok <- !is.na(v) & v > 0
-      if (!any(ok)) {
-        return(NULL)
-      }
-      data.table::data.table(
-        PlotNumber = dt$PlotNumber[ok],
-        Species = dt$Species[ok],
-        Strata = rep(st, sum(ok)),
-        Cover = v[ok]
-      )
-    })
-    res_dt <- data.table::rbindlist(Filter(Negate(is.null), parts))
-    if (nrow(res_dt) == 0L) {
-      return(empty_out())
-    }
-    res_dt <- attach_meta(res_dt)
-    data.table::setorderv(res_dt, c("PlotNumber", "Species", "Strata"))
-    cols <- c("PlotNumber", "SiteUnit", "Species", "Strata", "Cover", "ScientificName", "EnglishName", "Lifeform")
-    return(tibble::as_tibble(res_dt[, cols, with = FALSE]))
-  }
-
-  tot_cov <- combine_cols(cbind(cov_a, cov_b, cov_c, cov_d))
-  ok <- !is.na(tot_cov) & tot_cov > 0
-  if (!any(ok)) {
-    return(empty_out())
-  }
-  res_dt <- data.table::data.table(
-    PlotNumber = dt$PlotNumber[ok],
-    Species = dt$Species[ok],
-    Cover = tot_cov[ok]
-  )
-  res_dt <- attach_meta(res_dt)
-  if (strata == "lifeform") {
-    data.table::setorderv(res_dt, c("PlotNumber", "Lifeform", "Species"))
-  } else {
-    data.table::setorderv(res_dt, c("PlotNumber", "Species"))
-  }
-  cols <- c("PlotNumber", "SiteUnit", "Species", "Cover", "ScientificName", "EnglishName", "Lifeform")
-  tibble::as_tibble(res_dt[, cols, with = FALSE])
 }
 
 #' Query tidy `LMH25 (2023)`-ordered soil horizon records from PostgreSQL `BECMaster`
@@ -698,7 +469,7 @@ vpro_master_soil <- function(
       raw$HorizonRegime <- character()
       return(tibble::as_tibble(raw))
     }
-    vpro_order_soil_df(raw)
+    vpro_order_soil_df(raw, kind = suffix)
   }
 
   if (identical(type, "humus")) {

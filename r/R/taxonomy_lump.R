@@ -99,15 +99,17 @@ vpro_taxonomy <- function(ws = NULL, include_synonyms = FALSE, include_user = TR
       conflicts_tbl <- tibble::as_tibble(uniq_tuples[uniq_tuples$Code %in% unique(dup_codes), ])
     }
     # Prefer VLists accepted ('U') rows first while preserving conflicts attribute
-    ord <- order(
+    ord <- base::order(
       dt$Code,
       ifelse(dt$SourceCatalog == "VLists", 0L, 1L),
-      ifelse(!is.na(dt$Codetype) & toupper(dt$Codetype) == "U", 0L, 1L)
+      ifelse(!is.na(dt$Codetype) & toupper(dt$Codetype) == "U", 0L, 1L),
+      method = "radix"
     )
     dt <- dt[ord]
     dt <- dt[!duplicated(dt$Code)]
   } else if (nrow(dt) > 0L) {
-    dt <- dt[order(dt$Code, dt$OldCode)]
+    ord_all <- base::order(dt$Code, dt$OldCode, method = "radix")
+    dt <- dt[ord_all]
   }
 
   out <- tibble::as_tibble(dt)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/boostao/vpro/app/internal/lumping"
 	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
@@ -272,5 +273,89 @@ func TestLumpSpecCompilerPresetAndMaterialize(t *testing.T) {
 	}
 	if mat.Table.TableName != "Provincial2026_Lump" || mat.RowsWritten < 6 {
 		t.Fatalf("unexpected materialization result: %+v", mat)
+	}
+}
+
+func TestPreviewLumpImpactSublayerPrecedenceAndSampleParity(t *testing.T) {
+	service, initState := vprotest.ContextServiceFixture(t)
+	ctx := context.Background()
+
+	// 1. Sample SU + Sample_Lump must report 1 capped cell (Plot 8428935 ABIESPP Layer 1: 90+30 -> 99%),
+	// never double-counting populated TotalA alongside Cover1 (UX-CLASS-003).
+	sampleSel := vprocore.ContextSelection{
+		Project:       initState.ActiveProject,
+		ProjectPath:   initState.ProjectPath,
+		SU:            "Sample",
+		SUPath:        initState.ProjectPath,
+		Hierarchy:     initState.ActiveHierarchy,
+		HierarchyPath: initState.HierarchyPath,
+	}
+	sampleState, err := service.SwitchContext(initState.ContextID, sampleSel)
+	if err != nil {
+		t.Fatalf("SwitchContext(Sample) failed: %v", err)
+	}
+	sampleImpact, err := lumping.PreviewLumpImpact(service, ctx, sampleState.ContextID, "Sample_Lump", "")
+	if err != nil {
+		t.Fatalf("PreviewLumpImpact(Sample_Lump) failed: %v", err)
+	}
+	if sampleImpact.TotalPlots != 51 {
+		t.Fatalf("expected 51 scoped plots on Sample SU, got %d", sampleImpact.TotalPlots)
+	}
+	if sampleImpact.CappedCells != 1 {
+		t.Fatalf("UX-CLASS-003: expected CappedCells=1 on Sample_Lump (matching Synthesis), got %+v", sampleImpact)
+	}
+
+	// 2. Controlled rows verifying Cover1..3 over TotalA, Cover4..5c over TotalB,
+	// fallback TotalA/TotalB when sublayers are NULL, singleton lumped 99% cap, and unlumped 99.5% preservation.
+	vprotest.MutateContextFixture(t, initState.ProjectPath, `
+		DELETE FROM Sample_Veg;
+		DELETE FROM Sample_SU;
+		INSERT INTO Sample_SU (PlotNumber, SiteUnit) VALUES ('108050', 'U1');
+		INSERT INTO Sample_Veg (PlotNumber, ID, Species, Cover1, Cover2, TotalA, Cover4, TotalB, Cover6) VALUES
+			-- Both Cover1 and TotalA populated: TotalA must NOT be double-counted alongside Cover1
+			('108050', 9201, 'ABIELAS',  90.0, NULL, 90.0, 60.0, 60.0, NULL),
+			('108050', 9202, 'ABIEMAG1', 30.0, NULL, 30.0, 50.0, 50.0, NULL),
+			-- Fallback TotalA when Cover1..Cover3 are all NULL
+			('108050', 9203, 'SALIBEB',  NULL, NULL, 60.0, NULL, NULL, NULL),
+			('108050', 9204, 'SALISCO',  NULL, NULL, 55.0, NULL, NULL, NULL),
+			-- Singleton mapped species > 99% (capped at 99%) vs unmapped singleton > 99% (uncapped)
+			('108050', 9205, 'CARESIT',  NULL, NULL, NULL, NULL, NULL, 99.5),
+			('108050', 9206, 'TSUGHET',  NULL, NULL, NULL, NULL, NULL, 99.5);
+	`)
+
+	swState, err := service.SwitchContext(sampleState.ContextID, sampleSel)
+	if err != nil {
+		t.Fatalf("SwitchContext refresh failed: %v", err)
+	}
+	if _, err := lumping.CreateLumpTable(service, ctx, swState.ContextID, "PrecTest"); err != nil {
+		t.Fatalf("CreateLumpTable(PrecTest): %v", err)
+	}
+	for _, row := range []lumping.LumpRowInput{
+		{LumpCode: "ABIESPP", SppCode: "ABIELAS", Use: true},
+		{LumpCode: "ABIESPP", SppCode: "ABIEMAG1", Use: true},
+		{LumpCode: "SALIX", SppCode: "SALIBEB", Use: true},
+		{LumpCode: "SALIX", SppCode: "SALISCO", Use: true},
+		{LumpCode: "CAREX", SppCode: "CARESIT", Use: true},
+	} {
+		if _, err := lumping.UpsertLumpRow(service, ctx, swState.ContextID, "PrecTest", row); err != nil {
+			t.Fatalf("UpsertLumpRow(%+v): %v", row, err)
+		}
+	}
+
+	impact, err := lumping.PreviewLumpImpact(service, ctx, swState.ContextID, "PrecTest_Lump", "")
+	if err != nil {
+		t.Fatalf("PreviewLumpImpact(PrecTest_Lump): %v", err)
+	}
+	// Expected capped cells:
+	// 1) ABIESPP Cover1 (90+30=120 -> 99; TotalA skipped!)
+	// 2) ABIESPP Cover4 (60+50=110 -> 99; TotalB skipped!)
+	// 3) SALIX fallback TotalA (60+55=115 -> 99; Cover1..3 NULL)
+	// 4) CAREX singleton lumped Cover6 (99.5 -> 99)
+	// TSUGHET unlumped Cover6=99.5 must NOT be capped!
+	if impact.CappedCells != 4 {
+		t.Fatalf("expected exactly 4 capped cells (no TotalA/TotalB double count, no unlumped 99.5 cap), got %+v", impact)
+	}
+	if impact.MergedCells != 3 {
+		t.Fatalf("expected exactly 3 merged cells (ABIESPP Cover1, ABIESPP Cover4, SALIX TotalA), got %+v", impact)
 	}
 }

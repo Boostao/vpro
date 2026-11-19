@@ -356,22 +356,20 @@ vpro_validate_lmh25_merge_horizon <- function(suffix, horizon, upper_depth, lowe
   if (!has_u || !has_l) {
     return(invisible(NULL))
   }
-  hz <- trimws(sub("^[0-9IVX]+", "", toupper(trimws(hz_raw))))
-  if (identical(suffix, "Humus")) {
-    if (nzchar(hz) && (startsWith(hz, "HYDRIC") || startsWith(hz, "LIMNO") || startsWith(hz, "CUMULO") || startsWith(hz, "O"))) {
-      if (u >= l) {
-        cli::cli_abort(
-          "Plot {.val {plot}} LMH25 wetland Humus horizon {.val {hz_raw}} requires 0 <= UpperDepth < LowerDepth (got {u}..{l})."
-        )
-      }
-    } else if (nzchar(hz) && (startsWith(hz, "L") || startsWith(hz, "F") || startsWith(hz, "H"))) {
-      if (u <= l) {
-        cli::cli_abort(
-          "Plot {.val {plot}} LMH25 upland Humus horizon {.val {hz_raw}} requires UpperDepth > LowerDepth >= 0 (got {u}..{l})."
-        )
-      }
+  reg <- vpro_lmh25_horizon_regime(hz_raw, kind = suffix)
+  if (identical(reg, "wetland")) {
+    if (u >= l) {
+      cli::cli_abort(
+        "Plot {.val {plot}} LMH25 wetland Humus horizon {.val {hz_raw}} requires 0 <= UpperDepth < LowerDepth (got {u}..{l})."
+      )
     }
-  } else if (identical(suffix, "Mineral")) {
+  } else if (identical(reg, "upland")) {
+    if (u <= l) {
+      cli::cli_abort(
+        "Plot {.val {plot}} LMH25 upland Humus horizon {.val {hz_raw}} requires UpperDepth > LowerDepth >= 0 (got {u}..{l})."
+      )
+    }
+  } else if (identical(reg, "mineral")) {
     if (u >= l) {
       cli::cli_abort(
         "Plot {.val {plot}} LMH25 Mineral horizon {.val {hz_raw}} requires 0 <= UpperDepth < LowerDepth (got {u}..{l})."

@@ -15,6 +15,7 @@ vpro_master_veg(
   combine = c("pielou", "sum"),
   lump = NULL,
   resolve_synonyms = TRUE,
+  cover_precedence = c("strata_totals", "sublayer_sum"),
   limit = NULL,
   allow_full = FALSE
 )
@@ -46,6 +47,12 @@ two-column \code{data.frame(SppCode, LumpCode)} (with optional \code{Use} column
 
 \item{resolve_synonyms}{Logical; if \code{TRUE} (default), resolves \code{OldCode -> Code}
 synonyms from \code{standards.usys_all_specs} (falling back to bundled \code{VLists.db}).}
+
+\item{cover_precedence}{Stratum cover precedence when combining \code{A}/\code{B}
+sublayers alongside \code{TotalA}/\code{TotalB}: \code{"strata_totals"} (default, where
+populated \code{TotalA}/\code{TotalB} overrides sublayers) or \code{"sublayer_sum"}
+(matching BEC diagnostics where \code{TotalA}/\code{TotalB} is used only when
+sublayers are absent).}
 
 \item{limit}{Optional positive integer row limit.}
 

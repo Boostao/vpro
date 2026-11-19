@@ -102,4 +102,6 @@ test('LumpEditor.svelte compiles with zero warnings, renders BC Gov header, and 
   assert.match(rendered.body, /data-tour="lump-editor-root"/);
   assert.match(rendered.body, /Combine Species \(\*_Lump\)/);
   assert.match(rendered.body, /Lumping Presets &amp; Rules/);
+  assert.match(source, /lastLoadedContextId/);
+  assert.match(source, /Cells Capped at 99%/);
 });

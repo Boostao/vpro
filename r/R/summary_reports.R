@@ -218,7 +218,8 @@ vpro_summary_veg <- function(
       m <- match(g, c("A", "1", "2", "3", "B", "4", "5", "5a", "5b", "5c", "6", "7", "8", "9", "10"))
       ifelse(is.na(m), 99L, m)
     } else {
-      rank(g, ties.method = "min")
+      u_g <- sort(unique(g), method = "radix")
+      match(g, u_g)
     }
   }
 
@@ -228,7 +229,8 @@ vpro_summary_veg <- function(
     ifelse(is.na(long_tbl$Lifeform), 999L, long_tbl$Lifeform),
     -long_tbl$constancy,
     -long_tbl$mean_cover,
-    long_tbl$Species
+    long_tbl$Species,
+    method = "radix"
   )
   long_tbl <- long_tbl[ord_long, , drop = FALSE]
 
@@ -239,7 +241,8 @@ vpro_summary_veg <- function(
   ord_wide <- order(
     group_sort_key(base_rows$Group),
     ifelse(is.na(base_rows$Lifeform), 999L, base_rows$Lifeform),
-    base_rows$Species
+    base_rows$Species,
+    method = "radix"
   )
   base_rows <- base_rows[ord_wide, , drop = FALSE]
   wide_keys <- paste0(base_rows$Group, "\r", base_rows$Species)
@@ -312,7 +315,7 @@ as_tibble.vpro_summary_veg <- function(x, format = c("long", "wide"), ...) {
     return(NA_character_)
   }
   tab <- table(vals)
-  names(tab)[order(-as.integer(tab), names(tab))][[1L]]
+  names(tab)[order(-as.integer(tab), names(tab), method = "radix")][[1L]]
 }
 
 .vpro_aspect_sector <- function(aspect, slope = NULL) {
@@ -461,7 +464,7 @@ vpro_summary_env <- function(
     snr_rng <- if (length(snr_ok) == 0L) {
       NA_character_
     } else {
-      snr_sorted <- sort(unique(snr_ok))
+      snr_sorted <- sort(unique(snr_ok), method = "radix")
       if (length(snr_sorted) == 1L) snr_sorted[[1L]] else paste0(snr_sorted[[1L]], "-", snr_sorted[[length(snr_sorted)]])
     }
 

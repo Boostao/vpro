@@ -1,19 +1,74 @@
 # Tidy VP08 Soil Horizons, Other/Audit/Metadata & Hierarchy Conversions --------
 
-vpro_classify_horizon <- function(horizon) {
+# Strip a leading LMH25 lithologic-discontinuity marker (Arabic digits 2Of/3Ah
+# or Roman numerals IIOf/IXAh/XAh), matching Go vprocore.stripSoilDiscontinuityPrefix.
+vpro_strip_soil_discontinuity <- function(horizon) {
   h <- trimws(ifelse(is.na(horizon), "", as.character(horizon)))
-  # Wetland organic (O*, Hydric, Limno, Cumulo) vs upland organic (L, F, H) vs mineral.
-  # Mirrors Go vprocore.ClassifySoilHorizon: strip a discontinuity prefix (2Of, IIOf, XAh) first.
-  u <- sub("^[0-9IVX ]+", "", toupper(h))
-  out <- rep("mineral", length(h))
-  is_wet <- grepl("^(O|HYDRIC|LIMNO|CUMULO)", u)
-  is_up <- !is_wet & grepl("^[LFH]", u)
-  out[is_wet] <- "wetland_organic"
-  out[is_up] <- "upland_organic"
+  trimws(sub("^[0-9IVX ]+", "", toupper(h)))
+}
+
+# Canonical LMH25 (2023) soil horizon regime classifier shared across all R
+# soil readers, pedological keys, and custodian 3-way merge checks, matching
+# Go vprocore.ClassifySoilHorizon 1-to-1:
+#   - "mineral": all Mineral-table rows
+#   - "wetland": Humus O* (O, Oe, Op, Of, Om, Oh) + Hydric/Limno/Cumulo
+#   - "upland" : Humus L/F/H
+#   - ""       : blank or unrecognized Humus horizon
+vpro_lmh25_horizon_regime <- function(horizon, kind = NULL) {
+  n <- length(horizon)
+  if (identical(kind, "Mineral")) {
+    return(rep("mineral", n))
+  }
+  if (!is.null(kind) && !identical(kind, "Humus")) {
+    return(rep("", n))
+  }
+  u <- vpro_strip_soil_discontinuity(horizon)
+  out <- rep("", n)
+  is_wet <- nzchar(u) & (
+    startsWith(u, "HYDRIC") |
+      startsWith(u, "LIMNO") |
+      startsWith(u, "CUMULO") |
+      startsWith(u, "O")
+  )
+  is_up <- !is_wet & nzchar(u) & (
+    startsWith(u, "L") |
+      startsWith(u, "F") |
+      startsWith(u, "H")
+  )
+  out[is_wet] <- "wetland"
+  out[is_up] <- "upland"
   out
 }
 
-vpro_order_soil_df <- function(df) {
+# Canonical SQLite ORDER BY clause for VP08 Humus tables, matching Go
+# vprocore.HumusOrderBySQL (stripping 0-9/I/V/X discontinuity prefixes so 2Of,
+# IIOf, O, Oe, Op, Hydric, Limno, Cumulo sort ascending by UpperDepth after
+# upland L/F/H descending, with NULL UpperDepth last).
+vpro_humus_order_by_sql <- function(horizon_expr = '"Horizon"', upper_depth_expr = '"UpperDepth"') {
+  norm <- paste0("LTRIM(UPPER(TRIM(COALESCE(", horizon_expr, ", ''))), '0123456789IVX ')")
+  wetland <- paste0(
+    "(",
+    norm, " GLOB 'O*' OR ",
+    norm, " GLOB 'HYDRIC*' OR ",
+    norm, " GLOB 'LIMNO*' OR ",
+    norm, " GLOB 'CUMULO*')"
+  )
+  paste0(
+    "CASE WHEN ", wetland, " THEN 1 ELSE 0 END ASC, ",
+    "CASE WHEN ", upper_depth_expr, " IS NULL THEN 1 ELSE 0 END ASC, ",
+    "CASE WHEN ", wetland, " THEN ", upper_depth_expr, " ELSE -", upper_depth_expr, " END ASC"
+  )
+}
+
+vpro_classify_horizon <- function(horizon, kind = NULL) {
+  reg <- vpro_lmh25_horizon_regime(horizon, kind = kind)
+  out <- rep("mineral", length(reg))
+  out[reg == "wetland"] <- "wetland_organic"
+  out[reg == "upland"] <- "upland_organic"
+  out
+}
+
+vpro_order_soil_df <- function(df, kind = NULL) {
   if (nrow(df) == 0L) {
     return(tibble::as_tibble(df))
   }
@@ -21,7 +76,7 @@ vpro_order_soil_df <- function(df) {
   if ("Flag" %in% names(df)) {
     df$Flag <- vpro_access_to_logical(df$Flag)
   }
-  df$HorizonRegime <- vpro_classify_horizon(df$Horizon)
+  df$HorizonRegime <- vpro_classify_horizon(df$Horizon, kind = kind)
   # LMH25 (2023): upland organic L/F/H ordered UpperDepth DESC; wetland Of/Om/Oh & mineral A/B/C/R/W ordered UpperDepth ASC
   regime_rank <- match(df$HorizonRegime, c("upland_organic", "wetland_organic", "mineral"))
   depth_key <- ifelse(
@@ -29,7 +84,7 @@ vpro_order_soil_df <- function(df) {
     -suppressWarnings(as.numeric(df$UpperDepth)),
     suppressWarnings(as.numeric(df$UpperDepth))
   )
-  ord <- order(df$PlotNumber, regime_rank, depth_key, na.last = TRUE)
+  ord <- order(df$PlotNumber, regime_rank, depth_key, na.last = TRUE, method = "radix")
   df <- df[ord, , drop = FALSE]
   rownames(df) <- NULL
   tibble::as_tibble(df)
@@ -74,7 +129,7 @@ vpro_soil <- function(ws, scope = c("su", "project"), type = c("both", "humus", 
       collapse = ", "
     )
     raw <- vpro_query_scoped_plots(dbc, vpro_quote_ident(tbl), scoped_plots, select_cols = sel)
-    vpro_order_soil_df(raw)
+    vpro_order_soil_df(raw, kind = suffix)
   }
 
   if (type == "humus") {

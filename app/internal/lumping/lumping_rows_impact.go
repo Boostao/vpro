@@ -335,6 +335,7 @@ func computeFoldingImpactFromTx(ctx context.Context, tx *sql.Tx, project string,
 	type cellAcc struct {
 		sumCover float64
 		count    int
+		lumped   bool
 	}
 	cells := map[cellKey]*cellAcc{}
 
@@ -347,6 +348,17 @@ func computeFoldingImpactFromTx(ctx context.Context, tx *sql.Tx, project string,
 		folded   int
 	}
 	groups := map[string]*groupStat{}
+
+	narrowCover := func(cv sql.NullFloat64) (float64, bool) {
+		if !cv.Valid {
+			return 0, false
+		}
+		s := float32(cv.Float64)
+		if math.IsNaN(float64(s)) || math.IsInf(float64(s), 0) || s < 0 {
+			return 0, false
+		}
+		return float64(s), true
+	}
 
 	for rows.Next() {
 		var plot, spp string
@@ -369,13 +381,31 @@ func computeFoldingImpactFromTx(ctx context.Context, tx *sql.Tx, project string,
 			foldedSourceSpp[rawCode] = struct{}{}
 		}
 
+		// Match Synthesis sublayer_sum precedence (Cover1..Cover3 over TotalA;
+		// Cover4..Cover5c over TotalB) so populated stratum totals are never
+		// double-counted alongside populated sublayers (UX-CLASS-003).
+		hasSubA := false
+		for i := 0; i <= 2; i++ {
+			if _, ok := narrowCover(covers[i]); ok {
+				hasSubA = true
+				break
+			}
+		}
+		hasSubB := false
+		for i := 4; i <= 8; i++ {
+			if _, ok := narrowCover(covers[i]); ok {
+				hasSubB = true
+				break
+			}
+		}
+
 		hasPositiveLayer := false
 		for layerIdx, cv := range covers {
-			if !cv.Valid {
+			if (layerIdx == 3 && hasSubA) || (layerIdx == 9 && hasSubB) {
 				continue
 			}
-			narrowed := float64(float32(cv.Float64))
-			if narrowed <= 0 {
+			narrowed, ok := narrowCover(cv)
+			if !ok || narrowed <= 0 {
 				continue
 			}
 			hasPositiveLayer = true
@@ -388,6 +418,9 @@ func computeFoldingImpactFromTx(ctx context.Context, tx *sql.Tx, project string,
 			}
 			acc.sumCover += narrowed
 			acc.count++
+			if isFolded {
+				acc.lumped = true
+			}
 
 			if isFolded {
 				gs := groups[targetCode]
@@ -411,6 +444,7 @@ func computeFoldingImpactFromTx(ctx context.Context, tx *sql.Tx, project string,
 			}
 			acc.count++
 			if isFolded {
+				acc.lumped = true
 				gs := groups[targetCode]
 				if gs == nil {
 					gs = &groupStat{sources: map[string]struct{}{}, plots: map[string]struct{}{}}
@@ -439,7 +473,8 @@ func computeFoldingImpactFromTx(ctx context.Context, tx *sql.Tx, project string,
 		}
 		cappedVal := acc.sumCover
 		wasCapped := false
-		if cappedVal > FoldedCoverCap {
+		isFoldedCell := (len(activeMap) > 0 && acc.lumped) || acc.count > 1
+		if isFoldedCell && cappedVal > FoldedCoverCap {
 			cappedVal = FoldedCoverCap
 			wasCapped = true
 			preview.CappedCells++

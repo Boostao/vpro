@@ -242,9 +242,12 @@ func loadAndFoldProjectVeg(
 	for key, acc := range layerCells {
 		cov := acc.cover
 		isLumpedCell := lumpMap != nil && (acc.lumped || acc.count > 1)
-		if isLumpedCell && cov > foldedLumpCoverCap {
+		isFoldedCell := isLumpedCell || acc.count > 1
+		if isFoldedCell && cov > foldedLumpCoverCap {
 			cov = foldedLumpCoverCap
-			lumpCappedCells++
+			if isLumpedCell {
+				lumpCappedCells++
+			}
 		}
 		m := plotSpeciesTotals[key.plotIdx]
 		if m == nil {

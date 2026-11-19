@@ -213,10 +213,10 @@ vpro_normalize_lump_tibble <- function(lump_df) {
     Use = as.logical(use_lgl[keep]),
     stringsAsFactors = FALSE
   )
-  ord <- order(ifelse(out$Use, 0L, 1L), out$LumpCode, out$SppCode)
+  ord <- order(ifelse(out$Use, 0L, 1L), out$LumpCode, out$SppCode, method = "radix")
   out <- out[ord, , drop = FALSE]
   out <- out[!duplicated(out$SppCode), , drop = FALSE]
-  out <- out[order(out$LumpCode, out$SppCode), , drop = FALSE]
+  out <- out[order(out$LumpCode, out$SppCode, method = "radix"), , drop = FALSE]
   tibble::as_tibble(out)
 }
 
@@ -273,11 +273,10 @@ vpro_read_workspace_vp08_table <- function(dbc, project, suffix) {
     order_sql <- ' ORDER BY "Plot"'
   } else if (identical(suffix, "Humus")) {
     where_sql <- ' WHERE typeof("PlotNumber") = \'text\' AND TRIM("PlotNumber") <> \'\''
-    order_sql <- paste(
-      ' ORDER BY "PlotNumber",',
-      'CASE WHEN LOWER(TRIM(COALESCE("Horizon", \'\'))) GLOB \'o[fmh]*\' THEN 1 ELSE 0 END ASC,',
-      'CASE WHEN LOWER(TRIM(COALESCE("Horizon", \'\'))) GLOB \'o[fmh]*\' THEN "UpperDepth" ELSE -"UpperDepth" END ASC,',
-      '"Horizon" DESC, "ID"'
+    order_sql <- paste0(
+      ' ORDER BY "PlotNumber", ',
+      vpro_humus_order_by_sql('"Horizon"', '"UpperDepth"'),
+      ', "Horizon" DESC, "ID"'
     )
   } else if (identical(suffix, "Mineral")) {
     where_sql <- ' WHERE typeof("PlotNumber") = \'text\' AND TRIM("PlotNumber") <> \'\''

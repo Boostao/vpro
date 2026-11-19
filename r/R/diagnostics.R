@@ -314,66 +314,56 @@
 
   for (cc in present_cols) {
     v <- vpro_narrow_float32(as.numeric(dt[[cc]]))
-    v[!is.na(v) & v > 100] <- 100
     v[!is.na(v) & v < 0] <- NA_real_
     data.table::set(dt, j = cc, value = v)
   }
 
-  # Stratum A/B cover precedence:
-  # - "sublayer_sum" (diagnostics/synthesis engine default): use Cover1..3 when any sublayer is populated, else TotalA
-  # - "strata_totals" (MS Access vpro_veg default): use positive TotalA (or non-NA TotalA when sublayers are absent)
+  # Stratum A/B cover precedence (matching Go diagnostics/synthesis_compute.go):
+  # - "sublayer_sum" (MakeDiagnosticData default): use Cover1..3 when any sublayer is populated, else TotalA
+  # - "strata_totals" (BuildStrataTable): TotalA when populated (>0 emits uncapped; 0 suppresses A),
+  #   otherwise sum Cover1..3 with nulls as zero and cap fallback sum at 99% into Stratum A.
   sub_a <- intersect(c("Cover1", "Cover2", "Cover3"), present_cols)
-  if ("TotalA" %in% present_cols && length(sub_a) > 0L) {
-    has_sub_a <- rowSums(!is.na(as.matrix(dt[, sub_a, with = FALSE]))) > 0L
-    ta <- dt[["TotalA"]]
-    if (identical(cover_precedence, "sublayer_sum")) {
+  sub_b <- intersect(c("Cover4", "Cover5", "Cover5a", "Cover5b", "Cover5c"), present_cols)
+  active_cols <- present_cols
+
+  if (identical(cover_precedence, "sublayer_sum")) {
+    if ("TotalA" %in% present_cols && length(sub_a) > 0L) {
+      has_sub_a <- rowSums(!is.na(as.matrix(dt[, sub_a, with = FALSE]))) > 0L
+      ta <- dt[["TotalA"]]
       ta[has_sub_a] <- NA_real_
       data.table::set(dt, j = "TotalA", value = ta)
-    } else {
-      use_ta <- !is.na(ta) & (ta > 0 | !has_sub_a)
-      ta[!use_ta] <- NA_real_
-      data.table::set(dt, j = "TotalA", value = ta)
-      for (sc in sub_a) {
-        sv <- dt[[sc]]
-        sv[use_ta] <- NA_real_
-        data.table::set(dt, j = sc, value = sv)
-      }
     }
-  }
-  sub_b <- intersect(c("Cover4", "Cover5", "Cover5a", "Cover5b", "Cover5c"), present_cols)
-  if ("TotalB" %in% present_cols && length(sub_b) > 0L) {
-    has_sub_b <- rowSums(!is.na(as.matrix(dt[, sub_b, with = FALSE]))) > 0L
-    tb <- dt[["TotalB"]]
-    if (identical(cover_precedence, "sublayer_sum")) {
+    if ("TotalB" %in% present_cols && length(sub_b) > 0L) {
+      has_sub_b <- rowSums(!is.na(as.matrix(dt[, sub_b, with = FALSE]))) > 0L
+      tb <- dt[["TotalB"]]
       tb[has_sub_b] <- NA_real_
       data.table::set(dt, j = "TotalB", value = tb)
-    } else {
-      use_tb <- !is.na(tb) & (tb > 0 | !has_sub_b)
-      tb[!use_tb] <- NA_real_
-      data.table::set(dt, j = "TotalB", value = tb)
-      for (sc in sub_b) {
-        sv <- dt[[sc]]
-        sv[use_tb] <- NA_real_
-        data.table::set(dt, j = sc, value = sv)
-      }
     }
+  } else {
+    sum_sub_cap99 <- function(cols) {
+      if (length(cols) == 0L) return(rep(NA_real_, nrow(dt)))
+      mat <- as.matrix(dt[, cols, with = FALSE])
+      mat[is.na(mat)] <- 0.0
+      s <- pmin(rowSums(mat), 99.0)
+      ifelse(s > 0, s, NA_real_)
+    }
+    fb_a <- sum_sub_cap99(sub_a)
+    ta <- if ("TotalA" %in% present_cols) dt[["TotalA"]] else rep(NA_real_, nrow(dt))
+    eff_ta <- ifelse(!is.na(ta), ifelse(ta > 0, ta, NA_real_), fb_a)
+    data.table::set(dt, j = "TotalA", value = eff_ta)
+
+    fb_b <- sum_sub_cap99(sub_b)
+    tb <- if ("TotalB" %in% present_cols) dt[["TotalB"]] else rep(NA_real_, nrow(dt))
+    eff_tb <- ifelse(!is.na(tb), ifelse(tb > 0, tb, NA_real_), fb_b)
+    data.table::set(dt, j = "TotalB", value = eff_tb)
+
+    active_cols <- unique(c(setdiff(present_cols, c(sub_a, sub_b)), "TotalA", "TotalB"))
   }
 
   # Resolve optional species lump mapping & synonyms
   lump_tbl <- vpro_lump_map(ws, lump = lump)
-  has_lump <- nrow(lump_tbl) > 0L
-  lmap <- if (has_lump) stats::setNames(lump_tbl$LumpCode, lump_tbl$SppCode) else character()
   syn_map <- if (isTRUE(resolve_synonyms)) vpro_synonym_map(ws) else character()
-
-  if (length(lmap) > 0L && length(syn_map) > 0L) {
-    syn_spp <- unname(syn_map[names(lmap)])
-    extra <- !is.na(syn_spp) & !(syn_spp %in% names(lmap))
-    if (any(extra)) {
-      extra_map <- stats::setNames(unname(lmap[extra]), syn_spp[extra])
-      extra_map <- extra_map[!duplicated(names(extra_map))]
-      lmap <- c(lmap, extra_map)
-    }
-  }
+  lmap <- .vpro_expand_lump_map(lump_tbl, syn_map)
 
   was_mapped <- rep(FALSE, nrow(dt))
   if (length(lmap) > 0L) {
@@ -388,7 +378,7 @@
   }
   if (length(syn_map) > 0L) {
     ms <- syn_map[dt[["Species"]]]
-    hits <- !is.na(ms)
+    hits <- !is.na(ms) & ms != dt[["Species"]]
     if (any(hits)) {
       spp_new <- dt[["Species"]]
       spp_new[hits] <- unname(ms[hits])
@@ -407,9 +397,9 @@
   }
 
   # Unpivot populated layer observations and fold per (PlotNumber, Layer, Species)
-  # applying the 99% cap to lumped cells (matching engine.go lines 979-984)
-  layer_parts <- lapply(seq_along(present_cols), function(idx) {
-    cc <- present_cols[[idx]]
+  # applying the 99% cap to lumped (AnyMapped) or multi-row folded (N > 1L) cells (ENG-R-007)
+  layer_parts <- lapply(seq_along(active_cols), function(idx) {
+    cc <- active_cols[[idx]]
     vals <- dt[[cc]]
     ok <- !is.na(vals) & vals >= 0
     if (!any(ok)) {
@@ -437,13 +427,11 @@
     by = c("PlotNumber", "LayerID", "Species")
   ]
 
-  if (has_lump) {
-    cov_vec <- folded[["Cover"]]
-    cap_mask <- (folded[["AnyMapped"]] | folded[["N"]] > 1L) & cov_vec > 99.0
-    if (any(cap_mask)) {
-      cov_vec[cap_mask] <- 99.0
-      data.table::set(folded, j = "Cover", value = cov_vec)
-    }
+  cov_vec <- folded[["Cover"]]
+  cap_mask <- (folded[["AnyMapped"]] | folded[["N"]] > 1L) & cov_vec > 99.0
+  if (any(cap_mask)) {
+    cov_vec[cap_mask] <- 99.0
+    data.table::set(folded, j = "Cover", value = cov_vec)
   }
 
   plot_spp <- folded[, list(Cover = sum(get("Cover"))), by = c("PlotNumber", "Species")]
@@ -816,7 +804,7 @@ vpro_diagnostics <- function(
   diag_pot_vec <- .vpro_calc_diagnostic_potential(constancy_raw, mean_unit_raw)$diagnostic_potential
 
   tax <- vpro_taxonomy(ws, include_synonyms = FALSE, include_user = TRUE)
-  all_spp <- sort(unique(agg_dt[["Species"]]))
+  all_spp <- sort(unique(agg_dt[["Species"]]), method = "radix")
   tax_m <- match(all_spp, tax$Code)
   spp_sci <- ifelse(is.na(tax_m), all_spp, tax$ScientificName[tax_m])
   spp_eng <- ifelse(is.na(tax_m), "", ifelse(is.na(tax$EnglishName[tax_m]), "", tax$EnglishName[tax_m]))
@@ -898,7 +886,8 @@ vpro_diagnostics <- function(
     -vpro_round_ace(max_const_spp, 1L),
     -vpro_round_ace(max_cov_spp, 2L),
     spp_sci,
-    all_spp
+    all_spp,
+    method = "radix"
   )
 
   # Assemble wide $crosstab tibble
@@ -951,7 +940,8 @@ vpro_diagnostics <- function(
     ifelse(is.na(unit_species_tbl$Lifeform), 999L, unit_species_tbl$Lifeform),
     -unit_species_tbl$constancy,
     -unit_species_tbl$mean_cover_unit,
-    unit_species_tbl$Species
+    unit_species_tbl$Species,
+    method = "radix"
   )
   unit_species_tbl <- unit_species_tbl[us_ord, , drop = FALSE]
 

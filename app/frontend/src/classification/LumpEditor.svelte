@@ -501,8 +501,20 @@
     }
   }
 
+  let lastLoadedContextId = '';
+
   onMount(() => {
     if (contextId) {
+      lastLoadedContextId = contextId;
+      void refreshTables();
+    }
+  });
+
+  $effect(() => {
+    const cid = contextId;
+    if (cid && cid !== lastLoadedContextId) {
+      lastLoadedContextId = cid;
+      cancelPending();
       void refreshTables();
     }
   });

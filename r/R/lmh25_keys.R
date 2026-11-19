@@ -1,23 +1,13 @@
 # LMH25 (2023) Pedological Rules & Workspace Standards QA ----------------------
 
 vpro_classify_humus_lmh25 <- function(horizon, soil_group = "") {
-  u <- toupper(trimws(ifelse(is.na(horizon), "", as.character(horizon))))
-  # Strip a lithologic-discontinuity prefix (2L, 2Of, IIOf) before classifying (ENG-XCUT-005).
-  u <- sub("^[0-9IVX ]+", "", u)
-  sg <- toupper(trimws(ifelse(is.na(soil_group), "", as.character(soil_group))))
-  if (!nzchar(u) || identical(u, "S")) {
-    return("surface_or_blank")
-  }
-  if (grepl("^(OF|OM|OH|LIMNO|CUMULO|HYDRIC)", u) || startsWith(u, "O") || grepl("^[0-9]+O[FMHP]?", u)) {
-    return("wetland")
-  }
-  if (grepl("^[0-9]*(L|F|H)", u)) {
-    if (sg %in% c("F", "M", "H") && startsWith(u, "O")) {
-      return("wetland")
-    }
-    return("upland")
-  }
-  "other"
+  u <- vpro_strip_soil_discontinuity(horizon)
+  reg <- vpro_lmh25_horizon_regime(horizon, kind = "Humus")
+  out <- rep("other", length(u))
+  out[reg == "wetland"] <- "wetland"
+  out[reg == "upland"] <- "upland"
+  out[!nzchar(u) | u == "S"] <- "surface_or_blank"
+  out
 }
 
 vpro_parse_smr_int <- function(x) {

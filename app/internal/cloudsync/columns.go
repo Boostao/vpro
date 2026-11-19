@@ -95,11 +95,13 @@ func ValidateUTF16Bound(label, s string, maxUnits int) error {
 	return nil
 }
 
-// ValidateLMH25HorizonDepth enforces LMH25 directional soil horizon depth rules:
-// Upland L/F/H humus horizons measure upward from 0 cm (UpperDepth > LowerDepth);
-// Wetland Of/Om/Oh and Mineral A/B/C/R/W measure downward (UpperDepth < LowerDepth).
+// ValidateLMH25HorizonDepth enforces LMH25 directional soil horizon depth rules
+// via canonical vprocore.ValidateSoilHorizonDepthSign (stripping 0-9/I/V/X
+// discontinuity prefixes case-insensitively; upland L/F/H require
+// UpperDepth > LowerDepth >= 0, while wetland O*/Hydric/Limno/Cumulo and all
+// Mineral horizons require 0 <= UpperDepth < LowerDepth).
 func ValidateLMH25HorizonDepth(tableSuffix, horizon string, upper, lower *float64) error {
-	return vprocore.ValidateSoilHorizonDepthSign(tableSuffix, &horizon, upper, lower) // single LMH25 rule (ENG-GO-005)
+	return vprocore.ValidateSoilHorizonDepthSign(tableSuffix, &horizon, upper, lower) // single LMH25 rule (ENG-GO-005 / ENG-R-006)
 }
 
 // CanonicalizeSQLiteToPG converts a dynamic SQLite value into a typed PostgreSQL parameter
