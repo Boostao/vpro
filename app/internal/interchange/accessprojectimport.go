@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/boostao/vpro/app/internal/accessreader"
@@ -347,20 +349,234 @@ func sanitizeProjectSuggestion(raw string) string {
 	return candidate
 }
 
+const AccessImportProgressEvent = "vpro:access-import-progress"
+
+type AccessImportProgress struct {
+	ContextID          string `json:"contextId"`
+	Operation          string `json:"operation"` // "inspect" | "import"
+	Phase              string `json:"phase"`     // "starting" | "inspecting" | "streaming" | "finalizing"
+	SourceTable        string `json:"sourceTable,omitempty"`
+	TargetTable        string `json:"targetTable,omitempty"`
+	TableIndex         int    `json:"tableIndex,omitempty"`
+	TableRowsProcessed int    `json:"tableRowsProcessed"`
+	TableRowsImported  int    `json:"tableRowsImported"`
+	TotalRowsProcessed int    `json:"totalRowsProcessed"`
+	Message            string `json:"message"`
+}
+
+type accessImportProgressCtxKey struct{}
+
+type accessImportProgressTracker struct {
+	mu            sync.Mutex
+	contextID     string
+	operation     string
+	tableIndex    int
+	completedRows int
+	lastEmit      time.Time
+	emit          func(AccessImportProgress)
+}
+
+func WithAccessImportProgress(ctx context.Context, contextID, operation string, emit func(AccessImportProgress)) context.Context {
+	if ctx == nil || emit == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, accessImportProgressCtxKey{}, &accessImportProgressTracker{
+		contextID: contextID,
+		operation: operation,
+		emit:      emit,
+	})
+}
+
+func accessImportProgressFromContext(ctx context.Context) *accessImportProgressTracker {
+	if ctx == nil {
+		return nil
+	}
+	t, _ := ctx.Value(accessImportProgressCtxKey{}).(*accessImportProgressTracker)
+	return t
+}
+
+func (t *accessImportProgressTracker) emitStage(phase, message string) {
+	if t == nil || t.emit == nil {
+		return
+	}
+	t.mu.Lock()
+	ev := AccessImportProgress{
+		ContextID:          t.contextID,
+		Operation:          t.operation,
+		Phase:              phase,
+		TableIndex:         t.tableIndex,
+		TotalRowsProcessed: t.completedRows,
+		Message:            message,
+	}
+	t.lastEmit = time.Now()
+	t.mu.Unlock()
+	t.emit(ev)
+}
+
+func (t *accessImportProgressTracker) beginTable(sourceTable, targetTable string) {
+	if t == nil || t.emit == nil {
+		return
+	}
+	t.mu.Lock()
+	t.tableIndex++
+	phase := "streaming"
+	verb := "Importing"
+	if t.operation == "inspect" {
+		phase = "inspecting"
+		verb = "Scanning"
+	}
+	ev := AccessImportProgress{
+		ContextID:          t.contextID,
+		Operation:          t.operation,
+		Phase:              phase,
+		SourceTable:        sourceTable,
+		TargetTable:        targetTable,
+		TableIndex:         t.tableIndex,
+		TableRowsProcessed: 0,
+		TableRowsImported:  0,
+		TotalRowsProcessed: t.completedRows,
+		Message:            fmt.Sprintf("%s %s…", verb, sourceTable),
+	}
+	t.lastEmit = time.Now()
+	t.mu.Unlock()
+	t.emit(ev)
+}
+
+func (t *accessImportProgressTracker) updateTableRows(sourceTable, targetTable string, rowsProcessed, rowsImported int, force bool) {
+	if t == nil || t.emit == nil {
+		return
+	}
+	now := time.Now()
+	t.mu.Lock()
+	if !force && !t.lastEmit.IsZero() && now.Sub(t.lastEmit) < 100*time.Millisecond {
+		t.mu.Unlock()
+		return
+	}
+	phase := "streaming"
+	verb := "Importing"
+	if t.operation == "inspect" {
+		phase = "inspecting"
+		verb = "Scanning"
+	}
+	ev := AccessImportProgress{
+		ContextID:          t.contextID,
+		Operation:          t.operation,
+		Phase:              phase,
+		SourceTable:        sourceTable,
+		TargetTable:        targetTable,
+		TableIndex:         t.tableIndex,
+		TableRowsProcessed: rowsProcessed,
+		TableRowsImported:  rowsImported,
+		TotalRowsProcessed: t.completedRows + rowsProcessed,
+		Message:            fmt.Sprintf("%s %s…", verb, sourceTable),
+	}
+	t.lastEmit = now
+	t.mu.Unlock()
+	t.emit(ev)
+}
+
+func (t *accessImportProgressTracker) finishTable(sourceTable, targetTable string, rowsProcessed, rowsImported int) {
+	if t == nil || t.emit == nil {
+		return
+	}
+	t.mu.Lock()
+	t.completedRows += rowsProcessed
+	phase := "streaming"
+	verb := "Imported"
+	if t.operation == "inspect" {
+		phase = "inspecting"
+		verb = "Scanned"
+	}
+	ev := AccessImportProgress{
+		ContextID:          t.contextID,
+		Operation:          t.operation,
+		Phase:              phase,
+		SourceTable:        sourceTable,
+		TargetTable:        targetTable,
+		TableIndex:         t.tableIndex,
+		TableRowsProcessed: rowsProcessed,
+		TableRowsImported:  rowsImported,
+		TotalRowsProcessed: t.completedRows,
+		Message:            fmt.Sprintf("%s %s", verb, sourceTable),
+	}
+	t.lastEmit = time.Now()
+	t.mu.Unlock()
+	t.emit(ev)
+}
+
+func formatAccessReaderError(label string, err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	base := filepath.Base(label)
+	if base == "" || base == "." {
+		base = label
+	}
+	msg := err.Error()
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return fmt.Errorf("Access file %q was not found. Check the file path and try again", label)
+	case errors.Is(err, os.ErrPermission):
+		return fmt.Errorf("Access file %q could not be opened due to file permissions", label)
+	case strings.Contains(msg, "Access source read error"),
+		strings.Contains(msg, "unsupported or unreadable file"),
+		strings.Contains(msg, "cannot read Access catalog"),
+		strings.Contains(msg, "cannot reopen Access database"):
+		return fmt.Errorf("Access file %q could not be read. It may be incomplete, damaged, or in an unsupported format", base)
+	case strings.Contains(msg, "unsupported Access character encoding"),
+		strings.Contains(msg, "invalid, incomplete, or oversized Access text encoding"):
+		return fmt.Errorf("Access file %q contains damaged or unsupported text encoding", base)
+	case strings.Contains(msg, "invalid Access source row metadata"),
+		strings.Contains(msg, "unsupported or malformed Access property sequence"),
+		strings.Contains(msg, "unsupported, incomplete, or malformed Access native column schema"),
+		strings.Contains(msg, "incomplete Access native column schema"):
+		return fmt.Errorf("Access file %q has a damaged or incomplete table structure and could not be read", base)
+	default:
+		return err
+	}
+}
+
 func streamFileSHA256(path string) (string, error) {
+	return streamFileSHA256Context(context.Background(), path)
+}
+
+func streamFileSHA256Context(ctx context.Context, path string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
 	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
+	buf := make([]byte, 1<<20)
+	for {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		n, rErr := f.Read(buf)
+		if n > 0 {
+			_, _ = h.Write(buf[:n])
+		}
+		if rErr != nil {
+			if errors.Is(rErr, io.EOF) {
+				break
+			}
+			return "", rErr
+		}
 	}
-	return hex.EncodeToString(h.Sum(nil)), nil
+	return hex.EncodeToString(h.Sum(nil)), ctx.Err()
 }
 
 func resolveAccessSourcePath(requested string) (string, string, error) {
+	return resolveAccessSourcePathContext(context.Background(), requested)
+}
+
+func resolveAccessSourcePathContext(ctx context.Context, requested string) (string, string, error) {
 	if requested == "" || !utf8.ValidString(requested) || strings.ContainsRune(requested, 0) || !filepath.IsAbs(requested) {
 		return "", "", errors.New("Access database path must be an explicit absolute path")
 	}
@@ -368,13 +584,39 @@ func resolveAccessSourcePath(requested string) (string, string, error) {
 	if ext != ".mdb" && ext != ".accdb" {
 		return "", "", errors.New("Access database path must end in .mdb or .accdb")
 	}
-	resolved, err := filepath.EvalSymlinks(filepath.Clean(requested))
+	cleaned := filepath.Clean(requested)
+	info, err := os.Stat(cleaned)
 	if err != nil {
-		return "", "", fmt.Errorf("resolve Access database %q: %w", requested, err)
+		if errors.Is(err, os.ErrNotExist) {
+			return "", "", fmt.Errorf("Access file %q was not found. Check the file path and try again", cleaned)
+		}
+		if errors.Is(err, os.ErrPermission) {
+			return "", "", fmt.Errorf("Access file %q could not be opened due to file permissions", cleaned)
+		}
+		return "", "", fmt.Errorf("Access file %q could not be accessed", cleaned)
 	}
-	digest, err := streamFileSHA256(resolved)
+	if info.IsDir() || !info.Mode().IsRegular() {
+		return "", "", fmt.Errorf("Access path %q is a folder, not an Access (.mdb or .accdb) file", cleaned)
+	}
+	resolved, err := filepath.EvalSymlinks(cleaned)
 	if err != nil {
-		return "", "", fmt.Errorf("read Access database %q: %w", resolved, err)
+		if errors.Is(err, os.ErrNotExist) {
+			return "", "", fmt.Errorf("Access file %q was not found. Check the file path and try again", cleaned)
+		}
+		if errors.Is(err, os.ErrPermission) {
+			return "", "", fmt.Errorf("Access file %q could not be opened due to file permissions", cleaned)
+		}
+		return "", "", fmt.Errorf("Access file %q could not be accessed", cleaned)
+	}
+	digest, err := streamFileSHA256Context(ctx, resolved)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return "", "", err
+		}
+		if errors.Is(err, os.ErrPermission) {
+			return "", "", fmt.Errorf("Access file %q could not be read due to file permissions", resolved)
+		}
+		return "", "", fmt.Errorf("Access file %q could not be read", filepath.Base(resolved))
 	}
 	return resolved, digest, nil
 }
@@ -387,17 +629,19 @@ func InspectAccessDatabase(s *vprocore.ContextService, ctx context.Context, cont
 	}); err != nil {
 		return AccessDatabaseInspection{}, err
 	}
-	resolved, digest, err := resolveAccessSourcePath(sourcePath)
+	tracker := accessImportProgressFromContext(ctx)
+	tracker.emitStage("starting", "Verifying Access file…")
+	resolved, digest, err := resolveAccessSourcePathContext(ctx, sourcePath)
 	if err != nil {
 		return AccessDatabaseInspection{}, err
 	}
 	db, err := accessreader.Open(resolved)
 	if err != nil {
-		return AccessDatabaseInspection{}, err
+		return AccessDatabaseInspection{}, formatAccessReaderError(resolved, err)
 	}
 	tables, err := db.Tables()
 	if err != nil {
-		return AccessDatabaseInspection{}, err
+		return AccessDatabaseInspection{}, formatAccessReaderError(resolved, err)
 	}
 	byLower := make(map[string]accessreader.Table, len(tables))
 	var optionalSUs []string
@@ -491,19 +735,30 @@ func InspectAccessDatabase(s *vprocore.ContextService, ctx context.Context, cont
 				reader, readErr := db.Scan(srcTbl.Name)
 				if readErr != nil {
 					allPresent = false
-					candidate.StatusMessage = fmt.Sprintf("Failed opening %s: %v", srcTbl.Name, readErr)
+					candidate.StatusMessage = fmt.Sprintf("Could not open %s: %v", srcTbl.Name, formatAccessReaderError(resolved, readErr))
 				} else {
+					tracker.beginTable(srcTbl.Name, "")
 					reader.EnableRowQuarantine()
 					rowCnt := 0
 					for reader.Next() {
 						rowCnt++
+						if rowCnt&1023 == 0 {
+							if err := ctx.Err(); err != nil {
+								_ = reader.Close()
+								return AccessDatabaseInspection{}, err
+							}
+						}
+						if rowCnt&4095 == 0 {
+							tracker.updateTableRows(srcTbl.Name, "", rowCnt, rowCnt, false)
+						}
 					}
 					iterErr := reader.Err()
 					colCnt := len(reader.Columns)
 					_ = reader.Close()
+					tracker.finishTable(srcTbl.Name, "", rowCnt, rowCnt)
 					if iterErr != nil {
 						allPresent = false
-						candidate.StatusMessage = fmt.Sprintf("Failed reading %s: %v", srcTbl.Name, iterErr)
+						candidate.StatusMessage = fmt.Sprintf("Could not read %s: %v", srcTbl.Name, formatAccessReaderError(resolved, iterErr))
 					} else {
 						summary.ColumnCount = colCnt
 						summary.RowCount = rowCnt

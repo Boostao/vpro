@@ -215,26 +215,52 @@ func loadOptionalLumpMap(ctx context.Context, defaultProjectPath, lumpTable, lum
 	if targetDB == "" {
 		targetDB = defaultProjectPath
 	}
+	dbLabel := filepath.Base(targetDB)
+	if dbLabel == "" || dbLabel == "." {
+		dbLabel = "project database"
+	}
 	resolved, err := vprocore.ExistingDatabasePath(targetDB)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("species lumping file %q was not found", dbLabel)
+		}
+		if errors.Is(err, os.ErrPermission) {
+			return nil, fmt.Errorf("species lumping file %q could not be opened due to file permissions", dbLabel)
+		}
+		return nil, fmt.Errorf("species lumping file %q could not be opened", dbLabel)
 	}
+	resolvedLabel := filepath.Base(resolved)
 	db, err := sqlutil.OpenReadOnlyContext(ctx, resolved)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("species lumping file %q could not be read", resolvedLabel)
 	}
 	defer db.Close()
 
 	var actual string
 	if err := db.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name COLLATE NOCASE=?`, tbl).Scan(&actual); err != nil {
-		return nil, fmt.Errorf("lump table %s not found: %w", tbl, err)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("species lumping table %q was not found in %s", tbl, resolvedLabel)
+		}
+		return nil, fmt.Errorf("species lumping file %q could not be read as a valid VPro database", resolvedLabel)
 	}
 	rows, err := db.QueryContext(ctx, `
 		SELECT COALESCE(LumpCode,''), COALESCE(SppCode,''),
 		       CASE WHEN "Use" IS NULL THEN 0 WHEN typeof("Use")='text' THEN "Use" ELSE CAST("Use" AS INTEGER) END
 		FROM `+vprocore.QuoteHeaderIdentifier(actual))
 	if err != nil {
-		return nil, err
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("species lumping table %q in %s is missing required LumpCode, SppCode, or Use columns", actual, resolvedLabel)
 	}
 	defer rows.Close()
 

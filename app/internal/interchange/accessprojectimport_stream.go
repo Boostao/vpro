@@ -131,6 +131,15 @@ func streamAccessSourceIntoSQLite(
 	specs []streamInsertSpec,
 ) (streamTableMetrics, error) {
 	var metrics streamTableMetrics
+	if err := ctx.Err(); err != nil {
+		return metrics, err
+	}
+	tracker := accessImportProgressFromContext(ctx)
+	primaryTarget := ""
+	if len(specs) > 0 {
+		primaryTarget = specs[0].targetTable
+	}
+	tracker.beginTable(sourceTable, primaryTarget)
 	reader.EnableRowQuarantine()
 	cols := reader.ColumnsList()
 	metrics.actualSourceTable = sourceTable
@@ -280,10 +289,13 @@ func streamAccessSourceIntoSQLite(
 	rowOrdinal := 0
 	for reader.Next() {
 		rowOrdinal++
-		if rowOrdinal&4095 == 0 {
+		if rowOrdinal&1023 == 0 {
 			if err := ctx.Err(); err != nil {
 				return metrics, err
 			}
+		}
+		if rowOrdinal&4095 == 0 {
+			tracker.updateTableRows(sourceTable, primaryTarget, rowOrdinal, metrics.importedRows, false)
 		}
 		rawRow := reader.Row()
 		var adaptErr error
@@ -415,7 +427,7 @@ func streamAccessSourceIntoSQLite(
 		}
 	}
 	if err := reader.Err(); err != nil {
-		return metrics, fmt.Errorf("scan %s: %w", sourceTable, err)
+		return metrics, fmt.Errorf("read Access table %s: %w", sourceTable, formatAccessReaderError(sourceTable, err))
 	}
 	for _, q := range reader.QuarantinedRows() {
 		metrics.malformedRows++
@@ -423,6 +435,7 @@ func streamAccessSourceIntoSQLite(
 			_, _ = quarantineStmt.ExecContext(ctx, sourceTable, q.RowNumber, "", "access_decode: "+q.Reason, "{}")
 		}
 	}
+	tracker.finishTable(sourceTable, primaryTarget, rowOrdinal, metrics.importedRows)
 	return metrics, nil
 }
 
@@ -458,6 +471,10 @@ func resolveAuditChildSuffixes(rawTable, sourceProject, targetProject string) []
 }
 
 func seedImportedChildIdentities(ctx context.Context, tx *sql.Tx, sourceProject, targetProject string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	accessImportProgressFromContext(ctx).emitStage("finalizing", "Finalizing indexes and audit history…")
 	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" (
 		"ChildTable" TEXT NOT NULL,
 		"ID" INTEGER NOT NULL,
@@ -467,6 +484,9 @@ func seedImportedChildIdentities(ctx context.Context, tx *sql.Tx, sourceProject,
 	}
 
 	for _, suffix := range []string{"Veg", "Humus", "Mineral", "Other", "Metadata", "Audit"} {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		qChild := vprocore.QuoteHeaderIdentifier(targetProject + "_" + suffix)
 		if _, err := tx.ExecContext(ctx,
 			`INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID")
@@ -509,7 +529,12 @@ func seedImportedChildIdentities(ctx context.Context, tx *sql.Tx, sourceProject,
 			return err
 		}
 		defer stmt.Close()
-		for _, p := range pairs {
+		for i, p := range pairs {
+			if i&1023 == 0 {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+			}
 			for _, suffix := range resolveAuditChildSuffixes(p.tbl, sourceProject, targetProject) {
 				qChild := vprocore.QuoteHeaderIdentifier(targetProject + "_" + suffix)
 				if _, err := stmt.ExecContext(ctx, qChild, p.id); err != nil {
@@ -518,5 +543,5 @@ func seedImportedChildIdentities(ctx context.Context, tx *sql.Tx, sourceProject,
 			}
 		}
 	}
-	return nil
+	return ctx.Err()
 }

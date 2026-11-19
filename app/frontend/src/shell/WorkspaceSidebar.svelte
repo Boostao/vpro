@@ -1,10 +1,14 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { FolderOpen } from '@lucide/svelte';
   import { ContextService, ImportExportService, type AccessDatabaseInspection, type AccessProjectImportResult } from '../../bindings/github.com/boostao/vpro/app';
-import type { AccessProjectCandidate } from '../../bindings/github.com/boostao/vpro/app/internal/interchange/models';
-import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
+  import type { AccessProjectCandidate } from '../../bindings/github.com/boostao/vpro/app/internal/interchange/models';
+  import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
+  import { ReadRequests, type CancellableRead } from '../shared/readRequests';
   import { projectState } from '../shared/state';
   import { notifications } from './notificationService.svelte';
+
+  import type { AccessImportProgressPayload } from '../interchange/interchangeHub';
 
   let {
     busy,
@@ -14,6 +18,7 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
     requestTransition,
     switchContext,
     onAccessActivated,
+    subscribeAccessProgress,
   }: {
     busy: boolean;
     editorBusy: boolean;
@@ -22,6 +27,7 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
     requestTransition: (run: (contextId: string) => Promise<void>) => Promise<void>;
     switchContext: (contextId: string, selection: ContextSelection, next: 'plots' | 'hierarchy') => Promise<void>;
     onAccessActivated: () => Promise<void>;
+    subscribeAccessProgress?: (handler: (progress: AccessImportProgressPayload) => void) => Promise<() => void> | (() => void);
   } = $props();
 
   const externalProjectsEnabled = true;
@@ -36,12 +42,33 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
   let accessDestinationPath = $state('');
   let accessActivateOnSuccess = $state(true);
   let accessWorking = $state(false);
+  let accessOperation = $state<'inspect' | 'import' | ''>('');
+  let accessProgressPhase = $state('');
+  let accessProgressMessage = $state('');
+  let accessProgressRows = $state(0);
+  let accessProgressExpectedRows = $state(0);
+  let accessElapsedSeconds = $state(0);
+  let accessStatusNotice = $state('');
   let accessError = $state('');
   let accessResult = $state<AccessProjectImportResult | null>(null);
+
+  let accessGeneration = 0;
+  let activeAccessRpc: { cancel: () => unknown } | null = null;
+  const accessRequests = new ReadRequests();
+  let stopAccessProgressEvents: (() => void) | null = null;
+  let accessElapsedTimer: ReturnType<typeof setInterval> | null = null;
 
   const accessSelectedCandidate = $derived(
     accessInspection?.projects?.find(p => p.sourceProject === accessSelectedSourceProject) ?? null
   );
+  const accessProgressPercent = $derived.by(() => {
+    if (!accessWorking) return null;
+    if (accessProgressPhase === 'finalizing') return 98;
+    if (accessProgressExpectedRows > 0 && accessProgressRows > 0) {
+      return Math.min(96, Math.max(1, Math.round((accessProgressRows / accessProgressExpectedRows) * 95)));
+    }
+    return null;
+  });
   const activeHierarchyIndex = $derived(
     $projectState?.hierarchies?.findIndex(
       hierarchy => hierarchy.name === $projectState?.activeHierarchy && hierarchy.path === $projectState?.hierarchyPath
@@ -52,6 +79,120 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
       su => su.name === $projectState?.activeSU && su.path === $projectState?.suPath
     ) ?? -1
   );
+
+  async function formatSidebarError(cause: unknown): Promise<string> {
+    try {
+      const mod = await import('../interchange/interchangeHub');
+      if (typeof mod?.formatInterchangeError === 'function') {
+        return mod.formatInterchangeError(cause);
+      }
+    } catch {
+      // Fallback in isolated VM tests where dynamic import is unavailable.
+    }
+    const msg = String(cause ?? '').replace(/^(?:\s*(?:RuntimeError|Error|CallError):\s*)+/i, '').trim();
+    if (/picture selection|file dialogs not available/i.test(msg)) {
+      return 'File selection requires an active desktop window; enter a file path directly when running in a browser.';
+    }
+    if (/Access source read error|cannot read Access catalog/i.test(msg)) {
+      return 'The selected Access file could not be read. It may be incomplete, damaged, or in an unsupported format.';
+    }
+    if (/\b(?:lstat|stat|open)\b[^:]*:\s*no such file/i.test(msg)) {
+      return 'The selected file or folder was not found. Check the path and try again.';
+    }
+    return msg.replace(/:\s*sql:\s*no rows in result set/gi, '').trim() || 'An unexpected error occurred.';
+  }
+
+  function isCancelledAccessError(cause: unknown): boolean {
+    if (!cause) return false;
+    if (cause instanceof Error && cause.name === 'CancelError') return true;
+    const text = String(cause).toLowerCase();
+    return text.includes('context canceled') || text.includes('operation cancelled');
+  }
+
+  function clearAccessRuntimeTimersAndListeners() {
+    if (typeof stopAccessProgressEvents === 'function') {
+      const stop = stopAccessProgressEvents;
+      stopAccessProgressEvents = null;
+      stop();
+    }
+    if (typeof accessElapsedTimer !== 'undefined' && accessElapsedTimer !== null) {
+      clearInterval(accessElapsedTimer);
+      accessElapsedTimer = null;
+    }
+  }
+
+  function startAccessElapsedTimer() {
+    clearAccessRuntimeTimersAndListeners();
+    accessElapsedSeconds = 0;
+    if (typeof globalThis.setInterval === 'function') {
+      const startedAt = Date.now();
+      accessElapsedTimer = globalThis.setInterval(() => {
+        accessElapsedSeconds = Math.max(1, Math.floor((Date.now() - startedAt) / 1000));
+      }, 1000);
+    }
+  }
+
+  async function attachAccessProgressListener(contextId: string, expectedOperation: 'inspect' | 'import', reqGen: number) {
+    const handler = (raw: AccessImportProgressPayload) => {
+      if (!raw || reqGen !== accessGeneration) return;
+      if (raw.contextId && raw.contextId !== contextId) return;
+      if (raw.operation && raw.operation !== expectedOperation) return;
+      if (typeof raw.phase === 'string') accessProgressPhase = raw.phase;
+      if (typeof raw.message === 'string' && raw.message.trim()) {
+        accessProgressMessage = raw.message.trim();
+      }
+      const rows = Number(raw.totalRowsProcessed ?? raw.tableRowsProcessed ?? 0);
+      if (Number.isFinite(rows) && rows >= 0) {
+        accessProgressRows = rows;
+      }
+    };
+    try {
+      if (typeof subscribeAccessProgress === 'function') {
+        const off = await subscribeAccessProgress(handler);
+        if (reqGen !== accessGeneration) {
+          off?.();
+          return;
+        }
+        stopAccessProgressEvents = off;
+        return;
+      }
+      const mod = await import('../interchange/interchangeHub');
+      if (reqGen !== accessGeneration) return;
+      if (typeof mod?.subscribeWailsAccessImportProgress === 'function') {
+        stopAccessProgressEvents = mod.subscribeWailsAccessImportProgress(handler);
+      }
+    } catch {
+      // Progress events degrade gracefully if runtime events are unavailable in headless test harnesses.
+    }
+  }
+
+  function cancelAccessOperation(silent = false) {
+    const wasWorking = accessWorking;
+    const prevOp = accessOperation;
+    accessGeneration++;
+    const current = typeof activeAccessRpc !== 'undefined' ? activeAccessRpc : null;
+    activeAccessRpc = null;
+    clearAccessRuntimeTimersAndListeners();
+    accessWorking = false;
+    accessOperation = '';
+    accessProgressPhase = '';
+    accessProgressMessage = '';
+    accessProgressRows = 0;
+    accessProgressExpectedRows = 0;
+    if (typeof accessRequests !== 'undefined') {
+      accessRequests.cancelAll();
+    }
+    if (current) {
+      current.cancel();
+    }
+    if (!silent && wasWorking) {
+      accessError = '';
+      accessStatusNotice =
+        prevOp === 'inspect'
+          ? 'Access file inspection cancelled.'
+          : 'Import cancelled. No VPro project file (.db) was created.';
+    }
+  }
 
   function selectedContext(): ContextSelection {
     const state = $projectState;
@@ -146,12 +287,13 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
         });
       }
     } catch (cause) {
+      const msg = await formatSidebarError(cause);
       notifications.push({
         severity: 'error',
         category: 'general',
         source: 'Attach Project',
         title: 'Could not inspect SQLite file',
-        message: String(cause),
+        message: msg,
         toast: true,
       });
     }
@@ -171,12 +313,16 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
         toast: true,
       });
     } catch (cause) {
+      const msg =
+        typeof formatSidebarError === 'function'
+          ? await formatSidebarError(cause)
+          : String(cause ?? '').replace(/^(?:RuntimeError|Error|CallError):\s*/i, '').trim();
       notifications.push({
         severity: 'error',
         category: 'general',
         source: 'File Explorer',
         title: 'Could not open File Explorer',
-        message: String(cause),
+        message: msg,
         toast: true,
       });
     }
@@ -193,6 +339,7 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
     const contextId = $projectState?.contextId;
     if (!contextId) return;
     accessError = '';
+    accessStatusNotice = '';
     accessResult = null;
     try {
       const chosen = await ImportExportService.ChooseAccessDatabaseFile(contextId);
@@ -200,38 +347,68 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
       accessSourcePath = chosen;
       await inspectAccessSource(chosen);
     } catch (cause) {
-      accessError = `Could not select Access file: ${String(cause)}`;
+      accessError = `Could not select Access file: ${await formatSidebarError(cause)}`;
     }
   }
 
   async function inspectAccessSource(pathToInspect = accessSourcePath) {
     const contextId = $projectState?.contextId;
-    if (!contextId || !pathToInspect) return;
+    if (!contextId || !pathToInspect || accessWorking) return;
+    const reqGen = ++accessGeneration;
     accessWorking = true;
+    accessOperation = 'inspect';
+    accessProgressPhase = 'starting';
+    accessProgressMessage = 'Verifying Access file…';
+    accessProgressRows = 0;
+    accessProgressExpectedRows = 0;
     accessError = '';
+    accessStatusNotice = '';
     accessResult = null;
+    startAccessElapsedTimer();
     try {
-      const inspection = await ImportExportService.InspectAccessDatabase(contextId, pathToInspect);
+      await attachAccessProgressListener(contextId, 'inspect', reqGen);
+      if (reqGen !== accessGeneration) return;
+      const rawRpc = ImportExportService.InspectAccessDatabase(contextId, pathToInspect);
+      const isCancellable =
+        rawRpc !== null &&
+        typeof rawRpc === 'object' &&
+        typeof (rawRpc as { cancel?: unknown }).cancel === 'function';
+      const trackedRpc =
+        isCancellable && typeof accessRequests !== 'undefined'
+          ? accessRequests.track(rawRpc as unknown as CancellableRead<AccessDatabaseInspection>)
+          : rawRpc;
+      activeAccessRpc = trackedRpc === rawRpc && isCancellable ? (rawRpc as { cancel: () => unknown }) : null;
+      const inspection = await trackedRpc;
+      if (reqGen !== accessGeneration) return;
       accessInspection = inspection;
       accessSourcePath = inspection.sourcePath;
       const projects = inspection.projects ?? [];
       const first = projects.find(p => p.compatible) ?? projects[0] ?? null;
       applyAccessCandidate(first);
       if (!first) {
-        accessError = 'No *_Env project tables were found in the selected Access database.';
+        accessError = 'No VPro project tables (*_Env) were found in the selected Access database.';
       }
     } catch (cause) {
+      if (reqGen !== accessGeneration || isCancelledAccessError(cause)) return;
+      const msg = await formatSidebarError(cause);
+      if (reqGen !== accessGeneration) return;
       accessInspection = null;
-      accessError = `Access inspection failed: ${String(cause)}`;
+      accessError = `Access inspection failed: ${msg}`;
       notifications.push({
         severity: 'error',
         category: 'background',
         source: 'Access Import',
         title: 'Access inspection failed',
-        message: String(cause),
+        message: msg,
       });
     } finally {
-      accessWorking = false;
+      if (reqGen === accessGeneration) {
+        activeAccessRpc = null;
+        clearAccessRuntimeTimersAndListeners();
+        accessWorking = false;
+        accessOperation = '';
+        accessProgressPhase = '';
+      }
     }
   }
 
@@ -239,34 +416,60 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
     const contextId = $projectState?.contextId;
     if (!contextId) return;
     accessError = '';
+    accessStatusNotice = '';
     try {
       const chosen = await ContextService.ChooseNewSQLiteProjectFile(contextId, accessTargetProject);
       if (chosen) accessDestinationPath = chosen;
     } catch (cause) {
-      accessError = `Could not choose destination .db file: ${String(cause)}`;
+      accessError = `Could not choose destination .db file: ${await formatSidebarError(cause)}`;
     }
   }
 
   async function runAccessProjectImport(event: SubmitEvent) {
     event.preventDefault();
-    if (!accessInspection || !accessSelectedSourceProject || !accessTargetProject || !accessDestinationPath) return;
+    if (!accessInspection || !accessSelectedSourceProject || !accessTargetProject || !accessDestinationPath || accessWorking) return;
     const sourcePath = accessInspection.sourcePath;
     const sourceProject = accessSelectedSourceProject;
     const targetProject = accessTargetProject;
     const destinationPath = accessDestinationPath;
     const activateOnSuccess = accessActivateOnSuccess;
+    const expectedRows = (accessSelectedCandidate?.tables ?? []).reduce(
+      (sum, tbl) => sum + (tbl.present ? (tbl.rowCount ?? 0) : 0),
+      0
+    );
     await requestTransition(async contextId => {
+      const reqGen = ++accessGeneration;
       accessWorking = true;
+      accessOperation = 'import';
+      accessProgressPhase = 'starting';
+      accessProgressMessage = 'Preparing destination file and verifying Access database…';
+      accessProgressRows = 0;
+      accessProgressExpectedRows = expectedRows;
       accessError = '';
+      accessStatusNotice = '';
       accessResult = null;
+      startAccessElapsedTimer();
       try {
-        const result = await ImportExportService.ImportAccessProject(contextId, {
+        await attachAccessProgressListener(contextId, 'import', reqGen);
+        if (reqGen !== accessGeneration) return;
+        const rawRpc = ImportExportService.ImportAccessProject(contextId, {
           sourcePath,
           sourceProject,
           targetProject,
           destinationPath,
           activateOnSuccess,
         });
+        const isCancellable =
+          rawRpc !== null &&
+          typeof rawRpc === 'object' &&
+          typeof (rawRpc as { cancel?: unknown }).cancel === 'function';
+        const trackedRpc =
+          isCancellable && typeof accessRequests !== 'undefined'
+            ? accessRequests.track(rawRpc as unknown as CancellableRead<AccessProjectImportResult>)
+            : rawRpc;
+        activeAccessRpc = trackedRpc === rawRpc && isCancellable ? (rawRpc as { cancel: () => unknown }) : null;
+        const result = await trackedRpc;
+        if (reqGen !== accessGeneration) return;
         accessResult = result;
         notifications.push({
           severity: 'success',
@@ -282,20 +485,30 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
           await onAccessActivated();
         }
       } catch (cause) {
-        accessError = `Import failed: ${String(cause)}`;
+        if (reqGen !== accessGeneration || isCancelledAccessError(cause)) return;
+        const msg = await formatSidebarError(cause);
+        if (reqGen !== accessGeneration) return;
+        accessError = `Import failed: ${msg}`;
         notifications.push({
           severity: 'error',
           category: 'background',
           source: 'Access Import',
           title: 'Access project import failed',
-          message: String(cause),
+          message: msg,
         });
-        throw cause;
       } finally {
-        accessWorking = false;
+        if (reqGen === accessGeneration) {
+          activeAccessRpc = null;
+          clearAccessRuntimeTimersAndListeners();
+          accessWorking = false;
+          accessOperation = '';
+          accessProgressPhase = '';
+        }
       }
     });
   }
+
+  onDestroy(() => cancelAccessOperation(true));
 </script>
 
 <aside id="project-context" class="sidebar" aria-label="Projects">
@@ -307,7 +520,7 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
   </div>
   <nav aria-label="Project list">
     {#each $projectState?.projects ?? [] as project ((project.path ?? project.file) + project.name)}
-      <button class:active={project.name === $projectState?.activeProject && project.path === $projectState?.projectPath} disabled={!project.compatible || busy || editorBusy || companionPanelBusy || transitionWorking} title={project.compatible ? project.path : `${project.version} is not a complete VPro project`} onclick={() => chooseProject(project)}>
+      <button class:active={project.name === $projectState?.activeProject && project.path === $projectState?.projectPath} disabled={!project.compatible || busy || editorBusy || companionPanelBusy || transitionWorking || accessWorking} title={project.compatible ? project.path : `${project.version} is not a complete VPro project`} onclick={() => chooseProject(project)}>
         <span class="project-name">{project.name}
           <span class="project-location">{$projectState?.projects?.filter(item => item.name === project.name).length === 1 ? project.file : project.path}</span>
         </span>
@@ -317,7 +530,7 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
   </nav>
   <div class="su-picker">
     <label for="active-su">SITE UNIT</label>
-    <select id="active-su" value={String(activeSUIndex)} onchange={chooseSU} disabled={busy || editorBusy || companionPanelBusy || transitionWorking || !$projectState}>
+    <select id="active-su" value={String(activeSUIndex)} onchange={chooseSU} disabled={busy || editorBusy || companionPanelBusy || transitionWorking || accessWorking || !$projectState}>
       <option value="-1">None</option>
       {#each $projectState?.sus ?? [] as su, index ((su.path ?? '') + su.name)}
         <option value={String(index)} disabled={!su.compatible} title={su.path}>{su.name}{su.kind === 'master' ? ' (master)' : ''}</option>
@@ -326,7 +539,7 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
   </div>
   <div class="su-picker">
     <label for="active-hierarchy">HIERARCHY</label>
-    <select id="active-hierarchy" value={String(activeHierarchyIndex)} onchange={chooseHierarchy} disabled={busy || editorBusy || companionPanelBusy || transitionWorking || !$projectState}>
+    <select id="active-hierarchy" value={String(activeHierarchyIndex)} onchange={chooseHierarchy} disabled={busy || editorBusy || companionPanelBusy || transitionWorking || accessWorking || !$projectState}>
       <option value="-1">None</option>
       {#each $projectState?.hierarchies ?? [] as hierarchy, index ((hierarchy.path ?? hierarchy.file) + hierarchy.name)}
         <option value={String(index)} disabled={!hierarchy.compatible} title={hierarchy.path}>{hierarchy.name} ({hierarchy.file})</option>
@@ -360,7 +573,9 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
         <button type="button" id="browse-access-db" disabled={busy || transitionWorking || accessWorking || !$projectState?.contextId} onclick={() => void browseAccessDatabase()}>Browse Access (.mdb / .accdb)…</button>
         <label for="access-source-path">ACCESS SOURCE FILE (.mdb / .accdb)</label>
         <input id="access-source-path" bind:value={accessSourcePath} placeholder="C:\path\to\project.accdb" disabled={busy || transitionWorking || accessWorking} />
-        <button type="button" id="inspect-access-db" disabled={busy || transitionWorking || accessWorking || !accessSourcePath || !$projectState?.contextId} onclick={() => void inspectAccessSource()}>Inspect Access file</button>
+        <button type="button" id="inspect-access-db" disabled={busy || transitionWorking || accessWorking || !accessSourcePath || !$projectState?.contextId} onclick={() => void inspectAccessSource()}>
+          {accessWorking && accessOperation === 'inspect' ? 'Inspecting Access file…' : 'Inspect Access file'}
+        </button>
         {#if accessInspection && (accessInspection.projects?.length ?? 0) > 0}
           <label for="access-source-project">SOURCE PROJECT IN ACCESS DB</label>
           <select id="access-source-project" value={accessSelectedSourceProject} onchange={(e) => {
@@ -388,8 +603,38 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
             Switch to imported project on completion
           </label>
           <button type="submit" id="convert-import-access-btn" disabled={busy || transitionWorking || accessWorking || !accessSelectedCandidate?.compatible || !accessTargetProject || !accessDestinationPath}>
-            {accessWorking ? 'Converting & importing…' : 'Convert & import to VPRO DB'}
+            {accessWorking && accessOperation === 'import' ? 'Converting & importing…' : 'Convert & import to VPRO DB'}
           </button>
+        {/if}
+        {#if accessWorking}
+          <div class="grid gap-1.5 rounded border border-[#003366]/25 bg-[#F2F6FA] p-2 text-xs text-[#313132]" data-access-import-progress aria-live="polite">
+            <div class="flex items-center justify-between gap-2">
+              <strong class="truncate text-[#003366]">
+                {accessOperation === 'inspect' ? 'Inspecting Access file…' : 'Importing Access project…'}
+              </strong>
+              <span class="shrink-0 tabular-nums text-[11px] text-[#474543]" data-access-elapsed>{accessElapsedSeconds}s</span>
+            </div>
+            <progress
+              class="h-2 w-full"
+              max={100}
+              value={accessProgressPercent ?? undefined}
+              aria-label={accessOperation === 'inspect' ? 'Access file inspection progress' : 'Access project import progress'}
+            ></progress>
+            <p class="m-0 break-words text-[11px] text-[#474543]" data-access-progress-detail>
+              {accessProgressMessage || (accessOperation === 'inspect' ? 'Scanning tables…' : 'Preparing destination project file…')}{#if accessProgressRows > 0} ({accessProgressRows.toLocaleString()}{accessProgressExpectedRows > 0 ? ` / ${accessProgressExpectedRows.toLocaleString()}` : ''} rows{accessProgressPercent !== null ? ` · ${accessProgressPercent}%` : ''}){/if}
+            </p>
+            <button
+              type="button"
+              id="cancel-access-import-btn"
+              class="rounded border border-[#D8292F] bg-white px-2 py-1 text-xs font-semibold text-[#D8292F]"
+              onclick={() => cancelAccessOperation(false)}
+            >
+              {accessOperation === 'inspect' ? 'Cancel inspection' : 'Cancel import'}
+            </button>
+          </div>
+        {/if}
+        {#if accessStatusNotice && !accessWorking}
+          <p role="status" class="m-0 text-xs text-[#474543] break-words">{accessStatusNotice}</p>
         {/if}
         {#if accessError}<p role="alert" class="text-[#D8292F] break-words">{accessError}</p>{/if}
         {#if accessResult}

@@ -1,5 +1,31 @@
-import { Dialogs } from '@wailsio/runtime';
+import { Dialogs, Events } from '@wailsio/runtime';
 import { ImportExportService } from '../../bindings/github.com/boostao/vpro/app';
+
+export const ACCESS_IMPORT_PROGRESS_EVENT = 'vpro:access-import-progress';
+
+export interface AccessImportProgressPayload {
+  contextId?: string;
+  operation?: string;
+  phase?: string;
+  sourceTable?: string;
+  targetTable?: string;
+  tableIndex?: number;
+  tableRowsProcessed?: number;
+  tableRowsImported?: number;
+  totalRowsProcessed?: number;
+  message?: string;
+}
+
+export function subscribeWailsAccessImportProgress(
+  handler: (progress: AccessImportProgressPayload) => void
+): () => void {
+  if (typeof Events?.On !== 'function') {
+    return () => {};
+  }
+  return Events.On(ACCESS_IMPORT_PROGRESS_EVENT, (ev: { data?: unknown }) => {
+    handler((ev?.data ?? null) as AccessImportProgressPayload);
+  });
+}
 
 export interface FileDialogFilter {
   DisplayName: string;
@@ -213,6 +239,17 @@ export interface GeoPackageExportOutcome {
   attributeTables: string[];
 }
 
+export interface LumpTableSummary {
+  name: string;
+  tableName: string;
+  databasePath: string;
+  isActiveProject: boolean;
+  metadataVersion: string;
+  rowCount: number;
+  activeCount: number;
+  distinctLumpCodes: number;
+}
+
 export interface InterchangeHubPort {
   inspectVenusSource(contextID: string, sourcePath: string): Promise<VenusSourceInspection>;
   importVenusProject(contextID: string, request: VenusImportRequest): Promise<VenusImportResult>;
@@ -225,6 +262,7 @@ export interface InterchangeHubPort {
   exportWideMatrixCSV(contextID: string, request: WideMatrixCSVRequest): Promise<CSVExportOutcome>;
   exportProjectRDS(contextID: string, request: RDSExportRequest): Promise<RDSExportOutcome>;
   exportGeoPackage(contextID: string, request: GeoPackageExportRequest): Promise<GeoPackageExportOutcome>;
+  discoverLumpTables?(contextID: string, externalPaths?: string[]): Promise<LumpTableSummary[]>;
   chooseOpenFile?(title: string, filters?: FileDialogFilter[]): Promise<string>;
   chooseSaveFile?(title: string, defaultFilename: string, filters?: FileDialogFilter[]): Promise<string>;
 }
@@ -252,6 +290,8 @@ export const defaultInterchangeHubPort: InterchangeHubPort = {
     (ImportExportService.ExportProjectRDS(contextID, request) as never),
   exportGeoPackage: (contextID, request) =>
     (ImportExportService.ExportGeoPackage(contextID, request) as never),
+  discoverLumpTables: (contextID, externalPaths = []) =>
+    (ImportExportService.DiscoverLumpTables(contextID, externalPaths) as never),
   chooseOpenFile: async (title, filters) => {
     const selected = await Dialogs.OpenFile({
       Title: title,
@@ -352,6 +392,48 @@ export async function validateXMLSnippetChunked(
     }
   }
   return { valid: true, plotTagCount, error: '' };
+}
+
+export function formatInterchangeError(raw: unknown): string {
+  let msg = String(raw ?? '').trim();
+  if (!msg) return 'An unexpected error occurred.';
+  const prefixes = ['RuntimeError:', 'Error:', 'CallError:'];
+  let stripped = true;
+  while (stripped) {
+    stripped = false;
+    for (const prefix of prefixes) {
+      if (msg.startsWith(prefix)) {
+        msg = msg.slice(prefix.length).trim();
+        stripped = true;
+      }
+    }
+  }
+  if (msg.includes('picture selection') || msg.includes('file dialogs not available in server mode')) {
+    return 'File selection requires an active desktop window; enter a file path directly when running in a browser.';
+  }
+  if (msg.includes('database disk image is malformed') || msg.includes('file is not a database')) {
+    return 'The selected database file is damaged, incomplete, or not a valid SQLite file.';
+  }
+  if (msg.includes('Access source read error') || msg.includes('cannot read Access catalog') || msg.includes('cannot reopen Access database')) {
+    return 'The selected Access file could not be read. It may be incomplete, damaged, or in an unsupported format.';
+  }
+  const xmlLine = /XML syntax error on line (\d+)/i.exec(msg);
+  if (xmlLine) {
+    return `The selected XML file is incomplete or contains invalid XML formatting on line ${xmlLine[1]}.`;
+  }
+  if (msg.includes('XML syntax error') || msg.includes('unexpected EOF')) {
+    return 'The selected file ended unexpectedly or contains invalid formatting.';
+  }
+  if (/\b(?:lstat|stat|open|CreateFile|GetFileAttributesEx)\b[^:]*:\s*(?:no such file or directory|cannot find the file)/i.test(msg)) {
+    return 'The selected file or folder was not found. Check the path and try again.';
+  }
+  if (/\b(?:lstat|stat|open|CreateFile|GetFileAttributesEx)\b[^:]*:\s*(?:permission denied|access is denied)/i.test(msg)) {
+    return 'VPro does not have permission to read or write the selected file path.';
+  }
+  msg = msg.replace(/\b(?:lstat|stat|open|CreateFile|GetFileAttributesEx)\s+[^:]+:\s*/gi, '');
+  msg = msg.replace(/:\s*sql:\s*no rows in result set/gi, '');
+  msg = msg.replace(/\bsql:\s*no rows in result set\b/gi, 'the requested table or record was not found');
+  return msg.trim() || 'An unexpected error occurred.';
 }
 
 export const TURBOVEG_LAYER_CROSSWALK: ReadonlyArray<{

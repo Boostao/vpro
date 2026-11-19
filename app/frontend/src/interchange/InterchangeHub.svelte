@@ -12,6 +12,7 @@
     type FileDialogFilter,
     type GeoPackageExportOutcome,
     type InterchangeHubPort,
+    type LumpTableSummary,
     type RDSExportOutcome,
     type TurboVegExportOutcome,
     type TurboVegImportOutcome,
@@ -47,6 +48,10 @@
   let generation = 0;
   let activeRpc: { cancel: () => unknown } | null = null;
   const rpcRequests = new ReadRequests();
+  const lumpDiscoveryReads = new ReadRequests();
+  let lumpDiscoveryGen = 0;
+  let discoveredLumpTables = $state.raw<LumpTableSummary[]>([]);
+  let externalLumpDbPaths = $state<string[]>([]);
 
   // 1. VENUS 5.0 state
   let venusSourcePath = $state('');
@@ -61,6 +66,7 @@
   let tvExportFormat = $state<'xml' | 'sqlite'>('sqlite');
   let tvExportPath = $state('');
   let tvExportLump = $state('');
+  let tvExportLumpDbPath = $state('');
   let tvExportOutcome = $state.raw<TurboVegExportOutcome | null>(null);
 
   let tvImportPath = $state('');
@@ -86,6 +92,7 @@
 
   // 4. Long/Wide CSV & R .rds state
   let csvLumpTable = $state('');
+  let csvLumpDbPath = $state('');
   let longCsvDest = $state('');
   let wideCsvDest = $state('');
   let wideLayerMode = $state<'rollup_all' | 'strata_4' | 'species_layer'>('rollup_all');
@@ -102,7 +109,144 @@
   let gpkgIncludeAttributes = $state(true);
   let gpkgIncludeUnlocated = $state(false);
   let gpkgLumpTable = $state('');
+  let gpkgLumpDbPath = $state('');
   let gpkgOutcome = $state.raw<GeoPackageExportOutcome | null>(null);
+
+  function lumpDatabaseBaseName(dbPath: string): string {
+    const normalized = String(dbPath ?? '').replaceAll('\\', '/');
+    const idx = normalized.lastIndexOf('/');
+    return idx >= 0 ? normalized.slice(idx + 1) : normalized;
+  }
+
+  function lumpOptionValue(item: LumpTableSummary, list: readonly LumpTableSummary[] = discoveredLumpTables): string {
+    const duplicateCount = list.filter(other => other.tableName.toLowerCase() === item.tableName.toLowerCase()).length;
+    if (duplicateCount <= 1 || item.isActiveProject) {
+      return item.tableName;
+    }
+    return `${item.tableName}@${item.databasePath}`;
+  }
+
+  function formatLumpOptionLabel(item: LumpTableSummary): string {
+    const rules = `${item.activeCount} active rule${item.activeCount === 1 ? '' : 's'}`;
+    if (item.isActiveProject) {
+      return `${item.tableName} (${rules})`;
+    }
+    return `${item.tableName} (${lumpDatabaseBaseName(item.databasePath)} · ${rules})`;
+  }
+
+  function selectedLumpOptionKey(tableName: string, dbPath: string): string {
+    const trimmedTable = (tableName ?? '').trim();
+    if (!trimmedTable) return '';
+    const trimmedDb = (dbPath ?? '').trim();
+    const match = discoveredLumpTables.find(item => {
+      if (item.tableName.toLowerCase() !== trimmedTable.toLowerCase()) return false;
+      if (!trimmedDb) return item.isActiveProject;
+      return item.databasePath === trimmedDb;
+    }) ?? discoveredLumpTables.find(item => item.tableName.toLowerCase() === trimmedTable.toLowerCase());
+    return match ? lumpOptionValue(match, discoveredLumpTables) : trimmedTable;
+  }
+
+  function applySelectedLumpOption(target: 'tv' | 'csv' | 'gpkg', optionValue: string) {
+    const raw = (optionValue ?? '').trim();
+    const chosen = raw
+      ? discoveredLumpTables.find(item => lumpOptionValue(item, discoveredLumpTables) === raw) ?? null
+      : null;
+    const nextTable = chosen ? chosen.tableName : '';
+    const nextDbPath = chosen && !chosen.isActiveProject ? chosen.databasePath : '';
+    if (target === 'tv') {
+      tvExportLump = nextTable;
+      tvExportLumpDbPath = nextDbPath;
+    } else if (target === 'csv') {
+      csvLumpTable = nextTable;
+      csvLumpDbPath = nextDbPath;
+    } else {
+      gpkgLumpTable = nextTable;
+      gpkgLumpDbPath = nextDbPath;
+    }
+  }
+
+  async function refreshDiscoveredLumpTables(ownerContextId = contextId, extraPaths: string[] = externalLumpDbPaths) {
+    if (!ownerContextId) {
+      discoveredLumpTables = [];
+      return;
+    }
+    const discoverFn =
+      typeof port?.discoverLumpTables === 'function'
+        ? port.discoverLumpTables.bind(port)
+        : port === defaultInterchangeHubPort && typeof defaultInterchangeHubPort.discoverLumpTables === 'function'
+          ? defaultInterchangeHubPort.discoverLumpTables
+          : null;
+    if (!discoverFn) return;
+    const reqId = ++lumpDiscoveryGen;
+    try {
+      const rawRpc = discoverFn(ownerContextId, [...extraPaths]);
+      const tracked =
+        typeof lumpDiscoveryReads !== 'undefined' &&
+        rawRpc !== null &&
+        typeof rawRpc === 'object' &&
+        typeof (rawRpc as { cancel?: unknown }).cancel === 'function'
+          ? lumpDiscoveryReads.track(rawRpc as unknown as CancellableRead<LumpTableSummary[]>)
+          : rawRpc;
+      const items = (await tracked) ?? [];
+      if (reqId !== lumpDiscoveryGen || ownerContextId !== contextId) return;
+      discoveredLumpTables = Array.isArray(items) ? items : [];
+      for (const target of ['tv', 'csv', 'gpkg'] as const) {
+        const curTable = target === 'tv' ? tvExportLump : target === 'csv' ? csvLumpTable : gpkgLumpTable;
+        const curDb = target === 'tv' ? tvExportLumpDbPath : target === 'csv' ? csvLumpDbPath : gpkgLumpDbPath;
+        if (!curTable) continue;
+        const stillValid = discoveredLumpTables.some(
+          item =>
+            item.tableName.toLowerCase() === curTable.toLowerCase() &&
+            (!curDb ? true : item.databasePath === curDb)
+        );
+        if (!stillValid) {
+          applySelectedLumpOption(target, '');
+        }
+      }
+    } catch {
+      if (reqId === lumpDiscoveryGen && ownerContextId === contextId) {
+        discoveredLumpTables = [];
+      }
+    }
+  }
+
+  async function browseExternalLumpDatabase(target: 'tv' | 'csv' | 'gpkg') {
+    await pickFilePath(
+      'open',
+      'Choose VPro Database with *_Lump Tables',
+      '',
+      [{ DisplayName: 'VPro Project Database (*.db)', Pattern: '*.db' }],
+      async chosenPath => {
+        const nextPaths = externalLumpDbPaths.includes(chosenPath)
+          ? externalLumpDbPaths
+          : [...externalLumpDbPaths, chosenPath];
+        externalLumpDbPaths = nextPaths;
+        await refreshDiscoveredLumpTables(contextId, nextPaths);
+        const fromChosen = discoveredLumpTables.find(item => item.databasePath === chosenPath);
+        if (fromChosen) {
+          applySelectedLumpOption(target, lumpOptionValue(fromChosen, discoveredLumpTables));
+        } else {
+          pushHubError(
+            'No species lumping tables found',
+            `No *_Lump tables were found in ${lumpDatabaseBaseName(chosenPath)}.`
+          );
+        }
+      }
+    );
+  }
+
+  $effect(() => {
+    const owner = contextId;
+    const extras = $state.snapshot(externalLumpDbPaths);
+    if (!owner) {
+      discoveredLumpTables = [];
+      return;
+    }
+    void refreshDiscoveredLumpTables(owner, extras);
+    return () => {
+      lumpDiscoveryReads.cancelAll();
+    };
+  });
 
   function setBusy(next: boolean, rpc: unknown = null) {
     const cancellable =
@@ -138,7 +282,46 @@
     }
   }
 
-  function pushHubError(title: string, message: string) {
+  function pushHubError(title: string, rawMessage: unknown) {
+    let message = String(rawMessage ?? '').trim();
+    const prefixes = ['RuntimeError:', 'Error:', 'CallError:'];
+    let stripped = true;
+    while (stripped) {
+      stripped = false;
+      for (const prefix of prefixes) {
+        if (message.startsWith(prefix)) {
+          message = message.slice(prefix.length).trim();
+          stripped = true;
+        }
+      }
+    }
+    if (message.includes('picture selection') || message.includes('file dialogs not available in server mode')) {
+      message = 'File selection requires an active desktop window; enter a file path directly when running in a browser.';
+    } else if (message.includes('database disk image is malformed') || message.includes('file is not a database')) {
+      message = 'The selected database file is damaged, incomplete, or not a valid SQLite file.';
+    } else if (
+      message.includes('Access source read error') ||
+      message.includes('cannot read Access catalog') ||
+      message.includes('cannot reopen Access database')
+    ) {
+      message = 'The selected Access file could not be read. It may be incomplete, damaged, or in an unsupported format.';
+    } else if (/XML syntax error on line (\d+)/i.test(message)) {
+      const m = /XML syntax error on line (\d+)/i.exec(message);
+      message = `The selected XML file is incomplete or contains invalid XML formatting on line ${m?.[1] ?? '1'}.`;
+    } else if (message.includes('XML syntax error') || message.includes('unexpected EOF')) {
+      message = 'The selected file ended unexpectedly or contains invalid formatting.';
+    } else if (/\b(?:lstat|stat|open|CreateFile|GetFileAttributesEx)\b[^:]*:\s*(?:no such file or directory|cannot find the file)/i.test(message)) {
+      message = 'The selected file or folder was not found. Check the path and try again.';
+    } else if (/\b(?:lstat|stat|open|CreateFile|GetFileAttributesEx)\b[^:]*:\s*(?:permission denied|access is denied)/i.test(message)) {
+      message = 'VPro does not have permission to read or write the selected file path.';
+    } else {
+      message = message
+        .replace(/\b(?:lstat|stat|open|CreateFile|GetFileAttributesEx)\s+[^:]+:\s*/gi, '')
+        .replace(/:\s*sql:\s*no rows in result set/gi, '')
+        .replace(/\bsql:\s*no rows in result set\b/gi, 'the requested table or record was not found')
+        .trim();
+    }
+    if (!message) message = 'An unexpected error occurred.';
     error = message;
     if (typeof notifications !== 'undefined' && typeof notifications?.error === 'function') {
       notifications.error(title, message, { category: 'background', source: 'Interchange Hub' });
@@ -150,7 +333,7 @@
     title: string,
     defaultFilename: string,
     filters: FileDialogFilter[],
-    assign: (chosen: string) => void
+    assign: (chosen: string) => void | Promise<void>
   ) {
     if (busy || operationHeld) return;
     const owner = contextId;
@@ -162,7 +345,7 @@
           : await (port.chooseSaveFile ?? defaultInterchangeHubPort.chooseSaveFile)?.(title, defaultFilename, filters);
       if (owner !== contextId) return;
       if (typeof chosen === 'string' && chosen.trim()) {
-        assign(chosen.trim());
+        await assign(chosen.trim());
       }
     } catch (cause) {
       pushHubError('File picker failed', String(cause));
@@ -265,10 +448,12 @@
     if (busy || operationHeld || !contextId) return;
     const reqGen = ++generation;
     const owner = contextId;
+    const lumpDb = typeof tvExportLumpDbPath === 'string' ? tvExportLumpDbPath.trim() : '';
     const payload = $state.snapshot({
       format: tvExportFormat,
       destinationPath: tvExportPath.trim(),
       lumpTable: tvExportLump.trim(),
+      ...(lumpDb ? { lumpDbPath: lumpDb } : {}),
     });
     error = '';
     try {
@@ -487,9 +672,11 @@
     if (busy || operationHeld || !contextId) return;
     const reqGen = ++generation;
     const owner = contextId;
+    const lumpDb = typeof csvLumpDbPath === 'string' ? csvLumpDbPath.trim() : '';
     const payload = $state.snapshot({
       destinationPath: longCsvDest.trim(),
       lumpTable: csvLumpTable.trim(),
+      ...(lumpDb ? { lumpDbPath: lumpDb } : {}),
     });
     error = '';
     try {
@@ -518,12 +705,14 @@
     if (busy || operationHeld || !contextId) return;
     const reqGen = ++generation;
     const owner = contextId;
+    const lumpDb = typeof csvLumpDbPath === 'string' ? csvLumpDbPath.trim() : '';
     const payload = $state.snapshot({
       destinationPath: wideCsvDest.trim(),
       layerMode: wideLayerMode,
       zeroFill: wideZeroFill,
       includeSiteUnit: wideIncludeSiteUnit,
       lumpTable: csvLumpTable.trim(),
+      ...(lumpDb ? { lumpDbPath: lumpDb } : {}),
     });
     error = '';
     try {
@@ -556,9 +745,11 @@
     if (busy || operationHeld || !contextId) return;
     const reqGen = ++generation;
     const owner = contextId;
+    const lumpDb = typeof csvLumpDbPath === 'string' ? csvLumpDbPath.trim() : '';
     const payload = $state.snapshot({
       destinationPath: rdsDestPath.trim(),
       lumpTable: csvLumpTable.trim(),
+      ...(lumpDb ? { lumpDbPath: lumpDb } : {}),
     });
     error = '';
     try {
@@ -600,12 +791,14 @@
     if (busy || operationHeld || !contextId) return;
     const reqGen = ++generation;
     const owner = contextId;
+    const lumpDb = typeof gpkgLumpDbPath === 'string' ? gpkgLumpDbPath.trim() : '';
     const payload = $state.snapshot({
       destinationPath: gpkgDestPath.trim(),
       crs: gpkgCrs,
       includeAttributeTables: gpkgIncludeAttributes,
       includeUnlocatedPlots: gpkgIncludeUnlocated,
       lumpTable: gpkgLumpTable.trim(),
+      ...(lumpDb ? { lumpDbPath: lumpDb } : {}),
     });
     error = '';
     try {
@@ -639,7 +832,10 @@
     }
   }
 
-  onDestroy(cancelOperation);
+  onDestroy(() => {
+    lumpDiscoveryReads.cancelAll();
+    cancelOperation();
+  });
 </script>
 
 <section class="bcgov-interchange" data-tour="interchange-hub-root" data-interchange-hub aria-label="VPro Standards and Analytical Interchange Hub">
@@ -740,7 +936,29 @@
           </label>
           <label>
             <span>Optional *_Lump Table</span>
-            <input type="text" bind:value={tvExportLump} placeholder="None (raw species)" disabled={busy || operationHeld} />
+            <div class="input-with-browse">
+              <select
+                class="grow"
+                data-lump-select="turboveg"
+                value={selectedLumpOptionKey(tvExportLump, tvExportLumpDbPath)}
+                onchange={e => applySelectedLumpOption('tv', (e.currentTarget as HTMLSelectElement).value)}
+                disabled={busy || operationHeld}
+              >
+                <option value="">None (raw unlumped species)</option>
+                {#each discoveredLumpTables as item (item.tableName + '::' + item.databasePath)}
+                  <option value={lumpOptionValue(item, discoveredLumpTables)}>{formatLumpOptionLabel(item)}</option>
+                {/each}
+              </select>
+              <button
+                type="button"
+                class="btn-secondary"
+                data-browse-lump-db="turboveg"
+                disabled={busy || operationHeld}
+                onclick={() => void browseExternalLumpDatabase('tv')}
+              >
+                From .db…
+              </button>
+            </div>
           </label>
           <button type="button" class="btn-primary" disabled={busy || operationHeld || !contextId} onclick={runTurboVegExport}>
             Export TurboVeg
@@ -913,7 +1131,29 @@
         <h3>Long Tidy CSV &amp; Wide Plot-by-Species Matrix CSV</h3>
         <label class="field-label-block">
           <span>Optional *_Lump Table Applied at Export Time</span>
-          <input type="text" bind:value={csvLumpTable} placeholder="None" disabled={busy || operationHeld} />
+          <div class="input-with-browse">
+            <select
+              class="grow"
+              data-lump-select="analytics"
+              value={selectedLumpOptionKey(csvLumpTable, csvLumpDbPath)}
+              onchange={e => applySelectedLumpOption('csv', (e.currentTarget as HTMLSelectElement).value)}
+              disabled={busy || operationHeld}
+            >
+              <option value="">None (raw unlumped species)</option>
+              {#each discoveredLumpTables as item (item.tableName + '::' + item.databasePath)}
+                <option value={lumpOptionValue(item, discoveredLumpTables)}>{formatLumpOptionLabel(item)}</option>
+              {/each}
+            </select>
+            <button
+              type="button"
+              class="btn-secondary"
+              data-browse-lump-db="analytics"
+              disabled={busy || operationHeld}
+              onclick={() => void browseExternalLumpDatabase('csv')}
+            >
+              From .db…
+            </button>
+          </div>
         </label>
 
         <div class="sub-box">
@@ -968,6 +1208,20 @@
         <h3>Native R Serialization Format v2 (.rds) Export</h3>
         <p class="desc">Exports project tables (<code>env</code>, <code>admin</code>, <code>veg_long</code>, <code>humus</code>, <code>mineral</code>, <code>su</code>, <code>metadata</code>) as an .rds file ready for <code>readRDS()</code> in R, without requiring R to be installed.</p>
         <div class="form-stack">
+          <label>
+            <span>Optional *_Lump Table Applied to veg_long</span>
+            <select
+              data-lump-select="rds"
+              value={selectedLumpOptionKey(csvLumpTable, csvLumpDbPath)}
+              onchange={e => applySelectedLumpOption('csv', (e.currentTarget as HTMLSelectElement).value)}
+              disabled={busy || operationHeld}
+            >
+              <option value="">None (raw unlumped species)</option>
+              {#each discoveredLumpTables as item (item.tableName + '::' + item.databasePath)}
+                <option value={lumpOptionValue(item, discoveredLumpTables)}>{formatLumpOptionLabel(item)}</option>
+              {/each}
+            </select>
+          </label>
           <label>
             <span>Destination .rds Path</span>
             <div class="input-with-browse">
@@ -1026,9 +1280,31 @@
           <input type="checkbox" bind:checked={gpkgIncludeUnlocated} disabled={busy || operationHeld} />
           <span>Include unlocated plots (NULL geometry)</span>
         </label>
-        <label>
+        <label class="grow">
           <span>Optional *_Lump Table</span>
-          <input type="text" bind:value={gpkgLumpTable} placeholder="None" disabled={busy || operationHeld} />
+          <div class="input-with-browse">
+            <select
+              class="grow"
+              data-lump-select="geopackage"
+              value={selectedLumpOptionKey(gpkgLumpTable, gpkgLumpDbPath)}
+              onchange={e => applySelectedLumpOption('gpkg', (e.currentTarget as HTMLSelectElement).value)}
+              disabled={busy || operationHeld}
+            >
+              <option value="">None (raw unlumped species)</option>
+              {#each discoveredLumpTables as item (item.tableName + '::' + item.databasePath)}
+                <option value={lumpOptionValue(item, discoveredLumpTables)}>{formatLumpOptionLabel(item)}</option>
+              {/each}
+            </select>
+            <button
+              type="button"
+              class="btn-secondary"
+              data-browse-lump-db="geopackage"
+              disabled={busy || operationHeld}
+              onclick={() => void browseExternalLumpDatabase('gpkg')}
+            >
+              From .db…
+            </button>
+          </div>
         </label>
         <button type="button" class="btn-primary" disabled={busy || operationHeld || !contextId} onclick={runGeoPackageExport}>
           Export GeoPackage (.gpkg)

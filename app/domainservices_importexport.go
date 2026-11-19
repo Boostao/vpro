@@ -2,12 +2,97 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
+	"os"
+	"regexp"
+	"strings"
 
 	"github.com/boostao/vpro/app/internal/interchange"
 	"github.com/boostao/vpro/app/internal/lumping"
 	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
+
+func registerImportExportEvent(eventName string) {
+	application.RegisterEvent[interchange.AccessImportProgress](eventName)
+}
+
+func init() {
+	registerImportExportEvent(interchange.AccessImportProgressEvent)
+}
+
+func emitWailsAccessImportProgress(progress interchange.AccessImportProgress) {
+	if app := application.Get(); app != nil && app.Event != nil {
+		_ = app.Event.Emit(interchange.AccessImportProgressEvent, progress)
+	}
+}
+
+func withWailsAccessImportProgress(ctx context.Context, contextID, operation string) context.Context {
+	return interchange.WithAccessImportProgress(ctx, contextID, operation, emitWailsAccessImportProgress)
+}
+
+var (
+	xmlLineNumberPattern = regexp.MustCompile(`XML syntax error on line (\d+)`)
+	rawSyscallPattern    = regexp.MustCompile(`(?i)\b(?:lstat|stat|open|CreateFile|GetFileAttributesEx)\s+[^:]+:\s*`)
+)
+
+func sanitizeImportExportError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	msg := strings.TrimSpace(err.Error())
+	switch {
+	case strings.Contains(msg, "picture selection"),
+		strings.Contains(msg, "file dialogs not available in server mode"):
+		return errors.New("file selection requires an active desktop window; enter a file path directly when running in a browser")
+	case strings.Contains(msg, "database disk image is malformed"),
+		strings.Contains(msg, "file is not a database"):
+		return errors.New("the selected database file is damaged, incomplete, or not a valid SQLite file")
+	case strings.Contains(msg, "Access source read error"),
+		strings.Contains(msg, "cannot read Access catalog"),
+		strings.Contains(msg, "cannot reopen Access database"):
+		return errors.New("the selected Access file could not be read; it may be incomplete, damaged, or in an unsupported format")
+	case strings.Contains(msg, "XML syntax error"):
+		if m := xmlLineNumberPattern.FindStringSubmatch(msg); len(m) == 2 {
+			return fmt.Errorf("the selected XML file is incomplete or contains invalid XML formatting on line %s", m[1])
+		}
+		return errors.New("the selected XML file is incomplete or contains invalid XML formatting")
+	case strings.Contains(msg, "unexpected EOF"):
+		return errors.New("the selected file ended unexpectedly and appears incomplete or truncated")
+	}
+	if errors.Is(err, sql.ErrNoRows) || strings.Contains(msg, "sql: no rows in result set") {
+		cleaned := strings.TrimSpace(strings.ReplaceAll(msg, ": sql: no rows in result set", ""))
+		cleaned = strings.TrimSpace(strings.ReplaceAll(cleaned, "sql: no rows in result set", ""))
+		if cleaned != "" {
+			return errors.New(cleaned)
+		}
+		return errors.New("the requested record or table was not found")
+	}
+	if errors.Is(err, os.ErrNotExist) || strings.Contains(strings.ToLower(msg), "no such file or directory") || strings.Contains(strings.ToLower(msg), "cannot find the file") {
+		if rawSyscallPattern.MatchString(msg) {
+			return errors.New("the selected file or folder was not found; check the path and try again")
+		}
+		return errors.New(msg)
+	}
+	if errors.Is(err, os.ErrPermission) || strings.Contains(strings.ToLower(msg), "permission denied") || strings.Contains(strings.ToLower(msg), "access is denied") {
+		if rawSyscallPattern.MatchString(msg) {
+			return errors.New("VPro does not have permission to read or write the selected file path")
+		}
+		return errors.New(msg)
+	}
+	if rawSyscallPattern.MatchString(msg) {
+		cleaned := strings.TrimSpace(rawSyscallPattern.ReplaceAllString(msg, ""))
+		if cleaned != "" {
+			return errors.New(cleaned)
+		}
+	}
+	return err
+}
 
 type ImportExportService struct {
 	runtime           *runtimeShutdownTracker
@@ -63,12 +148,13 @@ func (s *ImportExportService) ChooseAccessDatabaseFile(ctx context.Context, cont
 	if s == nil || s.contexts == nil {
 		return "", errors.New("import/export context is unavailable")
 	}
-	return s.contexts.ChooseAccessDatabaseFile(ctx, contextID)
+	chosen, err := s.contexts.ChooseAccessDatabaseFile(ctx, contextID)
+	return chosen, sanitizeImportExportError(err)
 }
 
 // ChooseTableCSVArchiveFile opens a native OS save-file dialog for the project table CSV ZIP archive.
 func (s *ImportExportService) ChooseTableCSVArchiveFile(ctx context.Context) (string, error) {
-	return vprocorepkg.ChooseNativeSaveFile(
+	chosen, err := vprocorepkg.ChooseNativeSaveFile(
 		ctx,
 		"Select project table CSV archive destination",
 		"project-tables.zip",
@@ -76,6 +162,7 @@ func (s *ImportExportService) ChooseTableCSVArchiveFile(ctx context.Context) (st
 		"Project table CSV archive (.zip)",
 		"*.zip",
 	)
+	return chosen, sanitizeImportExportError(err)
 }
 
 func (s *ImportExportService) InspectAccessDatabase(ctx context.Context, contextID, sourcePath string) (AccessDatabaseInspection, error) {
@@ -84,7 +171,8 @@ func (s *ImportExportService) InspectAccessDatabase(ctx context.Context, context
 	if s == nil || s.contexts == nil {
 		return AccessDatabaseInspection{}, errors.New("import/export context is unavailable")
 	}
-	return s.contexts.InspectAccessDatabase(ctx, contextID, sourcePath)
+	res, err := s.contexts.InspectAccessDatabase(withWailsAccessImportProgress(ctx, contextID, "inspect"), contextID, sourcePath)
+	return res, sanitizeImportExportError(err)
 }
 
 func (s *ImportExportService) ImportAccessProject(ctx context.Context, contextID string, request AccessProjectImportRequest) (AccessProjectImportResult, error) {
@@ -93,7 +181,15 @@ func (s *ImportExportService) ImportAccessProject(ctx context.Context, contextID
 	if s == nil || s.contexts == nil {
 		return AccessProjectImportResult{}, errors.New("import/export context is unavailable")
 	}
-	return s.contexts.ImportAccessProject(ctx, contextID, request)
+	progressCtx := withWailsAccessImportProgress(ctx, contextID, "import")
+	emitWailsAccessImportProgress(interchange.AccessImportProgress{
+		ContextID: contextID,
+		Operation: "import",
+		Phase:     "starting",
+		Message:   "Preparing destination file and verifying Access database…",
+	})
+	res, err := s.contexts.ImportAccessProject(progressCtx, contextID, request)
+	return res, sanitizeImportExportError(err)
 }
 
 func (s *ImportExportService) GetProjectTableCSVReview(ctx context.Context, contextID, table string) (*ProjectTableCSVReview, error) {
@@ -290,7 +386,8 @@ func (s *ImportExportService) InspectVenusSource(ctx context.Context, contextID,
 	if s == nil || unwrapContextService(s.contexts) == nil {
 		return interchange.VenusSourceInspection{}, errors.New("import/export context is unavailable")
 	}
-	return interchange.InspectVenusSource(unwrapContextService(s.contexts), ctx, contextID, sourcePath)
+	res, err := interchange.InspectVenusSource(unwrapContextService(s.contexts), ctx, contextID, sourcePath)
+	return res, sanitizeImportExportError(err)
 }
 
 func (s *ImportExportService) ImportVenusProject(ctx context.Context, contextID string, request interchange.VenusImportRequest) (interchange.VenusImportResult, error) {
@@ -299,7 +396,8 @@ func (s *ImportExportService) ImportVenusProject(ctx context.Context, contextID 
 	if s == nil || unwrapContextService(s.contexts) == nil {
 		return interchange.VenusImportResult{}, errors.New("import/export context is unavailable")
 	}
-	return interchange.ImportVenusProject(unwrapContextService(s.contexts), ctx, contextID, request)
+	res, err := interchange.ImportVenusProject(unwrapContextService(s.contexts), ctx, contextID, request)
+	return res, sanitizeImportExportError(err)
 }
 
 // Official Alterra Turboveg 3 (31-table .sqlite) & <Plot_package> Standard XML Importer/Exporter
@@ -310,7 +408,8 @@ func (s *ImportExportService) ExportTurboVeg(ctx context.Context, contextID stri
 	if s == nil || unwrapContextService(s.contexts) == nil {
 		return interchange.TurboVegExportOutcome{}, errors.New("import/export context is unavailable")
 	}
-	return interchange.ExportTurboVeg(unwrapContextService(s.contexts), ctx, contextID, request)
+	res, err := interchange.ExportTurboVeg(unwrapContextService(s.contexts), ctx, contextID, request)
+	return res, sanitizeImportExportError(err)
 }
 
 func (s *ImportExportService) ImportTurboVeg(ctx context.Context, contextID string, request interchange.TurboVegImportRequest) (interchange.TurboVegImportOutcome, error) {
@@ -319,7 +418,8 @@ func (s *ImportExportService) ImportTurboVeg(ctx context.Context, contextID stri
 	if s == nil || unwrapContextService(s.contexts) == nil {
 		return interchange.TurboVegImportOutcome{}, errors.New("import/export context is unavailable")
 	}
-	return interchange.ImportTurboVeg(unwrapContextService(s.contexts), ctx, contextID, request)
+	res, err := interchange.ImportTurboVeg(unwrapContextService(s.contexts), ctx, contextID, request)
+	return res, sanitizeImportExportError(err)
 }
 
 // User Species List (VUser.USysUserSpp) Export & Import
@@ -330,7 +430,8 @@ func (s *ImportExportService) ExportUserSpeciesList(ctx context.Context, context
 	if s == nil || unwrapContextService(s.contexts) == nil {
 		return interchange.UserSpeciesExportResult{}, errors.New("import/export context is unavailable")
 	}
-	return interchange.ExportUserSpeciesList(unwrapContextService(s.contexts), ctx, contextID, request)
+	res, err := interchange.ExportUserSpeciesList(unwrapContextService(s.contexts), ctx, contextID, request)
+	return res, sanitizeImportExportError(err)
 }
 
 func (s *ImportExportService) PreviewUserSpeciesImport(ctx context.Context, contextID string, request interchange.UserSpeciesImportRequest) (interchange.UserSpeciesImportPreview, error) {
@@ -339,7 +440,8 @@ func (s *ImportExportService) PreviewUserSpeciesImport(ctx context.Context, cont
 	if s == nil || unwrapContextService(s.contexts) == nil {
 		return interchange.UserSpeciesImportPreview{}, errors.New("import/export context is unavailable")
 	}
-	return interchange.PreviewUserSpeciesImport(unwrapContextService(s.contexts), ctx, contextID, request)
+	res, err := interchange.PreviewUserSpeciesImport(unwrapContextService(s.contexts), ctx, contextID, request)
+	return res, sanitizeImportExportError(err)
 }
 
 func (s *ImportExportService) ImportUserSpeciesList(ctx context.Context, contextID string, request interchange.UserSpeciesImportRequest) (interchange.UserSpeciesImportResult, error) {
@@ -348,7 +450,8 @@ func (s *ImportExportService) ImportUserSpeciesList(ctx context.Context, context
 	if s == nil || unwrapContextService(s.contexts) == nil {
 		return interchange.UserSpeciesImportResult{}, errors.New("import/export context is unavailable")
 	}
-	return interchange.ImportUserSpeciesList(unwrapContextService(s.contexts), ctx, contextID, request)
+	res, err := interchange.ImportUserSpeciesList(unwrapContextService(s.contexts), ctx, contextID, request)
+	return res, sanitizeImportExportError(err)
 }
 
 // Long Tidy CSV, Wide Plot-by-Species Matrix CSV & R .rds Exporter
@@ -359,7 +462,8 @@ func (s *ImportExportService) ExportLongTidyCSV(ctx context.Context, contextID s
 	if s == nil || unwrapContextService(s.contexts) == nil {
 		return interchange.CSVExportOutcome{}, errors.New("import/export context is unavailable")
 	}
-	return interchange.ExportLongTidyCSV(unwrapContextService(s.contexts), ctx, contextID, request)
+	res, err := interchange.ExportLongTidyCSV(unwrapContextService(s.contexts), ctx, contextID, request)
+	return res, sanitizeImportExportError(err)
 }
 
 func (s *ImportExportService) ExportWideMatrixCSV(ctx context.Context, contextID string, request interchange.WideMatrixCSVRequest) (interchange.CSVExportOutcome, error) {
@@ -368,7 +472,8 @@ func (s *ImportExportService) ExportWideMatrixCSV(ctx context.Context, contextID
 	if s == nil || unwrapContextService(s.contexts) == nil {
 		return interchange.CSVExportOutcome{}, errors.New("import/export context is unavailable")
 	}
-	return interchange.ExportWideMatrixCSV(unwrapContextService(s.contexts), ctx, contextID, request)
+	res, err := interchange.ExportWideMatrixCSV(unwrapContextService(s.contexts), ctx, contextID, request)
+	return res, sanitizeImportExportError(err)
 }
 
 func (s *ImportExportService) ExportProjectRDS(ctx context.Context, contextID string, request interchange.RDSExportRequest) (interchange.RDSExportOutcome, error) {
@@ -377,7 +482,8 @@ func (s *ImportExportService) ExportProjectRDS(ctx context.Context, contextID st
 	if s == nil || unwrapContextService(s.contexts) == nil {
 		return interchange.RDSExportOutcome{}, errors.New("import/export context is unavailable")
 	}
-	return interchange.ExportProjectRDS(unwrapContextService(s.contexts), ctx, contextID, request)
+	res, err := interchange.ExportProjectRDS(unwrapContextService(s.contexts), ctx, contextID, request)
+	return res, sanitizeImportExportError(err)
 }
 
 // OGC GeoPackage (.gpkg) EPSG:3005 / EPSG:4326 Exporter
@@ -388,5 +494,6 @@ func (s *ImportExportService) ExportGeoPackage(ctx context.Context, contextID st
 	if s == nil || unwrapContextService(s.contexts) == nil {
 		return interchange.GeoPackageExportOutcome{}, errors.New("import/export context is unavailable")
 	}
-	return interchange.ExportGeoPackage(unwrapContextService(s.contexts), ctx, contextID, request)
+	res, err := interchange.ExportGeoPackage(unwrapContextService(s.contexts), ctx, contextID, request)
+	return res, sanitizeImportExportError(err)
 }

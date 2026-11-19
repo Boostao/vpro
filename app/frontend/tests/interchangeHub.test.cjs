@@ -408,3 +408,222 @@ test('InterchangeHub cancelOperation invokes Wails promise .cancel(), suppresses
   assert.equal(notifications.getSnapshot().entries.length, 0);
   assert.equal(busyTransitions.at(-1), false);
 });
+
+test('InterchangeHub plain-language error formatting strips RuntimeError, lstat syscalls, SQLite jargon, and picture selection (UX-IMPORT-003)', () => {
+  assert.doesNotMatch(
+    hub.formatInterchangeError(
+      'RuntimeError: resolve Access database "/tmp/does_not_exist.accdb": lstat /tmp/does_not_exist.accdb: no such file or directory'
+    ),
+    /RuntimeError|lstat|no such file or directory/
+  );
+  assert.match(
+    hub.formatInterchangeError('RuntimeError: picture selection requires its live native request window'),
+    /File selection requires an active desktop window/
+  );
+  assert.match(
+    hub.formatInterchangeError('RuntimeError: database disk image is malformed'),
+    /damaged, incomplete, or not a valid SQLite file/
+  );
+  assert.match(
+    hub.formatInterchangeError('RuntimeError: decode <Plot> #1: XML syntax error on line 1: unexpected EOF'),
+    /invalid XML formatting on line 1/
+  );
+  assert.doesNotMatch(
+    hub.formatInterchangeError('RuntimeError: lump table Missing_Lump not found: sql: no rows in result set'),
+    /RuntimeError|sql: no rows in result set/
+  );
+
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const host = componentFunctions('InterchangeHub.svelte', ['pushHubError'], {
+    error: '',
+    notifications,
+  });
+  host.actions.pushHubError(
+    'TurboVeg import failed',
+    'RuntimeError: decode <Plot> #1: XML syntax error on line 1: unexpected EOF'
+  );
+  assert.doesNotMatch(host.error, /RuntimeError|unexpected EOF/);
+  assert.match(host.error, /invalid XML formatting on line 1/);
+  assert.equal(notifications.getSnapshot().entries[0].message, host.error);
+});
+
+test('InterchangeHub replaces free-text lump inputs with discovered *_Lump selectors and passes cross-DB lumpDbPath (UX-IMPORT-004)', async () => {
+  const source = readFileSync(srcPath('InterchangeHub.svelte'), 'utf8');
+  assert.doesNotMatch(source, /<input[^>]*bind:value=\{(?:tvExportLump|csvLumpTable|gpkgLumpTable)\}/);
+  assert.match(source, /data-lump-select="turboveg"/);
+  assert.match(source, /data-lump-select="analytics"/);
+  assert.match(source, /data-lump-select="rds"/);
+  assert.match(source, /data-lump-select="geopackage"/);
+  assert.match(source, /None \(raw unlumped species\)/);
+
+  calls.length = 0;
+  await hub.defaultInterchangeHubPort.discoverLumpTables('ctx-lump', ['/tmp/External.db']);
+  assert.equal(calls[0][0], 'main.ImportExportService.DiscoverLumpTables');
+  assert.equal(calls[0][1], 'ctx-lump');
+  assert.deepEqual(calls[0][2], ['/tmp/External.db']);
+
+  const discoveredFixture = [
+    {
+      name: 'EdgeCaseQA',
+      tableName: 'EdgeCaseQA_Lump',
+      databasePath: '/data/projects/EdgeCaseQA.db',
+      isActiveProject: true,
+      metadataVersion: 'VP05',
+      rowCount: 18,
+      activeCount: 15,
+      distinctLumpCodes: 9,
+    },
+    {
+      name: 'Sample',
+      tableName: 'Sample_Lump',
+      databasePath: '/data/projects/Sample.db',
+      isActiveProject: false,
+      metadataVersion: 'VP05',
+      rowCount: 24,
+      activeCount: 20,
+      distinctLumpCodes: 11,
+    },
+  ];
+
+  const exportPayloads = [];
+  const host = componentFunctions(
+    'InterchangeHub.svelte',
+    [
+      'lumpDatabaseBaseName',
+      'lumpOptionValue',
+      'formatLumpOptionLabel',
+      'selectedLumpOptionKey',
+      'applySelectedLumpOption',
+      'refreshDiscoveredLumpTables',
+      'browseExternalLumpDatabase',
+      'pickFilePath',
+      'pushHubError',
+      'setBusy',
+      'runLongCsvExport',
+      'runWideCsvExport',
+      'runRdsExport',
+      'runTurboVegExport',
+      'runGeoPackageExport',
+    ],
+    {
+      $state: { snapshot: (v) => structuredClone(v) },
+      defaultInterchangeHubPort: hub.defaultInterchangeHubPort,
+      contextId: 'ctx-lump',
+      busy: false,
+      operationHeld: false,
+      error: '',
+      generation: 0,
+      lumpDiscoveryGen: 0,
+      discoveredLumpTables: [],
+      externalLumpDbPaths: [],
+      tvExportFormat: 'sqlite',
+      tvExportPath: '/tmp/out.sqlite',
+      tvExportLump: '',
+      tvExportLumpDbPath: '',
+      tvExportOutcome: null,
+      csvLumpTable: '',
+      csvLumpDbPath: '',
+      longCsvDest: '/tmp/long.csv',
+      wideCsvDest: '/tmp/wide.csv',
+      wideLayerMode: 'rollup_all',
+      wideZeroFill: true,
+      wideIncludeSiteUnit: true,
+      csvOutcome: null,
+      rdsDestPath: '/tmp/out.rds',
+      rdsOutcome: null,
+      gpkgDestPath: '/tmp/out.gpkg',
+      gpkgCrs: 'EPSG:3005',
+      gpkgIncludeAttributes: true,
+      gpkgIncludeUnlocated: false,
+      gpkgLumpTable: '',
+      gpkgLumpDbPath: '',
+      gpkgOutcome: null,
+      onBusyChange() {},
+      port: {
+        discoverLumpTables: async (_cid, extras) =>
+          extras && extras.includes('/ext/Regional.db')
+            ? [
+                ...discoveredFixture,
+                {
+                  name: 'Regional2026',
+                  tableName: 'Regional2026_Lump',
+                  databasePath: '/ext/Regional.db',
+                  isActiveProject: false,
+                  metadataVersion: 'VP05',
+                  rowCount: 8,
+                  activeCount: 8,
+                  distinctLumpCodes: 4,
+                },
+              ]
+            : discoveredFixture,
+        chooseOpenFile: async () => '/ext/Regional.db',
+        exportLongTidyCSV: async (_cid, req) => {
+          exportPayloads.push(['long', req]);
+          return { mode: 'long_tidy', rowCount: 1, plotCount: 1, speciesCount: 1, columnCount: 9, sha256: 'x', previewCsv: '' };
+        },
+        exportWideMatrixCSV: async (_cid, req) => {
+          exportPayloads.push(['wide', req]);
+          return { mode: 'wide_matrix', rowCount: 1, plotCount: 1, speciesCount: 1, columnCount: 2, sha256: 'x', previewCsv: '' };
+        },
+        exportProjectRDS: async (_cid, req) => {
+          exportPayloads.push(['rds', req]);
+          return { path: '/tmp/out.rds', sha256: 'x', byteSize: 10, plotCount: 1, tables: [] };
+        },
+        exportTurboVeg: async (_cid, req) => {
+          exportPayloads.push(['tv', req]);
+          return { format: 'sqlite', path: '/tmp/out.sqlite', sha256: 'x', plotCount: 1, speciesCount: 1, observationCount: 1 };
+        },
+        exportGeoPackage: async (_cid, req) => {
+          exportPayloads.push(['gpkg', req]);
+          return {
+            path: '/tmp/out.gpkg',
+            sha256: 'x',
+            crs: 'EPSG:3005',
+            srsId: 3005,
+            featureCount: 1,
+            locatedPlotCount: 1,
+            skippedUnlocatedCount: 0,
+            normalizedWestLongitudes: 0,
+            attributeTables: ['veg'],
+          };
+        },
+      },
+    }
+  );
+
+  await host.actions.refreshDiscoveredLumpTables();
+  assert.equal(host.discoveredLumpTables.length, 2);
+  assert.equal(host.actions.formatLumpOptionLabel(host.discoveredLumpTables[0]), 'EdgeCaseQA_Lump (15 active rules)');
+  assert.equal(host.actions.formatLumpOptionLabel(host.discoveredLumpTables[1]), 'Sample_Lump (Sample.db · 20 active rules)');
+
+  // Selecting Sample_Lump while EdgeCaseQA is active populates both lumpTable and lumpDbPath across exports!
+  host.actions.applySelectedLumpOption('csv', 'Sample_Lump');
+  host.actions.applySelectedLumpOption('tv', 'Sample_Lump');
+  host.actions.applySelectedLumpOption('gpkg', 'EdgeCaseQA_Lump');
+  assert.equal(host.csvLumpTable, 'Sample_Lump');
+  assert.equal(host.csvLumpDbPath, '/data/projects/Sample.db');
+  assert.equal(host.gpkgLumpTable, 'EdgeCaseQA_Lump');
+  assert.equal(host.gpkgLumpDbPath, '');
+
+  await host.actions.runLongCsvExport();
+  await host.actions.runWideCsvExport();
+  await host.actions.runRdsExport();
+  await host.actions.runTurboVegExport();
+  await host.actions.runGeoPackageExport();
+
+  assert.equal(exportPayloads[0][1].lumpTable, 'Sample_Lump');
+  assert.equal(exportPayloads[0][1].lumpDbPath, '/data/projects/Sample.db');
+  assert.equal(exportPayloads[1][1].lumpDbPath, '/data/projects/Sample.db');
+  assert.equal(exportPayloads[2][1].lumpDbPath, '/data/projects/Sample.db');
+  assert.equal(exportPayloads[3][1].lumpDbPath, '/data/projects/Sample.db');
+  assert.equal(exportPayloads[4][1].lumpTable, 'EdgeCaseQA_Lump');
+  assert.equal('lumpDbPath' in exportPayloads[4][1], false);
+
+  // Attaching an external .db via From .db... discovers and selects its lump table automatically.
+  await host.actions.browseExternalLumpDatabase('gpkg');
+  assert.equal(host.gpkgLumpTable, 'Regional2026_Lump');
+  assert.equal(host.gpkgLumpDbPath, '/ext/Regional.db');
+});
