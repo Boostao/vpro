@@ -123,10 +123,11 @@ func levelToRankName(level int64, tag string) string {
 
 func SplitBreakpointPrefix(name string) (clean string, isBreak bool) {
 	trimmed := strings.TrimSpace(name)
-	if strings.HasPrefix(trimmed, "~") {
-		return strings.TrimSpace(strings.TrimLeft(trimmed, "~")), true
+	for strings.HasPrefix(trimmed, "~") {
+		isBreak = true
+		trimmed = strings.TrimSpace(strings.TrimLeft(trimmed, "~"))
 	}
-	return trimmed, false
+	return trimmed, isBreak
 }
 
 type rawHierarchyRecord struct {
@@ -186,6 +187,35 @@ func DetectHierarchyCyclesAndOrphans(records []rawHierarchyRecord) (cycleIDs []i
 	return cycleIDs, orphanIDs, blankCount
 }
 
+func effectiveCycleEntryRank(level int64) int64 {
+	if level >= 1 && level <= 11 {
+		return level
+	}
+	return 12
+}
+
+func compareCycleEntryCandidate(a, b rawHierarchyRecord) int {
+	la, lb := effectiveCycleEntryRank(a.level), effectiveCycleEntryRank(b.level)
+	if la != lb {
+		if la < lb {
+			return -1
+		}
+		return 1
+	}
+	ca, _ := SplitBreakpointPrefix(a.name)
+	cb, _ := SplitBreakpointPrefix(b.name)
+	if cmp := strings.Compare(strings.ToLower(ca), strings.ToLower(cb)); cmp != 0 {
+		return cmp
+	}
+	if a.id < b.id {
+		return -1
+	}
+	if a.id > b.id {
+		return 1
+	}
+	return 0
+}
+
 func buildHierarchyTreeAndFlatRows(records []rawHierarchyRecord) ([]HierarchyExplorerNode, []HierarchyExplorerNode, []FlatHierarchyRow, HierarchyDiagnostics) {
 	cycles, orphans, blanks := DetectHierarchyCyclesAndOrphans(records)
 	cycleSet := map[int64]bool{}
@@ -220,11 +250,43 @@ func buildHierarchyTreeAndFlatRows(records []rawHierarchyRecord) ([]HierarchyExp
 		return 0
 	})
 
+	// Partition existing parent cycles into disjoint directed cycles and promote one
+	// deterministic entry node per cycle to root so cyclic nodes remain visible and repairable.
+	cycleRootSet := map[int64]bool{}
+	visitedCycleNodes := map[int64]bool{}
 	for _, r := range sortedRecords {
-		if cycleSet[r.id] {
+		if !cycleSet[r.id] || visitedCycleNodes[r.id] {
 			continue
 		}
-		if r.parent == nil {
+		var members []rawHierarchyRecord
+		currID := r.id
+		for !visitedCycleNodes[currID] {
+			visitedCycleNodes[currID] = true
+			rec, ok := byID[currID]
+			if !ok {
+				break
+			}
+			members = append(members, rec)
+			if rec.parent == nil || !cycleSet[*rec.parent] {
+				break
+			}
+			currID = *rec.parent
+		}
+		if len(members) > 0 {
+			best := members[0]
+			for _, cand := range members[1:] {
+				if compareCycleEntryCandidate(cand, best) < 0 {
+					best = cand
+				}
+			}
+			cycleRootSet[best.id] = true
+		}
+	}
+
+	for _, r := range sortedRecords {
+		if cycleRootSet[r.id] {
+			rootsRaw = append(rootsRaw, r) // surface broken-cycle entry at root so cyclic branches remain inspectable/repairable
+		} else if r.parent == nil {
 			rootsRaw = append(rootsRaw, r)
 		} else if _, exists := byID[*r.parent]; !exists {
 			rootsRaw = append(rootsRaw, r) // surface orphan at root so it remains inspectable/repairable
@@ -246,7 +308,13 @@ func buildHierarchyTreeAndFlatRows(records []rawHierarchyRecord) ([]HierarchyExp
 		rank := levelToRankName(lvl, rec.tag)
 		nextChain := append(slices.Clone(chain), rec)
 
-		kidsRaw := childrenByParent[rec.id]
+		var kidsRaw []rawHierarchyRecord
+		for _, child := range childrenByParent[rec.id] {
+			if slices.ContainsFunc(nextChain, func(prev rawHierarchyRecord) bool { return prev.id == child.id }) {
+				continue
+			}
+			kidsRaw = append(kidsRaw, child)
+		}
 		node := HierarchyExplorerNode{
 			ID:           rec.id,
 			Name:         rec.name,

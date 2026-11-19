@@ -413,3 +413,238 @@ test('UX-CLASS-001: Sample_Hierarchy ClassA/ClassB rows validate cleanly and enf
     /255 UTF-16 code units/
   );
 });
+
+test('UX-CLASS-005: ClassificationLeftTreePane surfaces cyclic hierarchy nodes with warning banner, Cycle badges, and Root reparent default', async () => {
+  const leftPaneSource = readFileSync(srcPath('ClassificationLeftTreePane.svelte'), 'utf8');
+  assert.equal(/\p{Extended_Pictographic}/u.test(leftPaneSource), false, 'ClassificationLeftTreePane must contain zero emojis');
+
+  const LeftPane = serverComponent(leftPaneSource, 'ClassificationLeftTreePane.svelte', {
+    './classificationExplorer': cls,
+  });
+
+  const cycleHierarchyView = {
+    contextId: 'ctx-cycle',
+    project: 'Sample',
+    hierarchy: 'QA_CycleHier',
+    hierarchyPath: '/Sample.db',
+    tableName: 'QA_CycleHier_Hierarchy',
+    roots: [
+      {
+        id: 1,
+        name: 'CycleA',
+        cleanName: 'CycleA',
+        parent: 2,
+        level: 2,
+        rankName: 'Class',
+        isBreakpoint: false,
+        depth: 0,
+        children: [
+          {
+            id: 2,
+            name: 'CycleB',
+            cleanName: 'CycleB',
+            parent: 1,
+            level: 4,
+            rankName: 'Order',
+            isBreakpoint: false,
+            depth: 1,
+            children: [],
+          },
+        ],
+      },
+      {
+        id: 3,
+        name: 'SelfCycle',
+        cleanName: 'SelfCycle',
+        parent: 3,
+        level: 6,
+        rankName: 'Alliance',
+        isBreakpoint: false,
+        depth: 0,
+        children: [],
+      },
+      {
+        id: 4,
+        name: 'ValidRoot',
+        cleanName: 'ValidRoot',
+        parent: null,
+        level: 2,
+        rankName: 'Class',
+        isBreakpoint: false,
+        depth: 0,
+        children: [
+          {
+            id: 5,
+            name: 'ValidLeaf',
+            cleanName: 'ValidLeaf',
+            parent: 4,
+            level: 11,
+            rankName: 'SiteSeries',
+            isBreakpoint: false,
+            depth: 1,
+            children: [],
+          },
+        ],
+      },
+    ],
+    flatNodes: [
+      { id: 1, name: 'CycleA', cleanName: 'CycleA', parent: 2, level: 2, rankName: 'Class', isBreakpoint: false, depth: 0, children: [] },
+      { id: 2, name: 'CycleB', cleanName: 'CycleB', parent: 1, level: 4, rankName: 'Order', isBreakpoint: false, depth: 1, children: [] },
+      { id: 3, name: 'SelfCycle', cleanName: 'SelfCycle', parent: 3, level: 6, rankName: 'Alliance', isBreakpoint: false, depth: 0, children: [] },
+      { id: 4, name: 'ValidRoot', cleanName: 'ValidRoot', parent: null, level: 2, rankName: 'Class', isBreakpoint: false, depth: 0, children: [] },
+      { id: 5, name: 'ValidLeaf', cleanName: 'ValidLeaf', parent: 4, level: 11, rankName: 'SiteSeries', isBreakpoint: false, depth: 1, children: [] },
+    ],
+    flatRankRows: [],
+    diagnostics: {
+      totalNodes: 5,
+      rootNodes: 3,
+      breakpointNodes: 0,
+      blankNameNodes: 0,
+      orphanNodes: [],
+      cycleNodeIds: [1, 2, 3],
+    },
+  };
+
+  const flatItems = cls.flattenVisibleHierarchyTree(cycleHierarchyView.roots, new Set([1, 2, 3, 4]));
+  assert.deepEqual(
+    plain(flatItems.map(i => i.name)),
+    ['CycleA', 'CycleB', 'SelfCycle', 'ValidRoot', 'ValidLeaf']
+  );
+
+  const rendered = render(LeftPane, {
+    props: {
+      mode: 'hierarchy_tree',
+      treeRowHeight: 34,
+      suFilterText: '',
+      suTree: null,
+      flatSUItems: [],
+      suVirtualSlice: { startIndex: 0, endIndex: 0, topSpacerPx: 0, bottomSpacerPx: 0 },
+      visibleSUItems: [],
+      selectedPlots: [],
+      lastHistoryId: 0,
+      hierarchyView: cycleHierarchyView,
+      flatHierarchyItems: flatItems,
+      hierVirtualSlice: { startIndex: 0, endIndex: flatItems.length, topSpacerPx: 0, bottomSpacerPx: 0 },
+      visibleHierarchyItems: flatItems,
+      selectedHierarchyNodeId: 1,
+      expandedHierarchyIds: [1, 2, 3, 4],
+      treeScrollTop: 0,
+      treeViewportHeight: 480,
+      mutating: false,
+      onLoadSUTree: () => {},
+      onOpenDialog: () => {},
+      onUndoLast: () => {},
+      onToggleSUExpand: () => {},
+      onPlotClick: () => {},
+      onPlotDragStart: () => {},
+      onBucketDrop: () => {},
+      onAssignPlots: () => {},
+      onToggleHierarchyExpand: () => {},
+      onSelectHierarchyNode: () => {},
+      onToggleBreak: () => {},
+    },
+  });
+
+  assert.match(rendered.body, /data-hierarchy-cycle-banner/);
+  assert.match(rendered.body, /Parent cycle detected \(3 nodes\)/);
+  assert.match(rendered.body, /CycleA \(#1\)/);
+  assert.match(rendered.body, /CycleB \(#2\)/);
+  assert.match(rendered.body, /SelfCycle \(#3\)/);
+  assert.equal((rendered.body.match(/data-hierarchy-cycle-badge/g) ?? []).length, 3);
+
+  // Verify client-side auto-expand of cycle nodes and Root-default selection for cyclic nodes
+  const vm = require('node:vm');
+  const ts = require('typescript');
+  const { compile } = require('svelte/compiler');
+  const client = await import('svelte/internal/client');
+
+  let paneScript = leftPaneSource.match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
+  paneScript = paneScript.replace(
+    'onToggleBreak: (nodeId: number) => void;',
+    'onToggleBreak: (nodeId: number) => void; inspect?: (v: any) => void;'
+  );
+  paneScript = paneScript.replace('onToggleBreak,', 'onToggleBreak, inspect,');
+  paneScript += `\n$effect(() => inspect?.({ selectHierarchyTreeNode }));`;
+
+  const compiled = compile(`<script lang="ts">${paneScript}</script>`, { generate: 'client' });
+  assert.equal(compiled.warnings.length, 0);
+  const modObj = { exports: {} };
+  vm.runInNewContext(
+    ts.transpileModule(compiled.js.code, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    }).outputText,
+    {
+      module: modObj,
+      exports: modObj.exports,
+      queueMicrotask,
+      CSS: { escape: s => s },
+      require(name) {
+        if (name === 'svelte/internal/client') return client;
+        if (name.startsWith('svelte/')) return require(name);
+        if (canonicalLocalSpecifier(name) === './classificationExplorer') return cls;
+        throw new Error(`Unexpected module ${name}`);
+      },
+    }
+  );
+
+  const expandedState = client.state([999999]); // simulate switching from another hierarchy
+  const selections = [];
+  let paneApi;
+  const dispose = client.effect_root(() => {
+    modObj.exports.default(null, {
+      mode: 'hierarchy_tree',
+      treeRowHeight: 34,
+      suFilterText: '',
+      suTree: null,
+      flatSUItems: [],
+      suVirtualSlice: { startIndex: 0, endIndex: 0, topSpacerPx: 0, bottomSpacerPx: 0 },
+      visibleSUItems: [],
+      selectedPlots: [],
+      lastHistoryId: 0,
+      hierarchyView: cycleHierarchyView,
+      flatHierarchyItems: flatItems,
+      hierVirtualSlice: { startIndex: 0, endIndex: flatItems.length, topSpacerPx: 0, bottomSpacerPx: 0 },
+      visibleHierarchyItems: flatItems,
+      selectedHierarchyNodeId: null,
+      get expandedHierarchyIds() {
+        return client.get(expandedState);
+      },
+      set expandedHierarchyIds(next) {
+        client.set(expandedState, next);
+      },
+      treeScrollTop: 0,
+      treeViewportHeight: 480,
+      mutating: false,
+      onLoadSUTree: () => {},
+      onOpenDialog: () => {},
+      onUndoLast: () => {},
+      onToggleSUExpand: () => {},
+      onPlotClick: () => {},
+      onPlotDragStart: () => {},
+      onBucketDrop: () => {},
+      onAssignPlots: () => {},
+      onToggleHierarchyExpand: () => {},
+      onSelectHierarchyNode: (id, name, pid) => selections.push([id, name, pid]),
+      onToggleBreak: () => {},
+      inspect: v => {
+        paneApi = v;
+      },
+    });
+  });
+
+  try {
+    client.flush();
+    assert.deepEqual(plain(client.get(expandedState)), [999999, 1, 2, 3]);
+
+    // Selecting CycleA (whose stored parent is 2, a cycle partner) defaults reparent target to null (Root)
+    paneApi.selectHierarchyTreeNode(1, 'CycleA', 2);
+    // Selecting ValidLeaf (whose stored parent is 4, acyclic) preserves parent 4
+    paneApi.selectHierarchyTreeNode(5, 'ValidLeaf', 4);
+    assert.deepEqual(selections, [
+      [1, 'CycleA', null],
+      [5, 'ValidLeaf', 4],
+    ]);
+  } finally {
+    dispose();
+  }
+});

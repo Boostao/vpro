@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     DIAGNOSTIC_CODE_META,
+    formatBreakpointUnitLabel,
     formatSynthesisMatrixCell,
     resolveDiagnosticCellClass,
     type BreakpointUnitRollup,
@@ -60,9 +61,9 @@
 {#if useBreakpointGrouping && breakpointRollups.length > 0}
   <div class="syn-breakpoint-rollups" data-synthesis-breakpoint-rollups>
     <span class="syn-legend-title">'~' Hierarchy Breakpoint Rollup ({breakpointPolicy}):</span>
-    {#each breakpointRollups as rollup (rollup.breakpointUnit)}
+    {#each breakpointRollups as rollup, rollupIdx (`${rollup.breakpointUnit}::${rollupIdx}`)}
       <span class="syn-breakpoint-chip">
-        <strong>~{rollup.breakpointUnit}</strong>
+        <strong>{formatBreakpointUnitLabel(rollup.breakpointUnit)}</strong>
         <span>n={rollup.plotCount}, {rollup.speciesCount} taxa</span>
         <span class="syn-muted">[{rollup.descendantUnits.join(', ')}]</span>
       </span>

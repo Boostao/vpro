@@ -85,6 +85,45 @@
   let dragOverBucket = $state<string | null>(null);
   let treeViewportEl = $state<HTMLDivElement | null>(null);
 
+  const cycleNodeIdSet = $derived(new Set(hierarchyView?.diagnostics.cycleNodeIds ?? []));
+  const orphanNodeIdSet = $derived(new Set(hierarchyView?.diagnostics.orphanNodes ?? []));
+  const cycleNodes = $derived.by(() => {
+    if (!hierarchyView || cycleNodeIdSet.size === 0) return [];
+    const byId = new Map((hierarchyView.flatNodes ?? []).map(n => [n.id, n]));
+    return (hierarchyView.diagnostics.cycleNodeIds ?? []).map(id => {
+      const found = byId.get(id);
+      return {
+        id,
+        name: found?.name ?? `#${id}`,
+        rankName: found?.rankName ?? '',
+        parent: found?.parent ?? null,
+      };
+    });
+  });
+
+  let lastAutoExpandedCycleKey = '';
+  $effect(() => {
+    if (mode !== 'hierarchy_tree' || !hierarchyView) return;
+    const ids = hierarchyView.diagnostics.cycleNodeIds ?? [];
+    if (ids.length === 0) {
+      lastAutoExpandedCycleKey = '';
+      return;
+    }
+    const key = `${hierarchyView.contextId}::${hierarchyView.tableName}::${ids.join(',')}`;
+    if (key === lastAutoExpandedCycleKey) return;
+    lastAutoExpandedCycleKey = key;
+    const missing = ids.filter(id => !expandedHierarchyIds.includes(id));
+    if (missing.length > 0) {
+      expandedHierarchyIds = [...expandedHierarchyIds, ...missing];
+    }
+  });
+
+  function selectHierarchyTreeNode(nodeId: number, name: string, parentNodeId: number | null) {
+    const effectiveParent =
+      cycleNodeIdSet.has(nodeId) || orphanNodeIdSet.has(nodeId) ? null : parentNodeId;
+    onSelectHierarchyNode(nodeId, name, effectiveParent);
+  }
+
   function handleSUTreeKeyDown(event: KeyboardEvent) {
     const action = resolveAriaTreeKeyAction(flatSUItems, focusedTreeItemId, event.key);
     if (!action) return;
@@ -123,7 +162,7 @@
     if (!targetItem) return;
     if (action.type === 'focus') {
       focusedTreeItemId = action.targetId;
-      onSelectHierarchyNode(targetItem.nodeId, targetItem.name, targetItem.parentNodeId);
+      selectHierarchyTreeNode(targetItem.nodeId, targetItem.name, targetItem.parentNodeId);
       queueMicrotask(() => {
         treeViewportEl
           ?.querySelector<HTMLElement>(`[data-tree-item-id="${CSS.escape(action.targetId)}"]`)
@@ -132,7 +171,7 @@
     } else if (action.type === 'expand' || action.type === 'collapse') {
       onToggleHierarchyExpand(targetItem.nodeId);
     } else if (action.type === 'select') {
-      onSelectHierarchyNode(targetItem.nodeId, targetItem.name, targetItem.parentNodeId);
+      selectHierarchyTreeNode(targetItem.nodeId, targetItem.name, targetItem.parentNodeId);
     }
   }
 </script>
@@ -291,6 +330,26 @@
         <strong>{hierarchyView.diagnostics.breakpointNodes}</strong> Breakpoints (~) ·
         <strong>{hierarchyView.diagnostics.cycleNodeIds.length}</strong> Cycles
       </p>
+      {#if cycleNodes.length > 0}
+        <div class="vpro-cls-cycle-banner" role="alert" data-hierarchy-cycle-banner>
+          <div class="vpro-cls-cycle-banner-text">
+            <strong>Parent cycle detected ({cycleNodes.length} {cycleNodes.length === 1 ? 'node' : 'nodes'}):</strong>
+            Select a flagged node below to move it to Root (or another non-cyclic parent) or delete it.
+          </div>
+          <div class="vpro-cls-cycle-chip-row">
+            {#each cycleNodes as cn (cn.id)}
+              <button
+                type="button"
+                class="vpro-cls-cycle-chip"
+                class:active={selectedHierarchyNodeId === cn.id}
+                onclick={() => selectHierarchyTreeNode(cn.id, cn.name, cn.parent)}
+              >
+                {cn.name} (#{cn.id})
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
     {/if}
 
     <div
@@ -307,6 +366,8 @@
         {/if}
 
         {#each visibleHierarchyItems as item (item.id)}
+          {@const inCycle = cycleNodeIdSet.has(item.nodeId)}
+          {@const isOrphan = orphanNodeIdSet.has(item.nodeId)}
           <div
             role="treeitem"
             tabindex={focusedTreeItemId === item.id || !focusedTreeItemId ? 0 : -1}
@@ -317,13 +378,14 @@
             class="vpro-tree-hnode"
             class:selected={selectedHierarchyNodeId === item.nodeId}
             class:breakpoint={item.isBreakpoint}
+            class:in-cycle={inCycle}
             style={`height:${treeRowHeight}px;padding-left:${(item.depth - 1) * 18 + 8}px;`}
             onfocus={() => (focusedTreeItemId = item.id)}
-            onclick={() => onSelectHierarchyNode(item.nodeId, item.name, item.parentNodeId)}
+            onclick={() => selectHierarchyTreeNode(item.nodeId, item.name, item.parentNodeId)}
             onkeydown={e => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                onSelectHierarchyNode(item.nodeId, item.name, item.parentNodeId);
+                selectHierarchyTreeNode(item.nodeId, item.name, item.parentNodeId);
               }
             }}
           >
@@ -344,6 +406,24 @@
             {/if}
             <span class="vpro-rank-badge">{item.rankName}</span>
             <span class="mono">{item.name}</span>
+            {#if inCycle}
+              <span
+                class="vpro-cycle-badge"
+                data-hierarchy-cycle-badge
+                title={item.parentNodeId === item.nodeId
+                  ? `Self-parent cycle on node #${item.nodeId} — select to move to Root or delete`
+                  : `Parent cycle on node #${item.nodeId} (current parent #${item.parentNodeId}) — select to move to Root or delete`}
+              >
+                Cycle
+              </span>
+            {:else if isOrphan}
+              <span
+                class="vpro-orphan-badge"
+                title={`Missing parent #${item.parentNodeId} — select to move to Root or another parent`}
+              >
+                Orphan
+              </span>
+            {/if}
             <button
               type="button"
               class="vpro-tilde-btn"
@@ -367,3 +447,69 @@
     </div>
   {/if}
 </section>
+
+<style>
+  .vpro-cls-cycle-banner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--vpro-error-border);
+    border-left: 4px solid var(--vpro-error);
+    border-radius: var(--vpro-radius-sm);
+    background: var(--vpro-error-bg);
+    color: var(--vpro-error-ink);
+    font-size: 0.78rem;
+  }
+
+  .vpro-cls-cycle-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .vpro-cls-cycle-chip {
+    padding: 0.1rem 0.45rem;
+    font-family: var(--vpro-font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    border: 1px solid var(--vpro-error-border);
+    border-radius: var(--vpro-radius-xs);
+    background: var(--vpro-surface);
+    color: var(--vpro-error-ink);
+    cursor: pointer;
+  }
+
+  .vpro-cls-cycle-chip.active {
+    background: var(--vpro-navy);
+    border-color: var(--vpro-navy);
+    color: var(--vpro-surface);
+  }
+
+  .vpro-tree-hnode.in-cycle {
+    background: var(--vpro-error-bg);
+  }
+
+  .vpro-tree-hnode.in-cycle.selected {
+    background: var(--vpro-navy-tint);
+  }
+
+  .vpro-cycle-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    background: var(--vpro-error);
+    color: var(--vpro-surface);
+    padding: 0.05rem 0.35rem;
+    border-radius: var(--vpro-radius-xs);
+  }
+
+  .vpro-orphan-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    background: var(--vpro-warning-bg);
+    color: var(--vpro-warning-ink);
+    border: 1px solid var(--vpro-warning-border);
+    padding: 0.03rem 0.35rem;
+    border-radius: var(--vpro-radius-xs);
+  }
+</style>

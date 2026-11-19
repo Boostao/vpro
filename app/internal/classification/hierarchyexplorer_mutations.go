@@ -183,11 +183,19 @@ func withHierarchyWriter(
 				}
 			}()
 
+			beforeState, sErr := inspectHierarchyTableState(ctx, tx, tableName)
+			if sErr != nil {
+				return sErr
+			}
 			res, proposal, mErr := mutate(owner, tx, hierName, tableName)
 			if mErr != nil {
 				return mErr
 			}
-			if err := ensureHierarchyTableAcyclicAndValid(ctx, tx, tableName); err != nil {
+			afterState, aErr := inspectHierarchyTableState(ctx, tx, tableName)
+			if aErr != nil {
+				return aErr
+			}
+			if err := validateHierarchyMutationTransition(opName, res, beforeState, afterState); err != nil {
 				return err
 			}
 			rawProp, jErr := json.Marshal(struct {
@@ -222,51 +230,197 @@ func withHierarchyWriter(
 	})
 }
 
-func ensureHierarchyTableAcyclicAndValid(ctx context.Context, tx *sql.Tx, tableName string) error {
+type hierarchyDuplicatePair struct {
+	firstID  int64
+	secondID int64
+	rawName  string
+}
+
+type hierarchyTableState struct {
+	records   []rawHierarchyRecord
+	byID      map[int64]rawHierarchyRecord
+	cycleIDs  []int64
+	cycleSet  map[int64]bool
+	orphanIDs []int64
+	orphanSet map[int64]bool
+	blankIDs  map[int64]bool
+	dupPairs  map[[2]int64]bool
+	dups      []hierarchyDuplicatePair
+}
+
+func inspectHierarchyTableState(ctx context.Context, tx *sql.Tx, tableName string) (*hierarchyTableState, error) {
 	rows, err := tx.QueryContext(ctx,
 		`SELECT "ID", COALESCE(CAST("Name" AS TEXT), ''), "Parent", COALESCE("Level", 11)
-		 FROM main.`+vprocore.QuoteHeaderIdentifier(tableName))
+		 FROM main.`+vprocore.QuoteHeaderIdentifier(tableName)+` ORDER BY "ID" ASC`)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer rows.Close()
 
-	var records []rawHierarchyRecord
-	seenNames := map[string]int64{}
+	state := &hierarchyTableState{
+		byID:      map[int64]rawHierarchyRecord{},
+		cycleSet:  map[int64]bool{},
+		orphanSet: map[int64]bool{},
+		blankIDs:  map[int64]bool{},
+		dupPairs:  map[[2]int64]bool{},
+	}
+	idsByClean := map[string][]int64{}
 	for rows.Next() {
 		var r rawHierarchyRecord
 		var parent sql.NullInt64
 		if err := rows.Scan(&r.id, &r.name, &parent, &r.level); err != nil {
-			return err
+			return nil, err
 		}
 		if parent.Valid {
 			p := parent.Int64
 			r.parent = &p
 		}
+		state.byID[r.id] = r
 		cleanName, _ := SplitBreakpointPrefix(r.name)
-		lowerName := strings.ToLower(cleanName)
-		if lowerName != "" {
-			if existingID, dup := seenNames[lowerName]; dup {
-				return fmt.Errorf("duplicate hierarchy node name %q (nodes %d and %d)", r.name, existingID, r.id)
+		lowerName := strings.ToLower(strings.TrimSpace(cleanName))
+		if lowerName == "" {
+			state.blankIDs[r.id] = true
+		} else {
+			for _, prevID := range idsByClean[lowerName] {
+				pairKey := [2]int64{min(prevID, r.id), max(prevID, r.id)}
+				state.dupPairs[pairKey] = true
+				state.dups = append(state.dups, hierarchyDuplicatePair{
+					firstID:  prevID,
+					secondID: r.id,
+					rawName:  r.name,
+				})
 			}
-			seenNames[lowerName] = r.id
+			idsByClean[lowerName] = append(idsByClean[lowerName], r.id)
 		}
-		records = append(records, r)
+		state.records = append(state.records, r)
 	}
 	if err := rows.Err(); err != nil {
-		return err
+		return nil, err
 	}
-	cycles, orphans, blanks := DetectHierarchyCyclesAndOrphans(records)
-	if blanks > 0 {
-		return errors.New("hierarchy cannot contain blank node names")
+
+	cycles, orphans, _ := DetectHierarchyCyclesAndOrphans(state.records)
+	state.cycleIDs = cycles
+	for _, id := range cycles {
+		state.cycleSet[id] = true
 	}
-	if len(orphans) > 0 {
-		return fmt.Errorf("hierarchy contains orphan parent reference on node(s) %v", orphans)
+	state.orphanIDs = orphans
+	for _, id := range orphans {
+		state.orphanSet[id] = true
 	}
-	if len(cycles) > 0 {
-		return fmt.Errorf("hierarchy mutation rejected: cycle detected involving node(s) %v", cycles)
+	return state, nil
+}
+
+func validateHierarchyMutationTransition(
+	opName string,
+	res *HierarchyMutationResult,
+	before *hierarchyTableState,
+	after *hierarchyTableState,
+) error {
+	if opName == "hierarchy_save_flat_rows" {
+		if len(after.dups) > 0 {
+			d := after.dups[0]
+			return fmt.Errorf("duplicate hierarchy node name %q (nodes %d and %d)", d.rawName, d.firstID, d.secondID)
+		}
+		if len(after.blankIDs) > 0 {
+			return errors.New("hierarchy cannot contain blank node names")
+		}
+		if len(after.orphanIDs) > 0 {
+			return fmt.Errorf("hierarchy contains orphan parent reference on node(s) %v", after.orphanIDs)
+		}
+		if len(after.cycleIDs) > 0 {
+			return fmt.Errorf("hierarchy mutation rejected: cycle detected involving node(s) %v", after.cycleIDs)
+		}
+		return nil
+	}
+
+	var targetID int64
+	if res != nil {
+		targetID = res.NodeID
+	}
+	isNameEdit := opName == "hierarchy_add_node" || opName == "hierarchy_rename_node" || opName == "hierarchy_toggle_breakpoint"
+
+	for _, d := range after.dups {
+		pairKey := [2]int64{min(d.firstID, d.secondID), max(d.firstID, d.secondID)}
+		if !before.dupPairs[pairKey] || (isNameEdit && (d.firstID == targetID || d.secondID == targetID)) {
+			return fmt.Errorf("duplicate hierarchy node name %q (nodes %d and %d)", d.rawName, d.firstID, d.secondID)
+		}
+	}
+
+	for id := range after.blankIDs {
+		if !before.blankIDs[id] || (isNameEdit && id == targetID) {
+			return errors.New("hierarchy cannot contain blank node names")
+		}
+	}
+
+	var offendingOrphans []int64
+	for _, id := range after.orphanIDs {
+		if !before.orphanSet[id] || (opName == "hierarchy_reparent_node" && id == targetID) {
+			offendingOrphans = append(offendingOrphans, id)
+		}
+	}
+	if len(offendingOrphans) > 0 {
+		return fmt.Errorf("hierarchy contains orphan parent reference on node(s) %v", offendingOrphans)
+	}
+
+	var newCycles []int64
+	for _, id := range after.cycleIDs {
+		if !before.cycleSet[id] {
+			newCycles = append(newCycles, id)
+		}
+	}
+	if len(newCycles) > 0 {
+		return fmt.Errorf("hierarchy mutation rejected: cycle detected involving node(s) %v", after.cycleIDs)
+	}
+
+	if opName == "hierarchy_reparent_node" {
+		if after.cycleSet[targetID] {
+			return fmt.Errorf("hierarchy mutation rejected: cycle detected involving node(s) %v", after.cycleIDs)
+		}
+		if rec, ok := after.byID[targetID]; ok {
+			visited := map[int64]bool{targetID: true}
+			curr := rec.parent
+			for curr != nil {
+				if visited[*curr] || after.cycleSet[*curr] {
+					return fmt.Errorf("hierarchy mutation rejected: cycle detected involving node(s) %v", after.cycleIDs)
+				}
+				next, exists := after.byID[*curr]
+				if !exists {
+					break
+				}
+				visited[*curr] = true
+				curr = next.parent
+			}
+		}
 	}
 	return nil
+}
+
+func resolveSafePromoteParent(ctx context.Context, tx *sql.Tx, tableName string, nodeID int64, parent sql.NullInt64) (*int64, error) {
+	if !parent.Valid || parent.Int64 == nodeID {
+		return nil, nil
+	}
+	state, err := inspectHierarchyTableState(ctx, tx, tableName)
+	if err != nil {
+		return nil, err
+	}
+	if _, exists := state.byID[parent.Int64]; !exists {
+		return nil, nil
+	}
+	visited := map[int64]bool{nodeID: true}
+	curr := &parent.Int64
+	for curr != nil {
+		if visited[*curr] || state.cycleSet[*curr] {
+			return nil, nil
+		}
+		rec, ok := state.byID[*curr]
+		if !ok {
+			break
+		}
+		visited[*curr] = true
+		curr = rec.parent
+	}
+	p := parent.Int64
+	return &p, nil
 }
 
 func hierarchyTableHasTagColumn(ctx context.Context, tx *sql.Tx, tableName string) bool {
@@ -483,10 +637,9 @@ func DeleteHierarchyNode(ctx context.Context, contexts *vprocore.ContextService,
 				affected += int(n)
 			}
 		} else {
-			var parentPtr *int64
-			if parent.Valid {
-				p := parent.Int64
-				parentPtr = &p
+			parentPtr, pErr := resolveSafePromoteParent(ctx, tx, tableName, request.NodeID, parent)
+			if pErr != nil {
+				return nil, nil, pErr
 			}
 			if _, err := tx.ExecContext(ctx, `UPDATE main.`+qTable+` SET "Parent" = ? WHERE "Parent" = ?`, parentPtr, request.NodeID); err != nil {
 				return nil, nil, err

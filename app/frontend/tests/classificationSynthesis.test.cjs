@@ -435,3 +435,93 @@ test('ClassificationSynthesisView SSR renders cleanly with zero warnings and zer
   assert.match(rendered.body, /Undo Move \(1\)/);
   assert.match(rendered.body, /00337/);
 });
+
+test('UX-CLASS-004: Synthesis breakpoint rollups strip leading ~ so rollup chips never render ~~', async () => {
+  calls.length = 0;
+  await syn.resolveSynthesisHierarchyBreakpoints('ctx-wave3', 'lowest');
+  assert.deepEqual(plain(calls[0]), [
+    'main.VegetationReportService.ResolveHierarchyBreakpointUnits',
+    'ctx-wave3',
+    { options: { breakpointPolicy: 'lowest', stripTildePrefix: true } },
+  ]);
+
+  assert.equal(syn.normalizeBreakpointUnitName('~ASSOC Tsugmer-Cassste'), 'ASSOC Tsugmer-Cassste');
+  assert.equal(syn.normalizeBreakpointUnitName('~~ASSOC Piceene-Alnuinc-Equiset'), 'ASSOC Piceene-Alnuinc-Equiset');
+  assert.equal(syn.normalizeBreakpointUnitName('~ ~ASSOC Picegla-Ribetri-Equiset'), 'ASSOC Picegla-Ribetri-Equiset');
+  assert.equal(syn.formatBreakpointUnitLabel('ASSOC Tsugmer-Cassste'), '~ASSOC Tsugmer-Cassste');
+  assert.equal(syn.formatBreakpointUnitLabel('~ASSOC Tsugmer-Cassste'), '~ASSOC Tsugmer-Cassste');
+  assert.equal(syn.formatBreakpointUnitLabel('~~ASSOC Tsugmer-Cassste'), '~ASSOC Tsugmer-Cassste');
+
+  const snap = buildFixtureSnapshot();
+  const rollups = syn.groupUnitsByHierarchyBreakpoints(snap, {
+    contextId: 'ctx-wave3',
+    project: 'Sample',
+    su: 'Sample',
+    hierarchy: 'Sample',
+    breakpointPolicy: 'lowest',
+    totalUnitsBefore: 2,
+    totalUnitsAfter: 2,
+    rolledUpPlotCount: 10,
+    unmappedUnits: [],
+    mappings: [],
+    buckets: [
+      {
+        breakpointUnit: '~ASSOC Tsugmer-Cassste',
+        sourceUnits: ['CWHvm1/01'],
+        plotCount: 6,
+      },
+      {
+        breakpointUnit: '~~ASSOC Tsugmer-Phylemp-Cladina',
+        sourceUnits: ['CWHvm1/05'],
+        plotCount: 4,
+      },
+    ],
+  });
+  assert.deepEqual(
+    plain(rollups.map(r => r.breakpointUnit)),
+    ['ASSOC Tsugmer-Cassste', 'ASSOC Tsugmer-Phylemp-Cladina']
+  );
+
+  const matrixSource = readFileSync(srcPath('SynthesisMatrixTab.svelte'), 'utf8');
+  assert.equal(/\p{Extended_Pictographic}/u.test(matrixSource), false, 'SynthesisMatrixTab must contain zero emojis');
+
+  const MatrixComponent = serverComponent(matrixSource, 'SynthesisMatrixTab.svelte', {
+    './classificationSynthesis': syn,
+  });
+  const rendered = render(MatrixComponent, {
+    props: {
+      snapshot: snap,
+      matrixSections: [],
+      matrixDisplay: 'roman_signif',
+      useBreakpointGrouping: true,
+      breakpointPolicy: 'lowest',
+      breakpointRollups: [
+        ...rollups,
+        {
+          breakpointUnit: '~ASSOC Piceene-Alnuinc-Equiset',
+          descendantUnits: ['CWHvm1/01'],
+          plotCount: 6,
+          speciesCount: 2,
+        },
+        {
+          breakpointUnit: '~~ASSOC Picegla-Ribetri-Equiset',
+          descendantUnits: ['CWHvm1/05'],
+          plotCount: 4,
+          speciesCount: 1,
+        },
+      ],
+      loading: false,
+      dragOverUnit: null,
+      onUnitDragOver: () => {},
+      onUnitDragLeave: () => {},
+      onUnitDrop: () => {},
+    },
+  });
+
+  assert.match(rendered.body, /data-synthesis-breakpoint-rollups/);
+  assert.match(rendered.body, /~ASSOC Tsugmer-Cassste/);
+  assert.match(rendered.body, /~ASSOC Tsugmer-Phylemp-Cladina/);
+  assert.match(rendered.body, /~ASSOC Piceene-Alnuinc-Equiset/);
+  assert.match(rendered.body, /~ASSOC Picegla-Ribetri-Equiset/);
+  assert.doesNotMatch(rendered.body, /~~ASSOC/);
+});

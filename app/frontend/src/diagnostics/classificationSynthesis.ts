@@ -410,12 +410,25 @@ export async function discoverExternalSynthesisLumps(
   }));
 }
 
+export function normalizeBreakpointUnitName(rawUnit: string): string {
+  let trimmed = (rawUnit ?? '').trim();
+  while (trimmed.startsWith('~')) {
+    trimmed = trimmed.replace(/^~+/, '').trim();
+  }
+  return trimmed;
+}
+
+export function formatBreakpointUnitLabel(rawUnit: string): string {
+  const clean = normalizeBreakpointUnitName(rawUnit);
+  return clean ? `~${clean}` : '~';
+}
+
 export function resolveSynthesisHierarchyBreakpoints(
   contextId: string,
   breakpointPolicy: 'lowest' | 'highest'
 ): CancellableRead<HierarchyBreakpointResolution | null> {
   return VegetationReportService.ResolveHierarchyBreakpointUnits(contextId, {
-    options: { breakpointPolicy },
+    options: { breakpointPolicy, stripTildePrefix: true },
   } as never) as unknown as CancellableRead<HierarchyBreakpointResolution | null>;
 }
 
@@ -439,7 +452,7 @@ export function groupUnitsByHierarchyBreakpoints(
       row.cells.some(cell => members.includes(cell.siteUnit) && cell.presentPlots > 0)
     ).length;
     return {
-      breakpointUnit: bucket.breakpointUnit,
+      breakpointUnit: normalizeBreakpointUnitName(bucket.breakpointUnit),
       descendantUnits: members,
       plotCount: plotSum > 0 ? plotSum : bucket.plotCount,
       speciesCount: activeSpecies,
@@ -594,7 +607,7 @@ export function filterAndGroupSpeciesRows(
     if (rows && rows.length > 0) {
       sections.push({
         key: `diag::${u.siteUnit}`,
-        title: `~${u.siteUnit}`,
+        title: formatBreakpointUnitLabel(u.siteUnit),
         subtitle: u.longName ? `${u.longName} (n=${u.plotCount})` : `n=${u.plotCount}`,
         rows,
       });
