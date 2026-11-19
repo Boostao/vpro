@@ -87,6 +87,28 @@ vpro_urldecode_safe <- function(s) {
   str
 }
 
+vpro_split_char <- function(s, sep) {
+  if (!nzchar(s)) {
+    return("")
+  }
+  parts <- strsplit(s, sep, fixed = TRUE)[[1L]]
+  if (endsWith(s, sep)) {
+    parts <- c(parts, "")
+  }
+  parts
+}
+
+vpro_validate_url_port_token <- function(port_tok) {
+  if (!grepl("^[0-9]+$", port_tok)) {
+    cli::cli_abort("Invalid port in PostgreSQL URL (must be an integer in 1..65535).")
+  }
+  port_num <- suppressWarnings(as.integer(port_tok))
+  if (is.na(port_num) || port_num < 1L || port_num > 65535L) {
+    cli::cli_abort("Invalid port in PostgreSQL URL (must be an integer in 1..65535).")
+  }
+  port_num
+}
+
 vpro_parse_pg_url_impl <- function(raw_url) {
   if (!is.character(raw_url) || length(raw_url) != 1L || is.na(raw_url) || !nzchar(trimws(raw_url))) {
     cli::cli_abort("PostgreSQL connection URL must be a non-empty character string.")
@@ -135,27 +157,57 @@ vpro_parse_pg_url_impl <- function(raw_url) {
   }
 
   port_str <- ""
-  if (startsWith(hostport, "[")) {
-    close_br <- regexpr("]", hostport, fixed = TRUE)[[1L]]
-    if (close_br <= 1L) {
-      cli::cli_abort("Malformed bracketed IPv6 host in PostgreSQL URL.")
+  if (nzchar(hostport)) {
+    hp_parts <- vpro_split_char(hostport, ",")
+    item_hosts <- character(length(hp_parts))
+    item_ports <- character(length(hp_parts))
+    for (idx in seq_along(hp_parts)) {
+      hp_item <- hp_parts[[idx]]
+      if (!nzchar(hp_item)) {
+        item_hosts[[idx]] <- ""
+        item_ports[[idx]] <- ""
+      } else if (startsWith(hp_item, "[")) {
+        close_br <- regexpr("]", hp_item, fixed = TRUE)[[1L]]
+        if (close_br <= 1L) {
+          cli::cli_abort("Malformed bracketed IPv6 host in PostgreSQL URL.")
+        }
+        item_hosts[[idx]] <- vpro_urldecode_safe(substr(hp_item, 2L, close_br - 1L))
+        after_br <- substring(hp_item, close_br + 1L)
+        if (startsWith(after_br, ":") && nchar(after_br) > 1L) {
+          item_ports[[idx]] <- substring(after_br, 2L)
+        } else if (nzchar(after_br)) {
+          cli::cli_abort("Malformed port specification in PostgreSQL URL.")
+        }
+      } else {
+        if (grepl("[\\[\\]]", hp_item)) {
+          cli::cli_abort("Malformed bracketed IPv6 host in PostgreSQL URL.")
+        }
+        colons <- gregexpr(":", hp_item, fixed = TRUE)[[1L]]
+        if (colons[[1L]] > 0L) {
+          if (length(colons) > 1L) {
+            cli::cli_abort("Malformed IPv6 host in PostgreSQL URL (enclose IPv6 literals in [...] brackets).")
+          }
+          colon_pos <- colons[[1L]]
+          item_hosts[[idx]] <- vpro_urldecode_safe(substr(hp_item, 1L, colon_pos - 1L))
+          item_ports[[idx]] <- substring(hp_item, colon_pos + 1L)
+        } else {
+          item_hosts[[idx]] <- vpro_urldecode_safe(hp_item)
+        }
+      }
+      if (nzchar(item_ports[[idx]])) {
+        vpro_validate_url_port_token(item_ports[[idx]])
+      }
     }
-    host <- substr(hostport, 2L, close_br - 1L)
-    after_br <- substring(hostport, close_br + 1L)
-    if (startsWith(after_br, ":") && nchar(after_br) > 1L) {
-      port_str <- substring(after_br, 2L)
-    } else if (nzchar(after_br)) {
-      cli::cli_abort("Malformed port specification in PostgreSQL URL.")
+    host <- paste(item_hosts, collapse = ",")
+    non_empty_ports <- item_ports[nzchar(item_ports)]
+    if (length(non_empty_ports) > 0L) {
+      port_str <- non_empty_ports[[1L]]
     }
   } else {
-    colon_pos <- regexpr(":", hostport, fixed = TRUE)[[1L]]
-    if (colon_pos > 0L) {
-      host <- vpro_urldecode_safe(substr(hostport, 1L, colon_pos - 1L))
-      port_str <- substring(hostport, colon_pos + 1L)
-    } else {
-      host <- vpro_urldecode_safe(hostport)
-    }
+    host <- ""
   }
+  authority_host <- host
+  extra_hosts <- if (nzchar(authority_host)) authority_host else character(0L)
 
   dbname <- if (nzchar(path_str)) vpro_urldecode_safe(path_str) else ""
   sslmode <- ""
@@ -176,8 +228,14 @@ vpro_parse_pg_url_impl <- function(raw_url) {
       }
       if (identical(qk, "sslmode") && nzchar(qv)) {
         sslmode <- trimws(qv)
-      } else if (identical(qk, "host") && !nzchar(host) && nzchar(qv)) {
+      } else if (identical(qk, "host") && nzchar(trimws(qv))) {
         host <- trimws(qv)
+        extra_hosts <- c(extra_hosts, host)
+      } else if (identical(qk, "hostaddr") && nzchar(trimws(qv))) {
+        if (!nzchar(host)) {
+          host <- trimws(qv)
+        }
+        extra_hosts <- c(extra_hosts, trimws(qv))
       } else if (identical(qk, "port") && !nzchar(port_str) && nzchar(qv)) {
         port_str <- trimws(qv)
       } else if (qk %in% c("dbname", "database") && !nzchar(dbname) && nzchar(qv)) {
@@ -192,13 +250,16 @@ vpro_parse_pg_url_impl <- function(raw_url) {
 
   explicit_port <- nzchar(port_str)
   if (explicit_port) {
-    if (!grepl("^[0-9]+$", port_str)) {
-      cli::cli_abort("Invalid port in PostgreSQL URL (must be an integer in 1..65535).")
+    port_tokens <- vpro_split_char(port_str, ",")
+    parsed_ports <- integer(0L)
+    for (pt in port_tokens) {
+      pt_trim <- trimws(pt)
+      if (!nzchar(pt_trim)) {
+        cli::cli_abort("Invalid port in PostgreSQL URL (must be an integer in 1..65535).")
+      }
+      parsed_ports <- c(parsed_ports, vpro_validate_url_port_token(pt_trim))
     }
-    port_num <- suppressWarnings(as.integer(port_str))
-    if (is.na(port_num) || port_num < 1L || port_num > 65535L) {
-      cli::cli_abort("Invalid port in PostgreSQL URL (must be an integer in 1..65535).")
-    }
+    port_num <- parsed_ports[[1L]]
   } else {
     port_num <- 5432L
   }
@@ -210,7 +271,8 @@ vpro_parse_pg_url_impl <- function(raw_url) {
     user = user,
     password = password,
     sslmode = sslmode,
-    explicit_port = explicit_port
+    explicit_port = explicit_port,
+    extra_hosts = unique(extra_hosts[nzchar(extra_hosts)])
   )
 }
 
@@ -254,25 +316,239 @@ vpro_validate_pg_sslmode <- function(sslmode) {
   s
 }
 
+vpro_parse_ipv4_octets <- function(s) {
+  if (!is.character(s) || length(s) != 1L || is.na(s) || !nzchar(s)) {
+    return(NULL)
+  }
+  parts <- vpro_split_char(s, ".")
+  if (length(parts) != 4L || !all(grepl("^(?:0|[1-9][0-9]{0,2})$", parts))) {
+    return(NULL)
+  }
+  vals <- suppressWarnings(as.integer(parts))
+  if (anyNA(vals) || any(vals < 0L | vals > 255L)) {
+    return(NULL)
+  }
+  vals
+}
+
+vpro_parse_ipv6_words <- function(s) {
+  if (!is.character(s) || length(s) != 1L || is.na(s) || !nzchar(s)) {
+    return(NULL)
+  }
+  if (!grepl(":", s, fixed = TRUE) || grepl(":::", s, fixed = TRUE)) {
+    return(NULL)
+  }
+
+  work <- s
+  if (grepl(".", work, fixed = TRUE)) {
+    colons <- gregexpr(":", work, fixed = TRUE)[[1L]]
+    last_colon <- colons[[length(colons)]]
+    prefix <- substr(work, 1L, last_colon)
+    if (identical(prefix, ":")) {
+      return(NULL)
+    }
+    v4 <- vpro_parse_ipv4_octets(substring(work, last_colon + 1L))
+    if (is.null(v4)) {
+      return(NULL)
+    }
+    hi16 <- sprintf("%x", v4[[1L]] * 256L + v4[[2L]])
+    lo16 <- sprintf("%x", v4[[3L]] * 256L + v4[[4L]])
+    work <- paste0(prefix, hi16, ":", lo16)
+  }
+
+  dbl_pos <- gregexpr("::", work, fixed = TRUE)[[1L]]
+  has_dbl <- dbl_pos[[1L]] > 0L
+  if (has_dbl && length(dbl_pos) > 1L) {
+    return(NULL)
+  }
+
+  if (has_dbl) {
+    idx <- dbl_pos[[1L]]
+    left_s <- substr(work, 1L, idx - 1L)
+    right_s <- substring(work, idx + 2L)
+    if (startsWith(left_s, ":") || endsWith(right_s, ":")) {
+      return(NULL)
+    }
+    left_g <- if (nzchar(left_s)) vpro_split_char(left_s, ":") else character(0L)
+    right_g <- if (nzchar(right_s)) vpro_split_char(right_s, ":") else character(0L)
+    n_g <- length(left_g) + length(right_g)
+    if (n_g > 7L) {
+      return(NULL)
+    }
+    all_g <- c(left_g, right_g)
+    if (length(all_g) > 0L && !all(grepl("^[0-9A-Fa-f]{1,4}$", all_g))) {
+      return(NULL)
+    }
+    left_w <- if (length(left_g) > 0L) strtoi(left_g, 16L) else integer(0L)
+    right_w <- if (length(right_g) > 0L) strtoi(right_g, 16L) else integer(0L)
+    return(c(left_w, rep(0L, 8L - n_g), right_w))
+  }
+
+  if (startsWith(work, ":") || endsWith(work, ":")) {
+    return(NULL)
+  }
+  groups <- vpro_split_char(work, ":")
+  if (length(groups) != 8L || !all(grepl("^[0-9A-Fa-f]{1,4}$", groups))) {
+    return(NULL)
+  }
+  strtoi(groups, 16L)
+}
+
+vpro_is_ipv6_loopback_words <- function(v6) {
+  !is.null(v6) &&
+    ((all(v6[1:7] == 0L) && v6[[8L]] == 1L) ||
+      (all(v6[1:5] == 0L) && v6[[6L]] == 65535L && (v6[[7L]] %/% 256L) == 127L))
+}
+
+vpro_is_single_loopback_pg_host <- function(raw_comp) {
+  h <- trimws(raw_comp)
+  if (!nzchar(h)) {
+    return(FALSE)
+  }
+  if (startsWith(h, "/")) {
+    return(TRUE)
+  }
+  if (identical(tolower(h), "localhost")) {
+    return(TRUE)
+  }
+  if (startsWith(h, "[") || endsWith(h, "]")) {
+    if (!startsWith(h, "[") || !endsWith(h, "]") || nchar(h) <= 2L) {
+      return(FALSE)
+    }
+    inner <- substr(h, 2L, nchar(h) - 1L)
+    return(vpro_is_ipv6_loopback_words(vpro_parse_ipv6_words(inner)))
+  }
+  v4 <- vpro_parse_ipv4_octets(h)
+  if (!is.null(v4)) {
+    return(v4[[1L]] == 127L)
+  }
+  vpro_is_ipv6_loopback_words(vpro_parse_ipv6_words(h))
+}
+
 # Loopback hosts (and Unix-domain socket directories) may use any sslmode for local development.
+# Multi-host comma-separated libpq strings require EVERY host component to be loopback/Unix-socket.
 vpro_is_loopback_pg_host <- function(host) {
-  h <- tolower(trimws(as.character(host[[1L]])))
-  h <- sub("^\\[(.*)\\]$", "\\1", h)
-  !nzchar(h) || startsWith(h, "/") || h %in% c("localhost", "::1") ||
-    grepl("^127(\\.[0-9]{1,3}){3}$", h)
+  if (is.null(host) || length(host) == 0L) {
+    return(TRUE)
+  }
+  if (anyNA(host)) {
+    return(FALSE)
+  }
+  chr <- as.character(host)
+  for (elem in chr) {
+    trimmed <- trimws(elem)
+    if (!nzchar(trimmed)) {
+      next
+    }
+    comps <- vpro_split_char(trimmed, ",")
+    for (comp in comps) {
+      if (!vpro_is_single_loopback_pg_host(comp)) {
+        return(FALSE)
+      }
+    }
+  }
+  TRUE
+}
+
+vpro_libpq_host <- function(host) {
+  h <- trimws(as.character(host[[1L]]))
+  if (!nzchar(h)) {
+    return(h)
+  }
+  comps <- vpro_split_char(h, ",")
+  norm <- vapply(
+    comps,
+    function(comp) {
+      c_trim <- trimws(comp)
+      if (startsWith(c_trim, "[") && endsWith(c_trim, "]") && nchar(c_trim) > 2L) {
+        inner <- substr(c_trim, 2L, nchar(c_trim) - 1L)
+        if (!is.null(vpro_parse_ipv6_words(inner))) {
+          return(inner)
+        }
+      }
+      c_trim
+    },
+    character(1L),
+    USE.NAMES = FALSE
+  )
+  paste(norm, collapse = ",")
 }
 
 # Mirrors Go cloudsync.requireTLSForRemoteHost: disable/allow/prefer can send credentials and plot
 # data in plaintext, so they are refused for any non-loopback host before a connection is opened.
 vpro_require_pg_tls <- function(host, sslmode) {
+  mode <- vpro_validate_pg_sslmode(sslmode)
   if (vpro_is_loopback_pg_host(host)) {
     return(invisible(TRUE))
   }
-  if (trimws(as.character(sslmode[[1L]])) %in% c("disable", "allow", "prefer")) {
+  if (mode %in% c("disable", "allow", "prefer")) {
     cli::cli_abort(c(
       "TLS is required for remote PostgreSQL hosts.",
       "i" = "Set {.arg sslmode} (or {.envvar VPRO_PG_SSLMODE}) to {.val require}, {.val verify-ca} or {.val verify-full}; {.val disable}, {.val allow} and {.val prefer} are only permitted for localhost."
     ), class = "vpro_pg_tls_required")
+  }
+  invisible(TRUE)
+}
+
+vpro_live_pg_tests_enabled <- function() {
+  keys <- c(
+    "VPRO_RUN_LIVE_PG_TESTS",
+    "VPRO_RUN_PG_TESTS",
+    "VPRO_LIVE_PG_TEST",
+    "VPRO_LIVE_PG"
+  )
+  vals <- tolower(trimws(vapply(keys, Sys.getenv, character(1L), unset = "")))
+  any(vals %in% c("1", "true"))
+}
+
+vpro_is_disposable_pg_test_dbname <- function(dbname) {
+  if (!is.character(dbname) || length(dbname) != 1L || is.na(dbname)) {
+    return(FALSE)
+  }
+  db_lo <- tolower(trimws(dbname))
+  if (!nzchar(db_lo)) {
+    return(FALSE)
+  }
+  if (db_lo %in% c("becmaster", "postgres", "template0", "template1", "defaultdb")) {
+    return(FALSE)
+  }
+  tokens <- unlist(strsplit(db_lo, "[_.-]+"), use.names = FALSE)
+  tokens <- tokens[nzchar(tokens)]
+  if (length(tokens) == 0L || any(tokens %in% c("prod", "production"))) {
+    return(FALSE)
+  }
+  any(grepl(
+    "^(?:pg)?(?:test|tests|testing|qa|tmp|temp|scratch|disposable|ephemeral)(?:db|[0-9]*)$",
+    tokens
+  ))
+}
+
+vpro_require_disposable_pg_test_db <- function(
+  dbname,
+  confirmed_db = Sys.getenv("VPRO_LIVE_PG_DESTRUCTIVE_DB", unset = ""),
+  contrib_dbname = dbname
+) {
+  db_clean <- if (is.character(dbname) && length(dbname) == 1L && !is.na(dbname)) trimws(dbname) else ""
+  contrib_clean <- if (is.character(contrib_dbname) && length(contrib_dbname) == 1L && !is.na(contrib_dbname)) trimws(contrib_dbname) else ""
+  conf_clean <- if (is.character(confirmed_db) && length(confirmed_db) == 1L && !is.na(confirmed_db)) trimws(confirmed_db) else ""
+
+  if (!identical(db_clean, contrib_clean)) {
+    cli::cli_abort(c(
+      "Refusing destructive PostgreSQL test execution: custodian ({.val {db_clean}}) and contributor ({.val {contrib_clean}}) database names differ.",
+      "i" = "Point both roles at the same dedicated test/scratch database (e.g. {.val becmaster_test})."
+    ), class = "vpro_pg_destructive_db_refused")
+  }
+  if (!vpro_is_disposable_pg_test_dbname(db_clean)) {
+    cli::cli_abort(c(
+      "Refusing destructive PostgreSQL test execution against non-test database {.val {db_clean}}.",
+      "i" = "Target database must never be {.val becmaster} and must include an explicit test/scratch marker (e.g. {.val becmaster_test}, {.val becmaster_qa}, {.val becmaster_tmp}, or {.val becmaster_scratch})."
+    ), class = "vpro_pg_destructive_db_refused")
+  }
+  if (!nzchar(conf_clean) || !identical(conf_clean, db_clean)) {
+    cli::cli_abort(c(
+      "Refusing destructive PostgreSQL test execution without matching {.envvar VPRO_LIVE_PG_DESTRUCTIVE_DB} confirmation.",
+      "i" = "Set {.envvar VPRO_LIVE_PG_DESTRUCTIVE_DB} to {.val {db_clean}} to confirm the test database is disposable."
+    ), class = "vpro_pg_destructive_db_refused")
   }
   invisible(TRUE)
 }
@@ -350,12 +626,16 @@ vpro_resolve_pg_credentials <- function(
     r_url$tier <- 4L
   }
 
+  extra_url_hosts <- character(0L)
   if (nzchar(resolved_url)) {
     parsed_u <- vpro_parse_pg_url_impl(resolved_url)
     url_eff_tier <- if (r_url$tier == 1L) 1.5 else as.numeric(r_url$tier)
 
-    if (nzchar(parsed_u$host) && r_host$tier >= url_eff_tier) {
-      resolved_host <- parsed_u$host
+    if (r_host$tier >= url_eff_tier) {
+      if (nzchar(parsed_u$host)) {
+        resolved_host <- parsed_u$host
+      }
+      extra_url_hosts <- parsed_u$extra_hosts
     }
     if (parsed_u$explicit_port && r_port$tier >= url_eff_tier) {
       resolved_port <- parsed_u$port
@@ -376,6 +656,10 @@ vpro_resolve_pg_credentials <- function(
 
   resolved_port <- vpro_validate_pg_port(resolved_port)
   resolved_ssl <- vpro_validate_pg_sslmode(resolved_ssl)
+  vpro_require_pg_tls(resolved_host, resolved_ssl)
+  for (eh in extra_url_hosts) {
+    vpro_require_pg_tls(eh, resolved_ssl)
+  }
 
   tiers_used <- c(r_host$tier, r_port$tier, r_db$tier, r_ssl$tier, r_user$tier, r_pass$tier, r_url$tier)
   min_tier <- min(tiers_used)
@@ -594,12 +878,13 @@ vpro_master_connect <- function(
     ))
   }
   vpro_require_pg_tls(creds$host, creds$sslmode)
+  dial_host <- vpro_libpq_host(creds$host)
 
   raw_conn <- vpro_pg_exec_safe(
     function() {
       DBI::dbConnect(
         RPostgres::Postgres(),
-        host = creds$host,
+        host = dial_host,
         port = as.integer(creds$port),
         dbname = creds$dbname,
         user = creds$user,
