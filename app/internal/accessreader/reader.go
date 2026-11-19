@@ -336,7 +336,7 @@ nextRow:
 		if status == 0 {
 			return false
 		}
-		reader.row = make(Row, len(reader.Columns))
+		row := make(Row, len(reader.Columns))
 		for index, column := range reader.Columns {
 			if C.go_mdb_is_null(reader.native, C.int(index)) != 0 && column.Type != "boolean" {
 				continue
@@ -359,10 +359,11 @@ nextRow:
 			if column.Type == "binary" {
 				var size C.size_t
 				value := C.go_mdb_blob(reader.native, C.int(index), &size)
-				if err := sourceError(reader.native.mdb.go_error); err != nil {
+				code := reader.native.mdb.go_error
+				if err := sourceError(code); err != nil {
 					C.free(value)
 					cellErr := fmt.Errorf("binary column %q: %w", column.Name, err)
-					if reader.quarantineRows {
+					if reader.quarantineRows && (code == C.GO_MDB_ERROR_TEXT || code == C.GO_MDB_ERROR_ROW) {
 						reader.Quarantined = append(reader.Quarantined, QuarantinedRow{RowNumber: reader.rowNumber, Reason: cellErr.Error()})
 						C.go_mdb_reset_row_state(reader.native)
 						continue nextRow
@@ -381,7 +382,7 @@ nextRow:
 					reader.err = cellErr
 					return false
 				}
-				reader.row[index] = C.GoBytes(value, C.int(size))
+				row[index] = C.GoBytes(value, C.int(size))
 				C.free(value)
 				continue
 			}
@@ -402,16 +403,16 @@ nextRow:
 				if value != "0" && value != "1" {
 					parseErr = fmt.Errorf("column %q: invalid Access boolean %q", column.Name, value)
 				} else {
-					reader.row[index] = value == "1"
+					row[index] = value == "1"
 				}
 			case "integer":
-				reader.row[index], parseErr = strconv.ParseInt(value, 10, 64)
+				row[index], parseErr = strconv.ParseInt(value, 10, 64)
 			case "real":
-				reader.row[index], parseErr = strconv.ParseFloat(value, 64)
+				row[index], parseErr = strconv.ParseFloat(value, 64)
 			case "datetime":
-				reader.row[index], parseErr = time.ParseInLocation("2006-01-02 15:04:05", value, time.UTC)
+				row[index], parseErr = time.ParseInLocation("2006-01-02 15:04:05", value, time.UTC)
 			default:
-				reader.row[index] = value // Decimals remain exact text, not float64.
+				row[index] = value // Decimals remain exact text, not float64.
 			}
 			if parseErr != nil {
 				cellErr := fmt.Errorf("column %q: %w", column.Name, parseErr)
@@ -425,7 +426,7 @@ nextRow:
 			}
 		}
 		if reader.postFetchCheck != nil {
-			if checkErr := reader.postFetchCheck(reader.rowNumber, reader.row); checkErr != nil {
+			if checkErr := reader.postFetchCheck(reader.rowNumber, row); checkErr != nil {
 				if reader.quarantineRows {
 					reader.Quarantined = append(reader.Quarantined, QuarantinedRow{RowNumber: reader.rowNumber, Reason: checkErr.Error()})
 					C.go_mdb_reset_row_state(reader.native)
@@ -435,6 +436,7 @@ nextRow:
 				return false
 			}
 		}
+		reader.row = row
 		return true
 	}
 }
@@ -466,4 +468,17 @@ func (db *DB) ReadAll(table string) ([]Column, []Row, error) {
 		rows = append(rows, reader.Row())
 	}
 	return reader.Columns, rows, reader.Err()
+}
+
+func injectPreRowErrorForTest(reader *Reader) {
+	if reader != nil && reader.native != nil && reader.native.mdb != nil {
+		reader.native.mdb.go_error = C.GO_MDB_ERROR_ROW
+	}
+}
+
+func nativeCurRowForTest(reader *Reader) int {
+	if reader == nil || reader.native == nil || reader.native.table == nil {
+		return -1
+	}
+	return int(reader.native.table.cur_row)
 }

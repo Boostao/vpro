@@ -132,7 +132,7 @@ mdb_crack_row4(MdbHandle *mdb, unsigned int row_start, unsigned int row_end,
 {
 	unsigned int i;
 
-	if (bitmask_sz + 3 + row_var_cols*2 + 2 > row_end)
+	if (row_end < row_start || bitmask_sz + 3 + row_var_cols*2 + 2 > row_end - row_start)
 		return 0;
 
 	for (i=0; i<row_var_cols+1; i++) {
@@ -150,18 +150,18 @@ mdb_crack_row3(MdbHandle *mdb, unsigned int row_start, unsigned int row_end,
 	unsigned int num_jumps = 0, jumps_used = 0;
 	unsigned int col_ptr, row_len;
 
+	if (row_end < row_start)
+		return 0;
 	row_len = row_end - row_start + 1;
 	num_jumps = (row_len - 1) / 256;
+	if (bitmask_sz + num_jumps + 1 > row_end - row_start)
+		return 0;
 	col_ptr = row_end - bitmask_sz - num_jumps - 1;
+	if (col_ptr >= (size_t)mdb->fmt->pg_size || col_ptr < row_start + 1 + row_var_cols)
+		return 0;
 	/* If last jump is a dummy value, ignore it */
 	if ((col_ptr-row_start-row_var_cols)/256 < num_jumps)
 		num_jumps--;
-
-	if (bitmask_sz + num_jumps + 1 > row_end)
-		return 0;
-
-	if (col_ptr >= (size_t)mdb->fmt->pg_size || col_ptr < row_var_cols)
-		return 0;
 
 	jumps_used = 0;
 	for (i=0; i<row_var_cols+1; i++) {
@@ -206,9 +206,18 @@ mdb_crack_row(MdbTableDef *table, int row_start, size_t row_size, MdbField *fiel
 	unsigned int bitmask_sz;
 	unsigned int *var_col_offsets = NULL;
 	unsigned int fixed_cols_found, row_fixed_cols;
-	unsigned int col_count_size;
+	unsigned int col_count_size = IS_JET3(mdb) ? 1 : 2;
 	unsigned int i;
-    unsigned int row_end = row_start + row_size - 1;
+	unsigned int row_end;
+
+	if (row_start < 0 || row_size < col_count_size ||
+	    (size_t)row_start > (size_t)mdb->fmt->pg_size ||
+	    row_size > (size_t)mdb->fmt->pg_size - (size_t)row_start) {
+		fprintf(stderr, "warning: Invalid page buffer detected in mdb_crack_row.\n");
+		if (!mdb->go_error) mdb->go_error = GO_MDB_ERROR_ROW;
+		return -1;
+	}
+	row_end = (unsigned int)row_start + (unsigned int)row_size - 1;
 
 	if (mdb_get_option(MDB_DEBUG_ROW)) {
 		mdb_buffer_dump(pg_buf, row_start, row_size);
@@ -216,17 +225,16 @@ mdb_crack_row(MdbTableDef *table, int row_start, size_t row_size, MdbField *fiel
 
 	if (IS_JET3(mdb)) {
 		row_cols = mdb_get_byte(pg_buf, row_start);
-		col_count_size = 1;
 	} else {
 		row_cols = mdb_get_int16(pg_buf, row_start);
-		col_count_size = 2;
 	}
 
 	bitmask_sz = (row_cols + 7) / 8;
-    if (bitmask_sz + !IS_JET3(mdb) >= row_end) {
-        fprintf(stderr, "warning: Invalid page buffer detected in mdb_crack_row.\n");
-        return -1;
-    }
+	if ((size_t)col_count_size + (table->num_var_cols > 0 ? (size_t)col_count_size : 0) + (size_t)bitmask_sz > row_size) {
+		fprintf(stderr, "warning: Invalid page buffer detected in mdb_crack_row.\n");
+		if (!mdb->go_error) mdb->go_error = GO_MDB_ERROR_ROW;
+		return -1;
+	}
 
 	nullmask = (unsigned char*)pg_buf + row_end - bitmask_sz + 1;
 
@@ -236,7 +244,11 @@ mdb_crack_row(MdbTableDef *table, int row_start, size_t row_size, MdbField *fiel
 			mdb_get_byte(pg_buf, row_end - bitmask_sz) :
 			mdb_get_int16(pg_buf, row_end - bitmask_sz - 1);
 		var_col_offsets = g_malloc((row_var_cols+1)*sizeof(int));
-        int success = 0;
+		if (!var_col_offsets) {
+			if (!mdb->go_error) mdb->go_error = GO_MDB_ERROR_ROW;
+			return -1;
+		}
+		int success = 0;
 		if (IS_JET3(mdb)) {
 			success = mdb_crack_row3(mdb, row_start, row_end, bitmask_sz,
                     row_var_cols, var_col_offsets);
@@ -244,13 +256,20 @@ mdb_crack_row(MdbTableDef *table, int row_start, size_t row_size, MdbField *fiel
 			success = mdb_crack_row4(mdb, row_start, row_end, bitmask_sz,
                     row_var_cols, var_col_offsets);
 		}
-        if (!success) {
-            fprintf(stderr, "warning: Invalid page buffer detected in mdb_crack_row.\n");
-            g_free(var_col_offsets);
-            return -1;
-        }
+		if (!success) {
+			fprintf(stderr, "warning: Invalid page buffer detected in mdb_crack_row.\n");
+			if (!mdb->go_error) mdb->go_error = GO_MDB_ERROR_ROW;
+			g_free(var_col_offsets);
+			return -1;
+		}
 	}
 
+	if (row_var_cols > row_cols) {
+		fprintf(stderr, "warning: Invalid page buffer detected in mdb_crack_row.\n");
+		if (!mdb->go_error) mdb->go_error = GO_MDB_ERROR_ROW;
+		g_free(var_col_offsets);
+		return -1;
+	}
 	fixed_cols_found = 0;
 	row_fixed_cols = row_cols - row_var_cols;
 
@@ -290,6 +309,12 @@ mdb_crack_row(MdbTableDef *table, int row_start, size_t row_size, MdbField *fiel
 		} else if ((!fields[i].is_fixed)
 		 && (col->var_col_num < row_var_cols)) {
 			col_start = var_col_offsets[col->var_col_num];
+			if (var_col_offsets[(col->var_col_num)+1] < col_start) {
+				fprintf(stderr, "warning: Invalid data location detected in mdb_crack_row. Table:%s Column:%i\n",table->name, i);
+				if (!mdb->go_error) mdb->go_error = GO_MDB_ERROR_ROW;
+				g_free(var_col_offsets);
+				return -1;
+			}
 			fields[i].start = row_start + col_start;
 			fields[i].value = (char*)pg_buf + row_start + col_start;
 			fields[i].siz = var_col_offsets[(col->var_col_num)+1] -
@@ -300,8 +325,12 @@ mdb_crack_row(MdbTableDef *table, int row_start, size_t row_size, MdbField *fiel
 			fields[i].siz = 0;
 			fields[i].is_null = 1;
 		}
-		if ((size_t)(fields[i].start + fields[i].siz) > row_start + row_size) {
+		if (fields[i].siz < 0 ||
+		    (fields[i].value != NULL &&
+		     (fields[i].start < row_start ||
+		      (size_t)fields[i].start + (size_t)fields[i].siz > (size_t)row_start + row_size))) {
 			fprintf(stderr, "warning: Invalid data location detected in mdb_crack_row. Table:%s Column:%i\n",table->name, i);
+			if (!mdb->go_error) mdb->go_error = GO_MDB_ERROR_ROW;
 			g_free(var_col_offsets);
 			return -1;
 		}

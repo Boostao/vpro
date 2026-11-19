@@ -74,6 +74,8 @@ int go_mdb_is_null(GoMdbReader *reader, int index) { return reader->nulls[index]
 int go_mdb_memo_too_large(GoMdbReader *reader, int index) {
     MdbColumn *col = go_mdb_column(reader, index);
     return col->col_type == MDB_MEMO && col->cur_value_len >= MDB_MEMO_OVERHEAD &&
+        col->cur_value_start >= 0 &&
+        (size_t)col->cur_value_start + 4 <= (size_t)reader->mdb->fmt->pg_size &&
         (mdb_get_int32(reader->mdb->pg_buf, col->cur_value_start) & 0x3fffffff) > GO_MDB_BIND_SIZE / 2;
 }
 int go_mdb_length(GoMdbReader *reader, int index) { return reader->lengths[index]; }
@@ -86,12 +88,17 @@ int go_mdb_next(GoMdbReader *reader) {
     MdbHandle *mdb = reader->mdb;
     int start;
     size_t size;
-    if (mdb_find_row(mdb, reader->table->cur_row - 1, &start, &size) < 0) return -1;
+    if (reader->table->cur_row == 0 ||
+            mdb_find_row(mdb, (int)(reader->table->cur_row - 1), &start, &size) < 0) {
+        if (!mdb->go_error) mdb->go_error = GO_MDB_ERROR_ROW;
+        return -1;
+    }
     start &= 0x1fff;
     MdbField *fields = calloc(reader->table->num_cols, sizeof(*fields));
     if (!fields) return -1;
     int count = mdb_crack_row(reader->table, start, size, fields);
     if (count < 0) {
+        if (!mdb->go_error) mdb->go_error = GO_MDB_ERROR_ROW;
         free(fields);
         return -1;
     }
@@ -102,9 +109,11 @@ int go_mdb_next(GoMdbReader *reader) {
     return 1;
 }
 
-/* Resets per-row error and iconv state without moving the cursor. Used when Go quarantines a
- * row AFTER go_mdb_next returned 1: mdb_fetch_row has already advanced cur_row past it, so
- * advancing again would silently skip the next valid row (ENG-GO-001). */
+/* Resets per-row error and iconv state without moving the cursor. mdb_fetch_row advances
+ * cur_row immediately after mdb_read_row (whether mdb_read_row succeeded or recorded a row/text
+ * decode error) and leaves cur_row untouched when mdb_read_next_dpg stops before reading a row,
+ * so neither in-fetch (status < 0) nor post-fetch (status == 1) quarantine should increment
+ * cur_row here (ENG-GO-001). */
 void go_mdb_reset_row_state(GoMdbReader *reader) {
     if (!reader || !reader->mdb) return;
     reader->mdb->go_error = 0;
@@ -115,14 +124,8 @@ void go_mdb_reset_row_state(GoMdbReader *reader) {
 #endif
 }
 
-/* Used when go_mdb_next returned < 0: mdb_fetch_row stopped on the failing row before its own
- * cur_row++, so the cursor must be stepped past that row exactly once. */
 void go_mdb_clear_row_error(GoMdbReader *reader) {
-    if (!reader || !reader->mdb) return;
     go_mdb_reset_row_state(reader);
-    if (reader->table && reader->table->strategy != MDB_INDEX_SCAN) {
-        reader->table->cur_row++;
-    }
 }
 
 void *go_mdb_blob(GoMdbReader *reader, int index, size_t *size) {
@@ -135,8 +138,13 @@ void *go_mdb_blob(GoMdbReader *reader, int index, size_t *size) {
                 (mdb_get_int32(col->bind_ptr, 0) & 0x3fffffff) > GO_MDB_BLOB_LIMIT) return NULL;
         return mdb_ole_read_full(reader->mdb, col, size);
     }
-    *size = col->cur_value_len;
-    if (*size == 0) return calloc(1, 1);
+    if (col->cur_value_len == 0) return calloc(1, 1);
+    if (col->cur_value_len < 0 || col->cur_value_start < 0 ||
+            (size_t)col->cur_value_start + (size_t)col->cur_value_len > (size_t)reader->mdb->fmt->pg_size) {
+        if (!reader->mdb->go_error) reader->mdb->go_error = GO_MDB_ERROR_ROW;
+        return NULL;
+    }
+    *size = (size_t)col->cur_value_len;
     void *value = malloc(*size);
     if (value) memcpy(value, reader->mdb->pg_buf + col->cur_value_start, *size);
     return value;

@@ -179,7 +179,7 @@ int mdb_find_row(MdbHandle *mdb, int row, int *start, size_t *len)
 	int rco = mdb->fmt->row_count_offset;
 	int next_start;
 
-	if (row > 1000) return -1;
+	if (row < 0 || row > 1000 || rco + 2 + row*2 + 2 > mdb->fmt->pg_size) return -1;
 
 	*start = mdb_get_int16(mdb->pg_buf, rco + 2 + row*2);
 	next_start = (row == 0) ? mdb->fmt->pg_size :
@@ -271,9 +271,13 @@ mdb_xfer_bound_ole(MdbHandle *mdb, int start, MdbColumn *col, int len)
 #else
 	if (col->bind_ptr) {
 		memset(col->bind_ptr, 0, MDB_MEMO_OVERHEAD);
-		if (len >= MDB_MEMO_OVERHEAD)
-			memcpy(col->bind_ptr, mdb->pg_buf + start, MDB_MEMO_OVERHEAD);
-		else if (len && !mdb->go_error)
+		if (len >= MDB_MEMO_OVERHEAD) {
+			if (start < 0 || (size_t)start + MDB_MEMO_OVERHEAD > (size_t)mdb->fmt->pg_size) {
+				if (!mdb->go_error) mdb->go_error = GO_MDB_ERROR_ROW;
+			} else {
+				memcpy(col->bind_ptr, mdb->pg_buf + start, MDB_MEMO_OVERHEAD);
+			}
+		} else if (len && !mdb->go_error)
 			mdb->go_error = 4;
 	}
 	ret = MDB_MEMO_OVERHEAD;
@@ -303,7 +307,23 @@ int ret;
 		} else {
 			//fprintf(stdout,"len %d size %d\n",len, col->col_size);
 			char *str;
-			if (col->col_type == MDB_NUMERIC) {
+			int min_len = 0;
+			switch (col->col_type) {
+			case MDB_BYTE: min_len = 1; break;
+			case MDB_INT: min_len = 2; break;
+			case MDB_LONGINT:
+			case MDB_COMPLEX:
+			case MDB_FLOAT: min_len = 4; break;
+			case MDB_DOUBLE:
+			case MDB_DATETIME:
+			case MDB_MONEY: min_len = 8; break;
+			case MDB_REPID: min_len = 16; break;
+			case MDB_NUMERIC: min_len = 17; break;
+			}
+			if (start < 0 || len < min_len || (size_t)start + (size_t)len > (size_t)mdb->fmt->pg_size) {
+				if (!mdb->go_error) mdb->go_error = GO_MDB_ERROR_ROW;
+				str = NULL;
+			} else if (col->col_type == MDB_NUMERIC) {
 				str = mdb_numeric_to_string(mdb, start, col->col_scale, col->col_prec);
 			} else if (col->col_type == MDB_DATETIME) {
 				if (len != 8) {
@@ -372,6 +392,10 @@ int mdb_read_row(MdbTableDef *table, unsigned int row)
 	}
 
 	fields = malloc(sizeof(MdbField) * table->num_cols);
+	if (!fields) {
+		if (!mdb->go_error) mdb->go_error = GO_MDB_ERROR_ROW;
+		return 0;
+	}
 
 	num_fields = mdb_crack_row(table, row_start, row_size, fields);
 	if (num_fields < 0) {
@@ -398,6 +422,8 @@ int mdb_read_row(MdbTableDef *table, unsigned int row)
 		col = g_ptr_array_index(table->columns,fields[i].colnum);
 		_mdb_attempt_bind(mdb, col, fields[i].is_null,
 			fields[i].start, fields[i].siz);
+		if (mdb->go_error)
+			break;
 	}
 
 	free(fields);
@@ -436,6 +462,8 @@ int mdb_read_next_dpg(MdbTableDef *table)
 	while (1) {
 		next_pg = mdb_map_find_next(mdb, table->usage_map,
 			table->map_sz, table->cur_phys_pg);
+		if (mdb->go_error)
+			return 0;
 		if (next_pg < 0)
 			break; /* unknow map type: goto fallback */
 		if (!next_pg)
@@ -485,12 +513,16 @@ mdb_fetch_row(MdbTableDef *table)
 	int rc;
 	guint32 pg;
 
+	if (mdb->go_error)
+		return 0;
+
 	/* initialize */
 	if (!table->cur_pg_num) {
+		if ((!table->is_temp_table)&&(table->strategy!=MDB_INDEX_SCAN)) {
+			if (!mdb_read_next_dpg(table) || mdb->go_error) return 0;
+		}
 		table->cur_pg_num=1;
 		table->cur_row=0;
-		if ((!table->is_temp_table)&&(table->strategy!=MDB_INDEX_SCAN))
-			if (!mdb_read_next_dpg(table)) return 0;
 	}
 
 	do {
@@ -498,13 +530,12 @@ mdb_fetch_row(MdbTableDef *table)
 			GPtrArray *pages = table->temp_table_pages;
 			if (pages->len == 0)
 				return 0;
-			rows = mdb_get_int16(
-				g_ptr_array_index(pages, table->cur_pg_num-1),
-				fmt->row_count_offset);
-			if (table->cur_row >= rows) {
-				table->cur_row = 0;
+			while (table->cur_row >= (rows = mdb_get_int16(
+					g_ptr_array_index(pages, table->cur_pg_num-1),
+					fmt->row_count_offset))) {
 				if (++table->cur_pg_num > (unsigned int)pages->len)
 					return 0;
+				table->cur_row = 0;
 			}
 			memcpy(mdb->pg_buf,
 				g_ptr_array_index(pages, table->cur_pg_num-1),
@@ -515,24 +546,23 @@ mdb_fetch_row(MdbTableDef *table)
 				mdb_index_scan_free(table);
 				return 0;
 			}
-			mdb_read_pg(mdb, pg);
+			if (!mdb_read_pg(mdb, pg) || mdb->go_error) {
+				return 0;
+			}
 		} else {
-			rows = mdb_get_int16(mdb->pg_buf,fmt->row_count_offset);
-
-			/* if at end of page, find a new data page */
-			if (table->cur_row >= rows) {
-				table->cur_row=0;
-	
-				if (!mdb_read_next_dpg(table)) {
+			/* if at end of page (or page has 0 rows), find a new data page */
+			while (table->cur_row >= (rows = mdb_get_int16(mdb->pg_buf, fmt->row_count_offset))) {
+				if (!mdb_read_next_dpg(table) || mdb->go_error) {
 					return 0;
 				}
+				table->cur_row=0;
 			}
 		}
 
 		/* printf("page %d row %d\n",table->cur_phys_pg, table->cur_row); */
 		rc = mdb_read_row(table, table->cur_row);
-		if (mdb->go_error) return 0;
 		table->cur_row++;
+		if (mdb->go_error) return 0;
 	} while (!rc);
 
 	return 1;
