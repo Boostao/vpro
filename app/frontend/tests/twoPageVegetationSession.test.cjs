@@ -339,3 +339,158 @@ test('lossless signed-zero request witnesses remain unchanged through failed dis
   assert.equal(Object.is(session.view().receipts[0].history.Request.original.records.rows[1].cells[column].real, -0), true);
   session.acknowledge();
 });
+
+test('staging negative cover (-1) surfaces validation error without locking session and saves 15 cleanly after correction (UX-VEG-003)', async () => {
+  const { session, port, calls } = setup();
+  await session.load();
+  session.stage('-7', 'Cover1', '-1', false);
+  assert.equal(session.view().blocked, false);
+  assert.equal(session.closeState().canSave, false);
+  assert.equal(session.closeState().blocked, true);
+  assert.match(session.view().error, />= 0/);
+  await assert.rejects(session.save(requestId), />= 0/);
+  assert.equal(calls.saves.length, 0);
+  session.undo();
+  assert.equal(session.closeState().unsaved, false);
+
+  // Re-stage -1, then immediately edit to 15 and save without reloading
+  session.stage('-7', 'Cover1', '-1', false);
+  assert.equal(session.closeState().canSave, false);
+  session.stage('-7', 'Cover1', '15', false);
+  assert.equal(session.view().error, null);
+  assert.equal(session.view().blocked, false);
+  assert.equal(session.closeState().canSave, true);
+
+  port.save = json => {
+    calls.saves.push(json);
+    const req = JSON.parse(json);
+    const result = saved(1);
+    const colIdx = wire.vegetationColumnIndex(req.original, 'Cover1');
+    result.history.Request = req;
+    result.history.Committed = structuredClone(req.original.records);
+    result.history.Committed.rows[0].cells[colIdx] = cell('real', 15);
+    result.history.Audits = result.history.Audits.slice(0, 1);
+    result.history.Audits[0].editField = 'Cover1';
+    result.history.Audits[0].afterEdit = '15';
+    return ready(client.proxy(result));
+  };
+  assert.equal(await session.save(requestId), true);
+  assert.equal(calls.saves.length, 1);
+  assert.equal(session.view().revision, 1);
+  assert.equal(session.view().blocked, false);
+  session.acknowledge();
+});
+
+test('pre-commit backend RuntimeError rejections keep session editable and retryable without leaving attempted wedged (UX-VEG-003)', async () => {
+  const path = require('node:path');
+  const { pathToFileURL } = require('node:url');
+  const { RuntimeError } = await import(
+    pathToFileURL(path.join(__dirname, '..', 'node_modules', '@wailsio', 'runtime', 'dist', 'runtime.js')).href
+  );
+
+  for (const backendMessage of [
+    'two-page vegetation draft -7.Cover1: source cover validation requires a value >= 0 and below 100 or NULL (<100 Or Is Null)',
+    'plot is locked; unlock before editing',
+    'two-page vegetation complete original/schema changed; cancel and reload',
+  ]) {
+    const { session, port, calls } = setup();
+    await session.load();
+    session.stage('-7', 'Cover1', '5', false);
+
+    port.save = json => {
+      calls.saves.push(json);
+      return Promise.reject(new RuntimeError(backendMessage));
+    };
+    assert.equal(await session.save(requestId), false);
+    assert.equal(session.view().blocked, false);
+    assert.match(session.view().error, /rejected before commit/);
+    assert.ok(session.view().error.includes(backendMessage));
+    await assert.rejects(session.resolve(), /No exact unknown/);
+
+    // Verify this.attempted was reset to false: a begin-time cancellation on next save must not mark blocked = true
+    const stopCancel = session.subscribe(() => { if (session.view().busy) session.cancel(); });
+    assert.equal(await session.save(nextID), false);
+    stopCancel();
+    assert.equal(session.view().blocked, false);
+    assert.equal(calls.saves.length, 1);
+
+    // Immediately edit Cover1 to 15 and save successfully without reloading
+    session.stage('-7', 'Cover1', '15', false);
+    assert.equal(session.view().error, null);
+    assert.equal(session.closeState().canSave, true);
+
+    port.save = json => {
+      calls.saves.push(json);
+      const req = JSON.parse(json);
+      const result = saved(1);
+      const colIdx = wire.vegetationColumnIndex(req.original, 'Cover1');
+      result.history.Request = req;
+      result.history.Committed = structuredClone(req.original.records);
+      result.history.Committed.rows[0].cells[colIdx] = cell('real', 15);
+      result.history.Audits = result.history.Audits.slice(0, 1);
+      result.history.Audits[0].editField = 'Cover1';
+      result.history.Audits[0].afterEdit = '15';
+      return ready(client.proxy(result));
+    };
+    assert.equal(await session.save(nextID), true);
+    assert.equal(calls.saves.length, 2);
+    assert.equal(session.view().revision, 1);
+    assert.equal(session.view().blocked, false);
+    session.acknowledge();
+  }
+
+  // Species-list Save path also recovers cleanly from pre-commit RuntimeError rejections
+  const speciesReceipt = structuredClone(readJsonFixture('twoPageVegetationSpeciesListReceipts.json')[7]);
+  const speciesReq = speciesReceipt.history.Request;
+  const speciesOwner = ownerOf(speciesReq);
+  let speciesCalls = 0;
+  const speciesPort = {
+    read: () => ready(client.proxy(structuredClone(speciesReq.original))),
+    references: () => ready(client.proxy(structuredClone(speciesReq.speciesList))),
+    save: () => { throw new Error('Unexpected legacy Save'); },
+    saveSpeciesList: () => {
+      speciesCalls++;
+      return Promise.reject(new RuntimeError('two-page Species list complete physical definitions changed; cancel and reload'));
+    },
+    outcome: () => { throw new Error('Unexpected recovery'); },
+  };
+  const speciesSession = new TwoPageVegetationSession(speciesOwner, speciesPort, true, true);
+  await speciesSession.load();
+  await speciesSession.loadReferences();
+  speciesSession.stage('-7', 'Species', 'A', false);
+  speciesSession.stage('-7', 'Cover1', '5', false);
+  speciesSession.stage('-7', 'Collected', 'C', false);
+  assert.equal(await speciesSession.save(speciesReq.requestId), false);
+  assert.equal(speciesSession.view().blocked, false);
+  assert.match(speciesSession.view().error, /rejected before commit/);
+  speciesPort.saveSpeciesList = json => {
+    speciesCalls++;
+    const req = JSON.parse(json);
+    const res = structuredClone(speciesReceipt);
+    const colIdx = wire.vegetationColumnIndex(req.original, 'Cover1');
+    res.history.Request = req;
+    res.history.Committed.rows[0].cells[colIdx] = cell('real', 15);
+    res.history.Audits.find(a => a.editField === 'Cover1').afterEdit = '15';
+    return ready(client.proxy(res));
+  };
+  speciesSession.stage('-7', 'Cover1', '15', false);
+  assert.equal(await speciesSession.save(nextID), true);
+  assert.equal(speciesCalls, 2);
+  assert.equal(speciesSession.view().blocked, false);
+  speciesSession.acknowledge();
+
+  // Post-commit cleanup failure and context cancellation/deadline RuntimeErrors remain conservatively blocked
+  for (const ambiguousMessage of [
+    'two-page vegetation edit committed but completion failed; recover the retained request before retrying: disk I/O',
+    'context canceled',
+    'two-page vegetation selected SU attachment: context deadline exceeded',
+  ]) {
+    const { session, port } = setup();
+    await session.load();
+    stage(session);
+    port.save = () => Promise.reject(new RuntimeError(ambiguousMessage));
+    assert.equal(await session.save(requestId), false);
+    assert.equal(session.view().blocked, true);
+    assert.throws(() => session.stage('-7', 'Cover1', '15', false), /unknown/);
+  }
+});

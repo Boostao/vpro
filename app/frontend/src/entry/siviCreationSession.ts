@@ -21,11 +21,19 @@ export interface SIVICreationView {
   revision: number;
 }
 
+function isPreCommitBackendRejection(cause: unknown): boolean {
+  if (cause === null || typeof cause !== 'object') return false;
+  const { name, message } = cause as { name?: unknown; message?: unknown };
+  if (name !== 'RuntimeError' || typeof message !== 'string') return false;
+  return !/\bcommitted but\b/i.test(message) && !/\bcontext (?:canceled|deadline exceeded)\b/i.test(message);
+}
+
 export class SIVICreationSession {
   private readonly owner: SIVISpeciesOwner;
   private state: SIVICreationView = { draft: null, references: null, busy: false, blocked: false,
     error: null, receipt: null, requestId: null, revision: 0 };
   private pending: SIVICreationRequest | null = null;
+  private attempted = false;
   private generation = 0;
   private readonly requests = new ReadRequests();
   private readonly listeners = new Set<() => void>();
@@ -107,9 +115,14 @@ export class SIVICreationSession {
     this.generation++;
     this.requests.cancelAll();
     this.state.busy = false;
-    if (this.pending) {
+    if (this.pending && this.attempted) {
       this.state.blocked = true;
       this.state.error = 'SIVI creation acknowledgement was cancelled; the exact draft/request remain unknown. Resolve read-only history, not matching values.';
+    } else if (this.pending) {
+      this.pending = null;
+      this.state.requestId = null;
+      this.attempted = false;
+      this.state.error = 'SIVI creation cancelled before dispatch; retained draft is unchanged.';
     } else this.state.error = 'SIVI creation definition read cancelled; retained draft and definitions are unchanged.';
     this.changed();
   }
@@ -119,6 +132,7 @@ export class SIVICreationSession {
     if (!close.canSave || !this.state.draft || !this.state.references) throw new Error(close.saveReason);
     this.pending = siviCreationRequest(this.state.draft, this.state.references, this.owner, requestId);
     this.state.requestId = requestId;
+    this.attempted = false;
     return this.acceptReceipt('create');
   }
   async resolve(): Promise<boolean> {
@@ -133,9 +147,18 @@ export class SIVICreationSession {
     this.state.busy = true;
     this.state.error = null;
     this.changed();
+    let preCommitRejected = false;
     try {
+      if (generation !== this.generation) return false;
+      if (operation === 'create') this.attempted = true;
       const json = JSON.stringify(request);
-      const wire = await this.requests.track(operation === 'create' ? this.port.create(json) : this.port.receipt(json));
+      let wire: unknown;
+      try {
+        wire = await this.requests.track(operation === 'create' ? this.port.create(json) : this.port.receipt(json));
+      } catch (rpcCause) {
+        preCommitRejected = operation === 'create' && isPreCommitBackendRejection(rpcCause);
+        throw rpcCause;
+      }
       if (generation !== this.generation) return false;
       if (wire === null && operation === 'lookup') {
         throw new Error('No committed history is visible for this request. This is unresolved, not proof that creation failed.');
@@ -146,11 +169,25 @@ export class SIVICreationSession {
       this.state.requestId = null;
       this.state.revision++;
       this.pending = null;
+      this.attempted = false;
       return true;
     } catch (cause) {
       if (generation === this.generation) {
-        this.state.blocked = true;
-        this.state.error = `SIVI creation outcome remains unknown; exact draft/request retained, no automatic replay: ${String(cause)}`;
+        if (preCommitRejected) {
+          this.pending = null;
+          this.state.requestId = null;
+          this.attempted = false;
+          this.state.blocked = false;
+          this.state.error = `SIVI creation rejected before commit; retained draft requires correction or Undo: ${String(cause)}`;
+        } else if (this.attempted) {
+          this.state.blocked = true;
+          this.state.error = `SIVI creation outcome remains unknown; exact draft/request retained, no automatic replay: ${String(cause)}`;
+        } else {
+          this.pending = null;
+          this.state.requestId = null;
+          this.attempted = false;
+          this.state.error = `SIVI creation failed before dispatch; retained draft requires correction: ${String(cause)}`;
+        }
       }
       return false;
     } finally {

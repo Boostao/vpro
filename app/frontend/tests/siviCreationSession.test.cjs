@@ -350,3 +350,108 @@ test('failed or cancelled definition reload leaves the same draft and previously
   assert.deepEqual(current.view().references, original.references);
   assert.match(current.view().error, /cancelled/);
 });
+
+test('staging negative cover (-1) in SIVI creation surfaces validation error, keeps Undo enabled, and saves 15 after correction (UX-VEG-003)', async () => {
+  const { current, calls } = await fixture();
+  for (const invalidCover of ['-1', '-0.01', '-0', '-1e-100', '99.999999']) {
+    current.updateDraft(editor.stageSIVICreationCover(current.view().draft, 'Cover1', invalidCover, false));
+    assert.equal(current.view().blocked, false);
+    assert.equal(current.closeState().canSave, false);
+    assert.equal(current.closeState().blocked, true);
+    assert.match(current.view().error, /0 or more and strictly less than 100/);
+    await assert.rejects(current.save(token), /0 or more and strictly less than 100/);
+    assert.equal(calls.create, 0);
+  }
+
+  // Undo remains usable while invalid
+  current.discard();
+  assert.equal(current.view().draft, null);
+  assert.equal(current.closeState().unsaved, false);
+
+  // Start SubVegA-SIVI_BC, stage -1, then edit to 15 and save without reloading
+  current.start('SubVegA-SIVI_BC');
+  let draft = editor.stageSIVICreationSpecies(current.view().draft, 'TREE');
+  draft = editor.stageSIVICreationCover(draft, 'Cover1', '-1', false);
+  current.updateDraft(draft);
+  assert.equal(current.closeState().canSave, false);
+  assert.equal(current.view().blocked, false);
+
+  draft = editor.stageSIVICreationCover(current.view().draft, 'Cover1', '15', false);
+  current.updateDraft(draft);
+  assert.equal(current.view().error, null);
+  assert.equal(current.closeState().canSave, true);
+  assert.equal(await current.save(token), true);
+  assert.equal(calls.create, 1);
+  assert.equal(current.view().revision, 1);
+  assert.equal(current.view().receipt.covers[0].value.real, 15);
+});
+
+test('pre-commit backend RuntimeError rejections on SIVI creation keep draft editable and retryable without deadlocking (UX-VEG-003)', async () => {
+  const path = require('node:path');
+  const { pathToFileURL } = require('node:url');
+  const { RuntimeError } = await import(
+    pathToFileURL(path.join(__dirname, '..', 'node_modules', '@wailsio', 'runtime', 'dist', 'runtime.js')).href
+  );
+  const nextToken = '00000000-0000-4000-8000-000000000002';
+
+  for (const backendMessage of [
+    'SIVI creation cover "Cover1" must be >= 0 and < 100 or NULL',
+    'SIVI creation requires an explicit audit actor',
+    'Select an exact source-list Species code or review its old-code/personal choices before creating.',
+  ]) {
+    const { current, calls, port } = await fixture();
+    port.create = json => {
+      calls.create++;
+      calls.requests.push(json);
+      return Promise.reject(new RuntimeError(backendMessage));
+    };
+    assert.equal(await current.save(token), false);
+    assert.equal(current.view().blocked, false);
+    assert.equal(current.view().requestId, null);
+    assert.match(current.view().error, /rejected before commit/);
+    assert.ok(current.view().error.includes(backendMessage));
+    await assert.rejects(current.resolve(), /No unknown SIVI creation request/);
+
+    // Verify pending/attempted state was cleared: cancelling a subsequent definition read does not mark creation blocked
+    const delayedRefs = held();
+    port.references = () => delayedRefs.promise;
+    const loadingRefs = current.loadReferences();
+    current.cancel();
+    delayedRefs.release(references());
+    assert.equal(await loadingRefs, false);
+    assert.equal(current.view().blocked, false);
+    assert.match(current.view().error, /definition read cancelled/);
+
+    // Immediately edit Cover1 to 15 and save cleanly without reloading
+    const updated = editor.stageSIVICreationCover(current.view().draft, 'Cover1', '15', false);
+    current.updateDraft(updated);
+    assert.equal(current.view().error, null);
+    assert.equal(current.closeState().canSave, true);
+
+    port.create = json => {
+      calls.create++;
+      calls.requests.push(json);
+      return resolved(receipt(JSON.parse(json)));
+    };
+    assert.equal(await current.save(nextToken), true);
+    assert.equal(calls.create, 2);
+    assert.equal(current.view().revision, 1);
+    assert.equal(current.view().blocked, false);
+    assert.equal(current.view().receipt.covers[0].value.real, 15);
+  }
+
+  // Post-commit cleanup failure, context cancellation/deadline, and plain transport errors still retain unknown request
+  for (const ambiguousError of [
+    new RuntimeError('SIVI identity creation committed but cleanup failed; reload before retrying: disk full'),
+    new RuntimeError('context canceled'),
+    new RuntimeError('SIVI creation: context deadline exceeded'),
+    new Error('transport socket closed'),
+  ]) {
+    const { current, port } = await fixture();
+    port.create = () => Promise.reject(ambiguousError);
+    assert.equal(await current.save(token), false);
+    assert.equal(current.view().blocked, true);
+    assert.equal(current.view().requestId, token);
+    assert.throws(() => current.discard(), /unknown/);
+  }
+});

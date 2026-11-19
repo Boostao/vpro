@@ -70,7 +70,7 @@ test('complete originals preserve physical membership separately and reject inco
   assert.equal(wire.twoPageVegetationOriginalFromWire(source, fixture.owner).records.rows.length, 2);
 });
 
-test('all25 source bindings are independently mapped and all21 cover controls enforce strict below100 without lower bound', () => {
+test('all25 source bindings are independently mapped and all21 cover controls enforce SINGLE-narrowed [0, 100) bounds while preserving unchanged historical values', () => {
   for (const [form, fields] of [
     ['SubVegAXL_BC', ['Cover1', 'Cover2', 'Cover3', 'TotalA', 'Cover4', 'Cover5', 'TotalB', 'Collected']],
     ['SubVegAXL', ['Cover1', 'Cover2', 'Cover3', 'TotalA', 'Cover4', 'Cover5', 'TotalB', 'Cover5a', 'Cover5b', 'Cover5c', 'Collected']],
@@ -83,13 +83,13 @@ test('all25 source bindings are independently mapped and all21 cover controls en
       assert.equal(editor.stageTwoPageVegetation(source, '-7', column, column === 'Collected' ? 'x' : '5', false).error, null);
       assert.equal(editor.stageTwoPageVegetation(source, '-7', column, '', true).error, null);
       if (column === 'Collected') continue;
-      for (const invalid of ['99.99999999999999', '99.999999', '100', '100.00000000000001', '101', '-0', '-1e-46', '1e39', ' 5', '5 ', 'NaN', '5x', '']) {
+      for (const invalid of ['99.99999999999999', '99.999999', '100', '100.00000000000001', '101', '-1', '-0.25', '-3.4028234663852886e38', '-0', '-1e-46', '1e39', ' 5', '5 ', 'NaN', '5x', '']) {
         assert.notEqual(editor.stageTwoPageVegetation(source, '-7', column, invalid, false).error, null, `${form}.${column} ${invalid}`);
       }
-      for (const valid of ['99.99999', '1e-46', '-1', '-3.4028234663852886e38']) {
+      for (const valid of ['0', '99.99999', '99.999996', '1e-46']) {
         assert.equal(editor.stageTwoPageVegetation(source, '-7', column, valid, false).error, null, `${form}.${column} ${valid}`);
       }
-      for (const historical of [99.999999, 0.1, 1e-46, 100, 101, 1e40, -0]) {
+      for (const historical of [99.999999, 0.1, 1e-46, 100, 101, 1e40, -0, -1, -3.4028234663852886e38]) {
         Object.assign(fieldCell(source, column), cell('real', historical));
         const raw = Object.is(historical, -0) ? '-0' : historical === 100 ? '100.0' : String(historical);
         const staged = editor.stageTwoPageVegetation(source, '-7', column, raw, false);
@@ -110,9 +110,10 @@ test('all21 numeric bindings match independently observed Access SINGLE storage 
       for (const observed of calibration.cases) {
         Object.assign(fieldCell(source, column), cell('real', 1));
         const staged = editor.stageTwoPageVegetation(source, '-7', column, observed.raw, false);
-        assert.equal(staged.error === null, observed.clientAccepted, `${form}.${column} ${observed.raw}`);
+        const expectedAccepted = observed.clientAccepted && observed.nativeValue !== null && observed.nativeValue >= 0;
+        assert.equal(staged.error === null, expectedAccepted, `${form}.${column} ${observed.raw}`);
         assert.equal(staged.raw, observed.raw);
-        if (observed.clientAccepted) {
+        if (expectedAccepted) {
           assert.equal(staged.value.storage, 'real');
           assert.equal(Object.is(staged.value.real, observed.nativeValue), true);
           const request = editor.twoPageVegetationRequest(source, {
@@ -208,5 +209,34 @@ test('column identifier witnesses match strict Go folding without folding data v
     assert.equal(keys.has(canonical), false);
     keys.add(canonical);
     for (const rune of Array.from(group)) assert.equal(wire.vegetationIdentifierKey(rune), canonical);
+  }
+});
+
+test('negative cover (-1) and float32 >= 100 are rejected before request build while correcting to 15 builds a valid request (UX-VEG-003)', () => {
+  for (const [form, column] of [
+    ['SubVegAXL_BC', 'Cover1'],
+    ['SubVegAXL', 'Cover5c'],
+    ['SubVegCXL', 'Cover6'],
+    ['SubVegDXL', 'Cover7'],
+  ]) {
+    const source = variant(form);
+    const scopedOwner = { contextId: source.contextId, project: source.project, plot: source.plot, form };
+    for (const bad of ['-1', '-0.01', '-99', '99.999999']) {
+      const rejected = editor.stageTwoPageVegetation(source, '-7', column, bad, false);
+      assert.equal(rejected.raw, bad);
+      assert.ok(rejected.error, `${form}.${column} ${bad}`);
+      assert.match(rejected.error, />= 0.*below100/);
+      assert.throws(
+        () => editor.twoPageVegetationRequest(source, scopedOwner, { [column]: rejected }, fixture.request.requestId),
+        />= 0.*below100/,
+      );
+    }
+    const corrected = editor.stageTwoPageVegetation(source, '-7', column, '15', false);
+    assert.equal(corrected.error, null);
+    assert.equal(corrected.value.real, 15);
+    const built = editor.twoPageVegetationRequest(source, scopedOwner, { [column]: corrected }, fixture.request.requestId);
+    assert.equal(built.edits.length, 1);
+    assert.equal(built.edits[0].column, column);
+    assert.equal(built.edits[0].value.real, 15);
   }
 });

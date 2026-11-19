@@ -32,6 +32,13 @@ export interface TwoPageVegetationView {
   referenceError: string | null;
 }
 
+function isPreCommitBackendRejection(cause: unknown): boolean {
+  if (cause === null || typeof cause !== 'object') return false;
+  const { name, message } = cause as { name?: unknown; message?: unknown };
+  if (name !== 'RuntimeError' || typeof message !== 'string') return false;
+  return !/\bcommitted but\b/i.test(message) && !/\bcontext (?:canceled|deadline exceeded)\b/i.test(message);
+}
+
 export class TwoPageVegetationSession {
   private readonly owner: TwoPageVegetationOwner;
   private state: TwoPageVegetationView = { original: null, selectedRowId: null, drafts: {}, busy: false, blocked: false,
@@ -191,6 +198,7 @@ export class TwoPageVegetationSession {
       this.state.error = 'Vegetation Save delivery cancelled; exact request retained. Recover durable history without replay.';
     } else {
       this.pending = null;
+      this.attempted = false;
       this.state.error = 'Vegetation operation cancelled before mutation dispatch; prior original and drafts retained.';
     }
     this.changed();
@@ -221,6 +229,7 @@ export class TwoPageVegetationSession {
     const pending = this.pending;
     if (!pending) throw new Error('Stable vegetation request is unavailable.');
     const generation = this.begin();
+    let preCommitRejected = false;
     try {
       if (generation !== this.generation) return false;
       if (!recovery) { this.attempted = true; this.dispatchSettled = false; }
@@ -233,6 +242,9 @@ export class TwoPageVegetationSession {
           operation = this.port.saveSpeciesList(pending.json);
         } else operation = this.port.save(pending.json);
         wire = await this.reads.track(operation);
+      } catch (rpcCause) {
+        preCommitRejected = !recovery && isPreCommitBackendRejection(rpcCause);
+        throw rpcCause;
       } finally { if (!recovery) this.dispatchSettled = true; }
       if (generation !== this.generation) return false;
       if (wire === null) throw new Error('Missing history is unresolved; neither cancellation nor matching values authorizes replay.');
@@ -270,11 +282,17 @@ export class TwoPageVegetationSession {
       return true;
     } catch (cause) {
       if (generation === this.generation) {
-        if (this.attempted) {
+        if (preCommitRejected) {
+          this.pending = null;
+          this.attempted = false;
+          this.state.blocked = false;
+          this.state.error = `Vegetation Save rejected before commit; retained drafts require correction or Undo: ${String(cause)}`;
+        } else if (this.attempted) {
           this.state.blocked = true;
           this.state.error = `Vegetation Save outcome remains unknown; original/drafts/request retained without replay: ${String(cause)}`;
         } else {
           this.pending = null;
+          this.attempted = false;
           this.state.error = `Vegetation request failed before dispatch; retained drafts require correction: ${String(cause)}`;
         }
       }
