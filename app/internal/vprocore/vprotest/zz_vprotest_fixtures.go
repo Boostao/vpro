@@ -140,7 +140,7 @@ func SeedHeight(t *testing.T, db *sql.DB, plot string, id any) {
 func StoredHeight(t *testing.T, db *sql.DB, plot string, id int, field string) *float64 {
 	t.Helper()
 	var value sql.NullFloat64
-	if err := db.QueryRow(`SELECT `+vprocore.QuoteHeaderIdentifier(field)+` FROM Sample_Veg WHERE PlotNumber=? AND ID=?`, plot, id).Scan(&value); err != nil {
+	if err := db.QueryRow(`SELECT `+vprocore.QuoteHeaderIdentifier(field)+` FROM Sample_Veg WHERE `+vprocore.ExactTextPlotPredicate(`"PlotNumber"`)+` AND ID=?`, plot, plot, id).Scan(&value); err != nil {
 		t.Fatal(err)
 	}
 	if !value.Valid {
@@ -253,8 +253,8 @@ func HeaderFixture(t *testing.T) (*vprocore.PlotService, *sql.DB) {
 // tests that count field-level audits from a clean baseline.
 func DeleteCreationIdentityAudits(t *testing.T, db *sql.DB, plot string) {
 	t.Helper()
-	if _, err := db.Exec(`DELETE FROM Sample_Audit WHERE PlotNumber = ? AND BeforeEdit IS NULL
-		AND (("Table" = '_Env' AND EditField = 'PlotNumber') OR ("Table" = '_Admin' AND EditField = 'Plot'))`, plot); err != nil {
+	if _, err := db.Exec(`DELETE FROM Sample_Audit WHERE `+vprocore.ExactTextPlotPredicate(`"PlotNumber"`)+` AND BeforeEdit IS NULL
+		AND (("Table" = '_Env' AND EditField = 'PlotNumber') OR ("Table" = '_Admin' AND EditField = 'Plot'))`, plot, plot); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -262,7 +262,7 @@ func DeleteCreationIdentityAudits(t *testing.T, db *sql.DB, plot string) {
 func AuditCount(t *testing.T, db *sql.DB, plot string) int {
 	t.Helper()
 	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM Sample_Audit WHERE PlotNumber = ?`, plot).Scan(&count); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM Sample_Audit WHERE `+vprocore.ExactTextPlotPredicate(`"PlotNumber"`), plot, plot).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	return count
@@ -480,7 +480,7 @@ func SiteCodeRestoreFixture(t *testing.T, member string, before, after *string) 
 	if err := s.CreatePlot(h); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`UPDATE Sample_Env SET `+vprocore.QuoteHeaderIdentifier(member)+`=? WHERE PlotNumber=?`, after, h.PlotNumber); err != nil {
+	if _, err := db.Exec(`UPDATE Sample_Env SET `+vprocore.QuoteHeaderIdentifier(member)+`=? WHERE `+vprocore.ExactTextPlotPredicate(`"PlotNumber"`), after, h.PlotNumber, h.PlotNumber); err != nil {
 		t.Fatal(err)
 	}
 	result, err := db.Exec(`INSERT INTO Sample_Audit

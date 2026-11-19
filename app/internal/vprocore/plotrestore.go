@@ -357,12 +357,12 @@ func (s *PlotService) restorePlans(tx *sql.Tx, project, plot string, entries []A
 
 func restoreTarget(plan auditRestorePlan, plot string) (string, []any) {
 	if plan.table == "Admin" {
-		return `"Plot" = ?`, []any{plot}
+		return ExactTextPlotPredicate(`"Plot"`), []any{plot, plot}
 	}
 	if plan.table == "Env" {
-		return `"PlotNumber" = ?`, []any{plot}
+		return ExactTextPlotPredicate(`"PlotNumber"`), []any{plot, plot}
 	}
-	return `"PlotNumber" = ? AND "ID" = ?`, []any{plot, *plan.entry.ID}
+	return ExactTextPlotPredicate(`"PlotNumber"`) + ` AND "ID" = ?`, []any{plot, plot, *plan.entry.ID}
 }
 
 func restoreCurrentValue(tx *sql.Tx, project, plot string, plan auditRestorePlan) (any, error) {
@@ -432,12 +432,12 @@ func (s *PlotService) SetAuditRestoreSelection(plotNumber string, rowIDs []strin
 		return err
 	}
 	if _, err := tx.Exec(`UPDATE `+QuoteHeaderIdentifier(project+"_Audit")+
-		` SET "Restore" = 0 WHERE "Project" = ? AND "PlotNumber" = ?`, project, plotNumber); err != nil {
+		` SET "Restore" = 0 WHERE "Project" = ? AND `+ExactTextPlotPredicate(`"PlotNumber"`), project, plotNumber, plotNumber); err != nil {
 		return err
 	}
 	for _, id := range ids {
 		result, err := tx.Exec(`UPDATE `+QuoteHeaderIdentifier(project+"_Audit")+
-			` SET "Restore" = -1 WHERE rowid = ? AND "Project" = ? AND "PlotNumber" = ?`, id, project, plotNumber)
+			` SET "Restore" = -1 WHERE rowid = ? AND "Project" = ? AND `+ExactTextPlotPredicate(`"PlotNumber"`), id, project, plotNumber, plotNumber)
 		if err != nil {
 			return err
 		}
@@ -488,7 +488,7 @@ func (s *PlotService) restoreAuditSelection(plot string, rowIDs []string, action
 	defer tx.Rollback()
 	var entries []AuditEntry
 	if marked {
-		entries, err = readAuditEntries(tx, project, `"PlotNumber" = ? AND "Restore" <> 0`, plot)
+		entries, err = readAuditEntries(tx, project, ExactTextPlotPredicate(`"PlotNumber"`)+` AND "Restore" <> 0`, plot, plot)
 	} else {
 		entries, err = SelectedAuditEntries(tx, project, plot, ids)
 	}
@@ -523,7 +523,7 @@ func (s *PlotService) restoreAuditSelection(plot string, rowIDs []string, action
 	if action == AuditRestorePrune {
 		for _, plan := range plans {
 			deleted, err := tx.Exec(`DELETE FROM `+QuoteHeaderIdentifier(project+"_Audit")+
-				` WHERE rowid = ? AND "Project" = ? AND "PlotNumber" = ?`, plan.rowID, project, plot)
+				` WHERE rowid = ? AND "Project" = ? AND `+ExactTextPlotPredicate(`"PlotNumber"`), plan.rowID, project, plot, plot)
 			if err != nil {
 				return nil, err
 			}

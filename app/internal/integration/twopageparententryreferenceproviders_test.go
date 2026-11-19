@@ -273,7 +273,7 @@ func TestTwoPageEntryReferenceProviderPhysicalExclusionsAndNumericChoices(t *tes
 			t.Fatal(err)
 		}
 	}
-	for _, item := range []string{"01", "+1", "1.0", "32768", "-32768"} {
+	for _, item := range []string{"01", "+1", "1.0", "32768", "-32768", "32767"} {
 		if _, err := db.Exec(`INSERT INTO USysTableOfLists(ListName,Item,ItemDescription) VALUES ('Accuracy',?,NULL)`, item); err != nil {
 			t.Fatal(err)
 		}
@@ -312,19 +312,19 @@ func TestTwoPageEntryReferenceProviderPhysicalExclusionsAndNumericChoices(t *tes
 					continue
 				}
 				switch *choice.Code {
-				case "01", "+1", "1.0", "32768":
+				case "01", "+1", "1.0", "32768", "-32768":
 					seen[*choice.Code] = true
 					if choice.Selectable || choice.Diagnostic == "" {
 						t.Fatal("invalid integer choice became selectable", choice)
 					}
-				case "-32768":
+				case "32767":
 					seen[*choice.Code] = true
 					if !choice.Selectable {
 						t.Fatal("exact signed short boundary rejected", choice)
 					}
 				}
 			}
-			if len(seen) != 5 || len(ref.Definitions.Rows) != 11 {
+			if len(seen) != 6 || len(ref.Definitions.Rows) != 12 {
 				t.Fatal("numeric invalid/raw definitions dropped", seen, len(ref.Definitions.Rows))
 			}
 			return true, nil

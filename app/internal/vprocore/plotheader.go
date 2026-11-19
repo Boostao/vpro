@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf16"
@@ -204,8 +205,9 @@ func ReadHeader(db sqlutil.HeaderDB, project, plot string, caps map[string]bool)
 	}
 	query := `SELECT ` + strings.Join(selectFields, ",") +
 		` FROM ` + QuoteHeaderIdentifier(project+"_Env") + ` AS "Env" INNER JOIN ` +
-		QuoteHeaderIdentifier(project+"_Admin") + ` AS "Admin" ON "Env"."PlotNumber" = "Admin"."Plot" WHERE "Env"."PlotNumber" = ?`
-	if err := db.QueryRow(query, plot).Scan(destinations...); err != nil {
+		QuoteHeaderIdentifier(project+"_Admin") + ` AS "Admin" ON ` + ExactTextPlotJoin(`"Env"."PlotNumber"`, `"Admin"."Plot"`) +
+		` WHERE ` + ExactTextPlotPredicate(`"Env"."PlotNumber"`)
+	if err := db.QueryRow(query, plot, plot).Scan(destinations...); err != nil {
 		return nil, err
 	}
 	return h, nil
@@ -289,6 +291,73 @@ func AuditHeaderChange(before, after any, strength int) bool {
 	return strength >= 1
 }
 
+var headerUTMZonePattern = regexp.MustCompile(`^0*([1-9]|[1-5][0-9]|60)[Nn]?$`)
+
+func isSiteDomainProperty(property string) bool {
+	switch property {
+	case "date", "startDate", "elevation", "slope", "aspect", "standAge", "accuracy",
+		"structuralStage", "successional", "utmZone", "latitude", "longitude":
+		return true
+	}
+	return false
+}
+
+func validateContextSiteHeaderValues(h FS882Header, old *FS882Header, contextScoped bool) error {
+	if !contextScoped {
+		return nil
+	}
+	var prev FS882Header
+	if old != nil {
+		prev = *old
+	}
+	if old == nil || !SameSiteCode(prev.Date, h.Date) {
+		if err := ValidateSurveyDateText(h.Date); err != nil {
+			return err
+		}
+	}
+	for _, codeField := range []BecHeaderField{
+		{"StructuralStage", "structuralStage", "Env", 6, h.StructuralStage},
+		{"SuccessionalStatus", "successional", "Env", 3, h.Successional},
+	} {
+		var prevVal *string
+		if old != nil {
+			if codeField.Property == "structuralStage" {
+				prevVal = prev.StructuralStage
+			} else {
+				prevVal = prev.Successional
+			}
+		}
+		if codeField.Value != nil && !utf8.ValidString(*codeField.Value) {
+			return sqlutil.ValidateSiteCodeText(codeField.Name, codeField.Value, codeField.Maximum)
+		}
+		if old != nil && SameSiteCode(prevVal, codeField.Value) {
+			continue
+		}
+		if err := sqlutil.ValidateSiteCodeText(codeField.Name, codeField.Value, codeField.Maximum); err != nil {
+			return err
+		}
+	}
+	if h.UTMZone != nil && (old == nil || !SameSiteCode(prev.UTMZone, h.UTMZone)) {
+		if err := sqlutil.ValidateSiteCodeText("UTMZone", h.UTMZone, 3); err != nil {
+			return err
+		}
+		if !headerUTMZonePattern.MatchString(strings.TrimSpace(*h.UTMZone)) {
+			return fmt.Errorf("UTMZone %q must be a Northern Hemisphere UTM zone number (for example 9, 10, or 10N)", *h.UTMZone)
+		}
+	}
+	if h.Latitude != nil && (old == nil || !SameHeightValue(prev.Latitude, h.Latitude)) {
+		if *h.Latitude < -90 || *h.Latitude > 90 {
+			return fmt.Errorf("Latitude must be between -90 and 90 degrees (got %v)", *h.Latitude)
+		}
+	}
+	if h.Longitude != nil && (old == nil || !SameHeightValue(prev.Longitude, h.Longitude)) {
+		if *h.Longitude < -180 || *h.Longitude > 180 {
+			return fmt.Errorf("Longitude must be between -180 and 180 degrees (got %v)", *h.Longitude)
+		}
+	}
+	return nil
+}
+
 func validateParentSoilQuantitativeHeaderValues(h FS882Header, old *FS882Header) error {
 	var prev FS882Header
 	if old != nil {
@@ -302,6 +371,11 @@ func validateParentSoilQuantitativeHeaderValues(h FS882Header, old *FS882Header)
 		{"RootRestrictingDepth", prev.RootRestrictingDepth, h.RootRestrictingDepth},
 		{"RootingDepth", prev.RootingDepth, h.RootingDepth},
 		{"SeepageDepth", prev.SeepageDepth, h.SeepageDepth},
+		{"Aspect", prev.Aspect, h.Aspect},
+		{"StartDate", prev.StartDate, h.StartDate},
+		{"Elevation", prev.Elevation, h.Elevation},
+		{"StandAge", prev.StandAge, h.StandAge},
+		{"LocationAccuracy", prev.Accuracy, h.Accuracy},
 	} {
 		if old != nil && reflect.DeepEqual(intField.before, intField.after) {
 			continue
@@ -317,6 +391,7 @@ func validateParentSoilQuantitativeHeaderValues(h FS882Header, old *FS882Header)
 	}{
 		{"HumusThickness", prev.HumusThickness, h.HumusThickness},
 		{"ActiveLayerDepth", prev.ActiveLayerDepth, h.ActiveLayerDepth},
+		{"SlopeGradient", prev.Slope, h.Slope},
 	} {
 		var beforePtr *float64
 		if old != nil {
@@ -365,6 +440,9 @@ func (s *PlotService) saveHeader(h FS882Header, mode headerSaveMode) error {
 	if strings.TrimSpace(h.PlotNumber) == "" {
 		return errors.New("PlotNumber is required")
 	}
+	if mode == headerCreate && h.PlotNumber != strings.TrimSpace(h.PlotNumber) {
+		return errors.New("PlotNumber must not have leading or trailing whitespace")
+	}
 	db, project, release, err := s.GetActiveDB()
 	if err != nil {
 		return err
@@ -376,7 +454,7 @@ func (s *PlotService) saveHeader(h FS882Header, mode headerSaveMode) error {
 	if err := validateQualityHeaderBeforeTransaction(db, project, h, mode); err != nil {
 		return err
 	}
-	if err := ValidateSubstrateHeaderBeforeTransaction(db, project, h, mode); err != nil {
+	if err := ValidateSubstrateHeaderBeforeTransactionWithBounds(db, project, h, mode, s.ContextScoped); err != nil {
 		return err
 	}
 	if err := s.validateSiteCodeHeaderBeforeTransaction(db, project, h, mode); err != nil {
@@ -398,6 +476,11 @@ func (s *PlotService) saveHeader(h FS882Header, mode headerSaveMode) error {
 		return err
 	}
 	if err := validateCodeHeaderBeforeTransaction(db, project, h, mode, validateParentSoilQuantitativeHeaderValues); err != nil {
+		return err
+	}
+	if err := validateCodeHeaderBeforeTransaction(db, project, h, mode, func(next FS882Header, old *FS882Header) error {
+		return validateContextSiteHeaderValues(next, old, s.ContextScoped)
+	}); err != nil {
 		return err
 	}
 	if err := s.validateSoilDrainageBeforeTransaction(db, project, h, mode); err != nil {
@@ -436,10 +519,10 @@ func (s *PlotService) saveHeader(h FS882Header, mode headerSaveMode) error {
 		}
 	}
 	var envCount, adminCount int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM `+QuoteHeaderIdentifier(project+"_Env")+` WHERE "PlotNumber" = ?`, h.PlotNumber).Scan(&envCount); err != nil {
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM `+QuoteHeaderIdentifier(project+"_Env")+` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`), h.PlotNumber, h.PlotNumber).Scan(&envCount); err != nil {
 		return err
 	}
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM `+QuoteHeaderIdentifier(project+"_Admin")+` WHERE "Plot" = ?`, h.PlotNumber).Scan(&adminCount); err != nil {
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM `+QuoteHeaderIdentifier(project+"_Admin")+` WHERE `+ExactTextPlotPredicate(`"Plot"`), h.PlotNumber, h.PlotNumber).Scan(&adminCount); err != nil {
 		return err
 	}
 	if envCount != adminCount || envCount > 1 {
@@ -452,6 +535,12 @@ func (s *PlotService) saveHeader(h FS882Header, mode headerSaveMode) error {
 		return fmt.Errorf("plot %q no longer exists; reload before saving", h.PlotNumber)
 	}
 	creating := envCount == 0
+	if creating && h.PlotNumber != strings.TrimSpace(h.PlotNumber) {
+		return errors.New("PlotNumber must not have leading or trailing whitespace")
+	}
+	if creating && s.ContextScoped && len(utf16.Encode([]rune(h.PlotNumber))) > 7 {
+		return errors.New("PlotNumber exceeds 7 UTF-16 code units")
+	}
 	old := &FS882Header{}
 	if !creating {
 		old, err = ReadHeader(tx, project, h.PlotNumber, caps)
@@ -469,7 +558,7 @@ func (s *PlotService) saveHeader(h FS882Header, mode headerSaveMode) error {
 	if err := validateQualityHeaderValues(h, qualityOld); err != nil {
 		return err
 	}
-	if err := ValidateSubstrateHeaderValues(h, qualityOld); err != nil {
+	if err := ValidateSubstrateHeaderValuesWithBounds(h, qualityOld, s.ContextScoped); err != nil {
 		return err
 	}
 	if err := s.validateSiteCodeHeaderValues(h, qualityOld); err != nil {
@@ -493,6 +582,9 @@ func (s *PlotService) saveHeader(h FS882Header, mode headerSaveMode) error {
 	if err := validateParentSoilQuantitativeHeaderValues(h, qualityOld); err != nil {
 		return err
 	}
+	if err := validateContextSiteHeaderValues(h, qualityOld, s.ContextScoped); err != nil {
+		return err
+	}
 	if err := s.validateSoilDrainageHeaderValues(h, qualityOld); err != nil {
 		return err
 	}
@@ -512,7 +604,7 @@ func (s *PlotService) saveHeader(h FS882Header, mode headerSaveMode) error {
 			if field.Table != table || field.Property == "plotNumber" || !caps[field.Property] {
 				continue
 			}
-			if !creating && (field.Property == "zone" || field.Property == "subZone" || field.Property == "siteSeries" || field.Property == "userSiteUnit" || field.Property == "becSiteUnit" || field.Property == "speciesListComplete" || field.Property == "updatedFromCards" || field.Property == "soilDrainage" || isQualityProperty(field.Property) || isSubstrateProperty(field.Property) || isSiteCodeProperty(field.Property) || isRegionProperty(field.Property) || isSoilProperty(field.Property) || isGeologyProperty(field.Property) || IsParentCodeProperty(field.Property) || IsOrdinaryProperty(field.Property)) &&
+			if !creating && (field.Property == "zone" || field.Property == "subZone" || field.Property == "siteSeries" || field.Property == "userSiteUnit" || field.Property == "becSiteUnit" || field.Property == "speciesListComplete" || field.Property == "updatedFromCards" || field.Property == "soilDrainage" || isSiteDomainProperty(field.Property) || isQualityProperty(field.Property) || isSubstrateProperty(field.Property) || isSiteCodeProperty(field.Property) || isRegionProperty(field.Property) || isSoilProperty(field.Property) || isGeologyProperty(field.Property) || IsParentCodeProperty(field.Property) || IsOrdinaryProperty(field.Property)) &&
 				reflect.DeepEqual(HeaderValue(h, field), HeaderValue(*old, field)) {
 				continue
 			}
@@ -528,8 +620,8 @@ func (s *PlotService) saveHeader(h FS882Header, mode headerSaveMode) error {
 			if len(assignments) == 0 {
 				continue
 			}
-			query = `UPDATE ` + target + ` SET ` + strings.Join(assignments, ",") + ` WHERE ` + QuoteHeaderIdentifier(key) + ` = ?`
-			values = append(values[1:], h.PlotNumber)
+			query = `UPDATE ` + target + ` SET ` + strings.Join(assignments, ",") + ` WHERE ` + ExactTextPlotPredicate(QuoteHeaderIdentifier(key))
+			values = append(values[1:], h.PlotNumber, h.PlotNumber)
 		}
 		if _, err := tx.Exec(query, values...); err != nil {
 			return fmt.Errorf("save %s: %w", table, err)

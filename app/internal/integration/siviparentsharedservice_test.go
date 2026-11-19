@@ -48,12 +48,12 @@ func sharedNumericEdits(t *testing.T, original *sourceform.SIVIParentProjection)
 	}{
 		{"UTMEasting", vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(-123456.78912345)}},
 		{"UTMNorthing", vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(-7654321.123456789)}},
-		{"SlopeGradient", vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(-101.125)}},
-		{"LocationAccuracy", vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("-32768")}},
-		{"Elevation", vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("32767")}},
-		{"Aspect", vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("-360")}},
+		{"SlopeGradient", vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(101.125)}},
+		{"LocationAccuracy", vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("0")}},
+		{"Elevation", vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("9000")}},
+		{"Aspect", vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("360")}},
 		{"StandAge", vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("32767")}},
-		{"StartDate", vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("-32768")}},
+		{"StartDate", vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("1900")}},
 		{"Latitude", vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(-49.1234567890123)}},
 		{"Longitude", vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(123.9876543210987)}},
 	} {
@@ -665,7 +665,7 @@ func TestSIVIParentSharedDateLegacyCorrectionNullAndAuthoritativeRestore(t *test
 				date := sftest.SiviParentEdit(t, original, "Date",
 					vprocore.ProjectMetadataCell{Storage: "text", Text: vprotest.SiviSharedTestPointer("2026-03-08 02:30:00.100000000")})
 				year := sftest.SiviParentEdit(t, original, "StartDate",
-					vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("-32768")})
+					vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("1900")})
 				result, err = service.Save(ctx, state.ContextID, "108050", sourceform.SIVIParentSharedWrite{Original: original, Edits: []sourceform.SIVIParentCellEdit{date, year}})
 				if err != nil || result.ChangedCells != 2 {
 					t.Fatal("mixed Date/year correction failed", result, err)
@@ -715,7 +715,7 @@ func TestSIVIParentSharedDateOwnershipCollisionAtomicRollbackAndRetry(t *testing
 	date := sftest.SiviParentEdit(t, original, "Date",
 		vprocore.ProjectMetadataCell{Storage: "text", Text: vprotest.SiviSharedTestPointer("0100-01-01 00:00:00.000000000")})
 	year := sftest.SiviParentEdit(t, original, "StartDate",
-		vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("-32768")})
+		vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("1900")})
 	request := sourceform.SIVIParentSharedWrite{Original: original, Edits: []sourceform.SIVIParentCellEdit{year, date}}
 	before := vprotest.DatabaseBytes(t, service.Contexts.Projects.Sqlite.Attachments)
 	for _, bad := range []sourceform.SIVIParentCellEdit{
@@ -781,10 +781,25 @@ func TestSIVIParentSharedNumericDomainsAndOwnership(t *testing.T) {
 		valid := []vprocore.ProjectMetadataCell{{Storage: "null"}}
 		bad := []vprocore.ProjectMetadataCell{{Storage: "text", Text: vprotest.SiviSharedTestPointer("3")}}
 		if kind == "integer" {
-			for _, value := range []string{"-32768", "32767", "0"} {
+			var okInts, badInts []string
+			switch edit.Column {
+			case "Aspect":
+				okInts = []string{"0", "360", "999"}
+				badInts = []string{"-1", "361", "500", "-32768", "32767", "-32769", "32768", "01", "9007199254740993"}
+			case "StartDate":
+				okInts = []string{"1900", "2026", "2500"}
+				badInts = []string{"-32768", "1899", "2501", "32767", "-32769", "32768", "01", "9007199254740993"}
+			case "Elevation":
+				okInts = []string{"0", "1250", "9000"}
+				badInts = []string{"-1", "-500", "9001", "-32768", "32767", "-32769", "32768", "01", "9007199254740993"}
+			default:
+				okInts = []string{"0", "32767"}
+				badInts = []string{"-1", "-32768", "-32769", "32768", "01", "9007199254740993"}
+			}
+			for _, value := range okInts {
 				valid = append(valid, vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer(value)})
 			}
-			for _, value := range []string{"-32769", "32768", "01", "9007199254740993"} {
+			for _, value := range badInts {
 				bad = append(bad, vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer(value)})
 			}
 			bad = append(bad, vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(3.0)})
@@ -795,11 +810,20 @@ func TestSIVIParentSharedNumericDomainsAndOwnership(t *testing.T) {
 			} else if kind == "longitude" {
 				limit = 180
 			}
-			for _, value := range []float64{-limit, limit, 0, -1.1234567890123} {
-				valid = append(valid, vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(value)})
-			}
-			for _, value := range []float64{math.Nextafter(limit, math.Inf(1)), -math.Nextafter(limit, math.Inf(1)), math.NaN(), math.Inf(1)} {
-				bad = append(bad, vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(value)})
+			if edit.Column == "SlopeGradient" {
+				for _, value := range []float64{0, 1.1234567890123, limit} {
+					valid = append(valid, vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(value)})
+				}
+				for _, value := range []float64{-0.1, -15, -limit, math.Nextafter(limit, math.Inf(1)), math.NaN(), math.Inf(1)} {
+					bad = append(bad, vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(value)})
+				}
+			} else {
+				for _, value := range []float64{-limit, limit, 0, -1.1234567890123} {
+					valid = append(valid, vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(value)})
+				}
+				for _, value := range []float64{math.Nextafter(limit, math.Inf(1)), -math.Nextafter(limit, math.Inf(1)), math.NaN(), math.Inf(1)} {
+					bad = append(bad, vprocore.ProjectMetadataCell{Storage: "real", Real: vprotest.SiviSharedTestPointer(value)})
+				}
 			}
 			bad = append(bad, vprocore.ProjectMetadataCell{Storage: "integer", Integer: vprotest.SiviSharedTestPointer("3")})
 		}

@@ -189,12 +189,12 @@ func TestTwoPageEntryOptionalReferenceNumberAndTextDomains(t *testing.T) {
 	}
 	for _, field := range fields {
 		if field.Column == "LocationAccuracy" {
-			for _, raw := range []string{"-32768", "0", "32767"} {
+			for _, raw := range []string{"0", "32767"} {
 				if got, err := TwoPageEntryReferenceCode(field, vprotest.MetadataInteger(raw)); err != nil || got != raw {
 					t.Fatal("accepted INTEGER reference changed representation", raw, got, err)
 				}
 			}
-			for _, raw := range []string{"32768", "-32769", "01", "+1", "1.0"} {
+			for _, raw := range []string{"-1", "-32768", "32768", "-32769", "01", "+1", "1.0"} {
 				if _, err := TwoPageEntryReferenceCode(field, vprotest.MetadataInteger(raw)); err == nil {
 					t.Fatal("invalid/noncanonical numeric reference accepted", raw)
 				}

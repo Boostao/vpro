@@ -338,7 +338,7 @@ func (service *ProjectService) ListPlots(ctx context.Context, offset, limit int)
 	}
 	defer database.Close()
 	table := `"` + active + `_Env"`
-	from := " FROM " + table + ` AS env WHERE EXISTS (SELECT 1 FROM "` + active + `_Admin" AS admin WHERE admin.Plot = env.PlotNumber)`
+	from := " FROM " + table + ` AS env WHERE EXISTS (SELECT 1 FROM "` + active + `_Admin" AS admin WHERE ` + ExactTextPlotJoin("admin.Plot", "env.PlotNumber") + `)`
 	if activeSU != "None" {
 		sus, err := service.discoverSUs(selected)
 		if err != nil {
@@ -347,7 +347,7 @@ func (service *ProjectService) ListPlots(ctx context.Context, offset, limit int)
 		if !hasCompatibleSU(sus, activeSU) {
 			return PlotPage{}, errors.New("active SU is no longer available")
 		}
-		from += ` AND EXISTS (SELECT 1 FROM "` + activeSU + `_SU" AS su WHERE su.PlotNumber = env.PlotNumber)`
+		from += ` AND EXISTS (SELECT 1 FROM "` + activeSU + `_SU" AS su WHERE ` + ExactTextPlotJoin("su.PlotNumber", "env.PlotNumber") + `)`
 	}
 	page := PlotPage{Plots: []PlotSummary{}}
 	if err := database.QueryRowContext(ctx, "SELECT COUNT(*)"+from).Scan(&page.Total); err != nil {

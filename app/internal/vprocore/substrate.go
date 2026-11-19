@@ -50,7 +50,7 @@ func isSubstrateProperty(property string) bool {
 	return false
 }
 
-func ValidateSubstrateHeaderValues(h FS882Header, old *FS882Header) error {
+func ValidateSubstrateHeaderValuesWithBounds(h FS882Header, old *FS882Header, enforcePercentBounds bool) error {
 	previous := SubstrateHeaderFields(FS882Header{})
 	if old != nil {
 		previous = SubstrateHeaderFields(*old)
@@ -59,12 +59,21 @@ func ValidateSubstrateHeaderValues(h FS882Header, old *FS882Header) error {
 		if err := ValidateSingleRangeChange(field.Property, previous[i].Value, field.Value); err != nil {
 			return err
 		}
+		if enforcePercentBounds && field.Value != nil && !SameHeightValue(previous[i].Value, field.Value) {
+			if *field.Value < 0 || *field.Value > 100 {
+				return fmt.Errorf("%s must be between 0%% and 100%% (got %v)", field.Column, *field.Value)
+			}
+		}
 	}
 	return nil
 }
 
-func ValidateSubstrateHeaderBeforeTransaction(db *sql.DB, project string, h FS882Header, mode headerSaveMode) error {
-	if err := ValidateSubstrateHeaderValues(h, nil); err == nil {
+func ValidateSubstrateHeaderValues(h FS882Header, old *FS882Header) error {
+	return ValidateSubstrateHeaderValuesWithBounds(h, old, false)
+}
+
+func ValidateSubstrateHeaderBeforeTransactionWithBounds(db *sql.DB, project string, h FS882Header, mode headerSaveMode, enforcePercentBounds bool) error {
+	if err := ValidateSubstrateHeaderValuesWithBounds(h, nil, enforcePercentBounds); err == nil {
 		return nil
 	} else if mode == headerCreate {
 		return err
@@ -74,7 +83,16 @@ func ValidateSubstrateHeaderBeforeTransaction(db *sql.DB, project string, h FS88
 		return err
 	}
 	for _, field := range SubstrateHeaderFields(h) {
-		if err := ValidateSingleRangeChange(field.Property, nil, field.Value); err == nil {
+		checkOne := func(before *float64) error {
+			if err := ValidateSingleRangeChange(field.Property, before, field.Value); err != nil {
+				return err
+			}
+			if enforcePercentBounds && field.Value != nil && !SameHeightValue(before, field.Value) && (*field.Value < 0 || *field.Value > 100) {
+				return fmt.Errorf("%s must be between 0%% and 100%% (got %v)", field.Column, *field.Value)
+			}
+			return nil
+		}
+		if err := checkOne(nil); err == nil {
 			continue
 		}
 		if math.IsNaN(*field.Value) || math.IsInf(*field.Value, 0) {
@@ -85,18 +103,22 @@ func ValidateSubstrateHeaderBeforeTransaction(db *sql.DB, project string, h FS88
 		}
 		var previous *float64
 		err := db.QueryRow(`SELECT `+QuoteHeaderIdentifier(field.Column)+` FROM `+
-			QuoteHeaderIdentifier(project+"_Env")+` WHERE "PlotNumber"=?`, h.PlotNumber).Scan(&previous)
+			QuoteHeaderIdentifier(project+"_Env")+` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`), h.PlotNumber, h.PlotNumber).Scan(&previous)
 		if err == sql.ErrNoRows {
-			return ValidateSingleRangeChange(field.Property, nil, field.Value)
+			return checkOne(nil)
 		}
 		if err != nil {
 			return err
 		}
-		if err := ValidateSingleRangeChange(field.Property, previous, field.Value); err != nil {
+		if err := checkOne(previous); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func ValidateSubstrateHeaderBeforeTransaction(db *sql.DB, project string, h FS882Header, mode headerSaveMode) error {
+	return ValidateSubstrateHeaderBeforeTransactionWithBounds(db, project, h, mode, false)
 }
 
 func validateSubstrateRestoreValue(table, column string, value any) error {

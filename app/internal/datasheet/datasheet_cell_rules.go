@@ -179,8 +179,16 @@ func validateAndNormalizeDatasheetCell(
 			(tableKey == "Veg" && colMeta.Name == "Species") || (tableKey == "Hierarchy" && colMeta.Name == "Name")) {
 			return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("%s.%s cannot be blank", tableKey, colMeta.Name)
 		}
+		if (colMeta.Name == "PlotNumber" || colMeta.Name == "Plot") && text != strings.TrimSpace(text) {
+			return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("%s.%s must not have leading or trailing whitespace", tableKey, colMeta.Name)
+		}
 		if colMeta.MaxUTF16 > 0 && len(utf16.Encode([]rune(text))) > colMeta.MaxUTF16 {
 			return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("%s.%s exceeds %d UTF-16 code units", tableKey, colMeta.Name, colMeta.MaxUTF16)
+		}
+		if tableKey == "Env" && colMeta.Name == "Date" {
+			if err := vprocore.ValidateSurveyDateText(&text); err != nil {
+				return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("Env.%s", err.Error())
+			}
 		}
 		auditCopy := text
 		cellCopy := text
@@ -222,10 +230,10 @@ func validateAndNormalizeDatasheetCell(
 				return nil, nil, vprocore.ProjectMetadataCell{}, err
 			}
 		}
-		if tableKey == "Env" && vprocore.NonNegativeParentIntegerColumns[colMeta.Name] {
+		if (tableKey == "Env" || tableKey == "Admin") && (vprocore.NonNegativeParentIntegerColumns[colMeta.Name] || vprocore.ParentSiteIntegerColumns[colMeta.Name]) {
 			intVal := int(num)
 			if err := vprocore.ValidateParentSoilInteger(colMeta.Name, &intVal); err != nil {
-				return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("Env.%s", err.Error())
+				return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("%s.%s", tableKey, err.Error())
 			}
 		}
 		s := strconv.FormatInt(num, 10)
@@ -300,6 +308,12 @@ func validateAndNormalizeDatasheetCell(
 		}
 		if math.IsNaN(num) || math.IsInf(num, 0) {
 			return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("%s.%s must be finite", tableKey, colMeta.Name)
+		}
+		if tableKey == "Env" && colMeta.Name == "Latitude" && (num < -90 || num > 90) {
+			return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("Env.Latitude must be between -90 and 90 degrees (got %v)", num)
+		}
+		if tableKey == "Env" && colMeta.Name == "Longitude" && (num < -180 || num > 180) {
+			return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("Env.Longitude must be between -180 and 180 degrees (got %v)", num)
 		}
 		if num == 0 {
 			num = 0

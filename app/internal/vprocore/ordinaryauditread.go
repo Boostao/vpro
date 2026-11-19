@@ -34,7 +34,7 @@ func (s *PlotService) ListAuditReadEntries(plot string) ([]OrdinaryAuditReadEntr
 		return nil, err
 	}
 	defer release()
-	rows, err := queryAuditEntries(s.ReadDB(db), project, `"PlotNumber" = ?`, plot)
+	rows, err := queryAuditEntries(s.ReadDB(db), project, ExactTextPlotPredicate(`"PlotNumber"`), plot, plot)
 	if err != nil {
 		return nil, err
 	}

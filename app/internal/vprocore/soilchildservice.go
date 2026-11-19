@@ -147,7 +147,7 @@ func (s *PlotService) UpdateSoilRecords(plot string, updates []SoilRecordUpdate)
 				if checkDepth {
 					var curHorizon sql.NullString
 					var curUpper, curLower sql.NullFloat64
-					if err := tx.QueryRow(`SELECT "Horizon", "UpperDepth", "LowerDepth" FROM `+table+` WHERE "PlotNumber" = ? AND "ID" = ?`, plot, id).
+					if err := tx.QueryRow(`SELECT "Horizon", "UpperDepth", "LowerDepth" FROM `+table+` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, plot, plot, id).
 						Scan(&curHorizon, &curUpper, &curLower); err != nil {
 						return err
 					}
@@ -192,7 +192,7 @@ func (s *PlotService) UpdateSoilRecords(plot string, updates []SoilRecordUpdate)
 				}
 				if checkCF {
 					var curG, curC, curS, curTot sql.NullInt64
-					if err := tx.QueryRow(`SELECT "PercentCoarseFragsGravel", "PercentCoarseFragsCobbles", "PercentCoarseFragsStones", "PercentCoarseFragsTotal" FROM `+table+` WHERE "PlotNumber" = ? AND "ID" = ?`, plot, id).
+					if err := tx.QueryRow(`SELECT "PercentCoarseFragsGravel", "PercentCoarseFragsCobbles", "PercentCoarseFragsStones", "PercentCoarseFragsTotal" FROM `+table+` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, plot, plot, id).
 						Scan(&curG, &curC, &curS, &curTot); err != nil {
 						return err
 					}

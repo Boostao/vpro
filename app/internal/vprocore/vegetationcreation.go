@@ -125,7 +125,7 @@ func (s *PlotService) CreateSourceVegetation(plot string, request VegetationCrea
 				return err
 			}
 			condition := rowPredicate + ` AND Species COLLATE BINARY=?`
-			args := []any{parent, id, request.Species}
+			args := []any{parent, parent, id, request.Species}
 			for property, value := range request.Values {
 				column := strings.ToUpper(property[:1]) + property[1:]
 				condition += ` AND ` + QuoteHeaderIdentifier(column) + ` IS ?`
@@ -133,7 +133,7 @@ func (s *PlotService) CreateSourceVegetation(plot string, request VegetationCrea
 			}
 			var visible bool
 			if err := tx.QueryRowContext(s.OperationContext(), `SELECT EXISTS(SELECT 1 FROM `+table+
-				` WHERE PlotNumber=? AND ID=? AND `+condition+`)`, args...).Scan(&visible); err != nil {
+				` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND ID=? AND `+condition+`)`, args...).Scan(&visible); err != nil {
 				return fmt.Errorf("created vegetation source row could not be checked: %w", err)
 			}
 			if !visible {

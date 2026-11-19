@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"regexp"
 	"strings"
+	"time"
 	"unicode/utf16"
 	"unicode/utf8"
 )
@@ -160,6 +162,23 @@ var NonNegativeParentIntegerColumns = map[string]bool{
 	"SeepageDepth":         true,
 }
 
+var ParentSiteIntegerColumns = map[string]bool{
+	"Aspect":           true,
+	"StartDate":        true,
+	"Elevation":        true,
+	"StandAge":         true,
+	"LocationAccuracy": true,
+}
+
+var ParentSubstrateSingleColumns = map[string]bool{
+	"SubstrateBedRock":       true,
+	"SubstrateDecWood":       true,
+	"SubstrateMineralSoil":   true,
+	"SubstrateOrganicMatter": true,
+	"SubstrateRocks":         true,
+	"SubstrateWater":         true,
+}
+
 var NonNegativeParentSingleColumns = map[string]bool{
 	"HumusThickness":       true,
 	"SV_SoilDepth":         true,
@@ -169,12 +188,71 @@ var NonNegativeParentSingleColumns = map[string]bool{
 	"ActiveLayerDepth":     true,
 }
 
+var surveyDatePattern = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})( \d{2}:\d{2}:\d{2}(\.\d{1,9})?)?$`)
+
+// ValidateSurveyDateText validates new or edited Env.Date values as real calendar dates
+// in YYYY-MM-DD format (optionally followed by wall-clock HH:MM:SS[.fraction] without timezone).
+func ValidateSurveyDateText(value *string) error {
+	if value == nil {
+		return nil
+	}
+	raw := *value
+	if !utf8.ValidString(raw) || strings.ContainsRune(raw, 0) {
+		return fmt.Errorf("Date must be valid UTF-8 text without NUL bytes")
+	}
+	for _, r := range raw {
+		if r >= 0xD800 && r <= 0xDFFF {
+			return fmt.Errorf("Date contains an unpaired UTF-16 surrogate")
+		}
+	}
+	m := surveyDatePattern.FindStringSubmatch(raw)
+	if m == nil {
+		return fmt.Errorf("Date must use YYYY-MM-DD calendar format (got %q)", raw)
+	}
+	var parsed time.Time
+	var err error
+	if m[2] == "" {
+		parsed, err = time.Parse("2006-01-02", raw)
+	} else {
+		parsed, err = time.Parse("2006-01-02 15:04:05.999999999", raw)
+	}
+	if err != nil || parsed.Year() < 100 || parsed.Year() > 9999 {
+		return fmt.Errorf("Date must be a valid calendar date in YYYY-MM-DD format (got %q)", raw)
+	}
+	return nil
+}
+
 func ValidateParentSoilInteger(column string, value *int) error {
 	if err := ValidateOrdinaryInteger(column, value); err != nil {
 		return err
 	}
-	if value != nil && NonNegativeParentIntegerColumns[column] && *value < 0 {
+	if value == nil {
+		return nil
+	}
+	if NonNegativeParentIntegerColumns[column] && *value < 0 {
 		return fmt.Errorf("%s must be >= 0 cm (got %d)", column, *value)
+	}
+	switch column {
+	case "Aspect":
+		if *value != 999 && (*value < 0 || *value > 360) {
+			return fmt.Errorf("Aspect must be between 0 and 360 degrees or 999 for level ground (got %d)", *value)
+		}
+	case "StartDate":
+		if *value < 1900 || *value > 2500 {
+			return fmt.Errorf("StartDate (survey year) must be between 1900 and 2500 (got %d)", *value)
+		}
+	case "Elevation":
+		if *value < 0 || *value > 9000 {
+			return fmt.Errorf("Elevation must be between 0 and 9000 m above sea level (got %d)", *value)
+		}
+	case "StandAge":
+		if *value < 0 {
+			return fmt.Errorf("StandAge must be >= 0 years (got %d)", *value)
+		}
+	case "LocationAccuracy":
+		if *value < 0 {
+			return fmt.Errorf("LocationAccuracy must be >= 0 m (got %d)", *value)
+		}
 	}
 	return nil
 }
@@ -186,8 +264,11 @@ func ValidateParentSoilSingle(column string, before, after *float64) error {
 	if after == nil || SameHeightValue(before, after) {
 		return nil
 	}
-	if column == "SV_PercentCoarseFrags" && (*after < 0 || *after > 100) {
+	if (column == "SV_PercentCoarseFrags" || ParentSubstrateSingleColumns[column]) && (*after < 0 || *after > 100) {
 		return fmt.Errorf("%s must be between 0%% and 100%% (got %v)", column, *after)
+	}
+	if column == "SlopeGradient" && *after < 0 {
+		return fmt.Errorf("SlopeGradient must be >= 0%% (got %v)", *after)
 	}
 	if NonNegativeParentSingleColumns[column] && *after < 0 {
 		return fmt.Errorf("%s must be >= 0 cm (got %v)", column, *after)

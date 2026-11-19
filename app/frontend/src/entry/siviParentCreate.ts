@@ -90,10 +90,24 @@ function validateSIVIFieldUTF16(label: string, value: string | undefined, maxUni
   return null;
 }
 
+function isValidISOCalendarDate(raw: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (!m) return false;
+  const year = Number.parseInt(m[1], 10);
+  const month = Number.parseInt(m[2], 10);
+  const day = Number.parseInt(m[3], 10);
+  if (year < 100 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  return dt.getUTCFullYear() === year && dt.getUTCMonth() === month - 1 && dt.getUTCDate() === day;
+}
+
 export function validateCreateSIVIPlotDraft(draft: CreateSIVIPlotRequest): Record<string, string> {
   const errors: Record<string, string> = {};
   const plotErr = validateSIVIFieldUTF16('PlotNumber', draft.plotNumber, 7, true);
   if (plotErr) errors.plotNumber = plotErr;
+  else if (draft.plotNumber !== draft.plotNumber.trim()) {
+    errors.plotNumber = 'PlotNumber must not contain leading or trailing spaces.';
+  }
 
   if (!SIVI_PLOT_TYPES.includes(draft.plotType)) {
     errors.plotType = 'PlotType must be Ground, Visual, Note, Other, or FS882.';
@@ -112,8 +126,12 @@ export function validateCreateSIVIPlotDraft(draft: CreateSIVIPlotRequest): Recor
     const err = validateSIVIFieldUTF16(label, draft[key], max, false);
     if (err) errors[key] = err;
   }
-  if (draft.date && draft.date.trim() !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(draft.date.trim())) {
-    errors.date = 'Date must use ISO format YYYY-MM-DD.';
+  if (draft.date && draft.date.trim() !== '') {
+    if (draft.date !== draft.date.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(draft.date)) {
+      errors.date = 'Date must use ISO format YYYY-MM-DD.';
+    } else if (!isValidISOCalendarDate(draft.date)) {
+      errors.date = 'Date must be a valid calendar date in YYYY-MM-DD format.';
+    }
   }
   return errors;
 }

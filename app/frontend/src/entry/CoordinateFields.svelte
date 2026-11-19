@@ -41,6 +41,7 @@
   let view = $state(editor.snapshot());
   let auto1Busy = $state(false);
   let auto1Summary = $state('');
+  let auto1OutOfBounds = $state(false);
   let auto1Generation = 0;
   const invalid = $derived(Object.values(view.axes).some(axis => axis.error !== null));
   function readonly(axis: CoordinateAxis) {
@@ -52,6 +53,7 @@
     const gen = ++auto1Generation;
     auto1Busy = true;
     auto1Summary = '';
+    auto1OutOfBounds = false;
     reportBusy?.(coordinateBusy(busyIdentity, busyOwner, true));
     try {
       let lat = targetDraft.latitude;
@@ -59,9 +61,11 @@
       let changed = false;
 
       if (lat === null && lon === null && targetDraft.utmZone && targetDraft.easting !== null && targetDraft.northing !== null) {
-        const zoneNum = Number.parseInt(String(targetDraft.utmZone).trim(), 10);
-        if (!Number.isFinite(zoneNum)) {
-          throw new Error(`Invalid UTM zone ${targetDraft.utmZone} for NAD83 projection.`);
+        const rawZone = String(targetDraft.utmZone).trim();
+        const zoneMatch = /^0*([0-9]{1,2})[Nn]?$/.exec(rawZone);
+        const zoneNum = zoneMatch ? Number.parseInt(zoneMatch[1], 10) : Number.NaN;
+        if (!Number.isInteger(zoneNum) || zoneNum < 7 || zoneNum > 12) {
+          throw new Error(`Invalid NAD83 UTM zone "${rawZone}" (expected Northern Hemisphere zone 7–12, such as 9 or 10N).`);
         }
         const projected = await SpatialService.ProjectNAD83UTMToLatLon(zoneNum, targetDraft.easting, targetDraft.northing);
         if (gen !== auto1Generation || identity !== targetDraft) return;
@@ -113,6 +117,15 @@
         suggestion.fsRegionDistrict ? `Dist: ${suggestion.fsRegionDistrict}` : '',
         suggestion.ntsMapSheet ? `Sheet: ${suggestion.ntsMapSheet}` : ''
       ].filter(Boolean);
+      const diag = (suggestion.diagnostics ?? []).filter(Boolean);
+      if (!suggestion.gisBgc && !suggestion.ecosection && !suggestion.fsRegionDistrict) {
+        auto1OutOfBounds = true;
+        const outMsg = diag.find(item => /outside/i.test(item))
+          ?? `Coordinates (${lat}, ${lon}) fall outside B.C. map coverage; no BGC, ecosection, or district matched.`;
+        parts.unshift(`Out of B.C. bounds: ${outMsg}`);
+      } else if (diag.length > 0) {
+        parts.push(...diag);
+      }
       auto1Summary = parts.join(' | ');
     } catch (cause) {
       if (gen === auto1Generation) {
@@ -151,7 +164,7 @@
     Project NAD83 UTM &lt;-&gt; DD &amp; Suggest BGC/Admin
   </button>
   {#if view.busy || auto1Busy}<span role="status">Preparing coordinate values…</span>{/if}
-  {#if auto1Summary}<span role="status" class="auto1-summary">{auto1Summary}</span>{/if}
+  {#if auto1Summary}<span role="status" class="auto1-summary" class:auto1-warning={auto1OutOfBounds} data-auto1-out-of-bc={auto1OutOfBounds ? 'true' : undefined}>{auto1Summary}</span>{/if}
   {#if (!view.ready || !view.axes.latitude.ready || !view.axes.longitude.ready) && !view.busy}<button type="button" disabled={disabled} onclick={() => void editor.initialize()}>Retry coordinate display</button>{/if}
   {#each axes as axis}
     {#if view.axes[axis].error}<span id={`coordinate-error-${axis}`} role="alert">{view.axes[axis].error}</span>{/if}
@@ -194,6 +207,7 @@
   .coordinate-toolbar select, .coordinate-toolbar button { border: 1px solid var(--vpro-border-strong, #9ca3af); border-radius: 4px; background: var(--vpro-surface, white); color: var(--vpro-navy, #003366); font-weight: 500; padding: .2rem .5rem; min-height: 30px; }
   .coordinate-toolbar button:hover:not(:disabled) { background: var(--vpro-navy-tint, #ebf1f8); border-color: var(--vpro-navy, #003366); }
   .coordinate-toolbar [role="alert"] { color: var(--vpro-error-ink, #a61b20); }
+  .auto1-warning { padding: .15rem .5rem; border-radius: 4px; border: 1px solid #d97706; background: #fffbeb; color: #92400e; font-weight: 600; }
   .coordinate-inputs { display: contents; }
   .coordinate-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid var(--vpro-forest-border, #D8D8D8); border-radius: 4px; padding: .5rem .65rem; background: var(--vpro-surface, white); color: var(--vpro-ink, #313132); font: inherit; font-family: var(--vpro-font-mono, monospace); font-variant-numeric: tabular-nums; line-height: 1.4; }
   .coordinate-control:focus { outline: 2px solid var(--vpro-focus-ring, #1a5a96); outline-offset: 1px; }

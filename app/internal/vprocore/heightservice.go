@@ -182,7 +182,7 @@ func (s *PlotService) UpdateHeightRecords(plotNumber string, updates []HeightRec
 			destinations[i] = new(sql.NullFloat64)
 		}
 		if err := tx.QueryRow(`SELECT `+strings.Join(columns, ",")+` FROM `+table+
-			` WHERE "PlotNumber" = ? AND "ID" = ?`, plotNumber, patch.id).Scan(destinations...); err != nil {
+			` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, plotNumber, plotNumber, patch.id).Scan(destinations...); err != nil {
 			return err
 		}
 		before, after := make([]any, len(patch.fields)), make([]any, len(patch.fields))
@@ -207,8 +207,8 @@ func (s *PlotService) UpdateHeightRecords(plotNumber string, updates []HeightRec
 		if len(assignments) == 0 {
 			continue
 		}
-		args = append(args, plotNumber, patch.id)
-		result, err := tx.Exec(`UPDATE `+table+` SET `+strings.Join(assignments, ",")+` WHERE "PlotNumber" = ? AND "ID" = ?`, args...)
+		args = append(args, plotNumber, plotNumber, patch.id)
+		result, err := tx.Exec(`UPDATE `+table+` SET `+strings.Join(assignments, ",")+` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, args...)
 		if err != nil {
 			return err
 		}

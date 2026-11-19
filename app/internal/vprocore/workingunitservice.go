@@ -319,7 +319,7 @@ func (s *WorkingUnitService) GetWorkingUnitChoices(ctx context.Context, mode str
 		}
 		query = `SELECT DISTINCT a.UserSiteUnit FROM ` + QuoteHeaderIdentifier(project.Name+"_Admin") +
 			` AS a INNER JOIN ` + QuoteHeaderIdentifier(project.Name+"_Env") +
-			` AS e ON e.PlotNumber=a.Plot WHERE a.UserSiteUnit IS NOT NULL ORDER BY a.UserSiteUnit COLLATE NOCASE,a.UserSiteUnit`
+			` AS e ON ` + ExactTextPlotJoin("e.PlotNumber", "a.Plot") + ` WHERE a.UserSiteUnit IS NOT NULL ORDER BY a.UserSiteUnit COLLATE NOCASE,a.UserSiteUnit`
 	} else {
 		if err := workingUnitSUAuthorized(reader, su); err != nil {
 			return nil, err

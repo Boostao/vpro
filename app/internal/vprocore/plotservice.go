@@ -458,7 +458,7 @@ func (s *PlotService) ListAuditEntries(plotNumber string) ([]AuditEntry, error) 
 	}
 	defer release()
 
-	entries, err := readAuditEntries(s.ReadDB(db), project, `"PlotNumber" = ?`, plotNumber)
+	entries, err := readAuditEntries(s.ReadDB(db), project, ExactTextPlotPredicate(`"PlotNumber"`), plotNumber, plotNumber)
 	if err != nil {
 		return nil, err
 	}

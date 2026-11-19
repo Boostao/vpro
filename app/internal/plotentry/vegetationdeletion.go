@@ -78,7 +78,7 @@ func inspectVegetationDeletion(ctx context.Context, tx *sql.Tx, table, plot, for
 	}
 	var visible bool
 	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM `+table+
-		` WHERE PlotNumber=? AND ID=? AND `+predicate+`)`, plot, id).Scan(&visible); err != nil {
+		` WHERE `+vprocore.ExactTextPlotPredicate(`"PlotNumber"`)+` AND ID=? AND `+predicate+`)`, plot, plot, id).Scan(&visible); err != nil {
 		return snapshot, err
 	}
 	if !visible {
@@ -112,7 +112,7 @@ func inspectVegetationDeletion(ctx context.Context, tx *sql.Tx, table, plot, for
 	for i := range values {
 		destinations[i] = &values[i]
 	}
-	if err := tx.QueryRowContext(ctx, `SELECT `+strings.Join(columns, ",")+` FROM `+table+` WHERE PlotNumber=? AND ID=?`, plot, id).Scan(destinations...); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT `+strings.Join(columns, ",")+` FROM `+table+` WHERE `+vprocore.ExactTextPlotPredicate(`"PlotNumber"`)+` AND ID=?`, plot, plot, id).Scan(destinations...); err != nil {
 		return snapshot, err
 	}
 	cells = append([]vegetationDeletionCell{{Name: "rowid"}}, cells...)

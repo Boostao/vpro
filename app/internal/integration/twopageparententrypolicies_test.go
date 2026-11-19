@@ -39,6 +39,9 @@ func TestTwoPageEntryFieldPoliciesExactPlannerDomains(t *testing.T) {
 				value = vprotest.MetadataText("2020-01-02 00:00:00")
 			case "integer", "boolean", "option":
 				value = vprotest.MetadataInteger("0")
+				if policy.Column == "StartDate" {
+					value = vprotest.MetadataInteger("1900")
+				}
 				if policy.Kind == "option" {
 					value = vprotest.MetadataText("1")
 				}

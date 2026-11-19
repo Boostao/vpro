@@ -75,7 +75,7 @@ func (s *PlotService) UpdateVegetationNumbers(plot string, updates []VegetationN
 			for form, predicate := range predicates {
 				var visible bool
 				if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM `+table+
-					` WHERE PlotNumber=? AND ID=? AND `+predicate+`)`, plot, update.ID).Scan(&visible); err != nil {
+					` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND ID=? AND `+predicate+`)`, plot, plot, update.ID).Scan(&visible); err != nil {
 					return fmt.Errorf("vegetation numeric source row could not be checked: %w", err)
 				}
 				if !visible {

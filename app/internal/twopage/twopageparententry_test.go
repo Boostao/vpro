@@ -53,7 +53,7 @@ func twoPageEntryEdits(t *testing.T, parent *sourceform.SiviParentProjection) []
 			if !exists {
 				t.Fatal("source field has no complete-entry test owner", binding.Binding)
 			}
-			value = twoPageXLValue(policy)
+			value = twoPageXLValue(binding.Binding, policy)
 		}
 		edits = append(edits, sftest.SiviParentEdit(t, parent, binding.Binding, value))
 	}

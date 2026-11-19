@@ -402,17 +402,30 @@ func (c *SqliteContext) createView(ctx context.Context, name, query string) erro
 	return rows.Close()
 }
 
+// ExactTextPlotPredicate returns an index-friendly SQLite predicate enforcing
+// exact UTF-8 byte equality and 'text' storage class for PlotNumber / Plot keys.
+// Callers must bind the plot string twice (once for `col = ?` and once for `CAST(? AS BLOB)`).
+func ExactTextPlotPredicate(col string) string {
+	return "(" + col + " = ? AND typeof(" + col + ") = 'text' AND CAST(" + col + " AS BLOB) = CAST(? AS BLOB))"
+}
+
+// ExactTextPlotJoin returns an index-friendly SQLite join predicate enforcing
+// exact UTF-8 byte equality and 'text' storage class across left and right keys.
+func ExactTextPlotJoin(left, right string) string {
+	return "(" + left + " = " + right + " AND typeof(" + left + ") = 'text' AND typeof(" + right + ") = 'text' AND CAST(" + left + " AS BLOB) = CAST(" + right + " AS BLOB))"
+}
+
 func (c *SqliteContext) createViews(ctx context.Context) error {
 	relation := func(alias, table string) string {
 		return QuoteHeaderIdentifier(alias) + "." + QuoteHeaderIdentifier(table)
 	}
 	project := func(suffix string) string { return relation("project", c.Selection.Project+"_"+suffix) }
-	env := "SELECT DISTINCT env.*, admin.* FROM " + project("Env") + " AS env INNER JOIN " + project("Admin") + " AS admin ON env.PlotNumber=admin.Plot"
+	env := "SELECT DISTINCT env.*, admin.* FROM " + project("Env") + " AS env INNER JOIN " + project("Admin") + " AS admin ON " + ExactTextPlotJoin("env.PlotNumber", "admin.Plot")
 	if err := c.createView(ctx, "Filtered_Env", env); err != nil {
 		return err
 	}
 	if c.Selection.SU != "None" {
-		env += " WHERE EXISTS(SELECT 1 FROM " + relation("su", c.Selection.SU+"_SU") + " AS su WHERE su.PlotNumber=env.PlotNumber)"
+		env += " WHERE EXISTS(SELECT 1 FROM " + relation("su", c.Selection.SU+"_SU") + " AS su WHERE " + ExactTextPlotJoin("su.PlotNumber", "env.PlotNumber") + ")"
 	}
 	if err := c.createView(ctx, "USysEnv", env); err != nil {
 		return err

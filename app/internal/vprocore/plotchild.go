@@ -282,7 +282,7 @@ func listChildRecords[T any](s *PlotService, kind, plot string) ([]T, error) {
 		}
 	}
 	rows, err := s.ReadDB(db).Query(`SELECT `+strings.Join(columns, ",")+` FROM `+
-		QuoteHeaderIdentifier(project+"_"+kind)+` WHERE "PlotNumber" = ? ORDER BY `+order, plot)
+		QuoteHeaderIdentifier(project+"_"+kind)+` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` ORDER BY `+order, plot, plot)
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +330,7 @@ func ChildParent(tx *sql.Tx, project, plot string) error {
 	for _, identity := range []struct{ table, key string }{{"Env", "PlotNumber"}, {"Admin", "Plot"}} {
 		var count int
 		err := tx.QueryRow(`SELECT COUNT(*) FROM `+QuoteHeaderIdentifier(project+"_"+identity.table)+
-			` WHERE `+QuoteHeaderIdentifier(identity.key)+` = ?`, plot).Scan(&count)
+			` WHERE `+ExactTextPlotPredicate(QuoteHeaderIdentifier(identity.key)), plot, plot).Scan(&count)
 		if err != nil {
 			return err
 		}
@@ -344,7 +344,7 @@ func ChildParent(tx *sql.Tx, project, plot string) error {
 
 func RequireChildIdentity(tx *sql.Tx, table, kind, plot string, id int64) error {
 	var count int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM `+table+` WHERE "PlotNumber" = ? AND "ID" = ?`, plot, id).Scan(&count); err != nil {
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM `+table+` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, plot, plot, id).Scan(&count); err != nil {
 		return err
 	}
 	if count != 1 {
@@ -584,7 +584,7 @@ func (s *PlotService) saveChildWithChecks(kind string, record any, mode childSav
 		}
 		if len(fields) > 0 {
 			if err := tx.QueryRow(`SELECT `+strings.Join(readColumns, ",")+` FROM `+table+
-				` WHERE "PlotNumber" = ? AND "ID" = ?`, plot, id).Scan(destinations...); err != nil {
+				` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, plot, plot, id).Scan(destinations...); err != nil {
 				return err
 			}
 		}
@@ -724,7 +724,7 @@ func (s *PlotService) saveChildWithChecks(kind string, record any, mode childSav
 					}
 				}
 				if len(selCols) > 0 {
-					if err := tx.QueryRow(`SELECT `+strings.Join(selCols, ",")+` FROM `+table+` WHERE "PlotNumber" = ? AND "ID" = ?`, plot, id).Scan(dests...); err != nil {
+					if err := tx.QueryRow(`SELECT `+strings.Join(selCols, ",")+` FROM `+table+` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, plot, plot, id).Scan(dests...); err != nil {
 						return err
 					}
 					for i, col := range activeCols {
@@ -773,8 +773,8 @@ func (s *PlotService) saveChildWithChecks(kind string, record any, mode childSav
 	}
 	switch {
 	case deleting:
-		query = `DELETE FROM ` + table + ` WHERE "PlotNumber" = ? AND "ID" = ?`
-		args = []any{plot, id}
+		query = `DELETE FROM ` + table + ` WHERE ` + ExactTextPlotPredicate(`"PlotNumber"`) + ` AND "ID" = ?`
+		args = []any{plot, plot, id}
 	case creating:
 		marks := strings.TrimSuffix(strings.Repeat("?,", len(fields)+2), ",")
 		query = `INSERT INTO ` + table + ` (` + strings.Join(append([]string{`"PlotNumber"`, `"ID"`}, columns...), ",") + `) VALUES (` + marks + `)`
@@ -784,8 +784,8 @@ func (s *PlotService) saveChildWithChecks(kind string, record any, mode childSav
 		for i, column := range columns {
 			assignments[i] = column + ` = ?`
 		}
-		query = `UPDATE ` + table + ` SET ` + strings.Join(assignments, ",") + ` WHERE "PlotNumber" = ? AND "ID" = ?`
-		args = append(append([]any{}, storedAfter...), plot, id)
+		query = `UPDATE ` + table + ` SET ` + strings.Join(assignments, ",") + ` WHERE ` + ExactTextPlotPredicate(`"PlotNumber"`) + ` AND "ID" = ?`
+		args = append(append([]any{}, storedAfter...), plot, plot, id)
 	}
 	result, err := tx.Exec(query, args...)
 	if err != nil {

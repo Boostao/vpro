@@ -173,8 +173,17 @@ func CreateSIVIPlot(s *vprocore.ContextService, ctx context.Context, contextID s
 	if req.PlotNumber == "" || strings.TrimSpace(req.PlotNumber) == "" {
 		return CreateSIVIPlotResult{}, errors.New("PlotNumber is required and must not be blank")
 	}
+	if req.PlotNumber != strings.TrimSpace(req.PlotNumber) {
+		return CreateSIVIPlotResult{}, errors.New("PlotNumber must not have leading or trailing whitespace")
+	}
 	if err := validateSIVIUTF16("PlotNumber", req.PlotNumber, 7); err != nil {
 		return CreateSIVIPlotResult{}, err
+	}
+	if req.Date != "" {
+		dateCopy := req.Date
+		if err := vprocore.ValidateSurveyDateText(&dateCopy); err != nil {
+			return CreateSIVIPlotResult{}, err
+		}
 	}
 	plotType, err := normalizeSIVIPlotType(req.PlotType)
 	if err != nil {

@@ -88,7 +88,7 @@ func validateQualityHeaderBeforeTransaction(db *sql.DB, project string, h FS882H
 			return fmt.Errorf("unsupported header property %q in active project", field.Property)
 		}
 		err := db.QueryRow(`SELECT `+QuoteHeaderIdentifier(field.Name)+` FROM `+
-			QuoteHeaderIdentifier(project+"_Admin")+` WHERE "Plot"=?`, h.PlotNumber).Scan(previous[i])
+			QuoteHeaderIdentifier(project+"_Admin")+` WHERE `+ExactTextPlotPredicate(`"Plot"`), h.PlotNumber, h.PlotNumber).Scan(previous[i])
 		if err == sql.ErrNoRows {
 			return validateQualityHeaderValues(h, nil)
 		}

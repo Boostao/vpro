@@ -31,13 +31,16 @@ func twoPageXLOriginal(t *testing.T, form string) *sourceform.SiviParentProjecti
 	return parent
 }
 
-func twoPageXLValue(field twoPageXLField) vprocore.ProjectMetadataCell {
+func twoPageXLValue(column string, field twoPageXLField) vprocore.ProjectMetadataCell {
 	switch field.kind {
 	case "text":
 		return vprotest.MetadataText("X")
 	case "date":
 		return vprotest.MetadataText("2026-10-06 12:34:56")
 	case "integer":
+		if column == "StartDate" {
+			return vprotest.MetadataInteger("1900")
+		}
 		return vprotest.MetadataInteger("1")
 	case "single", "latitude", "longitude":
 		return vprotest.SiviReal(1)
@@ -61,7 +64,7 @@ func TestTwoPageXLExactSourceScopeAndCompletePhysicalPlan(t *testing.T) {
 		}
 		edits := []sourceform.SiviParentScalarEdit{}
 		for column, field := range fields {
-			edit := sftest.SiviParentEdit(t, parent, column, twoPageXLValue(field))
+			edit := sftest.SiviParentEdit(t, parent, column, twoPageXLValue(column, field))
 			if edit.Table != "Sample_"+field.owner {
 				t.Fatal("source storage differs from accepted XL owner", column, edit.Table)
 			}
@@ -72,7 +75,7 @@ func TestTwoPageXLExactSourceScopeAndCompletePhysicalPlan(t *testing.T) {
 			t.Fatal("complete source plan", form, len(got), err)
 		}
 		for _, assignment := range got {
-			if !reflect.DeepEqual(assignment.After, twoPageXLValue(fields[assignment.Column])) {
+			if !reflect.DeepEqual(assignment.After, twoPageXLValue(assignment.Column, fields[assignment.Column])) {
 				t.Fatal("planned value changed", assignment)
 			}
 		}
@@ -99,7 +102,7 @@ func TestTwoPageXLPhysicalThresholdsAndRawStorage(t *testing.T) {
 	for column, field := range fields {
 		t.Run(column, func(t *testing.T) {
 			parent := twoPageXLOriginal(t, "FS882-8x6XL-CHARS")
-			valid := []vprocore.ProjectMetadataCell{{Storage: "null"}, twoPageXLValue(field)}
+			valid := []vprocore.ProjectMetadataCell{{Storage: "null"}, twoPageXLValue(column, field)}
 			invalid := []vprocore.ProjectMetadataCell{{Storage: "blob", BlobHex: vprotest.MetadataText("00").Text}}
 			switch field.kind {
 			case "text":
@@ -112,15 +115,33 @@ func TestTwoPageXLPhysicalThresholdsAndRawStorage(t *testing.T) {
 						vprotest.MetadataText(strings.Repeat("\U0001f600", field.maximum/2+1)))
 				}
 			case "integer":
-				if vprocore.NonNegativeParentIntegerColumns[column] {
+				switch column {
+				case "Aspect":
+					valid = append(valid, vprotest.MetadataInteger("0"), vprotest.MetadataInteger("360"), vprotest.MetadataInteger("999"))
+					invalid = append(invalid, vprotest.MetadataInteger("-1"), vprotest.MetadataInteger("361"), vprotest.MetadataInteger("500"), vprotest.MetadataInteger("-32768"), vprotest.MetadataInteger("32767"), vprotest.MetadataInteger("-32769"), vprotest.MetadataInteger("32768"), vprotest.MetadataInteger("01"), vprotest.SiviReal(1), vprotest.MetadataText("1"))
+				case "StartDate":
+					valid = append(valid, vprotest.MetadataInteger("1900"), vprotest.MetadataInteger("2500"))
+					invalid = append(invalid, vprotest.MetadataInteger("0"), vprotest.MetadataInteger("1899"), vprotest.MetadataInteger("2501"), vprotest.MetadataInteger("-32768"), vprotest.MetadataInteger("32767"), vprotest.MetadataInteger("-32769"), vprotest.MetadataInteger("32768"), vprotest.MetadataInteger("01"), vprotest.SiviReal(1), vprotest.MetadataText("1"))
+				case "Elevation":
+					valid = append(valid, vprotest.MetadataInteger("0"), vprotest.MetadataInteger("9000"))
+					invalid = append(invalid, vprotest.MetadataInteger("-1"), vprotest.MetadataInteger("-500"), vprotest.MetadataInteger("9001"), vprotest.MetadataInteger("-32768"), vprotest.MetadataInteger("32767"), vprotest.MetadataInteger("-32769"), vprotest.MetadataInteger("32768"), vprotest.MetadataInteger("01"), vprotest.SiviReal(1), vprotest.MetadataText("1"))
+				case "StandAge", "LocationAccuracy":
 					valid = append(valid, vprotest.MetadataInteger("0"), vprotest.MetadataInteger("32767"))
 					invalid = append(invalid, vprotest.MetadataInteger("-1"), vprotest.MetadataInteger("-32768"), vprotest.MetadataInteger("-32769"), vprotest.MetadataInteger("32768"), vprotest.MetadataInteger("01"), vprotest.SiviReal(1), vprotest.MetadataText("1"))
-				} else {
-					valid = append(valid, vprotest.MetadataInteger("-32768"), vprotest.MetadataInteger("32767"))
-					invalid = append(invalid, vprotest.MetadataInteger("-32769"), vprotest.MetadataInteger("32768"), vprotest.MetadataInteger("01"), vprotest.SiviReal(1), vprotest.MetadataText("1"))
+				default:
+					if vprocore.NonNegativeParentIntegerColumns[column] {
+						valid = append(valid, vprotest.MetadataInteger("0"), vprotest.MetadataInteger("32767"))
+						invalid = append(invalid, vprotest.MetadataInteger("-1"), vprotest.MetadataInteger("-32768"), vprotest.MetadataInteger("-32769"), vprotest.MetadataInteger("32768"), vprotest.MetadataInteger("01"), vprotest.SiviReal(1), vprotest.MetadataText("1"))
+					} else {
+						valid = append(valid, vprotest.MetadataInteger("-32768"), vprotest.MetadataInteger("32767"))
+						invalid = append(invalid, vprotest.MetadataInteger("-32769"), vprotest.MetadataInteger("32768"), vprotest.MetadataInteger("01"), vprotest.SiviReal(1), vprotest.MetadataText("1"))
+					}
 				}
 			case "single":
-				if vprocore.NonNegativeParentSingleColumns[column] {
+				if vprocore.ParentSubstrateSingleColumns[column] {
+					valid = append(valid, vprotest.SiviReal(0), vprotest.SiviReal(100), vprotest.SiviReal(0.1))
+					invalid = append(invalid, vprotest.SiviReal(-0.1), vprotest.SiviReal(100.1), vprotest.SiviReal(-math.MaxFloat32), vprotest.SiviReal(math.MaxFloat32), vprotest.SiviReal(math.Nextafter(float64(math.MaxFloat32), math.Inf(1))), vprotest.SiviReal(math.Inf(1)), vprotest.SiviReal(math.NaN()), vprotest.MetadataInteger("1"))
+				} else if column == "SlopeGradient" || vprocore.NonNegativeParentSingleColumns[column] {
 					valid = append(valid, vprotest.SiviReal(0), vprotest.SiviReal(math.MaxFloat32), vprotest.SiviReal(0.1))
 					invalid = append(invalid, vprotest.SiviReal(-0.1), vprotest.SiviReal(-math.MaxFloat32), vprotest.SiviReal(math.Nextafter(float64(math.MaxFloat32), math.Inf(1))), vprotest.SiviReal(math.Inf(1)), vprotest.SiviReal(math.NaN()), vprotest.MetadataInteger("1"))
 				} else {

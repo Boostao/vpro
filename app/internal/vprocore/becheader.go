@@ -64,7 +64,7 @@ func validateBECHeaderBeforeTransaction(db *sql.DB, project string, h FS882Heade
 			key = "Plot"
 		}
 		err := db.QueryRow(`SELECT `+QuoteHeaderIdentifier(field.Name)+` FROM `+
-			QuoteHeaderIdentifier(project+"_"+field.Table)+` WHERE `+QuoteHeaderIdentifier(key)+`=?`, h.PlotNumber).Scan(previous[i])
+			QuoteHeaderIdentifier(project+"_"+field.Table)+` WHERE `+ExactTextPlotPredicate(QuoteHeaderIdentifier(key)), h.PlotNumber, h.PlotNumber).Scan(previous[i])
 		if err == sql.ErrNoRows {
 			return validateBECHeaderValues(h, nil)
 		}

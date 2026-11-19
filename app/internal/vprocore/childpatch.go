@@ -137,7 +137,7 @@ func (s *PlotService) UpdateChildPlotPatches(updates []ChildPlotPatch) (resultEr
 			column := QuoteHeaderIdentifier(field.Column)
 			var current any
 			if err := tx.QueryRowContext(ctx, `SELECT `+headerReadColumn(column, member)+` FROM `+table+
-				` WHERE "PlotNumber" = ? AND "ID" = ?`, plot, update.Id).Scan(&current); err != nil {
+				` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, plot, plot, update.Id).Scan(&current); err != nil {
 				return err
 			}
 			if current != nil {
@@ -184,7 +184,7 @@ func (s *PlotService) UpdateChildPlotPatches(updates []ChildPlotPatch) (resultEr
 			}
 		}
 		result, err := tx.ExecContext(ctx, `UPDATE `+table+` SET `+strings.Join(assignments, ",")+
-			` WHERE "PlotNumber" = ? AND "ID" = ?`, append(args, plot, update.Id)...)
+			` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` AND "ID" = ?`, append(args, plot, plot, update.Id)...)
 		if err != nil {
 			return err
 		}
