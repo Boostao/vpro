@@ -3,6 +3,30 @@ import { transferColumns } from './environmentSUTransfer';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 import { equalCell } from '../admin/projectMetadataEditor';
 
+function collapseSiteUnitDefinitions(
+  rows: NonNullable<SiteUnitEnvironmentReview['master']['rows']>,
+  columns: Map<string, number>,
+) {
+  const shortIdx = columns.get('SiteSeries')!;
+  const longIdx = columns.get('SiteSeriesLongName')!;
+  for (const row of rows) {
+    if (!row?.cells || !completeCell(row.cells[shortIdx]) || !completeCell(row.cells[longIdx])) {
+      throw new Error('Reverse name definitions contain incomplete cells.');
+    }
+  }
+  if (rows.length <= 1) return rows;
+  const first = rows[0];
+  for (let i = 1; i < rows.length; i++) {
+    if (
+      !equalCell(rows[i].cells![shortIdx], first.cells![shortIdx]) ||
+      !equalCell(rows[i].cells![longIdx], first.cells![longIdx])
+    ) {
+      return rows;
+    }
+  }
+  return [first];
+}
+
 export function validateSiteUnitEnvironmentReview(review: SiteUnitEnvironmentReview, contextId: string,
   project: string, su: string, path: string): SiteUnitEnvironmentReview {
   if (!review || !contextId || review.contextId !== contextId || review.project !== project || review.su !== su ||
@@ -42,10 +66,28 @@ export function validateSiteUnitEnvironmentReview(review: SiteUnitEnvironmentRev
       if (change.origin !== 'selected SU' || !equalCell(change.after, unit)) throw new Error('Reverse unit value changed after review.');
     } else {
       if (unit.storage !== 'text') throw new Error('NULL SU values cannot choose name definitions.');
-      const masters = review.master.rows!.filter(row => row.cells![master.get('SiteSeries')!].text === unit.text);
-      const users = review.personal.rows!.filter(row => row.cells![personal.get('SiteSeries')!].text === unit.text);
-      if (masters.length > 1 || users.length > 1 || masters.length === 0 && users.length === 0) {
-        throw new Error('Reverse names require a unique matching master or personal definition.');
+      const users = collapseSiteUnitDefinitions(
+        review.personal.rows!.filter(
+          row => row.cells![personal.get('SiteSeries')!].storage === 'text' && row.cells![personal.get('SiteSeries')!].text === unit.text,
+        ),
+        personal,
+      );
+      if (users.length > 1) {
+        throw new Error(`Conflicting personal definitions found for SiteUnit "${unit.text}" in UserSiteUnitList.`);
+      }
+      const masters = users.length === 0
+        ? collapseSiteUnitDefinitions(
+            review.master.rows!.filter(
+              row => row.cells![master.get('SiteSeries')!].storage === 'text' && row.cells![master.get('SiteSeries')!].text === unit.text,
+            ),
+            master,
+          )
+        : [];
+      if (users.length === 0 && masters.length > 1) {
+        throw new Error(`Conflicting master definitions found for SiteUnit "${unit.text}" in MasterSiteUnitList.`);
+      }
+      if (users.length === 0 && masters.length === 0) {
+        throw new Error('Reverse names require a matching master or personal definition.');
       }
       const definition = users.length === 1 ? users[0] : masters[0];
       const columns = users.length === 1 ? personal : master;

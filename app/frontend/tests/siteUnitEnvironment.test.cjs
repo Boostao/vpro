@@ -40,16 +40,40 @@ test('Reverse SU review preserves original identities, NULL names, personal prec
   assert.equal(payload.review.changes[2].after.storage,'null');
   assert.throws(()=>request({...review(),changes:[]}),/nonempty/);
 });
-test('Reverse review rejects locked/duplicate/foreign/malformed and mismatched definitions',()=>{
+test('Reverse review rejects locked/conflicting/foreign/malformed and mismatched definitions',()=>{
   for(const mutate of [
     r=>r.contextId='stale',r=>r.path='C:\\foreign.db',r=>r.su='None',
     r=>r.env.rows[0].cells[1]={storage:'integer',integer:'-1',text:null,real:null,blobHex:null},
-    r=>r.personal.rows.push({...r.personal.rows[0],rowId:'2'}),
+    r=>r.personal.rows.push({rowId:'2',cells:[cell('  Unit  '),cell('Conflicting personal')]}),
+    r=>{r.personal.rows=[];r.master.rows.push({rowId:'2',cells:[cell('  Unit  '),cell('Conflicting master')]});r.changes[1].origin='master';r.changes[2].origin='master';r.changes[2].after=cell('Master long');},
     r=>r.changes[2].origin='master',r=>r.changes[1].field='EnteredBy',
     r=>r.changes.push({...r.changes[0]}),r=>r.changes[0].adminRowId='01',
     r=>r.changes[0].after.text='\ud800',r=>r.changes[0].after.text='x'.repeat(101),
     r=>r.changes[1].after.text='x'.repeat(51),r=>r.changes[2].after.integer='1'
   ]) { const r=review(); mutate(r); assert.throws(()=>validate(r)); }
+});
+test('Reverse review accepts personal override over conflicting master rows and collapses identical duplicates',()=>{
+  const overridden=review();
+  overridden.master.rows.push({rowId:'2',cells:[cell('  Unit  '),cell('Conflicting master')]});
+  assert.doesNotThrow(()=>request(overridden));
+
+  const identicalPersonal=review();
+  identicalPersonal.personal.rows=[
+    {rowId:'-794782529',cells:[cell('  Unit  '),cell('Sw - Currant - Horsetail')]},
+    {rowId:'-664311298',cells:[cell(null),cell(null)]},
+    {rowId:'1604326505',cells:[cell('  Unit  '),cell('Sw - Currant - Horsetail')]},
+    {rowId:'1857678454',cells:[cell('  Unit  '),cell('Sw - Currant - Horsetail')]}
+  ];
+  identicalPersonal.changes[2].after=cell('Sw - Currant - Horsetail');
+  assert.doesNotThrow(()=>request(identicalPersonal));
+
+  const identicalMaster=review();
+  identicalMaster.personal.rows=[];
+  identicalMaster.master.rows.push({rowId:'2',cells:[cell('  Unit  '),cell('Master long')]});
+  identicalMaster.changes[1].origin='master';
+  identicalMaster.changes[2].origin='master';
+  identicalMaster.changes[2].after=cell('Master long');
+  assert.doesNotThrow(()=>request(identicalMaster));
 });
 test('Reverse committed results require exact cell and row counts with positive exact history ID',()=>{
   const payload=request(review());

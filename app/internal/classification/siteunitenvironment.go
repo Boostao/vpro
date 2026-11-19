@@ -31,6 +31,31 @@ type SiteUnitEnvironmentChange struct {
 	After      vprocore.ProjectMetadataCell `json:"after"`
 }
 
+func collapseSiteUnitDefinitions(rows []vprocore.ProjectMetadataRow, columns map[string]int) ([]vprocore.ProjectMetadataRow, error) {
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	shortCol, longCol := columns["SiteSeries"], columns["SiteSeriesLongName"]
+	for _, row := range rows {
+		if _, err := vprocore.MetadataCellValue(row.Cells[shortCol]); err != nil {
+			return nil, err
+		}
+		if _, err := vprocore.MetadataCellValue(row.Cells[longCol]); err != nil {
+			return nil, err
+		}
+	}
+	if len(rows) == 1 {
+		return rows, nil
+	}
+	firstShort, firstLong := rows[0].Cells[shortCol], rows[0].Cells[longCol]
+	for _, row := range rows[1:] {
+		if !reflect.DeepEqual(row.Cells[shortCol], firstShort) || !reflect.DeepEqual(row.Cells[longCol], firstLong) {
+			return rows, nil
+		}
+	}
+	return rows[:1], nil
+}
+
 func planSiteUnitEnvironment(env, admin, su, master, personal vprocore.ProjectMetadataTable) ([]SiteUnitEnvironmentChange, error) {
 	type indexedTable struct {
 		columns map[string]int
@@ -84,13 +109,23 @@ func planSiteUnitEnvironment(env, admin, su, master, personal vprocore.ProjectMe
 			return nil, err
 		}
 		if code := values["UserSiteUnit"].Text; code != nil {
-			matches, overrides := masters.rows[*code], users.rows[*code]
-			if len(matches) > 1 || len(overrides) > 1 {
-				return nil, errors.New("SU/environment transfer has duplicate matching master or personal definitions; no definition was chosen")
+			overrides, err := collapseSiteUnitDefinitions(users.rows[*code], users.columns)
+			if err != nil {
+				return nil, fmt.Errorf("SU/environment personal definitions: %w", err)
 			}
-			definitions, definitionColumns, origin := matches, masters.columns, "master"
-			if len(overrides) == 1 {
-				definitions, definitionColumns, origin = overrides, users.columns, "personal override"
+			if len(overrides) > 1 {
+				return nil, fmt.Errorf("SU/environment transfer has conflicting personal definitions for SiteUnit %q in UserSiteUnitList; no definition was chosen", *code)
+			}
+			definitions, definitionColumns, origin := overrides, users.columns, "personal override"
+			if len(overrides) == 0 {
+				matches, err := collapseSiteUnitDefinitions(masters.rows[*code], masters.columns)
+				if err != nil {
+					return nil, fmt.Errorf("SU/environment master definitions: %w", err)
+				}
+				if len(matches) > 1 {
+					return nil, fmt.Errorf("SU/environment transfer has conflicting master definitions for SiteUnit %q in MasterSiteUnitList; add a personal override in UserSiteUnitList", *code)
+				}
+				definitions, definitionColumns, origin = matches, masters.columns, "master"
 			}
 			if len(definitions) == 1 {
 				values["SiteUnitShortName"] = definitions[0].Cells[definitionColumns["SiteSeries"]]
