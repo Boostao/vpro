@@ -3,13 +3,19 @@ package interchange
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/csv"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
@@ -111,7 +117,15 @@ func loadSpeciesLookupMeta(ctx context.Context, tx *sql.Tx) (map[string]speciesL
 	if err != nil {
 		return nil, err
 	}
+	rowIdx := 0
 	for rows.Next() {
+		if rowIdx&511 == 0 {
+			if err := ctx.Err(); err != nil {
+				rows.Close()
+				return nil, err
+			}
+		}
+		rowIdx++
 		var code, sci, eng, auth, ctype string
 		var lf sql.NullInt64
 		if err := rows.Scan(&code, &sci, &eng, &auth, &lf, &ctype); err != nil {
@@ -134,6 +148,10 @@ func loadSpeciesLookupMeta(ctx context.Context, tx *sql.Tx) (map[string]speciesL
 			Lifeform:       lfPtr,
 		}
 	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
 	if err := rows.Close(); err != nil {
 		return nil, err
 	}
@@ -145,7 +163,15 @@ func loadSpeciesLookupMeta(ctx context.Context, tx *sql.Tx) (map[string]speciesL
 	if err != nil {
 		return nil, err
 	}
+	uIdx := 0
 	for uRows.Next() {
+		if uIdx&511 == 0 {
+			if err := ctx.Err(); err != nil {
+				uRows.Close()
+				return nil, err
+			}
+		}
+		uIdx++
 		var code, sci, eng string
 		var lf sql.NullInt64
 		if err := uRows.Scan(&code, &sci, &eng, &lf); err != nil {
@@ -167,7 +193,14 @@ func loadSpeciesLookupMeta(ctx context.Context, tx *sql.Tx) (map[string]speciesL
 			Lifeform:       lfPtr,
 		}
 	}
-	return meta, uRows.Close()
+	if err := uRows.Err(); err != nil {
+		uRows.Close()
+		return nil, err
+	}
+	if err := uRows.Close(); err != nil {
+		return nil, err
+	}
+	return meta, ctx.Err()
 }
 
 func loadOptionalLumpMap(ctx context.Context, defaultProjectPath, lumpTable, lumpDBPath string) (map[string]string, error) {
@@ -245,47 +278,198 @@ func isAccessTruthy(raw any) bool {
 	}
 }
 
+func scopedPlotsCTEAndPredicate(owner *vprocore.SqliteContext, outerExpr string) (string, string) {
+	project := owner.Selection.Project
+	envTbl := "project." + vprocore.QuoteHeaderIdentifier(project+"_Env")
+	adminTbl := "project." + vprocore.QuoteHeaderIdentifier(project+"_Admin")
+
+	suWhere := ""
+	if owner.Selection.SU != "None" {
+		suTbl := "su." + vprocore.QuoteHeaderIdentifier(owner.Selection.SU+"_SU")
+		suWhere = `
+		WHERE EXISTS (
+			SELECT 1 FROM ` + suTbl + ` AS s
+			WHERE s."PlotNumber" = e."PlotNumber"
+			  AND typeof(s."PlotNumber") = 'text'
+			  AND CAST(s."PlotNumber" AS BLOB) = CAST(e."PlotNumber" AS BLOB)
+		)`
+	}
+
+	cte := `WITH "__vpro_scoped_plots"("PlotNumber") AS MATERIALIZED (
+		SELECT DISTINCT e."PlotNumber" COLLATE BINARY
+		FROM ` + envTbl + ` AS e
+		INNER JOIN ` + adminTbl + ` AS a
+		  ON a."Plot" = e."PlotNumber"
+		 AND typeof(e."PlotNumber") = 'text'
+		 AND typeof(a."Plot") = 'text'
+		 AND CAST(a."Plot" AS BLOB) = CAST(e."PlotNumber" AS BLOB)` + suWhere + `
+	) `
+
+	pred := outerExpr + ` IN (SELECT "PlotNumber" FROM "__vpro_scoped_plots")
+		AND typeof(` + outerExpr + `) = 'text'
+		AND EXISTS (
+			SELECT 1 FROM "__vpro_scoped_plots" AS __sp
+			WHERE __sp."PlotNumber" = ` + outerExpr + `
+			  AND CAST(__sp."PlotNumber" AS BLOB) = CAST(` + outerExpr + ` AS BLOB)
+		)`
+	return cte, pred
+}
+
+func withScopedReadSnapshot(ctx context.Context, owner *vprocore.SqliteContext, fn func(tx *sql.Tx) error) error {
+	if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		return err
+	}
+	defer owner.Mu.Unlock()
+
+	tx, err := owner.BeginReadSnapshot(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := fn(tx); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func writeAtomicExportFileContext(ctx context.Context, destinationPath string, data []byte) (string, string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", "", err
+	}
+	if strings.TrimSpace(destinationPath) == "" {
+		sum := sha256.Sum256(data)
+		return "", hex.EncodeToString(sum[:]), ctx.Err()
+	}
+	if !utf8.ValidString(destinationPath) || strings.ContainsRune(destinationPath, 0) {
+		return "", "", errors.New("destination path must be valid UTF-8 without NUL")
+	}
+	abs, err := filepath.Abs(filepath.Clean(destinationPath))
+	if err != nil {
+		return "", "", err
+	}
+	dir := filepath.Dir(abs)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", "", fmt.Errorf("create destination directory %s: %w", dir, err)
+	}
+	tmp, err := os.CreateTemp(dir, ".vpro-export-*")
+	if err != nil {
+		return "", "", err
+	}
+	tmpName := tmp.Name()
+	committed := false
+	defer func() {
+		if !committed {
+			_ = os.Remove(tmpName)
+		}
+	}()
+
+	const chunkBytes = 1 << 20
+	for offset := 0; offset < len(data); offset += chunkBytes {
+		if err := ctx.Err(); err != nil {
+			_ = tmp.Close()
+			return "", "", err
+		}
+		end := offset + chunkBytes
+		if end > len(data) {
+			end = len(data)
+		}
+		if _, err := tmp.Write(data[offset:end]); err != nil {
+			_ = tmp.Close()
+			return "", "", err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		_ = tmp.Close()
+		return "", "", err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return "", "", err
+	}
+	if err := tmp.Close(); err != nil {
+		return "", "", err
+	}
+	if err := ctx.Err(); err != nil {
+		return "", "", err
+	}
+	if err := os.Rename(tmpName, abs); err != nil {
+		return "", "", err
+	}
+	committed = true
+	sum := sha256.Sum256(data)
+	return abs, hex.EncodeToString(sum[:]), nil
+}
+
 func loadScopedPlotSiteUnits(ctx context.Context, tx *sql.Tx, owner *vprocore.SqliteContext) ([]string, map[string]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	project := owner.Selection.Project
+	envTbl := "project." + vprocore.QuoteHeaderIdentifier(project+"_Env")
+	adminTbl := "project." + vprocore.QuoteHeaderIdentifier(project+"_Admin")
+
 	plotOrder := []string{}
 	suByPlot := map[string]string{}
 
+	var query string
 	if owner.Selection.SU != "None" {
 		suTbl := "su." + vprocore.QuoteHeaderIdentifier(owner.Selection.SU+"_SU")
-		rows, err := tx.QueryContext(ctx, `
-			SELECT e.PlotNumber, COALESCE(s.SiteUnit, COALESCE(e.UserSiteUnit, ''))
-			FROM USysEnv AS e
-			LEFT JOIN `+suTbl+` AS s
-			  ON typeof(s.PlotNumber)=typeof(e.PlotNumber) AND CAST(s.PlotNumber AS BLOB)=CAST(e.PlotNumber AS BLOB)
-			ORDER BY e.PlotNumber`)
-		if err != nil {
-			return nil, nil, err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var plot, su string
-			if err := rows.Scan(&plot, &su); err != nil {
-				return nil, nil, err
-			}
-			plotOrder = append(plotOrder, plot)
-			suByPlot[plot] = strings.TrimSpace(su)
-		}
-		return plotOrder, suByPlot, rows.Err()
+		query = `
+			SELECT e."PlotNumber", COALESCE(s."SiteUnit", COALESCE(a."UserSiteUnit", ''))
+			FROM ` + envTbl + ` AS e
+			INNER JOIN ` + adminTbl + ` AS a
+			  ON a."Plot" = e."PlotNumber"
+			 AND typeof(e."PlotNumber") = 'text'
+			 AND typeof(a."Plot") = 'text'
+			 AND CAST(a."Plot" AS BLOB) = CAST(e."PlotNumber" AS BLOB)
+			INNER JOIN ` + suTbl + ` AS s
+			  ON s."PlotNumber" = e."PlotNumber"
+			 AND typeof(s."PlotNumber") = 'text'
+			 AND CAST(s."PlotNumber" AS BLOB) = CAST(e."PlotNumber" AS BLOB)
+			ORDER BY e."PlotNumber" COLLATE BINARY`
+	} else {
+		query = `
+			SELECT e."PlotNumber", COALESCE(a."UserSiteUnit", COALESCE(a."BECSiteUnit", ''))
+			FROM ` + envTbl + ` AS e
+			INNER JOIN ` + adminTbl + ` AS a
+			  ON a."Plot" = e."PlotNumber"
+			 AND typeof(e."PlotNumber") = 'text'
+			 AND typeof(a."Plot") = 'text'
+			 AND CAST(a."Plot" AS BLOB) = CAST(e."PlotNumber" AS BLOB)
+			ORDER BY e."PlotNumber" COLLATE BINARY`
 	}
 
-	rows, err := tx.QueryContext(ctx, `SELECT PlotNumber, COALESCE(UserSiteUnit, COALESCE(BECSiteUnit, '')) FROM USysEnv ORDER BY PlotNumber`)
+	rows, err := tx.QueryContext(ctx, query)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer rows.Close()
+
+	rowIdx := 0
 	for rows.Next() {
+		if rowIdx&511 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, nil, err
+			}
+		}
+		rowIdx++
 		var plot, su string
 		if err := rows.Scan(&plot, &su); err != nil {
 			return nil, nil, err
 		}
-		plotOrder = append(plotOrder, plot)
+		if _, exists := suByPlot[plot]; !exists {
+			plotOrder = append(plotOrder, plot)
+		}
 		suByPlot[plot] = strings.TrimSpace(su)
 	}
-	return plotOrder, suByPlot, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	return plotOrder, suByPlot, ctx.Err()
 }
 
 func extractLongVegObservations(
@@ -327,10 +511,11 @@ func extractLongVegObservations(
 		}
 	}
 
-	query := `SELECT ` + strings.Join(selectParts, ", ") + `
+	cteSQL, scopePred := scopedPlotsCTEAndPredicate(owner, `v."PlotNumber"`)
+	query := cteSQL + `SELECT ` + strings.Join(selectParts, ", ") + `
 		FROM ` + vegTbl + ` AS v
-		WHERE EXISTS (SELECT 1 FROM USysEnv AS e WHERE typeof(e.PlotNumber)=typeof(v.PlotNumber) AND CAST(e.PlotNumber AS BLOB)=CAST(v.PlotNumber AS BLOB))
-		ORDER BY v.PlotNumber, v.Species COLLATE NOCASE, COALESCE(v.ID, 0)`
+		WHERE ` + scopePred + `
+		ORDER BY v."PlotNumber", v."Species" COLLATE NOCASE, COALESCE(v."ID", 0)`
 
 	rows, err := tx.QueryContext(ctx, query)
 	if err != nil {
@@ -339,7 +524,14 @@ func extractLongVegObservations(
 	defer rows.Close()
 
 	var rawObs []longVegObservation
+	scannedRows := 0
 	for rows.Next() {
+		if scannedRows&511 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
+		scannedRows++
 		var plot, species, collected string
 		var id int64
 		var covers [15]sql.NullFloat64
@@ -426,6 +618,9 @@ func extractLongVegObservations(
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	// If lumping folded multiple species into the same (PlotNumber, LayerIndex, Species), combine covers capped at 99% and max(Height)
 	if len(lumpMap) > 0 {
@@ -436,7 +631,12 @@ func extractLongVegObservations(
 		}
 		folded := make(map[foldKey]*longVegObservation, len(rawObs))
 		order := make([]foldKey, 0, len(rawObs))
-		for _, obs := range rawObs {
+		for i, obs := range rawObs {
+			if i&1023 == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+			}
 			fk := foldKey{plot: obs.PlotNumber, layer: obs.LayerIndex, spp: obs.Species}
 			if existing, ok := folded[fk]; ok {
 				existing.Cover += obs.Cover
@@ -463,6 +663,9 @@ func extractLongVegObservations(
 		}
 	}
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	slices.SortFunc(rawObs, func(a, b longVegObservation) int {
 		if c := strings.Compare(a.PlotNumber, b.PlotNumber); c != 0 {
 			return c
@@ -472,7 +675,7 @@ func extractLongVegObservations(
 		}
 		return strings.Compare(a.Species, b.Species)
 	})
-	return rawObs, nil
+	return rawObs, ctx.Err()
 }
 
 func readTxColumnSet(ctx context.Context, tx *sql.Tx, alias, table string) (map[string]bool, error) {
@@ -503,6 +706,9 @@ func truncateCSVPreview(data []byte, maxLines int) string {
 }
 
 func ExportLongTidyCSV(s *vprocore.ContextService, ctx context.Context, contextID string, request LongTidyCSVRequest) (CSVExportOutcome, error) {
+	if err := ctx.Err(); err != nil {
+		return CSVExportOutcome{}, err
+	}
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (CSVExportOutcome, error) {
 		owner := plots.Projects.Sqlite
 		lumpMap, err := loadOptionalLumpMap(ctx, owner.Selection.ProjectPath, request.LumpTable, request.LumpDBPath)
@@ -510,29 +716,24 @@ func ExportLongTidyCSV(s *vprocore.ContextService, ctx context.Context, contextI
 			return CSVExportOutcome{}, err
 		}
 
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-			return CSVExportOutcome{}, err
-		}
-		defer owner.Mu.Unlock()
-		tx, err := owner.BeginReadSnapshot(ctx)
-		if err != nil {
-			return CSVExportOutcome{}, err
-		}
-		defer func() { _ = tx.Rollback() }()
-
-		plotOrder, suByPlot, err := loadScopedPlotSiteUnits(ctx, tx, owner)
-		if err != nil {
-			return CSVExportOutcome{}, err
-		}
-		sppMeta, err := loadSpeciesLookupMeta(ctx, tx)
-		if err != nil {
-			return CSVExportOutcome{}, err
-		}
-		obs, err := extractLongVegObservations(ctx, tx, owner, suByPlot, sppMeta, lumpMap)
-		if err != nil {
-			return CSVExportOutcome{}, err
-		}
-		if err := tx.Commit(); err != nil {
+		var (
+			plotOrder []string
+			suByPlot  map[string]string
+			obs       []longVegObservation
+		)
+		if err := withScopedReadSnapshot(ctx, owner, func(tx *sql.Tx) error {
+			var rErr error
+			plotOrder, suByPlot, rErr = loadScopedPlotSiteUnits(ctx, tx, owner)
+			if rErr != nil {
+				return rErr
+			}
+			sppMeta, rErr := loadSpeciesLookupMeta(ctx, tx)
+			if rErr != nil {
+				return rErr
+			}
+			obs, rErr = extractLongVegObservations(ctx, tx, owner, suByPlot, sppMeta, lumpMap)
+			return rErr
+		}); err != nil {
 			return CSVExportOutcome{}, err
 		}
 
@@ -543,7 +744,12 @@ func ExportLongTidyCSV(s *vprocore.ContextService, ctx context.Context, contextI
 			return CSVExportOutcome{}, err
 		}
 		sppSet := map[string]struct{}{}
-		for _, o := range obs {
+		for i, o := range obs {
+			if i&1023 == 0 {
+				if err := ctx.Err(); err != nil {
+					return CSVExportOutcome{}, err
+				}
+			}
 			sppSet[o.Species] = struct{}{}
 			row := []string{
 				o.PlotNumber,
@@ -566,7 +772,7 @@ func ExportLongTidyCSV(s *vprocore.ContextService, ctx context.Context, contextI
 		}
 
 		data := buf.Bytes()
-		writtenPath, shaHex, err := writeAtomicExportFile(request.DestinationPath, data)
+		writtenPath, shaHex, err := writeAtomicExportFileContext(ctx, request.DestinationPath, data)
 		if err != nil {
 			return CSVExportOutcome{}, err
 		}
@@ -591,6 +797,9 @@ func ExportWideMatrixCSV(s *vprocore.ContextService, ctx context.Context, contex
 	if mode != "rollup_all" && mode != "strata_4" && mode != "species_layer" {
 		return CSVExportOutcome{}, fmt.Errorf("unsupported Wide Matrix CSV layerMode %q (expected rollup_all, strata_4, or species_layer)", request.LayerMode)
 	}
+	if err := ctx.Err(); err != nil {
+		return CSVExportOutcome{}, err
+	}
 
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (CSVExportOutcome, error) {
 		owner := plots.Projects.Sqlite
@@ -599,29 +808,24 @@ func ExportWideMatrixCSV(s *vprocore.ContextService, ctx context.Context, contex
 			return CSVExportOutcome{}, err
 		}
 
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-			return CSVExportOutcome{}, err
-		}
-		defer owner.Mu.Unlock()
-		tx, err := owner.BeginReadSnapshot(ctx)
-		if err != nil {
-			return CSVExportOutcome{}, err
-		}
-		defer func() { _ = tx.Rollback() }()
-
-		plotOrder, suByPlot, err := loadScopedPlotSiteUnits(ctx, tx, owner)
-		if err != nil {
-			return CSVExportOutcome{}, err
-		}
-		sppMeta, err := loadSpeciesLookupMeta(ctx, tx)
-		if err != nil {
-			return CSVExportOutcome{}, err
-		}
-		obs, err := extractLongVegObservations(ctx, tx, owner, suByPlot, sppMeta, lumpMap)
-		if err != nil {
-			return CSVExportOutcome{}, err
-		}
-		if err := tx.Commit(); err != nil {
+		var (
+			plotOrder []string
+			suByPlot  map[string]string
+			obs       []longVegObservation
+		)
+		if err := withScopedReadSnapshot(ctx, owner, func(tx *sql.Tx) error {
+			var rErr error
+			plotOrder, suByPlot, rErr = loadScopedPlotSiteUnits(ctx, tx, owner)
+			if rErr != nil {
+				return rErr
+			}
+			sppMeta, rErr := loadSpeciesLookupMeta(ctx, tx)
+			if rErr != nil {
+				return rErr
+			}
+			obs, rErr = extractLongVegObservations(ctx, tx, owner, suByPlot, sppMeta, lumpMap)
+			return rErr
+		}); err != nil {
 			return CSVExportOutcome{}, err
 		}
 
@@ -633,7 +837,12 @@ func ExportWideMatrixCSV(s *vprocore.ContextService, ctx context.Context, contex
 			strata string
 		}
 		hasSublayerCover := map[plotSppStrata]bool{}
-		for _, o := range obs {
+		for i, o := range obs {
+			if i&1023 == 0 {
+				if err := ctx.Err(); err != nil {
+					return CSVExportOutcome{}, err
+				}
+			}
 			if o.Layer != "A" && o.Layer != "B" {
 				hasSublayerCover[plotSppStrata{o.PlotNumber, o.Species, o.StrataGroup}] = true
 			}
@@ -647,7 +856,12 @@ func ExportWideMatrixCSV(s *vprocore.ContextService, ctx context.Context, contex
 		}
 		values := map[matKey]float64{}
 
-		for _, o := range obs {
+		for i, o := range obs {
+			if i&1023 == 0 {
+				if err := ctx.Err(); err != nil {
+					return CSVExportOutcome{}, err
+				}
+			}
 			sppSet[o.Species] = struct{}{}
 			if (mode == "rollup_all" || mode == "strata_4") && (o.Layer == "A" || o.Layer == "B") {
 				if hasSublayerCover[plotSppStrata{o.PlotNumber, o.Species, o.StrataGroup}] {
@@ -693,7 +907,12 @@ func ExportWideMatrixCSV(s *vprocore.ContextService, ctx context.Context, contex
 		if request.ZeroFill {
 			absentCell = "0"
 		}
-		for _, plot := range plotOrder {
+		for pIdx, plot := range plotOrder {
+			if pIdx&31 == 0 {
+				if err := ctx.Err(); err != nil {
+					return CSVExportOutcome{}, err
+				}
+			}
 			row := make([]string, 0, len(header))
 			row = append(row, plot)
 			if request.IncludeSiteUnit {
@@ -716,7 +935,7 @@ func ExportWideMatrixCSV(s *vprocore.ContextService, ctx context.Context, contex
 		}
 
 		data := buf.Bytes()
-		writtenPath, shaHex, err := writeAtomicExportFile(request.DestinationPath, data)
+		writtenPath, shaHex, err := writeAtomicExportFileContext(ctx, request.DestinationPath, data)
 		if err != nil {
 			return CSVExportOutcome{}, err
 		}

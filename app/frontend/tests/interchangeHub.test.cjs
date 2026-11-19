@@ -226,3 +226,185 @@ test('InterchangeHub routes all validation and RPC error paths to background not
   assert.equal(entries.length, 7);
   assert.ok(entries.every(item => item.severity === 'error' && item.category === 'background' && item.source === 'Interchange Hub'));
 });
+
+test('InterchangeHub cancelOperation invokes Wails promise .cancel(), suppresses post-cancel error toasts, and fences subsequent exports', async () => {
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  class MockRuntimeError extends Error {
+    constructor(msg) {
+      super(msg);
+      this.name = 'RuntimeError';
+    }
+  }
+  class MockCancelledRejectionError extends Error {
+    constructor(promise, cause) {
+      super('Unhandled rejection in cancelled promise.');
+      this.name = 'CancelledRejectionError';
+      this.promise = promise;
+      this.cause = cause;
+    }
+  }
+  const readRequestsMod = loadTypeScript('shared/readRequests.ts', {
+    '@wailsio/runtime': {
+      Call: { RuntimeError: MockRuntimeError },
+      CancelledRejectionError: MockCancelledRejectionError,
+    },
+  });
+
+  function makeCancellableRpc(onCancelRejectError) {
+    let settleReject;
+    let settleResolve;
+    let cancelCalls = 0;
+    const p = new Promise((resolve, reject) => {
+      settleResolve = resolve;
+      settleReject = reject;
+    });
+    p.cancel = () => {
+      cancelCalls++;
+      const cancelErr = onCancelRejectError();
+      settleReject(cancelErr);
+    };
+    return {
+      promise: p,
+      getCancelCalls: () => cancelCalls,
+      resolve: (v) => settleResolve(v),
+      reject: (e) => settleReject(e),
+    };
+  }
+
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const busyTransitions = [];
+  const rpcRequests = new readRequestsMod.ReadRequests();
+
+  let activeMock = null;
+  const host = componentFunctions(
+    'InterchangeHub.svelte',
+    [
+      'pushHubError',
+      'setBusy',
+      'cancelOperation',
+      'runLongCsvExport',
+      'runWideCsvExport',
+      'runRdsExport',
+      'runGeoPackageExport',
+      'runTurboVegExport',
+    ],
+    {
+      $state: { snapshot: (v) => structuredClone(v) },
+      contextId: 'ctx-cancel',
+      busy: false,
+      operationHeld: false,
+      error: '',
+      generation: 0,
+      activeRpc: null,
+      rpcRequests,
+      csvLumpTable: '',
+      longCsvDest: '/tmp/bec_long.csv',
+      wideCsvDest: '/tmp/bec_wide.csv',
+      wideLayerMode: 'rollup_all',
+      wideZeroFill: true,
+      wideIncludeSiteUnit: true,
+      csvOutcome: null,
+      rdsDestPath: '/tmp/bec.rds',
+      rdsOutcome: null,
+      gpkgDestPath: '/tmp/bec.gpkg',
+      gpkgCrs: 'EPSG:3005',
+      gpkgIncludeAttributes: true,
+      gpkgIncludeUnlocated: false,
+      gpkgLumpTable: '',
+      gpkgOutcome: null,
+      tvExportFormat: 'sqlite',
+      tvExportPath: '/tmp/bec_tv.sqlite',
+      tvExportLump: '',
+      tvExportOutcome: null,
+      notifications,
+      onBusyChange(next) {
+        busyTransitions.push(next);
+      },
+      port: {
+        exportLongTidyCSV: () => activeMock.promise,
+        exportWideMatrixCSV: () => activeMock.promise,
+        exportProjectRDS: () => activeMock.promise,
+        exportGeoPackage: () => activeMock.promise,
+        exportTurboVeg: () => activeMock.promise,
+      },
+    }
+  );
+
+  // 1. Cancel each export format in-flight: must call .cancel() exactly once, clear busy immediately,
+  //    register expectedReadCancellation for Wails v3.1.0, and emit 0 error toasts.
+  for (const actionName of [
+    'runLongCsvExport',
+    'runWideCsvExport',
+    'runRdsExport',
+    'runGeoPackageExport',
+    'runTurboVegExport',
+  ]) {
+    activeMock = makeCancellableRpc(() => new MockRuntimeError('context canceled'));
+    const runPromise = host.actions[actionName]();
+    assert.equal(host.busy, true, `${actionName} should mark hub busy while in flight`);
+
+    host.actions.cancelOperation();
+    assert.equal(host.busy, false, `${actionName} should clear busy immediately on Cancel`);
+    assert.equal(activeMock.getCancelCalls(), 1, `${actionName} must invoke .cancel() once on active RPC`);
+    assert.equal(
+      readRequestsMod.expectedReadCancellation(
+        new MockCancelledRejectionError(activeMock.promise, new MockRuntimeError('context canceled'))
+      ),
+      true,
+      `${actionName} cancelled promise should suppress Wails CancelledRejectionError`
+    );
+
+    await runPromise;
+    assert.equal(host.error, '', `${actionName} cancel must not surface error text`);
+    assert.equal(notifications.getSnapshot().entries.length, 0, `${actionName} cancel must not push error toast`);
+  }
+
+  // 2. Immediately starting a fresh export after cancelling a stalled one must succeed cleanly
+  //    even if the cancelled promise settles after the new export begins.
+  let deferredRejectFirst;
+  const firstPromise = new Promise((_, reject) => {
+    deferredRejectFirst = reject;
+  });
+  let firstCancelled = 0;
+  firstPromise.cancel = () => {
+    firstCancelled++;
+  };
+  activeMock = { promise: firstPromise };
+  const firstRun = host.actions.runLongCsvExport();
+  assert.equal(host.busy, true);
+
+  host.actions.cancelOperation();
+  assert.equal(firstCancelled, 1);
+  assert.equal(host.busy, false);
+
+  const secondMock = makeCancellableRpc(() => new Error('unexpected'));
+  activeMock = secondMock;
+  const secondRun = host.actions.runLongCsvExport();
+  assert.equal(host.busy, true);
+
+  // Late rejection from first cancelled RPC arrives while second export is still running:
+  deferredRejectFirst(new MockRuntimeError('context canceled'));
+  await firstRun;
+  assert.equal(host.busy, true, 'late rejection of cancelled RPC must not clear busy of second export');
+  assert.equal(host.error, '');
+
+  const expectedCsvOutcome = {
+    mode: 'long_tidy',
+    rowCount: 42,
+    plotCount: 10,
+    speciesCount: 6,
+    columnCount: 9,
+    path: '/tmp/bec_long.csv',
+    sha256: 'abc123',
+    previewCsv: 'PlotNumber,SiteUnit\n00337,CWHvm1/01\n',
+  };
+  secondMock.resolve(expectedCsvOutcome);
+  await secondRun;
+
+  assert.equal(host.busy, false);
+  assert.deepEqual(host.csvOutcome, expectedCsvOutcome);
+  assert.equal(notifications.getSnapshot().entries.length, 0);
+  assert.equal(busyTransitions.at(-1), false);
+});

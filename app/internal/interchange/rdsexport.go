@@ -239,12 +239,22 @@ func (w *rdsWriter) writeDataFrame(df rdsDataFrame) error {
 }
 
 func EncodeNamedDataFramesToRDS(frames []rdsDataFrame) ([]byte, error) {
+	return encodeNamedDataFramesToRDSContext(context.Background(), frames)
+}
+
+func encodeNamedDataFramesToRDSContext(ctx context.Context, frames []rdsDataFrame) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	w := newRDSWriter()
 	w.writeU32(rSxpVec | rHasAttr)
 	w.writeI32(int32(len(frames)))
 
 	names := make([]string, len(frames))
 	for i, df := range frames {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		names[i] = df.Name
 		if err := w.writeDataFrame(df); err != nil {
 			return nil, err
@@ -262,14 +272,26 @@ func EncodeNamedDataFramesToRDS(frames []rdsDataFrame) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := gz.Write(w.buf.Bytes()); err != nil {
-		gz.Close()
-		return nil, err
+	raw := w.buf.Bytes()
+	const chunkBytes = 1 << 20
+	for offset := 0; offset < len(raw); offset += chunkBytes {
+		if err := ctx.Err(); err != nil {
+			_ = gz.Close()
+			return nil, err
+		}
+		end := offset + chunkBytes
+		if end > len(raw) {
+			end = len(raw)
+		}
+		if _, err := gz.Write(raw[offset:end]); err != nil {
+			_ = gz.Close()
+			return nil, err
+		}
 	}
 	if err := gz.Close(); err != nil {
 		return nil, err
 	}
-	return gzBuf.Bytes(), nil
+	return gzBuf.Bytes(), ctx.Err()
 }
 
 type RDSExportRequest struct {
@@ -317,9 +339,13 @@ func readSQLiteTableAsRDSDataFrame(
 	dfName string,
 	alias string,
 	table string,
+	cteSQL string,
 	whereClause string,
 	orderClause string,
 ) (rdsDataFrame, error) {
+	if err := ctx.Err(); err != nil {
+		return rdsDataFrame{}, err
+	}
 	pRows, err := tx.QueryContext(ctx, `PRAGMA `+vprocore.QuoteHeaderIdentifier(alias)+`.table_info(`+vprocore.QuoteHeaderIdentifier(table)+`)`)
 	if err != nil {
 		return rdsDataFrame{}, err
@@ -338,6 +364,10 @@ func readSQLiteTableAsRDSDataFrame(
 			return rdsDataFrame{}, err
 		}
 		metas = append(metas, colMeta{name: name, kind: classifySQLiteDeclaredType(ctype)})
+	}
+	if err := pRows.Err(); err != nil {
+		pRows.Close()
+		return rdsDataFrame{}, err
 	}
 	if err := pRows.Close(); err != nil {
 		return rdsDataFrame{}, err
@@ -359,7 +389,7 @@ func readSQLiteTableAsRDSDataFrame(
 	}
 
 	fullTable := vprocore.QuoteHeaderIdentifier(alias) + "." + vprocore.QuoteHeaderIdentifier(table) + " AS t"
-	query := `SELECT ` + strings.Join(selectExprs, ", ") + ` FROM ` + fullTable
+	query := cteSQL + `SELECT ` + strings.Join(selectExprs, ", ") + ` FROM ` + fullTable
 	if whereClause != "" {
 		query += " WHERE " + whereClause
 	}
@@ -375,6 +405,11 @@ func readSQLiteTableAsRDSDataFrame(
 
 	nrow := 0
 	for rows.Next() {
+		if nrow&511 == 0 {
+			if err := ctx.Err(); err != nil {
+				return rdsDataFrame{}, err
+			}
+		}
 		rawVals := make([]any, len(metas))
 		ptrs := make([]any, len(metas))
 		for i := range rawVals {
@@ -458,6 +493,9 @@ func readSQLiteTableAsRDSDataFrame(
 		}
 	}
 	if err := rows.Err(); err != nil {
+		return rdsDataFrame{}, err
+	}
+	if err := ctx.Err(); err != nil {
 		return rdsDataFrame{}, err
 	}
 	return rdsDataFrame{
@@ -577,6 +615,9 @@ func ExportProjectRDS(s *vprocore.ContextService, ctx context.Context, contextID
 	if strings.TrimSpace(request.DestinationPath) == "" {
 		return RDSExportOutcome{}, errors.New("RDS export requires a non-empty destinationPath")
 	}
+	if err := ctx.Err(); err != nil {
+		return RDSExportOutcome{}, err
+	}
 	dest := strings.TrimSpace(request.DestinationPath)
 	if !strings.HasSuffix(strings.ToLower(dest), ".rds") {
 		dest += ".rds"
@@ -589,67 +630,65 @@ func ExportProjectRDS(s *vprocore.ContextService, ctx context.Context, contextID
 			return RDSExportOutcome{}, err
 		}
 
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-			return RDSExportOutcome{}, err
-		}
-		defer owner.Mu.Unlock()
-		tx, err := owner.BeginReadSnapshot(ctx)
-		if err != nil {
-			return RDSExportOutcome{}, err
-		}
-		defer func() { _ = tx.Rollback() }()
-
 		project := owner.Selection.Project
-		scopePlotPred := `EXISTS (SELECT 1 FROM USysEnv AS e WHERE typeof(e.PlotNumber)=typeof(t."PlotNumber") AND CAST(e.PlotNumber AS BLOB)=CAST(t."PlotNumber" AS BLOB))`
-		scopeAdminPred := `EXISTS (SELECT 1 FROM USysEnv AS e WHERE typeof(e.PlotNumber)=typeof(t."Plot") AND CAST(e.PlotNumber AS BLOB)=CAST(t."Plot" AS BLOB))`
-
-		envDF, err := readSQLiteTableAsRDSDataFrame(ctx, tx, "env", "project", project+"_Env", scopePlotPred, `t."PlotNumber"`)
-		if err != nil {
-			return RDSExportOutcome{}, err
-		}
-		adminDF, err := readSQLiteTableAsRDSDataFrame(ctx, tx, "admin", "project", project+"_Admin", scopeAdminPred, `t."Plot"`)
-		if err != nil {
-			return RDSExportOutcome{}, err
-		}
+		plotCTE, scopePlotPred := scopedPlotsCTEAndPredicate(owner, `t."PlotNumber"`)
+		adminCTE, scopeAdminPred := scopedPlotsCTEAndPredicate(owner, `t."Plot"`)
 		humusOrder := `t."PlotNumber", ` + vprocore.HumusOrderBySQL(`t."Horizon"`, `t."UpperDepth"`) + `, t."Horizon" DESC, t."ID"`
-		humusDF, err := readSQLiteTableAsRDSDataFrame(ctx, tx, "humus", "project", project+"_Humus", scopePlotPred, humusOrder)
-		if err != nil {
-			return RDSExportOutcome{}, err
-		}
-		mineralDF, err := readSQLiteTableAsRDSDataFrame(ctx, tx, "mineral", "project", project+"_Mineral", scopePlotPred, `t."PlotNumber", t."UpperDepth" ASC, t."Horizon" ASC, t."ID"`)
-		if err != nil {
-			return RDSExportOutcome{}, err
-		}
-		metadataDF, err := readSQLiteTableAsRDSDataFrame(ctx, tx, "metadata", "project", project+"_Metadata", "", `t."ID"`)
-		if err != nil {
+
+		var (
+			envDF, adminDF, humusDF, mineralDF, metadataDF rdsDataFrame
+			plotOrder                                      []string
+			suByPlot                                       map[string]string
+			vegObs                                         []longVegObservation
+		)
+		if err := withScopedReadSnapshot(ctx, owner, func(tx *sql.Tx) error {
+			var rErr error
+			envDF, rErr = readSQLiteTableAsRDSDataFrame(ctx, tx, "env", "project", project+"_Env", plotCTE, scopePlotPred, `t."PlotNumber"`)
+			if rErr != nil {
+				return rErr
+			}
+			adminDF, rErr = readSQLiteTableAsRDSDataFrame(ctx, tx, "admin", "project", project+"_Admin", adminCTE, scopeAdminPred, `t."Plot"`)
+			if rErr != nil {
+				return rErr
+			}
+			humusDF, rErr = readSQLiteTableAsRDSDataFrame(ctx, tx, "humus", "project", project+"_Humus", plotCTE, scopePlotPred, humusOrder)
+			if rErr != nil {
+				return rErr
+			}
+			mineralDF, rErr = readSQLiteTableAsRDSDataFrame(ctx, tx, "mineral", "project", project+"_Mineral", plotCTE, scopePlotPred, `t."PlotNumber", t."UpperDepth" ASC, t."Horizon" ASC, t."ID"`)
+			if rErr != nil {
+				return rErr
+			}
+			metadataDF, rErr = readSQLiteTableAsRDSDataFrame(ctx, tx, "metadata", "project", project+"_Metadata", "", "", `t."ID"`)
+			if rErr != nil {
+				return rErr
+			}
+			plotOrder, suByPlot, rErr = loadScopedPlotSiteUnits(ctx, tx, owner)
+			if rErr != nil {
+				return rErr
+			}
+			sppMeta, rErr := loadSpeciesLookupMeta(ctx, tx)
+			if rErr != nil {
+				return rErr
+			}
+			vegObs, rErr = extractLongVegObservations(ctx, tx, owner, suByPlot, sppMeta, lumpMap)
+			return rErr
+		}); err != nil {
 			return RDSExportOutcome{}, err
 		}
 
-		plotOrder, suByPlot, err := loadScopedPlotSiteUnits(ctx, tx, owner)
-		if err != nil {
+		if err := ctx.Err(); err != nil {
 			return RDSExportOutcome{}, err
 		}
-		sppMeta, err := loadSpeciesLookupMeta(ctx, tx)
-		if err != nil {
-			return RDSExportOutcome{}, err
-		}
-		vegObs, err := extractLongVegObservations(ctx, tx, owner, suByPlot, sppMeta, lumpMap)
-		if err != nil {
-			return RDSExportOutcome{}, err
-		}
-		if err := tx.Commit(); err != nil {
-			return RDSExportOutcome{}, err
-		}
-
 		vegDF := buildVegLongDataFrame(vegObs)
 		suDF := buildSUDataFrame(plotOrder, suByPlot, owner.Selection.SU != "None")
 
 		frames := []rdsDataFrame{envDF, adminDF, vegDF, humusDF, mineralDF, suDF, metadataDF}
-		rdsBytes, err := EncodeNamedDataFramesToRDS(frames)
+		rdsBytes, err := encodeNamedDataFramesToRDSContext(ctx, frames)
 		if err != nil {
 			return RDSExportOutcome{}, err
 		}
-		writtenPath, shaHex, err := writeAtomicExportFile(dest, rdsBytes)
+		writtenPath, shaHex, err := writeAtomicExportFileContext(ctx, dest, rdsBytes)
 		if err != nil {
 			return RDSExportOutcome{}, err
 		}

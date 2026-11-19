@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { notifications } from '../shell/notificationService.svelte';
+  import { ReadRequests, type CancellableRead } from '../shared/readRequests';
   import {
     TURBOVEG_LAYER_CROSSWALK,
     defaultInterchangeHubPort,
@@ -44,6 +45,8 @@
   let busy = $state(false);
   let error = $state('');
   let generation = 0;
+  let activeRpc: { cancel: () => unknown } | null = null;
+  const rpcRequests = new ReadRequests();
 
   // 1. VENUS 5.0 state
   let venusSourcePath = $state('');
@@ -101,14 +104,38 @@
   let gpkgLumpTable = $state('');
   let gpkgOutcome = $state.raw<GeoPackageExportOutcome | null>(null);
 
-  function setBusy(next: boolean) {
-    busy = next;
-    onBusyChange(next);
+  function setBusy(next: boolean, rpc: unknown = null) {
+    const cancellable =
+      next &&
+      rpc !== null &&
+      typeof rpc === 'object' &&
+      typeof (rpc as { cancel?: unknown }).cancel === 'function'
+        ? (rpc as { cancel: () => unknown })
+        : null;
+    if (typeof activeRpc !== 'undefined') {
+      activeRpc = cancellable;
+    } else {
+      (setBusy as unknown as { _activeRpc?: { cancel: () => unknown } | null })._activeRpc = cancellable;
+    }
+    if (busy !== next) {
+      busy = next;
+      onBusyChange(next);
+    }
   }
 
   function cancelOperation() {
     generation++;
+    const current =
+      typeof activeRpc !== 'undefined'
+        ? activeRpc
+        : ((setBusy as unknown as { _activeRpc?: { cancel: () => unknown } | null })._activeRpc ?? null);
     setBusy(false);
+    if (typeof rpcRequests !== 'undefined') {
+      rpcRequests.cancelAll();
+    }
+    if (current) {
+      current.cancel();
+    }
   }
 
   function pushHubError(title: string, message: string) {
@@ -152,9 +179,17 @@
     const owner = contextId;
     error = '';
     venusInspection = null;
-    setBusy(true);
     try {
-      const res = await port.inspectVenusSource(owner, venusSourcePath.trim());
+      const rawRpc = port.inspectVenusSource(owner, venusSourcePath.trim());
+      const trackedRpc =
+        typeof rpcRequests !== 'undefined' &&
+        rawRpc !== null &&
+        typeof rawRpc === 'object' &&
+        typeof (rawRpc as { cancel?: unknown }).cancel === 'function'
+          ? rpcRequests.track(rawRpc as unknown as CancellableRead<VenusSourceInspection>)
+          : rawRpc;
+      setBusy(true, trackedRpc === rawRpc ? rawRpc : null);
+      const res = await trackedRpc;
       if (reqGen !== generation || owner !== contextId) return;
       venusInspection = res;
       if (res.projects.length > 0) {
@@ -163,9 +198,11 @@
         venusDestinationPath = res.projects[0].suggestedDestPath;
       }
     } catch (cause) {
-      if (reqGen === generation) pushHubError('VENUS inspection failed', String(cause));
+      if (reqGen === generation && owner === contextId && !(cause instanceof Error && cause.name === 'CancelError')) {
+        pushHubError('VENUS inspection failed', String(cause));
+      }
     } finally {
-      if (reqGen === generation) setBusy(false);
+      if (reqGen === generation && busy) setBusy(false);
     }
   }
 
@@ -186,9 +223,17 @@
       activateOnSuccess: venusActivate,
     });
     error = '';
-    setBusy(true);
     try {
-      const res = await port.importVenusProject(owner, payload);
+      const rawRpc = port.importVenusProject(owner, payload);
+      const trackedRpc =
+        typeof rpcRequests !== 'undefined' &&
+        rawRpc !== null &&
+        typeof rawRpc === 'object' &&
+        typeof (rawRpc as { cancel?: unknown }).cancel === 'function'
+          ? rpcRequests.track(rawRpc as unknown as CancellableRead<VenusImportResult>)
+          : rawRpc;
+      setBusy(true, trackedRpc === rawRpc ? rawRpc : null);
+      const res = await trackedRpc;
       if (reqGen !== generation || owner !== contextId) return;
       venusResult = res;
       if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
@@ -204,9 +249,11 @@
         onProjectActivated(res.state);
       }
     } catch (cause) {
-      if (reqGen === generation) pushHubError('VENUS import failed', String(cause));
+      if (reqGen === generation && owner === contextId && !(cause instanceof Error && cause.name === 'CancelError')) {
+        pushHubError('VENUS import failed', String(cause));
+      }
     } finally {
-      if (reqGen === generation) setBusy(false);
+      if (reqGen === generation && busy) setBusy(false);
     }
   }
 
@@ -224,9 +271,17 @@
       lumpTable: tvExportLump.trim(),
     });
     error = '';
-    setBusy(true);
     try {
-      const res = await port.exportTurboVeg(owner, payload);
+      const rawRpc = port.exportTurboVeg(owner, payload);
+      const trackedRpc =
+        typeof rpcRequests !== 'undefined' &&
+        rawRpc !== null &&
+        typeof rawRpc === 'object' &&
+        typeof (rawRpc as { cancel?: unknown }).cancel === 'function'
+          ? rpcRequests.track(rawRpc as unknown as CancellableRead<TurboVegExportOutcome>)
+          : rawRpc;
+      setBusy(true, trackedRpc === rawRpc ? rawRpc : null);
+      const res = await trackedRpc;
       if (reqGen !== generation || owner !== contextId) return;
       tvExportOutcome = res;
       if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
@@ -239,9 +294,11 @@
         });
       }
     } catch (cause) {
-      if (reqGen === generation) pushHubError('TurboVeg export failed', String(cause));
+      if (reqGen === generation && owner === contextId && !(cause instanceof Error && cause.name === 'CancelError')) {
+        pushHubError('TurboVeg export failed', String(cause));
+      }
     } finally {
-      if (reqGen === generation) setBusy(false);
+      if (reqGen === generation && busy) setBusy(false);
     }
   }
 
@@ -266,9 +323,11 @@
       }
       tvXmlSnippetCount = check.plotTagCount;
     } catch (cause) {
-      if (reqGen === generation) pushHubError('TurboVeg XML validation failed', String(cause));
+      if (reqGen === generation && owner === contextId && !(cause instanceof Error && cause.name === 'CancelError')) {
+        pushHubError('TurboVeg XML validation failed', String(cause));
+      }
     } finally {
-      if (reqGen === generation) setBusy(false);
+      if (reqGen === generation && busy) setBusy(false);
     }
   }
 
@@ -294,9 +353,17 @@
       resolveVProCodeSynonyms: tvResolveSynonyms,
     });
     error = '';
-    setBusy(true);
     try {
-      const res = await port.importTurboVeg(owner, payload);
+      const rawRpc = port.importTurboVeg(owner, payload);
+      const trackedRpc =
+        typeof rpcRequests !== 'undefined' &&
+        rawRpc !== null &&
+        typeof rawRpc === 'object' &&
+        typeof (rawRpc as { cancel?: unknown }).cancel === 'function'
+          ? rpcRequests.track(rawRpc as unknown as CancellableRead<TurboVegImportOutcome>)
+          : rawRpc;
+      setBusy(true, trackedRpc === rawRpc ? rawRpc : null);
+      const res = await trackedRpc;
       if (reqGen !== generation || owner !== contextId) return;
       tvImportOutcome = res;
       if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
@@ -312,9 +379,11 @@
         onProjectActivated(res.state);
       }
     } catch (cause) {
-      if (reqGen === generation) pushHubError('TurboVeg import failed', String(cause));
+      if (reqGen === generation && owner === contextId && !(cause instanceof Error && cause.name === 'CancelError')) {
+        pushHubError('TurboVeg import failed', String(cause));
+      }
     } finally {
-      if (reqGen === generation) setBusy(false);
+      if (reqGen === generation && busy) setBusy(false);
     }
   }
 
@@ -327,15 +396,25 @@
       destinationPath: userSppExportPath.trim(),
     });
     error = '';
-    setBusy(true);
     try {
-      const res = await port.exportUserSpeciesList(owner, payload);
+      const rawRpc = port.exportUserSpeciesList(owner, payload);
+      const trackedRpc =
+        typeof rpcRequests !== 'undefined' &&
+        rawRpc !== null &&
+        typeof rawRpc === 'object' &&
+        typeof (rawRpc as { cancel?: unknown }).cancel === 'function'
+          ? rpcRequests.track(rawRpc as unknown as CancellableRead<UserSpeciesExportResult>)
+          : rawRpc;
+      setBusy(true, trackedRpc === rawRpc ? rawRpc : null);
+      const res = await trackedRpc;
       if (reqGen !== generation || owner !== contextId) return;
       userSppExportResult = res;
     } catch (cause) {
-      if (reqGen === generation) pushHubError('User species export failed', String(cause));
+      if (reqGen === generation && owner === contextId && !(cause instanceof Error && cause.name === 'CancelError')) {
+        pushHubError('User species export failed', String(cause));
+      }
     } finally {
-      if (reqGen === generation) setBusy(false);
+      if (reqGen === generation && busy) setBusy(false);
     }
   }
 
@@ -349,15 +428,25 @@
       collisionPolicy: userSppPolicy,
     });
     error = '';
-    setBusy(true);
     try {
-      const res = await port.previewUserSpeciesImport(owner, payload);
+      const rawRpc = port.previewUserSpeciesImport(owner, payload);
+      const trackedRpc =
+        typeof rpcRequests !== 'undefined' &&
+        rawRpc !== null &&
+        typeof rawRpc === 'object' &&
+        typeof (rawRpc as { cancel?: unknown }).cancel === 'function'
+          ? rpcRequests.track(rawRpc as unknown as CancellableRead<UserSpeciesImportPreview>)
+          : rawRpc;
+      setBusy(true, trackedRpc === rawRpc ? rawRpc : null);
+      const res = await trackedRpc;
       if (reqGen !== generation || owner !== contextId) return;
       userSppPreview = res;
     } catch (cause) {
-      if (reqGen === generation) pushHubError('User species preview failed', String(cause));
+      if (reqGen === generation && owner === contextId && !(cause instanceof Error && cause.name === 'CancelError')) {
+        pushHubError('User species preview failed', String(cause));
+      }
     } finally {
-      if (reqGen === generation) setBusy(false);
+      if (reqGen === generation && busy) setBusy(false);
     }
   }
 
@@ -371,16 +460,26 @@
       collisionPolicy: userSppPolicy,
     });
     error = '';
-    setBusy(true);
     try {
-      const res = await port.importUserSpeciesList(owner, payload);
+      const rawRpc = port.importUserSpeciesList(owner, payload);
+      const trackedRpc =
+        typeof rpcRequests !== 'undefined' &&
+        rawRpc !== null &&
+        typeof rawRpc === 'object' &&
+        typeof (rawRpc as { cancel?: unknown }).cancel === 'function'
+          ? rpcRequests.track(rawRpc as unknown as CancellableRead<UserSpeciesImportResult>)
+          : rawRpc;
+      setBusy(true, trackedRpc === rawRpc ? rawRpc : null);
+      const res = await trackedRpc;
       if (reqGen !== generation || owner !== contextId) return;
       userSppImportResult = res;
       userSppPreview = res.preview;
     } catch (cause) {
-      if (reqGen === generation) pushHubError('User species import failed', String(cause));
+      if (reqGen === generation && owner === contextId && !(cause instanceof Error && cause.name === 'CancelError')) {
+        pushHubError('User species import failed', String(cause));
+      }
     } finally {
-      if (reqGen === generation) setBusy(false);
+      if (reqGen === generation && busy) setBusy(false);
     }
   }
 
@@ -393,15 +492,25 @@
       lumpTable: csvLumpTable.trim(),
     });
     error = '';
-    setBusy(true);
     try {
-      const res = await port.exportLongTidyCSV(owner, payload);
+      const rawRpc = port.exportLongTidyCSV(owner, payload);
+      const trackedRpc =
+        typeof rpcRequests !== 'undefined' &&
+        rawRpc !== null &&
+        typeof rawRpc === 'object' &&
+        typeof (rawRpc as { cancel?: unknown }).cancel === 'function'
+          ? rpcRequests.track(rawRpc as unknown as CancellableRead<CSVExportOutcome>)
+          : rawRpc;
+      setBusy(true, trackedRpc === rawRpc ? rawRpc : null);
+      const res = await trackedRpc;
       if (reqGen !== generation || owner !== contextId) return;
       csvOutcome = res;
     } catch (cause) {
-      if (reqGen === generation) pushHubError('Long CSV export failed', String(cause));
+      if (reqGen === generation && owner === contextId && !(cause instanceof Error && cause.name === 'CancelError')) {
+        pushHubError('Long CSV export failed', String(cause));
+      }
     } finally {
-      if (reqGen === generation) setBusy(false);
+      if (reqGen === generation && busy) setBusy(false);
     }
   }
 
@@ -417,15 +526,25 @@
       lumpTable: csvLumpTable.trim(),
     });
     error = '';
-    setBusy(true);
     try {
-      const res = await port.exportWideMatrixCSV(owner, payload);
+      const rawRpc = port.exportWideMatrixCSV(owner, payload);
+      const trackedRpc =
+        typeof rpcRequests !== 'undefined' &&
+        rawRpc !== null &&
+        typeof rawRpc === 'object' &&
+        typeof (rawRpc as { cancel?: unknown }).cancel === 'function'
+          ? rpcRequests.track(rawRpc as unknown as CancellableRead<CSVExportOutcome>)
+          : rawRpc;
+      setBusy(true, trackedRpc === rawRpc ? rawRpc : null);
+      const res = await trackedRpc;
       if (reqGen !== generation || owner !== contextId) return;
       csvOutcome = res;
     } catch (cause) {
-      if (reqGen === generation) pushHubError('Wide CSV export failed', String(cause));
+      if (reqGen === generation && owner === contextId && !(cause instanceof Error && cause.name === 'CancelError')) {
+        pushHubError('Wide CSV export failed', String(cause));
+      }
     } finally {
-      if (reqGen === generation) setBusy(false);
+      if (reqGen === generation && busy) setBusy(false);
     }
   }
 
@@ -442,9 +561,17 @@
       lumpTable: csvLumpTable.trim(),
     });
     error = '';
-    setBusy(true);
     try {
-      const res = await port.exportProjectRDS(owner, payload);
+      const rawRpc = port.exportProjectRDS(owner, payload);
+      const trackedRpc =
+        typeof rpcRequests !== 'undefined' &&
+        rawRpc !== null &&
+        typeof rawRpc === 'object' &&
+        typeof (rawRpc as { cancel?: unknown }).cancel === 'function'
+          ? rpcRequests.track(rawRpc as unknown as CancellableRead<RDSExportOutcome>)
+          : rawRpc;
+      setBusy(true, trackedRpc === rawRpc ? rawRpc : null);
+      const res = await trackedRpc;
       if (reqGen !== generation || owner !== contextId) return;
       rdsOutcome = res;
       if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
@@ -457,9 +584,11 @@
         });
       }
     } catch (cause) {
-      if (reqGen === generation) pushHubError('R .rds export failed', String(cause));
+      if (reqGen === generation && owner === contextId && !(cause instanceof Error && cause.name === 'CancelError')) {
+        pushHubError('R .rds export failed', String(cause));
+      }
     } finally {
-      if (reqGen === generation) setBusy(false);
+      if (reqGen === generation && busy) setBusy(false);
     }
   }
 
@@ -479,9 +608,17 @@
       lumpTable: gpkgLumpTable.trim(),
     });
     error = '';
-    setBusy(true);
     try {
-      const res = await port.exportGeoPackage(owner, payload);
+      const rawRpc = port.exportGeoPackage(owner, payload);
+      const trackedRpc =
+        typeof rpcRequests !== 'undefined' &&
+        rawRpc !== null &&
+        typeof rawRpc === 'object' &&
+        typeof (rawRpc as { cancel?: unknown }).cancel === 'function'
+          ? rpcRequests.track(rawRpc as unknown as CancellableRead<GeoPackageExportOutcome>)
+          : rawRpc;
+      setBusy(true, trackedRpc === rawRpc ? rawRpc : null);
+      const res = await trackedRpc;
       if (reqGen !== generation || owner !== contextId) return;
       gpkgOutcome = res;
       if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
@@ -494,9 +631,11 @@
         });
       }
     } catch (cause) {
-      if (reqGen === generation) pushHubError('GeoPackage export failed', String(cause));
+      if (reqGen === generation && owner === contextId && !(cause instanceof Error && cause.name === 'CancelError')) {
+        pushHubError('GeoPackage export failed', String(cause));
+      }
     } finally {
-      if (reqGen === generation) setBusy(false);
+      if (reqGen === generation && busy) setBusy(false);
     }
   }
 

@@ -238,6 +238,10 @@ func ExportGeoPackage(s *vprocore.ContextService, ctx context.Context, contextID
 		return GeoPackageExportOutcome{}, fmt.Errorf("unsupported GeoPackage CRS %q (supported: EPSG:3005, EPSG:4326)", request.CRS)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return GeoPackageExportOutcome{}, err
+	}
+
 	dest := strings.TrimSpace(request.DestinationPath)
 	if !strings.HasSuffix(strings.ToLower(dest), ".gpkg") {
 		dest += ".gpkg"
@@ -257,61 +261,60 @@ func ExportGeoPackage(s *vprocore.ContextService, ctx context.Context, contextID
 			return GeoPackageExportOutcome{}, err
 		}
 
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-			return GeoPackageExportOutcome{}, err
-		}
-		defer owner.Mu.Unlock()
-		readTx, err := owner.BeginReadSnapshot(ctx)
-		if err != nil {
-			return GeoPackageExportOutcome{}, err
-		}
-		defer func() { _ = readTx.Rollback() }()
-
 		project := owner.Selection.Project
-		_, suByPlot, err := loadScopedPlotSiteUnits(ctx, readTx, owner)
-		if err != nil {
+		plotCTE, scopePlotPred := scopedPlotsCTEAndPredicate(owner, `t."PlotNumber"`)
+		adminCTE, scopeAdminPred := scopedPlotsCTEAndPredicate(owner, `t."Plot"`)
+
+		var (
+			suByPlot                map[string]string
+			envCols, adminCols      []gpkgColSpec
+			envRows, adminRows      [][]any
+			vegObs                  []longVegObservation
+			humusCols, mineralCols  []gpkgColSpec
+			humusRows, mineralRows  [][]any
+		)
+		if err := withScopedReadSnapshot(ctx, owner, func(readTx *sql.Tx) error {
+			var rErr error
+			_, suByPlot, rErr = loadScopedPlotSiteUnits(ctx, readTx, owner)
+			if rErr != nil {
+				return rErr
+			}
+			envCols, envRows, rErr = readRawTableForGPKG(ctx, readTx, "project", project+"_Env", plotCTE, scopePlotPred, `t."PlotNumber"`)
+			if rErr != nil {
+				return rErr
+			}
+			adminCols, adminRows, rErr = readRawTableForGPKG(ctx, readTx, "project", project+"_Admin", adminCTE, scopeAdminPred, `t."Plot"`)
+			if rErr != nil {
+				return rErr
+			}
+			if request.IncludeAttributeTables {
+				sppMeta, mErr := loadSpeciesLookupMeta(ctx, readTx)
+				if mErr != nil {
+					return mErr
+				}
+				vegObs, rErr = extractLongVegObservations(ctx, readTx, owner, suByPlot, sppMeta, lumpMap)
+				if rErr != nil {
+					return rErr
+				}
+				humusCols, humusRows, rErr = readRawTableForGPKG(ctx, readTx, "project", project+"_Humus",
+					plotCTE, scopePlotPred,
+					`t."PlotNumber", `+vprocore.HumusOrderBySQL(`t."Horizon"`, `t."UpperDepth"`)+`, t."ID"`)
+				if rErr != nil {
+					return rErr
+				}
+				mineralCols, mineralRows, rErr = readRawTableForGPKG(ctx, readTx, "project", project+"_Mineral",
+					plotCTE, scopePlotPred,
+					`t."PlotNumber", t."UpperDepth" ASC, t."ID"`)
+				if rErr != nil {
+					return rErr
+				}
+			}
+			return nil
+		}); err != nil {
 			return GeoPackageExportOutcome{}, err
 		}
 
-		envCols, envRows, err := readRawTableForGPKG(ctx, readTx, "project", project+"_Env",
-			`EXISTS (SELECT 1 FROM USysEnv AS u WHERE typeof(u.PlotNumber)=typeof(t."PlotNumber") AND CAST(u.PlotNumber AS BLOB)=CAST(t."PlotNumber" AS BLOB))`,
-			`t."PlotNumber"`)
-		if err != nil {
-			return GeoPackageExportOutcome{}, err
-		}
-		adminCols, adminRows, err := readRawTableForGPKG(ctx, readTx, "project", project+"_Admin",
-			`EXISTS (SELECT 1 FROM USysEnv AS u WHERE typeof(u.PlotNumber)=typeof(t."Plot") AND CAST(u.PlotNumber AS BLOB)=CAST(t."Plot" AS BLOB))`,
-			`t."Plot"`)
-		if err != nil {
-			return GeoPackageExportOutcome{}, err
-		}
-
-		var vegObs []longVegObservation
-		var humusCols, mineralCols []gpkgColSpec
-		var humusRows, mineralRows [][]any
-		if request.IncludeAttributeTables {
-			sppMeta, mErr := loadSpeciesLookupMeta(ctx, readTx)
-			if mErr != nil {
-				return GeoPackageExportOutcome{}, mErr
-			}
-			vegObs, err = extractLongVegObservations(ctx, readTx, owner, suByPlot, sppMeta, lumpMap)
-			if err != nil {
-				return GeoPackageExportOutcome{}, err
-			}
-			humusCols, humusRows, err = readRawTableForGPKG(ctx, readTx, "project", project+"_Humus",
-				`EXISTS (SELECT 1 FROM USysEnv AS u WHERE typeof(u.PlotNumber)=typeof(t."PlotNumber") AND CAST(u.PlotNumber AS BLOB)=CAST(t."PlotNumber" AS BLOB))`,
-				`t."PlotNumber", `+vprocore.HumusOrderBySQL(`t."Horizon"`, `t."UpperDepth"`)+`, t."ID"`)
-			if err != nil {
-				return GeoPackageExportOutcome{}, err
-			}
-			mineralCols, mineralRows, err = readRawTableForGPKG(ctx, readTx, "project", project+"_Mineral",
-				`EXISTS (SELECT 1 FROM USysEnv AS u WHERE typeof(u.PlotNumber)=typeof(t."PlotNumber") AND CAST(u.PlotNumber AS BLOB)=CAST(t."PlotNumber" AS BLOB))`,
-				`t."PlotNumber", t."UpperDepth" ASC, t."ID"`)
-			if err != nil {
-				return GeoPackageExportOutcome{}, err
-			}
-		}
-		if err := readTx.Commit(); err != nil {
+		if err := ctx.Err(); err != nil {
 			return GeoPackageExportOutcome{}, err
 		}
 
@@ -353,11 +356,19 @@ func ExportGeoPackage(s *vprocore.ContextService, ctx context.Context, contextID
 			_ = gpkgDB.Close()
 			return GeoPackageExportOutcome{}, buildErr
 		}
+		if err := ctx.Err(); err != nil {
+			_ = tx.Rollback()
+			_ = gpkgDB.Close()
+			return GeoPackageExportOutcome{}, err
+		}
 		if err := sqlutil.CommitStagedTx(ctx, tx); err != nil {
 			_ = gpkgDB.Close()
 			return GeoPackageExportOutcome{}, err
 		}
 		if err := gpkgDB.Close(); err != nil {
+			return GeoPackageExportOutcome{}, err
+		}
+		if err := ctx.Err(); err != nil {
 			return GeoPackageExportOutcome{}, err
 		}
 
@@ -398,7 +409,10 @@ func mapSQLiteToGPKGType(decl string) (string, bool, bool) {
 	}
 }
 
-func readRawTableForGPKG(ctx context.Context, tx *sql.Tx, alias, table, whereClause, orderClause string) ([]gpkgColSpec, [][]any, error) {
+func readRawTableForGPKG(ctx context.Context, tx *sql.Tx, alias, table, cteSQL, whereClause, orderClause string) ([]gpkgColSpec, [][]any, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
 	pRows, err := tx.QueryContext(ctx, `PRAGMA `+vprocore.QuoteHeaderIdentifier(alias)+`.table_info(`+vprocore.QuoteHeaderIdentifier(table)+`)`)
 	if err != nil {
 		return nil, nil, err
@@ -414,6 +428,10 @@ func readRawTableForGPKG(ctx context.Context, tx *sql.Tx, alias, table, whereCla
 		}
 		gType, isBool, isText := mapSQLiteToGPKGType(ctype)
 		specs = append(specs, gpkgColSpec{Name: name, GPKGType: gType, IsBool: isBool, IsText: isText})
+	}
+	if err := pRows.Err(); err != nil {
+		pRows.Close()
+		return nil, nil, err
 	}
 	if err := pRows.Close(); err != nil {
 		return nil, nil, err
@@ -431,7 +449,7 @@ func readRawTableForGPKG(ctx context.Context, tx *sql.Tx, alias, table, whereCla
 		}
 	}
 
-	sqlStr := `SELECT ` + strings.Join(exprs, ", ") + ` FROM ` + vprocore.QuoteHeaderIdentifier(alias) + `.` + vprocore.QuoteHeaderIdentifier(table) + ` AS t`
+	sqlStr := cteSQL + `SELECT ` + strings.Join(exprs, ", ") + ` FROM ` + vprocore.QuoteHeaderIdentifier(alias) + `.` + vprocore.QuoteHeaderIdentifier(table) + ` AS t`
 	if whereClause != "" {
 		sqlStr += ` WHERE ` + whereClause
 	}
@@ -446,7 +464,14 @@ func readRawTableForGPKG(ctx context.Context, tx *sql.Tx, alias, table, whereCla
 	defer rows.Close()
 
 	var data [][]any
+	rowIdx := 0
 	for rows.Next() {
+		if rowIdx&511 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, nil, err
+			}
+		}
+		rowIdx++
 		vals := make([]any, len(specs))
 		ptrs := make([]any, len(specs))
 		for i := range vals {
@@ -471,7 +496,10 @@ func readRawTableForGPKG(ctx context.Context, tx *sql.Tx, alias, table, whereCla
 		}
 		data = append(data, vals)
 	}
-	return specs, data, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	return specs, data, ctx.Err()
 }
 
 func asFloat64Value(v any) (float64, bool) {
