@@ -69,6 +69,7 @@
   let scrollTop = $state(0);
   let viewportHeight = $state(520);
   let viewportEl = $state<HTMLDivElement | null>(null);
+  let workbenchEl = $state<HTMLElement | null>(null);
   let busy = $state(false);
   let saving = $state(false);
   let errorMessage = $state('');
@@ -123,6 +124,15 @@
   }
 
   function handleWindowKeydown(event: KeyboardEvent) {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f') {
+      const searchBox = workbenchEl?.querySelector<HTMLInputElement>('input.vpro-ds-search, input.vpro-ds-col-filter');
+      if (searchBox) {
+        event.preventDefault();
+        searchBox.focus();
+        searchBox.select?.();
+      }
+      return;
+    }
     if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') {
       event.preventDefault();
       if (page && !saving && !activeTableReadOnly && validEditCount > 0 && invalidDraftCount === 0) {
@@ -435,7 +445,7 @@
 
 <svelte:window onkeydown={handleWindowKeydown} onmouseup={() => { isMouseSelecting = false; }} />
 
-<section class="vpro-datasheet-workbench" data-tour="datasheet-grid-root" aria-label="Universal Project Datasheet Grid" oncopy={handleCopySelection}>
+<section bind:this={workbenchEl} class="vpro-datasheet-workbench" data-tour="datasheet-grid-root" aria-label="Universal Project Datasheet Grid" oncopy={handleCopySelection}>
   <div data-workbench-sticky-bar class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-stone-200 space-y-2">
     <DatasheetHeader
       {project} {su} {hierarchy} {tables} {activeTableKey} {page}

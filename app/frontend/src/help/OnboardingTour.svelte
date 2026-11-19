@@ -11,6 +11,7 @@
     helpPort = defaultHelpPort,
     onnavigateview,
     onensurecontextopen,
+    onrestorecontext,
     onresetsample,
     onclose,
   }: {
@@ -21,6 +22,7 @@
     helpPort?: HelpBackendPort;
     onnavigateview: (viewName: string) => void;
     onensurecontextopen?: () => void;
+    onrestorecontext?: () => void;
     onresetsample?: () => Promise<void> | void;
     onclose: () => void;
   } = $props();
@@ -175,6 +177,9 @@
       }
       if (allowScroll && typeof el.scrollIntoView === 'function') {
         el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+        if (typeof window !== 'undefined' && typeof window.scrollTo === 'function' && window.scrollY > 0) {
+          window.scrollTo(0, 0);
+        }
       }
       const rect = el.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0 || openedDetails) {
@@ -393,6 +398,8 @@
     targetWaiting = true;
     if (step.target === '#project-context' || step.target.includes('project-context')) {
       onensurecontextopen?.();
+    } else {
+      onrestorecontext?.();
     }
     if (step.view) {
       onnavigateview(step.view);
@@ -422,6 +429,7 @@
       await syncActiveStepSideEffects();
     } else {
       stopTargetTracking();
+      onrestorecontext?.();
       completedTourTitle = activeTour.title;
       activeTourId = null;
       stepIndex = 0;
@@ -432,17 +440,25 @@
 
   function returnToCatalog() {
     stopTargetTracking();
+    onrestorecontext?.();
     activeTourId = null;
     stepIndex = 0;
     targetRect = null;
     targetWaiting = false;
   }
 
+  function dismissTour() {
+    stopTargetTracking();
+    onrestorecontext?.();
+    onclose();
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     if (!open) return;
     if (event.key === 'Escape') {
       event.preventDefault();
-      onclose();
+      event.stopPropagation?.();
+      dismissTour();
     }
   }
 
@@ -450,6 +466,7 @@
     loadGen++;
     trackGen++;
     stopTargetTracking();
+    onrestorecontext?.();
   });
 </script>
 
@@ -487,7 +504,7 @@
           aria-label="Dismiss Guided Tour"
           data-tour-dismiss
           class="rounded p-1 text-white/90 hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-[#FCBA19]"
-          onclick={onclose}
+          onclick={dismissTour}
         >
           <X size={15} />
         </button>
@@ -577,7 +594,7 @@
             type="button"
             aria-label="Close Guided Tours"
             class="rounded border border-white/30 bg-white/10 p-1.5 text-white hover:bg-white/20"
-            onclick={onclose}
+            onclick={dismissTour}
           >
             <X size={16} />
           </button>

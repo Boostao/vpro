@@ -3,7 +3,7 @@
   import { Events } from '@wailsio/runtime';
   import { VproCloseRequest } from '../bindings/events';
   import { Bell, ChevronLeft, ChevronRight, Database, PanelRight, Search } from '@lucide/svelte';
-  import { ContextService, LifecycleService, type StartupState, type HierarchyNode, type PlotPage, type ProjectPlotProfileFilterRequest } from '../bindings/github.com/boostao/vpro/app';
+  import { ContextService, DatasheetService, LifecycleService, type StartupState, type HierarchyNode, type PlotPage, type ProjectPlotProfileFilterRequest } from '../bindings/github.com/boostao/vpro/app';
 import type { ContextSelection, PlotSummary } from '../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
   import { projectState } from './shared/state';
   import Navigation from './shell/Navigation.svelte';
@@ -77,6 +77,12 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     onFindPlot?: () => void;
     onOpenPictureManager?: (plotNumber: string) => void;
     onDiagnosticsContextChange?: (state: DiagnosticsDraftContext) => void;
+    availablePlots?: PlotSummary[];
+    onSelectPlotForTwoPage?: (plotNumber: string) => void;
+    onSwitchTo6x4NewPlot?: () => void;
+    canUndoPlotDelete?: boolean;
+    onCopyPlotToNumber?: (sourcePlot: string, targetPlot: string) => Promise<void>;
+    onRemovePlotAction?: (sourcePlot: string, cleanProjectName: string) => Promise<void>;
   };
   type LongVegetationWave3Props = {
     contextId: string;
@@ -109,18 +115,26 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   const siviStandaloneEnabled = true;
   let offset = $state(0), busy = $state(false), error = $state('');
   let request = 0, hierarchyRequest = 0, stateRequest = 0;
+  let catalogPlotRequest = 0, paletteSearchRequest = 0;
+  let scopedCatalogKey = '';
+  let scopedPlotCatalogRows = $state<PlotSummary[]>([]);
+  let dynamicPalettePlotRows = $state<PlotSummary[]>([]);
+  let createdSiviPlots = $state<Array<{ requestId: string; plotNumber: string; canUndo: boolean }>>([]);
   const plotReads = new ReadRequests(), hierarchyReads = new ReadRequests();
   const stateReads = new ReadRequests();
+  const catalogPlotReads = new ReadRequests(), paletteSearchReads = new ReadRequests();
   onDestroy(() => {
     request++; hierarchyRequest++; stateRequest++;
     secondaryPanelBusy = false; siviModalBusy = false; workbenchDirtyLabel = '';
     plotReads.cancelAll(); hierarchyReads.cancelAll(); stateReads.cancelAll();
+    catalogPlotRequest++; paletteSearchRequest++;
+    catalogPlotReads.cancelAll(); paletteSearchReads.cancelAll();
   });
   let view = $state<'home' | 'plots' | 'geospatial-map' | 'diagnostic-synthesis' | 'r-sidecar' | 'hierarchy' | 'fs882' | 'datasheet' | 'classification-explorer' | 'project-admin' | 'lump-editor' | 'interchange-hub' | 'long-environment' | 'summary-environment' | 'long-vegetation' | 'summary-vegetation' | 'lifeform-summary' | 'subzone-matrix' | 'table-csv' | 'user-log' | 'plot-locations' | 'google-earth-review' | 'picture-manager' | 'plot-label-preview'>('home');
   let projectAdminTab = $state<'lifecycle' | 'compliance' | 'optimizeveg' | 'merge' | 'cloudsync'>('lifecycle');
   let projectAdminTabNonce = $state(0), newSiviModalOpen = $state(false);
   let helpDrawerOpen = $state(false), helpDrawerTopicId = $state('site.plot_number'), helpDrawerTab = $state<HelpDrawerTab>('inspector');
-  let tourOpen = $state(false), tourInitialId = $state<string | null>(null);
+  let tourOpen = $state(false), tourInitialId = $state<string | null>(null), tourAutoOpenedContext = $state(false);
   let shortcutsModalOpen = $state(false), whatsNewModalOpen = $state(false), aboutModalOpen = $state(false);
   let userSetupOpen = $state(false);
   let resetSampleConfirmOpen = $state(false), resetSampleNotice = $state('');
@@ -438,14 +452,14 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
       error = '';
       if (next === 'project-admin') { projectAdminTab = 'lifecycle'; projectAdminTabNonce++; }
       if (next === 'fs882-twopage') {
-        editorPlotNumber = selected?.plotNumber;
+        editorPlotNumber = (view === 'fs882' ? editorPlotNumber : undefined) ?? selected?.plotNumber;
         editorEntryForm = 'fs882-twopage';
         diagnosticsDraft = null;
         view = 'fs882';
         return;
       }
       if (next === 'fs882') {
-        editorPlotNumber = selected?.plotNumber;
+        editorPlotNumber = (view === 'fs882' ? editorPlotNumber : undefined) ?? selected?.plotNumber;
         editorEntryForm = 'fs882';
         diagnosticsDraft = null;
       }
@@ -628,6 +642,10 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   function cancelAllReads() {
     request++; hierarchyRequest++; stateRequest++;
     plotReads.cancelAll(); hierarchyReads.cancelAll(); stateReads.cancelAll();
+    if (typeof catalogPlotReads !== 'undefined') {
+      catalogPlotRequest++; paletteSearchRequest++;
+      catalogPlotReads.cancelAll(); paletteSearchReads.cancelAll();
+    }
   }
 
   async function reviewProfileSU(proposal: ProjectPlotProfileFilterRequest, origin: string) {
@@ -640,6 +658,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     try {
       const state = await ContextService.SwitchContext(contextId, selection);
       request++; projectState.set(state); profileNavigation = null; plotProfilePanel?.clearCachedSources();
+      scopedCatalogKey = ''; scopedPlotCatalogRows = []; dynamicPalettePlotRows = []; createdSiviPlots = [];
       page = null; selected = null; hierarchyNodes = []; editorPlotNumber = undefined; diagnosticsDraft = null; view = next;
       await loadPlots(0);
       if (next === 'hierarchy') {
@@ -662,6 +681,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   }
 
   async function handleAccessActivated() {
+    scopedCatalogKey = ''; scopedPlotCatalogRows = []; dynamicPalettePlotRows = []; createdSiviPlots = [];
     profileNavigation = null; plotProfilePanel?.resetAllReviews(); editorPlotNumber = undefined; diagnosticsDraft = null; view = 'plots';
     await loadPlots(0);
   }
@@ -683,8 +703,17 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     const action = classifyGlobalHelpShortcut(event, activeEl);
     if (action === 'f1') { event.preventDefault(); openContextualHelp(); return; }
     if (action === 'shortcuts') { event.preventDefault(); shortcutsModalOpen = !shortcutsModalOpen; return; }
-    if (event.key === 'Escape' && helpDrawerOpen && !commandPaletteOpen && !notificationDrawerOpen && !shortcutsModalOpen && !whatsNewModalOpen && !aboutModalOpen && !tourOpen && !resetSampleConfirmOpen && !userSetupOpen && !closeRequest && !pendingTransition) {
-      event.preventDefault(); helpDrawerOpen = false;
+    if (event.key === 'Escape' && !commandPaletteOpen && !notificationDrawerOpen && !shortcutsModalOpen && !whatsNewModalOpen && !aboutModalOpen && !tourOpen && !resetSampleConfirmOpen && !userSetupOpen && !closeRequest && !pendingTransition) {
+      if (helpDrawerOpen) {
+        event.preventDefault();
+        helpDrawerOpen = false;
+        return;
+      }
+      if (isNarrowViewport && (contextExpanded || showInspectorRail)) {
+        event.preventDefault();
+        contextExpanded = false;
+        inspectorExpanded = false;
+      }
     }
   }
 
@@ -712,6 +741,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
       try {
         const nextState = await defaultHelpPort.resetWorkspaceToSample(contextId);
         cancelAllReads(); projectState.set(nextState); profileNavigation = null; plotProfilePanel?.clearCachedSources();
+        scopedCatalogKey = ''; scopedPlotCatalogRows = []; dynamicPalettePlotRows = []; createdSiviPlots = [];
         selected = null; page = null; hierarchyNodes = []; editorPlotNumber = undefined; diagnosticsDraft = null; resetSampleConfirmOpen = false; view = 'plots';
         resetSampleNotice = 'Workspace reset to the built-in Sample project (Project: Sample, SU: Sample, Hierarchy: Sample). Your own project files were preserved.';
         notifications.push({
@@ -728,21 +758,339 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     }, ownedDiscardOnSample);
   }
 
+  async function refreshScopedPlotCatalog(expectedContextId: string, currentPage: PlotPage | null, force = false) {
+    const SCOPED_PLOT_CATALOG_CAP = 2000;
+    const SCOPED_PLOT_CHUNK_SIZE = 200;
+    if (!expectedContextId || !currentPage || typeof currentPage.total !== 'number' || !Array.isArray(currentPage.plots)) return;
+    if (typeof ContextService?.ListPlots !== 'function') return;
+    const navKey = profileNavigation ? `profile:${profileNavigation.contextId}:${profileNavigation.plots.length}` : 'default';
+    const nextKey = `${expectedContextId}|${$projectState?.activeProject ?? ''}|${$projectState?.activeSU ?? ''}|${currentPage.total}|${navKey}`;
+    if (!force && nextKey === scopedCatalogKey && scopedPlotCatalogRows.length > 0) return;
+    const current = ++catalogPlotRequest;
+    catalogPlotReads.cancelAll();
+    try {
+      if (typeof ContextService.ListCreatedSIVIPlots === 'function') {
+        try {
+          const created = await catalogPlotReads.track(ContextService.ListCreatedSIVIPlots(expectedContextId));
+          if (current !== catalogPlotRequest || $projectState?.contextId !== expectedContextId) return;
+          createdSiviPlots = (created ?? []).map((entry) => ({
+            requestId: entry.requestId,
+            plotNumber: entry.plotNumber,
+            canUndo: Boolean(entry.canUndo && !entry.undone),
+          }));
+        } catch {
+          if (current === catalogPlotRequest) createdSiviPlots = [];
+        }
+      }
+      if (profileNavigation && profileNavigation.contextId === expectedContextId) {
+        scopedPlotCatalogRows = profileNavigation.plots;
+        scopedCatalogKey = nextKey;
+        return;
+      }
+      const total = currentPage.total;
+      if (total <= currentPage.plots.length && offset === 0) {
+        scopedPlotCatalogRows = currentPage.plots;
+        scopedCatalogKey = nextKey;
+        return;
+      }
+      const targetCount = Math.min(total, SCOPED_PLOT_CATALOG_CAP);
+      const collected: PlotSummary[] = [];
+      for (let nextOff = 0; nextOff < targetCount; nextOff += SCOPED_PLOT_CHUNK_SIZE) {
+        const limit = Math.min(SCOPED_PLOT_CHUNK_SIZE, targetCount - nextOff);
+        const chunk = await catalogPlotReads.track(ContextService.ListPlots(nextOff, limit));
+        if (current !== catalogPlotRequest || $projectState?.contextId !== expectedContextId) return;
+        if (!chunk || !Array.isArray(chunk.plots) || chunk.plots.length === 0) break;
+        collected.push(...chunk.plots);
+        if (chunk.plots.length < limit) break;
+      }
+      if (current === catalogPlotRequest && $projectState?.contextId === expectedContextId) {
+        scopedPlotCatalogRows = collected;
+        scopedCatalogKey = nextKey;
+      }
+    } catch {
+      // Keep current page rows available if background catalog pagination cancels
+    }
+  }
+
+  $effect(() => {
+    const ctxId = $projectState?.contextId ?? '';
+    const currentPage = page;
+    const _nav = profileNavigation;
+    if (!ctxId || !currentPage || typeof currentPage.total !== 'number' || !Array.isArray(currentPage.plots)) return;
+    if (busy || projectReportBusy || twoPageVegetationBusy || twoPageSoilBusy || pictureCreationBusy || pictureLifecycleBusy || vegetationPublicationBusy || lifeformPublicationBusy || summaryPublicationBusy || summaryPreferenceBusy || externalSUEnvironmentBusy) return;
+    void _nav;
+    void refreshScopedPlotCatalog(ctxId, currentPage);
+  });
+
+  function extractDatasheetPlotSummaries(dsPage: Awaited<ReturnType<typeof DatasheetService.GetDatasheetPage>>): PlotSummary[] {
+    if (!dsPage?.columns || !dsPage?.rows) return [];
+    const colIdx = new Map<string, number>();
+    dsPage.columns.forEach((col, idx) => colIdx.set(col.name.toLowerCase(), idx));
+    const cellStr = (cells: Array<{ text: string | null; integer: string | null; real: number | null }> | null | undefined, name: string): string | null => {
+      const idx = colIdx.get(name.toLowerCase());
+      if (idx === undefined || !cells || !cells[idx]) return null;
+      const c = cells[idx];
+      if (c.text !== null && c.text !== undefined) return c.text;
+      if (c.integer !== null && c.integer !== undefined) return String(c.integer);
+      if (c.real !== null && c.real !== undefined) return String(c.real);
+      return null;
+    };
+    const out: PlotSummary[] = [];
+    for (const row of dsPage.rows) {
+      const pn = cellStr(row.cells, 'plotnumber');
+      if (!pn) continue;
+      out.push({
+        plotNumber: pn,
+        fieldNumber: cellStr(row.cells, 'fieldnumber'),
+        plotRepresenting: cellStr(row.cells, 'plotrepresenting'),
+        zone: cellStr(row.cells, 'zone'),
+        subZone: cellStr(row.cells, 'subzone'),
+        siteSeries: cellStr(row.cells, 'siteseries'),
+      });
+    }
+    return out;
+  }
+
+  $effect(() => {
+    if (!commandPaletteOpen || typeof document === 'undefined') {
+      paletteSearchRequest++;
+      paletteSearchReads.cancelAll();
+      dynamicPalettePlotRows = [];
+      return;
+    }
+    const ctxId = $projectState?.contextId ?? '';
+    const totalPlots = page?.total ?? 0;
+    if (!ctxId || profileNavigation || totalPlots <= scopedPlotCatalogRows.length) return;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const runDynamicSearch = (rawQuery: string) => {
+      const cleaned = rawQuery.trim().replace(/^plot\s+/i, '').trim();
+      if (!cleaned) {
+        paletteSearchRequest++;
+        paletteSearchReads.cancelAll();
+        dynamicPalettePlotRows = [];
+        return;
+      }
+      const reqId = ++paletteSearchRequest;
+      paletteSearchReads.cancelAll();
+      void (async () => {
+        try {
+          const scopeToActiveSU = ($projectState?.activeSU ?? 'None') !== 'None';
+          const dsPage = await paletteSearchReads.track(
+            DatasheetService.GetDatasheetPage(ctxId, {
+              tableKey: 'Env',
+              offset: 0,
+              limit: 50,
+              sort: null,
+              filters: null,
+              globalSearch: cleaned,
+              scopeToActiveSU,
+            })
+          );
+          if (reqId !== paletteSearchRequest || $projectState?.contextId !== ctxId) return;
+          dynamicPalettePlotRows = extractDatasheetPlotSummaries(dsPage);
+        } catch {
+          // Ignore transient cancellation during typing
+        }
+      })();
+    };
+    const handleInput = (ev: Event) => {
+      const target = ev.target as HTMLInputElement | null;
+      if (!target || !target.matches?.('[data-command-palette-input]')) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => runDynamicSearch(target.value), 120);
+    };
+    document.addEventListener('input', handleInput, true);
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      document.removeEventListener('input', handleInput, true);
+    };
+  });
+
   const loadedPlotRows = $derived<PlotSummary[]>(
     (page as (PlotPage & { rows?: PlotSummary[] }) | null)?.plots ??
       (page as { rows?: PlotSummary[] } | null)?.rows ??
       []
   );
+  const allAvailablePlots = $derived.by<PlotSummary[]>(() => {
+    if (profileNavigation) return profileNavigation.plots;
+    const merged = new Map<string, PlotSummary>();
+    for (const row of scopedPlotCatalogRows) {
+      if (row?.plotNumber) merged.set(row.plotNumber, row);
+    }
+    for (const row of loadedPlotRows) {
+      if (row?.plotNumber && !merged.has(row.plotNumber)) merged.set(row.plotNumber, row);
+    }
+    for (const row of dynamicPalettePlotRows) {
+      if (row?.plotNumber && !merged.has(row.plotNumber)) merged.set(row.plotNumber, row);
+    }
+    return merged.size > 0 ? Array.from(merged.values()) : loadedPlotRows;
+  });
+  const canUndoSelectedPlot = $derived(
+    Boolean(selected?.plotNumber && createdSiviPlots.some((entry) => entry.plotNumber === selected?.plotNumber && entry.canUndo))
+  );
+  const canUndoEditorPlot = $derived(
+    Boolean(editorPlotNumber && createdSiviPlots.some((entry) => entry.plotNumber === editorPlotNumber && entry.canUndo))
+  );
+
+  async function copyPlotToNewNumber(sourcePlot: string, rawTargetPlot: string) {
+    if (busy || editorBusy || companionPanelBusy || transitionWorking || pendingTransition !== null || !!closeRequest) {
+      throw new Error('Wait for the current operation to finish first.');
+    }
+    if ((view === 'fs882' && editor?.getCloseState()?.unsaved) || workbenchDirtyLabel) {
+      throw new Error('Save or undo unsaved edits before copying a plot.');
+    }
+    const contextId = $projectState?.contextId;
+    if (!contextId) throw new Error('Open a project before copying a plot.');
+    const targetPlot = rawTargetPlot.trim();
+    if (!targetPlot || targetPlot.length > 7 || targetPlot.includes('\u0000')) {
+      throw new Error('Plot Number must be 1 to 7 characters.');
+    }
+    if (targetPlot === sourcePlot) {
+      throw new Error('Enter a Plot Number different from the current plot.');
+    }
+    if (allAvailablePlots.some((p) => p.plotNumber === targetPlot)) {
+      throw new Error(`Plot ${targetPlot} already exists in this project.`);
+    }
+    const header = await ContextService.GetPlot(contextId, sourcePlot);
+    if (!header) throw new Error(`Plot ${sourcePlot} could not be read.`);
+    const [vegRows, humusRows, mineralRows, otherRows] = await Promise.all([
+      ContextService.ListVegRecords(contextId, sourcePlot),
+      ContextService.ListHumusRecords(contextId, sourcePlot),
+      ContextService.ListMineralRecords(contextId, sourcePlot),
+      ContextService.ListOtherRecords(contextId, sourcePlot),
+    ]);
+    await ContextService.CreatePlot(contextId, { ...header, plotNumber: targetPlot, locked: false });
+    for (const row of vegRows ?? []) {
+      await ContextService.SaveVegRecord(contextId, { ...row, id: 0, plotNumber: targetPlot });
+    }
+    for (const row of humusRows ?? []) {
+      await ContextService.SaveHumusRecord(contextId, { ...row, id: 0, plotNumber: targetPlot });
+    }
+    for (const row of mineralRows ?? []) {
+      await ContextService.SaveMineralRecord(contextId, { ...row, id: 0, plotNumber: targetPlot });
+    }
+    for (const row of otherRows ?? []) {
+      await ContextService.SaveOtherRecord(contextId, { ...row, id: 0, plotNumber: targetPlot });
+    }
+    scopedCatalogKey = '';
+    await loadPlots(offset);
+    await refreshScopedPlotCatalog(contextId, page, true);
+    const copiedSummary: PlotSummary = {
+      plotNumber: targetPlot,
+      fieldNumber: header.fieldNo ?? null,
+      plotRepresenting: header.plotRepresenting ?? null,
+      zone: header.zone ?? null,
+      subZone: header.subZone ?? null,
+      siteSeries: header.siteSeries ?? null,
+    };
+    selected = allAvailablePlots.find((p) => p.plotNumber === targetPlot) ?? copiedSummary;
+    if (view === 'fs882') {
+      editorPlotNumber = targetPlot;
+    }
+    if (typeof notifications !== 'undefined') {
+      notifications.success?.(`Copied plot ${sourcePlot} to ${targetPlot}`, 'Site, vegetation, soil, and auxiliary rows were copied to the new Plot Number.', {
+        category: 'entry',
+        source: 'Plots',
+        contextTag: `Plot ${targetPlot}`,
+      });
+    }
+  }
+
+  async function collectAllProjectPlotNumbers(contextId: string): Promise<string[]> {
+    if (typeof DatasheetService?.GetDatasheetPage === 'function') {
+      const plotNums: string[] = [];
+      for (let nextOff = 0; ; nextOff += 1000) {
+        const dsPage = await DatasheetService.GetDatasheetPage(contextId, {
+          tableKey: 'Env',
+          offset: nextOff,
+          limit: 1000,
+          sort: null,
+          filters: null,
+          globalSearch: '',
+          scopeToActiveSU: false,
+        });
+        const summaries = extractDatasheetPlotSummaries(dsPage);
+        if (summaries.length === 0) break;
+        for (const s of summaries) plotNums.push(s.plotNumber);
+        if (summaries.length < 1000 || plotNums.length >= (dsPage?.totalRows ?? 0)) break;
+      }
+      if (plotNums.length > 0) return plotNums;
+    }
+    return allAvailablePlots.map((p) => p.plotNumber);
+  }
+
+  async function removePlotFromProject(sourcePlot: string, rawCleanProjectName: string) {
+    if (busy || editorBusy || companionPanelBusy || transitionWorking || pendingTransition !== null || !!closeRequest) {
+      throw new Error('Wait for the current operation to finish first.');
+    }
+    if ((view === 'fs882' && editor?.getCloseState()?.unsaved) || workbenchDirtyLabel) {
+      throw new Error('Save or undo unsaved edits before removing a plot.');
+    }
+    const contextId = $projectState?.contextId;
+    if (!contextId) throw new Error('Open a project before removing a plot.');
+    const undoable = createdSiviPlots.find((entry) => entry.plotNumber === sourcePlot && entry.canUndo);
+    if (undoable) {
+      await ContextService.UndoCreateSIVIPlot(contextId, {
+        creationRequestId: undoable.requestId,
+        plotNumber: sourcePlot,
+      });
+      scopedCatalogKey = '';
+      if (selected?.plotNumber === sourcePlot) selected = null;
+      if (editorPlotNumber === sourcePlot) {
+        editorPlotNumber = undefined;
+        if (view === 'fs882') view = 'plots';
+      }
+      await loadPlots(offset);
+      await refreshScopedPlotCatalog(contextId, page, true);
+      if (typeof notifications !== 'undefined') {
+        notifications.success?.(`Deleted plot ${sourcePlot}`, 'Removed the newly created SIVI plot.', {
+          category: 'entry',
+          source: 'Plots',
+        });
+      }
+      return;
+    }
+    const cleanProject = rawCleanProjectName.trim();
+    if (!cleanProject || !/^[A-Za-z][A-Za-z0-9_]{0,29}$/.test(cleanProject)) {
+      throw new Error('Clean project name must start with a letter and use only letters, numbers, or underscores (up to 30 characters).');
+    }
+    const allPlotNumbers = await collectAllProjectPlotNumbers(contextId);
+    const remainingPlots = allPlotNumbers.filter((pn) => pn !== sourcePlot);
+    if (remainingPlots.length === 0) {
+      throw new Error('Cannot save a clean project copy when this is the only plot in the project. Create a blank project in Project Admin instead.');
+    }
+    const result = await ContextService.ExportSplinterProject(contextId, {
+      splinterProject: cleanProject,
+      useActiveSu: false,
+      plotNumbers: remainingPlots,
+      activateOnSuccess: true,
+    });
+    scopedCatalogKey = ''; scopedPlotCatalogRows = []; dynamicPalettePlotRows = []; createdSiviPlots = [];
+    profileNavigation = null;
+    selected = null;
+    editorPlotNumber = undefined;
+    diagnosticsDraft = null;
+    if (result?.state) projectState.set(result.state);
+    view = 'plots';
+    await refresh();
+    if (typeof notifications !== 'undefined') {
+      notifications.success?.(`Switched to ${result.splinterProject}`, `Saved ${result.exportedPlotCount} plots without plot ${sourcePlot}. Original project file was preserved.`, {
+        category: 'general',
+        source: 'Plots',
+      });
+    }
+  }
+
   const currentContextPlotNumber = $derived(
     (view === 'fs882' ? editorPlotNumber : selected?.plotNumber) ?? selected?.plotNumber ?? ''
   );
   const currentContextPlotIndex = $derived(
     currentContextPlotNumber
-      ? loadedPlotRows.findIndex((p) => p.plotNumber === currentContextPlotNumber)
+      ? allAvailablePlots.findIndex((p) => p.plotNumber === currentContextPlotNumber)
       : -1
   );
   const canStepPrevPlot = $derived(
-    loadedPlotRows.length > 0 &&
+    allAvailablePlots.length > 0 &&
       !busy &&
       !editorBusy &&
       !companionPanelBusy &&
@@ -750,14 +1098,14 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
       currentContextPlotIndex > 0
   );
   const canStepNextPlot = $derived(
-    loadedPlotRows.length > 0 &&
+    allAvailablePlots.length > 0 &&
       !busy &&
       !editorBusy &&
       !companionPanelBusy &&
       !transitionWorking &&
       (currentContextPlotIndex === -1
-        ? loadedPlotRows.length > 0
-        : currentContextPlotIndex < loadedPlotRows.length - 1)
+        ? allAvailablePlots.length > 0
+        : currentContextPlotIndex < allAvailablePlots.length - 1)
   );
   const sessionStatusKind = $derived<'busy' | 'dirty' | 'ready'>(
     busy || editorBusy || companionPanelBusy || transitionWorking
@@ -778,7 +1126,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     !startupFailure && showInspectorToggle && inspectorExpanded
   );
   const commandCatalogInput = $derived<BuildCommandPaletteInput>({
-    plots: loadedPlotRows.map((p) => ({
+    plots: allAvailablePlots.map((p) => ({
       plotNumber: p.plotNumber,
       siteUnit: p.siteSeries,
       zone: p.zone,
@@ -809,14 +1157,14 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   });
 
   function stepContextPlot(delta: -1 | 1) {
-    if (loadedPlotRows.length === 0) return;
+    if (allAvailablePlots.length === 0) return;
     const targetIdx =
       currentContextPlotIndex === -1
         ? delta > 0
           ? 0
           : -1
         : currentContextPlotIndex + delta;
-    const target = loadedPlotRows[targetIdx];
+    const target = allAvailablePlots[targetIdx];
     if (!target) return;
     if (view === 'fs882') {
       void requestTransition(async () => {
@@ -835,7 +1183,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   function handleCommandPaletteSelect(action: CommandPaletteAction) {
     if (action.kind === 'open-plot-fs882' || action.kind === 'open-plot-twopage') {
       void requestTransition(async () => {
-        const found = loadedPlotRows.find((p) => p.plotNumber === action.plotNumber) ?? null;
+        const found = allAvailablePlots.find((p) => p.plotNumber === action.plotNumber) ?? null;
         if (found) selected = found;
         editorPlotNumber = action.plotNumber;
         editorEntryForm = action.kind === 'open-plot-twopage' ? 'fs882-twopage' : 'fs882';
@@ -850,7 +1198,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         return;
       }
       void requestTransition(async () => {
-        const found = loadedPlotRows.find((p) => p.plotNumber === action.plotNumber) ?? null;
+        const found = allAvailablePlots.find((p) => p.plotNumber === action.plotNumber) ?? null;
         if (found) selected = found;
         editorPlotNumber = action.plotNumber;
         editorEntryForm = 'sivi';
@@ -1187,7 +1535,13 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             <p role="status" data-entry-loading="fs882">Loading {editorLabel} editor...</p>
           {:then { default: FS882Form }}
           <FS882Form bind:this={editor} plotNumber={editorPlotNumber} contextId={$projectState?.contextId ?? ''} entryForm={editorEntryForm}
-            onSaved={async (p) => { editorPlotNumber = p; await loadPlots(offset); }} onClosed={() => navigate('plots')}
+            availablePlots={allAvailablePlots}
+            onSelectPlotForTwoPage={(p) => { void requestTransition(async () => { const found = allAvailablePlots.find((item) => item.plotNumber === p) ?? null; if (found) selected = found; editorPlotNumber = p; editorEntryForm = 'fs882-twopage'; view = 'fs882'; error = ''; }); }}
+            onSwitchTo6x4NewPlot={() => { void requestTransition(async () => { editorPlotNumber = undefined; editorEntryForm = 'fs882'; view = 'fs882'; error = ''; }); }}
+            canUndoPlotDelete={canUndoEditorPlot}
+            onCopyPlotToNumber={copyPlotToNewNumber}
+            onRemovePlotAction={removePlotFromProject}
+            onSaved={async (p) => { editorPlotNumber = p; scopedCatalogKey = ''; await loadPlots(offset); if ($projectState?.contextId) await refreshScopedPlotCatalog($projectState.contextId, page, true); }} onClosed={() => navigate('plots')}
             onBusyChange={(busy) => { localEditorBusy = busy; }} onProfileNavigation={applyProfileNavigation}
             onProfileSUReview={reviewProfileSU} onFindPlot={plotFindEnabled ? () => { plotFindOpen = true; } : undefined}
             onOpenPictureManager={(p) => {
@@ -1411,15 +1765,16 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             hierarchyPath={$projectState.hierarchyPath ?? ''} onBusyChange={(value) => { localEditorBusy = value; }} />{/key}
         {:catch loadError}<p class="error" role="alert">Subzone Matrix Report could not load: {String(loadError)}</p>{/await}
       {:else}
-        <PlotsBrowserPanel region="main" {view} {busy} {error} {page} {offset} {pageSize} {hierarchyNodes} bind:selected {siviStandaloneEnabled}
+        <PlotsBrowserPanel region="main" {view} {busy} {error} {page} allPlots={allAvailablePlots} {offset} {pageSize} {hierarchyNodes} bind:selected {siviStandaloneEnabled}
           onrefresh={refresh} onloadpage={loadPlots} onopenexplorer={() => navigate('classification-explorer')}
           onselectplot={() => { inspectorExpanded = true; }} />
       {/if}
     </main>
 
     {#if showInspectorRail}
-      <PlotsBrowserPanel region="detail" {view} {busy} {page} bind:selected {siviStandaloneEnabled} {editorBusy} {transitionWorking} {pendingTransition}
+      <PlotsBrowserPanel region="detail" {view} {busy} {page} allPlots={allAvailablePlots} bind:selected {siviStandaloneEnabled} {canUndoSelectedPlot} {editorBusy} {transitionWorking} {pendingTransition}
         onopenfs882={() => navigate('fs882')} onopentwopage={() => navigate('fs882-twopage')} onopensivi={() => void openSIVI()}
+        oncopyplot={copyPlotToNewNumber} onremoveplot={removePlotFromProject}
         oncollapseinspector={() => { inspectorExpanded = false; }} />
     {/if}
     {#if newSiviModalOpen && $projectState?.contextId}
@@ -1427,8 +1782,8 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         <SIVIParentCreateModal contextId={$projectState.contextId} activeProject={$projectState.activeProject} activeSu={$projectState.activeSU}
           open={newSiviModalOpen} operationHeld={busy || editorBusy || secondaryPanelBusy || transitionWorking || pendingTransition !== null || !!closeRequest}
           onBusyChange={(value) => { siviModalBusy = value; }}
-          oncreated={async (res) => { newSiviModalOpen = false; await loadPlots(offset); editorPlotNumber = res.plotNumber; editorEntryForm = 'sivi'; view = 'fs882'; }}
-          onundone={async () => { await loadPlots(offset); }} onclose={() => { newSiviModalOpen = false; }} />
+          oncreated={async (res) => { newSiviModalOpen = false; scopedCatalogKey = ''; await loadPlots(offset); if ($projectState?.contextId) await refreshScopedPlotCatalog($projectState.contextId, page, true); editorPlotNumber = res.plotNumber; editorEntryForm = 'sivi'; view = 'fs882'; }}
+          onundone={async () => { scopedCatalogKey = ''; await loadPlots(offset); if ($projectState?.contextId) await refreshScopedPlotCatalog($projectState.contextId, page, true); }} onclose={() => { newSiviModalOpen = false; }} />
       {/await}
     {/if}
   </div>
@@ -1445,8 +1800,11 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   {#if tourOpen && !startupFailure}
     {#await import('./help/OnboardingTour.svelte') then { default: OnboardingTour }}
       <OnboardingTour open={tourOpen} initialTourId={tourInitialId} activeProject={$projectState?.activeProject ?? 'Sample'}
-        onensurecontextopen={() => { contextExpanded = true; }} onnavigateview={(nextView) => { navigate(nextView as typeof view); }}
-        onresetsample={async () => { tourOpen = false; resetSampleConfirmOpen = true; }} onclose={() => { tourOpen = false; tourInitialId = null; }} />
+        onensurecontextopen={() => { if (!contextExpanded) tourAutoOpenedContext = true; contextExpanded = true; }}
+        onrestorecontext={() => { if (tourAutoOpenedContext || isNarrowViewport) { tourAutoOpenedContext = false; contextExpanded = false; } }}
+        onnavigateview={(nextView) => { navigate(nextView as typeof view); }}
+        onresetsample={async () => { if (tourAutoOpenedContext || isNarrowViewport) { tourAutoOpenedContext = false; contextExpanded = false; } tourOpen = false; resetSampleConfirmOpen = true; }}
+        onclose={() => { if (tourAutoOpenedContext || isNarrowViewport) { tourAutoOpenedContext = false; contextExpanded = false; } tourOpen = false; tourInitialId = null; }} />
     {/await}
   {/if}
   {#if shortcutsModalOpen && !startupFailure}

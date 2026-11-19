@@ -16,7 +16,12 @@ export function enterNavigationMode(form: string | null): 'field' | 'record' | n
   return form === null ? 'field' : sourceNextRecordForms.has(form) ? 'record' : null;
 }
 
-export function nextEnterPosition(positions: readonly EnterPosition[], current: number, mode: 'field' | 'record'): number | null {
+export function nextEnterPosition(
+  positions: readonly EnterPosition[],
+  current: number,
+  mode: 'field' | 'record',
+  reverse = false
+): number | null {
   if (!Number.isInteger(current) || current < 0 || current >= positions.length) {
     throw new Error('Enter navigation requires the currently observed source control.');
   }
@@ -25,7 +30,8 @@ export function nextEnterPosition(positions: readonly EnterPosition[], current: 
     throw new Error('Enter navigation requires an observed literal column and existing physical record.');
   }
   if (!source.enabled || !source.visible || source.invalid) return null;
-  for (let index = current + 1; index < positions.length; index++) {
+  const step = reverse ? -1 : 1;
+  for (let index = current + step; index >= 0 && index < positions.length; index += step) {
     const candidate = positions[index];
     if (!candidate.enabled || !candidate.visible) continue;
     if (mode === 'field' || candidate.form === source.form && candidate.record !== null &&
@@ -42,7 +48,7 @@ function entryControl(element: Element): element is HTMLInputElement | HTMLSelec
 export function navigateSourceEnter(event: KeyboardEvent, root: HTMLElement): void {
   const source = event.target;
   if (event.key !== 'Enter' || event.defaultPrevented || event.isComposing || event.repeat ||
-      event.altKey || event.ctrlKey || event.metaKey || event.shiftKey ||
+      event.altKey || event.ctrlKey || event.metaKey ||
       source instanceof HTMLTextAreaElement ||
       !(source instanceof HTMLInputElement || source instanceof HTMLSelectElement) ||
       !entryControl(source) ||
@@ -65,7 +71,7 @@ export function navigateSourceEnter(event: KeyboardEvent, root: HTMLElement): vo
     invalid: control.getAttribute('aria-invalid') === 'true',
   }));
   event.preventDefault();
-  const next = nextEnterPosition(positions, current, mode);
+  const next = nextEnterPosition(positions, current, mode, Boolean(event.shiftKey));
   if (next === null) return;
   const destination = controls[next];
   destination.focus();

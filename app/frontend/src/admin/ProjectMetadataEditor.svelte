@@ -226,6 +226,15 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
       notifyMetadata('error', committed ? 'Metadata refresh failed after commit' : 'Project metadata save failed', error);
     } finally { saving = false; }
   }
+  function handleKeydown(event: KeyboardEvent) {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      if (!restorationOpen && ready && !busy && draft && dirty && errors.length === 0 && !committedFailure && !standardPreview && !(standardDecision && !draft.standardPopulation)) {
+        void save();
+      }
+    }
+  }
+
   function close() {
     if (busy || dirty || errors.length || committedFailure) { error = 'Save or Undo metadata drafts, or reload the committed refresh before closing; invalid raw entries and recovery cannot be discarded implicitly.'; return; }
     onclosed();
@@ -236,6 +245,8 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
     return value?.storage === 'null' ? 'NULL title' : value?.text === '' ? 'Empty title' : value ? metadataCellText(value) : 'Unavailable title';
   }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <section class="metadata-editor" aria-label="Project metadata editor" data-metadata-editor>
   <header><h2>Project metadata — {review?.project ?? 'loading'}</h2>

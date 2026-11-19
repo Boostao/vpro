@@ -192,11 +192,11 @@
         </thead>
         <tbody class="divide-y divide-stone-100">
           {#each humusList as h (h.id)}
-            <tr class="hover:bg-stone-50">
-              <td class="p-2 font-semibold">{h.horizon ?? '—'}</td>
-              <td class="p-2">{h.upperDepth ?? '—'}</td>
-              <td class="p-2">{h.lowerDepth ?? '—'}</td>
-              <td class="p-2">{h.ph ?? '—'}</td>
+            <tr class="hover:bg-stone-50" data-source-form="SoilHumusXL">
+              <td class="p-2 font-semibold" data-column="Horizon">{h.horizon ?? '—'}</td>
+              <td class="p-2" data-column="UpperDepth">{h.upperDepth ?? '—'}</td>
+              <td class="p-2" data-column="LowerDepth">{h.lowerDepth ?? '—'}</td>
+              <td class="p-2" data-column="HumusFormpH">{h.ph ?? '—'}</td>
               <td class="p-2">{h.comment ?? '—'}</td>
               <td class="p-2">
                 <button
@@ -237,12 +237,12 @@
         </thead>
         <tbody class="divide-y divide-stone-100">
           {#each mineralList as m (m.id)}
-            <tr class="hover:bg-stone-50">
-              <td class="p-2 font-semibold">{m.horizon ?? '—'}</td>
-              <td class="p-2">{m.upperDepth ?? '—'}</td>
-              <td class="p-2">{m.lowerDepth ?? '—'}</td>
-              <td class="p-2">{m.texture ?? '—'}</td>
-              <td class="p-2">{m.colour ?? '—'}</td>
+            <tr class="hover:bg-stone-50" data-source-form="SoilMineralXL">
+              <td class="p-2 font-semibold" data-column="Horizon">{m.horizon ?? '—'}</td>
+              <td class="p-2" data-column="UpperDepth">{m.upperDepth ?? '—'}</td>
+              <td class="p-2" data-column="LowerDepth">{m.lowerDepth ?? '—'}</td>
+              <td class="p-2" data-column="Texture">{m.texture ?? '—'}</td>
+              <td class="p-2" data-column="Colour">{m.colour ?? '—'}</td>
               <td class="p-2">{m.comments ?? '—'}</td>
             </tr>
           {:else}

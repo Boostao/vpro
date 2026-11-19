@@ -282,23 +282,70 @@ const COLUMN_TO_HELP_ID: Record<string, string> = {
   snowcoverregime: 'site.realm_class',
   activelayerdepth: 'site.realm_class',
   humusform: 'humus.humus_form',
+  humusformphase: 'humus.humus_form',
   humusformph: 'humus.humus_form',
+  humusstructuredegree: 'humus.humus_form',
+  humusstructurekind: 'humus.humus_form',
+  mycelabundance: 'humus.humus_form',
+  fecalabundance: 'humus.humus_form',
+  consistence: 'humus.humus_form',
+  character: 'humus.humus_form',
+  fauna: 'humus.humus_form',
+  humusthickness: 'humus.upper_lower_depth',
   vonpost: 'humus.von_post',
+  pitdepthlimit: 'mineral.horizon',
   texture: 'mineral.texture_cf',
   colour: 'mineral.texture_cf',
+  mineralformph: 'mineral.texture_cf',
   percentcoarsefragstotal: 'mineral.texture_cf',
   percentcoarsefragsgravel: 'mineral.texture_cf',
   percentcoarsefragscobbles: 'mineral.texture_cf',
   percentcoarsefragsstones: 'mineral.texture_cf',
+  percentcoarsefragsshape: 'mineral.texture_cf',
+  mineralstructureclass: 'mineral.texture_cf',
+  mineralstructurekind: 'mineral.texture_cf',
+  mottlesabundance: 'mineral.texture_cf',
+  mottlessize: 'mineral.texture_cf',
+  mottlescontrast: 'mineral.texture_cf',
+  clayfilmsfreq: 'mineral.texture_cf',
+  clayfilmthickness: 'mineral.texture_cf',
+  effervescence: 'mineral.texture_cf',
+  porosity: 'mineral.texture_cf',
   gravel: 'mineral.texture_cf',
   cobbles: 'mineral.texture_cf',
   stones: 'mineral.texture_cf',
   rootingdepth: 'soil.rooting_seepage',
   rootrestrictingtype: 'soil.rooting_seepage',
   rootrestrictingdepth: 'soil.rooting_seepage',
+  rootzoneparticlesize: 'soil.rooting_seepage',
+  rootsabundance: 'soil.rooting_seepage',
+  rootssize: 'soil.rooting_seepage',
   seepagedepth: 'soil.rooting_seepage',
   soildrainage: 'soil.rooting_seepage',
+  soilclassgroup: 'soil.rooting_seepage',
+  soilclasssubgroup: 'soil.rooting_seepage',
+  watersource: 'soil.rooting_seepage',
+  hydrogeosystem: 'soil.rooting_seepage',
+  hydrogeosubsystem: 'soil.rooting_seepage',
+  sitemodifier1: 'site.bgc_zone',
+  sitemodifier2: 'site.bgc_zone',
+  gis_bgc: 'site.bgc_zone',
+  bec_use: 'site.bgc_zone',
   species: 'veg.species',
+  layer: 'veg.species',
+  collected: 'veg.species',
+  af: 'veg.species',
+  dc: 'veg.species',
+  ut: 'veg.species',
+  vi: 'veg.species',
+  pv: 'veg.species',
+  pg: 'veg.species',
+  ffa: 'veg.species',
+  cultural1: 'veg.species',
+  cultural2: 'veg.species',
+  other1: 'veg.species',
+  other2: 'veg.species',
+  ll: 'veg.species',
   plottype: 'sivi.plot_type',
 };
 
@@ -368,8 +415,78 @@ export function defaultHelpTopicForView(view: string, entryForm: 'fs882' | 'sivi
 }
 
 export interface HelpInspectableElement {
+  parentElement?: HelpInspectableElement | null;
   getAttribute?(name: string): string | null;
   closest?(selector: string): HelpInspectableElement | null;
+}
+
+const CONTEXTUAL_FIELD_ATTRIBUTES = [
+  ['data-two-page-entry-field', 'site'],
+  ['data-two-page-common-field', 'site'],
+  ['data-two-page-field', 'site'],
+  ['data-sivi-shared-field', 'sivi'],
+  ['data-sivi-parent-field', 'sivi'],
+  ['data-chars-field', 'sivi'],
+] as const;
+
+function inferContextualDomain(
+  origin: HelpInspectableElement | null | undefined,
+  entryForm: 'fs882' | 'sivi' | 'fs882-twopage',
+  fallbackDomain: 'site' | 'humus' | 'mineral' | 'veg' | 'sivi'
+): 'site' | 'humus' | 'mineral' | 'veg' | 'sivi' {
+  const twoPageSoil = origin?.closest?.('[data-two-page-soil-panel]')?.getAttribute?.('data-two-page-soil-panel') ?? '';
+  if (twoPageSoil === 'SoilMineralXL') return 'mineral';
+  if (twoPageSoil === 'SoilHumusXL') return 'humus';
+
+  const sourceForm = origin?.closest?.('[data-source-form]')?.getAttribute?.('data-source-form') ?? '';
+  if (sourceForm === 'SoilMineralXL') return 'mineral';
+  if (sourceForm === 'SoilHumusXL') return 'humus';
+  if (sourceForm.startsWith('SubVeg') || sourceForm.startsWith('USysVeg')) return 'veg';
+
+  const dsTable = origin?.closest?.('[data-datasheet-table]')?.getAttribute?.('data-datasheet-table') ?? '';
+  if (dsTable === 'Mineral') return 'mineral';
+  if (dsTable === 'Humus') return 'humus';
+  if (dsTable === 'Veg') return 'veg';
+
+  if (fallbackDomain === 'site' && entryForm === 'sivi') return 'sivi';
+  return fallbackDomain;
+}
+
+function resolveAttributesOnNode(
+  node: HelpInspectableElement,
+  origin: HelpInspectableElement,
+  entryForm: 'fs882' | 'sivi' | 'fs882-twopage'
+): string | null {
+  if (typeof node.getAttribute !== 'function') return null;
+
+  const soilCol = node.getAttribute('data-soil-column');
+  if (soilCol) {
+    const soilDomain = inferContextualDomain(origin, entryForm, 'humus') === 'mineral' ? 'mineral' : 'humus';
+    const mapped = mapColumnToHelpId(soilCol, soilDomain);
+    if (mapped) return mapped;
+  }
+
+  for (const [attr, domain] of CONTEXTUAL_FIELD_ATTRIBUTES) {
+    const col = node.getAttribute(attr);
+    if (col) {
+      const mapped = mapColumnToHelpId(col, domain);
+      if (mapped) return mapped;
+    }
+  }
+
+  const colAttr = node.getAttribute('data-column');
+  if (colAttr) {
+    const colDomain = inferContextualDomain(origin, entryForm, 'site');
+    const mapped = mapColumnToHelpId(colAttr, colDomain);
+    if (mapped) return mapped;
+  }
+
+  const directId = node.getAttribute('data-help-id')?.trim();
+  if (directId) {
+    return directId;
+  }
+
+  return null;
 }
 
 export function resolveContextualHelpTarget(
@@ -377,43 +494,52 @@ export function resolveContextualHelpTarget(
   view: string,
   entryForm: 'fs882' | 'sivi' | 'fs882-twopage' = 'fs882'
 ): string {
-  if (activeElement && typeof activeElement.closest === 'function') {
-    const directHolder = activeElement.closest('[data-help-id]');
-    const directId = directHolder?.getAttribute?.('data-help-id')?.trim();
-    if (directId) {
-      return directId;
+  if (activeElement) {
+    // Walk from the focused control upward so closer field/column attributes always beat outer container data-help-id wrappers.
+    let current: HelpInspectableElement | null | undefined = activeElement;
+    let walkedParentChain = false;
+    while (current) {
+      const resolved = resolveAttributesOnNode(current, activeElement, entryForm);
+      if (resolved) return resolved;
+      if (current.parentElement !== undefined) {
+        walkedParentChain = true;
+      }
+      current = current.parentElement ?? null;
     }
 
-    const soilColHolder = activeElement.closest('[data-soil-column]');
-    const soilCol = soilColHolder?.getAttribute?.('data-soil-column');
-    if (soilCol) {
-      const panelHolder = activeElement.closest('[data-two-page-soil-panel]');
-      const formName = panelHolder?.getAttribute?.('data-two-page-soil-panel') ?? '';
-      const soilDomain = formName === 'SoilMineralXL' ? 'mineral' : 'humus';
-      const mapped = mapColumnToHelpId(soilCol, soilDomain);
-      if (mapped) return mapped;
-    }
-
-    for (const [attr, domain] of [
-      ['data-two-page-entry-field', 'site'],
-      ['data-sivi-shared-field', 'sivi'],
-      ['data-sivi-parent-field', 'sivi'],
-      ['data-chars-field', 'sivi'],
-    ] as const) {
-      const holder = activeElement.closest(`[${attr}]`);
-      const col = holder?.getAttribute?.(attr);
-      if (col) {
-        const mapped = mapColumnToHelpId(col, domain);
+    // Fallback for lightweight closest()-only test doubles without parentElement chains:
+    // evaluate field-specific attributes before container-level [data-help-id].
+    if (!walkedParentChain && typeof activeElement.closest === 'function') {
+      const soilColHolder = activeElement.closest('[data-soil-column]');
+      const soilCol = soilColHolder?.getAttribute?.('data-soil-column');
+      if (soilCol) {
+        const soilDomain = inferContextualDomain(activeElement, entryForm, 'humus') === 'mineral' ? 'mineral' : 'humus';
+        const mapped = mapColumnToHelpId(soilCol, soilDomain);
         if (mapped) return mapped;
       }
-    }
 
-    const colAttr =
-      activeElement.getAttribute?.('data-column') ??
-      activeElement.closest('[data-column]')?.getAttribute?.('data-column');
-    if (colAttr) {
-      const mapped = mapColumnToHelpId(colAttr, entryForm === 'sivi' ? 'sivi' : 'site');
-      if (mapped) return mapped;
+      for (const [attr, domain] of CONTEXTUAL_FIELD_ATTRIBUTES) {
+        const holder = activeElement.closest(`[${attr}]`);
+        const col = holder?.getAttribute?.(attr);
+        if (col) {
+          const mapped = mapColumnToHelpId(col, domain);
+          if (mapped) return mapped;
+        }
+      }
+
+      const colHolder = activeElement.closest('[data-column]');
+      const colAttr = colHolder?.getAttribute?.('data-column');
+      if (colAttr) {
+        const colDomain = inferContextualDomain(activeElement, entryForm, 'site');
+        const mapped = mapColumnToHelpId(colAttr, colDomain);
+        if (mapped) return mapped;
+      }
+
+      const directHolder = activeElement.closest('[data-help-id]');
+      const directId = directHolder?.getAttribute?.('data-help-id')?.trim();
+      if (directId) {
+        return directId;
+      }
     }
   }
 

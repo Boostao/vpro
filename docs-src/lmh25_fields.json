@@ -10,8 +10,9 @@
       "lmh25Page": 14,
       "summary": "Unique literal plot identifier within the project (up to 7 characters; leading zeroes such as 00337 are preserved verbatim).",
       "rules": [
-        "Up to 7 characters; leading zeroes are kept exactly as entered.",
-        "Links each plot's Site header to its Vegetation, Humus, Mineral Soil, Other, and Site Unit records."
+        "Up to 7 characters without leading or trailing spaces; leading zeroes are kept exactly as entered.",
+        "Links each plot's Site header to its Vegetation, Humus, Mineral Soil, Other, and Site Unit records.",
+        "To fix a mis-entered plot number while preserving audit history, use Manage Plot Number in Plots or FS882 to copy the plot to a corrected number or save a clean project copy without the unwanted plot."
       ],
       "codes": []
     },
@@ -124,7 +125,7 @@
       "code": "SITE 9",
       "section": "Biogeoclimatic & Administrative Classification",
       "title": "Ecosection & Forest District",
-      "column": "Ecosection / ForestRegionDistrict",
+      "column": "Ecosection / FSRegionDistrict",
       "unit": "BC Demarchi Ecosection / NR District Code",
       "lmh25Page": 21,
       "summary": "Physiographic ecosection (139 provincial polygons) and Natural Resource District (23 provincial polygons).",
@@ -154,16 +155,16 @@
       "section": "Location & Topography",
       "title": "Elevation, Slope Gradient & Aspect",
       "column": "Elevation / SlopeGradient / Aspect",
-      "unit": "m ASL / % Slope / Degrees True North (0–360, 999 = level)",
+      "unit": "m ASL / % Slope / Degrees True North (0–359, 999 = level)",
       "lmh25Page": 26,
       "summary": "Plot elevation in metres above sea level, percent slope gradient, and azimuth aspect in degrees.",
       "rules": [
-        "Level sites (Slope = 0%) record Aspect = 999 (or blank) per LMH25.",
+        "Aspect accepts 0–359 degrees clockwise from true north, or 999 (or blank) for level ground (Slope = 0%); 360 is rejected so due north is recorded consistently as 0.",
         "Steep slopes (> 35%) on warm SW aspects (180–270 deg) vs. cool N/NE aspects (315–45 deg) adjust solar CMD in Ministry aSMR modelling."
       ],
       "codes": [
         {
-          "code": "0–360",
+          "code": "0–359",
           "label": "Azimuth degrees clockwise from true north"
         },
         {
@@ -323,7 +324,7 @@
       "lmh25Page": 44,
       "summary": "Six mutually exclusive ground-surface substrate fractions (Decaying Wood, Bedrock, Cobbles/Stones, Mineral Soil, Organic Matter, Water).",
       "rules": [
-        "LMH25 requires the 6 surface substrate components to sum to 100% (+/- 1% rounding tolerance).",
+        "LMH25 requires the 6 surface substrate components (0–100% each) to sum to 100% (within 0.01% for Valid 100% status; sums differing by more than 1% raise an LMH25 warning).",
         "LMH25 Field Checks show a live 100% progress bar on FS882 and Two-Page forms without silently altering historical plots."
       ],
       "codes": []

@@ -46,13 +46,19 @@
   import { bindContextPlots } from '../shared/contextPlots';
   import { ReadRequests } from '../shared/readRequests';
 
-  let { plotNumber, contextId, onSaved, onClosed, onBusyChange, onProfileNavigation, onProfileSUReview, onFindPlot, onOpenPictureManager, onDiagnosticsContextChange, entryForm = 'fs882' }: {
+  let { plotNumber, contextId, onSaved, onClosed, onBusyChange, onProfileNavigation, onProfileSUReview, onFindPlot, onOpenPictureManager, onDiagnosticsContextChange, entryForm = 'fs882', availablePlots = [], onSelectPlotForTwoPage, onSwitchTo6x4NewPlot, canUndoPlotDelete = false, onCopyPlotToNumber, onRemovePlotAction }: {
     plotNumber?: string; contextId: string; onSaved?: (p: string) => void | Promise<void>; onClosed?: () => void; onBusyChange?: (busy: boolean) => void; onFindPlot?: () => void;
     entryForm?: 'fs882' | 'sivi' | 'fs882-twopage';
     onProfileNavigation?: (proposal: ProjectPlotProfileFilterRequest, contextId: string) => Promise<void>;
     onProfileSUReview?: (proposal: ProjectPlotProfileFilterRequest, contextId: string) => Promise<void>;
     onOpenPictureManager?: (plotNumber: string) => void;
     onDiagnosticsContextChange?: (state: { header: Record<string, unknown> | null; humus: Record<string, unknown>[]; mineral: Record<string, unknown>[] }) => void;
+    availablePlots?: Array<{ plotNumber: string; fieldNumber?: string | null; plotRepresenting?: string | null; zone?: string | null; subZone?: string | null; siteSeries?: string | null }>;
+    onSelectPlotForTwoPage?: (plotNumber: string) => void;
+    onSwitchTo6x4NewPlot?: () => void;
+    canUndoPlotDelete?: boolean;
+    onCopyPlotToNumber?: (sourcePlot: string, targetPlot: string) => Promise<void>;
+    onRemovePlotAction?: (sourcePlot: string, cleanProjectName: string) => Promise<void>;
   } = $props();
   const EXTENDED_SHRUB_NOTICE = 'Extended shrubs use cover mode (Cover5a–Cover5c only; Height5a–Height5c height fields are disabled). Turn this option off to use height mode; hidden values, drafts and errors are retained.';
   const PlotService = { ...PlotEntryService, ...bindContextPlots(untrack(() => contextId)) };
@@ -312,6 +318,7 @@
   async function vegetationNotesTab() { activeTab = 'soils'; await tick(); document.querySelector<HTMLInputElement>('#header-soilSurveyor')?.focus(); }
   function sourceEnter(event: KeyboardEvent) {
     if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') {
+      if (typeof metadataOpen !== 'undefined' && metadataOpen) return;
       event.preventDefault();
       if (!draft.locked && !busy && !headerWorkflowBusy && capabilitiesReady && (dirty || childUnsaved)) {
         void save();
@@ -499,10 +506,10 @@
     const request = ++referenceRequest; referenceReads.cancelAll();
     try { const [m, n, ms, ss] = await Promise.all([referenceReads.track(PlotEntryService.GetListItems('MoistureRegime')), referenceReads.track(PlotEntryService.GetListItems('NutrientRegime')), referenceReads.track(PlotEntryService.GetListItems('MesoSlopePosition')), referenceReads.track(PlotEntryService.GetListItems('SurfaceShape'))]); if (request !== referenceRequest) return; moistureList = m ?? []; nutrientList = n ?? []; mesoSlopeList = ms ?? []; surfaceShapeList = ss ?? []; } catch (e) { if (request === referenceRequest) error = `Reference lists could not be loaded: ${String(e)}`; }
   }
-  const totalTreeCover = $derived(vegetationReadUnavailable ? null : vegList.reduce((s, r) => s + (r.totalA || 0), 0));
-  const totalShrubCover = $derived(vegetationReadUnavailable ? null : vegList.reduce((s, r) => s + (r.totalB || 0), 0));
-  const totalHerbCover = $derived(vegetationReadUnavailable ? null : vegList.reduce((s, r) => s + (r.cover6 || 0), 0));
-  const totalMossCover = $derived(vegetationReadUnavailable ? null : vegList.reduce((s, r) => s + (r.cover7 || 0), 0));
+  const totalTreeCover = $derived(vegetationReadUnavailable ? null : Math.min(99, vegList.reduce((s, r) => s + Math.min(99, r.totalA != null ? r.totalA : (r.cover1 || 0) + (r.cover2 || 0) + (r.cover3 || 0)), 0)));
+  const totalShrubCover = $derived(vegetationReadUnavailable ? null : Math.min(99, vegList.reduce((s, r) => s + Math.min(99, r.totalB != null ? r.totalB : (r.cover4 || 0) + (r.cover5 || 0) + (r.cover5a || 0) + (r.cover5b || 0) + (r.cover5c || 0)), 0)));
+  const totalHerbCover = $derived(vegetationReadUnavailable ? null : Math.min(99, vegList.reduce((s, r) => s + Math.min(99, r.cover6 || 0), 0)));
+  const totalMossCover = $derived(vegetationReadUnavailable ? null : Math.min(99, vegList.reduce((s, r) => s + Math.min(99, r.cover7 || 0), 0)));
   async function searchSpecies() {
     const request = ++speciesRequest; speciesReads.cancelAll();
     if (!speciesSearchQuery.trim()) { speciesSearchResults = []; searchingSpecies = false; return; }
@@ -636,14 +643,99 @@
   });
   const deleteVeg = (id: number) => deleteSourceChild('SubVegAXL_BC', id);
   const deleteHumus = (id: number) => deleteSourceChild('SoilHumusXL', id);
+  const showTwoPagePlotPrompt = $derived(standaloneTwoPage && !plotNumber && original === null);
+  let twoPagePickerFilter = $state('');
+  const filteredTwoPagePlots = $derived.by(() => {
+    const q = twoPagePickerFilter.trim().toLowerCase();
+    if (!q) return availablePlots.slice(0, 50);
+    return availablePlots.filter(p => `${p.plotNumber ?? ''} ${p.fieldNumber ?? ''} ${p.plotRepresenting ?? ''} ${p.zone ?? ''} ${p.subZone ?? ''} ${p.siteSeries ?? ''}`.toLowerCase().includes(q)).slice(0, 50);
+  });
+  let managePlotOpen = $state(false), copyPlotTarget = $state(''), removeCleanProject = $state(''), managePlotBusy = $state(false), lastManagedOrigin = '';
+  $effect(() => {
+    const origPlot = original?.plotNumber ?? '';
+    if (origPlot !== lastManagedOrigin) {
+      lastManagedOrigin = origPlot;
+      managePlotOpen = false;
+      copyPlotTarget = origPlot.trim().slice(0, 7);
+      const baseProj = ($projectState?.activeProject ?? 'Project').replace(/[^A-Za-z0-9_]/g, '');
+      removeCleanProject = `${(baseProj || 'Project').slice(0, 22)}_Clean`;
+    }
+  });
+  async function runCopyPlot() {
+    if (!original || !onCopyPlotToNumber || managePlotBusy) return;
+    managePlotBusy = true; error = null;
+    try { await onCopyPlotToNumber(original.plotNumber, copyPlotTarget); managePlotOpen = false; }
+    catch (cause) { error = String(cause instanceof Error ? cause.message : cause); }
+    finally { managePlotBusy = false; }
+  }
+  async function runRemovePlot() {
+    if (!original || !onRemovePlotAction || managePlotBusy) return;
+    managePlotBusy = true; error = null;
+    try { await onRemovePlotAction(original.plotNumber, canUndoPlotDelete ? '' : removeCleanProject); managePlotOpen = false; }
+    catch (cause) { error = String(cause instanceof Error ? cause.message : cause); }
+    finally { managePlotBusy = false; }
+  }
 </script>
 
 <svelte:window onkeydown={sourceEnter} />
 
-<div bind:this={container} data-tour="fs882-form-root" data-help-id={siviStandalone ? 'sivi.plot_type' : 'site.plot_number'} class="fs882-container bg-white rounded-lg shadow border border-stone-200 flex flex-col h-full text-stone-800 text-sm">
+<div bind:this={container} data-tour="fs882-form-root" class="fs882-container bg-white rounded-lg shadow border border-stone-200 flex flex-col h-full text-stone-800 text-sm">
+  {#if showTwoPagePlotPrompt}
+    <div class="fs882-body overflow-y-auto flex-1 min-w-0 p-4" data-field-card-form-pane>
+      <section aria-label="Select plot for Two-Page Entry" data-twopage-select-plot-prompt class="mx-auto my-6 max-w-2xl rounded border border-[#D8D8D8] border-t-[4px] border-t-[#003366] bg-white p-5 shadow-sm space-y-4">
+        <div class="space-y-1">
+          <div class="font-mono text-[11px] font-semibold uppercase tracking-wider text-[#1E5128]">FS882-8x6XL Two-Page Layout</div>
+          <h2 class="text-base font-bold text-[#003366] m-0">Two-Page Entry (FS882-8x6XL) — Select a Plot</h2>
+          <p class="text-xs leading-relaxed text-[#474543]">
+            Two-Page Entry edits an existing plot across side-by-side Site, Soil, and Vegetation panels. Choose a plot below to open Two-Page Entry immediately, or create a new plot header first.
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            data-twopage-plot-picker-filter
+            class="flex-1 min-w-48 rounded border border-stone-300 px-3 py-1.5 text-xs"
+            placeholder="Filter plots by plot number, BGC unit, or location..."
+            aria-label="Filter plots for Two-Page Entry"
+            bind:value={twoPagePickerFilter}
+          />
+          {#if onClosed}
+            <button type="button" class="rounded border border-[#003366] bg-white px-3 py-1.5 text-xs font-semibold text-[#003366] hover:bg-[#EBF1F8]" onclick={onClosed}>
+              Browse Plots Table
+            </button>
+          {/if}
+          {#if onSwitchTo6x4NewPlot}
+            <button type="button" data-twopage-switch-new-plot class="rounded bg-[#1E5128] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#153B1D]" onclick={onSwitchTo6x4NewPlot}>
+              Create New Plot Header (FS882 6x4)
+            </button>
+          {/if}
+        </div>
+
+        <div class="max-h-64 overflow-y-auto rounded border border-stone-200 divide-y divide-stone-100">
+          {#each filteredTwoPagePlots as p (p.plotNumber)}
+            <button
+              type="button"
+              data-twopage-pick-plot={p.plotNumber}
+              class="w-full flex items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-[#EBF1F8]"
+              onclick={() => onSelectPlotForTwoPage?.(p.plotNumber)}
+            >
+              <span class="font-mono font-bold text-[#003366] tabular-nums">{p.plotNumber}</span>
+              <span class="truncate text-stone-600">{[p.zone && p.subZone ? `${p.zone}${p.subZone}` : (p.zone ?? p.subZone), p.siteSeries ? `/${p.siteSeries}` : '', p.plotRepresenting ?? ''].filter(Boolean).join(' ')}</span>
+              <span class="shrink-0 rounded border border-[#003366] px-2 py-0.5 font-semibold text-[#003366]">Open 2-Page</span>
+            </button>
+          {:else}
+            <p class="p-4 text-center text-xs text-stone-500">
+              {availablePlots.length === 0 ? 'No plots in the active scope yet. Create a new plot header first.' : `No plots matched "${twoPagePickerFilter.trim()}".`}
+            </p>
+          {/each}
+        </div>
+      </section>
+    </div>
+  {:else}
   <header hidden={standaloneTwoPage && twoPageOpen && twoPageScope === 'entry'} class="fs882-toolbar p-3 bg-stone-100 border-b border-stone-200 flex flex-wrap justify-between items-center gap-2">
     <div class="flex items-center gap-3">
-      <h2 class="font-bold text-stone-900 text-base">{siviStandalone ? 'SIVI / FS1333: Site Visit' : 'FS882-6x4XL: Ecosystem Field Form'}</h2>
+      <h2 data-help-id={siviStandalone ? 'sivi.plot_type' : 'site.plot_number'} class="font-bold text-stone-900 text-base">{siviStandalone ? 'SIVI / FS1333: Site Visit' : 'FS882-6x4XL: Ecosystem Field Form'}</h2>
       <span class="px-2 py-0.5 rounded text-xs font-semibold {effectiveFormDirty ? 'bg-amber-100 text-amber-800' : 'bg-stone-200 text-stone-600'}">{effectiveFormDirty ? 'Draft Unsaved' : 'Clean'}</span>
       {#if draft.locked}<span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700 flex items-center gap-1"><Lock size={12} /> Locked (Read-Only)</span>{/if}
     </div>
@@ -655,6 +747,7 @@
       {#if siteUnitEnvironmentEnabled && !siviStandalone && !(externalSUEnvironmentEnabled && separateSUSelected)}<button type="button" data-source-control="btnSuIntoEnv" class="px-3 py-1 rounded text-xs border border-stone-300 bg-white disabled:opacity-50" disabled={childParentDisabled || childUnsaved || Object.keys(headerValidation).length > 0 || $projectState?.activeSU === 'None'} onclick={() => openEnvironmentSU('reverse')}>SU Into Env</button>{/if}
       {#if externalSUEnvironmentEnabled && separateSUSelected && !siviStandalone && !twoPageOpen}<button type="button" data-source-control="btnSuIntoEnv" data-external-su-environment-open class="px-3 py-1 rounded text-xs border border-stone-300 bg-white disabled:opacity-50" disabled={childParentDisabled || childUnsaved || Object.keys(headerValidation).length > 0} onclick={openExternalSUEnvironment}>SU Into Env: separate file</button>{/if}
       {#if onFindPlot}<button type="button" class="px-3 py-1 rounded text-xs border border-stone-300 bg-white disabled:opacity-50" disabled={busy || headerWorkflowBusy || !capabilitiesReady} onclick={onFindPlot}>Find Plot</button>{/if}
+      {#if original !== null && !siviStandalone && (onCopyPlotToNumber || onRemovePlotAction)}<button type="button" data-manage-plot-btn aria-expanded={managePlotOpen} class="px-3 py-1 rounded text-xs border border-stone-300 bg-white hover:bg-stone-50 disabled:opacity-50" disabled={busy || headerWorkflowBusy || dirty || childUnsaved || draft.locked || !capabilitiesReady} onclick={() => { managePlotOpen = !managePlotOpen; }}>Manage Plot #</button>{/if}
       {#if profileReviewEnabled}<button type="button" data-project-profile-review-open class="px-3 py-1 rounded text-xs border border-stone-300 bg-white disabled:opacity-50" disabled={busy || headerWorkflowBusy || siviSourceBarrier || profileReviewOpen || !capabilitiesReady || (profileEditingEnabled && $projectState?.plotProfile?.writable === true && (metadataOpen || codeCheckOpen || personalDraft !== null || deletionReview !== null || creationDraft !== null))} onclick={() => { if (siviSourceBarrier) { error = 'Observe the ProjectID source preference outcome before opening profile rules.'; return; } profileReviewOpen = true; profileReviewBusy = true; }}>{profileEditingEnabled && $projectState?.plotProfile?.writable === true ? 'Review project profile rules' : 'Review project profile (read-only)'}</button>{/if}
       <button type="button" data-view-field-card-btn title="Preview official printed field card (Alt+P)" onclick={() => { fieldCardModalOpen = true; fieldCardSplitOpen = false; }} class="px-3 py-1 rounded text-xs font-semibold border border-[#003366] bg-[#EBF1F8] text-[#003366] hover:bg-[#003366] hover:text-white flex items-center gap-1.5"><FileText size={14} /> View Field Card</button>
       <button type="button" data-dock-field-card-btn aria-pressed={fieldCardSplitOpen} title="Toggle live side-by-side split field card preview (>= 1760px)" onclick={() => { fieldCardSplitOpen = !fieldCardSplitOpen; if (fieldCardSplitOpen) fieldCardModalOpen = false; }} class="dock-field-card-btn px-3 py-1 rounded text-xs font-semibold border flex items-center gap-1.5 {fieldCardSplitOpen ? 'bg-[#003366] text-white border-[#003366]' : 'border-[#D1D5DB] bg-white text-[#003366] hover:bg-[#EBF1F8]'}"><Columns2 size={14} /> Dock Split View</button>
@@ -666,6 +759,32 @@
       {#if onClosed}<button type="button" aria-label={siviStandalone ? 'Close SIVI form' : 'Close FS882 form'} disabled={busy || headerWorkflowBusy} onclick={onClosed} class="px-2 py-1 text-stone-500 hover:text-stone-800 font-bold ml-2">✕</button>{/if}
     </div>
   </header>
+
+  {#if managePlotOpen && original !== null}
+    <section aria-label="Manage plot number" data-manage-plot-panel class="border-b border-stone-200 bg-stone-50 px-4 py-2.5 text-xs flex flex-wrap items-end gap-4">
+      {#if onCopyPlotToNumber}
+        <label class="flex flex-col gap-1">
+          <span class="font-semibold text-[#003366]">Copy Plot {original.plotNumber} to New Plot Number</span>
+          <span class="flex items-center gap-1.5">
+            <input type="text" maxlength="7" data-fs882-copy-plot-input class="rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs w-28" placeholder="New plot #" bind:value={copyPlotTarget} disabled={managePlotBusy || busy} />
+            <button type="button" data-fs882-copy-plot-btn class="rounded bg-[#003366] px-2.5 py-1 font-semibold text-white hover:bg-[#002244] disabled:opacity-50" disabled={managePlotBusy || busy || !copyPlotTarget.trim()} onclick={() => void runCopyPlot()}>Copy Plot</button>
+          </span>
+        </label>
+      {/if}
+      {#if onRemovePlotAction}
+        <div class="flex flex-col gap-1">
+          <span class="font-semibold text-[#A61B20]">{canUndoPlotDelete ? 'Delete Newly Created Plot' : `Remove Plot ${original.plotNumber} into Clean Project Copy`}</span>
+          <div class="flex items-center gap-1.5">
+            {#if !canUndoPlotDelete}
+              <input type="text" maxlength="30" data-fs882-clean-project-input class="rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs w-44" placeholder="Clean project name" bind:value={removeCleanProject} disabled={managePlotBusy || busy} />
+            {/if}
+            <button type="button" data-fs882-remove-plot-btn class="rounded border border-[#D8292F] bg-white px-2.5 py-1 font-semibold text-[#D8292F] hover:bg-[#FBEAEA] disabled:opacity-50" disabled={managePlotBusy || busy || (!canUndoPlotDelete && !removeCleanProject.trim())} onclick={() => void runRemovePlot()}>{canUndoPlotDelete ? 'Delete Plot' : 'Save & Switch Without Plot'}</button>
+          </div>
+        </div>
+      {/if}
+      <button type="button" class="ml-auto rounded border border-stone-300 bg-white px-2.5 py-1 text-stone-700 hover:bg-stone-100" onclick={() => { managePlotOpen = false; }}>Close</button>
+    </section>
+  {/if}
 
   {#if error}<div role="alert" class="p-2 bg-red-50 border-b border-red-200 text-red-800 text-xs flex items-center gap-2"><AlertTriangle size={14} class="text-red-600 shrink-0" /><span>{error}</span><button type="button" class="ml-auto rounded border border-red-300 bg-white px-2 py-0.5 text-[11px] font-medium text-red-800 hover:bg-red-100" onclick={() => { error = null; }}>Dismiss</button></div>{/if}
   {#if vegetationReadUnavailable}<p role="alert" class="p-2 bg-amber-50 text-amber-900 text-sm" data-vegetation-unavailable>Ordinary ID-keyed vegetation is unavailable: {vegetationReadUnavailable} Use independently enabled physical-row source views. Ordinary vegetation rows, totals and actions are not presented as an empty result.</p>{/if}
@@ -697,4 +816,5 @@
   {#if fieldCardSplitOpen && fieldCardViewModel}<div class="fs882-dock-pane"><FieldCardPreviewModal open={true} mode="docked" viewModel={fieldCardViewModel} onclose={() => { fieldCardSplitOpen = false; }} onmodechange={(nextMode) => { if (nextMode === 'modal') { fieldCardSplitOpen = false; fieldCardModalOpen = true; } }} /></div>{/if}
   </div>
   {#if fieldCardModalOpen && fieldCardViewModel}<FieldCardPreviewModal open={true} mode="modal" viewModel={fieldCardViewModel} onclose={() => { fieldCardModalOpen = false; }} onmodechange={(nextMode) => { if (nextMode === 'docked') { fieldCardModalOpen = false; fieldCardSplitOpen = true; } }} />{/if}
+  {/if}
 </div>

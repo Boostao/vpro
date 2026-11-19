@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount, untrack } from 'svelte';
+  import { onDestroy, onMount, tick, untrack } from 'svelte';
   import { ReadRequests } from '../shared/readRequests';
   import { computeVirtualWindow } from '../datasheet/universalDatasheetGrid';
   import SiteUnitExclusionFilter from './SiteUnitExclusionFilter.svelte';
@@ -80,6 +80,7 @@
   // Virtualized scroll state for tree pane
   let treeScrollTop = $state(0);
   let treeViewportHeight = $state(480);
+  let explorerEl = $state<HTMLElement | null>(null);
 
   // Right pane Plot Inspector & Exclusion filter state
   let inspectedPlot = $state.raw<PlotInspectorSummary | null>(null);
@@ -386,6 +387,32 @@
     }
   }
 
+  async function focusExplorerFilter() {
+    const existing = explorerEl?.querySelector<HTMLInputElement>('input.vpro-cls-filter');
+    if (existing) {
+      existing.focus();
+      existing.select?.();
+      return;
+    }
+    if (mode !== 'su_tree' && !flatDirty && !mutating) {
+      mode = 'su_tree';
+      treeScrollTop = 0;
+      void loadSUTreeAndPicker();
+      await tick();
+      const input = explorerEl?.querySelector<HTMLInputElement>('input.vpro-cls-filter');
+      input?.focus();
+      input?.select?.();
+    }
+  }
+
+  function handleWindowKeydown(event: KeyboardEvent) {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f') {
+      if (activeDialog !== 'none') return;
+      event.preventDefault();
+      void focusExplorerFilter();
+    }
+  }
+
   onMount(() => {
     if (effectiveContextId) void reloadActivePane();
   });
@@ -398,7 +425,10 @@
   });
 </script>
 
+<svelte:window onkeydown={handleWindowKeydown} />
+
 <section
+  bind:this={explorerEl}
   class="vpro-cls-explorer"
   data-tour="classification-explorer-root"
   aria-label="Dual-Pane Classification Explorer"

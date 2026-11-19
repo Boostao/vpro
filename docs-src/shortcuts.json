@@ -16,22 +16,32 @@
   },
   {
     "keys": "Shift+Enter",
-    "scope": "FS882 & Datasheet Tables",
-    "action": "Move to the previous cell or row in a table"
+    "scope": "FS882 & Datasheet",
+    "action": "Move to the previous plot field or up to the previous table row"
   },
   {
     "keys": "Ctrl+S",
-    "scope": "Plot Forms & Project Metadata",
-    "action": "Validate and save plot changes with audit history"
+    "scope": "Plot Forms, Datasheet & Project Metadata",
+    "action": "Validate and save changes with audit history"
   },
   {
     "keys": "Ctrl+F",
     "scope": "Plots, Datasheet & Explorer",
-    "action": "Jump to the quick plot or species filter box"
+    "action": "Jump to the quick plot, table, or Site Unit filter box"
   },
   {
     "keys": "Esc",
-    "scope": "Help Drawer, Dialogs & Cell Editing",
-    "action": "Close the open help drawer or dialog, or cancel editing a cell"
+    "scope": "Drawers, Tours, Dialogs & Cell Editing",
+    "action": "Close the open drawer, tour, or dialog, or cancel editing a cell"
+  },
+  {
+    "keys": "Ctrl+K",
+    "scope": "Anywhere",
+    "action": "Open Quick Jump to search plots, views, projects, Site Units, and LMH25 topics"
+  },
+  {
+    "keys": "Alt+P",
+    "scope": "FS882 & Two-Page Forms",
+    "action": "Open or close the printed FS882 field card preview"
   }
 ]

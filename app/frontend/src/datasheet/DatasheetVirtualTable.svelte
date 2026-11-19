@@ -80,7 +80,7 @@
     scrollTop = e.currentTarget.scrollTop;
   }}
 >
-  <table class="vpro-ds-grid" role="grid" aria-rowcount={page.totalRows}>
+  <table class="vpro-ds-grid" role="grid" aria-rowcount={page.totalRows} data-datasheet-table={page.tableKey}>
     <thead>
       <tr class="vpro-ds-header-row">
         {#each orderedColumns as colEntry (colEntry.meta.name)}
@@ -112,6 +112,7 @@
             <input
               type="text"
               class="vpro-ds-col-filter"
+              data-column={colEntry.meta.name}
               aria-label={`Filter ${colEntry.meta.name}`}
               placeholder={colEntry.meta.pinned ? '=00337 or text' : 'Filter...'}
               bind:value={columnFilters[colEntry.meta.name]}
@@ -154,6 +155,7 @@
                   type="text"
                   class="vpro-ds-cell-input"
                   class:mono={colMeta.pinned || colMeta.kind !== 'text'}
+                  data-column={colMeta.name}
                   data-grid-row={rowIdx}
                   data-grid-col={colIdx}
                   value={displayVal}

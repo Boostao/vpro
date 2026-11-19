@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ChevronLeft, ChevronRight, RefreshCw, X } from '@lucide/svelte';
   import type { HierarchyNode, PlotPage } from '../../bindings/github.com/boostao/vpro/app';
-import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
+  import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
   import { projectState } from '../shared/state';
 
   let {
@@ -10,11 +10,13 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
     busy = false,
     error = '',
     page = null,
+    allPlots = [],
     offset = 0,
     pageSize = 25,
     hierarchyNodes = [],
     selected = $bindable(null),
     siviStandaloneEnabled = true,
+    canUndoSelectedPlot = false,
     editorBusy = false,
     transitionWorking = false,
     pendingTransition = null,
@@ -26,17 +28,21 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
     onopenexplorer = () => {},
     oncollapseinspector = () => {},
     onselectplot = () => {},
+    oncopyplot,
+    onremoveplot,
   }: {
     region?: 'main' | 'detail';
     view?: string;
     busy?: boolean;
     error?: string;
     page?: PlotPage | null;
+    allPlots?: PlotSummary[];
     offset?: number;
     pageSize?: number;
     hierarchyNodes?: HierarchyNode[];
     selected?: PlotSummary | null;
     siviStandaloneEnabled?: boolean;
+    canUndoSelectedPlot?: boolean;
     editorBusy?: boolean;
     transitionWorking?: boolean;
     pendingTransition?: unknown;
@@ -48,8 +54,78 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
     onopenexplorer?: () => void;
     oncollapseinspector?: () => void;
     onselectplot?: (plot: PlotSummary) => void;
+    oncopyplot?: (sourcePlot: string, targetPlot: string) => Promise<void>;
+    onremoveplot?: (sourcePlot: string, cleanProjectName: string) => Promise<void>;
   } = $props();
+
+  let plotFilter = $state('');
+  let filterInputEl: HTMLInputElement | undefined = $state();
+  let targetPlotDraft = $state('');
+  let cleanProjectDraft = $state('');
+  let actionBusy = $state(false);
+  let actionError = $state('');
+  let lastSelectedPlotForDraft = '';
+
+  $effect(() => {
+    const selPlot = selected?.plotNumber ?? '';
+    if (selPlot !== lastSelectedPlotForDraft) {
+      lastSelectedPlotForDraft = selPlot;
+      targetPlotDraft = selPlot.trim().slice(0, 7);
+      const baseProj = ($projectState?.activeProject ?? 'Project').replace(/[^A-Za-z0-9_]/g, '');
+      cleanProjectDraft = `${(baseProj || 'Project').slice(0, 22)}_Clean`;
+      actionError = '';
+    }
+  });
+
+  const trimmedFilter = $derived(plotFilter.trim().toLowerCase());
+  const displayedPlots = $derived.by(() => {
+    if (!trimmedFilter) return page?.plots ?? [];
+    const pool = allPlots.length > 0 ? allPlots : (page?.plots ?? []);
+    return pool.filter((p) => {
+      const hay = `${p.plotNumber ?? ''} ${p.fieldNumber ?? ''} ${p.plotRepresenting ?? ''} ${p.zone ?? ''} ${p.subZone ?? ''} ${p.siteSeries ?? ''}`.toLowerCase();
+      return hay.includes(trimmedFilter);
+    });
+  });
+
+  function handleWindowKeydown(event: KeyboardEvent) {
+    if (region !== 'main' || view !== 'plots') return;
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f') {
+      if (filterInputEl) {
+        event.preventDefault();
+        filterInputEl.focus();
+        filterInputEl.select?.();
+      }
+    }
+  }
+
+  async function submitCopyPlot() {
+    if (!selected || !oncopyplot || actionBusy) return;
+    actionBusy = true;
+    actionError = '';
+    try {
+      await oncopyplot(selected.plotNumber, targetPlotDraft);
+    } catch (cause) {
+      actionError = String(cause instanceof Error ? cause.message : cause);
+    } finally {
+      actionBusy = false;
+    }
+  }
+
+  async function submitRemovePlot() {
+    if (!selected || !onremoveplot || actionBusy) return;
+    actionBusy = true;
+    actionError = '';
+    try {
+      await onremoveplot(selected.plotNumber, canUndoSelectedPlot ? '' : cleanProjectDraft);
+    } catch (cause) {
+      actionError = String(cause instanceof Error ? cause.message : cause);
+    } finally {
+      actionBusy = false;
+    }
+  }
 </script>
+
+<svelte:window onkeydown={handleWindowKeydown} />
 
 {#if region === 'detail'}
   {#if selected && view === 'plots'}
@@ -99,6 +175,88 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
             disabled={busy || editorBusy || transitionWorking || pendingTransition !== null}
             onclick={onopensivi}
           >Open SIVI / FS1333</button>
+        {/if}
+
+        {#if oncopyplot || onremoveplot}
+          <details class="mt-3 rounded border border-slate-200 bg-slate-50 p-2.5 text-xs" data-plot-identity-actions>
+            <summary class="cursor-pointer font-semibold text-[#003366]">Rename or Remove Plot</summary>
+            <div class="mt-2 space-y-2.5 text-slate-700">
+              {#if actionError}
+                <p role="alert" class="rounded border border-[#D8292F] bg-[#FBEAEA] p-1.5 text-[11px] text-[#A61B20]">{actionError}</p>
+              {/if}
+
+              {#if oncopyplot}
+                <div class="space-y-1">
+                  <label for="inspector-copy-plot-input" class="block text-[11px] font-semibold text-slate-700">
+                    Copy to corrected Plot Number (up to 7 characters)
+                  </label>
+                  <div class="flex gap-1.5">
+                    <input
+                      id="inspector-copy-plot-input"
+                      type="text"
+                      maxlength="7"
+                      data-copy-plot-input
+                      class="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 font-mono text-xs"
+                      placeholder="New plot #"
+                      bind:value={targetPlotDraft}
+                      disabled={busy || editorBusy || actionBusy}
+                    />
+                    <button
+                      type="button"
+                      data-copy-plot-btn
+                      class="rounded bg-[#003366] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#002244] disabled:opacity-50"
+                      disabled={busy || editorBusy || actionBusy || !targetPlotDraft.trim()}
+                      onclick={() => void submitCopyPlot()}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              {/if}
+
+              {#if onremoveplot}
+                <div class="space-y-1 border-t border-slate-200 pt-2">
+                  {#if canUndoSelectedPlot}
+                    <p class="text-[11px] text-slate-600">
+                      This newly created SIVI plot has no child rows and can be deleted directly.
+                    </p>
+                    <button
+                      type="button"
+                      data-undo-sivi-plot-btn
+                      class="w-full rounded border border-[#D8292F] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#D8292F] hover:bg-[#FBEAEA] disabled:opacity-50"
+                      disabled={busy || editorBusy || actionBusy}
+                      onclick={() => void submitRemovePlot()}
+                    >
+                      Delete Newly Created Plot
+                    </button>
+                  {:else}
+                    <label for="inspector-clean-project-input" class="block text-[11px] font-semibold text-slate-700">
+                      Remove plot into clean project copy (keeps original .db backup)
+                    </label>
+                    <input
+                      id="inspector-clean-project-input"
+                      type="text"
+                      maxlength="30"
+                      data-exclude-plot-project-input
+                      class="w-full rounded border border-slate-300 bg-white px-2 py-1 font-mono text-xs"
+                      placeholder="Clean project name"
+                      bind:value={cleanProjectDraft}
+                      disabled={busy || editorBusy || actionBusy}
+                    />
+                    <button
+                      type="button"
+                      data-exclude-plot-splinter-btn
+                      class="w-full rounded border border-[#D8292F] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#D8292F] hover:bg-[#FBEAEA] disabled:opacity-50"
+                      disabled={busy || editorBusy || actionBusy || !cleanProjectDraft.trim()}
+                      onclick={() => void submitRemovePlot()}
+                    >
+                      Save &amp; Switch Without Plot {selected.plotNumber}
+                    </button>
+                  {/if}
+                </div>
+              {/if}
+            </div>
+          </details>
         {/if}
       </div>
     </aside>
@@ -161,28 +319,44 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
     <div><div class="eyebrow">{$projectState?.activeProject ?? 'PROJECT'}</div><h1>Plots</h1></div>
     <button class="icon-button" title="Refresh projects and plots" aria-label="Refresh projects and plots" disabled={busy} onclick={onrefresh}><RefreshCw size={18} strokeWidth={1.8} /></button>
   </div>
-  <div class="table-bar"><span>{page?.total ?? 0} plots</span><span>{busy ? 'Loading...' : 'Project data'}</span></div>
+  <div class="table-bar">
+    <span>{trimmedFilter ? `${displayedPlots.length} matching of ${page?.total ?? allPlots.length} plots` : `${page?.total ?? 0} plots`}</span>
+    <div class="flex flex-wrap items-center gap-2">
+      <input
+        bind:this={filterInputEl}
+        type="search"
+        class="plots-filter-input"
+        data-plots-filter-input
+        aria-label="Filter plots by number, BGC unit, or location"
+        placeholder="Filter plots by number, BGC unit, or location (Ctrl+F)..."
+        bind:value={plotFilter}
+      />
+      <span>{busy ? 'Loading...' : 'Project data'}</span>
+    </div>
+  </div>
   <div class="table-scroll">
     <table>
       <thead><tr><th>Plot number</th><th>Field number</th><th>Representing</th><th>Zone</th><th>Subzone</th><th>Site series</th></tr></thead>
       <tbody>
-        {#each page?.plots ?? [] as plot (plot.plotNumber)}
+        {#each displayedPlots as plot (plot.plotNumber)}
           <tr class:selected={selected?.plotNumber === plot.plotNumber}>
             <td><button class="plot-link tabular-nums" onclick={() => { selected = plot; onselectplot(plot); }}>{plot.plotNumber}</button></td>
             <td class="tabular-nums">{plot.fieldNumber ?? '—'}</td><td>{plot.plotRepresenting ?? '—'}</td>
             <td>{plot.zone ?? '—'}</td><td>{plot.subZone ?? '—'}</td><td class="tabular-nums">{plot.siteSeries ?? '—'}</td>
           </tr>
         {:else}
-          <tr><td colspan="6" class="empty-row">{busy ? 'Loading plots...' : 'No plots in this project.'}</td></tr>
+          <tr><td colspan="6" class="empty-row">{busy ? 'Loading plots...' : trimmedFilter ? `No plots matched "${plotFilter.trim()}".` : 'No plots in this project.'}</td></tr>
         {/each}
       </tbody>
     </table>
   </div>
-  <div class="table-footer">
-    <span class="tabular-nums">{page?.total ? `${offset + 1}–${Math.min(offset + pageSize, page.total)} of ${page.total}` : '0 of 0'}</span>
-    <div class="page-controls">
-      <button class="icon-button" title="Previous page" aria-label="Previous page" disabled={busy || offset === 0} onclick={() => onloadpage(Math.max(0, offset - pageSize))}><ChevronLeft size={18} /></button>
-      <button class="icon-button" title="Next page" aria-label="Next page" disabled={busy || offset + pageSize >= (page?.total ?? 0)} onclick={() => onloadpage(offset + pageSize)}><ChevronRight size={18} /></button>
+  {#if !trimmedFilter}
+    <div class="table-footer">
+      <span class="tabular-nums">{page?.total ? `${offset + 1}–${Math.min(offset + pageSize, page.total)} of ${page.total}` : '0 of 0'}</span>
+      <div class="page-controls">
+        <button class="icon-button" title="Previous page" aria-label="Previous page" disabled={busy || offset === 0} onclick={() => onloadpage(Math.max(0, offset - pageSize))}><ChevronLeft size={18} /></button>
+        <button class="icon-button" title="Next page" aria-label="Next page" disabled={busy || offset + pageSize >= (page?.total ?? 0)} onclick={() => onloadpage(offset + pageSize)}><ChevronRight size={18} /></button>
+      </div>
     </div>
-  </div>
+  {/if}
 {/if}

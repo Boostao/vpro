@@ -182,6 +182,7 @@ export function buildCommandPaletteCatalog(input: BuildCommandPaletteInput): Com
     { id: 'view-home', title: 'Workspace Home & Readiness Overview', subtitle: 'Session summary, active libraries & quick entry', badge: 'View', keywords: 'home dashboard overview', action: { kind: 'navigate-view', view: 'home' } },
     { id: 'view-plots', title: 'Plot Register & Scoped Plot Lookup', subtitle: 'Browse, filter, and open plots in active context', badge: 'Plots', keywords: 'plots list table lookup register', action: { kind: 'navigate-view', view: 'plots' } },
     { id: 'view-fs882', title: 'FS882 Ecosystem Field Form (6×4)', subtitle: 'Site, Soil/Terrain, Vegetation, Veg Other & Audit editor', badge: 'Form', keywords: 'fs882 6x4 form entry site soil veg', action: { kind: 'navigate-view', view: 'fs882' } },
+    { id: 'view-fs882-twopage', title: 'Two-Page Entry (FS882-8x6XL)', subtitle: 'Side-by-side Site, Soil & Vegetation two-page editor', badge: 'Form', keywords: 'two-page twopage 2-page fs882 8x6 form entry', action: { kind: 'navigate-view', view: 'fs882-twopage' } },
     { id: 'action-new-sivi', title: 'New SIVI / FS1333 Plot', subtitle: 'Create a new Site Visit plot in active project', badge: 'Form', keywords: 'new create sivi fs1333 plot', action: { kind: 'new-sivi' }, disabled: input.newSiviAvailable === false, disabledReason: 'Finish current busy workflow first' },
     { id: 'view-datasheet', title: 'Universal Datasheet Grid', subtitle: 'Direct spreadsheet editing across Env, Veg, Humus, Mineral & SU', badge: 'Grid', keywords: 'datasheet spreadsheet table grid bulk edit', action: { kind: 'navigate-view', view: 'datasheet' } },
     { id: 'view-map', title: '3D Map (BGC, Coordinate Check & Site Units)', subtitle: 'Provincial BGC v13 overlay, coordinate check & polygon AOI -> SU', badge: 'GIS', keywords: 'map 3d geospatial gis bgc pmtiles aoi coordinates', action: { kind: 'navigate-view', view: 'geospatial-map' } },
@@ -298,6 +299,14 @@ export function scoreCommandItem(item: CommandPaletteItem, rawQuery: string): nu
       item.action.plotNumber.toLowerCase().startsWith(tok)
     ) {
       score += item.badge === 'FS882' ? 140 : 120;
+      continue;
+    }
+    if (
+      item.action.kind.startsWith('open-plot-') &&
+      'plotNumber' in item.action &&
+      item.action.plotNumber.toLowerCase().includes(tok)
+    ) {
+      score += item.badge === 'FS882' ? 110 : 95;
       continue;
     }
     if (titleLower.startsWith(tok)) {
