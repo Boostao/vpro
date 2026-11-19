@@ -28,7 +28,7 @@ func summaryQualityRequest(t *testing.T, expected, proposed SummaryVegetationQua
 
 func TestSummaryQualityFacadeStrictRequiredWire(t *testing.T) {
 	value := SummaryVegetationQualityPreferenceValues{
-		SiteMinimum: "Poor", VegMinimum: "Poor", SoilMinimum: "Poor", BECMinimum: "True",
+		SiteMinimum: "Poor", VegMinimum: "Poor", SoilMinimum: "Poor", BECMinimum: "",
 		SiteIncludeNulls: true, VegIncludeNulls: true, SoilIncludeNulls: true, BECIncludeNulls: true,
 	}
 	valid := summaryQualityRequest(t, value, value)
@@ -38,7 +38,7 @@ func TestSummaryQualityFacadeStrictRequiredWire(t *testing.T) {
 	}
 	for _, invalid := range []string{
 		`{}`, strings.Replace(valid, `"enforce":false`, `"enforce":null`, 1),
-		strings.Replace(valid, `"becMinimum":"True"`, `"becMinimum":true`, 1),
+		strings.Replace(valid, `"becMinimum":""`, `"becMinimum":true`, 1),
 		strings.Replace(valid, `"becIncludeNulls":true`, `"becIncludeNulls":1`, 1),
 		strings.Replace(valid, `"siteMinimum":"Poor"`, `"siteMinimum":"Poor","siteMinimum":"Good"`, 1),
 		strings.Replace(valid, `"siteMinimum":"Poor"`, `"siteMinimum":"Poor","\u0073iteMinimum":"Good"`, 1),

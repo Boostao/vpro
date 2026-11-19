@@ -140,15 +140,39 @@ type summaryVegetationQualityPreferenceValues struct {
 	BECIncludeNulls  bool
 }
 
+func isLegacyBECUseBooleanPlaceholder(raw string) bool {
+	trimmed := strings.TrimSpace(raw)
+	return strings.EqualFold(trimmed, "true") || strings.EqualFold(trimmed, "false")
+}
+
 func summaryVegetationQualityPreferenceOption(values vprocore.ConfigValues, key string) (any, error) {
 	switch key {
-	case "DataQualityFilterSite", "DataQualityFilterVeg", "DataQualityFilterSoil", "DataQualityFilterBECUseLV":
+	case "DataQualityFilterSite", "DataQualityFilterVeg", "DataQualityFilterSoil":
 		value, err := vprocore.ConfigString(values, "ReportOptions", key)
 		if err != nil {
 			return nil, err
 		}
 		if !utf8.ValidString(value) {
 			return nil, fmt.Errorf("ReportOptions.%s contains malformed Unicode", key)
+		}
+		return value, nil
+	case "DataQualityFilterBECUseLV":
+		fields, err := vprocore.ConfigSection(values, "ReportOptions")
+		if err != nil {
+			return nil, err
+		}
+		if _, isBool := fields[key].(bool); isBool {
+			return "", nil
+		}
+		value, err := vprocore.ConfigString(values, "ReportOptions", key)
+		if err != nil {
+			return nil, err
+		}
+		if !utf8.ValidString(value) {
+			return nil, fmt.Errorf("ReportOptions.%s contains malformed Unicode", key)
+		}
+		if value == "True" || value == "False" {
+			return "", nil
 		}
 		return value, nil
 	case "DataQualityFilterEnforce":
@@ -249,6 +273,9 @@ func ReadSummaryVegetationQualityPreferences(s *vprocore.DesktopConfig, ctx cont
 
 func CompareAndSetSummaryVegetationQualityPreferences(s *vprocore.DesktopConfig, ctx context.Context,
 	expected, proposed summaryVegetationQualityPreferenceValues) (vprocore.ReportPreferenceUpdate, error) {
+	if expected.BECMinimum != proposed.BECMinimum && isLegacyBECUseBooleanPlaceholder(proposed.BECMinimum) {
+		return vprocore.ReportPreferenceUpdate{}, errors.New("Summary Vegetation quality DataQualityFilterBECUseLV cannot use boolean True/False as a BEC_Use threshold; leave empty or enter a BEC_Use code")
+	}
 	changes := summaryVegetationQualityPreferenceChanges(expected, proposed)
 	for _, change := range changes {
 		if text, ok := change.Proposed.(string); ok && change.Expected != change.Proposed &&

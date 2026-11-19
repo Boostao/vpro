@@ -35,7 +35,7 @@ Program:
   Organization: "B.C. Ministry of Forests, Research Branch — Biogeoclimatic Ecosystem Classification (BEC) Program"
 ReportOptions:
   DataQualityFilterBECUse: 1
-  DataQualityFilterBECUseLV: "True"
+  DataQualityFilterBECUseLV: ""
   DataQualityFilterEnforce: false
   DataQualityFilterEnforceLV: false
   DataQualityFilterSite: "Poor"

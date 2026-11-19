@@ -42,7 +42,16 @@
   const operationHeld = $derived(operationHeldProp || environmentalHeld || workbookHeld);
   let environmentalSession = $state.raw<SummaryEnvironmentalSession | SummaryEnvironmentalNumericSession | SummaryEnvironmentalLifeformSession | null>(null);
   let environmentalError = $state('');
-  if (summaryEnvironmentalEnabled) {
+  const canInspectEnvironmental = untrack(() => {
+    const owner = ownedContext();
+    return summaryEnvironmentalEnabled &&
+      typeof owner.contextId === 'string' && owner.contextId !== '' &&
+      typeof owner.project === 'string' && owner.project !== '' &&
+      typeof owner.projectPath === 'string' && owner.projectPath !== '' &&
+      typeof owner.su === 'string' && owner.su !== '' && owner.su !== 'None' && owner.su !== 'USysSuTableDynamic' &&
+      typeof owner.suPath === 'string' && owner.suPath !== '';
+  });
+  if (canInspectEnvironmental) {
     try { environmentalSession = summaryEnvironmentalDesktop.session(ownedContext()); }
     catch (cause) {
       const envErr = `Combined environmental inspection unavailable: ${String(cause)}`;
@@ -171,7 +180,7 @@
       presentationReadBusy || !!presentationView && (presentationView.busy || presentationView.blocked || !!presentationView.draftError) || fieldListHeld || environmentalHeld || workbookHeld);
   }
   const unsubscribe = session.subscribe(() => { viewState = session.view(); syncReportNotifications(); reportBusy(); });
-  const unsubscribeEnvironment = summaryEnvironmentalEnabled ? summaryEnvironmentalDesktop.subscribe(() => {
+  const unsubscribeEnvironment = canInspectEnvironmental ? summaryEnvironmentalDesktop.subscribe(() => {
     environmentalHeld = summaryEnvironmentalDesktop.activity().busy;
     reportBusy();
   }) : undefined;
@@ -432,6 +441,25 @@
       }
     }
   }
+  function normalizeExclusionSummaryPreview(raw: unknown): unknown {
+    if (!raw || typeof raw !== 'object') return raw;
+    const candidate = { ...(raw as Record<string, unknown>) };
+    const hasRefs = !!candidate.references && typeof candidate.references === 'object';
+    const refShowCommon = hasRefs && Boolean((candidate.references as Record<string, unknown>).showCommon);
+    const grouped = typeof candidate.groupAndOrder === 'number' && candidate.groupAndOrder !== 11;
+    if (hasRefs) {
+      candidate.source = 'literal-normal-su-effective-references';
+      candidate.ordering = refShowCommon
+        ? 'literal-null-first-layer-species-common'
+        : grouped
+          ? 'literal-null-first-group-species'
+          : 'literal-null-first-layer-species';
+    } else {
+      candidate.source = grouped ? 'literal-normal-su-grouped' : 'literal-normal-su-layer';
+      candidate.ordering = grouped ? 'literal-null-first-group-species' : 'literal-null-first-layer-species';
+    }
+    return candidate;
+  }
   async function previewWithPreferences() {
     exclusionSummaryText = '';
     try {
@@ -469,7 +497,7 @@
         qualityMutationHeld || qualityUnavailable || presentationMutationHeld || presentationInvalid || !!viewState.draftError || !!preferences && !preferenceView?.initialized} data-summary-preview>
         Preview Summary Vegetation
       </button>
-      <button type="button" onclick={previewWithPreferences} disabled={!enabled || !contextId || viewState.busy || operationHeld || fieldListHeld || preferenceHeld || qualityMutationHeld || presentationMutationHeld} data-summary-preview-preferences>
+      <button type="button" onclick={previewWithPreferences} disabled={!enabled || !contextId || !su || su === 'None' || !suPath || viewState.busy || operationHeld || fieldListHeld || preferenceHeld || qualityMutationHeld || presentationMutationHeld} data-summary-preview-preferences>
         Preview with Saved Preferences
       </button>
       {#if viewState.busy}<button onclick={() => session.cancel(port)} data-summary-cancel>Cancel preview</button>{/if}
@@ -480,7 +508,7 @@
   <p class="owner">Project: {project}<br />{projectPath}<br />Current Site Unit Table: {su}<br />{suPath}</p>
   {#if !enabled}<p>Summary Vegetation report preview is currently unavailable.</p>{/if}
   {#if unavailableScope}
-    <p>{unitScope === 'field' ? 'Specify a non-empty environment field name for Field-Derived Summary units.' : 'A selected normal Site Unit Table is required for Current Site Unit Table scope.'}</p>
+    <p class="scope-guidance" role="status">{unitScope === 'field' ? 'Specify a non-empty environment field name for Field-Derived Summary units.' : 'A selected normal Site Unit Table is required for Current Site Unit Table scope.'}</p>
   {/if}
   <div class="options">
     <label>Summary Report Units
@@ -671,11 +699,13 @@
     onBusyChange={(held) => { workbookHeld = held; reportBusy(); }} />
   <div class="exclusion-section">
     <SiteUnitExclusionFilter contextId={contextId} su={su} hierarchy={effectiveHierarchy} reportMode="summary"
-      average={viewState.average} display={viewState.display} showClass={viewState.showClass} groupAndOrder={viewState.groupAndOrder}
+      average={viewState.average} display={viewState.display}
+      showClass={viewState.display === 4 || viewState.display === 5 ? (viewState.showClass || 1) : 0}
+      groupAndOrder={viewState.groupAndOrder}
       onBusyChange={onExclusionBusyChange}
       onSummaryPreview={result => {
         exclusionSummaryText = `${result.exclusions.retainedUnits?.length ?? 0} units retained (${result.exclusions.excludedUnits?.length ?? 0} excluded; ${result.exclusions.retainedPlots}/${result.exclusions.totalPlotsBefore} plots)`;
-        void session.applyExternalPreview(result.preview, port);
+        void session.applyExternalPreview(normalizeExclusionSummaryPreview(result.preview), port);
       }} />
     {#if exclusionSummaryText}<p role="status" data-summary-exclusion-status>{exclusionSummaryText}</p>{/if}
   </div>
@@ -686,7 +716,7 @@
     Unlumped raw mode runs directly unless a *_Lump table, QC filter, hierarchy header, variant rollup, or Goldstream metadata option is enabled.</p>
   <p>The source “% Presence” display uses Count/nPlots ratios (0.75), not ratio × 100. Cover cells preserve source formatted text and NULL blanks.
     Profile navigation does not filter the current physical Site Unit Table.</p>
-  {#if viewState.preview && !qualityUnavailable}
+  {#if viewState.preview && !qualityInvalid}
     <article data-summary-result>
       <h2>{viewState.preview.unitScope && viewState.preview.unitScope !== 'su' ? `Summary Units (${viewState.preview.unitScope})` : 'Current Site Unit Table'} — {viewState.preview.groupAndOrder === 12 ? 'Strata' : viewState.preview.groupAndOrder === 13 ? 'Lifeform' : viewState.preview.groupAndOrder === 14 ? 'None' : 'Layer'}</h2>
       <p>Calculate: {viewState.preview.average === 1 ? 'By n Plots' : 'Characteristic'}.
@@ -757,6 +787,7 @@
   label { display: flex; flex-direction: column; gap: .35rem; min-width: 0; color: #313132; font-weight: 500; }
   select, input:not([type="checkbox"]) { box-sizing: border-box; width: 100%; min-width: 0; padding: .5rem; border: 1px solid #D8D8D8; border-radius: .25rem; background: #FFFFFF; color: #313132; }
   .owner, .scope-meta { overflow-wrap: anywhere; color: #474543; }
+  .scope-guidance { margin: 0; padding: .6rem .85rem; border-left: 4px solid #003366; background: #FFFFFF; color: #313132; border-radius: .25rem; }
   .qc-summary { padding: .5rem .75rem; border-left: 4px solid #FCBA19; background: #FFFFFF; color: #003366; font-weight: 600; }
   .linked-field-list, .exclusion-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; }
   .actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }

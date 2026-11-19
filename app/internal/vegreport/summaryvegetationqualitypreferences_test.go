@@ -39,7 +39,7 @@ func TestSummaryQualityPrivateDefaultsOmissionSharedCASAndReopen(t *testing.T) {
 	store := summaryQualityFixture(t)
 	ctx := context.Background()
 	expected := summaryVegetationQualityPreferenceValues{
-		SiteMinimum: "Poor", VegMinimum: "Poor", SoilMinimum: "Poor", BECMinimum: "True",
+		SiteMinimum: "Poor", VegMinimum: "Poor", SoilMinimum: "Poor", BECMinimum: "",
 		SiteIncludeNulls: true, VegIncludeNulls: true, SoilIncludeNulls: true, BECIncludeNulls: true,
 	}
 	read, err := ReadSummaryVegetationQualityPreferences(store, ctx)
@@ -63,7 +63,7 @@ func TestSummaryQualityPrivateDefaultsOmissionSharedCASAndReopen(t *testing.T) {
 	}
 	proposed := expected
 	proposed.SiteMinimum = "  literal nonmember longer than 15  "
-	proposed.BECMinimum = ""
+	proposed.BECMinimum = "3"
 	proposed.BECIncludeNulls = false
 	result, err := CompareAndSetSummaryVegetationQualityPreferences(store, ctx, expected, proposed)
 	if err != nil || !result.Committed || !result.Changed {
@@ -83,13 +83,20 @@ func TestSummaryQualityPrivateDefaultsOmissionSharedCASAndReopen(t *testing.T) {
 	}
 	fields := original["ReportOptions"].(map[string]any)
 	fields["DataQualityFilterSite"] = proposed.SiteMinimum
-	fields["DataQualityFilterBECUseLV"] = ""
+	fields["DataQualityFilterBECUseLV"] = "3"
 	fields["DataQualityFilterBECUse"] = false
 	if !reflect.DeepEqual(original, persisted) {
 		t.Fatal("unrelated/legacy storage changed", original, persisted)
 	}
 	if result, err := CompareAndSetSummaryVegetationQualityPreferences(store, ctx, expected, proposed); err == nil || result.Committed || !strings.Contains(err.Error(), "changed") {
 		t.Fatal("shared expected values authorized stale Save", result, err)
+	}
+	for _, invalidBEC := range []string{"True", "False", " true ", "false"} {
+		bad := proposed
+		bad.BECMinimum = invalidBEC
+		if res, err := CompareAndSetSummaryVegetationQualityPreferences(store, ctx, proposed, bad); err == nil || res.Committed {
+			t.Fatalf("expected boolean BECMinimum placeholder %q to be rejected, got res=%+v err=%v", invalidBEC, res, err)
+		}
 	}
 }
 
@@ -202,5 +209,88 @@ func TestSummaryQualityPrivateHistoricalNULOmissionAndCorrection(t *testing.T) {
 	corrected.SiteMinimum = "Good"
 	if result, err := CompareAndSetSummaryVegetationQualityPreferences(store, context.Background(), proposed, corrected); err != nil || !result.Committed {
 		t.Fatal(result, err)
+	}
+}
+
+func TestDefaultConfigInitYMLQualityEnforceRetainsNumericSampleBECUsePlots(t *testing.T) {
+	sampleRaw, err := vprocore.SampleFiles.ReadFile("resources/Sample.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	contexts, state := newClonedContextService(t, sampleRaw, nil)
+	sel := vprotest.ContextSelection(state)
+	sel.SU = "Sample"
+	sel.SUPath = state.ProjectPath
+	sampleState, err := contexts.SwitchContext(state.ContextID, sel)
+	if err != nil {
+		t.Fatalf("SwitchContext to Sample SU failed: %v", err)
+	}
+
+	qualSvc := NewSummaryVegetationQualityPreferencesService(contexts)
+	review, err := qualSvc.GetSummaryVegetationQualityPreferences(context.Background(), sampleState.ContextID)
+	if err != nil {
+		t.Fatalf("GetSummaryVegetationQualityPreferences failed: %v", err)
+	}
+	if review.Values.BECMinimum != "" {
+		t.Fatalf("default config.init.yml BECMinimum = %q, want empty string", review.Values.BECMinimum)
+	}
+
+	proposed := review.Values
+	proposed.Enforce = true
+	outcome := qualSvc.SaveSummaryVegetationQualityPreferences(
+		context.Background(),
+		sampleState.ContextID,
+		summaryQualityRequest(t, review.Values, proposed),
+	)
+	if !outcome.Committed || !outcome.Changed || outcome.ErrorMessage != "" {
+		t.Fatalf("enabling Enforce QC failed: %+v", outcome)
+	}
+
+	sumSvc, err := NewSummaryVegetationService(contexts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := sumSvc.PreviewWithPreferences(context.Background(), sampleState.ContextID)
+	if err != nil {
+		t.Fatalf("PreviewWithPreferences with default Enforce QC failed: %v", err)
+	}
+	if preview.Quality == nil || !preview.Quality.Enforced ||
+		preview.Quality.TotalBefore != 51 || preview.Quality.Retained != 51 || preview.Quality.RemovedCount != 0 ||
+		len(preview.Units) != 11 {
+		t.Fatalf("default Enforce QC dropped valid Sample BEC_Use plots: quality=%+v units=%d", preview.Quality, len(preview.Units))
+	}
+
+	// Exclude NULL BEC_Use while keeping default unset BECMinimum: all 48 numeric BEC_Use (1..5) plots must remain.
+	noNullBEC := proposed
+	noNullBEC.BECIncludeNulls = false
+	outNoNull := qualSvc.SaveSummaryVegetationQualityPreferences(
+		context.Background(),
+		sampleState.ContextID,
+		summaryQualityRequest(t, proposed, noNullBEC),
+	)
+	if !outNoNull.Committed || outNoNull.ErrorMessage != "" {
+		t.Fatalf("disabling BECIncludeNulls failed: %+v", outNoNull)
+	}
+	previewNoNull, err := sumSvc.PreviewWithPreferences(context.Background(), sampleState.ContextID)
+	if err != nil {
+		t.Fatalf("PreviewWithPreferences with BECIncludeNulls=false failed: %v", err)
+	}
+	if previewNoNull.Quality == nil || previewNoNull.Quality.Retained != 48 || previewNoNull.Quality.RemovedCount != 3 {
+		t.Fatalf("expected 48 numeric BEC_Use plots retained and 3 NULL plots removed, got %+v", previewNoNull.Quality)
+	}
+
+	// Verify Exclusion Filter preview succeeds across all 6 display modes when showClass is normalized.
+	for _, display := range []int{1, 2, 3, 4, 5, 6} {
+		showClass := normalizeSummaryVegetationShowClass(display, 1)
+		exclPrev, err := PreviewSummaryVegetationWithExclusions(context.Background(), contexts, sampleState.ContextID, SummaryVegetationExclusionRequest{
+			Average:          1,
+			Display:          display,
+			ShowClass:        showClass,
+			GroupAndOrder:    11,
+			UseDefaultPresets: true,
+		})
+		if err != nil || exclPrev == nil || len(exclPrev.Preview.Rows) == 0 {
+			t.Fatalf("PreviewSummaryVegetationWithExclusions(display=%d, showClass=%d) failed: err=%v preview=%+v", display, showClass, err, exclPrev)
+		}
 	}
 }

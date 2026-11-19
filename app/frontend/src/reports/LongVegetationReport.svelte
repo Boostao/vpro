@@ -45,6 +45,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
   import LongVegetationSelectedUnitSelection from './LongVegetationSelectedUnitSelection.svelte';
   import LongVegetationProjectScopeSelection from './LongVegetationProjectScopeSelection.svelte';
   import LongVegetationProjectUnitPreferences from './LongVegetationProjectUnitPreferences.svelte';
+  import type { ProjectScopeSelectionSession } from './longVegetationProjectScopeSession';
   import { projectReportWorkspace } from './longVegetationProjectWorkspaces';
   import { notifications } from '../shell/notificationService.svelte';
 
@@ -94,6 +95,22 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
   const qualityMinimaEnabled = true;
   const workbookOwner = untrack(() => ({ contextId, project, projectPath, su, suPath }));
   const projectWorkspace = untrack(() => projectReportWorkspace?.(workbookOwner) ?? null);
+  const projectScopeSelection = projectWorkspace ? ({
+    view: () => {
+      const raw = projectWorkspace.selection.view();
+      if (raw && !raw.dirty && (!raw.fields || raw.fields.length === 0) && raw.scope?.sourceKind !== 'project-selected-fields') {
+        return { ...raw, draftError: '' };
+      }
+      return raw;
+    },
+    subscribe: (listener: () => void) => projectWorkspace.selection.subscribe(listener),
+    cancel: () => projectWorkspace.selection.cancel(),
+    load: () => projectWorkspace.selection.load(),
+    switchTo: (sourceKind: 'selected-list' | 'project-selected-fields' | 'project-all-plots') => projectWorkspace.selection.switchTo(sourceKind),
+    build: () => projectWorkspace.selection.build(),
+    edit: (fields: string[]) => projectWorkspace.selection.edit(fields),
+    undo: () => projectWorkspace.selection.undo(),
+  } as ProjectScopeSelectionSession) : null;
   let projectView = $state.raw(untrack(() => projectWorkspace?.view() ?? null));
   const projectActive = $derived(!!projectView?.projectActive);
   const projectScopeKnown = $derived(!projectWorkspace || !!projectView?.scope.scope && !projectView.scope.authorityUnknown);
@@ -550,7 +567,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
   }
   async function options() {
     if (projectActive && projectWorkspace) { await readProject(() => projectWorkspace.loadOptions()); return; }
-    if (busy || operationHeld || workbookBarrier || preferenceBarrier) return;
+    if (busy || operationHeld || workbookBarrier || preferenceBarrier || !su || su === 'None') return;
     cancel(); const request = generation; settings = null; error = ''; preview = null; workbookReview = null;
     busy = true; reportBusy();
     try {
@@ -909,8 +926,9 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     void loadLumpTables();
     if (projectWorkspace) void projectWorkspace.selection.load().then(() => {
       if (disposed) return;
-      if (projectWorkspace.view().scope.scope?.sourceKind === 'selected-list') void options();
+      if (projectWorkspace.view().scope.scope?.sourceKind === 'selected-list' && su && su !== 'None') void options();
     }).catch(cause => {
+      if (disposed) return;
       error = `Owned report scope unavailable: ${String(cause)}`;
       if (typeof notifications !== 'undefined') {
         const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined) || (typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined);
@@ -921,7 +939,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
         });
       }
     });
-    else void options();
+    else if (su && su !== 'None') void options();
   });
   onDestroy(() => {
     disposed = true;
@@ -938,7 +956,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     <h1>Long Vegetation</h1>
     <div class="actions">
       <button data-source-control="btnViewReport" disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || (projectActive ? !projectView?.outputReady : !settings || su === 'None')} onclick={show}>View Report</button>
-      <button disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || projectActive && !projectView?.outputReady} onclick={options}>Reload report options</button>
+      <button disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || (projectActive ? !projectView?.outputReady : !su || su === 'None')} onclick={options}>Reload report options</button>
       {#if workbookEnabled}
         <button disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || (projectActive ? !projectView?.outputReady : !settings || su === 'None' || su === 'USysSuTableDynamic')} onclick={reviewWorkbook}>
           {selectedWorkbookScope === 'unlumped' ? 'Review unlumped XLSX workbook (no file yet)' : `Review ${selectedWorkbookScope.replace(/^lump:/, '')} XLSX workbook (no file yet)`}
@@ -948,6 +966,10 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
       {#if projectView?.readBusy}<button data-project-report-cancel onclick={() => projectWorkspace?.cancelReportRead()}>Cancel original project report read</button>{/if}
     </div>
   </header>
+  {#if su === 'None' && !projectActive}
+    <p class="scope-guidance" role="status">{projectWorkspace ? 'Select an SU in Projects & context, or choose an explicit available whole-project scope before viewing the report.' :
+      'Select an SU in Projects & context before viewing the report.'}</p>
+  {/if}
   {#if preferenceView?.draftError}<p class="error" role="alert">{preferenceView.draftError}</p>{/if}
   {#if statisticsView?.draftError}<p class="error" role="alert">{statisticsView.draftError}</p>{/if}
   {#if !publication.outcome && publication.requestedDestination && !publication.busy}
@@ -956,7 +978,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
   {#if publication.blocked && !publication.busy}
     <button onclick={acknowledgeWorkbook}>Acknowledge workbook outcome</button>
   {/if}
-  {#if projectWorkspace && projectView}
+  {#if projectWorkspace && projectView && projectScopeSelection}
     {#if !projectView.publication?.outcome && projectView.publication?.requestedDestination && !projectView.publication.busy}
       <p data-project-workbook-unknown role="alert">Original project workbook outcome unknown.
         Retain and inspect {projectView.publication.requestedDestination}; never replay blindly.</p>
@@ -965,7 +987,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
       <button data-project-workbook-acknowledge disabled={busy || operationHeld || sharedMutationHeld || publication.busy || publication.blocked}
         onclick={() => projectWorkspace.workbook?.acknowledge()}>Acknowledge original project workbook outcome</button>
     {/if}
-    <LongVegetationProjectScopeSelection selection={projectWorkspace.selection} allPlotsAvailable={su === 'None'}
+    <LongVegetationProjectScopeSelection selection={projectScopeSelection} allPlotsAvailable={su === 'None'}
       cancelReads={() => projectWorkspace.cancelScopeReads()} onChange={projectChanged}
       operationHeld={busy || operationHeld || workbookBarrier || sharedPreferenceBarrier || projectView.scopeOperationHeld}
       mutationHeld={busy || operationHeld || workbookBarrier || sharedMutationHeld || projectView.scopeMutationHeld} />
@@ -1292,10 +1314,6 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
         Publication never replaces an existing file. Every returned or unknown outcome clears preparation; acknowledge it and explicitly obtain a new review before retrying.</p>
     </section>
   {/if}
-  {#if su === 'None' && !projectActive}
-    <p>{projectWorkspace ? 'Select an SU in Projects & context, or choose an explicit available whole-project scope before viewing the report.' :
-      'Select an SU in Projects & context before viewing the report.'}</p>
-  {/if}
   {#if settings?.constantSpeciesList}<p class="notice">Constant species list is enabled in retained YAML. Presence and mean-cover thresholds are bypassed, as in the source report; missing combinations have NULL statistics, not zero.</p>{/if}
   {#if settings?.grouping === 'none'}<p class="notice">The source's None mode changes row ordering, not cover aggregation.
     Layer observations remain separate and labelled; equal source sort keys use a deterministic layer/name tie-break.
@@ -1450,5 +1468,6 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
   th, td { border: 1px solid #D8D8D8; padding: .5rem; text-align: left; min-width: 8rem; white-space: pre-wrap; overflow-wrap: anywhere; }
   thead th { background: #003366; color: #FFFFFF; }
   .error { color: #D8292F; font-weight: 600; } .diagnostic, .notice { color: #1A5A96; }
+  .scope-guidance { margin: 0; padding: .6rem .85rem; border-left: 4px solid #003366; background: #F2F2F2; color: #313132; border-radius: .3rem; }
   .guidance { color: #474543; font-size: .875rem; }
 </style>
