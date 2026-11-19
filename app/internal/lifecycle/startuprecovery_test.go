@@ -162,3 +162,217 @@ func TestStartupRecoverySampleFallbackRelocationAndPortableReanchor(t *testing.T
 		t.Fatalf("RecoverWithPaths lost custom Current.User: got %q", u)
 	}
 }
+
+func TestStartupRecoveryRealStateUpgradeOption2AndDiagnostics(t *testing.T) {
+	// Seed a workspace with Sample.db and family databases first
+	dataDir := t.TempDir()
+	seedCfg := t.TempDir()
+	initPrefs, err := vprocore.OpenDesktopConfig(dataDir, seedCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initSvc, err := vprocore.NewSQLiteProjectService(dataDir, seedCfg, initPrefs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = initSvc.CloseSQLiteContext()
+	sampleDB := filepath.Join(dataDir, "projects", "Sample.db")
+
+	// 1. Direct boot on real-state config.yml + partial desktop-selection.json {"activeProject":"Sample"}
+	realCfg := t.TempDir()
+	realYAML := strings.Join([]string{
+		"Audit:",
+		"  AuditStrength: 1",
+		"Current:",
+		"  AssignedSuSource: 1",
+		"  CoordMethod: '1'",
+		"  CurrPlotlist: None",
+		"  CurrProject: Sample",
+		"  CurrHierarchy: Sample",
+		"  HierarchyPath: " + sampleDB,
+		"  CurrVegProfile: Sample",
+		"  DataFormName: frmSIVIsite",
+		"  DataFormNumber: '1'",
+		"  ProjectIdSource: '2'",
+		"  ProjectPath: " + sampleDB,
+		"  SUPath: ''",
+		"  User: Admin",
+		"Message:",
+		"  DontShowDataQualityMessage: no",
+		"  ShowWhatsNew: yes",
+		"ReportOptions:",
+		"  DataQualityFilterEnforce: no",
+		"  DataQualityFilterEnforceLV: no",
+		"  DataQualityFilterSiteNull: yes",
+		"  DataQualityFilterSiteNullLV: yes",
+		"System:",
+		"  RunOnce: yes",
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(realCfg, "config.yml"), []byte(realYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(realCfg, "desktop-selection.json"), []byte(`{"activeProject":"Sample"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	upgradedPrefs, err := vprocore.OpenDesktopConfig(dataDir, realCfg)
+	if err != nil {
+		t.Fatalf("expected real-state config.yml + partial desktop-selection.json to boot without recovery, got %v", err)
+	}
+	upgradedSvc, err := vprocore.NewSQLiteProjectService(dataDir, realCfg, upgradedPrefs)
+	if err != nil {
+		t.Fatalf("NewSQLiteProjectService after real-state upgrade failed: %v", err)
+	}
+	liveState, err := upgradedSvc.GetState(context.Background())
+	_ = upgradedSvc.CloseSQLiteContext()
+	if err != nil || liveState.ActiveProject != "Sample" || liveState.ActiveHierarchy != "Sample" {
+		t.Fatalf("unexpected active state after real-state upgrade: %+v (%v)", liveState, err)
+	}
+
+	// 2. Option 2 (RecoverWithPaths) with string CoordMethod: '1', ProjectIdSource: '2', and valid HierarchyPath (ClearHierarchy: false)
+	opt2Cfg := t.TempDir()
+	opt2ConfigFile := filepath.Join(opt2Cfg, "config.yml")
+	if err := os.WriteFile(opt2ConfigFile, []byte(realYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Trigger an explicit conflict via desktop-selection.json so Startup Recovery is entered
+	if err := os.WriteFile(filepath.Join(opt2Cfg, "desktop-selection.json"), []byte(`{"activeProject":"Sample","activeHierarchy":"None"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	fixedClock := time.Date(2026, 11, 19, 14, 0, 0, 0, time.UTC)
+	activateOpt2 := func() (StartupState, error) {
+		p, oErr := vprocore.OpenDesktopConfig(dataDir, opt2Cfg)
+		if oErr != nil {
+			return StartupState{}, oErr
+		}
+		ps, sErr := vprocore.NewSQLiteProjectService(dataDir, opt2Cfg, p)
+		if sErr != nil {
+			return StartupState{}, sErr
+		}
+		defer ps.CloseSQLiteContext()
+		st := StartupState{Ready: true, ConfigPath: p.Path, ReleaseChannel: vprocore.ReleaseChannelStable}
+		PopulateRecoveryHints(&st)
+		return st, nil
+	}
+
+	startupOpt2 := &StartupService{
+		DataDir:  dataDir,
+		Now:      func() time.Time { return fixedClock },
+		Activate: activateOpt2,
+	}
+	initialRecovery := StartupState{
+		Ready:      false,
+		Message:    "legacy JSON conflicts with explicit YAML Current.CurrHierarchy; both files were retained",
+		ConfigPath: opt2ConfigFile,
+	}
+	PopulateRecoveryHints(&initialRecovery)
+	startupOpt2.SetState(initialRecovery)
+
+	gotFailure := startupOpt2.GetState()
+	if strings.Contains(gotFailure.Message, "Current.CurrHierarchy") || strings.Contains(gotFailure.Message, "RuntimeError") {
+		t.Fatalf("expected plain-language failure message, got %q", gotFailure.Message)
+	}
+	if strings.Contains(gotFailure.Message, "Configured Hierarchy database was not found") {
+		t.Fatalf("valid HierarchyPath %q was falsely flagged as missing: %q", sampleDB, gotFailure.Message)
+	}
+
+	recovered, err := startupOpt2.RecoverWithPaths(context.Background(), StartupRecoveryRequest{
+		ProjectPath:    sampleDB,
+		ProjectName:    "Sample",
+		SUPath:         "",
+		ClearSU:        false,
+		HierarchyPath:  sampleDB,
+		ClearHierarchy: false,
+	})
+	if err != nil || !recovered.Ready {
+		t.Fatalf("Option 2 RecoverWithPaths failed on string CoordMethod: %+v (%v)", recovered, err)
+	}
+	if recovered.BackupPath == "" {
+		t.Fatal("expected Option 2 to create config.backup-<timestamp>.yml")
+	}
+	afterPrefs, err := vprocore.OpenDesktopConfig(dataDir, opt2Cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterSel, err := afterPrefs.Selection()
+	if err != nil || afterSel.Hierarchy != "Sample" || afterSel.HierarchyPath != sampleDB {
+		t.Fatalf("Option 2 failed to preserve valid Hierarchy selection: %+v (%v)", afterSel, err)
+	}
+	afterSnap, err := afterPrefs.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if coord, cErr := vprocore.ConfigInt(afterSnap, "Current", "CoordMethod", 1, 3); cErr != nil || coord != 1 {
+		t.Fatalf("CoordMethod after Option 2 = %d (%v), want 1", coord, cErr)
+	}
+	if projSrc, pErr := vprocore.ConfigInt(afterSnap, "Current", "ProjectIdSource", 1, 2); pErr != nil || projSrc != 2 {
+		t.Fatalf("ProjectIdSource after Option 2 = %d (%v), want 2", projSrc, pErr)
+	}
+	if strength, aErr := vprocore.ConfigInt(afterSnap, "Audit", "AuditStrength", 0, 3); aErr != nil || strength != 1 {
+		t.Fatalf("AuditStrength after Option 2 = %d (%v), want 1", strength, aErr)
+	}
+
+	// 3. Option 2 repairs genuinely corrupt CoordMethod/AuditStrength while pre-filling managed ProjectPath via SetState
+	corruptCfg := t.TempDir()
+	corruptFile := filepath.Join(corruptCfg, "config.yml")
+	corruptYAML := "Audit:\n  AuditStrength: 99\nCurrent:\n  CoordMethod: 'corrupt'\n  CurrProject: Sample\n  ProjectPath: ''\n  CurrPlotlist: MissingSU\n  SUPath: '/nonexistent/MissingSU.db'\n  CurrHierarchy: MissingHier\n  HierarchyPath: '/nonexistent/MissingHier.db'\n  User: BotanistSam\n"
+	if err := os.WriteFile(corruptFile, []byte(corruptYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	startupCorrupt := &StartupService{
+		DataDir: dataDir,
+		Now:     func() time.Time { return fixedClock },
+		Activate: func() (StartupState, error) {
+			p, oErr := vprocore.OpenDesktopConfig(dataDir, corruptCfg)
+			if oErr != nil {
+				return StartupState{}, oErr
+			}
+			ps, sErr := vprocore.NewSQLiteProjectService(dataDir, corruptCfg, p)
+			if sErr != nil {
+				return StartupState{}, sErr
+			}
+			defer ps.CloseSQLiteContext()
+			st := StartupState{Ready: true, ConfigPath: p.Path, ReleaseChannel: vprocore.ReleaseChannelStable}
+			PopulateRecoveryHints(&st)
+			return st, nil
+		},
+	}
+	corruptRecovery := StartupState{
+		Ready:      false,
+		Message:    "Current.CoordMethod must be an integer from 1 to 3",
+		ConfigPath: corruptFile,
+	}
+	PopulateRecoveryHints(&corruptRecovery)
+	startupCorrupt.SetState(corruptRecovery)
+
+	corruptState := startupCorrupt.GetState()
+	if corruptState.ProjectPath != sampleDB {
+		t.Fatalf("expected SetState to prefill managed Sample.db path %q when ProjectPath=='', got %q", sampleDB, corruptState.ProjectPath)
+	}
+	if !strings.Contains(corruptState.Message, "Configured Site Unit database was not found at /nonexistent/MissingSU.db.") ||
+		!strings.Contains(corruptState.Message, "Configured Hierarchy database was not found at /nonexistent/MissingHier.db.") {
+		t.Fatalf("expected missing SU/Hierarchy diagnostics in message, got %q", corruptState.Message)
+	}
+
+	repaired, err := startupCorrupt.RecoverWithPaths(context.Background(), StartupRecoveryRequest{
+		ProjectPath:    corruptState.ProjectPath,
+		ClearSU:        true,
+		ClearHierarchy: true,
+	})
+	if err != nil || !repaired.Ready {
+		t.Fatalf("RecoverWithPaths failed to repair corrupt scalars: %+v (%v)", repaired, err)
+	}
+	repairedPrefs, err := vprocore.OpenDesktopConfig(dataDir, corruptCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repairedSnap, err := repairedPrefs.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u, _ := vprocore.ConfigString(repairedSnap, "Current", "User"); u != "BotanistSam" {
+		t.Fatalf("expected User BotanistSam preserved after repair, got %q", u)
+	}
+}

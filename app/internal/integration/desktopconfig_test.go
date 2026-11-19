@@ -201,7 +201,8 @@ func TestDesktopConfigMalformedYAMLAndChangedLegacyNeverDefault(t *testing.T) {
 	for _, bad := range []string{
 		"", "null", "[]", "Current: null", "Current:\n  CoordMethod: null",
 		"Current:\n  CoordMethod: 2\n  CoordMethod: 3", "Current:\n  CoordMethod: false",
-		"Current:\n  CoordMethod: \"2\"", "Audit:\n  AuditStrength: 4",
+		"Current:\n  CoordMethod: \"invalid\"", "Current:\n  CoordMethod: \"1abc\"", "Current:\n  CoordMethod: \"9\"",
+		"Audit:\n  AuditStrength: 4",
 		"Desktop:\n  SchemaVersion: 2", "{}\n---\n{}", "Current:\n  User: \"\"",
 		"release_channel: null", "release_channel: \"beta\"", "release_channel: 1",
 	} {
@@ -474,5 +475,68 @@ func TestDesktopConfigPartialDesktopOverlayFillsOnlyAbsentSchemaVersion(t *testi
 	after, err := os.ReadFile(filepath.Join(config, "config.yml"))
 	if err != nil || !bytes.Equal(before, after) {
 		t.Fatal("explicit invalid schema version was rewritten")
+	}
+}
+
+func TestDesktopConfigLegacyScalarNormalizationAndPartialSelectionUpgrade(t *testing.T) {
+	data, config := vprotest.ConfigFixture(t)
+	hierPath := filepath.Join(data, "projects", "Sample.db")
+	writeConfigFixture(t, config, "desktop-selection.json", `{"activeProject":"Sample"}`)
+	writeConfigFixture(t, config, "config.yml", strings.Join([]string{
+		"Audit:",
+		"  AuditStrength: '1'",
+		"Current:",
+		"  AssignedSuSource: '2'",
+		"  CoordMethod: '2'",
+		"  CurrPlotlist: None",
+		"  CurrProject: Sample",
+		"  CurrHierarchy: Sample",
+		"  HierarchyPath: " + hierPath,
+		"  CurrVegProfile: Sample",
+		"  DataFormName: frmSIVIsite",
+		"  DataFormNumber: '1'",
+		"  ProjectIdSource: '2'",
+		"  ProjectPath: " + hierPath,
+		"  SUPath: ''",
+		"  User: Admin",
+		"Message:",
+		"  DontShowDataQualityMessage: no",
+		"  ShowWhatsNew: yes",
+		"ReportOptions:",
+		"  DataQualityFilterEnforceLV: no",
+		"  DataQualityFilterSiteNullLV: yes",
+		"",
+	}, "\n"))
+
+	store, err := vprocore.OpenDesktopConfig(data, config)
+	if err != nil {
+		t.Fatalf("expected existing-user config.yml + partial desktop-selection.json to upgrade cleanly, got %v", err)
+	}
+	if mode, err := store.CoordinateMode(); err != nil || mode != vprocore.CoordinateModeDM {
+		t.Fatalf("CoordinateMode = %q (%v), want %q", mode, err, vprocore.CoordinateModeDM)
+	}
+	if wuMode, err := store.WorkingUnitMode(); err != nil || wuMode != "master" {
+		t.Fatalf("WorkingUnitMode = %q (%v), want master", wuMode, err)
+	}
+	sel, err := store.Selection()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sel.Project != "Sample" || sel.Hierarchy != "Sample" || sel.HierarchyPath != hierPath {
+		t.Fatalf("unexpected selection after partial desktop-selection.json upgrade: %+v", sel)
+	}
+	snap, err := store.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if src, err := vprocore.ConfigInt(snap, "Current", "ProjectIdSource", 1, 2); err != nil || src != 2 {
+		t.Fatalf("ProjectIdSource not normalized to int 2: %d (%v)", src, err)
+	}
+	if strength, err := vprocore.ConfigInt(snap, "Audit", "AuditStrength", 0, 3); err != nil || strength != 1 {
+		t.Fatalf("AuditStrength not normalized to int 1: %d (%v)", strength, err)
+	}
+	rep, err := vprocore.ConfigSection(snap, "ReportOptions")
+	if err != nil || rep["DataQualityFilterEnforceLV"] != false || rep["DataQualityFilterSiteNullLV"] != true {
+		t.Fatalf("YAML 1.1 yes/no booleans not normalized in ReportOptions: %#v (%v)", rep, err)
 	}
 }

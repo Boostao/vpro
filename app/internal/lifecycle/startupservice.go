@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
@@ -93,8 +94,121 @@ func (s *StartupService) SetState(next StartupState) {
 		return
 	}
 	s.mu.Lock()
+	enrichRecoveryDiagnostics(&next, s.DataDir)
 	s.State = WithBuildMetadata(next)
 	s.mu.Unlock()
+}
+
+var friendlyConfigFieldLabels = map[string]string{
+	"Current.CoordMethod":      "Coordinate display format",
+	"Current.AssignedSuSource": "Working Unit source",
+	"Current.ProjectIdSource":  "Project ID source",
+	"Current.CurrProject":      "Active Project",
+	"Current.CurrPlotlist":     "Active Site Unit list",
+	"Current.CurrHierarchy":    "Active Hierarchy",
+	"Current.ProjectPath":      "Project file path",
+	"Current.SUPath":           "Site Unit file path",
+	"Current.HierarchyPath":    "Hierarchy file path",
+	"Current.User":             "User name",
+	"Audit.AuditStrength":      "Audit tracking level",
+	"Desktop.SchemaVersion":    "Settings version",
+}
+
+// HumanizeStartupMessage translates internal YAML/JSON preference key errors into plain language
+// while preserving file paths and concrete database diagnostics.
+func HumanizeStartupMessage(raw string) string {
+	msg := strings.TrimSpace(raw)
+	if msg == "" {
+		return ""
+	}
+	for _, prefix := range []string{"RuntimeError: ", "Error: ", "validate recovered configuration: "} {
+		for strings.HasPrefix(msg, prefix) {
+			msg = strings.TrimSpace(strings.TrimPrefix(msg, prefix))
+		}
+	}
+	if strings.HasPrefix(msg, "legacy JSON conflicts with explicit YAML ") && strings.HasSuffix(msg, "; both files were retained") {
+		field := strings.TrimSuffix(strings.TrimPrefix(msg, "legacy JSON conflicts with explicit YAML "), "; both files were retained")
+		label := friendlyConfigFieldLabels[field]
+		if label == "" {
+			label = field
+		}
+		return fmt.Sprintf("An older VPro selection file conflicts with your saved %s setting. Both files were kept unchanged.", label)
+	}
+	if strings.HasPrefix(msg, "legacy ") && strings.HasSuffix(msg, " changed after migration; YAML and JSON were retained for explicit resolution") {
+		path := strings.TrimSuffix(strings.TrimPrefix(msg, "legacy "), " changed after migration; YAML and JSON were retained for explicit resolution")
+		return fmt.Sprintf("An older VPro settings file (%s) changed after your preferences were upgraded. Both files were kept unchanged so you can confirm which project to open.", path)
+	}
+	switch msg {
+	case "Current.CoordMethod must be an integer from 1 to 3":
+		return "Saved Coordinate display format setting could not be read (expected Decimal Degrees, Degrees-Minutes, or Degrees-Minutes-Seconds)."
+	case "Current.AssignedSuSource must be an integer from 1 to 3":
+		return "Saved Working Unit source setting could not be read."
+	case "Audit.AuditStrength must be an integer from 0 to 3":
+		return "Saved Audit tracking level setting could not be read."
+	case "Desktop.SchemaVersion must be an integer from 1 to 1":
+		return "Saved settings version is not supported by this release of VPro."
+	case "Current.User must not be empty":
+		return "Saved User name must not be empty."
+	}
+	for rawKey, friendly := range friendlyConfigFieldLabels {
+		if strings.Contains(msg, rawKey) {
+			msg = strings.ReplaceAll(msg, rawKey, friendly)
+		}
+	}
+	msg = strings.ReplaceAll(msg, "configured context could not be opened; YAML was retained: ", "Your saved project or support databases could not be opened (your settings file was kept unchanged): ")
+	msg = strings.ReplaceAll(msg, "; YAML selection was retained", " (your saved settings were kept unchanged)")
+	msg = strings.ReplaceAll(msg, "; YAML was retained", " (your saved settings were kept unchanged)")
+	return msg
+}
+
+func appendDiagnosticSentence(base, sentence string) string {
+	sentence = strings.TrimSpace(sentence)
+	if sentence == "" || strings.Contains(base, sentence) {
+		return base
+	}
+	base = strings.TrimSpace(base)
+	if base == "" {
+		return sentence
+	}
+	if !strings.HasSuffix(base, ".") && !strings.HasSuffix(base, "!") && !strings.HasSuffix(base, "?") {
+		base += "."
+	}
+	return base + " " + sentence
+}
+
+func enrichRecoveryDiagnostics(state *StartupState, dataDir string) {
+	if state == nil || state.Ready {
+		return
+	}
+	state.Message = HumanizeStartupMessage(state.Message)
+	if strings.TrimSpace(state.ProjectPath) == "" &&
+		strings.TrimSpace(state.ConfiguredProject) != "" &&
+		state.ConfiguredProject != "None" &&
+		strings.TrimSpace(dataDir) != "" {
+		candidate := filepath.Join(dataDir, "projects", state.ConfiguredProject+".db")
+		if resolved, err := vprocore.ExistingDatabasePath(candidate); err == nil {
+			state.ProjectPath = resolved
+		}
+	}
+	if p := strings.TrimSpace(state.ProjectPath); p != "" {
+		if _, err := vprocore.ExistingDatabasePath(p); err != nil && !strings.Contains(state.Message, p) {
+			state.Message = appendDiagnosticSentence(state.Message, fmt.Sprintf("Configured project database was not found at %s.", p))
+		}
+	}
+	if su := strings.TrimSpace(state.ConfiguredSU); su != "" && su != "None" {
+		if sp := strings.TrimSpace(state.SUPath); sp != "" {
+			if _, err := vprocore.ExistingDatabasePath(sp); err != nil {
+				state.Message = appendDiagnosticSentence(state.Message, fmt.Sprintf("Configured Site Unit database was not found at %s.", sp))
+			}
+		}
+	}
+	if hier := strings.TrimSpace(state.ConfiguredHierarchy); hier != "" && hier != "None" {
+		if hp := strings.TrimSpace(state.HierarchyPath); hp != "" {
+			if _, err := vprocore.ExistingDatabasePath(hp); err != nil {
+				state.Message = appendDiagnosticSentence(state.Message, fmt.Sprintf("Configured Hierarchy database was not found at %s.", hp))
+			}
+		}
+	}
 }
 
 // PopulateRecoveryHints extracts best-effort selection hints from an existing config.yml
@@ -105,10 +219,12 @@ func PopulateRecoveryHints(state *StartupState) {
 	}
 	raw, err := os.ReadFile(state.ConfigPath)
 	if err != nil {
+		enrichRecoveryDiagnostics(state, "")
 		return
 	}
 	values, err := vprocore.DecodeConfig(raw)
 	if err != nil {
+		enrichRecoveryDiagnostics(state, "")
 		return
 	}
 	if ch, ok := values["release_channel"].(string); ok && (ch == vprocore.ReleaseChannelStable || ch == vprocore.ReleaseChannelExperimental) {
@@ -116,6 +232,7 @@ func PopulateRecoveryHints(state *StartupState) {
 	}
 	current, err := vprocore.ConfigSection(values, "Current")
 	if err != nil {
+		enrichRecoveryDiagnostics(state, "")
 		return
 	}
 	str := func(k string) string {
@@ -128,6 +245,7 @@ func PopulateRecoveryHints(state *StartupState) {
 	state.SUPath = str("SUPath")
 	state.ConfiguredHierarchy = str("CurrHierarchy")
 	state.HierarchyPath = str("HierarchyPath")
+	enrichRecoveryDiagnostics(state, "")
 }
 
 // ChooseDatabaseFile opens a native file chooser for relocating a missing .db file.
@@ -261,7 +379,7 @@ func (s *StartupService) RecoverWithPaths(ctx context.Context, req StartupRecove
 		}
 	}
 	if len(compatible) == 0 {
-		return StartupState{}, fmt.Errorf("no compatible VP08 project tables (<Project>_Env..Admin) found in %s", resolvedProjPath)
+		return StartupState{}, fmt.Errorf("no compatible VPro project tables were found in %s", resolvedProjPath)
 	}
 
 	priorBytes, priorReadErr := os.ReadFile(configPath)
@@ -280,6 +398,8 @@ func (s *StartupService) RecoverWithPaths(ctx context.Context, req StartupRecove
 		}
 		values = defaults
 	}
+	vprocore.NormalizeLegacyConfigScalars(values)
+
 	stampedImports := vprocore.StampLegacyImportHashes(s.DataDir, filepath.Dir(configPath))
 	if _, ok := values["Desktop"].(map[string]any); !ok {
 		values["Desktop"] = map[string]any{
@@ -331,6 +451,7 @@ func (s *StartupService) RecoverWithPaths(ctx context.Context, req StartupRecove
 	}
 
 	current := values["Current"].(map[string]any)
+	previousProject, _ := current["CurrProject"].(string)
 	requestedName := strings.TrimSpace(req.ProjectName)
 	chosenProject := ""
 	if requestedName != "" {
@@ -341,12 +462,11 @@ func (s *StartupService) RecoverWithPaths(ctx context.Context, req StartupRecove
 			}
 		}
 		if chosenProject == "" {
-			return StartupState{}, fmt.Errorf("project %q was not found as a compatible VP08 project in %s", requestedName, resolvedProjPath)
+			return StartupState{}, fmt.Errorf("project %q was not found as a compatible VPro project in %s", requestedName, resolvedProjPath)
 		}
 	} else {
-		cfgProj, _ := current["CurrProject"].(string)
 		for _, p := range compatible {
-			if p.Name == cfgProj {
+			if p.Name == previousProject {
 				chosenProject = p.Name
 				break
 			}
@@ -359,7 +479,7 @@ func (s *StartupService) RecoverWithPaths(ctx context.Context, req StartupRecove
 				for _, p := range compatible {
 					names = append(names, p.Name)
 				}
-				return StartupState{}, fmt.Errorf("database contains multiple VP08 projects (%s); enter the target project name", strings.Join(names, ", "))
+				return StartupState{}, fmt.Errorf("database contains multiple VPro projects (%s); enter the target project name", strings.Join(names, ", "))
 			}
 		}
 	}
@@ -367,45 +487,83 @@ func (s *StartupService) RecoverWithPaths(ctx context.Context, req StartupRecove
 	current["CurrProject"] = chosenProject
 	current["ProjectPath"] = resolvedProjPath
 
-	if req.ClearSU {
+	currSU, okSU := current["CurrPlotlist"].(string)
+	if !okSU || strings.TrimSpace(currSU) == "" || !vprocore.ProjectNamePattern.MatchString(currSU) {
+		currSU = "None"
+		current["CurrPlotlist"] = "None"
+	}
+	if req.ClearSU || currSU == "None" {
 		current["CurrPlotlist"] = "None"
 		current["SUPath"] = ""
 	} else if suTrimmed := strings.TrimSpace(req.SUPath); suTrimmed != "" {
 		absSU, absErr := filepath.Abs(suTrimmed)
 		if absErr != nil {
-			return StartupState{}, fmt.Errorf("resolve SU path: %w", absErr)
+			return StartupState{}, fmt.Errorf("resolve Site Unit database path: %w", absErr)
 		}
 		resolvedSU, exErr := vprocore.ExistingDatabasePath(absSU)
 		if exErr != nil {
-			return StartupState{}, fmt.Errorf("SU database unavailable: %w", exErr)
+			return StartupState{}, fmt.Errorf("Site Unit database unavailable at %s: %w", absSU, exErr)
 		}
 		current["SUPath"] = resolvedSU
+	} else {
+		current["SUPath"] = ""
 	}
 
-	if req.ClearHierarchy {
+	currHier, okHier := current["CurrHierarchy"].(string)
+	if !okHier || strings.TrimSpace(currHier) == "" || !vprocore.ProjectNamePattern.MatchString(currHier) {
+		currHier = "None"
+		current["CurrHierarchy"] = "None"
+	}
+	if req.ClearHierarchy || currHier == "None" {
 		current["CurrHierarchy"] = "None"
 		current["HierarchyPath"] = ""
 	} else if hierTrimmed := strings.TrimSpace(req.HierarchyPath); hierTrimmed != "" {
 		absHier, absErr := filepath.Abs(hierTrimmed)
 		if absErr != nil {
-			return StartupState{}, fmt.Errorf("resolve Hierarchy path: %w", absErr)
+			return StartupState{}, fmt.Errorf("resolve Hierarchy database path: %w", absErr)
 		}
 		resolvedHier, exErr := vprocore.ExistingDatabasePath(absHier)
 		if exErr != nil {
-			return StartupState{}, fmt.Errorf("Hierarchy database unavailable: %w", exErr)
+			return StartupState{}, fmt.Errorf("Hierarchy database unavailable at %s: %w", absHier, exErr)
 		}
 		current["HierarchyPath"] = resolvedHier
+	} else {
+		current["HierarchyPath"] = ""
 	}
 
 	// Clear unreachable explicit ProfilePath so a missing external profile does not block recovery
-	if profPath, ok := current["ProfilePath"].(string); ok && strings.TrimSpace(profPath) != "" {
-		if info, stErr := os.Stat(profPath); stErr != nil || !info.Mode().IsRegular() {
+	if rawProfPath, hasProfPath := current["ProfilePath"]; hasProfPath {
+		if profPath, ok := rawProfPath.(string); !ok {
 			delete(current, "ProfilePath")
+		} else if strings.TrimSpace(profPath) != "" {
+			if info, stErr := os.Stat(profPath); stErr != nil || !info.Mode().IsRegular() {
+				delete(current, "ProfilePath")
+				current["CurrVegProfile"] = chosenProject
+			}
+		}
+	}
+	if currProf, ok := current["CurrVegProfile"].(string); !ok || strings.TrimSpace(currProf) == "" || !utf8.ValidString(currProf) {
+		current["CurrVegProfile"] = chosenProject
+	} else if previousProject != "" && currProf == previousProject && chosenProject != previousProject {
+		if profPath, _ := current["ProfilePath"].(string); strings.TrimSpace(profPath) == "" {
 			current["CurrVegProfile"] = chosenProject
 		}
 	}
 
-	if user, _ := current["User"].(string); strings.TrimSpace(user) == "" {
+	// Repair any remaining out-of-range/corrupt required scalars after backing up priorBytes
+	if _, err := vprocore.ConfigInt(values, "Current", "CoordMethod", 1, 3); err != nil {
+		current["CoordMethod"] = 1
+	}
+	if _, err := vprocore.ConfigInt(values, "Current", "AssignedSuSource", 1, 3); err != nil {
+		current["AssignedSuSource"] = 1
+	}
+	if auditMap, ok := values["Audit"].(map[string]any); !ok {
+		values["Audit"] = map[string]any{"AuditStrength": 3}
+	} else if _, err := vprocore.ConfigInt(values, "Audit", "AuditStrength", 0, 3); err != nil {
+		auditMap["AuditStrength"] = 3
+	}
+
+	if user, ok := current["User"].(string); !ok || strings.TrimSpace(user) == "" || !utf8.ValidString(user) {
 		current["User"] = "Admin"
 	}
 	if ch, hasCh := values["release_channel"]; hasCh {
@@ -415,7 +573,7 @@ func (s *StartupService) RecoverWithPaths(ctx context.Context, req StartupRecove
 	}
 
 	if err := vprocore.ValidateDesktopConfig(values); err != nil {
-		return StartupState{}, fmt.Errorf("validate recovered configuration: %w", err)
+		return StartupState{}, errors.New(HumanizeStartupMessage(err.Error()))
 	}
 	encoded, err := yaml.Marshal(values)
 	if err != nil {
@@ -436,7 +594,7 @@ func (s *StartupService) RecoverWithPaths(ctx context.Context, req StartupRecove
 			if hadPrior {
 				_ = vprocore.WriteDesktopConfigAtomically(configPath, priorBytes)
 			}
-			return StartupState{}, actErr
+			return StartupState{}, errors.New(HumanizeStartupMessage(actErr.Error()))
 		}
 		activated.BackupPath = backupPath
 		s.State = WithBuildMetadata(activated)

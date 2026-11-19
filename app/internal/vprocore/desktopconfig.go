@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -183,6 +184,246 @@ func mergeConfigDefaults(values ConfigValues) error {
 	return nil
 }
 
+func parseStrictIntLiteral(raw string) (int, bool) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return 0, false
+	}
+	digits := s
+	if strings.HasPrefix(digits, "-") {
+		digits = digits[1:]
+		if digits == "" || digits == "0" {
+			return 0, false
+		}
+	}
+	if len(digits) > 1 && digits[0] == '0' {
+		return 0, false
+	}
+	for i := 0; i < len(digits); i++ {
+		if digits[i] < '0' || digits[i] > '9' {
+			return 0, false
+		}
+	}
+	parsed, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, false
+	}
+	return parsed, true
+}
+
+func parseLegacyBoolString(raw string) (bool, bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "true", "yes", "1", "-1":
+		return true, true
+	case "false", "no", "0":
+		return false, true
+	default:
+		return false, false
+	}
+}
+
+func normalizeCoordMethodScalar(raw any) (int, bool) {
+	switch v := raw.(type) {
+	case int:
+		if v == 0 {
+			return 1, true
+		}
+		return v, true
+	case string:
+		if n, ok := parseStrictIntLiteral(v); ok {
+			if n == 0 {
+				return 1, true
+			}
+			return n, true
+		}
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "dd", "decimal", "decimal degrees", "utm":
+			return 1, true
+		case "dm", "ddm", "degrees minutes", "decimal minutes":
+			return 2, true
+		case "dms", "degrees minutes seconds":
+			return 3, true
+		}
+	}
+	return 0, false
+}
+
+func normalizeAssignedSUSourceScalar(raw any) (int, bool) {
+	switch v := raw.(type) {
+	case int:
+		if v == 0 {
+			return 1, true
+		}
+		return v, true
+	case string:
+		if n, ok := parseStrictIntLiteral(v); ok {
+			if n == 0 {
+				return 1, true
+			}
+			return n, true
+		}
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "env":
+			return 1, true
+		case "master":
+			return 2, true
+		case "su":
+			return 3, true
+		}
+	}
+	return 0, false
+}
+
+func normalizeProjectIDSourceScalar(raw any) (int, bool) {
+	switch v := raw.(type) {
+	case int:
+		if v == 0 {
+			return 2, true
+		}
+		return v, true
+	case string:
+		if n, ok := parseStrictIntLiteral(v); ok {
+			if n == 0 {
+				return 2, true
+			}
+			return n, true
+		}
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "env":
+			return 1, true
+		case "master":
+			return 2, true
+		}
+	}
+	return 0, false
+}
+
+// NormalizeLegacyConfigScalars coerces legacy VPro64 / R YAML 1.1 string-encoded numeric and
+// boolean scalars (such as CoordMethod: '1', ProjectIdSource: '2', ShowWhatsNew: yes,
+// DataQualityFilterEnforceLV: no) into canonical VPro 2.0 YAML types in-place while leaving
+// genuinely malformed values untouched so ValidateDesktopConfig still rejects them.
+func NormalizeLegacyConfigScalars(values ConfigValues) {
+	if values == nil {
+		return
+	}
+	if desktop, ok := values["Desktop"].(map[string]any); ok {
+		if rawVer, present := desktop["SchemaVersion"]; present {
+			if s, isStr := rawVer.(string); isStr {
+				if n, ok := parseStrictIntLiteral(s); ok {
+					desktop["SchemaVersion"] = n
+				}
+			}
+		}
+	}
+	if current, ok := values["Current"].(map[string]any); ok {
+		if raw, present := current["CoordMethod"]; present {
+			if n, ok := normalizeCoordMethodScalar(raw); ok {
+				current["CoordMethod"] = n
+			}
+		}
+		if raw, present := current["AssignedSuSource"]; present {
+			if n, ok := normalizeAssignedSUSourceScalar(raw); ok {
+				current["AssignedSuSource"] = n
+			}
+		}
+		if raw, present := current["ProjectIdSource"]; present {
+			if n, ok := normalizeProjectIDSourceScalar(raw); ok {
+				current["ProjectIdSource"] = n
+			}
+		}
+		if raw, present := current["DataFormNumber"]; present {
+			if n, isInt := raw.(int); isInt {
+				current["DataFormNumber"] = strconv.Itoa(n)
+			}
+		}
+	}
+	if audit, ok := values["Audit"].(map[string]any); ok {
+		if raw, present := audit["AuditStrength"]; present {
+			if s, isStr := raw.(string); isStr {
+				if n, ok := parseStrictIntLiteral(s); ok {
+					audit["AuditStrength"] = n
+				}
+			}
+		}
+	}
+
+	defaults, err := DecodeConfig(DesktopDefaults)
+	if err != nil {
+		return
+	}
+	if repDef, ok := defaults["ReportOptions"].(map[string]any); ok {
+		for _, rLegacyIntKey := range []string{
+			"PcOrdGroup", "PcOrdLayerAsSpp", "PcOrdSppCodesOnly", "PcOrdSppGreater", "PcOrdStrataAsSpp",
+		} {
+			if _, exists := repDef[rLegacyIntKey]; !exists {
+				repDef[rLegacyIntKey] = 0
+			}
+		}
+	}
+	legacyTitleBoolKeys := map[string]bool{
+		"DataQualityFilterBECUseLV":   true,
+		"DataQualityFilterSoilNull":   true,
+		"DataQualityFilterSoilNullLV": true,
+		"DataQualityFilterVegNull":    true,
+		"DataQualityFilterVegNullLV":  true,
+	}
+	for secName, rawSec := range defaults {
+		defMap, isMap := rawSec.(map[string]any)
+		if !isMap {
+			continue
+		}
+		secMap, ok := values[secName].(map[string]any)
+		if !ok {
+			continue
+		}
+		for key, defVal := range defMap {
+			if secName == "Current" && (key == "CoordMethod" || key == "AssignedSuSource" || key == "ProjectIdSource" || key == "DataFormNumber") {
+				continue
+			}
+			if secName == "Audit" && key == "AuditStrength" {
+				continue
+			}
+			curVal, present := secMap[key]
+			if !present || curVal == nil {
+				continue
+			}
+			switch defVal.(type) {
+			case int:
+				if s, isStr := curVal.(string); isStr {
+					if n, ok := parseStrictIntLiteral(s); ok {
+						secMap[key] = n
+					}
+				}
+			case bool:
+				if s, isStr := curVal.(string); isStr {
+					if b, ok := parseLegacyBoolString(s); ok {
+						secMap[key] = b
+					}
+				}
+			case string:
+				if secName == "ReportOptions" && legacyTitleBoolKeys[key] {
+					switch v := curVal.(type) {
+					case bool:
+						if v {
+							secMap[key] = "True"
+						} else {
+							secMap[key] = "False"
+						}
+					case string:
+						if b, ok := parseLegacyBoolString(v); ok {
+							if b {
+								secMap[key] = "True"
+							} else {
+								secMap[key] = "False"
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 func setConfigValue(values ConfigValues, section, key string, value any, conflict bool) error {
 	if _, present := values[section]; !present {
 		values[section] = map[string]any{}
@@ -225,6 +466,7 @@ func OpenDesktopConfig(dataDir, configDir string) (*DesktopConfig, error) {
 		if err != nil {
 			return nil, err
 		}
+		NormalizeLegacyConfigScalars(values)
 	}
 	if _, present := values["Desktop"]; !present {
 		values["Desktop"] = map[string]any{}
@@ -407,7 +649,11 @@ func decodeLegacySelection(data []byte, dataDir string) (map[string]any, error) 
 	for jsonKey, yamlKey := range map[string]string{
 		"activeProject": "CurrProject", "activeSU": "CurrPlotlist", "activeHierarchy": "CurrHierarchy",
 	} {
-		value := fields[jsonKey]
+		rawValue, present := fields[jsonKey]
+		if !present {
+			continue
+		}
+		value := rawValue
 		if value == "" {
 			value = "None"
 			if jsonKey == "activeProject" {
@@ -419,15 +665,16 @@ func decodeLegacySelection(data []byte, dataDir string) (map[string]any, error) 
 		}
 		changes[yamlKey] = value
 	}
-	file := fields["hierarchyFile"]
-	if file != "" && (filepath.Base(file) != file || strings.ContainsAny(file, `/\`) || file == "." || file == ".." || filepath.Ext(file) != ".db") {
-		return nil, errors.New("legacy hierarchyFile must be a local database filename")
+	if file, hasFile := fields["hierarchyFile"]; hasFile {
+		if file != "" && (filepath.Base(file) != file || strings.ContainsAny(file, `/\`) || file == "." || file == ".." || filepath.Ext(file) != ".db") {
+			return nil, errors.New("legacy hierarchyFile must be a local database filename")
+		}
+		path := ""
+		if file != "" {
+			path = filepath.Join(dataDir, "projects", file)
+		}
+		changes["HierarchyPath"] = path
 	}
-	path := ""
-	if file != "" {
-		path = filepath.Join(dataDir, "projects", file)
-	}
-	changes["HierarchyPath"] = path
 	return changes, nil
 }
 
