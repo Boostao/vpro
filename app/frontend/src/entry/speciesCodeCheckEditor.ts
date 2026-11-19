@@ -14,17 +14,41 @@ export interface CodeCheckDraft {
   ignored: number[];
 }
 
+export const CODE_CHECK_STATUSES = ['master', 'user', 'missing', 'unlisted', 'synonym'] as const;
+export const UNRESOLVED_CODE_CHECK_STATUSES = ['unlisted', 'missing', 'synonym'] as const;
+
 export function beginCodeCheck(review: SpeciesCodeCheckReview): CodeCheckDraft {
   if (!review.project || !review.su || !Array.isArray(review.rows)) throw new Error('Species check needs an explicit project/working-unit scope and complete rows.');
   const ids = new Set<number>();
   for (const row of review.rows) {
+    const validCode = row.code === null || (typeof row.code === 'string' && wellFormedUTF16(row.code));
+    const validSuggested = row.suggestedCode === undefined || row.suggestedCode === null ||
+      (typeof row.suggestedCode === 'string' && wellFormedUTF16(row.suggestedCode));
     if (!Number.isInteger(row.id) || row.id < -2147483648 || row.id > 2147483647 || ids.has(row.id) || !row.plotNumber ||
-        !['master', 'user', 'missing', 'unlisted'].includes(row.status) || row.code !== null && !wellFormedUTF16(row.code)) {
+        !(CODE_CHECK_STATUSES as readonly string[]).includes(row.status) || !validCode || !validSuggested) {
       throw new Error('Species check returned a missing, ambiguous or malformed source identity; reload the scope.');
     }
     ids.add(row.id);
   }
   return { review: { project: review.project, su: review.su, rows: review.rows }, cells: {}, ignored: [] };
+}
+
+export function unresolvedCodeCheckRows(draft: CodeCheckDraft): SpeciesCodeCheckRow[] {
+  return draft.review.rows.filter(row => (UNRESOLVED_CODE_CHECK_STATUSES as readonly string[]).includes(row.status) && !draft.ignored.includes(row.id));
+}
+
+export function suggestedCodeForRow(row: SpeciesCodeCheckRow): string | null {
+  const suggested = row.suggestedCode ?? null;
+  if (row.status !== 'synonym' || typeof suggested !== 'string' || suggested === '' || suggested === row.code) return null;
+  if (!wellFormedUTF16(suggested) || suggested.length > 8) return null;
+  return suggested;
+}
+
+export function stageSuggestedCodeCheck(draft: CodeCheckDraft, id: number): CodeCheckDraft {
+  const row = sourceRow(draft, id);
+  const suggested = suggestedCodeForRow(row);
+  if (!suggested) throw new Error('Species check row has no valid <= 8 UTF-16 suggested replacement code.');
+  return stageCodeCheck(draft, id, suggested);
 }
 
 function sourceRow(draft: CodeCheckDraft, id: number): SpeciesCodeCheckRow {

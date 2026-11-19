@@ -331,3 +331,173 @@ func TestSpeciesCodeCheckStrictRawTransport(t *testing.T) {
 		t.Fatal("NULL/literal transport changed:", update, err)
 	}
 }
+
+func TestSpeciesCodeCheckRealSampleSynonymsLookupAndSaveAudit(t *testing.T) {
+	ctx := context.Background()
+	service, state := vprotest.ContextServiceFixture(t)
+
+	review, err := ReviewSpeciesCodes(service, ctx, state.ContextID)
+	if err != nil {
+		t.Fatalf("ReviewSpeciesCodes on real Sample failed: %v", err)
+	}
+	if review.Project != "Sample" || len(review.Rows) == 0 {
+		t.Fatalf("unexpected Sample review header: project=%q su=%q rows=%d", review.Project, review.SU, len(review.Rows))
+	}
+
+	expectedCanonical := map[string]string{
+		"AMBLSER1": "AMBLSER",
+		"ARTEMIS":  "ARTEMISI",
+		"ASTRAGA":  "ASTRAGAL",
+		"BARBILO":  "BARBILOP",
+		"XANTNOO":  "CALLNOO",
+	}
+	seenPairs := map[string]string{}
+	checkedTargets := map[string]bool{}
+	var updates []SpeciesCodeCheckUpdate
+	synonymCount := 0
+
+	for _, row := range review.Rows {
+		if row.Code != nil && (*row.Code == "TRIEEUR1" || *row.Code == "HYPNPRA") {
+			if row.Status == "synonym" || row.SuggestedCode != nil {
+				t.Fatalf("expected S-only target synonym %q not to emit an unresolvable suggestedCode, got %+v", *row.Code, row)
+			}
+		}
+		if row.Status != "synonym" {
+			if row.SuggestedCode != nil {
+				t.Fatalf("non-synonym row %+v unexpectedly carries suggestedCode", row)
+			}
+			continue
+		}
+		synonymCount++
+		if row.Code == nil || row.SuggestedCode == nil || *row.SuggestedCode == "" || *row.SuggestedCode == *row.Code {
+			t.Fatalf("invalid synonym row identity/suggestion: %+v", row)
+		}
+		if err := vprocore.ValidateVegetationSpeciesLookup(*row.SuggestedCode); err != nil {
+			t.Fatalf("synonym row %+v suggestedCode failed <=8 UTF-16 lookup validation: %v", row, err)
+		}
+		seenPairs[*row.Code] = *row.SuggestedCode
+		if !checkedTargets[*row.SuggestedCode] {
+			opts, err := LookupSpeciesCodeCheckTarget(service, ctx, state.ContextID, vprocore.VegetationSpeciesLookup{Code: *row.SuggestedCode})
+			if err != nil || len(opts) == 0 {
+				t.Fatalf("LookupSpeciesCodeCheckTarget(%q) for synonym %q returned no accepted options: opts=%+v err=%v", *row.SuggestedCode, *row.Code, opts, err)
+			}
+			checkedTargets[*row.SuggestedCode] = true
+		}
+		if want, tracked := expectedCanonical[*row.Code]; tracked {
+			if *row.SuggestedCode != want {
+				t.Fatalf("expected Sample synonym %q -> %q, got %q", *row.Code, want, *row.SuggestedCode)
+			}
+			expectedOrig := *row.Code
+			updates = append(updates, SpeciesCodeCheckUpdate{
+				ID:         row.ID,
+				PlotNumber: row.PlotNumber,
+				Expected:   &expectedOrig,
+				Value:      *row.SuggestedCode,
+			})
+		}
+	}
+
+	if synonymCount == 0 {
+		t.Fatal("expected seeded Sample_Veg to contain OldCode synonym rows")
+	}
+	for oldCode, wantNew := range expectedCanonical {
+		if got, ok := seenPairs[oldCode]; !ok || got != wantNew {
+			t.Fatalf("missing expected Sample synonym %s -> %s (got %q, present=%v)", oldCode, wantNew, got, ok)
+		}
+	}
+	if len(updates) < 10 {
+		t.Fatalf("expected multiple Sample synonym updates (incl. multi-plot XANTNOO), got %d", len(updates))
+	}
+
+	db, _, release, err := service.Plots.GetActiveDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var auditBefore int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM Sample_Audit WHERE "Table"='_Veg' AND "EditField"='Species'`).Scan(&auditBefore); err != nil {
+		release()
+		t.Fatal(err)
+	}
+	release()
+
+	if err := SaveSpeciesCodeCheck(service, state.ContextID, updates); err != nil {
+		t.Fatalf("SaveSpeciesCodeCheck on Sample synonym replacements failed: %v", err)
+	}
+
+	db, _, release, err = service.Plots.GetActiveDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+
+	var auditAfter int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM Sample_Audit WHERE "Table"='_Veg' AND "EditField"='Species'`).Scan(&auditAfter); err != nil {
+		t.Fatal(err)
+	}
+	if auditAfter-auditBefore != len(updates) {
+		t.Fatalf("expected %d new Sample_Audit _Veg.Species rows, got %d (before=%d after=%d)", len(updates), auditAfter-auditBefore, auditBefore, auditAfter)
+	}
+	for _, u := range updates {
+		var stored string
+		if err := db.QueryRow(`SELECT Species FROM Sample_Veg WHERE PlotNumber=? AND ID=?`, u.PlotNumber, u.ID).Scan(&stored); err != nil {
+			t.Fatalf("query updated Sample_Veg (%s, %d): %v", u.PlotNumber, u.ID, err)
+		}
+		if stored != u.Value {
+			t.Fatalf("expected Sample_Veg (%s, %d) Species=%q, got %q", u.PlotNumber, u.ID, u.Value, stored)
+		}
+	}
+
+	refreshed, err := ReviewSpeciesCodes(service, ctx, state.ContextID)
+	if err != nil {
+		t.Fatalf("post-save ReviewSpeciesCodes failed: %v", err)
+	}
+	refreshedByID := map[int]SpeciesCodeCheckRow{}
+	for _, r := range refreshed.Rows {
+		refreshedByID[r.ID] = r
+	}
+	for _, u := range updates {
+		got := refreshedByID[u.ID]
+		if got.Status != "master" || got.SuggestedCode != nil || got.Code == nil || *got.Code != u.Value {
+			t.Fatalf("expected saved synonym row %d to refresh as master %q, got %+v", u.ID, u.Value, got)
+		}
+	}
+}
+
+func TestSpeciesCodeCheckExcludesOverlongSuggestedCodesInVLists(t *testing.T) {
+	ctx := context.Background()
+	service, state := vprotest.ContextServiceFixture(t)
+
+	// AMMOARE1 -> CALAAREARE1 (11 chars, S-only) and PTEROGO -> NOGOPTERI (9 chars, S-only) exist in VLists.db.
+	// Also test an OldCode whose USysAllSpecs target is DIOBELONE (9 chars > 8 UTF-16 units, Codetype='U').
+	vprotest.MutateContextFixture(t, state.ProjectPath, `
+		PRAGMA foreign_keys = OFF;
+		INSERT INTO Sample_Env (PlotNumber, Zone) VALUES ('SYNUTF8', 'CWH');
+		INSERT INTO Sample_Admin (Plot, PlotType) VALUES ('SYNUTF8', 'FS882');
+		INSERT INTO Sample_Veg (ID, PlotNumber, Species, Cover6, Flag) VALUES
+			(-901, 'SYNUTF8', 'AMMOARE1', 5.0, 0),
+			(-902, 'SYNUTF8', 'PTEROGO', 2.0, 0);
+	`)
+	var err error
+	state, err = service.SwitchContext(state.ContextID, vprotest.ContextSelection(state))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	review, err := ReviewSpeciesCodes(service, ctx, state.ContextID)
+	if err != nil {
+		t.Fatalf("ReviewSpeciesCodes: %v", err)
+	}
+	byID := map[int]SpeciesCodeCheckRow{}
+	for _, r := range review.Rows {
+		byID[r.ID] = r
+	}
+	for _, id := range []int{-901, -902} {
+		row, ok := byID[id]
+		if !ok {
+			t.Fatalf("missing test row %d", id)
+		}
+		if row.Status != "unlisted" || row.SuggestedCode != nil {
+			t.Fatalf("expected over-8/S-only OldCode row %d to remain unlisted with nil SuggestedCode, got %+v", id, row)
+		}
+	}
+}

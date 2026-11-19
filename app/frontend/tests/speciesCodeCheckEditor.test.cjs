@@ -4,7 +4,7 @@ const {readFileSync}=require('node:fs');
 const path=require('node:path');
 const {render}=require('svelte/server');
 const {compile}=require('svelte/compiler');
-const { loadTypeScript,serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
+const { loadTypeScript, serverComponent, componentFunctions, srcPath } = require('./svelteTestHelpers.cjs');
 const quality=loadTypeScript('qualityEditor.ts',{'./becEditor':loadTypeScript('becEditor.ts')});
 const editor=loadTypeScript('speciesCodeCheckEditor.ts',{'./qualityEditor':quality});
 const json=value=>JSON.parse(JSON.stringify(value));
@@ -101,4 +101,113 @@ test('Code-check scope and raw errors remain outside remounted tabs and explicit
   assert.match(component,/capped at 99%/);
   assert.doesNotMatch(component,/(emerald-|#b7cfc0)/i);
   assert.equal(compile(component,{filename:'SpeciesCodeCheck.svelte',generate:'client'}).warnings.length,0);
+});
+test('Species check supports synonym status, <=8 UTF-16 suggestedCode guards, and scope-wide replacement updates',()=>{
+  const sampleSynonymReview={project:'Sample',su:'None',rows:[
+    {id:101,plotNumber:'00337',code:'ABIEBALD',status:'master'},
+    {id:102,plotNumber:'00337',code:'MYUSER1',status:'user'},
+    {id:103,plotNumber:'8529675',code:'AMBLSER1',status:'synonym',suggestedCode:'AMBLSER'},
+    {id:104,plotNumber:'8529676',code:'ARTEMIS',status:'synonym',suggestedCode:'ARTEMISI'},
+    {id:105,plotNumber:'9003002',code:'ARTEMIS',status:'synonym',suggestedCode:'ARTEMISI'},
+    {id:106,plotNumber:'8529670',code:'ASTRAGA',status:'synonym',suggestedCode:'ASTRAGAL'},
+    {id:107,plotNumber:'00337',code:'myherb',status:'unlisted'},
+    {id:108,plotNumber:'00337',code:null,status:'missing'},
+  ]};
+  let draft=editor.beginCodeCheck(sampleSynonymReview);
+  assert.deepEqual(editor.unresolvedCodeCheckRows(draft).map(r=>r.id),[103,104,105,106,107,108]);
+  assert.equal(editor.suggestedCodeForRow(sampleSynonymReview.rows[2]),'AMBLSER');
+  assert.equal(editor.suggestedCodeForRow(sampleSynonymReview.rows[3]),'ARTEMISI');
+  assert.equal(editor.suggestedCodeForRow(sampleSynonymReview.rows[6]),null);
+
+  draft=editor.stageSuggestedCodeCheck(draft,104);
+  assert.equal(draft.cells['104'].raw,'ARTEMISI');
+  assert.throws(()=>editor.codeCheckUpdates(draft),/Review this literal replacement/);
+
+  const artemisiOptions=[{code:'ARTEMISI',source:'master',scientificName:'Artemisia spp.',englishName:'sagebrush',lifeform:7,codeType:'U'}];
+  draft=editor.acceptCodeCheckTarget(json(draft),104,'ARTEMISI',artemisiOptions,true);
+  assert.deepEqual(json(editor.codeCheckUpdates(json(draft))),[
+    {id:104,plotNumber:'8529676',expected:'ARTEMIS',value:'ARTEMISI'},
+    {id:105,plotNumber:'9003002',expected:'ARTEMIS',value:'ARTEMISI'},
+  ]);
+
+  draft=editor.ignoreCodeCheck(draft,106,true);
+  assert.deepEqual(editor.unresolvedCodeCheckRows(draft).map(r=>r.id),[103,104,105,107,108]);
+
+  // Malformed lone surrogate in suggestedCode is rejected on load; over-8 UTF-16 suggestion is suppressed without crashing
+  assert.throws(()=>editor.beginCodeCheck({project:'Sample',su:'None',rows:[
+    {id:201,plotNumber:'P1',code:'ARTEMIS',status:'synonym',suggestedCode:'\ud800'},
+  ]}),/malformed/);
+  const overlongDraft=editor.beginCodeCheck({project:'Sample',su:'None',rows:[
+    {id:202,plotNumber:'P1',code:'AMMOARE1',status:'synonym',suggestedCode:'CALAAREARE1'},
+    {id:203,plotNumber:'P1',code:'SYNEMPTY',status:'synonym',suggestedCode:''},
+    {id:204,plotNumber:'P1',code:'SAMECODE',status:'synonym',suggestedCode:'SAMECODE'},
+  ]});
+  assert.equal(editor.suggestedCodeForRow(overlongDraft.review.rows[0]),null);
+  assert.equal(editor.suggestedCodeForRow(overlongDraft.review.rows[1]),null);
+  assert.equal(editor.suggestedCodeForRow(overlongDraft.review.rows[2]),null);
+  assert.throws(()=>editor.stageSuggestedCodeCheck(overlongDraft,202),/<= 8 UTF-16/);
+});
+test('SpeciesCodeCheck.svelte opens Sample synonym rows, applies suggested code, reviews target, and commits updates',async()=>{
+  const species=loadTypeScript('vegetationSpeciesEditor.ts',{'./qualityEditor':quality});
+  const personal=loadTypeScript('personalSpeciesEditor.ts',{'./qualityEditor':quality,'./vegetationSpeciesEditor':species});
+  let currentRows=[
+    {id:1,plotNumber:'00337',code:'ABIEBALD',status:'master'},
+    {id:2,plotNumber:'8529676',code:'ARTEMIS',status:'synonym',suggestedCode:'ARTEMISI'},
+    {id:3,plotNumber:'9003002',code:'ARTEMIS',status:'synonym',suggestedCode:'ARTEMISI'},
+    {id:4,plotNumber:'8529670',code:'ASTRAGA',status:'synonym',suggestedCode:'ASTRAGAL'},
+  ];
+  const savedPayloads=[];
+  let committedCalls=0;
+  const client={
+    ReviewSpeciesCodes:async()=>({project:'Sample',su:'None',rows:structuredClone(currentRows)}),
+    LookupSpeciesCodeCheckTarget:async({code})=>code==='ARTEMISI'
+      ?[{code:'ARTEMISI',source:'master',scientificName:'Artemisia spp.',englishName:'sagebrush',lifeform:7,codeType:'U'}]
+      :[],
+    SaveSpeciesCodeCheck:async(updates)=>{
+      savedPayloads.push(structuredClone(updates));
+      for(const u of updates){
+        currentRows=currentRows.map(r=>r.id===u.id?{id:r.id,plotNumber:r.plotNumber,code:u.value,status:'master'}:r);
+      }
+    },
+  };
+  const ctx=componentFunctions('SpeciesCodeCheck.svelte',['reload','stage','reviewTarget','applySuggested','accept','ignore','save'],{
+    client,
+    reads:{track:p=>p,cancelAll(){}},
+    beginCodeCheck:editor.beginCodeCheck,
+    unresolvedCodeCheckRows:editor.unresolvedCodeCheckRows,
+    suggestedCodeForRow:editor.suggestedCodeForRow,
+    stageSuggestedCodeCheck:editor.stageSuggestedCodeCheck,
+    stageCodeCheck:editor.stageCodeCheck,
+    acceptCodeCheckTarget:editor.acceptCodeCheckTarget,
+    ignoreCodeCheck:editor.ignoreCodeCheck,
+    codeCheckErrors:editor.codeCheckErrors,
+    codeCheckUpdates:editor.codeCheckUpdates,
+    personalSpeciesErrors:personal.personalSpeciesErrors,
+    session:null,choices:{},metadata:null,reading:false,saving:false,committedFailure:false,
+    error:null,success:null,offset:0,generation:0,busy:false,pending:0,
+    oncommitted:async()=>{committedCalls++;},onclosed(){},
+  });
+  await ctx.actions.reload();
+  assert.equal(ctx.error,null);
+  assert.equal(editor.unresolvedCodeCheckRows(ctx.session).length,3);
+
+  await ctx.actions.applySuggested(ctx.session.review.rows[1]);
+  assert.equal(ctx.error,null);
+  assert.equal(ctx.session.cells['2'].raw,'ARTEMISI');
+  assert.equal(ctx.choices['2'].entered,'ARTEMISI');
+  assert.equal(ctx.choices['2'].options[0].code,'ARTEMISI');
+
+  ctx.actions.accept(2,true);
+  assert.equal(ctx.error,null);
+  assert.equal(ctx.session.cells['2'].reviewed,'ARTEMISI');
+  assert.equal(ctx.session.cells['3'].reviewed,'ARTEMISI');
+
+  await ctx.actions.save();
+  assert.equal(ctx.error,null);
+  assert.equal(committedCalls,1);
+  assert.deepEqual(savedPayloads,[[
+    {id:2,plotNumber:'8529676',expected:'ARTEMIS',value:'ARTEMISI'},
+    {id:3,plotNumber:'9003002',expected:'ARTEMIS',value:'ARTEMISI'},
+  ]]);
+  assert.deepEqual(editor.unresolvedCodeCheckRows(ctx.session).map(r=>r.code),['ASTRAGA']);
 });

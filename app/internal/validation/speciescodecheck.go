@@ -78,6 +78,9 @@ func ReviewSpeciesCodes(s *vprocore.ContextService, ctx context.Context, context
 			   AND s.OldCode IS NOT NULL AND s.OldCode<>''
 			   AND s.Code IS NOT NULL AND s.Code<>''
 			   AND s.OldCode<>s.Code
+			   AND LENGTH(s.Code)<=8
+			   AND (EXISTS(SELECT 1 FROM USysAllSpecs c WHERE c.Code COLLATE BINARY=s.Code AND LOWER(COALESCE(CAST(c.Codetype AS TEXT),''))<>'s')
+			        OR EXISTS(SELECT 1 FROM USysUserSpp u WHERE u.Code COLLATE BINARY=s.Code))
 			 ORDER BY CASE WHEN EXISTS(SELECT 1 FROM USysAllSpecs c WHERE c.Code COLLATE BINARY=s.Code AND LOWER(COALESCE(CAST(c.Codetype AS TEXT),''))<>'s') THEN 0 ELSE 1 END,
 			          s.Code COLLATE BINARY
 			 LIMIT 1),
@@ -110,7 +113,7 @@ func ReviewSpeciesCodes(s *vprocore.ContextService, ctx context.Context, context
 				row.Status = "missing"
 			case master:
 				row.Status = "master"
-			case suggested.Valid && suggested.String != "":
+			case suggested.Valid && suggested.String != "" && vprocore.ValidateVegetationSpeciesLookup(suggested.String) == nil:
 				codeCopy := suggested.String
 				row.SuggestedCode = &codeCopy
 				row.Status = "synonym"

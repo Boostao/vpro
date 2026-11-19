@@ -5,7 +5,7 @@ import type { SpeciesCodeCheckRow } from '../../bindings/github.com/boostao/vpro
   import type { bindContextPlots } from '../shared/contextPlots';
   import type { EditorCloseState } from '../shell/closeLifecycle';
   import { ReadRequests } from '../shared/readRequests';
-  import { beginCodeCheck, stageCodeCheck, acceptCodeCheckTarget, ignoreCodeCheck, codeCheckErrors, codeCheckUpdates, type CodeCheckDraft } from './speciesCodeCheckEditor';
+  import { beginCodeCheck, unresolvedCodeCheckRows, suggestedCodeForRow, stageSuggestedCodeCheck, stageCodeCheck, acceptCodeCheckTarget, ignoreCodeCheck, codeCheckErrors, codeCheckUpdates, type CodeCheckDraft } from './speciesCodeCheckEditor';
   import { beginCodeCheckPersonalSpecies, matchesCodeCheckPersonalSpeciesSource, personalSpeciesErrors, personalSpeciesRequest,
     personalSpeciesMatches, personalSpeciesCommittedError, type PersonalSpeciesDraft } from './personalSpeciesEditor';
   import { speciesEventError } from './vegetationSpeciesEditor';
@@ -31,8 +31,9 @@ import type { SpeciesCodeCheckRow } from '../../bindings/github.com/boostao/vpro
   const metadataErrors = $derived(metadata ? personalSpeciesErrors(metadata) : []);
   const unresolved = $derived.by(() => {
     const current = session;
-    return current ? current.review.rows.filter(row => ['unlisted', 'missing'].includes(row.status) && !current.ignored.includes(row.id)) : [];
+    return current ? unresolvedCodeCheckRows(current) : [];
   });
+  const unresolvedSynonyms = $derived(unresolved.filter(row => row.status === 'synonym').length);
   const visible = $derived(unresolved.slice(offset, offset + 25));
   const pending = $derived(session ? Object.values(session.cells).filter(cell => cell.raw !== cell.row.code).length : 0);
   const personalEnabled = true;
@@ -94,10 +95,18 @@ import type { SpeciesCodeCheckRow } from '../../bindings/github.com/boostao/vpro
   }
 
   async function applySuggested(row: SpeciesCodeCheckRow) {
-    const suggested = row.suggestedCode;
+    const suggested = row.suggestedCode ? suggestedCodeForRow(row) : null;
     if (!suggested || !session || busy || metadata || committedFailure) return;
-    stage(row.id, suggested);
-    if (!error) await reviewTarget(row.id);
+    try {
+      generation++; reads.cancelAll();
+      session = stageSuggestedCodeCheck(session, row.id);
+      const next = { ...choices }; delete next[String(row.id)]; choices = next;
+      error = null; success = null;
+    } catch (cause) {
+      error = `Species-check draft failed: ${String(cause)}`;
+      return;
+    }
+    await reviewTarget(row.id);
   }
 
   function accept(id: number, all: boolean) {
@@ -200,7 +209,7 @@ import type { SpeciesCodeCheckRow } from '../../bindings/github.com/boostao/vpro
   <h3 class="font-semibold text-[#003366]">Species code check - explicit scope and replacements</h3>
   {#if session}
     <p class="mt-2" role="status">Project: {session.review.project}. Working unit: {session.review.su === 'None' ? 'None - entire project' : session.review.su}.
-      {session.review.rows.length} physical rows reviewed; {unresolved.length} unresolved; {session.ignored.length} ignored locally.</p>
+      {session.review.rows.length} physical rows reviewed; {unresolved.length} unresolved ({unresolvedSynonyms} old-code synonyms); {session.ignored.length} ignored locally.</p>
   {/if}
   {#if busy}<p role="status">Waiting for the owned context operation...</p>{/if}
   {#if error}<p class="mt-2 font-medium text-[#D8292F]" role="alert">{error}</p>{/if}
@@ -232,7 +241,7 @@ import type { SpeciesCodeCheckRow } from '../../bindings/github.com/boostao/vpro
               <td>
                 <div class="font-mono">{row.code === null ? 'NULL' : JSON.stringify(row.code)}</div>
                 <div class="mt-1 text-xs text-[#606060]">Status: {row.status}</div>
-                {#if row.suggestedCode}
+                {#if row.suggestedCode && suggestedCodeForRow(row)}
                   <div class="mt-1 flex flex-wrap items-center gap-1.5" data-suggested-code={row.suggestedCode}>
                     <span class="rounded bg-[#FFF9E6] px-1.5 py-0.5 text-xs font-medium text-[#313132] border border-[#FCBA19]">Suggested: {row.suggestedCode}</span>
                     <button type="button" class="text-xs" data-use-suggested-id={row.id} disabled={busy || !!metadata || committedFailure}
@@ -245,6 +254,9 @@ import type { SpeciesCodeCheckRow } from '../../bindings/github.com/boostao/vpro
                   <input id={`check-replacement-${row.id}`} type="text" value={cell?.raw ?? ''} disabled={busy || !!metadata || committedFailure}
                     aria-invalid={!!cell?.error} oninput={event => stage(row.id, event.currentTarget.value)} />
                 </label>
+                {#if cell && cell.reviewed === cell.raw && cell.raw !== row.code}
+                  <p class="mt-1 text-xs font-medium text-[#2E8540]">Reviewed replacement ready to save: {JSON.stringify(cell.reviewed)}</p>
+                {/if}
                 <button type="button" class="mt-1" disabled={busy || !!metadata || committedFailure || !cell} onclick={() => void reviewTarget(row.id)}>Review literal target</button>
                 {#if target && target.entered === cell?.raw}
                   <div class="mt-2 rounded border border-[#D8D8D8] bg-[#F2F2F2] p-2 text-xs" aria-label={`Target definitions, row ${row.id}`}>
