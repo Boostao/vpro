@@ -8,10 +8,11 @@ import (
 	"testing"
 
 	"github.com/boostao/vpro/app/internal/listcatalog"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestStandards2026ProvenanceAndBundledArtifacts(t *testing.T) {
-	repoRoot := filepath.Join("..", "..")
+	repoRoot := resources.RepoRoot()
 	provBytes, err := os.ReadFile(filepath.Join(repoRoot, "resources", "standards-2026-provenance.json"))
 	if err != nil {
 		t.Fatal(err)

@@ -4,6 +4,7 @@ import (
 	"github.com/boostao/vpro/app/internal/references"
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -24,7 +25,7 @@ func parentCatalogueExpected(t *testing.T, _ listcatalog.Provenance) []listcatal
 	var inputs [][]byte
 	for i, name := range []string{"parent-codes-fixture.json.gz", "parent-codes-source-provenance.json.gz",
 		"parent-codes-fixture-manifest.json.gz", "geology-codes-fixture.json.gz"} {
-		path := filepath.Join("resources", name)
+		path := resources.Path("resources", name)
 		var (
 			data []byte
 			err  error

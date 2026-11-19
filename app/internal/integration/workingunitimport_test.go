@@ -4,6 +4,7 @@ import (
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -30,7 +31,7 @@ func TestWorkingUnitFreezeNativeSnapshot(t *testing.T) {
 	if bytes.HasPrefix(vprocore.WorkingUnitDatabase, []byte("SQLite format 3")) {
 		t.Skip("Working Unit resource is already frozen")
 	}
-	data, err := os.ReadFile(filepath.Join("evidence", "private", "working-unit-native", "working-unit-reference-snapshot.json"))
+	data, err := os.ReadFile(resources.Path("evidence", "private", "working-unit-native", "working-unit-reference-snapshot.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +47,7 @@ func TestWorkingUnitFreezeNativeSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.TypedCellsSHA256 = sqlutil.BecHash(cells)
-	file, err := os.CreateTemp("resources", ".working-unit-import-*.db")
+	file, err := os.CreateTemp(resources.Path("resources"), ".working-unit-import-*.db")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,14 +74,14 @@ func TestWorkingUnitFreezeNativeSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.DatabaseSHA256 = sqlutil.BecHash(database)
-	if err := os.Rename(path, filepath.Join("resources", "working-unit.db")); err != nil {
+	if err := os.Rename(path, resources.Path("resources", "working-unit.db")); err != nil {
 		t.Fatal(err)
 	}
 	provenance, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join("resources", "working-unit-provenance.json"), append(provenance, '\n'), 0644); err != nil {
+	if err := os.WriteFile(resources.Path("resources", "working-unit-provenance.json"), append(provenance, '\n'), 0644); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("3508 rows / 17540 typed cells frozen; database SHA256=%s cells SHA256=%s", p.DatabaseSHA256, p.TypedCellsSHA256)

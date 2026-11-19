@@ -5,6 +5,7 @@ import (
 	"github.com/boostao/vpro/app/internal/sourceform/sftest"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -14,7 +15,6 @@ import (
 
 	"math/rand"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -26,7 +26,7 @@ func TestLongEnvironmentExactRegistryScopeTypedValuesAndOrphans(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected, err := os.ReadFile(filepath.Join("testdata", "long-environment-fields.txt"))
+	expected, err := os.ReadFile(resources.Path("testdata", "long-environment-fields.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}

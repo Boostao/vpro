@@ -18,6 +18,7 @@ import (
 
 	"codeberg.org/go-pdf/fpdf"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func plotLabelPDFTestPreview() PlotLabelRegionalPreview {
@@ -81,7 +82,7 @@ func TestPlotLabelPDFNullEmptyAndLiteralSpaces(t *testing.T) {
 }
 
 func TestPlotLabelPDFSourceDateCases(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("testdata", "plot-label-regional-date.json"))
+	data, err := os.ReadFile(resources.Path("testdata", "plot-label-regional-date.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

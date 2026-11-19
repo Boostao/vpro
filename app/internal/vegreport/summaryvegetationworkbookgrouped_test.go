@@ -3,6 +3,7 @@ package vegreport
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -16,7 +17,6 @@ import (
 	"io"
 	"math"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -184,7 +184,7 @@ func assertSummaryGroupedWorkbookCells(t *testing.T, input summaryVegetationWork
 func TestSummaryGroupedWorkbookIndependentSourceRows(t *testing.T) {
 	accepted, refused := 0, 0
 	for _, filename := range []string{"summaryVegetationGroupSource.json", "summaryVegetationGroupAdditionalSource.json"} {
-		data, err := os.ReadFile(filepath.Join("testdata", filename))
+		data, err := os.ReadFile(resources.Path("testdata", filename))
 		if err != nil {
 			t.Fatal(err)
 		}

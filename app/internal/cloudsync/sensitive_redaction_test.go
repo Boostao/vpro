@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/resources"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -277,7 +278,7 @@ func TestSensitiveRedactionFailsClosedWhenConservationMetadataEmptyOrMissing(t *
 	_ = pdb.Close()
 
 	// 1. Shipped VLists.db has 8,262 USysSppAttributes rows with 0 RedBlueList codes -> must fail loud!
-	bundledVLists := filepath.Join("..", "..", "resources", "database-family", "VLists.db")
+	bundledVLists := resources.Path("resources", "database-family", "VLists.db")
 	if _, err := loadSensitiveSpeciesFromSQLiteVLists(ctx, bundledVLists); err == nil || !strings.Contains(err.Error(), "0 Red/Blue-listed species rows") {
 		t.Fatalf("expected loadSensitiveSpeciesFromSQLiteVLists on unpopulated bundled VLists.db to fail loud, got: %v", err)
 	}

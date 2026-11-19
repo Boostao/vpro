@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/boostao/vpro/app/resources"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -190,7 +191,7 @@ func TestGoSQLite3DSNQueryParametersSupported(t *testing.T) {
 		"_writable_schema":          true,
 	}
 
-	appRoot := filepath.Join("..", "..")
+	appRoot := resources.RepoRoot()
 	dsnParamRe := regexp.MustCompile(`[?&](_[A-Za-z0-9_]+)=`)
 	var unsupported []string
 

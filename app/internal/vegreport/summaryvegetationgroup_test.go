@@ -4,6 +4,7 @@ import (
 	"github.com/boostao/vpro/app/internal/reports/reportcore"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -11,7 +12,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -28,7 +28,7 @@ func summaryGroupedLayers() vprocore.ProjectMetadataTable {
 }
 
 func TestSummaryVegetationGroupedStageSourceQueries(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("testdata", "summaryVegetationGroupSource.json"))
+	data, err := os.ReadFile(resources.Path("testdata", "summaryVegetationGroupSource.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

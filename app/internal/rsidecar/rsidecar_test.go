@@ -18,10 +18,12 @@ import (
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestLayer2ImportPurity(t *testing.T) {
-	entries, err := os.ReadDir("internal/rsidecar")
+	pkgDir := resources.Path("internal", "rsidecar")
+	entries, err := os.ReadDir(pkgDir)
 	if err != nil {
 		t.Fatalf("read internal/rsidecar: %v", err)
 	}
@@ -38,7 +40,7 @@ func TestLayer2ImportPurity(t *testing.T) {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
 			continue
 		}
-		f, err := parser.ParseFile(fset, filepath.Join("internal/rsidecar", entry.Name()), nil, parser.ImportsOnly)
+		f, err := parser.ParseFile(fset, filepath.Join(pkgDir, entry.Name()), nil, parser.ImportsOnly)
 		if err != nil {
 			t.Fatalf("parse %s: %v", entry.Name(), err)
 		}

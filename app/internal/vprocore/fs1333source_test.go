@@ -11,10 +11,11 @@ import (
 
 	"github.com/boostao/vpro/app/internal/fs882layout"
 	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestFS1333PackagedAggregateHeightsAndChildLinksRemainUnmapped(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("resources", "fs1333-sivi-layout.json"))
+	data, err := os.ReadFile(resources.Path("resources", "fs1333-sivi-layout.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +103,7 @@ func TestFS1333PackagedAggregateHeightsAndChildLinksRemainUnmapped(t *testing.T)
 }
 
 func TestFS1333HeightBRemainsPhysicalTextNotNumericCoercion(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("resources", "Sample.db"))
+	path, err := filepath.Abs(resources.Path("resources", "Sample.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +124,7 @@ func TestFS1333HeightBRemainsPhysicalTextNotNumericCoercion(t *testing.T) {
 }
 
 func TestFS1333ParentBindingsAndEventOwnershipRemainDistinct(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("resources", "fs1333-sivi-layout.json"))
+	data, err := os.ReadFile(resources.Path("resources", "fs1333-sivi-layout.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +154,7 @@ func TestFS1333ParentBindingsAndEventOwnershipRemainDistinct(t *testing.T) {
 	if !reflect.DeepEqual(actualEvents, expectedEvents) {
 		t.Fatal("SIVI parent events drifted or inherited XL Lock/audit events", actualEvents)
 	}
-	path, err := filepath.Abs(filepath.Join("resources", "Sample.db"))
+	path, err := filepath.Abs(resources.Path("resources", "Sample.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +196,7 @@ func TestFS1333ParentBindingsAndEventOwnershipRemainDistinct(t *testing.T) {
 func TestFS1333ExtendedChildOnlyAddsThreeShrubCoverBindings(t *testing.T) {
 	load := func(name string) fs882layout.Layout {
 		t.Helper()
-		data, err := os.ReadFile(filepath.Join("resources", name))
+		data, err := os.ReadFile(resources.Path("resources", name))
 		if err != nil {
 			t.Fatal(err)
 		}

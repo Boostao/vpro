@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestProjectProfileSpeciesPresenceSharedWire(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("testdata", "profiling-presence-wire.json"))
+	data, err := os.ReadFile(resources.Path("testdata", "profiling-presence-wire.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

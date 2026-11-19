@@ -1,70 +1,44 @@
 package main
 
 import (
-	"go/ast"
-	"go/parser"
-	"go/token"
-	"reflect"
+	"context"
+	"path/filepath"
 	"testing"
 )
 
 func TestExternalSUEnvironmentRegistrationUnconditionalDefaultOn(t *testing.T) {
-	fset := token.NewFileSet()
-	mainFile, err := parser.ParseFile(fset, "main.go", nil, 0)
+	services, _, _, _ := openTestDesktopServices(t)
+	contextSvc := findRegisteredService[ContextService](t, services)
+	classificationSvc := findRegisteredService[ClassificationService](t, services)
+
+	ctx := context.Background()
+	state, err := contextSvc.GetState(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ContextService.GetState: %v", err)
 	}
-	domainFile, err := parser.ParseFile(fset, "domainservices_classification.go", nil, 0)
-	if err != nil {
-		t.Fatal(err)
+
+	extSUFile := filepath.Join(t.TempDir(), "ExtUnits.db")
+	created, err := classificationSvc.CreateSUTable(ctx, state.ContextID, CreateSUTableRequest{
+		Name:                    "ExtUnits",
+		Destination:             "new_file",
+		FilePath:                extSUFile,
+		PopulateAllProjectPlots: true,
+		SeedFromUserSiteUnit:    true,
+		Activate:                true,
+	})
+	if err != nil || created == nil || !created.Activated || created.NewState == nil {
+		t.Fatalf("CreateSUTable(new_file) failed: created=%+v err=%v", created, err)
 	}
-	var builderCalls int
-	var domainRegistered int
-	ast.Inspect(mainFile, func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if name, ok := call.Fun.(*ast.Ident); ok && name.Name == "buildClassificationService" && len(call.Args) == 3 {
-			if ident, ok := call.Args[0].(*ast.Ident); ok && ident.Name == "contextService" {
-				builderCalls++
-			}
-		}
-		if selector, ok := call.Fun.(*ast.SelectorExpr); ok && selector.Sel.Name == "NewService" && len(call.Args) == 1 {
-			if ident, ok := call.Args[0].(*ast.Ident); ok && ident.Name == "classificationService" {
-				domainRegistered++
-			}
-		}
-		return true
-	})
-	var constructorArgs [][]string
-	ast.Inspect(domainFile, func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if name, ok := call.Fun.(*ast.Ident); ok && name.Name == "NewClassificationService" && len(call.Args) == 6 {
-			constructor, ok := call.Args[3].(*ast.CallExpr)
-			if !ok {
-				return true
-			}
-			sel, ok := constructor.Fun.(*ast.SelectorExpr)
-			if !ok || sel.Sel.Name != "NewExternalSUEnvironmentService" {
-				return true
-			}
-			var arguments []string
-			for _, argument := range constructor.Args {
-				ident, ok := argument.(*ast.Ident)
-				if !ok {
-					t.Fatal("external transfer registration uses unexpected argument expression")
-				}
-				arguments = append(arguments, ident.Name)
-			}
-			constructorArgs = append(constructorArgs, arguments)
-		}
-		return true
-	})
-	if domainRegistered != 1 || builderCalls != 1 || !reflect.DeepEqual(constructorArgs, [][]string{{"core"}}) {
-		t.Fatal("external transfer not unconditionally registered on ClassificationService once", domainRegistered, builderCalls, constructorArgs)
+
+	review, err := classificationSvc.GetExternalSUEnvironmentReview(ctx, created.NewState.ContextID)
+	if err != nil || review == nil {
+		t.Fatalf("GetExternalSUEnvironmentReview failed on default-ON ClassificationService: review=%+v err=%v", review, err)
+	}
+	if len(review.ApprovalHash) != 64 || len(review.SourceHash) != 64 || review.SessionID == "" || review.SUPath == "" {
+		t.Fatalf("unexpected ExternalSUEnvironmentReview: %+v", review)
+	}
+
+	if _, err := classificationSvc.GetExternalSUEnvironmentReview(ctx, "stale-context-id"); err == nil {
+		t.Fatal("expected stale context ID to be rejected by GetExternalSUEnvironmentReview")
 	}
 }

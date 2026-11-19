@@ -12,10 +12,11 @@ import (
 	"time"
 
 	"github.com/boostao/vpro/app/internal/listcatalog"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func fixturePaths() (string, string) {
-	base := filepath.Join("..", "..", "resources")
+	base := filepath.Join(resources.RepoRoot(), "resources")
 	return filepath.Join(base, "site-codes-fixture.json.gz"), filepath.Join(base, "site-codes-fixture-manifest.json")
 }
 

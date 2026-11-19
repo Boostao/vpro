@@ -2,6 +2,7 @@ package vegreport
 
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -10,14 +11,13 @@ import (
 	"errors"
 	"math"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 )
 
 func TestSummaryVegetationEnvironmentalCountOriginalSourceCases(t *testing.T) {
-	fixture := filepath.Join("testdata", "summary_environment_count_source.json")
+	fixture := resources.Path("testdata", "summary_environment_count_source.json")
 	raw, err := os.ReadFile(fixture)
 	if err != nil {
 		t.Fatal(err)

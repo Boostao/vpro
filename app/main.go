@@ -231,6 +231,31 @@ func newWailsServiceGraph(
 	}
 }
 
+func buildDesktopServices(
+	dataDir, configDir string,
+	refs *referenceCatalogBundle,
+	cloudSyncManager *cloudsyncpkg.Manager,
+	closeService *lifecyclepkg.CloseService,
+	lookupEnv func(string) (string, bool),
+) ([]application.Service, wailsServiceGraph) {
+	wailsGraph := newWailsServiceGraph(dataDir, configDir, refs, cloudSyncManager, closeService, lookupEnv)
+	services := []application.Service{
+		application.NewService(wailsGraph.lifecycle),
+		application.NewService(wailsGraph.context),
+		application.NewService(wailsGraph.plotEntry),
+		application.NewService(wailsGraph.datasheet),
+		application.NewService(wailsGraph.classification),
+		application.NewService(wailsGraph.validation),
+		application.NewService(wailsGraph.importExport),
+		application.NewService(wailsGraph.vegReport),
+		application.NewService(wailsGraph.envReport),
+		application.NewService(wailsGraph.spatial),
+		application.NewService(wailsGraph.pictures),
+		application.NewService(wailsGraph.help),
+	}
+	return services, wailsGraph
+}
+
 func main() {
 	dataDir, configDir, windows, err := resolveHostEnvironment()
 	if err != nil {
@@ -248,35 +273,8 @@ func main() {
 	}
 
 	cloudSyncManager := NewCloudSyncManager(configDir)
-	wailsGraph := newWailsServiceGraph(dataDir, configDir, refs, cloudSyncManager, closeService, os.LookupEnv)
-	lifecycleService := wailsGraph.lifecycle
-	contextService := wailsGraph.context
-	plotEntryService := wailsGraph.plotEntry
-	datasheetService := wailsGraph.datasheet
-	classificationService := wailsGraph.classification
-	validationService := wailsGraph.validation
-	importExportService := wailsGraph.importExport
-	vegetationReportService := wailsGraph.vegReport
-	environmentReportService := wailsGraph.envReport
-	spatialService := wailsGraph.spatial
-	pictures := wailsGraph.pictures
-	helpService := wailsGraph.help
+	services, wailsGraph := buildDesktopServices(dataDir, configDir, refs, cloudSyncManager, closeService, os.LookupEnv)
 	runtimeTracker := wailsGraph.tracker
-
-	services := []application.Service{
-		application.NewService(lifecycleService),
-		application.NewService(contextService),
-		application.NewService(plotEntryService),
-		application.NewService(datasheetService),
-		application.NewService(classificationService),
-		application.NewService(validationService),
-		application.NewService(importExportService),
-		application.NewService(vegetationReportService),
-		application.NewService(environmentReportService),
-		application.NewService(spatialService),
-		application.NewService(pictures),
-		application.NewService(helpService),
-	}
 
 	var window *application.WebviewWindow
 	app = application.New(application.Options{

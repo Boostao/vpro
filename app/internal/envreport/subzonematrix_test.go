@@ -3,6 +3,7 @@ package envreport
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -11,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -76,7 +76,7 @@ func TestSubzoneMatrixOwnedOriginalsAndSourceProjection(t *testing.T) {
 }
 
 func TestSubzoneMatrixAllControlledNativeCases(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("internal", "reports", "subzonematrix", "testdata", "source.json"))
+	data, err := os.ReadFile(resources.Path("internal", "reports", "subzonematrix", "testdata", "source.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

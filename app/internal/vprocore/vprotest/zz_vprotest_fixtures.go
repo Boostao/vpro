@@ -4,6 +4,7 @@ import (
 	"github.com/boostao/vpro/app/internal/references"
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -516,7 +517,7 @@ func (ctx *SiviCreationJournalCancellation) Err() error {
 
 func SiviParentTables(t *testing.T) (vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable) {
 	t.Helper()
-	path, err := filepath.Abs(filepath.Join("resources", "Sample.db"))
+	path, err := filepath.Abs(resources.Path("resources", "Sample.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -756,7 +757,7 @@ func CloneLifeformReferenceFixture(table vprocore.ProjectMetadataTable) vprocore
 
 func VegetationReportFixture(t *testing.T) (vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable, vprocore.ProjectMetadataTable) {
 	t.Helper()
-	source, err := os.ReadFile(filepath.Join("testdata", "long-vegetation-cover-columns.txt"))
+	source, err := os.ReadFile(resources.Path("testdata", "long-vegetation-cover-columns.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}

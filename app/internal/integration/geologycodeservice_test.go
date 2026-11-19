@@ -3,6 +3,7 @@ package integration
 import (
 	"github.com/boostao/vpro/app/internal/references"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -26,7 +27,7 @@ func TestGeologyCatalogue870CellsAnd13FieldShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer service.Close()
-	fixture, err := os.ReadFile(filepath.Join("resources", "geology-codes-fixture.json.gz"))
+	fixture, err := os.ReadFile(resources.Path("resources", "geology-codes-fixture.json.gz"))
 	if err != nil {
 		t.Fatal(err)
 	}

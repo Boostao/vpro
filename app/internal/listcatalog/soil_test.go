@@ -12,11 +12,13 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/resources"
 )
 
 func soilFixture(t *testing.T) ([]byte, Provenance, []Choice) {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "..", "resources", "soil-codes-fixture.json.gz"))
+	data, err := os.ReadFile(filepath.Join(resources.RepoRoot(), "resources", "soil-codes-fixture.json.gz"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,8 +186,8 @@ func TestSoilScalarAndNativeHashEncoding(t *testing.T) {
 }
 
 func TestBundledSoilCatalogue2026(t *testing.T) {
-	database := filepath.Join("..", "..", "resources", "soil-codes.db")
-	provenance := filepath.Join("..", "..", "resources", "soil-codes-provenance.json")
+	database := filepath.Join(resources.RepoRoot(), "resources", "soil-codes.db")
+	provenance := filepath.Join(resources.RepoRoot(), "resources", "soil-codes-provenance.json")
 	data, err := os.ReadFile(database)
 	if err != nil {
 		t.Fatal(err)

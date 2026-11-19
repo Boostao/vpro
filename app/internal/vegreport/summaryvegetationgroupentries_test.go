@@ -4,6 +4,7 @@ import (
 	"github.com/boostao/vpro/app/internal/reports/reportcore"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -14,7 +15,6 @@ import (
 	"errors"
 	"math"
 	"os"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -46,7 +46,7 @@ type summaryGroupRawFixture struct {
 
 func summaryRawGroupFixture(t *testing.T) (summaryGroupRawFixture, VegetationReportPreparation) {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("testdata", "summaryVegetationGroupSource.json"))
+	data, err := os.ReadFile(resources.Path("testdata", "summaryVegetationGroupSource.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

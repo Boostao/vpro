@@ -2,12 +2,12 @@ package vegreport
 
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -72,7 +72,7 @@ func TestSummaryEnvironmentalCategoryIndependentSixteenFieldBindings(t *testing.
 }
 
 func TestSummaryEnvironmentalCategoryDirectBatchOriginalFixtures(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("testdata", "summary_environment_category_direct_batch_source.json"))
+	raw, err := os.ReadFile(resources.Path("testdata", "summary_environment_category_direct_batch_source.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

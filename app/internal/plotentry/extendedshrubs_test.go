@@ -3,6 +3,7 @@ package plotentry
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -18,7 +19,7 @@ import (
 )
 
 func TestExtendedShrubsPackagedSourceAndAuthorizedNumericFields(t *testing.T) {
-	data, err := os.ReadFile("resources/fs882-extended-shrub-layout.json")
+	data, err := os.ReadFile(resources.Path("resources", "fs882-extended-shrub-layout.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

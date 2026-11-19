@@ -4,6 +4,7 @@ import (
 	"github.com/boostao/vpro/app/internal/reports/reportcore"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -11,14 +12,13 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 )
 
 func TestSummaryVegetationGroupedAdditionalSourceOutcomes(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("testdata", "summaryVegetationGroupAdditionalSource.json"))
+	data, err := os.ReadFile(resources.Path("testdata", "summaryVegetationGroupAdditionalSource.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

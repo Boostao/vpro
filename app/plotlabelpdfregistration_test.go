@@ -1,76 +1,59 @@
 package main
 
 import (
-	"go/ast"
-	"go/parser"
-	"go/token"
-	"reflect"
+	"bytes"
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
 func TestPlotLabelPDFRegistrationIsUnconditionallyRegisteredOnImportExportService(t *testing.T) {
-	fset := token.NewFileSet()
-	mainFile, err := parser.ParseFile(fset, "main.go", nil, 0)
+	services, _, _, _ := openTestDesktopServices(t)
+	contextSvc := findRegisteredService[ContextService](t, services)
+	importExportSvc := findRegisteredService[ImportExportService](t, services)
+
+	ctx := context.Background()
+	state, err := contextSvc.GetState(ctx)
+	if err != nil {
+		t.Fatalf("ContextService.GetState: %v", err)
+	}
+
+	review, err := importExportSvc.GetPlotLabelPDFReview(ctx, state.ContextID, `{"plotNumber":"108050"}`)
+	if err != nil || review == nil {
+		t.Fatalf("GetPlotLabelPDFReview failed on default-ON ImportExportService: review=%+v err=%v", review, err)
+	}
+	if review.Project != "Sample" || len(review.ApprovalHash) != 64 || len(review.PDFSHA256) != 64 || review.SessionID == "" {
+		t.Fatalf("unexpected PlotLabelPDFExportReview: %+v", review)
+	}
+
+	destPDF := filepath.Join(t.TempDir(), "plot-108050-label.pdf")
+	exportReq, err := json.Marshal(map[string]string{
+		"plotNumber":   "108050",
+		"approvalHash": review.ApprovalHash,
+		"destination":  destPDF,
+		"requestId":    "11111111-2222-4333-8444-555555555555",
+		"sessionId":    review.SessionID,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	domainFile, err := parser.ParseFile(fset, "domainservices_importexport.go", nil, 0)
-	if err != nil {
-		t.Fatal(err)
+	outcome, err := importExportSvc.ExportReviewedPlotLabelPDF(ctx, state.ContextID, string(exportReq))
+	if err != nil || outcome == nil || outcome.Status != "published" || outcome.SHA256 != review.PDFSHA256 {
+		t.Fatalf("ExportReviewedPlotLabelPDF failed: outcome=%+v err=%v", outcome, err)
 	}
-	var builderArgs [][]string
-	var domainRegistered int
-	ast.Inspect(mainFile, func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if name, ok := call.Fun.(*ast.Ident); ok && name.Name == "buildImportExportService" {
-			var args []string
-			for _, arg := range call.Args {
-				ident, ok := arg.(*ast.Ident)
-				if !ok {
-					t.Fatal("buildImportExportService uses unexpected argument expression")
-				}
-				args = append(args, ident.Name)
-			}
-			builderArgs = append(builderArgs, args)
-		}
-		if selector, ok := call.Fun.(*ast.SelectorExpr); ok && selector.Sel.Name == "NewService" && len(call.Args) == 1 {
-			if ident, ok := call.Args[0].(*ast.Ident); ok && ident.Name == "importExportService" {
-				domainRegistered++
-			}
-		}
-		return true
-	})
-	var constructorArgs [][]string
-	ast.Inspect(domainFile, func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if name, ok := call.Fun.(*ast.Ident); ok && name.Name == "NewImportExportService" && len(call.Args) == 4 {
-			constructor, ok := call.Args[3].(*ast.CallExpr)
-			if !ok {
-				return true
-			}
-			sel, ok := constructor.Fun.(*ast.SelectorExpr)
-			if !ok || sel.Sel.Name != "NewPlotLabelPDFExportService" {
-				return true
-			}
-			var arguments []string
-			for _, argument := range constructor.Args {
-				ident, ok := argument.(*ast.Ident)
-				if !ok {
-					t.Fatal("label PDF registration uses unexpected argument expression")
-				}
-				arguments = append(arguments, ident.Name)
-			}
-			constructorArgs = append(constructorArgs, arguments)
-		}
-		return true
-	})
-	if domainRegistered != 1 || !reflect.DeepEqual(builderArgs, [][]string{{"contextService"}}) || !reflect.DeepEqual(constructorArgs, [][]string{{"core"}}) {
-		t.Fatal("label PDF service is not unconditionally registered on ImportExportService once", domainRegistered, builderArgs, constructorArgs)
+	pdfBytes, err := os.ReadFile(destPDF)
+	if err != nil || !bytes.HasPrefix(pdfBytes, []byte("%PDF-")) {
+		t.Fatalf("expected published PDF file at %s, err=%v", destPDF, err)
+	}
+
+	recovered, err := importExportSvc.RecoverPlotLabelPDFOutcome(ctx, state.ContextID, string(exportReq))
+	if err != nil || recovered == nil || recovered.Outcome == nil || recovered.Outcome.SHA256 != review.PDFSHA256 {
+		t.Fatalf("RecoverPlotLabelPDFOutcome failed: recovered=%+v err=%v", recovered, err)
+	}
+
+	if _, err := importExportSvc.GetPlotLabelPDFReview(ctx, "stale-context-id", `{"plotNumber":"108050"}`); err == nil {
+		t.Fatal("expected stale context ID to be rejected by GetPlotLabelPDFReview")
 	}
 }

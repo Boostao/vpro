@@ -13,12 +13,13 @@ import (
 	"testing"
 	"unicode/utf16"
 
+	"github.com/boostao/vpro/app/resources"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 func fixture(t *testing.T) ([]byte, Provenance) {
 	t.Helper()
-	data, err := ReadFixture(filepath.Join("..", "..", "resources", "site-codes-fixture.json.gz"))
+	data, err := ReadFixture(filepath.Join(resources.RepoRoot(), "resources", "site-codes-fixture.json.gz"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,8 +149,8 @@ func TestFixtureAllCellsRoundTrip(t *testing.T) {
 }
 
 func TestBundledCatalogue(t *testing.T) {
-	database := filepath.Join("..", "..", "resources", "site-codes.db")
-	provenance := filepath.Join("..", "..", "resources", "site-codes-provenance.json")
+	database := filepath.Join(resources.RepoRoot(), "resources", "site-codes.db")
+	provenance := filepath.Join(resources.RepoRoot(), "resources", "site-codes-provenance.json")
 	data, err := os.ReadFile(database)
 	if err != nil {
 		t.Fatal(err)

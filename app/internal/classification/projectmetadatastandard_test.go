@@ -3,6 +3,7 @@ package classification
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -14,7 +15,7 @@ import (
 )
 
 func TestProjectMetadataConfirmedStandardProposalsRemainExplicitAssignments(t *testing.T) {
-	raw, err := os.ReadFile("resources/project-metadata-standard.json")
+	raw, err := os.ReadFile(resources.Path("resources", "project-metadata-standard.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +27,7 @@ func TestProjectMetadataConfirmedStandardProposalsRemainExplicitAssignments(t *t
 		defaults["GeoRefMethod"] != "GPS +/- 10m" || defaults["CoordinateSystem"] != "dd.mm.ss.s" {
 		t.Fatal("source-standard literal contract changed")
 	}
-	source, err := os.ReadFile("testdata/projectmetadata/standard-population.vba")
+	source, err := os.ReadFile(resources.Path("testdata", "projectmetadata", "standard-population.vba"))
 	if err != nil {
 		t.Fatal(err)
 	}

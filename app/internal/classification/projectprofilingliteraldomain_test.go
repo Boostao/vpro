@@ -3,6 +3,7 @@ package classification
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -20,7 +21,7 @@ import (
 )
 
 func TestSourceProfileSQLLiteralNativeDomain(t *testing.T) {
-	raw, err := os.ReadFile("testdata/profiling-literal-native.json")
+	raw, err := os.ReadFile(resources.Path("testdata", "profiling-literal-native.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,6 +3,7 @@ package vegreport
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -12,7 +13,6 @@ import (
 	"math"
 	"math/rand"
 	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -40,7 +40,7 @@ type vegetationPresenceFixture struct {
 
 func readVegetationPresenceFixture(t *testing.T) vegetationPresenceFixture {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("testdata", "long-vegetation-presence.json"))
+	raw, err := os.ReadFile(resources.Path("testdata", "long-vegetation-presence.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

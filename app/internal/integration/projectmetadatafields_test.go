@@ -3,11 +3,11 @@ package integration
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
 	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -215,7 +215,7 @@ func TestProjectMetadataReferencesPreserveSourceBindingsAndListPolicies(t *testi
 }
 
 func TestProjectMetadataPoliciesMatchSealedAccessTableDefinition(t *testing.T) {
-	source := filepath.Join("testdata", "projectmetadata", "Sample_Metadata_CreateSQL.txt")
+	source := resources.Path("testdata", "projectmetadata", "Sample_Metadata_CreateSQL.txt")
 	data, err := os.ReadFile(source)
 	if err != nil {
 		t.Fatal(err)

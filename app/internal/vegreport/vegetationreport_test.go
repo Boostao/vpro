@@ -4,6 +4,7 @@ import (
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -27,7 +28,7 @@ func TestLongVegetationPreparationSourceReductionAndTypedObservations(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected, err := os.ReadFile(filepath.Join("testdata", "long-vegetation-cover-columns.txt"))
+	expected, err := os.ReadFile(resources.Path("testdata", "long-vegetation-cover-columns.txt"))
 	if err != nil || strings.Join(result.CoverColumns, "\n")+"\n" != strings.ReplaceAll(string(expected), "\r\n", "\n") {
 		t.Fatal("original fifteen cover/total reduction fields changed", err)
 	}
@@ -137,7 +138,7 @@ func TestLongVegetationPreparationMatchesDisposableSQLiteMAX(t *testing.T) {
 
 func TestLongVegetationPreparationOriginalLayerMetadataReadOnly(t *testing.T) {
 	veg, su, _ := vprotest.VegetationReportFixture(t)
-	path, err := filepath.Abs(filepath.Join("resources", "database-family", "VPro64.db"))
+	path, err := filepath.Abs(resources.Path("resources", "database-family", "VPro64.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

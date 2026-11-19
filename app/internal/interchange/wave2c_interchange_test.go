@@ -15,6 +15,7 @@ import (
 	"github.com/boostao/vpro/app/internal/interchange"
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestProjectRDSExportVerifiedWithNativeRscript(t *testing.T) {
@@ -535,7 +536,7 @@ func TestTurboVegExternalFixturesPlotPackageCP1252AndMinimalTV3SQLite(t *testing
 	dir := t.TempDir()
 
 	// 1. External <Plot_package> XML fixture (windows-1252 encoding, trailing <Lookup_tables>, Braun-Blanquet scale "01", TV2 "null" literals, scientific name + synonym crosswalk)
-	extXMLFixture := filepath.Join("internal", "interchange", "testdata", "turboveg3", "external_plot_package.xml")
+	extXMLFixture := resources.Path("internal", "interchange", "testdata", "turboveg3", "external_plot_package.xml")
 	extXMLDest := filepath.Join(dir, "ExtXML.db")
 	xmlOut, err := interchange.ImportTurboVeg(service, ctx, state.ContextID, interchange.TurboVegImportRequest{
 		SourcePath:      extXMLFixture,
@@ -609,7 +610,7 @@ func TestTurboVegExternalFixturesPlotPackageCP1252AndMinimalTV3SQLite(t *testing
 	}
 
 	// 2. External 31-table Turboveg 3 SQLite fixture seeded from external_tv3_minimal.sql (WKT POINT, Delphi TDateTime 45492.0 = 2024-07-19, layers 7=jl & 8=sl & 9=ml & 10=ep, deleted plot/species skipped)
-	extSQLScript, err := os.ReadFile(filepath.Join("internal", "interchange", "testdata", "turboveg3", "external_tv3_minimal.sql"))
+	extSQLScript, err := os.ReadFile(resources.Path("internal", "interchange", "testdata", "turboveg3", "external_tv3_minimal.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}

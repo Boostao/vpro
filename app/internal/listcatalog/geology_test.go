@@ -8,15 +8,17 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/resources"
 )
 
 func geologyFixture(t *testing.T) ([]byte, Provenance, []Choice) {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "..", "resources", "geology-codes-fixture.json.gz"))
+	data, err := os.ReadFile(filepath.Join(resources.RepoRoot(), "resources", "geology-codes-fixture.json.gz"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	encoded, err := os.ReadFile(filepath.Join("..", "..", "resources", "geology-codes-provenance.json"))
+	encoded, err := os.ReadFile(filepath.Join(resources.RepoRoot(), "resources", "geology-codes-provenance.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

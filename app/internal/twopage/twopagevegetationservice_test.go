@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -112,29 +111,53 @@ func TestTwoPageVegetationServiceStrictTransportAndExplicitErrors(t *testing.T) 
 	}
 }
 
-func TestTwoPageVegetationServiceActualMainRegistration(t *testing.T) {
-	mainData, err := os.ReadFile("main.go")
-	if err != nil {
-		t.Fatal(err)
+func TestTwoPageVegetationServiceExportedRPCContractAndStaleContextRejection(t *testing.T) {
+	serviceType := reflect.TypeOf((*TwoPageVegetationService)(nil))
+	wantMethods := []string{
+		"CreateRow",
+		"DeleteRow",
+		"GetOriginal",
+		"GetSpeciesReferences",
+		"ListDeletedRows",
+		"RecoverOutcome",
+		"RecoverReceipt",
+		"RestoreRow",
+		"Save",
 	}
-	plotEntryData, err := os.ReadFile("domainservices_plotentry.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, required := range []string{
-		"buildPlotEntryService(contextService, plots, refs)",
-		"application.NewService(plotEntryService)",
-	} {
-		if strings.Count(string(mainData), required) != 1 {
-			t.Fatal("actual main registration missing/duplicated", required)
+	gotMethods := make([]string, 0, serviceType.NumMethod())
+	for i := 0; i < serviceType.NumMethod(); i++ {
+		m := serviceType.Method(i)
+		gotMethods = append(gotMethods, m.Name)
+		mt := m.Type
+		for p := 1; p < mt.NumIn(); p++ {
+			if kind := mt.In(p).Kind(); kind == reflect.Func || kind == reflect.Chan {
+				t.Fatalf("TwoPageVegetationService.%s parameter %d has non-RPC kind %s", m.Name, p, kind)
+			}
+		}
+		for r := 0; r < mt.NumOut(); r++ {
+			if kind := mt.Out(r).Kind(); kind == reflect.Func || kind == reflect.Chan {
+				t.Fatalf("TwoPageVegetationService.%s return %d has non-RPC kind %s", m.Name, r, kind)
+			}
 		}
 	}
-	for _, required := range []string{
-		"twopagepkg.NewTwoPageVegetationService(core)",
-		"twoPageVegetation:            twoPageVegetation",
-	} {
-		if strings.Count(string(plotEntryData), required) != 1 {
-			t.Fatal("actual PlotEntryService builder registration missing/duplicated", required)
-		}
+	if !reflect.DeepEqual(gotMethods, wantMethods) {
+		t.Fatalf("TwoPageVegetationService exported method set = %v, want %v", gotMethods, wantMethods)
+	}
+
+	contexts, _, _, request := vegetationWriteFixture(t, false, "SubVegAXL_BC", 3)
+	service := vegetationFacade(t, contexts)
+	raw := vegetationAttemptJSON(t, request)
+	ctx := context.Background()
+	if _, err := service.GetOriginal(ctx, "stale-context-id", "108050", "SubVegAXL_BC"); err == nil {
+		t.Fatal("expected stale context ID rejection on GetOriginal")
+	}
+	if _, err := service.GetSpeciesReferences(ctx, "stale-context-id", "108050", "SubVegAXL_BC"); err == nil {
+		t.Fatal("expected stale context ID rejection on GetSpeciesReferences")
+	}
+	if _, err := service.Save(ctx, "stale-context-id", raw); err == nil {
+		t.Fatal("expected stale context ID rejection on Save")
+	}
+	if _, err := service.ListDeletedRows(ctx, "stale-context-id", "108050", "SubVegAXL_BC"); err == nil {
+		t.Fatal("expected stale context ID rejection on ListDeletedRows")
 	}
 }

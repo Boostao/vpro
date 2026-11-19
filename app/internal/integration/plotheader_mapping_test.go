@@ -3,6 +3,7 @@ package integration
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -14,7 +15,7 @@ import (
 )
 
 func TestPlotHeader_SourceBindingsAndTypes(t *testing.T) {
-	data, err := os.ReadFile("resources/fs882-xl-layout.json")
+	data, err := os.ReadFile(resources.Path("resources", "fs882-xl-layout.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

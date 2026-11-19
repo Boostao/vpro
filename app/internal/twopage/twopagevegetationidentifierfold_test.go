@@ -3,14 +3,15 @@ package twopage
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"unicode"
+
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestTwoPageVegetationIdentifierFoldExhaustiveCompilerContract(t *testing.T) {
-	path := filepath.Join("frontend", "src", "shared", "twoPageVegetationIdentifierFold.json")
+	path := resources.Path("frontend", "src", "shared", "twoPageVegetationIdentifierFold.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)

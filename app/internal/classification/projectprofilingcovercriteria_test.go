@@ -3,6 +3,7 @@ package classification
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -14,7 +15,6 @@ import (
 	"errors"
 	"math"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -53,7 +53,7 @@ type nativeCoverCriteriaFixture struct {
 
 func readNativeCoverCriteriaFixture(t *testing.T) nativeCoverCriteriaFixture {
 	t.Helper()
-	file, err := os.Open(filepath.Join("testdata", "profiling-cover-native.json"))
+	file, err := os.Open(resources.Path("testdata", "profiling-cover-native.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

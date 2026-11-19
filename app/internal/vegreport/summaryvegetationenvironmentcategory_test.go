@@ -2,6 +2,7 @@ package vegreport
 
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -9,14 +10,13 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 )
 
 func TestSummaryEnvironmentalCategoryOriginalFixtures(t *testing.T) {
-	path := filepath.Join("testdata", "summary_environment_category_source.json")
+	path := resources.Path("testdata", "summary_environment_category_source.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)

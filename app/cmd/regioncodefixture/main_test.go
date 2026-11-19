@@ -11,15 +11,16 @@ import (
 	"testing"
 
 	"github.com/boostao/vpro/app/internal/listcatalog"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func fixture(t *testing.T) ([]byte, []byte) {
 	t.Helper()
-	data, err := listcatalog.ReadFixture(filepath.Join("..", "..", "resources", "region-codes-fixture.json.gz"))
+	data, err := listcatalog.ReadFixture(filepath.Join(resources.RepoRoot(), "resources", "region-codes-fixture.json.gz"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	manifest, err := os.ReadFile(filepath.Join("..", "..", "resources", "region-codes-fixture-manifest.json"))
+	manifest, err := os.ReadFile(filepath.Join(resources.RepoRoot(), "resources", "region-codes-fixture-manifest.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

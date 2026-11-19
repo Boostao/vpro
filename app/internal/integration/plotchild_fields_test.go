@@ -3,13 +3,13 @@ package integration
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -63,7 +63,7 @@ func TestPlotChild_XLStoredBindingCoverage(t *testing.T) {
 			} `json:"fields"`
 		} `json:"forms"`
 	}
-	data, err := os.ReadFile(filepath.Join("resources", "fs882-xl-layout.json"))
+	data, err := os.ReadFile(resources.Path("resources", "fs882-xl-layout.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

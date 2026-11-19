@@ -2,6 +2,7 @@ package vegreport
 
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -13,7 +14,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strconv"
 	"testing"
@@ -35,7 +35,7 @@ type summaryClassExpected struct {
 }
 
 func TestSummaryVegetationClassSealedSourceFixtures(t *testing.T) {
-	path := filepath.Join("testdata", "summaryVegetationClassSource.json")
+	path := resources.Path("testdata", "summaryVegetationClassSource.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)

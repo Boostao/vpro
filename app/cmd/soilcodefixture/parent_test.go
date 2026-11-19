@@ -5,10 +5,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestParentProfileGeneratorDeterministicPinnedNonoverwriting(t *testing.T) {
-	resource := filepath.Join("..", "..", "resources")
+	resource := filepath.Join(resources.RepoRoot(), "resources")
 	var outputs [][]byte
 	for i := 0; i < 2; i++ {
 		dir := t.TempDir()

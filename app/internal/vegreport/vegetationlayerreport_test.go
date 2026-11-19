@@ -4,6 +4,7 @@ import (
 	"github.com/boostao/vpro/app/internal/reports/reportcore"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -13,7 +14,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -243,7 +243,7 @@ func TestLongVegetationLayerMatchesACEEnglishJoinFixture(t *testing.T) {
 		Layer, Spp, EnglishName, MatchedName string
 		P, MC, P1, P2                        *float64
 	}
-	raw, err := os.ReadFile(filepath.Join("testdata", "long-vegetation-layer-join.json"))
+	raw, err := os.ReadFile(resources.Path("testdata", "long-vegetation-layer-join.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

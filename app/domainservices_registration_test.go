@@ -3,9 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -13,58 +10,194 @@ import (
 	"testing"
 
 	lifecyclepkg "github.com/boostao/vpro/app/internal/lifecycle"
+	"github.com/boostao/vpro/app/internal/projectops"
 	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-func TestMainRegistersStrictlyTwelveCohesiveDomainServices(t *testing.T) {
-	file, err := parser.ParseFile(token.NewFileSet(), "main.go", nil, 0)
+func openTestDesktopServices(t *testing.T) ([]application.Service, wailsServiceGraph, string, string) {
+	t.Helper()
+	dataDir := t.TempDir()
+	configDir := t.TempDir()
+	refs := openReferenceCatalogBundle(dataDir)
+	cloud := NewCloudSyncManager(configDir)
+	closeSvc, err := lifecyclepkg.NewCloseService(func(string) bool { return false }, func() {})
 	if err != nil {
-		t.Fatal(err)
+		refs.Close()
+		cloud.Close()
+		t.Fatalf("NewCloseService: %v", err)
 	}
-	var registered []string
-	var appendCalls int
-	ast.Inspect(file, func(node ast.Node) bool {
-		assign, ok := node.(*ast.AssignStmt)
-		if ok && len(assign.Lhs) == 1 && len(assign.Rhs) == 1 {
-			if ident, ok := assign.Lhs[0].(*ast.Ident); ok && ident.Name == "services" {
-				if call, ok := assign.Rhs[0].(*ast.CallExpr); ok {
-					if fn, ok := call.Fun.(*ast.Ident); ok && fn.Name == "append" {
-						appendCalls++
-					}
+	emptyEnv := func(string) (string, bool) { return "", false }
+	services, graph := buildDesktopServices(dataDir, configDir, refs, cloud, closeSvc, emptyEnv)
+	t.Cleanup(func() {
+		graph.tracker.shutdown(refs, cloud)
+	})
+	return services, graph, dataDir, configDir
+}
+
+func findRegisteredService[T any](t *testing.T, services []application.Service) *T {
+	t.Helper()
+	wantType := reflect.TypeOf((*T)(nil))
+	var found *T
+	count := 0
+	for _, svc := range services {
+		if typed, ok := svc.Instance().(*T); ok {
+			found = typed
+			count++
+		}
+	}
+	if count != 1 || found == nil {
+		t.Fatalf("expected strictly 1 registered %s in desktopServices, got count=%d ptr=%v", wantType, count, found)
+	}
+	return found
+}
+
+func TestMainRegistersStrictlyTwelveCohesiveDomainServices(t *testing.T) {
+	services, graph, dataDir, configDir := openTestDesktopServices(t)
+	if len(services) != 12 {
+		t.Fatalf("buildDesktopServices must register strictly 12 cohesive domain services; got len=%d", len(services))
+	}
+
+	wantTypes := []reflect.Type{
+		reflect.TypeOf((*LifecycleService)(nil)),
+		reflect.TypeOf((*ContextService)(nil)),
+		reflect.TypeOf((*PlotEntryService)(nil)),
+		reflect.TypeOf((*DatasheetService)(nil)),
+		reflect.TypeOf((*ClassificationService)(nil)),
+		reflect.TypeOf((*ValidationService)(nil)),
+		reflect.TypeOf((*ImportExportService)(nil)),
+		reflect.TypeOf((*VegetationReportService)(nil)),
+		reflect.TypeOf((*EnvironmentReportService)(nil)),
+		reflect.TypeOf((*SpatialService)(nil)),
+		reflect.TypeOf((*PictureService)(nil)),
+		reflect.TypeOf((*HelpService)(nil)),
+	}
+
+	seenPtrs := make(map[uintptr]bool, len(services))
+	for idx, svc := range services {
+		inst := svc.Instance()
+		if inst == nil {
+			t.Fatalf("service[%d] has nil Instance()", idx)
+		}
+		rv := reflect.ValueOf(inst)
+		if rv.Kind() != reflect.Ptr || rv.IsNil() {
+			t.Fatalf("service[%d] (%T) must be a non-nil struct pointer", idx, inst)
+		}
+		if rv.Type() != wantTypes[idx] {
+			t.Fatalf("service[%d] type = %s, want %s", idx, rv.Type(), wantTypes[idx])
+		}
+		ptr := rv.Pointer()
+		if seenPtrs[ptr] {
+			t.Fatalf("service[%d] (%s) registered a duplicate service instance pointer", idx, rv.Type())
+		}
+		seenPtrs[ptr] = true
+
+		// Every bound Wails RPC method must accept/return JSON-serializable types (zero func/chan parameters).
+		rt := rv.Type()
+		for mIdx := 0; mIdx < rt.NumMethod(); mIdx++ {
+			m := rt.Method(mIdx)
+			mt := m.Type
+			for p := 1; p < mt.NumIn(); p++ {
+				if kind := mt.In(p).Kind(); kind == reflect.Func || kind == reflect.Chan {
+					t.Fatalf("%s.%s parameter %d has non-RPC kind %s (%s)", rt, m.Name, p, kind, mt.In(p))
 				}
-				if comp, ok := assign.Rhs[0].(*ast.CompositeLit); ok {
-					for _, elt := range comp.Elts {
-						call, ok := elt.(*ast.CallExpr)
-						if !ok || len(call.Args) != 1 {
-							t.Fatalf("unexpected service registration element: %T", elt)
-						}
-						arg, ok := call.Args[0].(*ast.Ident)
-						if !ok {
-							t.Fatalf("service registration argument must be named domain service variable, got %T", call.Args[0])
-						}
-						registered = append(registered, arg.Name)
-					}
+			}
+			for r := 0; r < mt.NumOut(); r++ {
+				if kind := mt.Out(r).Kind(); kind == reflect.Func || kind == reflect.Chan {
+					t.Fatalf("%s.%s return %d has non-RPC kind %s (%s)", rt, m.Name, r, kind, mt.Out(r))
 				}
 			}
 		}
-		return true
-	})
-	want := []string{
-		"lifecycleService",
-		"contextService",
-		"plotEntryService",
-		"datasheetService",
-		"classificationService",
-		"validationService",
-		"importExportService",
-		"vegetationReportService",
-		"environmentReportService",
-		"spatialService",
-		"pictures",
-		"helpService",
 	}
-	if appendCalls != 0 || len(registered) != 12 || !reflect.DeepEqual(registered, want) {
-		t.Fatalf("main.go must register strictly 12 cohesive domain services; got len=%d appendCalls=%d registered=%v", len(registered), appendCalls, registered)
+
+	ctx := context.Background()
+	lifecycleSvc := findRegisteredService[LifecycleService](t, services)
+	contextSvc := findRegisteredService[ContextService](t, services)
+	plotEntrySvc := findRegisteredService[PlotEntryService](t, services)
+	datasheetSvc := findRegisteredService[DatasheetService](t, services)
+	classificationSvc := findRegisteredService[ClassificationService](t, services)
+	validationSvc := findRegisteredService[ValidationService](t, services)
+	importExportSvc := findRegisteredService[ImportExportService](t, services)
+	vegReportSvc := findRegisteredService[VegetationReportService](t, services)
+	envReportSvc := findRegisteredService[EnvironmentReportService](t, services)
+	spatialSvc := findRegisteredService[SpatialService](t, services)
+	pictureSvc := findRegisteredService[PictureService](t, services)
+	helpSvc := findRegisteredService[HelpService](t, services)
+
+	startup := lifecycleSvc.GetStartupState()
+	if !startup.Ready || startup.ReleaseChannel != vprocorepkg.ReleaseChannelStable {
+		t.Fatalf("expected cold-boot desktop services Ready=true in stable channel, got %+v", startup)
+	}
+
+	state, err := contextSvc.GetState(ctx)
+	if err != nil || state.ContextID == "" || state.ActiveProject != "Sample" {
+		t.Fatalf("ContextService.GetState failed: state=%+v err=%v", state, err)
+	}
+
+	// Verify real RPC dispatch across all 12 registered services, including TwoPageVegetationService on PlotEntryService.
+	if orig, err := plotEntrySvc.GetTwoPageVegetationOriginal(ctx, state.ContextID, "108050", "SubVegAXL_BC"); err != nil || orig == nil {
+		t.Fatalf("PlotEntryService.GetTwoPageVegetationOriginal failed: orig=%+v err=%v", orig, err)
+	}
+	if refs, err := plotEntrySvc.GetTwoPageVegetationSpeciesReferences(ctx, state.ContextID, "108050", "SubVegAXL_BC"); err != nil || refs == nil {
+		t.Fatalf("PlotEntryService.GetTwoPageVegetationSpeciesReferences failed: refs=%+v err=%v", refs, err)
+	}
+	if tables, err := datasheetSvc.ListDatasheetTables(ctx, state.ContextID); err != nil || len(tables) == 0 {
+		t.Fatalf("DatasheetService.ListDatasheetTables failed: len=%d err=%v", len(tables), err)
+	}
+	if becStatus, err := classificationSvc.GetBECCatalogueStatus(ctx); err != nil || becStatus.SiteSeriesRows == 0 {
+		t.Fatalf("ClassificationService.GetBECCatalogueStatus failed: status=%+v err=%v", becStatus, err)
+	}
+	if _, err := validationSvc.CheckSpeciesCodes(ctx, state.ContextID); err != nil {
+		t.Fatalf("ValidationService.CheckSpeciesCodes failed: %v", err)
+	}
+	if preview, err := importExportSvc.GetPlotLabelRegionalPreview(ctx, state.ContextID, "108050"); err != nil || preview == nil {
+		t.Fatalf("ImportExportService.GetPlotLabelRegionalPreview failed: preview=%+v err=%v", preview, err)
+	}
+	if scope, err := vegReportSvc.GetLongVegetationReportScope(ctx, state.ContextID); err != nil || scope == nil || scope.Project != "Sample" {
+		t.Fatalf("VegetationReportService.GetLongVegetationReportScope failed: scope=%+v err=%v", scope, err)
+	}
+	if _, err := envReportSvc.GetLongEnvironmentOptions(ctx, state.ContextID); err != nil {
+		t.Fatalf("EnvironmentReportService.GetLongEnvironmentOptions failed: %v", err)
+	}
+	if _, err := spatialSvc.GetCoordinateMode(); err != nil {
+		t.Fatalf("SpatialService.GetCoordinateMode failed: %v", err)
+	}
+	if picMeta, err := pictureSvc.GetMetadata(ctx, state.ContextID, "108050"); err != nil || picMeta == nil {
+		t.Fatalf("PictureService.GetMetadata failed: meta=%+v err=%v", picMeta, err)
+	}
+	if about, err := helpSvc.GetAboutInfo(ctx); err != nil || about.ProductName != "VPro" {
+		t.Fatalf("HelpService.GetAboutInfo failed: about=%+v err=%v", about, err)
+	}
+
+	// Verify startup recovery RPCs hot-swap the bound service graph cleanly.
+	cfgPath := filepath.Join(configDir, "config.yml")
+	rawCfg, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("read config.yml: %v", err)
+	}
+	writeBrokenProjectConfig(t, cfgPath, rawCfg, filepath.Join(dataDir, "projects", "Missing.db"))
+	graph.lifecycle.startup.SetState(StartupState{
+		Ready:          false,
+		ConfigPath:     cfgPath,
+		ReleaseChannel: vprocorepkg.ReleaseChannelStable,
+	})
+	recovered, err := lifecycleSvc.RecoverStartupWithPaths(ctx, StartupRecoveryRequest{
+		ProjectPath:    filepath.Join(dataDir, "projects", "Sample.db"),
+		ProjectName:    "Sample",
+		ClearSU:        true,
+		ClearHierarchy: true,
+	})
+	if err != nil || !recovered.Ready {
+		t.Fatalf("LifecycleService.RecoverStartupWithPaths failed: state=%+v err=%v", recovered, err)
+	}
+	swappedState, err := contextSvc.GetState(ctx)
+	if err != nil || swappedState.ContextID == "" || swappedState.ContextID == state.ContextID {
+		t.Fatalf("expected fresh ContextID after RecoverStartupWithPaths, got before=%q after=%q err=%v",
+			state.ContextID, swappedState.ContextID, err)
+	}
+	if orig, err := plotEntrySvc.GetTwoPageVegetationOriginal(ctx, swappedState.ContextID, "108050", "SubVegAXL_BC"); err != nil || orig == nil {
+		t.Fatalf("PlotEntryService after hot-swap failed: orig=%+v err=%v", orig, err)
 	}
 }
 
@@ -178,152 +311,174 @@ func TestLifecycleServiceConsolidatesStartupAndCloseHandshake(t *testing.T) {
 	}
 }
 
+func resolveExternalArchiveRootForTest() string {
+	if env, ok := os.LookupEnv("VPRO_EXTERNAL_ARCHIVE_ROOT"); ok {
+		return strings.TrimSpace(env)
+	}
+	if repoRoot := resources.RepoRoot(); repoRoot != "" {
+		return filepath.Dir(filepath.Dir(repoRoot))
+	}
+	return ""
+}
+
 func TestImportAccessProjectRenamedAuditAndChildLoadingViaPlotEntryService(t *testing.T) {
-	candidates := []struct {
-		paths         []string
-		sourceProject string
-		targetProject string
-	}{
-		{
-			paths:         []string{`/home/bruno/Work/VPRO_ACCESS_1/VPro64/Haida_Gwaii_2019.accdb`, `C:\Users\BrunoTremblay\Work\VPRO_ACCESS_1\VPro64\Haida_Gwaii_2019.accdb`},
-			sourceProject: "Haida_Gwaii_VPro19_2019",
-			targetProject: "Haida2019",
-		},
-		{
-			paths:         []string{`/home/bruno/Work/VPRO_ACCESS/VPro64/VPro64.accdb`, `C:\Users\BrunoTremblay\Work\VPRO_ACCESS\VPro64\VPro64.accdb`},
-			sourceProject: "Sample",
-			targetProject: "SampleRenamed",
-		},
-	}
-
-	var chosenPath, sourceProject, targetProject string
-	for _, cand := range candidates {
-		for _, p := range cand.paths {
-			if _, err := os.Stat(p); err == nil {
-				chosenPath = p
-				sourceProject = cand.sourceProject
-				targetProject = cand.targetProject
-				break
-			}
-		}
-		if chosenPath != "" {
-			break
-		}
-	}
-	if chosenPath == "" {
-		t.Skip("no sibling Access .accdb fixture available on this host")
-	}
-
-	dataDir := t.TempDir()
-	configDir := t.TempDir()
-	prefs, err := vprocorepkg.OpenDesktopConfig(dataDir, configDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	projects, err := vprocorepkg.NewSQLiteProjectService(dataDir, configDir, prefs)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer projects.CloseSQLiteContext()
-	plots, err := vprocorepkg.NewPlotServiceWithPreferences(projects)
-	if err != nil {
-		t.Fatal(err)
-	}
-	contextSvc, err := NewContextService(projects, plots)
-	if err != nil {
-		t.Fatal(err)
-	}
-	importExportSvc := NewImportExportService(contextSvc, nil, nil, nil)
-	plotEntrySvc := &PlotEntryService{
-		contexts: contextSvc,
-		plots:    plots,
-	}
-
 	ctx := context.Background()
+
+	// 1. Always-run CI-hermetic renamed project audit + child loading verification via SaveProjectAs + PlotEntryService.
+	services, _, dataDir, _ := openTestDesktopServices(t)
+	contextSvc := findRegisteredService[ContextService](t, services)
+	plotEntrySvc := findRegisteredService[PlotEntryService](t, services)
+	importExportSvc := findRegisteredService[ImportExportService](t, services)
+
 	initState, err := contextSvc.GetState(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
+	firstPlot := "108050"
+	hdr, err := plotEntrySvc.GetPlot(firstPlot)
+	if err != nil {
+		t.Fatalf("PlotEntryService.GetPlot(%s): %v", firstPlot, err)
+	}
+	seedNote := "Hermetic pre-rename audit seed"
+	hdr.OfficeNotes = &seedNote
+	if err := contextSvc.UpdatePlot(initState.ContextID, *hdr); err != nil {
+		t.Fatalf("UpdatePlot(%s) seed failed: %v", firstPlot, err)
+	}
 
-	destPath := filepath.Join(dataDir, "projects", targetProject+".db")
-	impRes, err := importExportSvc.ImportAccessProject(ctx, initState.ContextID, AccessProjectImportRequest{
-		SourcePath:        chosenPath,
-		SourceProject:     sourceProject,
-		TargetProject:     targetProject,
-		DestinationPath:   destPath,
+	renamedProject := "SampleRenamed"
+	renamedDest := filepath.Join(dataDir, "projects", renamedProject+".db")
+	savedRes, err := contextSvc.SaveProjectAs(ctx, initState.ContextID, projectops.SaveProjectAsRequest{
+		NewProjectName:    renamedProject,
+		DestinationPath:   renamedDest,
 		ActivateOnSuccess: true,
 	})
-	if err != nil {
-		t.Fatalf("ImportAccessProject(%s -> %s) failed: %v", sourceProject, targetProject, err)
+	if err != nil || !savedRes.Activated || savedRes.State == nil || savedRes.State.ActiveProject != renamedProject {
+		t.Fatalf("SaveProjectAs(%s) failed: res=%+v err=%v", renamedProject, savedRes, err)
 	}
-	if !impRes.Activated || impRes.State == nil || impRes.State.ActiveProject != targetProject {
-		t.Fatalf("expected activated %s state, got %+v", targetProject, impRes)
+	renamedCID := savedRes.State.ContextID
+	auditEntries, err := plotEntrySvc.ListAuditReadEntries(firstPlot)
+	if err != nil || len(auditEntries) == 0 {
+		t.Fatalf("ListAuditReadEntries on %s failed: len=%d err=%v", renamedProject, len(auditEntries), err)
 	}
-	activeCtxID := impRes.State.ContextID
-
-	page, err := contextSvc.ListPlots(ctx, 0, 50)
-	if err != nil || len(page.Plots) == 0 {
-		t.Fatalf("ListPlots on renamed project failed: page=%+v err=%v", page, err)
+	for _, entry := range auditEntries {
+		if entry.Project != renamedProject {
+			t.Fatalf("audit row %s retained foreign Project=%q instead of %q", entry.RowID, entry.Project, renamedProject)
+		}
 	}
-
-	totalAuditRows := 0
-	for _, summary := range page.Plots {
-		pNum := summary.PlotNumber
-		if _, err := plotEntrySvc.GetPlot(pNum); err != nil {
-			t.Fatalf("PlotEntryService.GetPlot(%s) failed: %v", pNum, err)
-		}
-		if _, err := plotEntrySvc.ListVegRecords(pNum); err != nil {
-			t.Fatalf("PlotEntryService.ListVegRecords(%s) failed: %v", pNum, err)
-		}
-		if _, err := plotEntrySvc.ListHumusRecords(pNum); err != nil {
-			t.Fatalf("PlotEntryService.ListHumusRecords(%s) failed: %v", pNum, err)
-		}
-		if _, err := plotEntrySvc.ListMineralRecords(pNum); err != nil {
-			t.Fatalf("PlotEntryService.ListMineralRecords(%s) failed: %v", pNum, err)
-		}
-		if _, err := plotEntrySvc.ListOtherRecords(pNum); err != nil {
-			t.Fatalf("PlotEntryService.ListOtherRecords(%s) failed: %v", pNum, err)
-		}
-		auditEntries, err := plotEntrySvc.ListAuditReadEntries(pNum)
-		if err != nil {
-			t.Fatalf("PlotEntryService.ListAuditReadEntries(%s) failed: %v", pNum, err)
-		}
-		for _, entry := range auditEntries {
-			if entry.Project != targetProject {
-				t.Fatalf("audit row %s for plot %s retained foreign Project=%q instead of %q", entry.RowID, pNum, entry.Project, targetProject)
-			}
-		}
-		trail, err := plotEntrySvc.ListAuditEntries(pNum)
-		if err != nil {
-			t.Fatalf("PlotEntryService.ListAuditEntries(%s) failed: %v", pNum, err)
-		}
-		totalAuditRows += len(trail)
-	}
-	if totalAuditRows == 0 {
-		t.Fatalf("expected non-zero audit trail rows across %s plots to exercise project ownership normalization", targetProject)
-	}
-
-	// Verify editing and saving an imported plot under renamed TargetProject succeeds and records new audit rows
-	firstPlot := page.Plots[0].PlotNumber
-	hdr, err := plotEntrySvc.GetPlot(firstPlot)
+	postRenameHdr, err := plotEntrySvc.GetPlot(firstPlot)
 	if err != nil {
 		t.Fatal(err)
 	}
-	note := "Verified Wave 6.1 renamed import edit"
-	hdr.OfficeNotes = &note
-	if err := contextSvc.UpdatePlot(activeCtxID, *hdr); err != nil {
-		t.Fatalf("UpdatePlot on renamed imported plot %s failed: %v", firstPlot, err)
+	afterNote := "Hermetic post-rename audit edit"
+	postRenameHdr.OfficeNotes = &afterNote
+	if err := contextSvc.UpdatePlot(renamedCID, *postRenameHdr); err != nil {
+		t.Fatalf("UpdatePlot on renamed project failed: %v", err)
 	}
-	afterAudits, err := contextSvc.ListAuditReadEntries(ctx, activeCtxID, firstPlot)
-	if err != nil || len(afterAudits) == 0 {
-		t.Fatalf("expected audit entries after UpdatePlot on %s, got len=%d err=%v", firstPlot, len(afterAudits), err)
+	afterAudits, err := contextSvc.ListAuditReadEntries(ctx, renamedCID, firstPlot)
+	if err != nil || len(afterAudits) <= len(auditEntries) {
+		t.Fatalf("expected additional audit entry after UpdatePlot, before=%d after=%d err=%v", len(auditEntries), len(afterAudits), err)
 	}
+
+	// 2. Optional read-only sibling Access archive check when VPRO_EXTERNAL_ARCHIVE_ROOT / sibling archives exist on disk.
+	archiveRoot := resolveExternalArchiveRootForTest()
+	if archiveRoot == "" {
+		return
+	}
+	candidates := []struct {
+		relPath       string
+		sourceProject string
+		targetProject string
+	}{
+		{
+			relPath:       filepath.Join("VPRO_ACCESS_1", "VPro64", "Haida_Gwaii_2019.accdb"),
+			sourceProject: "Haida_Gwaii_VPro19_2019",
+			targetProject: "Haida2019",
+		},
+		{
+			relPath:       filepath.Join("VPRO_ACCESS", "VPro64", "VPro64.accdb"),
+			sourceProject: "Sample",
+			targetProject: "AccessRenamed",
+		},
+	}
+	var chosenPath, sourceProject, targetProject string
+	for _, cand := range candidates {
+		full := filepath.Join(archiveRoot, cand.relPath)
+		if _, statErr := os.Stat(full); statErr == nil {
+			chosenPath = full
+			sourceProject = cand.sourceProject
+			targetProject = cand.targetProject
+			break
+		}
+	}
+	if chosenPath == "" {
+		return
+	}
+
+	t.Run("OptionalLocalAccessArchive", func(t *testing.T) {
+		curState, err := contextSvc.GetState(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		destPath := filepath.Join(dataDir, "projects", targetProject+".db")
+		impRes, err := importExportSvc.ImportAccessProject(ctx, curState.ContextID, AccessProjectImportRequest{
+			SourcePath:        chosenPath,
+			SourceProject:     sourceProject,
+			TargetProject:     targetProject,
+			DestinationPath:   destPath,
+			ActivateOnSuccess: true,
+		})
+		if err != nil {
+			t.Fatalf("ImportAccessProject(%s -> %s) failed: %v", sourceProject, targetProject, err)
+		}
+		if !impRes.Activated || impRes.State == nil || impRes.State.ActiveProject != targetProject {
+			t.Fatalf("expected activated %s state, got %+v", targetProject, impRes)
+		}
+		page, err := contextSvc.ListPlots(ctx, 0, 50)
+		if err != nil || len(page.Plots) == 0 {
+			t.Fatalf("ListPlots on renamed project failed: page=%+v err=%v", page, err)
+		}
+		totalAuditRows := 0
+		for _, summary := range page.Plots {
+			pNum := summary.PlotNumber
+			if _, err := plotEntrySvc.GetPlot(pNum); err != nil {
+				t.Fatalf("PlotEntryService.GetPlot(%s) failed: %v", pNum, err)
+			}
+			if _, err := plotEntrySvc.ListVegRecords(pNum); err != nil {
+				t.Fatalf("PlotEntryService.ListVegRecords(%s) failed: %v", pNum, err)
+			}
+			if _, err := plotEntrySvc.ListHumusRecords(pNum); err != nil {
+				t.Fatalf("PlotEntryService.ListHumusRecords(%s) failed: %v", pNum, err)
+			}
+			if _, err := plotEntrySvc.ListMineralRecords(pNum); err != nil {
+				t.Fatalf("PlotEntryService.ListMineralRecords(%s) failed: %v", pNum, err)
+			}
+			if _, err := plotEntrySvc.ListOtherRecords(pNum); err != nil {
+				t.Fatalf("PlotEntryService.ListOtherRecords(%s) failed: %v", pNum, err)
+			}
+			entries, err := plotEntrySvc.ListAuditReadEntries(pNum)
+			if err != nil {
+				t.Fatalf("PlotEntryService.ListAuditReadEntries(%s) failed: %v", pNum, err)
+			}
+			for _, entry := range entries {
+				if entry.Project != targetProject {
+					t.Fatalf("audit row %s for plot %s retained foreign Project=%q instead of %q", entry.RowID, pNum, entry.Project, targetProject)
+				}
+			}
+			trail, err := plotEntrySvc.ListAuditEntries(pNum)
+			if err != nil {
+				t.Fatalf("PlotEntryService.ListAuditEntries(%s) failed: %v", pNum, err)
+			}
+			totalAuditRows += len(trail)
+		}
+		if totalAuditRows == 0 {
+			t.Fatalf("expected non-zero audit trail rows across %s plots", targetProject)
+		}
+	})
 }
 
 func TestColdBootPictureLibraryWiringAndNilPictureServiceGuards(t *testing.T) {
 	ctx := context.Background()
 
-	// 1. Nil receiver guards on *PictureService must not panic!
 	var nilPic *PictureService
 	if _, err := nilPic.GetMetadata(ctx, "cid", "00337"); err == nil {
 		t.Fatal("expected nil PictureService.GetMetadata to return error without panic")
@@ -332,7 +487,6 @@ func TestColdBootPictureLibraryWiringAndNilPictureServiceGuards(t *testing.T) {
 		t.Fatal("expected nil PictureService.GetImage to return error without panic")
 	}
 
-	// 2. Cold boot EnsureDefaultPictureLibrary + newDefaultPictureEnvLookup enables all 4 picture services out-of-the-box!
 	dataDir := t.TempDir()
 	configDir := t.TempDir()
 	preferences, err := vprocorepkg.OpenDesktopConfig(dataDir, configDir)
@@ -344,9 +498,7 @@ func TestColdBootPictureLibraryWiringAndNilPictureServiceGuards(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if projects.Sqlite != nil {
-			_ = projects.Sqlite.Close()
-		}
+		_ = projects.CloseSQLiteContext()
 	})
 	plots, err := vprocorepkg.NewPlotServiceWithPreferences(projects)
 	if err != nil {
@@ -396,7 +548,6 @@ func TestColdBootPictureLibraryWiringAndNilPictureServiceGuards(t *testing.T) {
 		t.Fatalf("unexpected initial VPics metadata review: %+v", review)
 	}
 
-	// Explicit directory/path env override must take precedence over defaults.
 	missingLibrary := filepath.Join(t.TempDir(), "missing-vpics.db")
 	overrideLookup := newDefaultPictureEnvLookup(func(key string) (string, bool) {
 		if key == "VPRO_PICTURE_LIBRARY_PATH" {
@@ -413,7 +564,6 @@ func TestContextServiceOmitsFuncParametersAndForwardsAllVProCoreRPCs(t *testing.
 	mainType := reflect.TypeOf(&ContextService{})
 	coreType := reflect.TypeOf(&vprocorepkg.ContextService{})
 
-	// 1. main.ContextService MUST NOT expose Edit or any method with reflect.Func parameters/returns!
 	if _, hasEdit := mainType.MethodByName("Edit"); hasEdit {
 		t.Fatal("main.ContextService must not expose Edit(string, func(*PlotService) error) error to Wails bindings")
 	}
@@ -432,7 +582,6 @@ func TestContextServiceOmitsFuncParametersAndForwardsAllVProCoreRPCs(t *testing.
 		}
 	}
 
-	// 2. Every exported method on *vprocore.ContextService EXCEPT Edit MUST exist on *main.ContextService!
 	for i := 0; i < coreType.NumMethod(); i++ {
 		cm := coreType.Method(i)
 		if cm.Name == "Edit" {
@@ -449,46 +598,33 @@ func TestContextServiceOmitsFuncParametersAndForwardsAllVProCoreRPCs(t *testing.
 	}
 }
 
-func TestSpatialExtraDirsNoHardcodedHomePath(t *testing.T) {
-	rawMain, err := os.ReadFile("main.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(rawMain), "/home/bruno") {
-		t.Fatal("main.go must not contain hardcoded developer path /home/bruno")
-	}
-
-	existingDir := t.TempDir()
+func TestSpatialExtraDirsBehavioralResolutionAndDeduplication(t *testing.T) {
+	existingDirA := t.TempDir()
+	existingDirB := t.TempDir()
+	configuredDir := t.TempDir()
 	missingDir := filepath.Join(t.TempDir(), "does_not_exist")
 
+	envList := strings.Join([]string{"", "   ", existingDirA, missingDir, existingDirB, existingDirA}, string(filepath.ListSeparator))
 	dirs := resolveSpatialExtraDirs(func(key string) (string, bool) {
 		if key == "VPRO_SPATIAL_ASSETS_DIR" {
-			return existingDir, true
+			return envList, true
 		}
 		return "", false
-	})
-	found := false
-	for _, d := range dirs {
-		if d == existingDir {
-			found = true
-		}
-		if info, err := os.Stat(d); err != nil || !info.IsDir() {
-			t.Fatalf("resolveSpatialExtraDirs included non-existent directory %q: %v", d, err)
-		}
-	}
-	if !found {
-		t.Fatalf("expected existing VPRO_SPATIAL_ASSETS_DIR %q in %v", existingDir, dirs)
-	}
+	}, "", " . ", configuredDir, existingDirA, missingDir)
 
-	dirsMissing := resolveSpatialExtraDirs(func(key string) (string, bool) {
-		if key == "VPRO_SPATIAL_ASSETS_DIR" {
-			return missingDir, true
+	seen := map[string]int{}
+	for _, d := range dirs {
+		seen[d]++
+		if info, err := os.Stat(d); err != nil || !info.IsDir() {
+			t.Fatalf("resolveSpatialExtraDirs returned non-existent or non-directory path %q: %v", d, err)
 		}
-		return "", false
-	})
-	for _, d := range dirsMissing {
-		if d == missingDir {
-			t.Fatalf("resolveSpatialExtraDirs must omit non-existent directory %q", missingDir)
+	}
+	for _, want := range []string{existingDirA, existingDirB, configuredDir} {
+		if seen[want] != 1 {
+			t.Fatalf("expected %q once in %v, got count=%d", want, dirs, seen[want])
 		}
+	}
+	if seen[missingDir] != 0 {
+		t.Fatalf("resolveSpatialExtraDirs must omit non-existent directory %q", missingDir)
 	}
 }

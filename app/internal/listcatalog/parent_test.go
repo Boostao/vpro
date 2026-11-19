@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/boostao/vpro/app/resources"
 )
 
 func parentFixture(t *testing.T) ([][]byte, Provenance, []Choice) {
@@ -16,7 +18,7 @@ func parentFixture(t *testing.T) ([][]byte, Provenance, []Choice) {
 	var inputs [][]byte
 	for i, name := range []string{"parent-codes-fixture.json.gz", "parent-codes-source-provenance.json.gz",
 		"parent-codes-fixture-manifest.json.gz", "geology-codes-fixture.json.gz"} {
-		path := filepath.Join("..", "..", "resources", name)
+		path := filepath.Join(resources.RepoRoot(), "resources", name)
 		var (
 			data []byte
 			err  error
@@ -140,8 +142,8 @@ func TestParentStorageNullableDuplicateFractionalSignedZeroAndRollback(t *testin
 }
 
 func TestBundledParentCatalogue2026(t *testing.T) {
-	database := filepath.Join("..", "..", "resources", "parent-codes.db")
-	provenance := filepath.Join("..", "..", "resources", "parent-codes-provenance.json")
+	database := filepath.Join(resources.RepoRoot(), "resources", "parent-codes.db")
+	provenance := filepath.Join(resources.RepoRoot(), "resources", "parent-codes-provenance.json")
 	data, err := os.ReadFile(database)
 	if err != nil {
 		t.Fatal(err)

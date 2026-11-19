@@ -2,6 +2,7 @@ package classification
 
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -29,7 +30,7 @@ type profilePresenceNative struct {
 
 func profilePresenceFixture(t *testing.T) (*sql.Conn, profilePresenceNative) {
 	t.Helper()
-	raw, err := os.ReadFile("testdata/profiling-presence-native.json")
+	raw, err := os.ReadFile(resources.Path("testdata", "profiling-presence-native.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

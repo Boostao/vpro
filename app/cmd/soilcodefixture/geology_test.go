@@ -6,10 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestGeologyProfileGeneratorPinnedDeterministicAndNonoverwriting(t *testing.T) {
-	snapshot := filepath.Join("..", "..", "resources", "geology-codes-fixture.json.gz")
+	snapshot := filepath.Join(resources.RepoRoot(), "resources", "geology-codes-fixture.json.gz")
 	var databases, provenances [][]byte
 	for i := 0; i < 2; i++ {
 		dir := t.TempDir()

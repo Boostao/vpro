@@ -6,11 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestDiscoverAndListSampleHierarchy(t *testing.T) {
 	projects := t.TempDir()
-	data, err := os.ReadFile("resources/Sample.db")
+	data, err := os.ReadFile(resources.Path("resources", "Sample.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

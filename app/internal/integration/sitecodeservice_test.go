@@ -3,6 +3,7 @@ package integration
 import (
 	"github.com/boostao/vpro/app/internal/references"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
@@ -29,7 +30,7 @@ func TestSiteCodeCatalogueFrozenCellsDTOOrderAndDuplicates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := listcatalog.ReadFixture(filepath.Join("resources", "site-codes-fixture.json.gz"))
+	data, err := listcatalog.ReadFixture(resources.Path("resources", "site-codes-fixture.json.gz"))
 	if err != nil {
 		t.Fatal(err)
 	}

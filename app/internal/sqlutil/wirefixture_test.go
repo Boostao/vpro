@@ -62,4 +62,13 @@ func TestReadWireFixturePlainAndGzipFallback(t *testing.T) {
 	if _, err := ReadWireFixture(filepath.Join(dir, "missing.json")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected os.ErrNotExist, got %v", err)
 	}
+	if _, err := ReadWireFixture(filepath.Join("frontend", "tests", "fixtures", "definitely-missing-fixture.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected os.ErrNotExist for missing repo-relative fixture, got %v", err)
+	}
+
+	// Repo-relative fixture resolves cleanly without mutating process CWD.
+	repoWire, err := ReadWireFixture(filepath.Join("frontend", "tests", "fixtures", "ordinaryAuditWire.json"))
+	if err != nil || len(repoWire) == 0 {
+		t.Fatalf("expected repo-relative ReadWireFixture to succeed from package CWD: len=%d err=%v", len(repoWire), err)
+	}
 }

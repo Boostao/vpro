@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	"github.com/boostao/vpro/app/internal/listcatalog"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestSoilFixtureDeterministicNonoverwritingAndPinned(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "resources", "soil-codes-fixture.json.gz"))
+	data, err := os.ReadFile(filepath.Join(resources.RepoRoot(), "resources", "soil-codes-fixture.json.gz"))
 	if err != nil {
 		t.Fatal(err)
 	}

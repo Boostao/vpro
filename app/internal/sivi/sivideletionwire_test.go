@@ -2,17 +2,17 @@ package sivi
 
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"testing"
 )
 
 func TestSIVIDeletionAuditRealProducerFormat(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("resources", "sivi-audit-number-format.json"))
+	raw, err := os.ReadFile(resources.Path("resources", "sivi-audit-number-format.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
