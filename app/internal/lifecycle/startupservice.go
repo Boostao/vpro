@@ -2,10 +2,13 @@ package lifecycle
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -176,11 +179,606 @@ func appendDiagnosticSentence(base, sentence string) string {
 	return base + " " + sentence
 }
 
+const sqliteHeaderMagic = "SQLite format 3\x00"
+
+type supportDatabaseSpec struct {
+	Role           string
+	Description    string
+	RequiredTables []string
+	RequiredCols   map[string][]string
+}
+
+var supportDatabaseSpecs = []supportDatabaseSpec{
+	{
+		Role:           "VPro64",
+		Description:    "built-in table templates",
+		RequiredTables: []string{"USysEnvTable", "USysVegTable", "USysSuTable", "USysHierarchyTable"},
+	},
+	{
+		Role:        "VLists",
+		Description: "provincial plant taxonomy and BEC reference lists",
+		RequiredTables: []string{
+			"USysAllSpecs", "USysTableOfLists", "MasterSiteUnitList", "USysMetadataTemplates",
+			"USysZoneList", "USysMasterAudit", "USysSiteSeriesNames", "USysSppAttributes",
+			"USysSppAttributeFieldList", "USysSppAttributeDescription",
+		},
+		RequiredCols: map[string][]string{
+			"USysAllSpecs": {"EnglishName", "CombinedEnglishName"},
+		},
+	},
+	{
+		Role:           "VUser",
+		Description:    "personal species and site unit lists",
+		RequiredTables: []string{"USysUserSpp", "UserSiteUnitList", "USysSiteUnitAll", "USysPrefs"},
+	},
+	{
+		Role:           "VMetaData",
+		Description:    "project metadata codes",
+		RequiredTables: []string{"ProjectMetadata", "ProjectMetaDataCodes"},
+	},
+	{
+		Role:           "VMessageBoard",
+		Description:    "workspace message board",
+		RequiredTables: []string{"tblMessageBoard", "tblMessageList"},
+	},
+	{
+		Role:           "VPics",
+		Description:    "plot picture catalogue",
+		RequiredTables: []string{"tblVPics"},
+	},
+}
+
+func findSupportDatabaseSpec(role string) (supportDatabaseSpec, bool) {
+	trimmed := strings.TrimSpace(strings.TrimSuffix(strings.TrimSuffix(role, ".db"), ".DB"))
+	for _, spec := range supportDatabaseSpecs {
+		if strings.EqualFold(trimmed, spec.Role) {
+			return spec, true
+		}
+	}
+	return supportDatabaseSpec{}, false
+}
+
+type supportDatabaseIssue struct {
+	Spec   supportDatabaseSpec
+	Path   string
+	Reason string
+}
+
+type supportDatabaseBackup struct {
+	Role         string
+	OriginalPath string
+	BackupPath   string
+}
+
+func describeSupportDatabaseFailureReason(err error) string {
+	if err == nil {
+		return ""
+	}
+	lower := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(lower, "empty (0 bytes)"):
+		return "the file is empty (0 bytes)"
+	case strings.Contains(lower, "not a database"):
+		return "the file is not a readable VPro database"
+	case strings.Contains(lower, "malformed") || strings.Contains(lower, "corrupt") || strings.Contains(lower, "integrity check"):
+		return "the database file is damaged"
+	case strings.Contains(lower, "missing a required physical table") ||
+		strings.Contains(lower, "missing required column") ||
+		strings.Contains(lower, "_table_metadata"):
+		return "required VPro support tables are missing or incomplete"
+	case strings.Contains(lower, "directory"):
+		return "a folder was found instead of a database file"
+	case strings.Contains(lower, "no such file") || strings.Contains(lower, "not found") || strings.Contains(lower, "cannot find"):
+		return "the file was not found"
+	default:
+		return "the file could not be read"
+	}
+}
+
+func inspectSupportDatabaseFile(ctx context.Context, spec supportDatabaseSpec, path string) (absent bool, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	linfo, lerr := os.Lstat(path)
+	if errors.Is(lerr, os.ErrNotExist) {
+		return true, nil
+	}
+	if lerr != nil {
+		return false, lerr
+	}
+	if linfo.IsDir() {
+		return false, errors.New("path is a directory instead of a database file")
+	}
+	info, statErr := os.Stat(path)
+	if statErr != nil {
+		return false, fmt.Errorf("file cannot be accessed: %w", statErr)
+	}
+	if !info.Mode().IsRegular() {
+		return false, errors.New("path is not a regular file")
+	}
+	if info.Size() == 0 {
+		return false, errors.New("file is empty (0 bytes)")
+	}
+	f, openErr := os.Open(path)
+	if openErr != nil {
+		return false, openErr
+	}
+	var header [16]byte
+	_, readErr := io.ReadFull(f, header[:])
+	_ = f.Close()
+	if readErr != nil || string(header[:]) != sqliteHeaderMagic {
+		return false, errors.New("file is not a database")
+	}
+
+	db, dbErr := sqlutil.OpenReadOnlyContext(ctx, path)
+	if dbErr != nil {
+		return false, dbErr
+	}
+	defer func() { _ = db.Close() }()
+
+	checkRows, qErr := db.QueryContext(ctx, "PRAGMA quick_check(1);")
+	if qErr != nil {
+		return false, qErr
+	}
+	var checkResults []string
+	for checkRows.Next() {
+		var line string
+		if sErr := checkRows.Scan(&line); sErr != nil {
+			_ = checkRows.Close()
+			return false, sErr
+		}
+		checkResults = append(checkResults, strings.TrimSpace(line))
+	}
+	if rErr := checkRows.Err(); rErr != nil {
+		_ = checkRows.Close()
+		return false, rErr
+	}
+	_ = checkRows.Close()
+	if len(checkResults) == 0 {
+		return false, errors.New("integrity check returned no result")
+	}
+	for _, res := range checkResults {
+		if !strings.EqualFold(res, "ok") {
+			return false, fmt.Errorf("integrity check failed: %s", res)
+		}
+	}
+
+	var hasMeta bool
+	if mErr := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='_table_metadata')").Scan(&hasMeta); mErr != nil {
+		return false, mErr
+	}
+	if hasMeta {
+		metaRows, mQueryErr := db.QueryContext(ctx, `SELECT * FROM "_table_metadata"`)
+		if mQueryErr != nil {
+			return false, mQueryErr
+		}
+		metaCols, colErr := metaRows.Columns()
+		if colErr != nil {
+			_ = metaRows.Close()
+			return false, colErr
+		}
+		if !slices.Contains(metaCols, "table_name") || !slices.Contains(metaCols, "description") {
+			_ = metaRows.Close()
+			return false, errors.New("_table_metadata must contain table_name and description")
+		}
+		vals := make([]any, len(metaCols))
+		ptrs := make([]any, len(metaCols))
+		for i := range vals {
+			ptrs[i] = &vals[i]
+		}
+		for metaRows.Next() {
+			if sErr := metaRows.Scan(ptrs...); sErr != nil {
+				_ = metaRows.Close()
+				return false, sErr
+			}
+		}
+		if rErr := metaRows.Err(); rErr != nil {
+			_ = metaRows.Close()
+			return false, rErr
+		}
+		_ = metaRows.Close()
+	}
+
+	for _, tbl := range spec.RequiredTables {
+		var exists bool
+		if tErr := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?)", tbl).Scan(&exists); tErr != nil {
+			return false, tErr
+		}
+		if !exists {
+			return false, fmt.Errorf("%s.%s is missing a required physical table", spec.Role, tbl)
+		}
+	}
+
+	for tbl, reqCols := range spec.RequiredCols {
+		colRows, cErr := db.QueryContext(ctx, `PRAGMA table_info("`+strings.ReplaceAll(tbl, `"`, `""`)+`")`)
+		if cErr != nil {
+			return false, cErr
+		}
+		var haveCols []string
+		for colRows.Next() {
+			var cid, notNull, pk int
+			var cName, cType string
+			var dflt sql.NullString
+			if sErr := colRows.Scan(&cid, &cName, &cType, &notNull, &dflt, &pk); sErr != nil {
+				_ = colRows.Close()
+				return false, sErr
+			}
+			haveCols = append(haveCols, cName)
+		}
+		if rErr := colRows.Err(); rErr != nil {
+			_ = colRows.Close()
+			return false, rErr
+		}
+		_ = colRows.Close()
+		for _, wantCol := range reqCols {
+			if !slices.Contains(haveCols, wantCol) {
+				return false, fmt.Errorf("%s.%s is missing required column %s", spec.Role, tbl, wantCol)
+			}
+		}
+	}
+
+	return false, nil
+}
+
+func readConfiguredSupportDBPaths(configPath string) map[string]string {
+	if strings.TrimSpace(configPath) == "" {
+		return nil
+	}
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil
+	}
+	values, err := vprocore.DecodeConfig(raw)
+	if err != nil {
+		return nil
+	}
+	desktop, ok := values["Desktop"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	rawPaths, ok := desktop["DatabasePaths"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := make(map[string]string, len(rawPaths))
+	for role, val := range rawPaths {
+		if s, ok := val.(string); ok && strings.TrimSpace(s) != "" {
+			out[role] = strings.TrimSpace(s)
+		}
+	}
+	return out
+}
+
+func reanchorSupportCandidate(rawPath, dataDir string) (string, bool) {
+	if strings.TrimSpace(dataDir) == "" {
+		return rawPath, false
+	}
+	slashed := strings.ReplaceAll(rawPath, `\`, `/`)
+	marker := "/" + vprocore.DatabaseFamilySubdir + "/"
+	idx := strings.LastIndex(slashed, marker)
+	if idx < 0 {
+		return rawPath, false
+	}
+	tail := slashed[idx+len(marker):]
+	if tail == "" || strings.Contains(tail, "/") || tail == "." || tail == ".." || !strings.EqualFold(filepath.Ext(tail), ".db") {
+		return rawPath, false
+	}
+	cand := filepath.Join(dataDir, vprocore.DatabaseFamilySubdir, tail)
+	if info, err := os.Stat(cand); err == nil && info.Mode().IsRegular() {
+		return cand, true
+	}
+	return rawPath, false
+}
+
+func diagnoseSupportDatabases(ctx context.Context, dataDir, configPath string) []supportDatabaseIssue {
+	customPaths := readConfiguredSupportDBPaths(configPath)
+	var issues []supportDatabaseIssue
+	for _, spec := range supportDatabaseSpecs {
+		if customPath, hasCustom := customPaths[spec.Role]; hasCustom {
+			effective := customPath
+			if !filepath.IsAbs(customPath) {
+				if anchored, ok := reanchorSupportCandidate(customPath, dataDir); ok {
+					effective = anchored
+				} else {
+					issues = append(issues, supportDatabaseIssue{
+						Spec:   spec,
+						Path:   customPath,
+						Reason: "the file was not found",
+					})
+					continue
+				}
+			} else if info, stErr := os.Stat(customPath); stErr != nil || !info.Mode().IsRegular() {
+				if anchored, ok := reanchorSupportCandidate(customPath, dataDir); ok {
+					effective = anchored
+				} else {
+					absent, inspErr := inspectSupportDatabaseFile(ctx, spec, customPath)
+					if absent {
+						issues = append(issues, supportDatabaseIssue{
+							Spec:   spec,
+							Path:   customPath,
+							Reason: "the file was not found",
+						})
+					} else if inspErr != nil {
+						issues = append(issues, supportDatabaseIssue{
+							Spec:   spec,
+							Path:   customPath,
+							Reason: describeSupportDatabaseFailureReason(inspErr),
+						})
+					}
+					continue
+				}
+			}
+			if absent, inspErr := inspectSupportDatabaseFile(ctx, spec, effective); absent {
+				issues = append(issues, supportDatabaseIssue{
+					Spec:   spec,
+					Path:   effective,
+					Reason: "the file was not found",
+				})
+				continue
+			} else if inspErr != nil {
+				issues = append(issues, supportDatabaseIssue{
+					Spec:   spec,
+					Path:   effective,
+					Reason: describeSupportDatabaseFailureReason(inspErr),
+				})
+				continue
+			}
+		}
+
+		if strings.TrimSpace(dataDir) == "" {
+			continue
+		}
+		canonPath := filepath.Join(dataDir, vprocore.DatabaseFamilySubdir, spec.Role+".db")
+		absent, inspErr := inspectSupportDatabaseFile(ctx, spec, canonPath)
+		if !absent && inspErr != nil {
+			issues = append(issues, supportDatabaseIssue{
+				Spec:   spec,
+				Path:   canonPath,
+				Reason: describeSupportDatabaseFailureReason(inspErr),
+			})
+		}
+	}
+	return issues
+}
+
+func formatSupportDatabaseIssuesDiagnostic(issues []supportDatabaseIssue) string {
+	if len(issues) == 0 {
+		return ""
+	}
+	if len(issues) == 1 {
+		it := issues[0]
+		return fmt.Sprintf(
+			"Shared support database %s.db (%s) at %s could not be opened because %s. Your project files and saved settings were kept unchanged.",
+			it.Spec.Role, it.Spec.Description, it.Path, it.Reason,
+		)
+	}
+	parts := make([]string, 0, len(issues))
+	for _, it := range issues {
+		parts = append(parts, fmt.Sprintf("%s.db (%s) at %s (%s)", it.Spec.Role, it.Spec.Description, it.Path, it.Reason))
+	}
+	return fmt.Sprintf(
+		"Shared support databases could not be opened: %s. Your project files and saved settings were kept unchanged.",
+		strings.Join(parts, "; "),
+	)
+}
+
+func mentionsSupportRoleFailure(msg string) bool {
+	trimmed := strings.TrimSpace(msg)
+	if trimmed == "" || strings.HasPrefix(trimmed, "Shared support database") {
+		return true
+	}
+	for _, spec := range supportDatabaseSpecs {
+		if strings.Contains(trimmed, "attach "+spec.Role+":") ||
+			strings.Contains(trimmed, "read "+spec.Role+" table descriptions:") ||
+			strings.Contains(trimmed, spec.Role+".") ||
+			strings.Contains(trimmed, "DatabasePaths."+spec.Role) {
+			return true
+		}
+	}
+	return false
+}
+
+func copyNonEmptySidecarBackup(srcSidecar, dstSidecar string) error {
+	info, err := os.Stat(srcSidecar)
+	if errors.Is(err, os.ErrNotExist) || (err == nil && (!info.Mode().IsRegular() || info.Size() == 0)) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	raw, err := os.ReadFile(srcSidecar)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dstSidecar, raw, 0o600)
+}
+
+func backupCorruptSupportDatabase(dbPath, role string, now time.Time) (string, error) {
+	linfo, lerr := os.Lstat(dbPath)
+	if errors.Is(lerr, os.ErrNotExist) {
+		return "", nil
+	}
+	if lerr != nil {
+		return "", lerr
+	}
+	dir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	stamp := now.UTC().Format("20060102-150405")
+
+	if linfo.IsDir() {
+		for attempt := 0; attempt < 1000; attempt++ {
+			suffix := ""
+			if attempt > 0 {
+				suffix = fmt.Sprintf("-%d", attempt)
+			}
+			candidate := filepath.Join(dir, fmt.Sprintf("%s.corrupt-%s%s.dir", role, stamp, suffix))
+			if _, stErr := os.Lstat(candidate); errors.Is(stErr, os.ErrNotExist) {
+				if rErr := os.Rename(dbPath, candidate); rErr != nil {
+					return "", rErr
+				}
+				return candidate, nil
+			}
+		}
+		return "", fmt.Errorf("could not allocate unique backup folder name for %s.db", role)
+	}
+
+	if linfo.Mode()&os.ModeSymlink != 0 {
+		if _, stErr := os.Stat(dbPath); stErr != nil {
+			target, _ := os.Readlink(dbPath)
+			for attempt := 0; attempt < 1000; attempt++ {
+				suffix := ""
+				if attempt > 0 {
+					suffix = fmt.Sprintf("-%d", attempt)
+				}
+				candidate := filepath.Join(dir, fmt.Sprintf("%s.corrupt-%s%s.symlink.txt", role, stamp, suffix))
+				f, cErr := os.OpenFile(candidate, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+				if errors.Is(cErr, os.ErrExist) {
+					continue
+				}
+				if cErr != nil {
+					return "", cErr
+				}
+				_, _ = f.WriteString(target + "\n")
+				_ = f.Sync()
+				_ = f.Close()
+				_ = os.Remove(dbPath)
+				return candidate, nil
+			}
+			return "", fmt.Errorf("could not allocate unique backup symlink note for %s.db", role)
+		}
+	}
+
+	raw, err := os.ReadFile(dbPath)
+	if err != nil {
+		return "", fmt.Errorf("read %s.db for backup: %w", role, err)
+	}
+	stage, err := os.CreateTemp(dir, ".support-corrupt-backup-*.db")
+	if err != nil {
+		return "", err
+	}
+	stageName := stage.Name()
+	defer os.Remove(stageName)
+	if err := stage.Chmod(0o600); err != nil {
+		_ = stage.Close()
+		return "", err
+	}
+	if _, err := stage.Write(raw); err != nil {
+		_ = stage.Close()
+		return "", err
+	}
+	if err := stage.Sync(); err != nil {
+		_ = stage.Close()
+		return "", err
+	}
+	if err := stage.Close(); err != nil {
+		return "", err
+	}
+
+	for attempt := 0; attempt < 1000; attempt++ {
+		suffix := ""
+		if attempt > 0 {
+			suffix = fmt.Sprintf("-%d", attempt)
+		}
+		candidate := filepath.Join(dir, fmt.Sprintf("%s.corrupt-%s%s.db", role, stamp, suffix))
+		linkErr := sqlutil.LinkOrCreateExclusive(stageName, candidate)
+		if linkErr == nil {
+			_ = copyNonEmptySidecarBackup(dbPath+"-wal", candidate+"-wal")
+			_ = copyNonEmptySidecarBackup(dbPath+"-journal", candidate+"-journal")
+			_ = os.Chmod(dbPath, 0o600)
+			if rmErr := sqlutil.RemoveSQLiteWithSidecars(dbPath); rmErr != nil {
+				return "", fmt.Errorf("remove unreadable %s.db after saving backup %s: %w", role, candidate, rmErr)
+			}
+			return candidate, nil
+		}
+		if errors.Is(linkErr, os.ErrExist) {
+			continue
+		}
+		return "", fmt.Errorf("write %s.db backup %q: %w", role, candidate, linkErr)
+	}
+	return "", fmt.Errorf("could not allocate unique backup filename for %s.db", role)
+}
+
+func repairWorkspaceSupportDatabases(ctx context.Context, dataDir string, now time.Time) ([]supportDatabaseBackup, error) {
+	if strings.TrimSpace(dataDir) == "" {
+		return nil, nil
+	}
+	absRoot, err := filepath.Abs(dataDir)
+	if err != nil {
+		return nil, err
+	}
+	familyDir := filepath.Join(absRoot, vprocore.DatabaseFamilySubdir)
+	var backups []supportDatabaseBackup
+	for _, spec := range supportDatabaseSpecs {
+		dbPath := filepath.Join(familyDir, spec.Role+".db")
+		absent, inspErr := inspectSupportDatabaseFile(ctx, spec, dbPath)
+		if absent || inspErr == nil {
+			continue
+		}
+		backupPath, bErr := backupCorruptSupportDatabase(dbPath, spec.Role, now)
+		if bErr != nil {
+			return backups, fmt.Errorf("back up unreadable %s.db: %w", spec.Role, bErr)
+		}
+		if backupPath != "" {
+			backups = append(backups, supportDatabaseBackup{
+				Role:         spec.Role,
+				OriginalPath: dbPath,
+				BackupPath:   backupPath,
+			})
+		}
+	}
+	if len(backups) == 0 {
+		return nil, nil
+	}
+	if _, err := vprocore.InstallDatabaseFamily(absRoot); err != nil {
+		return backups, fmt.Errorf("restore clean support databases: %w", err)
+	}
+	for _, item := range backups {
+		spec, ok := findSupportDatabaseSpec(item.Role)
+		if !ok {
+			continue
+		}
+		if absent, vErr := inspectSupportDatabaseFile(ctx, spec, item.OriginalPath); absent || vErr != nil {
+			if absent {
+				return backups, fmt.Errorf("restored %s.db was not created at %s", item.Role, item.OriginalPath)
+			}
+			return backups, fmt.Errorf("verify restored %s.db: %w", item.Role, vErr)
+		}
+	}
+	return backups, nil
+}
+
+func formatSupportDatabaseBackupSummary(backups []supportDatabaseBackup) string {
+	if len(backups) == 0 {
+		return ""
+	}
+	if len(backups) == 1 {
+		b := backups[0]
+		return fmt.Sprintf("Unreadable %s.db was backed up to %s and replaced with a clean %s.db.", b.Role, b.BackupPath, b.Role)
+	}
+	parts := make([]string, 0, len(backups))
+	for _, b := range backups {
+		parts = append(parts, fmt.Sprintf("%s.db -> %s", b.Role, b.BackupPath))
+	}
+	return fmt.Sprintf("Unreadable support databases were backed up (%s) and replaced with clean built-in copies.", strings.Join(parts, "; "))
+}
+
 func enrichRecoveryDiagnostics(state *StartupState, dataDir string) {
 	if state == nil || state.Ready {
 		return
 	}
 	state.Message = HumanizeStartupMessage(state.Message)
+	if strings.TrimSpace(dataDir) != "" || strings.TrimSpace(state.ConfigPath) != "" {
+		if issues := diagnoseSupportDatabases(context.Background(), dataDir, state.ConfigPath); len(issues) > 0 {
+			supportDiag := formatSupportDatabaseIssuesDiagnostic(issues)
+			if mentionsSupportRoleFailure(state.Message) {
+				state.Message = supportDiag
+			} else {
+				state.Message = appendDiagnosticSentence(state.Message, supportDiag)
+			}
+		}
+	}
 	if strings.TrimSpace(state.ProjectPath) == "" &&
 		strings.TrimSpace(state.ConfiguredProject) != "" &&
 		state.ConfiguredProject != "None" &&
@@ -268,10 +866,11 @@ func (s *StartupService) ChooseDatabaseFile(ctx context.Context) (string, error)
 // ResetToSample backs up the existing config.yml to config.backup-<timestamp>.yml,
 // writes canonical Sample defaults, and activates the live application runtime.
 func (s *StartupService) ResetToSample(ctx context.Context) (StartupState, error) {
-	if ctx != nil {
-		if err := ctx.Err(); err != nil {
-			return StartupState{}, err
-		}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return StartupState{}, err
 	}
 	if s == nil {
 		return StartupState{}, errors.New("startup service is unavailable")
@@ -287,8 +886,9 @@ func (s *StartupService) ResetToSample(ctx context.Context) (StartupState, error
 	}
 	priorBytes, priorReadErr := os.ReadFile(configPath)
 	hadPrior := priorReadErr == nil
+	opTime := s.now()
 
-	backupPath, err := vprocore.BackupDesktopConfigFile(configPath, s.now())
+	backupPath, err := vprocore.BackupDesktopConfigFile(configPath, opTime)
 	if err != nil {
 		return StartupState{}, err
 	}
@@ -312,21 +912,37 @@ func (s *StartupService) ResetToSample(ctx context.Context) (StartupState, error
 		return StartupState{}, fmt.Errorf("write Sample recovery config.yml: %w", err)
 	}
 
+	supportBackups, repErr := repairWorkspaceSupportDatabases(ctx, s.DataDir, opTime)
+	if repErr != nil {
+		if hadPrior {
+			_ = vprocore.WriteDesktopConfigAtomically(configPath, priorBytes)
+		}
+		return StartupState{}, errors.New(HumanizeStartupMessage(repErr.Error()))
+	}
+	supportMsg := formatSupportDatabaseBackupSummary(supportBackups)
+	if backupPath == "" && len(supportBackups) > 0 {
+		backupPath = supportBackups[0].BackupPath
+	}
+
 	if s.Activate != nil {
 		activated, actErr := s.Activate()
 		if actErr != nil {
 			if hadPrior {
 				_ = vprocore.WriteDesktopConfigAtomically(configPath, priorBytes)
 			}
-			return StartupState{}, fmt.Errorf("activate Sample project: %w", actErr)
+			return StartupState{}, fmt.Errorf("activate Sample project: %s", HumanizeStartupMessage(actErr.Error()))
 		}
 		activated.BackupPath = backupPath
+		if supportMsg != "" {
+			activated.Message = supportMsg
+		}
 		s.State = WithBuildMetadata(activated)
 		return s.State, nil
 	}
 
 	s.State = WithBuildMetadata(StartupState{
 		Ready:          true,
+		Message:        supportMsg,
 		ConfigPath:     configPath,
 		ReleaseChannel: vprocore.ReleaseChannelStable,
 		BackupPath:     backupPath,
@@ -410,15 +1026,20 @@ func (s *StartupService) RecoverWithPaths(ctx context.Context, req StartupRecove
 		desktop := values["Desktop"].(map[string]any)
 		desktop["SchemaVersion"] = 1
 		desktop["LegacyImports"] = stampedImports
-		// Drop invalid/unreachable custom DatabasePaths so standard family databases can open cleanly
+		// Drop invalid, unreachable, or corrupt custom DatabasePaths so standard family databases can open cleanly
 		if rawDBPaths, hasDBPaths := desktop["DatabasePaths"].(map[string]any); hasDBPaths {
 			for role, v := range rawDBPaths {
 				pStr, ok := v.(string)
-				if !ok || !filepath.IsAbs(pStr) {
+				spec, knownRole := findSupportDatabaseSpec(role)
+				if !ok || !filepath.IsAbs(pStr) || !knownRole {
 					delete(rawDBPaths, role)
 					continue
 				}
 				if info, stErr := os.Stat(pStr); stErr != nil || !info.Mode().IsRegular() {
+					delete(rawDBPaths, role)
+					continue
+				}
+				if absent, inspErr := inspectSupportDatabaseFile(ctx, spec, pStr); absent || inspErr != nil {
 					delete(rawDBPaths, role)
 				}
 			}
@@ -580,12 +1201,25 @@ func (s *StartupService) RecoverWithPaths(ctx context.Context, req StartupRecove
 		return StartupState{}, err
 	}
 
-	backupPath, err := vprocore.BackupDesktopConfigFile(configPath, s.now())
+	opTime := s.now()
+	backupPath, err := vprocore.BackupDesktopConfigFile(configPath, opTime)
 	if err != nil {
 		return StartupState{}, err
 	}
 	if err := vprocore.WriteDesktopConfigAtomically(configPath, encoded); err != nil {
 		return StartupState{}, fmt.Errorf("write recovered config.yml: %w", err)
+	}
+
+	supportBackups, repErr := repairWorkspaceSupportDatabases(ctx, s.DataDir, opTime)
+	if repErr != nil {
+		if hadPrior {
+			_ = vprocore.WriteDesktopConfigAtomically(configPath, priorBytes)
+		}
+		return StartupState{}, errors.New(HumanizeStartupMessage(repErr.Error()))
+	}
+	supportMsg := formatSupportDatabaseBackupSummary(supportBackups)
+	if backupPath == "" && len(supportBackups) > 0 {
+		backupPath = supportBackups[0].BackupPath
 	}
 
 	if s.Activate != nil {
@@ -597,12 +1231,16 @@ func (s *StartupService) RecoverWithPaths(ctx context.Context, req StartupRecove
 			return StartupState{}, errors.New(HumanizeStartupMessage(actErr.Error()))
 		}
 		activated.BackupPath = backupPath
+		if supportMsg != "" {
+			activated.Message = supportMsg
+		}
 		s.State = WithBuildMetadata(activated)
 		return s.State, nil
 	}
 
 	next := StartupState{
 		Ready:          true,
+		Message:        supportMsg,
 		ConfigPath:     configPath,
 		ReleaseChannel: vprocore.ReleaseChannelStable,
 		BackupPath:     backupPath,

@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { compile } = require('svelte/compiler');
 const { render } = require('svelte/server');
-const { serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
+const { componentFunctions, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
 
 const source = readFileSync(srcPath('StartupRecoveryPanel.svelte'), 'utf8');
 const moduleBlock = source.match(/<script lang="ts" module>([\s\S]*?)<\/script>/)[1];
@@ -18,6 +18,7 @@ vm.runInNewContext(
 );
 
 const {
+  detectSupportDatabaseFailure,
   hasConfiguredContextSelection,
   formatStartupError,
   isDatabasePathMissing,
@@ -181,4 +182,167 @@ test('StartupRecoveryPanel SSR renders repair vs relocate headings and accurate 
   assert.match(missingHierHtml, /Option 2: Relocate missing database path/);
   assert.equal((missingHierHtml.match(/type="checkbox"[^>]*checked/g) ?? []).length, 1);
   assert.doesNotMatch(missingHierHtml, /id="recovery-hierarchy-path"/);
+});
+
+test('detectSupportDatabaseFailure and deriveInitialRecoveryDraft diagnose corrupt VUser.db and other support DBs', () => {
+  assert.equal(detectSupportDatabaseFailure(makeFailure()), null);
+
+  // 1. Enriched diagnostic from Go StartupService with explicit VUser.db path
+  const enrichedFailure = makeFailure({
+    message:
+      'Shared support database VUser.db (personal species and site unit lists) at /tmp/vpro/data/database-family/VUser.db ' +
+      'could not be opened because the file is not a readable VPro database. Your project files and saved settings were kept unchanged.',
+  });
+  const enrichedDraft = deriveInitialRecoveryDraft(enrichedFailure);
+  assert.ok(enrichedDraft.supportDatabaseIssue);
+  assert.equal(enrichedDraft.supportDatabaseIssue.role, 'VUser');
+  assert.equal(enrichedDraft.supportDatabaseIssue.fileName, 'VUser.db');
+  assert.equal(
+    enrichedDraft.supportDatabaseIssue.filePath,
+    '/tmp/vpro/data/database-family/VUser.db'
+  );
+  assert.equal(enrichedDraft.supportDatabaseIssue.hasPersonalUserEntries, true);
+  assert.equal(enrichedDraft.hasMissingDatabase, false);
+  assert.equal(enrichedDraft.clearSu, false);
+  assert.equal(enrichedDraft.clearHierarchy, false);
+  assert.doesNotMatch(enrichedDraft.formattedMessage, /RuntimeError|YAML|SQLITE_NOTADB/);
+
+  // 2. Raw attach failure infers database-family/VUser.db path from workspace projectPath (POSIX & Windows)
+  const rawPosixDraft = deriveInitialRecoveryDraft(
+    makeFailure({
+      message: 'configured context could not be opened; YAML was retained: attach VUser: file is not a database',
+    })
+  );
+  assert.ok(rawPosixDraft.supportDatabaseIssue);
+  assert.equal(rawPosixDraft.supportDatabaseIssue.filePath, '/tmp/vpro/data/database-family/VUser.db');
+  assert.match(rawPosixDraft.formattedMessage, /Shared support database VUser\.db/);
+  assert.match(rawPosixDraft.formattedMessage, /\/tmp\/vpro\/data\/database-family\/VUser\.db/);
+  assert.doesNotMatch(rawPosixDraft.formattedMessage, /YAML|RuntimeError/);
+
+  const rawWinIssue = detectSupportDatabaseFailure(
+    makeFailure({
+      projectPath: 'C:\\Users\\FieldCrew\\AppData\\Local\\vpro\\projects\\Sample.db',
+      message: 'configured context could not be opened; YAML was retained: VUser.USysUserSpp is missing a required physical table',
+    })
+  );
+  assert.ok(rawWinIssue);
+  assert.equal(
+    rawWinIssue.filePath,
+    'C:\\Users\\FieldCrew\\AppData\\Local\\vpro\\database-family\\VUser.db'
+  );
+
+  // 3. Multi-support-database corruption
+  const multiIssue = detectSupportDatabaseFailure(
+    makeFailure({
+      message:
+        'Shared support databases could not be opened: VLists.db (provincial plant taxonomy and BEC reference lists) ' +
+        'at /tmp/vpro/data/database-family/VLists.db (the file is empty (0 bytes)); ' +
+        'VUser.db (personal species and site unit lists) at /tmp/vpro/data/database-family/VUser.db (the file is not a readable VPro database).',
+    })
+  );
+  assert.ok(multiIssue);
+  assert.deepEqual([...multiIssue.allFileNames], ['VLists.db', 'VUser.db']);
+  assert.equal(multiIssue.hasPersonalUserEntries, true);
+});
+
+test('StartupRecoveryPanel SSR and recovery actions back up corrupt VUser.db and exit Startup Recovery', async () => {
+  const Panel = serverComponent(source, 'StartupRecoveryPanel.svelte', {
+    '../../bindings/github.com/boostao/vpro/app': {
+      LifecycleService: {
+        ResetStartupToSample: async () => ({ ready: true, backupPath: '' }),
+        ChooseStartupDatabaseFile: async () => '',
+        RecoverStartupWithPaths: async () => ({ ready: true, backupPath: '' }),
+      },
+    },
+  });
+
+  const corruptVUserHtml = render(Panel, {
+    props: {
+      startupFailure: makeFailure({
+        message:
+          'Shared support database VUser.db (personal species and site unit lists) at /tmp/vpro/data/database-family/VUser.db ' +
+          'could not be opened because the file is not a readable VPro database. Your project files and saved settings were kept unchanged.',
+      }),
+      busy: false,
+      onrecovered: () => {},
+    },
+  }).body;
+
+  assert.match(corruptVUserHtml, /Shared support database could not be opened/);
+  assert.match(corruptVUserHtml, /data-startup-support-db-callout/);
+  assert.match(corruptVUserHtml, /\/tmp\/vpro\/data\/database-family\/VUser\.db/);
+  assert.match(corruptVUserHtml, /VUser\.corrupt-&lt;timestamp(?:&gt;|>)\.db/);
+  assert.match(corruptVUserHtml, /data-startup-repair-support/);
+  assert.match(corruptVUserHtml, /Back up &amp; restore VUser\.db &amp; open project/);
+  assert.match(corruptVUserHtml, /Restore VUser\.db &amp; Switch to Sample project/);
+  assert.doesNotMatch(corruptVUserHtml, /Option 2: Relocate missing database path/);
+
+  // Exercise interactive recovery actions (Option 1: keep project & settings; Option 2: switch to Sample)
+  const calls = [];
+  const notices = [];
+  const supportFailure = makeFailure({
+    message:
+      'Shared support database VUser.db (personal species and site unit lists) at /tmp/vpro/data/database-family/VUser.db ' +
+      'could not be opened because the file is not a readable VPro database.',
+  });
+  const derivedMeta = deriveInitialRecoveryDraft(supportFailure);
+
+  const ctx = componentFunctions(
+    'StartupRecoveryPanel.svelte',
+    ['buildRecoveryNotice', 'fallbackStartupToSample', 'recoverStartupPaths', 'repairSupportAndOpenProject'],
+    {
+      $state: { snapshot: (v) => structuredClone(v) },
+      busy: false,
+      recoveryWorking: false,
+      recoveryError: '',
+      recoveryProjectPath: derivedMeta.projectPath,
+      recoveryProjectName: derivedMeta.projectName,
+      recoverySUPath: derivedMeta.suPath,
+      recoveryClearSU: derivedMeta.clearSu,
+      recoveryHierarchyPath: derivedMeta.hierarchyPath,
+      recoveryClearHierarchy: derivedMeta.clearHierarchy,
+      derivedMeta,
+      formatStartupError,
+      LifecycleService: {
+        RecoverStartupWithPaths: async (payload) => {
+          calls.push({ rpc: 'RecoverStartupWithPaths', payload });
+          return {
+            ready: true,
+            backupPath: '/tmp/vpro/config/config.backup-20261119-164500.yml',
+            message:
+              'Unreadable VUser.db was backed up to /tmp/vpro/data/database-family/VUser.corrupt-20261119-164500.db and replaced with a clean VUser.db.',
+          };
+        },
+        ResetStartupToSample: async () => {
+          calls.push({ rpc: 'ResetStartupToSample' });
+          return {
+            ready: true,
+            backupPath: '/tmp/vpro/config/config.backup-20261119-164500.yml',
+            message:
+              'Unreadable VUser.db was backed up to /tmp/vpro/data/database-family/VUser.corrupt-20261119-164500.db and replaced with a clean VUser.db.',
+          };
+        },
+      },
+      onrecovered: async (notice) => {
+        notices.push(notice);
+      },
+    }
+  );
+
+  await ctx.actions.repairSupportAndOpenProject();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].rpc, 'RecoverStartupWithPaths');
+  assert.equal(calls[0].payload.projectPath, '/tmp/vpro/data/projects/Sample.db');
+  assert.equal(notices.length, 1);
+  assert.match(notices[0], /Support database restored and project opened cleanly\./);
+  assert.match(notices[0], /VUser\.corrupt-20261119-164500\.db/);
+  assert.match(notices[0], /config\.backup-20261119-164500\.yml/);
+  assert.equal(ctx.recoveryError, '');
+
+  await ctx.actions.fallbackStartupToSample();
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].rpc, 'ResetStartupToSample');
+  assert.equal(notices.length, 2);
+  assert.match(notices[1], /Recovered with built-in Sample project\./);
+  assert.match(notices[1], /VUser\.corrupt-20261119-164500\.db/);
 });

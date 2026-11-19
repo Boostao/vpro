@@ -3,12 +3,15 @@ package lifecycle
 import (
 	"bytes"
 	"context"
+	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -374,5 +377,306 @@ func TestStartupRecoveryRealStateUpgradeOption2AndDiagnostics(t *testing.T) {
 	}
 	if u, _ := vprocore.ConfigString(repairedSnap, "Current", "User"); u != "BotanistSam" {
 		t.Fatalf("expected User BotanistSam preserved after repair, got %q", u)
+	}
+}
+
+func TestStartupRecoveryCorruptVUserDBResetToSampleBacksUpAndRestoresCleanly(t *testing.T) {
+	dataDir := t.TempDir()
+	configDir := t.TempDir()
+	configFile := filepath.Join(configDir, "config.yml")
+
+	initPrefs, err := vprocore.OpenDesktopConfig(dataDir, configDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initSvc, err := vprocore.NewSQLiteProjectService(dataDir, configDir, initPrefs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = initSvc.CloseSQLiteContext()
+
+	vuserPath := filepath.Join(dataDir, "database-family", "VUser.db")
+	corruptPayload := []byte("NOT A SQLITE DB")
+	if err := os.WriteFile(vuserPath, corruptPayload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	activateRuntime := func() (StartupState, error) {
+		p, oErr := vprocore.OpenDesktopConfig(dataDir, configDir)
+		if oErr != nil {
+			return StartupState{}, oErr
+		}
+		ps, sErr := vprocore.NewSQLiteProjectService(dataDir, configDir, p)
+		if sErr != nil {
+			return StartupState{}, sErr
+		}
+		defer ps.CloseSQLiteContext()
+		st := StartupState{Ready: true, ConfigPath: p.Path, ReleaseChannel: vprocore.ReleaseChannelStable}
+		PopulateRecoveryHints(&st)
+		return st, nil
+	}
+
+	_, bootErr := activateRuntime()
+	if bootErr == nil || !strings.Contains(bootErr.Error(), "VUser") {
+		t.Fatalf("expected cold boot to fail attaching corrupt VUser.db, got %v", bootErr)
+	}
+
+	fixedClock := time.Date(2026, 11, 19, 16, 45, 0, 0, time.UTC)
+	startup := &StartupService{
+		DataDir:  dataDir,
+		Now:      func() time.Time { return fixedClock },
+		Activate: activateRuntime,
+	}
+	recoveryState := StartupState{
+		Ready:          false,
+		Message:        bootErr.Error(),
+		ConfigPath:     configFile,
+		ReleaseChannel: vprocore.ReleaseChannelStable,
+	}
+	PopulateRecoveryHints(&recoveryState)
+	startup.SetState(recoveryState)
+
+	failureView := startup.GetState()
+	if failureView.Ready {
+		t.Fatalf("expected Ready=false in Startup Recovery, got %+v", failureView)
+	}
+	for _, wantSubstr := range []string{"VUser.db", "personal species and site unit lists", vuserPath} {
+		if !strings.Contains(failureView.Message, wantSubstr) {
+			t.Fatalf("expected plain-language failure diagnostic containing %q, got %q", wantSubstr, failureView.Message)
+		}
+	}
+	for _, forbidden := range []string{"RuntimeError", "YAML", "SQLITE_NOTADB"} {
+		if strings.Contains(failureView.Message, forbidden) {
+			t.Fatalf("failure diagnostic leaked internal token %q: %q", forbidden, failureView.Message)
+		}
+	}
+	sampleDB := filepath.Join(dataDir, "projects", "Sample.db")
+	if failureView.ProjectPath != sampleDB {
+		t.Fatalf("expected ProjectPath prefilled with %q, got %q", sampleDB, failureView.ProjectPath)
+	}
+
+	recovered, err := startup.ResetToSample(context.Background())
+	if err != nil || !recovered.Ready {
+		t.Fatalf("ResetToSample failed to recover corrupt VUser.db on first attempt: %+v (%v)", recovered, err)
+	}
+
+	wantVUserBackup := filepath.Join(dataDir, "database-family", "VUser.corrupt-20261119-164500.db")
+	gotBackupBytes, err := os.ReadFile(wantVUserBackup)
+	if err != nil {
+		t.Fatalf("expected corrupt VUser.db backup at %s: %v", wantVUserBackup, err)
+	}
+	if !bytes.Equal(gotBackupBytes, corruptPayload) {
+		t.Fatalf("corrupt VUser.db backup bytes mismatch: got %q, want %q", gotBackupBytes, corruptPayload)
+	}
+	if !strings.Contains(recovered.Message, wantVUserBackup) {
+		t.Fatalf("expected recovered.Message to report %q, got %q", wantVUserBackup, recovered.Message)
+	}
+
+	vuserSpec, _ := findSupportDatabaseSpec("VUser")
+	if absent, vErr := inspectSupportDatabaseFile(context.Background(), vuserSpec, vuserPath); absent || vErr != nil {
+		t.Fatalf("restored VUser.db failed verification: absent=%v err=%v", absent, vErr)
+	}
+
+	// Confirm subsequent cold boot succeeds directly without entering Startup Recovery
+	rebootState, rebootErr := activateRuntime()
+	if rebootErr != nil || !rebootState.Ready {
+		t.Fatalf("expected subsequent cold boot to succeed cleanly after VUser.db restoration, got %+v (%v)", rebootState, rebootErr)
+	}
+}
+
+func TestStartupRecoveryCorruptSupportDBsRecoverWithPathsPreservesSettingsAndMultiDB(t *testing.T) {
+	dataDir := t.TempDir()
+	configDir := t.TempDir()
+	configFile := filepath.Join(configDir, "config.yml")
+
+	initPrefs, err := vprocore.OpenDesktopConfig(dataDir, configDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initSvc, err := vprocore.NewSQLiteProjectService(dataDir, configDir, initPrefs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = initSvc.CloseSQLiteContext()
+
+	if err := initPrefs.Update("Current", map[string]any{
+		"User":          "BotanistElena",
+		"DataFormName":  "frmSIVIsite",
+		"CurrHierarchy": "Sample",
+		"HierarchyPath": filepath.Join(dataDir, "projects", "Sample.db"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	sampleDB := filepath.Join(dataDir, "projects", "Sample.db")
+	familyDir := filepath.Join(dataDir, "database-family")
+	vuserPath := filepath.Join(familyDir, "VUser.db")
+	corruptVUser1 := []byte("CORRUPT_NOT_A_SQLITE_DB_BYTES")
+	corruptWal1 := []byte("UNCOMMITTED_USER_SPECIES_WAL_FRAMES")
+	if err := os.WriteFile(vuserPath, corruptVUser1, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(vuserPath+"-wal", corruptWal1, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	activateRuntime := func() (StartupState, error) {
+		p, oErr := vprocore.OpenDesktopConfig(dataDir, configDir)
+		if oErr != nil {
+			return StartupState{}, oErr
+		}
+		ps, sErr := vprocore.NewSQLiteProjectService(dataDir, configDir, p)
+		if sErr != nil {
+			return StartupState{}, sErr
+		}
+		defer ps.CloseSQLiteContext()
+		st := StartupState{Ready: true, ConfigPath: p.Path, ReleaseChannel: vprocore.ReleaseChannelStable}
+		PopulateRecoveryHints(&st)
+		return st, nil
+	}
+
+	_, bootErr := activateRuntime()
+	if bootErr == nil {
+		t.Fatal("expected cold boot to fail when VUser.db is corrupt")
+	}
+
+	fixedClock := time.Date(2026, 11, 19, 16, 45, 0, 0, time.UTC)
+	startup := &StartupService{
+		DataDir:  dataDir,
+		Now:      func() time.Time { return fixedClock },
+		Activate: activateRuntime,
+	}
+	rec1 := StartupState{Ready: false, Message: bootErr.Error(), ConfigPath: configFile}
+	PopulateRecoveryHints(&rec1)
+	startup.SetState(rec1)
+
+	// Recover via RecoverWithPaths (Option 1: Back up & restore VUser.db & open project)
+	recovered1, err := startup.RecoverWithPaths(context.Background(), StartupRecoveryRequest{
+		ProjectPath:    sampleDB,
+		ProjectName:    "Sample",
+		HierarchyPath:  sampleDB,
+		ClearSU:        false,
+		ClearHierarchy: false,
+	})
+	if err != nil || !recovered1.Ready {
+		t.Fatalf("RecoverWithPaths failed on corrupt VUser.db: %+v (%v)", recovered1, err)
+	}
+
+	firstBackup := filepath.Join(familyDir, "VUser.corrupt-20261119-164500.db")
+	gotB1, err := os.ReadFile(firstBackup)
+	if err != nil || !bytes.Equal(gotB1, corruptVUser1) {
+		t.Fatalf("expected exact corrupt VUser.db backup at %s, got %q (%v)", firstBackup, gotB1, err)
+	}
+	gotWalB1, err := os.ReadFile(firstBackup + "-wal")
+	if err != nil || !bytes.Equal(gotWalB1, corruptWal1) {
+		t.Fatalf("expected non-empty WAL sidecar backup at %s-wal, got %q (%v)", firstBackup, gotWalB1, err)
+	}
+	if _, statWalErr := os.Stat(vuserPath + "-wal"); !errors.Is(statWalErr, os.ErrNotExist) {
+		t.Fatalf("expected stale VUser.db-wal sidecar removed before reseed, got err=%v", statWalErr)
+	}
+
+	afterPrefs, err := vprocore.OpenDesktopConfig(dataDir, configDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap1, err := afterPrefs.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u, _ := vprocore.ConfigString(snap1, "Current", "User"); u != "BotanistElena" {
+		t.Fatalf("expected User BotanistElena preserved, got %q", u)
+	}
+	if formName, _ := vprocore.ConfigString(snap1, "Current", "DataFormName"); formName != "frmSIVIsite" {
+		t.Fatalf("expected DataFormName frmSIVIsite preserved, got %q", formName)
+	}
+
+	// Phase 2: Multi-DB corruption at the same timestamp (missing VP08 table in VUser.db + 0-byte VLists.db + corrupt B-tree pages in VPro64.db)
+	vuserSQL, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(vuserPath, "rw"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vuserSQL.Exec(`DROP TABLE "USysUserSpp";`); err != nil {
+		_ = vuserSQL.Close()
+		t.Fatal(err)
+	}
+	_ = vuserSQL.Close()
+	droppedVUserBytes, err := os.ReadFile(vuserPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vlistsPath := filepath.Join(familyDir, "VLists.db")
+	if err := os.WriteFile(vlistsPath, []byte{}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	vpro64Path := filepath.Join(familyDir, "VPro64.db")
+	vpro64Bytes, err := os.ReadFile(vpro64Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Corrupt B-tree interior/table pages while keeping the 16-byte SQLite header intact so PRAGMA quick_check catches page damage
+	for i := 100; i < len(vpro64Bytes) && i < 16384; i++ {
+		vpro64Bytes[i] = 0xFF
+	}
+	if err := os.WriteFile(vpro64Path, vpro64Bytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, bootErr2 := activateRuntime()
+	if bootErr2 == nil {
+		t.Fatal("expected cold boot to fail under multi-DB corruption")
+	}
+
+	startup2 := &StartupService{
+		DataDir:  dataDir,
+		Now:      func() time.Time { return fixedClock }, // same timestamp verifies -1 non-overwriting backup suffix
+		Activate: activateRuntime,
+	}
+	rec2 := StartupState{Ready: false, Message: bootErr2.Error(), ConfigPath: configFile}
+	PopulateRecoveryHints(&rec2)
+	startup2.SetState(rec2)
+
+	diag2 := startup2.GetState().Message
+	for _, want := range []string{"VPro64.db", "VLists.db", "VUser.db", vpro64Path, vlistsPath, vuserPath} {
+		if !strings.Contains(diag2, want) {
+			t.Fatalf("expected multi-DB diagnostic to include %q, got %q", want, diag2)
+		}
+	}
+
+	recovered2, err := startup2.RecoverWithPaths(context.Background(), StartupRecoveryRequest{
+		ProjectPath:   sampleDB,
+		ProjectName:   "Sample",
+		HierarchyPath: sampleDB,
+	})
+	if err != nil || !recovered2.Ready {
+		t.Fatalf("RecoverWithPaths failed to heal multi-DB corruption: %+v (%v)", recovered2, err)
+	}
+
+	// Verify first VUser backup was NOT overwritten and second backup got -1 suffix
+	stillFirst, err := os.ReadFile(firstBackup)
+	if err != nil || !bytes.Equal(stillFirst, corruptVUser1) {
+		t.Fatalf("first VUser backup %s was overwritten or lost!", firstBackup)
+	}
+	secondVUserBackup := filepath.Join(familyDir, "VUser.corrupt-20261119-164500-1.db")
+	gotB2, err := os.ReadFile(secondVUserBackup)
+	if err != nil || !bytes.Equal(gotB2, droppedVUserBytes) {
+		t.Fatalf("expected second VUser backup at %s preserving dropped-table DB bytes: %v", secondVUserBackup, err)
+	}
+	vlistsBackup := filepath.Join(familyDir, "VLists.corrupt-20261119-164500.db")
+	if info, stErr := os.Stat(vlistsBackup); stErr != nil || info.Size() != 0 {
+		t.Fatalf("expected 0-byte VLists backup at %s, got info=%v err=%v", vlistsBackup, info, stErr)
+	}
+	vpro64Backup := filepath.Join(familyDir, "VPro64.corrupt-20261119-164500.db")
+	gotVPro64Backup, err := os.ReadFile(vpro64Backup)
+	if err != nil || !bytes.Equal(gotVPro64Backup, vpro64Bytes) {
+		t.Fatalf("expected corrupt VPro64 backup at %s preserving exact damaged bytes: %v", vpro64Backup, err)
+	}
+
+	for _, spec := range supportDatabaseSpecs {
+		p := filepath.Join(familyDir, spec.Role+".db")
+		if absent, vErr := inspectSupportDatabaseFile(context.Background(), spec, p); absent || vErr != nil {
+			t.Fatalf("support DB %s.db not healthy after multi-DB restore: absent=%v err=%v", spec.Role, absent, vErr)
+		}
 	}
 }
