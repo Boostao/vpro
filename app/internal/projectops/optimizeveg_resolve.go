@@ -133,6 +133,255 @@ func resolveVegIntConsensus(members []vegRowWithRowID, col, plot, species string
 	return chosen, nil
 }
 
+type invalidVegNumericCell struct {
+	sourceID  int64
+	hasID     bool
+	display   string
+	violation string
+}
+
+func memberSourceID(m vegRowWithRowID) (int64, bool) {
+	if idCell, ok := m.cells["ID"]; ok && idCell.storage == "integer" {
+		return idCell.intVal, true
+	}
+	if m.rowID != 0 {
+		return m.rowID, true
+	}
+	return 0, false
+}
+
+func isNonFiniteTextToken(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "nan", "+nan", "-nan", "inf", "+inf", "-inf", "infinity", "+infinity", "-infinity":
+		return true
+	default:
+		return false
+	}
+}
+
+func groupHasVegColumn(members []vegRowWithRowID, col string) bool {
+	for _, m := range members {
+		if _, ok := m.cells[col]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func formatMemberIDTag(id int64, hasID bool) string {
+	if !hasID {
+		return ""
+	}
+	return fmt.Sprintf(" (ID %d)", id)
+}
+
+func validateMemberCoverCell(col string, m vegRowWithRowID) (float64, bool, *invalidVegNumericCell) {
+	c, exists := m.cells[col]
+	if !exists || c.storage == "" || c.storage == "null" {
+		return 0, false, nil
+	}
+	srcID, hasID := memberSourceID(m)
+	idTag := formatMemberIDTag(srcID, hasID)
+
+	switch c.storage {
+	case "real", "integer":
+		var val float64
+		var disp string
+		if c.storage == "real" {
+			val = c.realVal
+			disp = strconv.FormatFloat(val, 'g', -1, 64)
+		} else {
+			val = float64(c.intVal)
+			disp = strconv.FormatInt(c.intVal, 10)
+		}
+		if math.IsNaN(val) || math.IsInf(val, 0) {
+			return 0, true, &invalidVegNumericCell{
+				sourceID:  srcID,
+				hasID:     hasID,
+				display:   disp,
+				violation: fmt.Sprintf("non-finite %s cover %s%s", col, disp, idTag),
+			}
+		}
+		if val < 0 {
+			return 0, true, &invalidVegNumericCell{
+				sourceID:  srcID,
+				hasID:     hasID,
+				display:   disp,
+				violation: fmt.Sprintf("negative %s cover %s%s", col, disp, idTag),
+			}
+		}
+		if math.Abs(val) > math.MaxFloat32 {
+			return 0, true, &invalidVegNumericCell{
+				sourceID:  srcID,
+				hasID:     hasID,
+				display:   disp,
+				violation: fmt.Sprintf("out-of-bounds %s cover %s (exceeds IEEE-754 SINGLE range)%s", col, disp, idTag),
+			}
+		}
+		narrowed, ok := NarrowSingleCover(val)
+		if !ok {
+			narrowedDisp := strconv.FormatFloat(float64(narrowed), 'g', -1, 32)
+			return 0, true, &invalidVegNumericCell{
+				sourceID:  srcID,
+				hasID:     hasID,
+				display:   disp,
+				violation: fmt.Sprintf("out-of-bounds %s cover %s (IEEE-754 SINGLE %s >= 100)%s", col, disp, narrowedDisp, idTag),
+			}
+		}
+		if narrowed == 0 {
+			narrowed = 0
+		}
+		return float64(narrowed), true, nil
+
+	case "text":
+		rawText := string(c.bytes)
+		disp := fmt.Sprintf("%q", rawText)
+		kind := "non-numeric"
+		if isNonFiniteTextToken(rawText) {
+			kind = "non-numeric/non-finite"
+		}
+		return 0, true, &invalidVegNumericCell{
+			sourceID:  srcID,
+			hasID:     hasID,
+			display:   disp,
+			violation: fmt.Sprintf("%s %s cover %s%s", kind, col, disp, idTag),
+		}
+
+	case "blob":
+		disp := "0x" + hex.EncodeToString(c.bytes)
+		return 0, true, &invalidVegNumericCell{
+			sourceID:  srcID,
+			hasID:     hasID,
+			display:   disp,
+			violation: fmt.Sprintf("non-numeric %s cover blob %s%s", col, disp, idTag),
+		}
+
+	default:
+		disp := fmt.Sprintf("<%s>", c.storage)
+		return 0, true, &invalidVegNumericCell{
+			sourceID:  srcID,
+			hasID:     hasID,
+			display:   disp,
+			violation: fmt.Sprintf("non-numeric %s cover %s%s", col, disp, idTag),
+		}
+	}
+}
+
+func validateMemberHeightCell(col string, m vegRowWithRowID) (float64, bool, *invalidVegNumericCell) {
+	c, exists := m.cells[col]
+	if !exists || c.storage == "" || c.storage == "null" {
+		return 0, false, nil
+	}
+	srcID, hasID := memberSourceID(m)
+	idTag := formatMemberIDTag(srcID, hasID)
+
+	switch c.storage {
+	case "real", "integer":
+		var val float64
+		var disp string
+		if c.storage == "real" {
+			val = c.realVal
+			disp = strconv.FormatFloat(val, 'g', -1, 64)
+		} else {
+			val = float64(c.intVal)
+			disp = strconv.FormatInt(c.intVal, 10)
+		}
+		if math.IsNaN(val) || math.IsInf(val, 0) {
+			return 0, true, &invalidVegNumericCell{
+				sourceID:  srcID,
+				hasID:     hasID,
+				display:   disp,
+				violation: fmt.Sprintf("non-finite %s height %s%s", col, disp, idTag),
+			}
+		}
+		if val < 0 {
+			return 0, true, &invalidVegNumericCell{
+				sourceID:  srcID,
+				hasID:     hasID,
+				display:   disp,
+				violation: fmt.Sprintf("negative %s height %s%s", col, disp, idTag),
+			}
+		}
+		if math.Abs(val) > math.MaxFloat32 || math.IsInf(float64(float32(val)), 0) {
+			return 0, true, &invalidVegNumericCell{
+				sourceID:  srcID,
+				hasID:     hasID,
+				display:   disp,
+				violation: fmt.Sprintf("out-of-bounds %s height %s (exceeds IEEE-754 SINGLE range)%s", col, disp, idTag),
+			}
+		}
+		if val == 0 {
+			val = 0
+		}
+		return val, true, nil
+
+	case "text":
+		rawText := string(c.bytes)
+		disp := fmt.Sprintf("%q", rawText)
+		kind := "non-numeric"
+		if isNonFiniteTextToken(rawText) {
+			kind = "non-numeric/non-finite"
+		}
+		return 0, true, &invalidVegNumericCell{
+			sourceID:  srcID,
+			hasID:     hasID,
+			display:   disp,
+			violation: fmt.Sprintf("%s %s height %s%s", kind, col, disp, idTag),
+		}
+
+	case "blob":
+		disp := "0x" + hex.EncodeToString(c.bytes)
+		return 0, true, &invalidVegNumericCell{
+			sourceID:  srcID,
+			hasID:     hasID,
+			display:   disp,
+			violation: fmt.Sprintf("non-numeric %s height blob %s%s", col, disp, idTag),
+		}
+
+	default:
+		disp := fmt.Sprintf("<%s>", c.storage)
+		return 0, true, &invalidVegNumericCell{
+			sourceID:  srcID,
+			hasID:     hasID,
+			display:   disp,
+			violation: fmt.Sprintf("non-numeric %s height %s%s", col, disp, idTag),
+		}
+	}
+}
+
+func buildInvalidNumericConflict(
+	gk vegGroupKey,
+	col string,
+	invalids []invalidVegNumericCell,
+) OptimizeVegConflict {
+	reasons := make([]string, 0, len(invalids))
+	var badVals []string
+	seenVals := map[string]bool{}
+	var badIDs []int64
+	seenIDs := map[int64]bool{}
+	for _, inv := range invalids {
+		reasons = append(reasons, inv.violation)
+		if !seenVals[inv.display] {
+			seenVals[inv.display] = true
+			badVals = append(badVals, inv.display)
+		}
+		if inv.hasID && !seenIDs[inv.sourceID] {
+			seenIDs[inv.sourceID] = true
+			badIDs = append(badIDs, inv.sourceID)
+		}
+	}
+	msg := fmt.Sprintf("%s cannot be consolidated", strings.Join(reasons, "; "))
+	return OptimizeVegConflict{
+		PlotNumber:   gk.plot,
+		Species:      gk.species,
+		Field:        col,
+		Reason:       msg,
+		Values:       badVals,
+		SourceIDs:    badIDs,
+		Overrideable: false,
+	}
+}
+
 func resolveOptimizeVegGroup(
 	gk vegGroupKey,
 	members []vegRowWithRowID,
@@ -143,6 +392,9 @@ func resolveOptimizeVegGroup(
 	custodianAuditOverride bool,
 	preview *OptimizeVegPreview,
 ) plannedVegConsolidation {
+	if len(members) == 0 {
+		return plannedVegConsolidation{}
+	}
 	survivor := members[0]
 	survivorLogicalID := survivor.cells["ID"].intVal
 
@@ -158,96 +410,84 @@ func resolveOptimizeVegGroup(
 	var blockedReasons []string
 	overlapping := false
 
-	// Rule 3: Independent non-null MAX on numeric cover columns.
+	// Rule 3: Validate EVERY source row's numeric cover cell BEFORE computing non-null MAX.
 	for _, col := range vegCoverCols {
-		if _, hasCol := survivor.cells[col]; !hasCol {
+		if !groupHasVegColumn(members, col) {
 			continue
 		}
 		countNonNull := 0
+		validCount := 0
 		var maxVal float64
+		var invalidCells []invalidVegNumericCell
 		for _, m := range members {
-			c := m.cells[col]
-			if c.storage == "null" {
+			narrowed, present, invalid := validateMemberCoverCell(col, m)
+			if !present {
 				continue
-			}
-			var val float64
-			switch c.storage {
-			case "real":
-				val = c.realVal
-			case "integer":
-				val = float64(c.intVal)
-			default:
-				continue
-			}
-			if math.IsNaN(val) || math.IsInf(val, 0) {
-				continue
-			}
-			if countNonNull == 0 || val > maxVal {
-				maxVal = val
 			}
 			countNonNull++
-		}
-		if countNonNull == 0 {
-			afterCells[col] = rawSQLiteCell{storage: "null"}
-			continue
+			if invalid != nil {
+				invalidCells = append(invalidCells, *invalid)
+				continue
+			}
+			if validCount == 0 || narrowed > maxVal {
+				maxVal = narrowed
+			}
+			validCount++
 		}
 		if countNonNull > 1 {
 			overlapping = true
 		}
-		finalCover := maxVal
-		if finalCover < 0 {
-			// ENG-GO-002: a negative cover is invalid source data; block the group rather than
-			// silently carrying it into the consolidated row.
-			msg := fmt.Sprintf("negative %s cover %v cannot be consolidated", col, finalCover)
-			blockedReasons = append(blockedReasons, msg)
-			conflicts = append(conflicts, OptimizeVegConflict{
-				PlotNumber: gk.plot,
-				Species:    gk.species,
-				Field:      col,
-				Reason:     msg,
-				SourceIDs:  []int64{survivorLogicalID},
-			})
-			afterCells[col] = survivor.cells[col]
+		if len(invalidCells) > 0 {
+			conflict := buildInvalidNumericConflict(gk, col, invalidCells)
+			blockedReasons = append(blockedReasons, conflict.Reason)
+			conflicts = append(conflicts, conflict)
+			if survCell, ok := survivor.cells[col]; ok {
+				afterCells[col] = survCell
+			} else {
+				afterCells[col] = rawSQLiteCell{storage: "null"}
+			}
 			continue
 		}
-		if narrowed, ok := NarrowSingleCover(finalCover); ok {
-			finalCover = float64(narrowed) // store the Access SINGLE value, not the raw double
-		} else {
-			finalCover = 99.0
-			cappedCols = append(cappedCols, col)
+		if validCount == 0 {
+			afterCells[col] = rawSQLiteCell{storage: "null"}
+			continue
 		}
-		afterCells[col] = rawSQLiteCell{storage: "real", realVal: finalCover}
-		mergedCovers[col] = finalCover
+		afterCells[col] = rawSQLiteCell{storage: "real", realVal: maxVal}
+		mergedCovers[col] = maxVal
 	}
 
-	// Rule 3: Independent non-null MAX on numeric height columns.
+	// Rule 3: Validate EVERY source row's numeric height cell BEFORE computing non-null MAX.
 	for _, col := range vegNumericHeightCols {
-		if _, hasCol := survivor.cells[col]; !hasCol {
+		if !groupHasVegColumn(members, col) {
 			continue
 		}
 		hasVal := false
 		var maxVal float64
+		var invalidCells []invalidVegNumericCell
 		for _, m := range members {
-			c := m.cells[col]
-			if c.storage == "null" {
+			val, present, invalid := validateMemberHeightCell(col, m)
+			if !present {
 				continue
 			}
-			var val float64
-			switch c.storage {
-			case "real":
-				val = c.realVal
-			case "integer":
-				val = float64(c.intVal)
-			default:
-				continue
-			}
-			if math.IsNaN(val) || math.IsInf(val, 0) {
+			if invalid != nil {
+				invalidCells = append(invalidCells, *invalid)
 				continue
 			}
 			if !hasVal || val > maxVal {
 				maxVal = val
 				hasVal = true
 			}
+		}
+		if len(invalidCells) > 0 {
+			conflict := buildInvalidNumericConflict(gk, col, invalidCells)
+			blockedReasons = append(blockedReasons, conflict.Reason)
+			conflicts = append(conflicts, conflict)
+			if survCell, ok := survivor.cells[col]; ok {
+				afterCells[col] = survCell
+			} else {
+				afterCells[col] = rawSQLiteCell{storage: "null"}
+			}
+			continue
 		}
 		if !hasVal {
 			afterCells[col] = rawSQLiteCell{storage: "null"}
@@ -400,9 +640,11 @@ func resolveOptimizeVegGroup(
 	}
 
 	blocked := len(conflicts) > 0 || len(blockedReasons) > 0
-	if blocked && len(blockedReasons) == 0 && len(conflicts) > 0 {
+	if blocked {
 		for _, c := range conflicts {
-			blockedReasons = append(blockedReasons, c.Reason)
+			if !slices.Contains(blockedReasons, c.Reason) {
+				blockedReasons = append(blockedReasons, c.Reason)
+			}
 		}
 	}
 
