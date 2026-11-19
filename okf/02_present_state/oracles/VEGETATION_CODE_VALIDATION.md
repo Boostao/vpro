@@ -30,20 +30,12 @@ codes are not explicitly filtered. Validation uses the physical master
 
 ## Package API
 
-`vpro_validate_vegetation_codes()` requires an active project context and accepts
-an explicit SQLite species-reference database, defaulting to bundled
-`VLists.db`. The reference database must contain `USysAllSpecs.Code`.
+`vpro_validate(ws, scope = c("su", "project"), checks = "compliance")` (`r/R/lmh25_validate.R`) checks `<Project>_Veg` codes against `ws$vlists_path` (`USysAllSpecs`) and `ws$vuser_path` (`USysUserSpp`).
 
-By default, an active SU restricts validation using the Access left-join shape.
-`use_active_su = FALSE` validates the complete active project. Same-file and
+By default (`scope = "su"`), an active SU restricts validation to active SU plots.
+`scope = "project"` validates the complete active project. Same-file and
 external active SUs are supported without changing context attachment ownership.
 
-The package uses SQLite `NOCASE` for ASCII case-insensitive code matching as a
-portable approximation of Access database comparison. Exact accent and locale
-collation equivalence is not claimed. Codes are not trimmed or otherwise
-normalized.
+The package uses case-insensitive ASCII code matching as a portable approximation of Access database comparison, distinguishing accepted master codes, personal user codes (`status = "user"`), deprecated synonyms (`status = "synonym"` with `suggested_code` from `OldCode -> Code`), and unlisted codes (`status = "unknown"`).
 
-Findings contain `PlotNumber` and `Species`, are deduplicated on those projected
-values, and are sorted deterministically. This replaces Access's unspecified
-record order and Excel automation. The operation is read-only and does not alter
-project, SU, configuration, reference data, or compatibility views.
+Findings in `$veg_codes` (`PlotNumber`, `Species`, `status`, `suggested_code`) are deduplicated and sorted deterministically. This replaces Access's unspecified record order and Excel automation. The operation is read-only and does not alter project, SU, configuration, reference data, or compatibility views.

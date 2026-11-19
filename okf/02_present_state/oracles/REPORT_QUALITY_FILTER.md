@@ -35,13 +35,10 @@ transformations, so they can misattribute non-quality removals.
 
 ## Package API
 
-`vpro_filter_plot_quality()` requires an active project and active SU. It accepts
-explicit thresholds and null-handling flags instead of reading registry-backed
-report options. It returns:
+`vpro_filter_plots()` (`r/R/read_plots.R`) evaluates quality thresholds on a `vpro_workspace` handle (`scope = c("su", "project")`) using explicit thresholds (`site_min`, `veg_min`, `soil_min`, `bec_min`), null-handling flags (`include_site_missing`, `include_veg_missing`, `include_soil_missing`, `include_bec_missing`), and `exclude_modifiers` instead of reading registry-backed report options. It returns:
 
 - `selected`: deterministic `PlotNumber` and `SiteUnit` rows;
-- `removed`: original quality values, a primary `removed_by` reason, and all
-  `failed_criteria`;
+- `removed`: original quality values (`SitePlotQuality`, `VegPlotQuality`, `SoilPlotQuality`, `BEC_Use`) and `failed_criteria`;
 - `thresholds`: resolved labels, ranks, BEC threshold, and missing-value options.
 
 `bec_min = NULL` represents long-report `QCLV` behavior. Supplying `bec_min`

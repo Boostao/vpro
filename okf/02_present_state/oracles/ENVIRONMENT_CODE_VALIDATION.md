@@ -31,16 +31,12 @@ blocks in a visible Excel workbook. If no field produces findings, Access writes
 
 ## Package API
 
-`vpro_validate_environment_codes()` requires an active project context and
-accepts an explicit SQLite list-reference database, defaulting to bundled
-`VLists.db`. The reference database must contain `USysTableOfLists` with
-`ListName`, `Item`, `FieldUsedIn`, `ValidateLoops`, and `Validate` fields.
+`vpro_validate(ws, scope = c("su", "project"), checks = c("all", "compliance", "lmh25"))` (`r/R/lmh25_validate.R`) evaluates environment-code picklists against `ws$vlists_path` (defaulting to workspace `VLists.db` or bundled `VLists.db.gz`). The reference database must contain `USysTableOfLists` with `ListName`, `Item`, `FieldUsedIn`, `ValidateLoops`, and `Validate` fields.
 
-The API returns a list containing two deterministic data frames:
+The returned validation bundle from `vpro_validate()` exposes two deterministic tibbles for environment-code rules:
 
-- `findings`: `list_name`, `field`, `PlotNumber`, and `value`;
-- `skipped`: `list_name`, `field`, and `reason` for definitions that could not be
-  evaluated.
+- `$env_codes`: `list_name`, `field`, `PlotNumber`, and `value`;
+- `$skipped_definitions`: `list_name`, `field`, and `reason` for definitions that could not be evaluated.
 
 Returning skipped definitions preserves Access's field-level continuation while
 making errors visible without modal dialogs. Null or blank metadata names and
@@ -50,8 +46,8 @@ ambiguous fields are skipped. This case-insensitive resolution is important for
 the canonical `SoilClassSubgroup` metadata, which matches the bundled VP08 field
 `SoilClassSubGroup`.
 
-By default, an active SU restricts validation through the same Env-SU-Admin
-intersection represented by `USysEnv`. `use_active_su = FALSE` validates the
+By default (`scope = "su"`), an active SU restricts validation through the same Env-SU-Admin
+intersection represented by `USysEnv`. `scope = "project"` validates the
 complete active Env-Admin project join. Same-file and external SUs are supported
 without changing context attachment ownership.
 

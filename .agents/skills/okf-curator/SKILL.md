@@ -34,4 +34,4 @@ Run this curation pass in the same commit whenever you:
    python3 scripts/check-okf-hygiene.py
    python3 -m unittest discover -s scripts/tests -p 'test_*.py'
    ```
-   Fix any reported allowlist violation, rule byte-budget breach (`>= 24,000` bytes), missing index reference, broken relative link, or `vpro_wails` / policy drift before committing.
+   Fix any reported allowlist violation, rule byte-budget breach (`>= 24,000` bytes), missing index reference, broken relative link, stale pre-monorepo repository name, `r/NAMESPACE` `vpro_*()` export drift, `r/inst/extdata/*.db.gz` 7-DB parity gap, or whitespace filename violation before committing.

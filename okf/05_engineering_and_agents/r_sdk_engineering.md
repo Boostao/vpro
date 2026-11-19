@@ -60,7 +60,7 @@ This playbook preserves every architectural, SQLite WAL concurrency, Access/BEC 
 - **Guarded Opt-In Write-Back (`BEGIN IMMEDIATE`):**
   - **Permitted write targets only:** `<Name>_ClusterCandidate_SU`, user-confirmed working `<Name>_SU`, `<Name>_Lump`, `__VPRO_PlotClimate`, and `__VPRO_RSidecarHistory`.
   - Set `PRAGMA busy_timeout = 5000; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;` and wrap every mutation in an explicit `BEGIN IMMEDIATE ... COMMIT` transaction with clean `ROLLBACK` on error.
-  - **Hard Refusal Guards:** Unconditionally reject writes targeting `Master*` tables (or prefixes matching `"master"` case-insensitively), `USys*` tables/views, bundled `VLists.db`, or custodian-locked `BECSiteUnit` without explicit authorization. Require `confirm_overwrite = TRUE` before replacing existing `*_SU` or `*_Lump` tables.
+  - **Hard Refusal Guards:** Unconditionally reject writes targeting `Master*` tables (or prefixes matching `"master"` case-insensitively), `USys*` tables/views, bundled `VLists.db` (`r/inst/extdata/*.db.gz`), or custodian-locked `BECSiteUnit` without explicit authorization. Require `overwrite = TRUE` before replacing existing `*_SU` (`vpro_write_su()`) or `*_Lump` (`vpro_write_lump()`) tables.
   - **Atomic Provenance:** Append `<Project>_Audit` rows and `__VPRO_*` provenance/identity reservations inside the **same** `BEGIN IMMEDIATE` transaction; never reuse deleted child IDs.
 
 ---
@@ -71,20 +71,20 @@ All ecological calculations and validators in `r/` are anchored to the 9 empiric
 
 | Empirical Oracle Document | Calibrated Legacy Source & R SDK Contract |
 |---|---|
-| [`COORDINATE_CONVERSIONS.md`](../02_present_state/oracles/COORDINATE_CONVERSIONS.md) | `V7mdlCoordTools` (`ConvertLongLatToDeg`, `GetLongDMS`/`GetLatDMS`, `GetLongDM`/`GetLatDM`) in R `double` precision without VBA `Single` intermediate drift. |
-| [`DIAGNOSTIC_CLASSIFICATION.md`](../02_present_state/oracles/DIAGNOSTIC_CLASSIFICATION.md) | `V7mdlDiagnostic.Diagnostic` & `MakeDiagnosticData` (`d`, `dd`, `cd`, `c`, `ic`, first-field tie-break, `+ -> 0`, unreachable `ic` under `1..5` presence). |
-| [`ENVIRONMENT_CODE_VALIDATION.md`](../02_present_state/oracles/ENVIRONMENT_CODE_VALIDATION.md) | `V7mdlReportsValidateEnvData` (`USysTableOfLists` `ValidateLoops` expansion e.g. `SiteDisturbance1..3`, `USysEnv` active-SU scope, deterministic `findings` + `skipped`). |
-| [`REPORT_QUALITY_FILTER.md`](../02_present_state/oracles/REPORT_QUALITY_FILTER.md) | `V7mdlReportsQualityControl` (`QC` vs `QCLV`, `DataQuality` `Poor=1..Excellent=4`, independent null flags, lexical `BEC_Use >= threshold`, explicit `Project` orphan diagnostics). |
-| [`SHORT_VEG_LAYER_MAPPING_DESIGN.md`](../02_present_state/oracles/SHORT_VEG_LAYER_MAPPING_DESIGN.md) | Versioned `LayerCode` mapping (`Layer1234567` join key vs legacy padded `LayerCode` lifeform bug). |
-| [`SHORT_VEG_LAYER_STRATA_ORACLE.md`](../02_present_state/oracles/SHORT_VEG_LAYER_STRATA_ORACLE.md) | `ConvertProVeg2V2` & `BuildStrataTable` (`TotalA`/`TotalB` authoritative override vs `99%`-capped sub-layer sum; positive-only A/B strata vs non-null zero C/D). |
-| [`VALUE_CONVERSIONS.md`](../02_present_state/oracles/VALUE_CONVERSIONS.md) | `V7mdlValueConversions` (`Presence2Class` `I–V`, `SignifClass` `+`/`1–9`, `ProminenceClass`, `GoldstreamClass`, no-op `vpRoundUp` identity, `vpRoundDown1` cap at 100, ACE 15-sig-digit rounding). |
-| [`VEGETATION_CODE_VALIDATION.md`](../02_present_state/oracles/VEGETATION_CODE_VALIDATION.md) | `V7mdlReportsValidateVegCodes.CheckVegData` (physical `USysAllSpecs.Code` left join, active-SU vs full-project orphan plot semantics). |
-| [`VEGETATION_OPTIMIZATION_POLICY.md`](../02_present_state/oracles/VEGETATION_OPTIMIZATION_POLICY.md) | Read-only duplicate diagnosis (`Check4DuplicatedSpecies` over 12-branch `USysAllVeg` `UNION`, `FilterOnLoad = False`, `129` `MyLayer='4'` DAO rows), `First()` order sensitivity, `_Audit` breakage probe, and approved 5-rule deterministic optimization policy. |
+| [`COORDINATE_CONVERSIONS.md`](../02_present_state/oracles/COORDINATE_CONVERSIONS.md) | `V7mdlCoordTools` (`vpro_coordinate_decimal()`, `vpro_coordinate_dms()`, `vpro_coordinate_dm()`) in R `double` precision without VBA `Single` intermediate drift. |
+| [`DIAGNOSTIC_CLASSIFICATION.md`](../02_present_state/oracles/DIAGNOSTIC_CLASSIFICATION.md) | `V7mdlDiagnostic.Diagnostic` & `MakeDiagnosticData` (`vpro_classify_diagnostic_codes()`, `vpro_diagnostics()`: `d`, `dd`, `cd`, `c`, `ic`, first-field tie-break, `+ -> 0`, unreachable `ic` under `1..5` presence). |
+| [`ENVIRONMENT_CODE_VALIDATION.md`](../02_present_state/oracles/ENVIRONMENT_CODE_VALIDATION.md) | `V7mdlReportsValidateEnvData` (`vpro_validate()`: `USysTableOfLists` `ValidateLoops` expansion e.g. `SiteDisturbance1..3`, `scope = c("su", "project")`, deterministic `$env_codes` + `$skipped_definitions`). |
+| [`REPORT_QUALITY_FILTER.md`](../02_present_state/oracles/REPORT_QUALITY_FILTER.md) | `V7mdlReportsQualityControl` (`vpro_filter_plots()`: `QC` vs `QCLV`, `DataQuality` `Poor=1..Excellent=4`, independent missing flags, lexical `BEC_Use >= bec_min`). |
+| [`SHORT_VEG_LAYER_MAPPING_DESIGN.md`](../02_present_state/oracles/SHORT_VEG_LAYER_MAPPING_DESIGN.md) | `VPro64.db` `LayerCode` mapping (`Layer1234567` join key vs legacy padded `LayerCode` lifeform bug in `vpro_veg()` & `vpro_summary_veg()`). |
+| [`SHORT_VEG_LAYER_STRATA_ORACLE.md`](../02_present_state/oracles/SHORT_VEG_LAYER_STRATA_ORACLE.md) | `ConvertProVeg2V2` & `BuildStrataTable` (`TotalA`/`TotalB` authoritative override vs `99%`-capped sub-layer sum; `cover_precedence` in `vpro_veg()`, `vpro_master_veg()`, `vpro_summary_veg()`, `vpro_matrix()`). |
+| [`VALUE_CONVERSIONS.md`](../02_present_state/oracles/VALUE_CONVERSIONS.md) | `V7mdlValueConversions` (`vpro_presence_class()` `roman`/`numeric`, `vpro_significance_class()`, `vpro_prominence_class()`, `vpro_goldstream_class()`, `vpro_cap_percent()`, `vpro_round_ace()` 15-sig-digit rounding). |
+| [`VEGETATION_CODE_VALIDATION.md`](../02_present_state/oracles/VEGETATION_CODE_VALIDATION.md) | `V7mdlReportsValidateVegCodes.CheckVegData` (`vpro_validate()$veg_codes`: `USysAllSpecs` + `USysUserSpp`, `OldCode -> Code` synonyms, active-SU vs full-project scope). |
+| [`VEGETATION_OPTIMIZATION_POLICY.md`](../02_present_state/oracles/VEGETATION_OPTIMIZATION_POLICY.md) | Read-only duplicate diagnosis (`vpro_validate(ws, scope = "project")$duplicates` & `Check4DuplicatedSpecies`), `First()` order sensitivity, `_Audit` breakage probe, and approved 5-rule deterministic optimization policy. |
 
 ### Eight Non-Negotiable Domain Invariants
 
 1. **7-DB SQLite Family & `_table_metadata` (`'VP08'`):**
-   - `<Project>.db` (8 tables per prefix `<P>`: `_Env`, `_Admin`, `_Veg`, `_Humus`, `_Mineral`, `_Other`, `_Audit`, `_Metadata`), `VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, `VPics.db`.
+   - `<Project>.db` (8 tables per prefix `<P>`: `_Env`, `_Admin`, `_Veg`, `_Humus`, `_Mineral`, `_Other`, `_Audit`, `_Metadata`), `VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, `VPics.db` (all 6 support DBs + `Sample.db` uniformly bundled as `*.db.gz` in `r/inst/extdata/` and decompressed on demand into a session temp cache in `r/R/zzz.R`).
    - Never invent `_Env.StartDate` or an `Env -> Metadata` FK (confirmed dead VBA in `V7mdlRelationships`).
    - Preserve shared `<Project>.db` tables: `__VPRO_PlotClimate` (`PlotNumber TEXT PRIMARY KEY`, `CoordElevHash`, `RefPeriod`, `Source`, `MAT`, `MWMT`, `MCMT`, `MAP`, `MSP`, `PAS`, `CMD`, `PPT_05`..`PPT_09`, `PPT_at`, `PPT_wt`, `DD5`, `NFFD`, `ComputedAt`), `<Name>_ClusterCandidate_SU`, `<Name>_SU` (`PlotNumber`, `SiteUnit`), `<Name>_Lump` (`SppCode`, `LumpCode`, `Use`), `<Name>_Hierarchy` (`~Name` breakpoint semantics), and `__VPRO_RSidecarHistory`.
 2. **Literal `character` `PlotNumber` (`Text 7`):**
@@ -113,17 +113,17 @@ All ecological calculations and validators in `r/` are anchored to the 9 empiric
 
 1. **Credentials, Secret Redaction & Transport Security (`cloud_pg_*.R`):**
    - Resolve credentials strictly via explicit parameters, `VPRO_PG_*` / `BECMASTER_*` environment variables, or local `.env` / `becmaster.env` files (`vpro_has_pg_credentials()`, `vpro_master_connect()`, `vpro_master_disconnect()`, `vpro_master_status()`, `vpro_master_bootstrap()`); `.env*` files must remain excluded in `.gitignore` and `r/.Rbuildignore`.
-   - Never print, log, or serialize raw passwords, tokens, or unredacted DSNs in `vpro_master_con` S3 print methods or error conditions.
-   - Enforce TLS (`sslmode = "require"` or `"verify-full"`) for all non-loopback PostgreSQL hosts, and bind accredited session role/actor context (`public`, `contributor`, `ecologist`, `custodian`) for PostgreSQL Row-Level Security (RLS) policies.
+   - Never print, log, or serialize raw passwords, tokens, or unredacted DSNs in `vpro_pg_conn` S3 print methods or error conditions.
+   - Enforce TLS (`sslmode = "require"` or `"verify-full"`) for all non-loopback PostgreSQL hosts, and bind accredited session role/actor context (`public`, `contributor`, `ecologist`, `custodian`) for PostgreSQL Row-Level Security (RLS) policies across the 31 tables in `becmaster`, `staging`, and `standards`.
 2. **Accredited Read Queries, Rare-Plant Redaction & Regional WAL Checkout (`cloud_master_*.R`):**
-   - `vpro_master_env()`, `vpro_master_veg()`, `vpro_master_soil()`, `vpro_master_audit()`, `vpro_master_standards()`, and `vpro_master_workspace()` return tidy `VP08`-typed tibbles preserving literal `character` `PlotNumber` and `-1/0 -> logical` `BOOLEAN` conversion.
-   - Public/anonymous roles receive approved snapshot views with sensitive Red/Blue-listed rare-plant coordinates redacted (`USysSppAttributes.RedBlueList`).
+   - `vpro_master_env()`, `vpro_master_veg(..., cover_precedence = c("strata_totals", "sublayer_sum"))`, `vpro_master_soil()`, `vpro_master_audit()`, `vpro_master_standards()`, and `vpro_master_workspace()` return tidy `VP08`-typed tibbles preserving literal `character` `PlotNumber` and `-1/0 -> logical` `BOOLEAN` conversion.
+   - Non-custodian roles and published snapshots truncate sensitive Red/Blue-listed rare-plant coordinates (`USysSppAttributes.RedBlueList`) to a `0.1°` (~10 km) geographic / `10,000 m` UTM grid, failing closed if conservation metadata is missing or empty.
    - `vpro_master_pull()` materializes filtered regional or BGC subsets into canonical WAL-mode `VP08` SQLite `.db` files ready for immediate offline use in `app/` or `r/`, atomically recording every checkout in `becmaster.download_log`.
 3. **Pre-Flight Compliance Gate, Staging Queue & Custodian `SERIALIZABLE` 3-Way Merge (`cloud_staging_submit.R`, `cloud_custodian_*.R`):**
    - `vpro_staging_submit()` runs mandatory pre-upload compliance validation (`USysTableOfLists`, `USysAllSpecs` taxonomy + `UserSpeciesManifest` capture, 1:N FK integrity, UTF-16/numeric/`LMH25` bounds) before writing an immutable submission bundle into `staging.submissions` (enforced server-side by RLS + `BEFORE INSERT` compliance/role triggers).
-   - `vpro_staging_list()`, `vpro_staging_inspect()`, and `vpro_staging_diff()` (`vpro_merge_preview`) compute deterministic plot- and field-level 3-way diffs (`added`, `identical`, `fast_forward`, `conflict`) against baseline watermarks.
-   - `vpro_staging_merge()` requires `custodian` role authorization and executes inside a **`SERIALIZABLE` PostgreSQL transaction**: applies explicit conflict resolutions (`accept_source` vs. `keep_target`), allocates monotonic `becmaster` `child_identity` IDs (never reusing deleted child IDs), advances watermarks, records `becmaster.merge_ledger`, and appends SHA-256 hash-chained `becmaster.audit` entries (`prev_hash` $\rightarrow$ `entry_hash`).
-   - `vpro_master_audit(..., verify_chain = TRUE)` cryptographically verifies the unbroken `prev_hash` $\rightarrow$ `entry_hash` SHA-256 chain across `becmaster.audit`. `vpro_staging_reject()` records structured rejection provenance, and `vpro_master_standards_sync()` publishes or pulls versioned `BCPlantTaxonomy v19` & `BECdb v13` releases with atomic local `VLists.db` swap.
+   - `vpro_staging_list()`, `vpro_staging_inspect()`, and `vpro_staging_diff()` compute deterministic plot- and field-level 3-way merge previews (`added`, `identical`, `fast_forward`, `conflict`) against baseline watermarks.
+   - `vpro_staging_merge()` requires `custodian` role authorization and executes inside a **`SERIALIZABLE` PostgreSQL transaction**: applies explicit conflict resolutions (`accept_source` vs. `keep_target`), allocates monotonic `becmaster` `child_identity` IDs (never reusing deleted child IDs), advances watermarks, records `becmaster.merge_ledger`, and appends SHA-256 hash-chained `becmaster.audit` entries (`prev_hash` $\rightarrow$ `row_hash`).
+   - `vpro_master_audit(..., verify_chain = TRUE)` cryptographically verifies the unbroken `prev_hash` $\rightarrow$ `row_hash` SHA-256 chain across `becmaster.audit`. `vpro_staging_reject()` records structured rejection provenance, and `vpro_master_standards_sync()` publishes or pulls versioned `BCPlantTaxonomy v19` & `BECdb v13` releases with atomic local `VLists.db` swap.
 4. **Approved Dataset Snapshots (`cloud_snap_*.R`, `cloud_rds_bundle.R`, `cloud_snapshot_publish.R`):**
    - `vpro_master_publish_snapshot()`, `vpro_master_list_snapshots()`, `vpro_export_rds()`, and `vpro_import_rds()` cut, register, and round-trip SHA-256-verified `.rds` and read-only SQLite snapshots carrying pinned `AllSpecs` / `TableOfLists` / `BECdb` version stamps (`Schedule A 1.iii, 2.i`).
 
@@ -133,11 +133,11 @@ All ecological calculations and validators in `r/` are anchored to the 9 empiric
 
 - **Explicit Sibling Paths:** Workspace `glob`/`grep` default to the `Boostao/vpro` monorepo root (`app/`, `r/`, `okf/`). Pass explicit absolute paths for external sibling references (`/home/bruno/Work/VPRO_ACCESS/`, `/home/bruno/Work/VPRO_ACCESS_1/VPro64/BECMaster_fixing.accdb` [strictly read-only], `/home/bruno/Work/becweb_standards_2025_2026/`, `/home/bruno/Work/MoF-Skeena-Research/`, `/home/bruno/Work/bcgov_ref/`, `/home/bruno/Work/spatial_assets/`).
 - **Local R Toolchain & Formatting:**
-  - R 4.6 (`Rscript` on `PATH`; package `Depends: R (>= 4.4.0)`), `quarto` CLI, and `air` formatter (`(cd r && air format R tests)` using `r/air.toml`).
+  - R 4.6 (`Rscript` on `PATH`; package `Depends: R (>= 4.4.0)`), `quarto` CLI, and optional Posit `air` formatter (`bash scripts/format-r.sh` using `r/air.toml`, skipping cleanly when `air` is not installed).
   - Keep `TMPDIR` / `TEMP` / `TMP` free of whitespace (`Rscript` aborts at C startup if `R_TempDir` contains spaces).
 - **Mandatory Quality Gates (`0 errors | 0 warnings | 0 notes`):**
   ```bash
-  (cd r && air format R tests)
+  bash scripts/format-r.sh
   (cd r && Rscript -e "roxygen2::roxygenise()")
   (cd r && Rscript -e "testthat::test_local(stop_on_failure = TRUE)")
   (cd r && R CMD build . && R CMD check --no-manual vpro_*.tar.gz && rm -rf vpro_*.tar.gz vpro.Rcheck)

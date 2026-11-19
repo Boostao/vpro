@@ -4,7 +4,7 @@
 
 ## Read-only duplicate-species diagnostic oracle (`USysAllVeg`)
 
-`vpro_vegetation_duplicates(context)` in `r/` and the read-only duplicate diagnostic in `app/` implement `V7mdlOptimizeVeg.Check4DuplicatedSpecies` (canonical SaveAsText, lines 67–137) over the 12-branch cover-column unpivot in `Queries/USysAllVeg.txt` (lines 1–20):
+`vpro_validate(ws, scope = "project", checks = "compliance")$duplicates` (`r/R/lmh25_validate.R`) in `r/` and the read-only duplicate diagnostic in `app/` (`app/internal/projectops/optimizeveg.go`) implement `V7mdlOptimizeVeg.Check4DuplicatedSpecies` (canonical SaveAsText, lines 67–137) over the 12-branch cover-column unpivot in `Queries/USysAllVeg.txt` (lines 1–20):
 
 - **Scope & `UNION` deduplication:** Checks the complete active project (even when an active `*_SU` filter is selected). Each non-null `Cover1`–`Cover7`, `Cover5a`–`Cover5c`, `TotalA`, and `TotalB` value becomes a `(PlotNumber, Species, MyLayer, Cover)` tuple combined via `UNION` (not `UNION ALL`), so identical `(PlotNumber, Species, MyLayer, Cover)` tuples collapse before grouping. Findings identify groups with `> 1` distinct non-null cover value (`n_of_spp` integer count). Null `PlotNumber`/`Species` keys remain eligible; blank `""` species stays distinct from `NULL`.
 - **Excluded columns:** `Cover8`–`Cover10` and the physical `Layer` column do **not** participate in `USysAllVeg` or the duplicate diagnostic.

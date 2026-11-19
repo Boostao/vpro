@@ -21,20 +21,20 @@
 ## 3. `VP08`, BEC Calibration & Cloud `BECMaster` Rules
 
 - **Domain & Oracle Calibration (`../okf/02_present_state/oracles/`):**
-  - Preserve the 7-DB SQLite family (`<Project>.db`, `VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, `VPics.db`) and `_table_metadata` (`'VP08'`).
+  - Preserve the 7-DB SQLite family (`<Project>.db`, `VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, `VPics.db`, uniformly seeded as `*.db.gz` in `inst/extdata/`) and `_table_metadata` (`'VP08'`).
   - Keep `PlotNumber` strictly R `character` / SQLite `TEXT` (never stripping leading zeroes like `'00337'`).
   - Convert Access `BOOLEAN` (`-1L` = `TRUE`, `0L` = `FALSE`, `NULL` = `NA` on disk $\leftrightarrow$ R `logical`).
-  - Narrow cover to IEEE-754 `float32` before `< 100`, cap lumped (`*_Lump`) and fallback `TotalA`/`TotalB` strata sums at `99%` without mutating `<Project>_Veg`, apply ACE 15-sig-digit rounding (`1.005 -> 1.01`), respect `VLists.USysAllSpecs.Lifeform` (`INT32`) vs `VUser.USysUserSpp.LifeForm` (`INT16`), join short-veg layers on `LayerCode.Layer1234567`, enforce UTF-16 code-unit limits, and order `LMH25 (2023)` horizons (`L/F/H` upward `UpperDepth DESC`; `Of/Om/Oh` & `A/B/C/R/W` downward `UpperDepth ASC`).
+  - Narrow cover to IEEE-754 `float32` before `< 100`, cap lumped (`*_Lump`) and fallback `TotalA`/`TotalB` strata sums at `99%` without mutating `<Project>_Veg`, honor `cover_precedence = c("strata_totals", "sublayer_sum")` across `vpro_veg()`, `vpro_master_veg()`, `vpro_summary_veg()`, and `vpro_matrix()`, apply ACE 15-sig-digit rounding (`1.005 -> 1.01`), respect `VLists.USysAllSpecs.Lifeform` (`INT32`) vs `VUser.USysUserSpp.LifeForm` (`INT16`), join short-veg layers on `LayerCode.Layer1234567`, enforce UTF-16 code-unit limits, and order `LMH25 (2023)` horizons (`L/F/H` upward `UpperDepth DESC`; `Of/Om/Oh` & `A/B/C/R/W` downward `UpperDepth ASC`).
 - **Cloud `BECMaster` (`R/cloud_*.R`):**
-  - Keep `RPostgres` optional in `Suggests`; resolve credentials from `.env` / `becmaster.env` / `VPRO_PG_*` / `BECMASTER_*` (`.env*` git/build-ignored) with strict password/DSN redaction in `print()` and errors.
-  - Enforce TLS (`sslmode = "require"` / `"verify-full"`) on non-loopback hosts, RBAC/RLS session roles (`public`, `contributor`, `ecologist`, `custodian`), rare-plant coordinate redaction (`USysSppAttributes.RedBlueList`) on non-custodian reads/snapshots, `becmaster.download_log` entries on `vpro_master_pull()`, mandatory pre-upload compliance gating on `vpro_staging_submit()`, `SERIALIZABLE` Custodian 3-way merge (`vpro_staging_merge()`) with monotonic `child_identity`, and SHA-256 hash-chained `becmaster.audit` verified by `vpro_master_audit(..., verify_chain = TRUE)`.
+  - Keep `RPostgres` optional in `Suggests`; resolve credentials from `.env` / `becmaster.env` / `VPRO_PG_*` / `BECMASTER_*` (`.env*` git/build-ignored) with strict password/DSN redaction in `vpro_pg_conn` `print()` methods and errors.
+  - Enforce TLS (`sslmode = "require"` / `"verify-full"`) on non-loopback hosts, RBAC/RLS session roles (`public`, `contributor`, `ecologist`, `custodian`), fail-closed rare-plant coordinate truncation (`0.1°` ~10 km lat/lon, `10,000 m` UTM via `USysSppAttributes.RedBlueList`) on non-custodian reads/snapshots, `becmaster.download_log` entries on `vpro_master_pull()`, mandatory pre-upload compliance gating on `vpro_staging_submit()`, `SERIALIZABLE` Custodian 3-way merge (`vpro_staging_merge()`) with monotonic `child_identity`, and SHA-256 hash-chained `becmaster.audit` (`prev_hash` $\rightarrow$ `row_hash`) verified by `vpro_master_audit(..., verify_chain = TRUE)`.
 
 ## 4. R Formatting, Quality Gates & Worktree Rules
 
 Keep `TMPDIR`/`TEMP`/`TMP` free of whitespace (`Rscript` aborts at C startup if `R_TempDir` contains spaces), keep `^AGENTS\.md$` in `.Rbuildignore`, write all user-facing docs (`DESCRIPTION`, `NEWS.md`, `README.md`, `vignettes/`, `roxygen2`, and user warnings) in plain field-focused language per [`../CONTRIBUTING.md`](../CONTRIBUTING.md#6-user-facing-voice--plain-language-lexicon-cbc-standard), and always run `R CMD check` on the built tarball (`0 errors | 0 warnings | 0 notes`):
 
 ```bash
-(cd r && air format R tests)
+bash scripts/format-r.sh
 (cd r && Rscript -e "roxygen2::roxygenise()")
 (cd r && Rscript -e "testthat::test_local(stop_on_failure = TRUE)")
 (cd r && R CMD build . && R CMD check --no-manual vpro_*.tar.gz && rm -rf vpro_*.tar.gz vpro.Rcheck)

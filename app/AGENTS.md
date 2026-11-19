@@ -15,23 +15,24 @@
 
 ## 2. Backend SQLite WAL, Cloud Sync & Access Calibration Guards
 
-- **Dual-Connection `SQLiteContext`:** Escape `file:` URIs via `net/url` (`#` truncates `mode=ro`!), verify `os.SameFile` around `ATTACH DATABASE`, use caller-owned `beginReadSnapshot` on the `:memory:` read coordinator, reuse held operation read leases instead of recursive `RWMutex.RLock`, and fence every switch with a fresh 128-bit `contextID`.
-- **Atomic Writes & Calibration:** Wrap mutations + `<Project>_Audit` + `__VPRO_*` child ID reservations in one `BEGIN IMMEDIATE` transaction (never reuse deleted child IDs). Preserve Access `BOOLEAN` (`true = -1`, `false = 0`), narrow cover to `float32` before `<100` (`99.999996` passes; `99.999999` rejects), cap lumped/fallback strata cover at `99%`, apply 15-sig-digit ACE rounding (`1.005 -> 1.01`), enforce UTF-16 code-unit bounds & `sqlutil.ValidateRawJSONWire` / `DecodeStrictJSON`, omit unchanged legacy out-of-rule columns on `UPDATE`, use `typeof(col)='text'` + `CAST(col AS BLOB)=CAST(? AS BLOB)` for `PlotNumber`, honor `INT32` vs `INT16` `Lifeform` & `LayerCode.Layer1234567`, and order `LMH25` horizons (`L/F/H` upward `UpperDepth DESC`; `Of/Om/Oh` & `A/B/C/R/W` downward `UpperDepth ASC`).
-- **Cloud `BECMaster` (`internal/cloudsync`) & R Sidecar (`internal/rsidecar`):** Maintain 3-schema (`becmaster`, `staging`, `standards`) parity with `../r/R/cloud_*.R`, redact secrets/DSNs, require TLS on non-loopback hosts, run `RunComplianceValidation` before staging upload, and keep Custodian 3-way merge `SERIALIZABLE` with SHA-256 hash-chained `audit`. Quote/short-path `Rscript --vanilla` calls and never open read-only sidecar queries in `rw` mode.
+- **Dual-Connection `SQLiteContext`:** Escape `file:` URIs via `net/url` (`#` truncates `mode=ro`!), verify `os.SameFile` around `ATTACH DATABASE`, isolate `ReferenceService`'s 2-table lookup read-model at `<dataDir>/readmodels/vlists-lookup.db` (never colliding with `<dataDir>/VLists.db` or `<dataDir>/database-family/VLists.db`), use caller-owned `beginReadSnapshot` on the `:memory:` read coordinator, reuse held operation read leases instead of recursive `RWMutex.RLock`, and fence every switch with a fresh 128-bit `contextID`.
+- **Atomic Writes & Calibration:** Wrap mutations + `<Project>_Audit` (`AuditStrength` `0..3`, default `3`) + `__VPRO_*` child ID reservations in one `BEGIN IMMEDIATE` transaction (never reuse deleted child IDs). Preserve Access `BOOLEAN` (`true = -1`, `false = 0`), narrow cover to `float32` before `<100` (`99.999996` passes; `99.999999` rejects), cap lumped/fallback strata cover at `99%`, apply 15-sig-digit ACE rounding (`1.005 -> 1.01`), enforce UTF-16 code-unit bounds & `sqlutil.ValidateRawJSONWire` / `DecodeStrictJSON`, omit unchanged legacy out-of-rule columns on `UPDATE`, use `typeof(col)='text'` + `CAST(col AS BLOB)=CAST(? AS BLOB)` for `PlotNumber`, honor `INT32` vs `INT16` `Lifeform` & `LayerCode.Layer1234567`, and order `LMH25` horizons (`L/F/H` upward `UpperDepth DESC`; `Of/Om/Oh` & `A/B/C/R/W` downward `UpperDepth ASC`).
+- **Cloud `BECMaster` (`internal/cloudsync`) & R Sidecar (`internal/rsidecar`):** Maintain 3-schema (`becmaster`, `staging`, `standards`; `31` tables) parity with `../r/R/cloud_*.R`, redact secrets/DSNs, require TLS on non-loopback hosts, fail closed on `USysSppAttributes.RedBlueList` conservation metadata (`0.1°` ~10 km / `10,000 m` coordinate truncation), run `RunComplianceValidation` before staging upload, and keep Custodian 3-way merge `SERIALIZABLE` with SHA-256 hash-chained `becmaster.audit` (`prev_hash` $\rightarrow$ `row_hash`). Quote/short-path `Rscript --vanilla` calls and never open read-only sidecar queries in `rw` mode.
 
 ## 3. Svelte 5, Wails IPC, Native COM & Excelize Guards
 
 - **Wails Bindings:** Always run `wails3 generate bindings -ts -i` (`-i` is mandatory so nullable arrays emit TypeScript interfaces rather than classes).
 - **Svelte 5 & Async Fencing:** Detach proxies with `$state.snapshot(...)` (or `$state.raw`) before IPC/`structuredClone`. Recheck request generation after awaited client validation and yield during large XML validation so Cancel/remount/close barriers (`CloseService` `"vpro:close-request"` $\rightarrow$ `ConfirmClose`/`CancelClose`; wait for `CancelClose` ack in tests) can run.
-- **Wire Fixtures, Chunked IPC, Excelize & YAML:** Match frontend mocks to shared strict-Go round-trip fixtures (`declaredType`, not `type`). Reassemble chunked UTF-8 Wails request bodies by upload ID and never replay a completed mutation if response capture was missed. Use `strings.EqualFold` for `excelize/v2` worksheet collisions, validate case-folded grouping keys before threshold filtering, and keep `type configValues = map[string]any` as a `yaml.v3` type alias.
+- **Wire Fixtures, Chunked IPC, Excelize & YAML:** Match frontend mocks to shared strict-Go round-trip fixtures (`declaredType`, not `type`). Reassemble chunked UTF-8 Wails request bodies by upload ID and never replay a completed mutation if response capture was missed. Use `strings.EqualFold` for `excelize/v2` worksheet collisions, validate case-folded grouping keys before threshold filtering, and keep `type configValues = map[string]any` as a `go.yaml.in/yaml/v3` type alias.
 - **Native Windows COM (`go-ole`):** Keep `HWND`/state outside native COM interface memory, pass receiver + all args, treat `HRESULT` as signed `int32`, classify Cancel only from `Show`'s `ERROR_CANCELLED`, treat `IUnknown.Release` return as refcount (not `HRESULT`), and balance STA init after releasing interfaces/paths.
 
 ## 4. Validation Commands (from Monorepo Root)
 
 ```bash
 (cd app/frontend && npm test && npm run check && npm run build)
-(cd app && go test ./...)
-(cd app && wails3 generate bindings -ts -i)
+# Export GOTOOLCHAIN=go1.27.4+auto whenever XDG_CONFIG_HOME is isolated:
+(cd app && GOTOOLCHAIN=go1.27.4+auto go test ./...)
+(cd app && GOTOOLCHAIN=go1.27.4+auto wails3 generate bindings -ts -i)
 # Use -a after editing C headers/sources inside app/internal/accessreader:
-(cd app && go test -a ./internal/accessreader/...)
+(cd app && GOTOOLCHAIN=go1.27.4+auto go test -a ./internal/accessreader/...)
 ```

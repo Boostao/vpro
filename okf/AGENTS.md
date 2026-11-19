@@ -30,7 +30,7 @@ Update `okf/` **in the same commit** whenever a change modifies:
 3. **Domain/BEC oracle rules or policy approval status** $\rightarrow$ update [`02_present_state/oracles/`](./02_present_state/oracles/) and log a **`D-XX`** entry in [`04_evidence_and_sources/decisions_and_gaps.md`](./04_evidence_and_sources/decisions_and_gaps.md).
 4. **Any new `.md` file under `okf/01_*`..`okf/05_*`** $\rightarrow$ register it in [`00_index.md`](./00_index.md) (manifest tree and table).
 
-Before committing, verify zero markdown bloat, zero broken relative links, rule byte budgets (`< 24,000` bytes), and zero `vpro_wails` drift in active docs:
+Before committing, verify zero markdown bloat, zero broken relative links across all allowlisted docs, rule byte budgets (`< 24,000` bytes), `r/NAMESPACE` `vpro_*()` export parity, `r/inst/extdata/*.db.gz` 7-DB parity, zero whitespace in tracked filenames, and zero stale pre-monorepo repository names in active docs:
 
 ```bash
 python3 scripts/check-okf-hygiene.py

@@ -34,8 +34,8 @@ To avoid context bloat while preserving 100% of engineering invariants, instruct
 Both `app/` (Go) and `r/` (R) share one physical data contract and **must never diverge** on these rules:
 
 1. **7-Database SQLite Family (`WAL` Mode) & `_table_metadata` (`'VP08'`):**
-   - `<Project>.db` (8 tables per `<P>_`: `_Env`, `_Admin`, `_Veg`, `_Humus` [`SoilHumus`], `_Mineral` [`SoilMineral`], `_Other`, `_Audit`, `_Metadata`, plus optional `*_SU`, `*_Hierarchy` with `~` breakpoints, `*_Lump`, `*_Profile`, and `__VPRO_*` receipt/cache/identity tables), `VPro64.db`, `VLists.db` (`BCPlantTaxonomy v19`, `BECdb v13`, `LMH25 2023`), `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, and `VPics.db`.
-   - Do not invent `_Env.StartDate` or an `Env -> Metadata` FK (dead legacy VBA). Embedded `app/resources/*.db` read-models never replace `VLists.db` / `VUser.db`.
+   - `<Project>.db` (8 tables per `<P>_`: `_Env`, `_Admin`, `_Veg`, `_Humus` [`SoilHumus`], `_Mineral` [`SoilMineral`], `_Other`, `_Audit`, `_Metadata`, plus optional `*_SU`, `*_Hierarchy` with `~` breakpoints, `*_Lump`, `*_Profile`, and `__VPRO_*` receipt/cache/identity tables), `VPro64.db`, `VLists.db` (`BCPlantTaxonomy v19`, `BECdb v13`, `LMH25 2023`), `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, and `VPics.db` (uniformly seeded as `*.db.gz` in `r/inst/extdata/`).
+   - Do not invent `_Env.StartDate` or an `Env -> Metadata` FK (dead legacy VBA). Embedded `app/resources/*.db` read-models (including `<dataDir>/readmodels/vlists-lookup.db` for `ReferenceService`) never replace or collide with `VLists.db` / `VUser.db`.
 2. **Literal Text `PlotNumber` (`Text 7`):**
    - Always SQLite `TEXT` / Go `string` / R `character` (`typeof(PlotNumber) = 'text'`, `CAST(PlotNumber AS BLOB) = CAST(? AS BLOB)`), preserving leading zeroes (e.g., `'00337'`).
 3. **Access `BOOLEAN`, `float32` Cover Narrowing, `99%` Lump Cap & ACE Rounding:**
@@ -47,8 +47,8 @@ Both `app/` (Go) and `r/` (R) share one physical data contract and **must never 
 5. **Catalogue Asymmetry, UTF-16 Bounds, Atomic Provenance & Cloud `BECMaster`:**
    - `VLists.USysAllSpecs.Lifeform` is `INT32` vs. `VUser.USysUserSpp.LifeForm` `INT16`; short-veg layer keys join `LayerCode.Layer1234567` (never padded `LayerCode.LayerCode`).
    - Enforce UTF-16 code-unit limits (`PlotNumber <= 7`, `Species <= 8`, `Horizon <= 8`, `Texture <= 4`, `Colour <= 14`).
-   - Wrap every local write in `BEGIN IMMEDIATE` with `<Project>_Audit` + monotonic `__VPRO_*` child ID reservations (never reusing deleted IDs).
-   - PostgreSQL `BECMaster` sync (`app/internal/cloudsync` & `r/R/cloud_*.R`) operates over 3 isolated schemas (`becmaster`, `staging`, `standards`) with TLS, secret redaction, pre-upload compliance gating, `SERIALIZABLE` Custodian 3-way merge, and SHA-256 hash-chained `becmaster.audit`.
+   - Wrap every local write in `BEGIN IMMEDIATE` with `<Project>_Audit` (`AuditStrength` `0..3`, default `3` = `Edit, Add & Delete`) + monotonic `__VPRO_*` child ID reservations (never reusing deleted IDs).
+   - PostgreSQL `BECMaster` sync (`app/internal/cloudsync` & `r/R/cloud_*.R`) operates over 3 isolated schemas (`becmaster`, `staging`, `standards`; `31` tables total) with TLS, secret redaction, fail-closed `USysSppAttributes.RedBlueList` `0.1°` (~10 km) / `10,000 m` rare-plant coordinate truncation, pre-upload compliance gating, `SERIALIZABLE` Custodian 3-way merge, and SHA-256 hash-chained `becmaster.audit` (`prev_hash` $\rightarrow$ `row_hash`).
 
 ---
 
@@ -78,20 +78,22 @@ Go (`app/internal/sqlutil/sqlutil_foundation.go`: `UserDataDir()`, `UserConfigDi
 ## 6. Quick Monorepo Validation Matrix
 
 ```bash
-# 1. Desktop Frontend (Svelte 5 unit tests, svelte-check & Vite bundle)
+# 1. Desktop Frontend (Node 24+: Svelte 5 unit tests, svelte-check & Vite bundle)
 (cd app/frontend && npm test && npm run check && npm run build)
 
 # 2. Desktop Go Backend & Wails TS bindings
-(cd app && go test ./...)
-(cd app && wails3 generate bindings -ts -i)
+#    Always export GOTOOLCHAIN=go1.27.4+auto when XDG_CONFIG_HOME is isolated (so distros
+#    defaulting /usr/bin/go to GOTOOLCHAIN=local still switch to go1.27.4 from app/go.mod)
+(cd app && GOTOOLCHAIN=go1.27.4+auto go test ./...)
+(cd app && GOTOOLCHAIN=go1.27.4+auto wails3 generate bindings -ts -i)
 
-# 3. Headless R Companion SDK (air format, roxygen2, testthat & tarball R CMD check: 0E/0W/0N)
-(cd r && air format R tests)
+# 3. Headless R Companion SDK (optional air format, roxygen2, testthat & tarball R CMD check: 0E/0W/0N)
+bash scripts/format-r.sh
 (cd r && Rscript -e "roxygen2::roxygenise()" && Rscript -e "testthat::test_local(stop_on_failure = TRUE)")
 (cd r && R CMD build . && R CMD check --no-manual vpro_*.tar.gz && rm -rf vpro_*.tar.gz vpro.Rcheck)
 
-# 4. Root Offline F1 Help Bundle, OKF Hygiene, BC Gov Release Portal & Packaging Scripts
-python3 scripts/check-okf-hygiene.py
+# 4. Root Offline F1 Help Bundle, OKF/Dep Hygiene, BC Gov Release Portal & Packaging Scripts
+python3 scripts/check-okf-hygiene.py && python3 scripts/check-dep-lockstep.py
 python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 node scripts/build-docs-src.mjs && node site/build.mjs && node --test scripts/tests/downloadPortal.test.cjs
 ```

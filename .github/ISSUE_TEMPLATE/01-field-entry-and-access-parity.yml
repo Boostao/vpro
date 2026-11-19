@@ -36,7 +36,7 @@ body:
         - Windows 11 (Desktop / Laptop)
         - Windows 11 (Field Toughbook / Tablet)
         - macOS (Universal App)
-        - Linux (AppImage / deb)
+        - Linux (deb / rpm / tar.gz)
         - Browser / Server Mode
     validations:
       required: true

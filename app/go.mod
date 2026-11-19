@@ -2,6 +2,9 @@ module github.com/boostao/vpro/app
 
 go 1.27.0
 
+// When running Go commands under an isolated XDG_CONFIG_HOME on systems whose
+// /usr/bin/go defaults to GOTOOLCHAIN=local (e.g., Fedora), also export
+// GOTOOLCHAIN=go1.27.4+auto so Go switches to the pinned toolchain automatically.
 toolchain go1.27.4
 
 require (

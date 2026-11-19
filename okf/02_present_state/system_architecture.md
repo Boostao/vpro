@@ -21,7 +21,7 @@ flowchart TB
     end
 
     subgraph Desktop["Primary Desktop App: app/ (github.com/boostao/vpro/app · 4-Layer Go DAG + Wails v3)"]
-        UI["Svelte 5 Runes Frontend (app/frontend · Vite 8 + Tailwind v4)<br/>24 Views · 118 Components · MapLibre v6 + WebGPU · F1 Help"]
+        UI["Svelte 5 Runes Frontend (app/frontend · Vite 8 + Tailwind v4)<br/>24 Views · 176 Components · MapLibre v6 + WebGPU · F1 Help"]
         IPC["Wails v3 Typed IPC Bridge (-ts -i)<br/>Strictly 12 Domain Services + Close Nonce Handshake"]
         CTX["Dual-Connection SQLiteContext (app/internal/vprocore)<br/>1) Pinned :memory: RO Coordinator (beginReadSnapshot)<br/>2) Lazy rw+WAL c.projectDB Writer (FK=ON, busy_timeout=5000)"]
         CAT["2026 Embedded SHA-256 Read-Model Catalogues<br/>BECdb v13, BCPlantTaxonomy v19, LMH25 (2023), bc-overview.pmtiles"]
@@ -56,25 +56,25 @@ flowchart TB
 
 | Architectural Layer | Component / Module | Exact Version | Source Evidence |
 |---|---|---|---|
-| **Backend Language** | Go (`github.com/boostao/vpro/app`, `CGO_ENABLED=1`) | `go 1.27.0` | `app/go.mod`, `.github/workflows/release.yml` |
+| **Backend Language** | Go (`github.com/boostao/vpro/app`, `CGO_ENABLED=1`, `toolchain go1.27.4`) | `go 1.27.0` (`toolchain go1.27.4`) | `app/go.mod`, `.github/workflows/release.yml` |
 | **Desktop Shell & IPC** | Wails v3 (`github.com/wailsapp/wails/v3` + `@wailsio/runtime`, `wails3 generate bindings -ts -i`) | `v3.1.0` | `app/go.mod`, `app/frontend/package.json` |
 | **Primary SQL Engine** | CGO SQLite3 (`github.com/mattn/go-sqlite3`, `PRAGMA journal_mode = WAL`) | `v1.14.53` | `app/go.mod`, `app/internal/vprocore/sqlitecontext.go` |
 | **Cloud `BECMaster` Driver** | Pure-Go PostgreSQL (`github.com/jackc/pgx/v5`, `pgxpool`, `CopyFrom`, `Batch`) | `v5.13.0` | `app/go.mod`, `app/internal/cloudsync/` |
 | **Access Binary Reader** | Internal CGO `accessreader` wrapping vendored `mdbtools` (`libmdb`) on `linux \|\| windows \|\| darwin` | `1.0.1` (`-fvisibility=hidden`, Win `-static`) | `internal/accessreader/reader.go:1-16` |
 | **Windows Native Shell/COM** | `github.com/go-ole/go-ole` (`IFileDialog` / `IShellItem` COM syscalls, balanced STA) | `v1.3.0` | `app/go.mod`, `app/internal/pictures/` |
-| **Document & Interchange** | `excelize/v2` (`.xlsx`), `go-pdf/fpdf` + `LiberationSans` (`.pdf`), `golang.org/x/text`, `gopkg.in/yaml.v3` | `v2.11.1`, `v0.12.0`, `v0.39.0`, `v3.0.6` | `app/go.mod`, `app/resources/fonts/` |
+| **Document & Interchange** | `excelize/v2` (`.xlsx`), `go-pdf/fpdf` + `LiberationSans` (`.pdf`), `golang.org/x/text`, `go.yaml.in/yaml/v3` | `v2.11.1`, `v0.12.0`, `v0.44.0`, `v3.0.6` | `app/go.mod`, `app/resources/fonts/` |
 | **Frontend & 3D GIS** | Svelte 5 (`^5.57.3`), `maplibre-gl` (`^6.18.0`), `@deck.gl/*` (`^9.4.1`), `@luma.gl/webgpu` (`^9.4.2`), `pmtiles` (`^4.5.0`) | Svelte 5 + MapLibre 6.18 | `app/frontend/package.json` |
 | **CSS, Fonts & Icons** | Tailwind CSS v4 (`@tailwindcss/vite`), `@lucide/svelte`, BC Sans WOFF2 (`site/`, `app/frontend/src/`) | `^4.3.5`, `^1.73.0` | `app/frontend/package.json`, `site/fonts/` |
-| **Bundler & Test Suites** | Vite 8 (`^8.3.8`), `svelte-check`, Node 22 single-pass `app/frontend/scripts/run-tests.mjs` (`.test.cjs` suites in `app/frontend/tests/`), Go test (`*_test.go`) | `^8.3.8` / Node `22` | `app/frontend/package.json`, `app/frontend/scripts/run-tests.mjs` |
+| **Bundler & Test Suites** | Vite 8 (`^8.3.8`), `svelte-check`, Node `24+` single-pass `app/frontend/scripts/run-tests.mjs` (`.test.cjs` suites in `app/frontend/tests/`), Go test (`*_test.go`) | `^8.3.8` / Node `24+` | `app/frontend/package.json`, `.github/workflows/ci.yml` |
 
 ---
 
-## 3. Backend Go 4-Layer Acyclic Architecture (`486` Production `.go` Files)
+## 3. Backend Go 4-Layer Acyclic Architecture (`487` Production `.go` Files)
 
 ### 3.1 Startup Lifecycle, Non-Destructive Recovery & Guarded Window Close
 Unlike legacy `VPro64.accdb`—which silently resets or crashes when linked `.accdb` paths move (`VPro64_forAI/Modules/V7mdlSplash.txt:70-137`)—`app/main.go` enforces deterministic startup, build-tier (`dev` | `alpha` | `release`), and shutdown contracts:
 
-1. **Startup & Recovery Mode (`app/main.go`, `app/internal/lifecycle/startupservice.go`, `app/internal/lifecycle/buildinfo.go`):** Resolves `%APPDATA%\vpro\config.yml` and `%LOCALAPPDATA%\vpro\`, verifies SHA-256 hashes of all 5 support databases (`databasefamily.go`) and 8 embedded reference `.db` catalogues, and opens `SQLiteProjectService`. If `config.yml` or a configured external `.db` fails validation, `StartupService` enters non-destructive recovery mode so the user can relocate `.db` paths or materialize `Sample.db` **without overwriting `config.yml` without backup**.
+1. **Startup & Recovery Mode (`app/main.go`, `app/internal/lifecycle/startupservice.go`, `app/internal/lifecycle/buildinfo.go`):** Resolves `%APPDATA%\vpro\config.yml` and `%LOCALAPPDATA%\vpro\`, verifies SHA-256 hashes of all 6 support databases (`VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, `VPics.db` in `databasefamily.go`), provisions `<dataDir>/readmodels/vlists-lookup.db` alongside the embedded reference `.db` read-models, and opens `SQLiteProjectService`. If `config.yml`, a support database (e.g., `VUser.db`), or a configured external `.db` fails validation, `StartupService` enters non-destructive recovery mode (backing up corrupt `.db` files byte-for-byte before restoring clean seeds) so the user can relocate `.db` paths or materialize `Sample.db` **without overwriting `config.yml` without backup**.
 2. **Cryptographic Nonce Window-Close Handshake (`app/internal/lifecycle/closeservice.go`, `app/main.go`):** Prevents data loss from dirty forms or in-flight workbook publications when the OS window close button is clicked:
 
 ```mermaid
@@ -158,7 +158,7 @@ flowchart LR
 
 ---
 
-## 4. Frontend Svelte 5 Architecture (`118` `.svelte` Components, `24` Views)
+## 4. Frontend Svelte 5 Architecture (176 focused `.svelte` components, `24` Views)
 
 ### 4.1 Reactive State, Session Machines & Bundle Splitting
 * **Svelte 5 Runes + Class Session Machines:** Uses Svelte 5 Runes (`$state`, `$derived`, `$effect`, `$props`) paired with stateful TypeScript session classes cached across view switches so unsaved drafts and preview snapshots survive tab navigation and block context-switch/close barriers (`41a09f8`, `d630301`).

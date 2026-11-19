@@ -40,14 +40,12 @@ rounding operation.
 
 ## Package API
 
-- `vpro_presence_class()` returns Roman-numeral presence classes.
-- `vpro_presence_class_numeric()` returns the Access character-number labels.
+- `vpro_presence_class(presence, format = c("roman", "numeric"))` returns Roman-numeral presence classes (`"I"`–`"V"`, default `format = "roman"`) or Access character-number labels (`"1"`–`"5"`, `format = "numeric"`).
 - `vpro_prominence_class()` and `vpro_goldstream_class()` return classes or raw
   scores through an explicit `return_score` argument, replacing global report
   state.
-- `vpro_significance_class()` returns one stable character type.
-- `vpro_round_minimum()` provides the documented minimum-and-rounding operation
-  as stable numeric data with explicit digits and minimum arguments.
+- `vpro_significance_class()` returns one stable character type (`"+"`, `"1"`–`"9"`).
+- `vpro_round_ace(x, digits = 2L)` formats `double` inputs to 15 significant decimal digits before half-away rounding (`1.005 -> 1.01`), paired with `vpro_narrow_float32()` for IEEE-754 `float32` cover narrowing.
 - `vpro_cap_percent()` preserves the Access cap-at-100 behavior.
 
 All APIs are vectorized, require finite numeric values or missing values, and

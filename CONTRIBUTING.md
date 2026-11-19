@@ -6,24 +6,24 @@ Thank you for maintaining **VPro 2.0**. Before editing any subsystem, read the m
 
 ## 1. Prerequisites & Local Validation Matrix
 
-- **Desktop (`app/`):** Go `1.27+` (`CGO_ENABLED=1`), Node `24+`, `wails3` CLI matching `app/go.mod` (`v3.1.0`), plus GTK4 & WebKitGTK 6.0 dev headers on Linux (or MinGW/LLVM-MinGW + NSIS on Windows).
-- **R SDK (`r/`):** R `>= 4.4.0`, `quarto` CLI (optional for guides), `air` formatter.
+- **Desktop (`app/`):** Go `1.27+` (`CGO_ENABLED=1`, `GOTOOLCHAIN=go1.27.4+auto` when running under isolated `XDG_CONFIG_HOME`), Node `24+`, `wails3` CLI matching `app/go.mod` (`v3.1.0`), plus GTK4 & WebKitGTK 6.0 dev headers on Linux (or MinGW/LLVM-MinGW + NSIS on Windows).
+- **R SDK (`r/`):** R `>= 4.4.0`, `quarto` CLI (optional for guides), Posit `air` formatter (optional; `scripts/format-r.sh` runs `air` when installed and skips cleanly otherwise).
 
 ```bash
 # Desktop frontend unit suites, typecheck & Vite bundle
 (cd app/frontend && npm test && npm run check && npm run build)
 
 # Desktop Go backend & TS interface bindings
-(cd app && go test ./...)
-(cd app && wails3 generate bindings -ts -i)
+(cd app && GOTOOLCHAIN=go1.27.4+auto go test ./...)
+(cd app && GOTOOLCHAIN=go1.27.4+auto wails3 generate bindings -ts -i)
 
 # Headless R Companion SDK (zero-note tarball R CMD check)
-(cd r && air format R tests)
+bash scripts/format-r.sh
 (cd r && Rscript -e "roxygen2::roxygenise()" && Rscript -e "testthat::test_local(stop_on_failure = TRUE)")
 (cd r && R CMD build . && R CMD check --no-manual vpro_*.tar.gz && rm -rf vpro_*.tar.gz vpro.Rcheck)
 
-# Dependency lockstep, F1 help bundle, BC Gov portal & release verifier
-python3 scripts/check-dep-lockstep.py
+# OKF hygiene, dependency lockstep, F1 help bundle, BC Gov portal & release verifier
+python3 scripts/check-okf-hygiene.py && python3 scripts/check-dep-lockstep.py
 python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 node scripts/build-docs-src.mjs && node site/build.mjs && node --test scripts/tests/downloadPortal.test.cjs
 ```
@@ -49,7 +49,7 @@ When the BC Ministry of Forests publishes a new `BECdb` or `BCPlantTaxonomy` rel
 
 1. Place the official `.zip`/`.accdb` archives in the local read-only standards staging directory (never mutate source archives) and record their SHA-256 checksums.
 2. Regenerate `app/resources/` SQLite read-models, `app/resources/database-family/VLists.db`, and `app/resources/standards-2026-provenance.json` via `app/cmd/standards2026` (verify expected table counts and `Codetype = 'XX'` preservation).
-3. Sync `r/data-raw/lists/`, recompress `r/inst/extdata/VLists.db.gz`, and update any version labels in `docs-src/` and `site/build.mjs`.
+3. Sync `r/data-raw/lists/`, recompress `r/inst/extdata/*.db.gz` (`VLists.db.gz`, `VPro64.db.gz`, `VUser.db.gz`, `VMetaData.db.gz`, `VMessageBoard.db.gz`, `VPics.db.gz`), and update any version labels in `docs-src/` and `site/build.mjs`.
 4. Run the full Desktop, R `R CMD check`, and `site/` test matrices, and test `vpro_standards()` + `standards.library_releases` ingestion against PostgreSQL `BECMaster`.
 
 ---

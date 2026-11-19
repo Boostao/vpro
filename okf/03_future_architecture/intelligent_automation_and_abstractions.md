@@ -66,7 +66,7 @@ flowchart TB
 ## 4. Automation 3: Reactive In-App Diagnostic & Edatopic Synthesis Workbench
 
 * **Manual Pain Eliminated:** Retires the multi-application loop: *Export Summary Veg `.xlsx` $\rightarrow$ launch Excel $\rightarrow$ load `Diagnostic10.xla` (`EA6EF4E1...`) $\rightarrow$ run Pairwise/Differential macros $\rightarrow$ manually switch back to VPro to reassign outlier plots in `*_SU` $\rightarrow$ re-export* (`RE26OCF433` Schedule A `4.a.i`, `4.b.ii`).
-* **Target Touchpoints:** New `ClassificationSynthesisView.svelte` + Go `ClassificationService` (`internal/diagnostics/` porting `V7mdlDiagnostic.txt:57-170`, `Diagnostic10.xla :: mdlPairwise.bas`, and `vpro/R/diagnostic-classification.R`).
+* **Target Touchpoints:** New `ClassificationSynthesisView.svelte` + Go `ClassificationService` (`internal/diagnostics/` porting `V7mdlDiagnostic.txt:57-170`, `Diagnostic10.xla :: mdlPairwise.bas`, and `r/R/diagnostics.R`).
 
 ```mermaid
 sequenceDiagram
@@ -94,7 +94,7 @@ sequenceDiagram
 ## 5. Automation 4: One-Click "Pre-Flight QA & 3-Way Project Merge" Pipeline
 
 * **Manual Pain Eliminated:** Consolidates **five separate legacy manual workflows** (`ValidateEnvData`, `Check Spp Codes`, `OptimizeVeg`, `CompareTwoProjects`, and `USysMerge` — `VPro2.0_Functions` PDF pp. 5, 11; `RE26OCF433` Schedule A `1.i–ii`) into a single deterministic, transactional wizard.
-* **Target Touchpoints:** `ValidationService` + `ProjectMergeService` in `app/` (porting `vpro/R/environment-validation.R`, `integrity-validation.R`, `vegetation-duplicates.R`) + Cloud `BECMaster` upload endpoint.
+* **Target Touchpoints:** `ValidationService` + `ProjectMergeService` in `app/` (aligned with `r/R/lmh25_validate.R` `vpro_validate()`) + Cloud `BECMaster` upload endpoint.
 * **Four-Step Automated Pipeline (`RunProjectPreflightAndDiff`):**
   1. **Schema & FK Integrity Check:** Detect orphan `_Veg`, `_Humus`, `_Mineral`, `_Other`, `_Audit` rows (`PlotNumber NOT IN _Env`) and missing 1:1 `_Admin` rows; quarantine or repair transactionally.
   2. **Safe Transactional `OptimizeVeg` & Duplicate Resolution:** Group split multi-row species entries `(PlotNumber, Species)` across sub-layers inside a `SAVEPOINT` (fixing legacy `CombineSppCovers` bug that summed `Height6` instead of `Max(Height6)` in `V7mdlSpellCheck2020.txt:185`), previewing exact before/after row counts.

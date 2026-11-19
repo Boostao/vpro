@@ -105,7 +105,7 @@ flowchart TD
 ### 4.2 Atomic Audit Trail & Safe Field Restoration
 * **Legacy Defect Eliminated (`archive/oct2026-parity-ledgers/FS882-6x4XL-access-contract.md:83-155`):** In Access `Form_BeforeUpdate` (`V7mdlAudit.txt:236-320`), unbound UI checkboxes (`Check369`/`Check371`/`Check373`) and aborted saves wrote orphan/phantom rows into `<Project>_Audit`, while `frmSIVIsite` logged table `"Unknown"`.
 * **Transactional SQLite Audit (`app/` `plotrestore.go:15-180`, `vpro` `plot-crud` parity):**
-  1. Every parent (`_Env`, `_Admin`) and child (`_Veg`, `_Humus`, `_Mineral`, `_Other`) mutation writes its `<Project>_Audit` rows (`BeforeEdit`, `AfterEdit`, `User`, `EditWhen`, child `ID`) inside the **same SQLite `BEGIN IMMEDIATE` transaction**, honoring `AuditStrength` (`0=Off`, `1=Edit`, `2=Edit+Add`, `3=Edit+Add+Delete`).
+  1. Every parent (`_Env`, `_Admin`) and child (`_Veg`, `_Humus`, `_Mineral`, `_Other`) mutation writes its `<Project>_Audit` rows (`BeforeEdit`, `AfterEdit`, `User`, `EditWhen`, child `ID` or `NULL` for header/table-level events) inside the **same SQLite `BEGIN IMMEDIATE` transaction**, honoring `AuditStrength` (`0=Off`, `1=Edit`, `2=Edit+Add`, `3=Edit+Add+Delete`; default `3`).
   2. `RestoreSelectedAuditRecords` rolls back selected field edits with explicit post-restore disposition (`retain` vs. `prune` audit rows) while **refusing destructive `CleanVegPlot` silent row deletion** (`CleanedVegRows == 0` enforced in `plotrestore.go` and `FS882Form.svelte:1710`) and preserving Access's rule skipping `_Veg.Cover*` audit restoration (`V7mdlAudit.txt:174`).
 
 ---

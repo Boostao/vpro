@@ -96,7 +96,7 @@ The Go backend in `app/` (`module github.com/boostao/vpro/app`) enforces a stric
 
 1. **7-Database SQLite Family & `config.yml`:**
    - Preserve `<Project>.db` (`VP08` 8 core tables: `_Env`, `_Admin`, `_Veg`, `_Humus`, `_Mineral`, `_Other`, `_Audit`, `_Metadata`), `VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, `VPics.db`, `_table_metadata` (`'VP08'`), and `config.yml` (with lossless legacy JSON migration).
-   - Embedded reference `.db` files in `app/resources/` are read-models, **never** replacements for `VLists.db` / `VUser.db`.
+   - Embedded reference `.db` files in `app/resources/` are read-models, **never** replacements for `VLists.db` / `VUser.db`; `ReferenceService` provisions its 2-table (`Lists`, `Species`) lookup read-model at `<dataDir>/readmodels/vlists-lookup.db` so it never collides with `<dataDir>/VLists.db` or `<dataDir>/database-family/VLists.db` on case-insensitive filesystems (Windows NTFS / macOS APFS).
    - `app/internal/sqlutil/sqlutil_foundation.go` (`UserDataDir()` and `UserConfigDir()`) defines the shared workspace contract consumed identically by `r/R/workspace.R` (`VPRO_DATA_DIR` / `VPRO_CONFIG_DIR` overrides first; Windows `%LOCALAPPDATA%\vpro` & `%APPDATA%\vpro`; macOS `~/Library/Application Support/vpro`; Linux `${XDG_DATA_HOME:-~/.local/share}/vpro` & `${XDG_CONFIG_HOME:-~/.config}/vpro`).
 2. **URI Escaping & TOCTOU Protection:**
    - Always build SQLite `file:` URIs from resolved absolute paths using proper `net/url` escaping (`#`, `?`, or `%` in raw file paths can truncate `mode=ro`!) and verify `os.SameFile` before and after `ATTACH DATABASE`.
@@ -109,7 +109,7 @@ The Go backend in `app/` (`module github.com/boostao/vpro/app`) enforces a stric
 ### 4.2 Data Types, Validation & Access Calibration (`okf/02_present_state/oracles/`)
 
 - **Atomic Mutations & Monotonic Child Identity Reservations:**
-  - Parent/child mutations, `<Project>_Audit` rows (`AuditStrength` `0..3`), and `__VPRO_*` identity/history reservations (`__VPRO_ChildIdentity`, `__VPRO_ProfileIdentity`, `__VPRO_PictureCreationIdentity`, etc.) share a single atomic SQLite transaction (`BEGIN IMMEDIATE` on `c.projectDB` with `_foreign_keys=on&_busy_timeout=5000`). **Never reuse deleted child IDs.**
+  - Parent/child mutations, `<Project>_Audit` rows (`AuditStrength` `0..3`, default `3` = `Edit, Add & Delete`; header/table-level events write `ID = NULL`), and `__VPRO_*` identity/history reservations (`__VPRO_ChildIdentity`, `__VPRO_ProfileIdentity`, `__VPRO_PictureCreationIdentity`, etc.) share a single atomic SQLite transaction (`BEGIN IMMEDIATE` on `c.projectDB` with `_foreign_keys=on&_busy_timeout=5000`). **Never reuse deleted child IDs.**
 - **Access `BOOLEAN` Encoding:**
   - Normalize reads explicitly and preserve `true = -1`, `false = 0` (`NULL` = `nil`) in SQLite storage and `<Project>_Audit` rows.
 - **IEEE-754 `SINGLE` (`float32`) Cover Narrowing:**
@@ -141,7 +141,7 @@ The Go backend in `app/` (`module github.com/boostao/vpro/app`) enforces a stric
    - Draft validation errors must survive tab remounts and block Save, Lock, context-switch, and window-close (`CloseService` cryptographic 128-bit nonce handshake `"vpro:close-request"` $\rightarrow$ `ConfirmClose(nonce)` / `CancelClose(nonce)`). Wait for explicit `CancelClose` acknowledgement in lifecycle tests before mutating barriers.
 3. **Excelize & YAML v3 Invariants:**
    - Use `strings.EqualFold` (matching `excelize/v2`) when checking worksheet name collisions, and validate case-folded joined grouping keys *before* threshold filtering in reports.
-   - With `gopkg.in/yaml.v3`, keep `type configValues = map[string]any` as a type alias (`=`) so nested map type assertions stay `map[string]any`.
+   - With `go.yaml.in/yaml/v3`, keep `type configValues = map[string]any` as a type alias (`=`) so nested map type assertions stay `map[string]any`.
 4. **Generation-Fenced Async Client Validation & Yielding:**
    - After awaited client-side result validation, recheck the request generation before assigning UI state. Large XML validation must yield to the event loop so Cancel/remount/close guards can run; test a held validation yield in actual Wails, release it after remount, and prove the old result cannot populate the new panel.
 5. **Wire-Faithful Shared Fixtures & Production Binding Checks:**
@@ -159,42 +159,43 @@ The Go backend in `app/` (`module github.com/boostao/vpro/app`) enforces a stric
 
 - **Layer-2 Isolation & 12-Service Preservation:**
   - `app/internal/cloudsync` (`pgx/v5` + `pgxpool` + `pgx.CopyFrom` + `pgx.Batch`) is a pure Layer-2 package with zero sibling Layer-2 imports, surfaced via 19 RPC methods on `ContextService` (`app/domainservices_context.go`) and `CloudSyncWorkbench.svelte` (5th tab of `ProjectAdminWorkbench.svelte`), preserving the strict 12-service Wails registration ceiling and `sqlutil.DecodeStrictJSON` wire validation.
-- **3 Isolated PostgreSQL Schemas (`schema.go`):**
-  1. `becmaster` — `env` (`112` cols + PostGIS `geom`), `admin` (`20` cols), `veg`/`humus`/`mineral`/`other` with monotonic `child_identity` + watermark, `metadata` (`75` cols), SHA-256 hash-chained `audit` (`prev_hash` $\rightarrow$ `entry_hash`) + `merge_ledger`, `snapshots`, and `download_log`.
-  2. `staging` — `submissions` enforced by PostgreSQL Row-Level Security (RLS) + `BEFORE INSERT` role/compliance trigger + submission-keyed `VP08` staging tables.
-  3. `standards` — `library_releases` + versioned 2026 `BCPlantTaxonomy v19` (`USysAllSpecs`) & `BECdb v13` catalogues.
+- **3 Isolated PostgreSQL Schemas (`schema.go`, `31` tables):**
+  1. `becmaster` (`14` tables) — `schema_migrations`, `env` (`112` cols + PostGIS `geom`), `admin` (`20` cols), `veg`/`humus`/`mineral`/`other` with monotonic `child_identity` + `child_identity_watermark`, `metadata` (`75` cols), SHA-256 hash-chained `audit` (`prev_hash` $\rightarrow$ `row_hash`) + `merge_ledger`, `snapshots`, and `download_log`.
+  2. `staging` (`9` tables) — `submissions` enforced by PostgreSQL Row-Level Security (RLS) + `BEFORE INSERT` role/compliance trigger + 8 submission-keyed `VP08` staging tables (`env`, `admin`, `veg`, `humus`, `mineral`, `other`, `metadata`, `audit`).
+  3. `standards` (`8` tables) — `library_releases` + 7 versioned 2026 `BCPlantTaxonomy v19` (`usys_all_specs`, `usys_spp_attributes`), `LMH25` (`usys_table_of_lists`), & `BECdb v13` (`bec_site_series`, `master_site_unit_list`, `usys_zone_list`, `project_metadata`) catalogues.
 - **Security, Compliance Gate & `SERIALIZABLE` Custodian 3-Way Merge:**
-  - Resolve connection configs offline-first (`becmaster.env` / `VPRO_PG_*` / `BECMASTER_*` env vars), strictly redact passwords/DSNs across all logs, errors, and frontend DTOs, and require TLS (`sslmode=require` / `verify-full`) for non-loopback hosts.
+  - Resolve connection configs offline-first (`becmaster.env` / `VPRO_PG_*` / `BECMASTER_*` env vars), strictly redact passwords/DSNs across all logs, errors, and frontend DTOs, require TLS (`sslmode=require` / `verify-full`) for non-loopback hosts, and enforce fail-closed `USysSppAttributes.RedBlueList` rare-plant coordinate truncation (`0.1°` ~10 km lat/lon, `10,000 m` UTM) for non-custodian reads and snapshots.
   - Enforce local `RunComplianceValidation` + `UserSpeciesManifest` packaging prior to every `staging.submissions` upload (`contributor.go`).
   - Standards publish/pull (`< 3 s`) performs an atomic local `VLists.db` swap after SHA-256 verification; baseline seeding (`seed.go`) streams all `71,567` `BECMaster` plots (`1.65M` veg, `597K` audit) via `pgx.CopyFrom` without OOM; regional subset checkouts write canonical WAL `VP08` `.db` files and append `becmaster.download_log` entries.
-  - Custodian 3-way merge (`custodian_merge.go`, `< 300 ms`) executes `pgx.Batch`-pipelined mutations inside a `SERIALIZABLE` PostgreSQL transaction with monotonic `child_identity` allocation and tamper-evident SHA-256 hash-chained `becmaster.audit` + `becmaster.merge_ledger` provenance, remaining 100% interoperable with `r/R/cloud_*.R`.
+  - Custodian 3-way merge (`custodian_merge.go`, `< 300 ms`) executes `pgx.Batch`-pipelined mutations inside a `SERIALIZABLE` PostgreSQL transaction with monotonic `child_identity` allocation and tamper-evident SHA-256 hash-chained `becmaster.audit` (`prev_hash` $\rightarrow$ `row_hash`, verified from genesis when `limit == 0`) + `becmaster.merge_ledger` provenance, remaining 100% interoperable with `r/R/cloud_*.R`.
 
 ---
 
 ## 7. Toolchain, Build Tiers & Validation Reference
 
 ### Prerequisites
-- **Node `22.12+` & npm** on `PATH`.
-- **Go `1.27+` (`CGO_ENABLED=1`)** plus `~/go/bin` (`wails3` `v3.1.0`, `task`, `nfpm`) and `~/.local/bin` (`pmtiles`, `tippecanoe`).
+- **Node `24+` & npm** on `PATH` (aligned with `.github/workflows/*.yml` and `CONTRIBUTING.md`).
+- **Go `1.27+` (`toolchain go1.27.4`, `CGO_ENABLED=1`)** plus `~/go/bin` (`wails3` `v3.1.0`, `task`, `nfpm`) and `~/.local/bin` (`pmtiles`, `tippecanoe`). Whenever running Go commands with an isolated `XDG_CONFIG_HOME` on Linux distributions whose `/usr/bin/go` defaults to `GOTOOLCHAIN=local` (e.g., Fedora), explicitly export `GOTOOLCHAIN=go1.27.4+auto`.
 - **CGO Compilers & WebView Dev Libraries:** Linux `gcc` + GTK4 & WebKitGTK 6.0 dev packages (GTK3 & WebKitGTK 4.1 for legacy `gtk3` build tag); Windows `x86_64-w64-mingw32-gcc` / LLVM-MinGW + `makensis`.
 - **Optional Sidecar Runtime:** `Rscript` (`R >= 4.4.0` with `vpro` and `climr`), `quarto`, and `gh` CLI.
 
 ### Canonical Commands (Run from Monorepo Root or `app/`)
 ```bash
 # Regenerate Wails TypeScript bindings (MUST include -ts -i so nullable arrays emit interfaces, not classes)
-(cd app && wails3 generate bindings -ts -i)
+(cd app && GOTOOLCHAIN=go1.27.4+auto wails3 generate bindings -ts -i)
 
 # Frontend unit tests (single-pass runner), svelte-check & Vite production bundle
 (cd app/frontend && npm test && npm run check && npm run build)
 
-# Backend Go test suite
-(cd app && go test ./...)
+# Backend Go test & vet suite
+(cd app && GOTOOLCHAIN=go1.27.4+auto go test ./... && GOTOOLCHAIN=go1.27.4+auto go vet ./...)
 
-# Native desktop packaging (supports VERSION=2.1.0-alpha.1 / BUILD_MODE=dev|alpha|release)
-(cd app && wails3 task linux:build)
-(cd app && wails3 task windows:build)
+# Native desktop packaging (.deb / .rpm / .tar.gz on Linux; NSIS .exe / .zip on Windows; Universal .dmg on macOS)
+(cd app && GOTOOLCHAIN=go1.27.4+auto wails3 task linux:build)
+(cd app && GOTOOLCHAIN=go1.27.4+auto wails3 task windows:build)
 
-# Root single-source F1 help bundle, BC Gov release portal & packaging unit tests
+# Root single-source F1 help bundle, OKF/lockstep hygiene, BC Gov release portal & packaging unit tests
+python3 scripts/check-okf-hygiene.py && python3 scripts/check-dep-lockstep.py
 python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 node scripts/build-docs-src.mjs && node site/build.mjs && node --test scripts/tests/downloadPortal.test.cjs
 ```
