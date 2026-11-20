@@ -30,9 +30,7 @@
   let syncUTMFromDD = $state(true);
   let syncLatLonFromUTM = $state(false);
 
-  const filteredQARows = $derived<SpatialPlotQARow[]>(
-    filterSpatialQARows(qaReport?.rows ?? [], qaFilterOnlyIssues)
-  );
+  const filteredQARows = $derived<SpatialPlotQARow[]>(filterSpatialQARows(qaReport?.rows ?? [], qaFilterOnlyIssues));
 
   function buildStampOpts(allScoped: boolean): SpatialStampOptions {
     const plotNumbers = Object.entries(qaSelectedPlots)
@@ -147,11 +145,7 @@
               />
             </td>
             <td>
-              <button
-                type="button"
-                class="wb-link-btn mono"
-                onclick={() => onOpenPlot?.(row.plotNumber)}
-              >
+              <button type="button" class="wb-link-btn mono" onclick={() => onOpenPlot?.(row.plotNumber)}>
                 {row.plotNumber}
               </button>
             </td>
@@ -159,7 +153,8 @@
               {row.fieldBgc || '-'} -&gt; {row.suggestedGisBgc || row.storedGisBgc || '-'}
             </td>
             <td class:wb-flag-text={row.divergenceFlagged || row.longitudeSignFlipped}>
-              {#if row.longitudeSignFlipped}+W {/if}
+              {#if row.longitudeSignFlipped}+W
+              {/if}
               {row.divergenceMeters != null ? `${row.divergenceMeters.toFixed(0)}m` : '-'}
             </td>
           </tr>

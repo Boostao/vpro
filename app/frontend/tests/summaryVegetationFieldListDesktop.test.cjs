@@ -64,19 +64,18 @@ function pane(state, enabled = true, disabled = false, validation = '') {
       view: () => view, update: (on: boolean, busy = false, error = '') => {
         enabledFromPresentationDraft = on; peerDisabled = busy; peerValidation = error;
       }};
-  `, { './summaryVegetationFieldList': client }, { scope: state.scope, session: state.session,
+  `, { './summaryVegetationFieldList': client, '../shared/readRequests': require('./svelteTestHelpers.cjs').serverReads, '../shell/notificationService.svelte': noopNotificationsStub }, { scope: state.scope, session: state.session,
     enabledFromPresentationDraft: enabled, peerDisabled: disabled, peerValidation: validation, onStateChange: () => {} });
 }
 function root(value) {
-  const source = fs.readFileSync(srcPath('App.svelte'), 'utf8').replaceAll('\r\n', '\n');
-  const effect = source.match(/  \$effect\(\(\) => \{\n    if \(!summaryVegetationFieldListDesktop.enabled\)[\s\S]*?\n  \}\);/)[0];
-  const derived = source.match(/  const editorBusy = \$derived\([^\n]+/)[0];
+  const source = fs.readFileSync(srcPath('shell/operationGuard.svelte.ts'), 'utf8').replaceAll('\r\n', '\n');
+  const effect = source.match(/  \$effect\(\(\) => \{\n    if \(!summaryVegetationFieldListDesktop\.enabled\)[\s\S]*?\n  \}\);/)[0];
   const compiled = compiler.compileModule(`
-    let localEditorBusy = $state(false), pictureCreationBusy = false, pictureLifecycleBusy = false,
-      twoPageSoilBusy = false, twoPageVegetationBusy = false, summaryPreferenceBusy = false, projectReportBusy = false,
-      summaryEnvironmentalBusy = false, externalSUEnvironmentBusy = false, matrixPublicationBusy = false;
+    let localEditorBusy = $state(false);
     let summaryFieldListBusy = $state(false), view = 'home';
-    ${derived}
+    const setFlag = (_key, active) => { summaryFieldListBusy = active; };
+    const onBlockedFromHome = (opts) => { if (view === 'home') view = opts.view; };
+    const editorBusy = $derived(localEditorBusy || summaryFieldListBusy);
     ${effect.replace('$effect(', 'installEffect(')}
     export const handlers = { held: () => editorBusy, route: () => view,
       peer: value => { localEditorBusy = value; } };
@@ -362,8 +361,8 @@ test('None with empty path belongs only to field-list context, no fabricated sou
   await current.loadFieldList();
   assert.equal(current.state().scope.suPath, '');
   assert.equal(current.state().scope.sourcePath, sourcePath);
-  const app = fs.readFileSync(srcPath('App.svelte'), 'utf8');
-  assert.ok(app.includes('!state?.contextId || !state.projectPath || !state.suPath'));
+  const opGuard = fs.readFileSync(srcPath('shell/operationGuard.svelte.ts'), 'utf8');
+  assert.match(opGuard, /!state\?\.contextId \|\|[\s\S]*?!state\.projectPath \|\|[\s\S]*?!state\.suPath/);
   current.destroy();
 });
 

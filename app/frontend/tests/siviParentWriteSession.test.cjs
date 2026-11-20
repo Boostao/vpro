@@ -220,14 +220,23 @@ test('mounted parent retains77 fields and one visible source-labelled live contr
   assert.match(markup, /data-sivi-direct-load[^>]*disabled/);
 });
 test('parent draft owner joins global lifecycle and permits remount without implicit refresh/source writes', () => {
-  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
-  assert.match(parent, /childUnsaved = \$derived\(nonParentChildUnsaved \|\| siviParentWriteUnsaved \|\| siviParentActionUnsaved \|\| siviProjectAssignmentUnsaved \|\| siviParentSharedUnsaved \|\| twoPageOpen \|\| twoPageSoilBusy \|\| twoPageSoilBlocked \|\| twoPageVegetationBusy \|\| twoPageVegetationBlocked\)/);
-  assert.match(parent, /blocked: \[[^\]]*siviClose[^\]]*siviParentWriteClose[^\]]*\]\.some\(c => c\?\.blocked \?\? false\)/);
-  assert.match(parent, /\[\(\) => siviParentWriteUnsaved, \(\) => siviParentWriteOperation\('save'\)\]/);
-  assert.match(parent, /\[\(\) => siviParentWriteUnsaved, \(\) => void siviParentWriteOperation\('undo'\)\]/);
+  const { createFS882TestController, readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const parent = readFS882Composite();
+  const h = createFS882TestController();
+  try {
+    assert.equal(h.ctrl.childUnsaved, false);
+    h.ctrl.twoPageOpen = true;
+    h.flush();
+    assert.equal(h.ctrl.childUnsaved, true);
+  } finally {
+    h.dispose();
+  }
+  assert.match(parent, /\bparentWriteClose\b[\s\S]*?\.some\(\(c\)\s*=>\s*c\?\.blocked/);
+  assert.match(parent, /\[\(\) => parentWriteUnsaved,\s*\(\) => parentWriteOperation\('save'\)\]/);
+  assert.match(parent, /\[\(\) => parentWriteUnsaved,\s*\(\) => void parentWriteOperation\('undo'\)\]/);
   assert.match(parent, /Save or explicitly Undo SIVI parent drafts\/recovery before changing the plot lock/);
-  assert.match(parent, /dirty \|\| nonParentChildUnsaved \|\| !siviParentSession/);
-  assert.match(parent, /if \(!siviParentWriteUnsaved && !siviParentActionUnsaved && !siviProjectAssignmentUnsaved && !siviParentSharedUnsaved &&\s+siviParentSourceSession/);
-  assert.match(parent, /!siviParentSourceView\?\.error &&\s+!siviParentSourceView\?\.authorityUnknown\) await siviParentSourceSession\.load\(\)/);
-  assert.match(parent, /siviParentWriteSession\.closeState\(\)\.unsaved/);
+  assert.match(parent, /!parentSession/);
+  assert.match(parent, /!anyParentUnsaved &&[\s\S]*?parentSourceSession/);
+  assert.match(parent, /!parentSourceView\?\.error &&[\s\S]*?!parentSourceView\?\.authorityUnknown[\s\S]*?await parentSourceSession\.load\(\)/);
+  assert.match(parent, /parentWriteSession\.closeState\(\)\.unsaved/);
 });

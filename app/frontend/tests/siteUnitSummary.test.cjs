@@ -79,7 +79,7 @@ test('summary component is cancellable and enters shared draft-safe navigation',
     assert.equal(compile(read(file),{filename:file,generate:'client'}).warnings.length,0);
   }
   assert.match(read('Navigation.svelte'),/name: 'Summary Environment', icon: ChartColumn, view: 'summary-environment'/);
-  assert.match(read('App.svelte'),/view === 'summary-environment' && \$projectState/);
+  assert.match(require('./svelteTestHelpers.cjs').renderShellDeferredViews('summary-environment', { contextId: 'c1', activeProject: 'Sample', activeSU: 'S1' }), /Loading Site Unit Summary/);
   const panel=read('SiteUnitSummary.svelte');
   assert.match(panel,/onDestroy\(\(\) => \{ unsubscribe\?\.\(\); unsubscribeFull\?\.\(\); unsubscribeSpecies\?\.\(\); cancel\(\); \}\)/);assert.match(panel,/request !== generation/);
   assert.match(panel,/onBusyChange\(busy \|\| preferenceBarrier \|\| workbookBusy \|\| speciesBarrier\)/);

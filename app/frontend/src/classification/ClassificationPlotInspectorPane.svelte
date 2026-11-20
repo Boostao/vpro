@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { ReadRequests } from '../shared/readRequests';
+  import { ReadRequests, formatError } from '../shared/readRequests';
   import ClassificationUserSUPanel from './ClassificationUserSUPanel.svelte';
   import {
     isValidBECUnitMask,
@@ -83,10 +83,8 @@
     const baseChoices = picker ?? [];
     if (port.searchBECSiteSeries && (zoneArg || subZoneArg || queryArg)) {
       try {
-        const series = await reads.track(
-          port.searchBECSiteSeries(zoneArg, subZoneArg, queryArg, 120)
-        );
-        const seen = new Set(baseChoices.map(c => c.siteSeries));
+        const series = await reads.track(port.searchBECSiteSeries(zoneArg, subZoneArg, queryArg, 120));
+        const seen = new Set(baseChoices.map((c) => c.siteSeries));
         const merged = [...baseChoices];
         for (const item of series ?? []) {
           if (item.siteSeries && !seen.has(item.siteSeries)) {
@@ -112,16 +110,12 @@
     }
   }
 
-  function formatInspectorError(cause: unknown): string {
-    return String(cause ?? '').replace(/^(?:\s*(?:RuntimeError|Error)\s*:\s*)+/i, '').trim();
-  }
-
   async function refreshBECPicker() {
     if (!effectiveContextId) return;
     try {
       becChoices = await queryBECChoices();
     } catch (err) {
-      onError(formatInspectorError(err));
+      onError(formatError(err));
     }
   }
 
@@ -131,7 +125,7 @@
       const entries = await reads.track(port.listUserSiteUnitList(effectiveContextId));
       userSiteUnits = entries ?? [];
     } catch (err) {
-      onError(`Could not load personal site unit list: ${formatInspectorError(err)}`);
+      onError(`Could not load personal site unit list: ${formatError(err)}`);
     }
   }
 
@@ -157,17 +151,35 @@
 
   {#if inspectedPlot}
     <dl class="vpro-cls-kv">
-      <div><dt>Plot</dt><dd class="mono">{inspectedPlot.plotNumber}</dd></div>
+      <div>
+        <dt>Plot</dt>
+        <dd class="mono">{inspectedPlot.plotNumber}</dd>
+      </div>
       <div>
         <dt>Field BGC / Series</dt>
-        <dd class="mono">{inspectedPlot.zone}{inspectedPlot.subZone || ''}{inspectedPlot.siteSeries ? `/${inspectedPlot.siteSeries}` : '—'}</dd>
+        <dd class="mono">
+          {inspectedPlot.zone}{inspectedPlot.subZone || ''}{inspectedPlot.siteSeries
+            ? `/${inspectedPlot.siteSeries}`
+            : '—'}
+        </dd>
       </div>
-      <div><dt>Active SU Unit</dt><dd class="mono">{inspectedPlot.currentSuUnit || '(Unassigned)'}</dd></div>
-      <div><dt>UserSiteUnit</dt><dd class="mono">{inspectedPlot.userSiteUnit || '—'}</dd></div>
-      <div><dt>rSMR / rSNR</dt><dd class="mono">{inspectedPlot.moistureRegime || '—'} / {inspectedPlot.nutrientRegime || '—'}</dd></div>
+      <div>
+        <dt>Active SU Unit</dt>
+        <dd class="mono">{inspectedPlot.currentSuUnit || '(Unassigned)'}</dd>
+      </div>
+      <div>
+        <dt>UserSiteUnit</dt>
+        <dd class="mono">{inspectedPlot.userSiteUnit || '—'}</dd>
+      </div>
+      <div>
+        <dt>rSMR / rSNR</dt>
+        <dd class="mono">{inspectedPlot.moistureRegime || '—'} / {inspectedPlot.nutrientRegime || '—'}</dd>
+      </div>
       <div>
         <dt>Elev / Slope / Aspect</dt>
-        <dd class="mono">{inspectedPlot.elevation ?? '—'} m · {inspectedPlot.slope || '—'}% · {inspectedPlot.aspect ?? '—'} deg</dd>
+        <dd class="mono">
+          {inspectedPlot.elevation ?? '—'} m · {inspectedPlot.slope || '—'}% · {inspectedPlot.aspect ?? '—'} deg
+        </dd>
       </div>
     </dl>
 
@@ -192,8 +204,7 @@
     {/if}
   {:else}
     <p class="vpro-cls-muted">
-      Click any plot leaf in the SU tree to inspect its field BEC, edatopic regime,
-      topography, and dominant species.
+      Click any plot leaf in the SU tree to inspect its field BEC, edatopic regime, topography, and dominant species.
     </p>
   {/if}
 </section>
@@ -202,7 +213,12 @@
   <div class="vpro-cls-card-head">
     <h3>BECdb v13 Unit Picker (ZZZZsssvp/##)</h3>
     <div class="vpro-cls-actions">
-      <button type="button" class="vpro-btn-mini" class:active-pill={rightPaneTab === 'bec_picker'} onclick={() => (rightPaneTab = 'bec_picker')}>
+      <button
+        type="button"
+        class="vpro-btn-mini"
+        class:active-pill={rightPaneTab === 'bec_picker'}
+        onclick={() => (rightPaneTab = 'bec_picker')}
+      >
         BEC Picker
       </button>
       <button
@@ -234,7 +250,9 @@
         list="vpro-cls-bec-zone-options"
         placeholder="Zone (e.g. CWH)"
         bind:value={becZone}
-        onkeydown={e => { if (e.key === 'Enter') void refreshBECPicker(); }}
+        onkeydown={(e) => {
+          if (e.key === 'Enter') void refreshBECPicker();
+        }}
       />
       <input
         type="text"
@@ -242,9 +260,15 @@
         class="vpro-cls-zone-input"
         placeholder="SubZone"
         bind:value={becSubZone}
-        onkeydown={e => { if (e.key === 'Enter') void refreshBECPicker(); }}
+        onkeydown={(e) => {
+          if (e.key === 'Enter') void refreshBECPicker();
+        }}
       />
-      <select aria-label="BEC lookup catalogue source" bind:value={becSearchMode} onchange={() => void refreshBECPicker()}>
+      <select
+        aria-label="BEC lookup catalogue source"
+        bind:value={becSearchMode}
+        onchange={() => void refreshBECPicker()}
+      >
         <option value="combined">All Sources</option>
         <option value="becdb_v13">BECdb v13 (Zone / Series)</option>
       </select>
@@ -254,19 +278,32 @@
         class="vpro-cls-query-input"
         placeholder="Search code or name..."
         bind:value={becQuery}
-        onkeydown={e => { if (e.key === 'Enter') void refreshBECPicker(); }}
+        onkeydown={(e) => {
+          if (e.key === 'Enter') void refreshBECPicker();
+        }}
       />
       <button type="button" class="vpro-btn-secondary" onclick={() => void refreshBECPicker()}>Search</button>
     </div>
 
     <div class="vpro-cls-custom-assign">
-      <input type="text" aria-label="Custom or BEC target site unit" class="mono" placeholder="Custom or ZZZZsssvp/## unit..." bind:value={customTargetUnit} />
+      <input
+        type="text"
+        aria-label="Custom or BEC target site unit"
+        class="mono"
+        placeholder="Custom or ZZZZsssvp/## unit..."
+        bind:value={customTargetUnit}
+      />
       {#if customTargetUnit.trim()}
         <span class="vpro-mask-badge" class:valid={isValidBECUnitMask(customTargetUnit)}>
           {isValidBECUnitMask(customTargetUnit) ? 'BEC Mask OK' : 'Working Unit'}
         </span>
       {/if}
-      <button type="button" class="vpro-btn-primary vpro-cls-assign-btn" disabled={selectedPlots.length === 0 || !customTargetUnit.trim() || mutating} onclick={() => onAssignPlots(selectedPlots, customTargetUnit.trim())}>
+      <button
+        type="button"
+        class="vpro-btn-primary vpro-cls-assign-btn"
+        disabled={selectedPlots.length === 0 || !customTargetUnit.trim() || mutating}
+        onclick={() => onAssignPlots(selectedPlots, customTargetUnit.trim())}
+      >
         Assign ({selectedPlots.length})
       </button>
     </div>
@@ -278,7 +315,12 @@
             <strong class="mono">{choice.siteSeries}</strong>
             <span class="vpro-cls-sub">{choice.longName}</span>
           </div>
-          <button type="button" class="vpro-btn-mini vpro-cls-assign-btn" disabled={selectedPlots.length === 0 || mutating} onclick={() => onAssignPlots(selectedPlots, choice.siteSeries)}>
+          <button
+            type="button"
+            class="vpro-btn-mini vpro-cls-assign-btn"
+            disabled={selectedPlots.length === 0 || mutating}
+            onclick={() => onAssignPlots(selectedPlots, choice.siteSeries)}
+          >
             Assign ({selectedPlots.length})
           </button>
         </div>

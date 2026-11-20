@@ -1,13 +1,25 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { SpatialService } from '../../bindings/github.com/boostao/vpro/app';
-  import { ReadRequests } from '../shared/readRequests';
+  import { ReadRequests, formatError } from '../shared/readRequests';
   import { validatePlotLocationReview, type ValidatedPlotLocationReview } from './plotLocationReview';
   import { reportCellText } from '../reports/longEnvironmentReport';
   import { notifications } from '../shell/notificationService.svelte';
 
-  let { contextId, project, projectPath, su, suPath, onBusyChange }: {
-    contextId: string; project: string; projectPath: string; su: string; suPath: string; onBusyChange: (busy: boolean) => void;
+  let {
+    contextId,
+    project,
+    projectPath,
+    su,
+    suPath,
+    onBusyChange,
+  }: {
+    contextId: string;
+    project: string;
+    projectPath: string;
+    su: string;
+    suPath: string;
+    onBusyChange: (busy: boolean) => void;
   } = $props();
   let review = $state<ValidatedPlotLocationReview | null>(null);
   let busy = $state(false);
@@ -18,40 +30,64 @@
   const reads = new ReadRequests();
   let generation = 0;
 
-  function cancel() { generation++; reads.cancelAll(); busy = false; onBusyChange(false); }
+  function cancel() {
+    generation++;
+    reads.cancelAll();
+    busy = false;
+    onBusyChange(false);
+  }
   async function show() {
     if (busy) {
       error = 'Wait for or cancel the current location read before another review.';
-      notifications.error('Plot location review blocked', error, { category: 'reports', source: 'Plot Locations', contextTag: project || undefined });
+      notifications.error('Plot location review blocked', error, {
+        category: 'reports',
+        source: 'Plot Locations',
+        contextTag: project || undefined,
+      });
       return;
     }
-    cancel(); const request = generation;
-    review = null; error = ''; offset = 0; busy = true; onBusyChange(true);
+    cancel();
+    const request = generation;
+    review = null;
+    error = '';
+    offset = 0;
+    busy = true;
+    onBusyChange(true);
     try {
       const value = await reads.track(SpatialService.GetPlotLocationReview(contextId));
       if (request !== generation) return;
       const validated = await validatePlotLocationReview(value, contextId, project, projectPath, su, suPath);
       if (request !== generation) return;
       review = validated;
-      notifications.info(
-        'Plot locations loaded',
-        `Loaded ${validated.report.rows.length} plot location row(s).`,
-        { category: 'reports', source: 'Plot Locations', contextTag: project || undefined },
-      );
+      notifications.info('Plot locations loaded', `Loaded ${validated.report.rows.length} plot location row(s).`, {
+        category: 'reports',
+        source: 'Plot Locations',
+        contextTag: project || undefined,
+      });
     } catch (cause) {
       if (request === generation) {
-        error = `Plot locations unavailable; no database, audits, configuration or output file written: ${String(cause)}`;
-        notifications.error('Plot locations unavailable', error, { category: 'reports', source: 'Plot Locations', contextTag: project || undefined });
+        error = `Plot locations unavailable; no database, audits, configuration or output file written: ${formatError(cause)}`;
+        notifications.error('Plot locations unavailable', error, {
+          category: 'reports',
+          source: 'Plot Locations',
+          contextTag: project || undefined,
+        });
       }
     } finally {
-      if (request === generation) { busy = false; onBusyChange(false); }
+      if (request === generation) {
+        busy = false;
+        onBusyChange(false);
+      }
     }
   }
   onDestroy(cancel);
 </script>
 
 <section class="locations" data-plot-location-review aria-label="Plot location review">
-  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border" data-workbench-sticky-bar>
+  <header
+    class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border"
+    data-workbench-sticky-bar
+  >
     <h1>Plot location review</h1>
     <div class="actions">
       <button type="button" data-plot-location-read disabled={busy} onclick={show}>Review plot locations</button>
@@ -59,52 +95,152 @@
     </div>
   </header>
   <p>Project {project} / SU {su}. Selected context scope; current-plot and profile filters are not applied.</p>
-  <dl><div><dt>Owned project database</dt><dd>{projectPath}</dd></div>
-    {#if su !== 'None'}<div><dt>Owned SU database</dt><dd>{suPath}</dd></div>{/if}</dl>
+  <dl>
+    <div>
+      <dt>Owned project database</dt>
+      <dd>{projectPath}</dd>
+    </div>
+    {#if su !== 'None'}<div>
+        <dt>Owned SU database</dt>
+        <dd>{suPath}</dd>
+      </div>{/if}
+  </dl>
   {#if review}
-    <p role="status" data-plot-location-summary>{review.report.rows.length} physical Env rows with an Admin match and both coordinates present.
-      No data, audits, configuration or output files written.</p>
+    <p role="status" data-plot-location-summary>
+      {review.report.rows.length} physical Env rows with an Admin match and both coordinates present. No data, audits, configuration
+      or output files written.
+    </p>
     <div class="table-scroll">
       <table>
         <caption>Source location report fields: latitude then signed decimal longitude</caption>
-        <thead><tr>{#each review.report.fields as field}<th id={`location-${field.key}`} scope="col">{field.label}</th>{/each}</tr></thead>
-        <tbody>{#each rows as row (row.envRowId)}
-          <tr data-plot-location-row={row.envRowId}>{#each review.report.fields as field, i}
-            <td headers={`location-${field.key}`} aria-label={`${field.label} for plot ${reportCellText(row.values[0])}, Env row ${row.envRowId}`}>{reportCellText(row.values[i])}</td>
-          {/each}</tr>
-        {:else}<tr><td colspan="8">No qualifying coordinate rows. No coordinates were inferred.</td></tr>{/each}</tbody>
+        <thead
+          ><tr
+            >{#each review.report.fields as field}<th id={`location-${field.key}`} scope="col">{field.label}</th
+              >{/each}</tr
+          ></thead
+        >
+        <tbody
+          >{#each rows as row (row.envRowId)}
+            <tr data-plot-location-row={row.envRowId}
+              >{#each review.report.fields as field, i}
+                <td
+                  headers={`location-${field.key}`}
+                  aria-label={`${field.label} for plot ${reportCellText(row.values[0])}, Env row ${row.envRowId}`}
+                  >{reportCellText(row.values[i])}</td
+                >
+              {/each}</tr
+            >
+          {:else}<tr><td colspan="8">No qualifying coordinate rows. No coordinates were inferred.</td></tr
+            >{/each}</tbody
+        >
       </table>
     </div>
     <div class="actions" aria-label="Location review pages">
-      <button type="button" disabled={offset === 0} onclick={() => { offset = Math.max(0, offset - pageSize); }}>Previous locations</button>
-      <span>{review.report.rows.length ? offset + 1 : 0}-{Math.min(offset + pageSize, review.report.rows.length)} of {review.report.rows.length}</span>
-      <button type="button" disabled={offset + pageSize >= review.report.rows.length} onclick={() => { offset += pageSize; }}>Next locations</button>
+      <button
+        type="button"
+        disabled={offset === 0}
+        onclick={() => {
+          offset = Math.max(0, offset - pageSize);
+        }}>Previous locations</button
+      >
+      <span
+        >{review.report.rows.length ? offset + 1 : 0}-{Math.min(offset + pageSize, review.report.rows.length)} of {review
+          .report.rows.length}</span
+      >
+      <button
+        type="button"
+        disabled={offset + pageSize >= review.report.rows.length}
+        onclick={() => {
+          offset += pageSize;
+        }}>Next locations</button
+      >
     </div>
     <details>
       <summary>Physical provenance for the displayed rows</summary>
       {#each rows as row (row.envRowId)}
-        <p>Plot {reportCellText(row.values[0])}: Env row {row.envRowId}; Admin row {row.adminRowId};
-          SU rows {row.membershipRowIds.length ? row.membershipRowIds.join(', ') : 'not selected'};
-          stored longitude {reportCellText(row.storedLongitude)}.</p>
+        <p>
+          Plot {reportCellText(row.values[0])}: Env row {row.envRowId}; Admin row {row.adminRowId}; SU rows {row
+            .membershipRowIds.length
+            ? row.membershipRowIds.join(', ')
+            : 'not selected'}; stored longitude {reportCellText(row.storedLongitude)}.
+        </p>
       {/each}
     </details>
   {/if}
-  <p class="notice">Plot coordinate summary preview. Longitude uses the standard VPro western-hemisphere sign convention, and historical out-of-range coordinates are surfaced without silent clamping.</p>
+  <p class="notice">
+    Plot coordinate summary preview. Longitude uses the standard VPro western-hemisphere sign convention, and historical
+    out-of-range coordinates are surfaced without silent clamping.
+  </p>
 </section>
 
 <style>
-  .locations { padding: 1rem; min-width: 0; max-width: 100%; color: var(--vpro-ink); background: var(--vpro-surface); }
-  h1 { font-size: 1.5rem; margin-bottom: .75rem; color: var(--vpro-navy); }
-  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin: 1rem 0; }
-  button { border: 1px solid var(--vpro-navy); border-radius: .25rem; padding: .4rem .6rem; background: var(--vpro-surface); color: var(--vpro-navy); font-weight: 600; }
-  button:disabled { opacity: .5; }
-  dl > div { margin: .6rem 0; }
-  dt { font-weight: 600; color: var(--vpro-navy); }
-  dd, p { overflow-wrap: anywhere; }
-  .table-scroll { overflow-x: auto; max-width: 100%; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid var(--vpro-border); padding: .4rem .6rem; text-align: left; vertical-align: top; white-space: pre-wrap; }
-  th { background: var(--vpro-canvas); color: var(--vpro-navy); }
-  caption { text-align: left; margin-bottom: .5rem; color: var(--vpro-ink-secondary); }
-  .notice { color: var(--vpro-ink-secondary); }
+  .locations {
+    padding: 1rem;
+    min-width: 0;
+    max-width: 100%;
+    color: var(--vpro-ink);
+    background: var(--vpro-surface);
+  }
+  h1 {
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--vpro-navy);
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 1rem 0;
+  }
+  button {
+    border: 1px solid var(--vpro-navy);
+    border-radius: 0.25rem;
+    padding: 0.4rem 0.6rem;
+    background: var(--vpro-surface);
+    color: var(--vpro-navy);
+    font-weight: 600;
+  }
+  button:disabled {
+    opacity: 0.5;
+  }
+  dl > div {
+    margin: 0.6rem 0;
+  }
+  dt {
+    font-weight: 600;
+    color: var(--vpro-navy);
+  }
+  dd,
+  p {
+    overflow-wrap: anywhere;
+  }
+  .table-scroll {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  th,
+  td {
+    border: 1px solid var(--vpro-border);
+    padding: 0.4rem 0.6rem;
+    text-align: left;
+    vertical-align: top;
+    white-space: pre-wrap;
+  }
+  th {
+    background: var(--vpro-canvas);
+    color: var(--vpro-navy);
+  }
+  caption {
+    text-align: left;
+    margin-bottom: 0.5rem;
+    color: var(--vpro-ink-secondary);
+  }
+  .notice {
+    color: var(--vpro-ink-secondary);
+  }
 </style>

@@ -54,19 +54,23 @@ test('report rejects stale contexts, incomplete scopes and invented observations
     x=>x.report.diagnostics=[{code:'missing_env',unit:null,plotNumber:null,count:-1}]
   ]) { const value=fixture(); mutate(value); assert.throws(()=>validate(value)); }
 });
-test('report view is independently gated, scoped, cancellable and participates in draft-safe navigation',()=>{
+test('report view is independently gated, scoped, cancellable and participates in draft-safe navigation',async ()=>{
+  const { readReportComposite, renderShellDeferredViews, componentFunctions } = require('./svelteTestHelpers.cjs');
   const read=file=>readFileSync(srcPath(file),'utf8');
   for(const file of ['LongEnvironmentReport.svelte','Navigation.svelte','App.svelte']) {
     assert.equal(compile(read(file),{filename:file,generate:'client'}).warnings.length,0);
   }
-  const panel=read('LongEnvironmentReport.svelte'), root=read('App.svelte');
+  const panel=readReportComposite('long-environment');
   assert.match(read('Navigation.svelte'),/view: 'long-environment'/);
-  assert.match(panel,/onDestroy\(\(\) => \{ unsubscribe\?\.\(\); unsubscribeWorkbook\(\); cancel\(\); \}\)/);
+  assert.match(panel,/onDestroy\(\(\) => \{\s*unsubscribe\?\.\(\);\s*unsubscribeWorkbook\(\);\s*cancel\(\);\s*\}\)/);
   assert.match(panel,/request !== generation/);
-  assert.match(panel,/EnvironmentReportService\.PreviewLongEnvironment\(contextId/);
+  assert.match(panel,/EnvironmentReportService\.PreviewLongEnvironment\(\s*contextId/);
   assert.match(panel,/data-source-control="rptSvTitle"/);
   assert.match(panel,/data-source-control="btnViewReport"/);
-  assert.match(panel,/edits affect only this preview/);
-  assert.match(root,/closeDisposition\(state, busy \|\| editorBusy/);
-  assert.match(root,/\{#key \$projectState\.contextId\}[\s\S]*<LongEnvironmentReport/);
+  assert.match(panel,/Input and report preparation never save preferences/);
+  assert.equal(renderShellDeferredViews('long-environment', null), '');
+  assert.match(renderShellDeferredViews('long-environment', { contextId: 'c1', activeProject: 'Sample', activeSU: 'S1' }), /Loading Long Environment Report/);
+  const appCtx = componentFunctions('App.svelte', ['requestTransition'], { editorBusy: true, error: '' });
+  await appCtx.actions.requestTransition(async () => assert.fail('must block while editorBusy'));
+  assert.match(appCtx.error, /Wait for the current operation/);
 });

@@ -19,7 +19,6 @@
     siteCodeBusy = $bindable(),
     regionCodeBusy = $bindable(),
     pictureBusy = $bindable(),
-    metadataEnabled,
     openProjectMetadata,
     canOpenProjectMetadata,
     onOpenPictureManager,
@@ -39,7 +38,6 @@
     markDirty,
     validateHeader,
     onError,
-    pictureReadingEnabled,
     twoPageOpen,
     contextId,
     activeProject,
@@ -58,7 +56,6 @@
     siteCodeBusy: boolean;
     regionCodeBusy: boolean;
     pictureBusy: boolean;
-    metadataEnabled: boolean;
     openProjectMetadata: () => void;
     canOpenProjectMetadata: () => boolean;
     onOpenPictureManager?: (plotNumber: string) => void;
@@ -83,7 +80,6 @@
     markDirty: () => void;
     validateHeader: (key: string, message: string | null) => void;
     onError: (message: string) => void;
-    pictureReadingEnabled: boolean;
     twoPageOpen: boolean;
     contextId: string;
     activeProject: string | null;
@@ -93,18 +89,42 @@
   } = $props();
 </script>
 
-<ParentCodeFields bind:draft {original} {capabilities} scope="site"
+<ParentCodeFields
+  bind:draft
+  {original}
+  {capabilities}
+  scope="site"
   disabled={headerInputsDisabled}
-  onchange={markDirty} onvalidation={validateHeader} onbusy={(pending) => parentCodeBusy = pending}>
+  onchange={markDirty}
+  onvalidation={validateHeader}
+  onbusy={(pending) => {
+    parentCodeBusy = pending;
+  }}
+>
   {#snippet children(editor)}
-    <OrdinaryFields bind:draft {original} {capabilities} scope="site"
+    <OrdinaryFields
+      bind:draft
+      {original}
+      {capabilities}
+      scope="site"
       disabled={headerInputsDisabled}
-      onchange={markDirty} onvalidation={validateHeader}>
+      onchange={markDirty}
+      onvalidation={validateHeader}
+    >
       {#snippet children(ordinaryEditor)}
-        <HeaderEditor bind:draft {original} {capabilities} disabled={headerInputsDisabled}
-          onMetadata={metadataEnabled ? openProjectMetadata : undefined} metadataDisabled={!canOpenProjectMetadata()}
-          {onOpenPictureManager} {projectIds}
-          {editor} additionalEditor={ordinaryEditor} {masterAllowed} {extendedShrubs}
+        <HeaderEditor
+          bind:draft
+          {original}
+          {capabilities}
+          disabled={headerInputsDisabled}
+          onMetadata={openProjectMetadata}
+          metadataDisabled={!canOpenProjectMetadata()}
+          {onOpenPictureManager}
+          {projectIds}
+          {editor}
+          additionalEditor={ordinaryEditor}
+          {masterAllowed}
+          {extendedShrubs}
           {snowCoverRegime}
           {activeLayerDepth}
           {snowCoverRegimeDisabled}
@@ -115,21 +135,42 @@
           {onActiveLayerDepthChange}
           existing={original !== null}
           {lists}
-          onchange={markDirty} onerror={onError} onvalidation={validateHeader}
-          onCoordinateBusyChange={(pending) => coordinateBusy = pending}
-          onWorkingUnitBusyChange={(pending) => workingUnitBusy = pending}
-          onQualityBusyChange={(pending) => qualityBusy = pending}
-          onSiteCodeBusyChange={(pending) => siteCodeBusy = pending}
-          onRegionCodeBusyChange={(pending) => regionCodeBusy = pending} {workingUnitSession}
-          pictureEditor={pictureReadingEnabled && !twoPageOpen ? linkedPictures : undefined} />
+          onchange={markDirty}
+          onerror={onError}
+          onvalidation={validateHeader}
+          onCoordinateBusyChange={(pending) => {
+            coordinateBusy = pending;
+          }}
+          onWorkingUnitBusyChange={(pending) => {
+            workingUnitBusy = pending;
+          }}
+          onQualityBusyChange={(pending) => {
+            qualityBusy = pending;
+          }}
+          onSiteCodeBusyChange={(pending) => {
+            siteCodeBusy = pending;
+          }}
+          onRegionCodeBusyChange={(pending) => {
+            regionCodeBusy = pending;
+          }}
+          {workingUnitSession}
+          pictureEditor={!twoPageOpen ? linkedPictures : undefined}
+        />
       {/snippet}
     </OrdinaryFields>
     {#snippet linkedPictures()}
       {#if activeProject && original}
-        <PicturePanel {contextId} project={activeProject} plotNumber={original.plotNumber}
+        <PicturePanel
+          {contextId}
+          project={activeProject}
+          plotNumber={original.plotNumber}
           disabled={pictureDisabled}
           metadataDisabled={pictureMetadataDisabled}
-          onBusyChange={(pending) => pictureBusy = pending} metadataSession={pictureMetadataSession} />
+          onBusyChange={(pending) => {
+            pictureBusy = pending;
+          }}
+          metadataSession={pictureMetadataSession}
+        />
       {:else}
         <p role="status">Save and reload an owned plot before reading linked pictures.</p>
       {/if}

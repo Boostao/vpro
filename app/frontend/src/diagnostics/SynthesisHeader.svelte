@@ -13,17 +13,7 @@
     onOpenExport: () => void;
   }
 
-  let {
-    snapshot,
-    project,
-    su,
-    lastLatencyMs,
-    loading,
-    mutating,
-    onRefresh,
-    onUndo,
-    onOpenExport,
-  }: Props = $props();
+  let { snapshot, project, su, lastLatencyMs, loading, mutating, onRefresh, onUndo, onOpenExport }: Props = $props();
 </script>
 
 <header class="syn-header">
@@ -62,12 +52,7 @@
     >
       Undo Move{snapshot?.undoDepth ? ` (${snapshot.undoDepth})` : ''}
     </button>
-    <button
-      type="button"
-      class="syn-btn syn-btn-gold"
-      disabled={!snapshot || loading}
-      onclick={onOpenExport}
-    >
+    <button type="button" class="syn-btn syn-btn-gold" disabled={!snapshot || loading} onclick={onOpenExport}>
       Publish Diagnostic .xlsx
     </button>
   </div>

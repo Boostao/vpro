@@ -98,17 +98,19 @@ test('CSV transport rejects foreign, incomplete, normalized or corrupted reviews
   }
 });
 
-test('CSV UI is independently default-off and shares existing draft, context and busy-close navigation',()=>{
+test('CSV UI is independently default-off and shares existing draft, context and busy-close navigation', async () => {
+  const { renderShellDeferredViews, componentFunctions } = require('./svelteTestHelpers.cjs');
   const component=readFileSync(srcPath('ProjectTableCSVReview.svelte'),'utf8');
-  const app=readFileSync(srcPath('App.svelte'),'utf8');
   const navigation=readFileSync(srcPath('Navigation.svelte'),'utf8');
   assert.equal(compile(component,{filename:'ProjectTableCSVReview.svelte',generate:'client'}).warnings.length,0);
   assert.match(navigation,/name: 'Project Table CSV Archive', icon: Table, view: 'table-csv'/);
-  assert.match(app,/view === 'table-csv' && \$projectState/);
-  assert.match(app,/function navigate[\s\S]*?requestTransition/);
-  assert.match(app,/busy \|\| editorBusy \|\| transitionWorking/);
-  assert.match(component,/reads\.track\(ImportExportService\.GetProjectTableCSVReview\(contextId, table\)\)/);
-  assert.match(component,/const validated = await validateProjectTableCSVReview[\s\S]*?if \(request !== generation\) return;[\s\S]*?review = validated/);
+  assert.equal(renderShellDeferredViews('table-csv', null), '');
+  assert.match(renderShellDeferredViews('table-csv', { contextId: 'c1', activeProject: 'Sample' }), /Loading Table CSV Review/);
+  const appCtx = componentFunctions('App.svelte', ['navigate', 'requestTransition'], { editorBusy: true });
+  await appCtx.actions.navigate('table-csv');
+  assert.match(appCtx.error, /Wait for the current operation/);
+  assert.match(component,/reads\.track\(\s*ImportExportService\.GetTableCSVArchiveReview\(contextId,\s*JSON\.stringify\(\{\s*table\s*\}\)\)\s*\)/);
+  assert.match(component,/const validated = await validateTableCSVArchiveReview[\s\S]*?if \(request !== generation\) return;[\s\S]*?review = validated\.review/);
   assert.match(component,/onDestroy\(cancel\)/);
   assert.match(component,/reads\.cancelAll\(\)/);
   assert.match(component,/<textarea id="csv-value-preview" readonly/);

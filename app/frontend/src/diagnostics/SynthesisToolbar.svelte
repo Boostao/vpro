@@ -76,7 +76,7 @@
       data-synthesis-unit-source
       value={options.unitSource ?? 'auto'}
       disabled={loading || mutating}
-      onchange={e =>
+      onchange={(e) =>
         onUpdateOptions(
           { unitSource: (e.currentTarget as HTMLSelectElement).value as 'auto' | 'su' | 'user_site_unit' },
           true
@@ -94,7 +94,7 @@
       data-synthesis-lump-select
       value={`${options.lumpDbPath ?? ''}::${options.lumpTable ?? ''}`}
       disabled={loading || mutating}
-      onchange={e => {
+      onchange={(e) => {
         const val = (e.currentTarget as HTMLSelectElement).value;
         const sep = val.indexOf('::');
         onUpdateOptions(
@@ -116,10 +116,22 @@
   </label>
 
   <div class="syn-control-buttons">
-    <button type="button" class="syn-btn syn-btn-ghost-dark" data-synthesis-browse-lump onclick={onBrowseExternalLump} disabled={loading || mutating}>
+    <button
+      type="button"
+      class="syn-btn syn-btn-ghost-dark"
+      data-synthesis-browse-lump
+      onclick={onBrowseExternalLump}
+      disabled={loading || mutating}
+    >
       External Lump .db...
     </button>
-    <button type="button" class="syn-btn syn-btn-ghost-dark" data-synthesis-browse-su onclick={onBrowseExternalSU} disabled={loading || mutating}>
+    <button
+      type="button"
+      class="syn-btn syn-btn-ghost-dark"
+      data-synthesis-browse-su
+      onclick={onBrowseExternalSU}
+      disabled={loading || mutating}
+    >
       Inspect External SU .db...
     </button>
   </div>
@@ -129,7 +141,7 @@
     <select
       value={options.significanceBasis ?? 'all_plots'}
       disabled={loading || mutating}
-      onchange={e =>
+      onchange={(e) =>
         onUpdateOptions(
           { significanceBasis: (e.currentTarget as HTMLSelectElement).value as 'all_plots' | 'present_plots' },
           true
@@ -144,7 +156,7 @@
     <span>Cell Notation</span>
     <select
       value={matrixDisplay}
-      onchange={e => onMatrixDisplayChange((e.currentTarget as HTMLSelectElement).value as MatrixDisplayMode)}
+      onchange={(e) => onMatrixDisplayChange((e.currentTarget as HTMLSelectElement).value as MatrixDisplayMode)}
     >
       <option value="roman_signif">BEC Class (I..V - +..9)</option>
       <option value="pct_cover">Constancy % / Mean Cover</option>
@@ -156,7 +168,7 @@
     <span>Row Grouping</span>
     <select
       value={matrixGrouping}
-      onchange={e => onMatrixGroupingChange((e.currentTarget as HTMLSelectElement).value as MatrixGroupingMode)}
+      onchange={(e) => onMatrixGroupingChange((e.currentTarget as HTMLSelectElement).value as MatrixGroupingMode)}
     >
       <option value="diagnostic_unit">Diagnostic Unit (~Unit + Companions)</option>
       <option value="stratum">Stratum (Tree / Shrub / Herb / Moss)</option>
@@ -170,7 +182,8 @@
       type="checkbox"
       checked={options.excludeStandardModifiers}
       disabled={loading || mutating}
-      onchange={e => onUpdateOptions({ excludeStandardModifiers: (e.currentTarget as HTMLInputElement).checked }, true)}
+      onchange={(e) =>
+        onUpdateOptions({ excludeStandardModifiers: (e.currentTarget as HTMLInputElement).checked }, true)}
     />
     <span>
       Exclude <code>.support</code> / <code>.poor</code> / <code>.nudum</code>
@@ -189,7 +202,7 @@
       step="1"
       data-synthesis-min-max-presence
       value={options.minMaxPresencePct ?? 0}
-      oninput={e => {
+      oninput={(e) => {
         const val = Number((e.currentTarget as HTMLInputElement).value);
         onUpdateOptions({ minMaxPresencePct: Number.isFinite(val) ? Math.max(0, Math.min(100, val)) : 0 }, false);
       }}
@@ -202,7 +215,7 @@
       type="checkbox"
       data-synthesis-use-breakpoints
       checked={useBreakpointGrouping}
-      onchange={e => onToggleBreakpoints((e.currentTarget as HTMLInputElement).checked)}
+      onchange={(e) => onToggleBreakpoints((e.currentTarget as HTMLInputElement).checked)}
     />
     <span>Group by '~' Breakpoints</span>
   </label>
@@ -213,7 +226,7 @@
       <select
         data-synthesis-breakpoint-policy
         value={breakpointPolicy}
-        onchange={e =>
+        onchange={(e) =>
           onToggleBreakpoints(true, (e.currentTarget as HTMLSelectElement).value as 'lowest' | 'highest')}
       >
         <option value="lowest">Lowest ('~' Closest Parent)</option>
@@ -226,7 +239,7 @@
     <input
       type="checkbox"
       checked={diagnosticOnly}
-      onchange={e => onDiagnosticOnlyChange((e.currentTarget as HTMLInputElement).checked)}
+      onchange={(e) => onDiagnosticOnlyChange((e.currentTarget as HTMLInputElement).checked)}
     />
     <span>Diagnostic Taxa Only</span>
   </label>
@@ -234,7 +247,8 @@
 
 <details class="syn-advanced-panel" data-synthesis-advanced-params>
   <summary>
-    Advanced BEC Synthesis &amp; Pairwise Thresholds (Defaults: MinPlots=2, Constancy=60%, Noise=10%, MinDiff=0.5, MinDd=0.5)
+    Advanced BEC Synthesis &amp; Pairwise Thresholds (Defaults: MinPlots=2, Constancy=60%, Noise=10%, MinDiff=0.5,
+    MinDd=0.5)
   </summary>
   <div class="syn-advanced-body">
     <div class="syn-params-grid">
@@ -245,7 +259,7 @@
           placeholder="e.g. sp., x, cf."
           data-synthesis-exclude-patterns
           value={excludePatternsText}
-          oninput={e => onExcludePatternsInput((e.currentTarget as HTMLInputElement).value)}
+          oninput={(e) => onExcludePatternsInput((e.currentTarget as HTMLInputElement).value)}
           onchange={onRecompute}
         />
       </label>
@@ -258,7 +272,7 @@
           step="1"
           data-synthesis-pairwise-min-plots
           value={options.pairwise?.minPlots ?? 2}
-          oninput={e => onUpdatePairwiseParam('minPlots', (e.currentTarget as HTMLInputElement).value)}
+          oninput={(e) => onUpdatePairwiseParam('minPlots', (e.currentTarget as HTMLInputElement).value)}
         />
       </label>
 
@@ -271,7 +285,7 @@
           step="1"
           data-synthesis-pairwise-min-constancy
           value={options.pairwise?.minConstancy ?? 60}
-          oninput={e => onUpdatePairwiseParam('minConstancy', (e.currentTarget as HTMLInputElement).value)}
+          oninput={(e) => onUpdatePairwiseParam('minConstancy', (e.currentTarget as HTMLInputElement).value)}
         />
       </label>
 
@@ -284,7 +298,7 @@
           step="1"
           data-synthesis-pairwise-noise-constancy
           value={options.pairwise?.noiseConstancy ?? 10}
-          oninput={e => onUpdatePairwiseParam('noiseConstancy', (e.currentTarget as HTMLInputElement).value)}
+          oninput={(e) => onUpdatePairwiseParam('noiseConstancy', (e.currentTarget as HTMLInputElement).value)}
         />
       </label>
 
@@ -296,7 +310,7 @@
           step="0.1"
           data-synthesis-pairwise-min-diff
           value={options.pairwise?.minDiff ?? 0.5}
-          oninput={e => onUpdatePairwiseParam('minDiff', (e.currentTarget as HTMLInputElement).value)}
+          oninput={(e) => onUpdatePairwiseParam('minDiff', (e.currentTarget as HTMLInputElement).value)}
         />
       </label>
 
@@ -308,18 +322,13 @@
           step="0.1"
           data-synthesis-pairwise-min-dd
           value={options.pairwise?.minDd ?? 0.5}
-          oninput={e => onUpdatePairwiseParam('minDd', (e.currentTarget as HTMLInputElement).value)}
+          oninput={(e) => onUpdatePairwiseParam('minDd', (e.currentTarget as HTMLInputElement).value)}
         />
       </label>
     </div>
 
     <div class="syn-advanced-actions">
-      <button
-        type="button"
-        class="syn-btn syn-btn-ghost-dark"
-        data-synthesis-reset-pairwise
-        onclick={onResetPairwise}
-      >
+      <button type="button" class="syn-btn syn-btn-ghost-dark" data-synthesis-reset-pairwise onclick={onResetPairwise}>
         Reset Pairwise Defaults (2, 60, 10, 0.5, 0.5)
       </button>
       <button

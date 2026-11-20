@@ -401,8 +401,8 @@ test('common field grids use scoped display and explicit related-field row start
   const source = readFileSync(srcPath('TwoPageParentCommonFields.svelte'), 'utf8');
   assert.match(source, /\.two-page-common-grid\s*\{\s*display:\s*grid;/);
   assert.match(source, /class:group-start=\{field.column === 'SV_StandAgeEstMeas' \|\| field.column === 'StrataCoverTotal'\}/);
-  assert.match(source, /@media \(min-width: 640px\)[\s\S]*\.group-start \{ grid-column-start: 1; \}/);
-  assert.match(source, /@media \(min-width: 1024px\)[\s\S]*\.height-estimation \{ grid-column-start: 3; \}/);
+  assert.match(source, /@media \(min-width: 640px\)[\s\S]*?\.group-start \{\s*grid-column-start: 1;\s*\}/);
+  assert.match(source, /@media \(min-width: 1024px\)[\s\S]*?\.height-estimation \{\s*grid-column-start: 3;\s*\}/);
 });
 test('actual common controller caches variant owners and refreshes clean peers without replay', async () => {
   const sessions = new Map(), current = {

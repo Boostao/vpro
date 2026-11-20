@@ -92,13 +92,11 @@
       class="vpro-ds-search"
       placeholder="Search all columns..."
       bind:value={globalSearch}
-      onkeydown={e => {
+      onkeydown={(e) => {
         if (e.key === 'Enter') onApplyFilter();
       }}
     />
-    <button type="button" class="vpro-btn-secondary" disabled={busy} onclick={onApplyFilter}>
-      Apply Filter
-    </button>
+    <button type="button" class="vpro-btn-secondary" disabled={busy} onclick={onApplyFilter}> Apply Filter </button>
     <button
       type="button"
       class="vpro-btn-secondary"
@@ -129,12 +127,7 @@
         Delete Selected Row
       </button>
     {/if}
-    <button
-      type="button"
-      class="vpro-btn-secondary"
-      disabled={draftCount === 0 || saving}
-      onclick={onDiscard}
-    >
+    <button type="button" class="vpro-btn-secondary" disabled={draftCount === 0 || saving} onclick={onDiscard}>
       Discard ({draftCount})
     </button>
     <button
@@ -150,7 +143,7 @@
 
 <nav class="vpro-ds-tabs" aria-label="Canonical Project Tables">
   {#each ALL_DATASHEET_KEYS as key (key)}
-    {@const info = tables.find(t => t.key === key)}
+    {@const info = tables.find((t) => t.key === key)}
     {@const isReadOnlyTab = isReadOnlyDatasheetTable(key, info?.readOnly)}
     <button
       type="button"

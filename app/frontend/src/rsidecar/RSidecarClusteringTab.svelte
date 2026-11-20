@@ -135,7 +135,11 @@
         </select>
         {#if !linkageActive}
           <span class="field-hint">
-            {vegclustMode ? `Disabled for vegclust (${clusterMethod})` : betaActive ? 'Uses Flexible-Beta parameter' : 'N/A for PAM medoids'}
+            {vegclustMode
+              ? `Disabled for vegclust (${clusterMethod})`
+              : betaActive
+                ? 'Uses Flexible-Beta parameter'
+                : 'N/A for PAM medoids'}
           </span>
         {/if}
       </label>
@@ -165,7 +169,14 @@
       </label>
       <label class:field-muted={clusterMethod !== 'NC'}>
         Noise Distance (dnoise)
-        <input type="number" step="0.05" min="0.05" max="5" bind:value={clusterDnoise} disabled={clusterMethod !== 'NC'} />
+        <input
+          type="number"
+          step="0.05"
+          min="0.05"
+          max="5"
+          bind:value={clusterDnoise}
+          disabled={clusterMethod !== 'NC'}
+        />
       </label>
       <label>
         Unit Prefix
@@ -279,7 +290,7 @@
               aria-label="Select plot {leaf.plotNumber}"
               transform="translate({leaf.cx}, {leaf.cy})"
               onclick={() => (selectedDendroPlot = leaf.plotNumber)}
-              onkeydown={e => {
+              onkeydown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   selectedDendroPlot = leaf.plotNumber;
@@ -332,7 +343,9 @@
                     <span>
                       <code>{ind.species}</code>
                       {#if ind.scientificName}<em>({ind.scientificName})</em>{/if}
-                      [{ind.constancyPct}% | IndVal {ind.indVal}]{idx < Math.min(4, cl.indicators.length - 1) ? ', ' : ''}
+                      [{ind.constancyPct}% | IndVal {ind.indVal}]{idx < Math.min(4, cl.indicators.length - 1)
+                        ? ', '
+                        : ''}
                     </span>
                   {/each}
                 </td>

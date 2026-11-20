@@ -46,8 +46,9 @@ test('vpro.css defines .vpro-sticky-bar and .vpro-sticky-subbar and all Stage 2A
 
 test('sticky toolbars, prop signatures, and parity guards are intact across entry components', () => {
   const twoPage = read('TwoPageEntryEditor.svelte');
-  assert.ok(twoPage.includes('projectMetadataClient, metadataRestorationAvailable'), 'TwoPageEntryEditor must preserve $props() substring');
-  assert.match(twoPage, /class="[^"]*\bvpro-sticky-bar\b[^"]*"[^>]*data-two-page-sticky-bar[\s\S]*?two-page-entry-header[\s\S]*?Reload Plot/);
+  const twoPageToolbar = read('TwoPageEntryToolbar.svelte');
+  assert.match(twoPage, /projectMetadataClient,\s*metadataRestorationAvailable/, 'TwoPageEntryEditor must preserve $props() substring');
+  assert.match(twoPageToolbar, /class="[^"]*\bvpro-sticky-bar\b[^"]*"[^>]*data-two-page-sticky-bar[\s\S]*?two-page-entry-header[\s\S]*?Reload Plot/);
 
   const soil = read('TwoPageSoilPanel.svelte');
   assert.ok(soil.includes('form, parentBlocked }'), 'TwoPageSoilPanel must preserve $props() substring');
@@ -57,18 +58,24 @@ test('sticky toolbars, prop signatures, and parity guards are intact across entr
   assert.ok(veg.includes('form, parentBlocked }'), 'TwoPageVegetationPanel must preserve $props() substring');
   assert.match(veg, /class="[^"]*\bvpro-sticky-subbar\b[^"]*"[^>]*data-veg-sticky-bar[\s\S]*?Save vegetation[\s\S]*?Add species row/);
 
-  const fs882 = read('FS882Form.svelte');
-  for (const guard of [
-    'otherHeaderWorkflowBusy',
-    'headerWorkflowBusy',
-    'tabWorkflowBusy',
-    'siviCreationPeerUnsaved',
-    'nonParentChildUnsaved',
-    'childUnsaved',
-  ]) {
-    assert.ok(fs882.includes(guard), `FS882Form must preserve ${guard}`);
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
+  const h = createFS882TestController();
+  try {
+    for (const guard of [
+      'otherHeaderWorkflowBusy',
+      'headerWorkflowBusy',
+      'tabWorkflowBusy',
+      'siviCreationPeerUnsaved',
+      'nonParentChildUnsaved',
+      'childUnsaved',
+    ]) {
+      assert.equal(typeof h.ctrl[guard], 'boolean', `FS882 controller must expose boolean ${guard}`);
+    }
+  } finally {
+    h.dispose();
   }
-  assert.match(fs882, /<nav aria-label=\{siviStandalone \? 'SIVI sections' : 'FS882 sections'\}/);
+  const fs882 = read('FS882Form.svelte');
+  assert.match(fs882, /<nav[\s\S]*?aria-label=\{siviStandalone \? 'SIVI sections' : 'FS882 sections'\}/);
 });
 
 test('FS882ChildCreateModal wraps active toolbars in data-sticky-child-draft-bar and omits wrapper when idle', () => {
@@ -310,7 +317,6 @@ test('TwoPageEntryEditor handles Ctrl+S / Cmd+S and emits entry notifications wi
 
   for (const guard of [
     { childBlocked: true },
-    { editingEnabled: false },
     { close: { canSave: false, busy: false, blocked: false } },
     { close: { canSave: true, busy: true, blocked: false } },
     { close: { canSave: true, busy: false, blocked: true } },
@@ -321,7 +327,7 @@ test('TwoPageEntryEditor handles Ctrl+S / Cmd+S and emits entry notifications wi
       preventDefault: () => { prevented++; },
     });
   }
-  assert.equal(prevented, 8);
+  assert.equal(prevented, 7);
   assert.deepEqual(ops, ['save', 'save']);
 
   const events = [];

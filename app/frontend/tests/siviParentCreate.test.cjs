@@ -118,10 +118,12 @@ test('SIVIParentCreateModal SSR and client mount create FS1333 SIVI plots, detac
     .replace('export default function', 'function');
 
   let seq = 0;
+  const { serverReads } = require('./svelteTestHelpers.cjs');
   const mountFn = new Function(
     '$',
     'onDestroy',
     'onMount',
+    'formatError',
     'defaultSIVIParentCreatePort',
     'SIVI_PLOT_TYPES',
     'validateCreateSIVIPlotDraft',
@@ -192,6 +194,7 @@ test('SIVIParentCreateModal SSR and client mount create FS1333 SIVI plots, detac
       client,
       () => {},
       fn => fn(),
+      serverReads.formatError,
       siviCreate.defaultSIVIParentCreatePort,
       siviCreate.SIVI_PLOT_TYPES,
       siviCreate.validateCreateSIVIPlotDraft,
@@ -258,10 +261,12 @@ test('SIVIParentCreateModal releases onBusyChange(false) before awaiting oncreat
     .replace('export default function', 'function');
 
   let seq = 0;
+  const { serverReads } = require('./svelteTestHelpers.cjs');
   const mountFn = new Function(
     '$',
     'onDestroy',
     'onMount',
+    'formatError',
     'defaultSIVIParentCreatePort',
     'SIVI_PLOT_TYPES',
     'validateCreateSIVIPlotDraft',
@@ -363,6 +368,7 @@ test('SIVIParentCreateModal releases onBusyChange(false) before awaiting oncreat
       client,
       () => {},
       fn => fn(),
+      serverReads.formatError,
       siviCreate.defaultSIVIParentCreatePort,
       siviCreate.SIVI_PLOT_TYPES,
       siviCreate.validateCreateSIVIPlotDraft,

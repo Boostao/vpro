@@ -49,24 +49,39 @@
   }: Props = $props();
 </script>
 
-<section class="overflow-hidden rounded border border-vpro-border bg-white shadow-sm" aria-label="Cloud Connection and Session Role">
+<section
+  class="overflow-hidden rounded border border-vpro-border bg-white shadow-sm"
+  aria-label="Cloud Connection and Session Role"
+>
   <div class="border-b-[3px] border-b-vpro-gold bg-vpro-navy px-4 py-3 text-white">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div class="flex flex-wrap items-center gap-2">
         <span class="text-xs font-semibold uppercase tracking-wider text-vpro-gold">Cloud BECMaster Sync</span>
         {#if connectionReport?.connected}
-          <span class="rounded bg-vpro-success px-2 py-0.5 text-xs font-semibold text-white" data-cloud-status-badge="connected">
+          <span
+            class="rounded bg-vpro-success px-2 py-0.5 text-xs font-semibold text-white"
+            data-cloud-status-badge="connected"
+          >
             Connected ({connectionReport.latencyMs} ms)
           </span>
         {:else}
-          <span class="rounded bg-slate-700 px-2 py-0.5 text-xs font-semibold text-vpro-ink-muted" data-cloud-status-badge="offline">
+          <span
+            class="rounded bg-slate-700 px-2 py-0.5 text-xs font-semibold text-vpro-ink-muted"
+            data-cloud-status-badge="offline"
+          >
             Offline / Unprobed
           </span>
         {/if}
-        <span class="rounded bg-vpro-gold px-2 py-0.5 text-xs font-bold text-vpro-navy" data-cloud-role-badge={activeRoleMode}>
+        <span
+          class="rounded bg-vpro-gold px-2 py-0.5 text-xs font-bold text-vpro-navy"
+          data-cloud-role-badge={activeRoleMode}
+        >
           {activeRoleMode === 'custodian' ? 'Custodian Admin' : 'Contributor'}
         </span>
-        <span class="rounded border border-vpro-border-strong/50 bg-vpro-navy-dark px-2 py-0.5 font-mono text-[11px] text-vpro-ink-muted" data-cloud-env-indicator>
+        <span
+          class="rounded border border-vpro-border-strong/50 bg-vpro-navy-dark px-2 py-0.5 font-mono text-[11px] text-vpro-ink-muted"
+          data-cloud-env-indicator
+        >
           {#if configStatus?.sessionOverride}
             Session Override ({configStatus.configSource})
           {:else if configStatus?.envFileDetected}
@@ -111,7 +126,9 @@
   </div>
 
   <!-- Cloud Counters & Telemetry Strip -->
-  <div class="grid grid-cols-2 gap-2 border-b border-vpro-border bg-vpro-surface-subtle px-4 py-2.5 text-xs sm:grid-cols-5">
+  <div
+    class="grid grid-cols-2 gap-2 border-b border-vpro-border bg-vpro-surface-subtle px-4 py-2.5 text-xs sm:grid-cols-5"
+  >
     <div>
       <div class="text-[11px] text-vpro-ink-secondary">BECMaster Plots</div>
       <div class="font-mono text-sm font-bold text-vpro-navy">
@@ -133,14 +150,17 @@
     <div>
       <div class="text-[11px] text-vpro-ink-secondary">Dated Snapshots</div>
       <div class="font-mono text-sm font-bold text-vpro-navy">
-        {connectionReport ? `${connectionReport.snapshotCount}${connectionReport.latestSnapshotTag ? ` (${connectionReport.latestSnapshotTag})` : ''}` : '—'}
+        {connectionReport
+          ? `${connectionReport.snapshotCount}${connectionReport.latestSnapshotTag ? ` (${connectionReport.latestSnapshotTag})` : ''}`
+          : '—'}
       </div>
     </div>
     <div>
       <div class="text-[11px] text-vpro-ink-secondary">Provincial Standards</div>
       <div class="font-mono text-xs font-semibold text-vpro-navy">
         {#if connectionReport?.activeStandardsRelease}
-          {connectionReport.activeStandardsRelease} (BEC v{connectionReport.activeBecVersion ?? '?'} / Taxa v{connectionReport.activeTaxonomyVersion ?? '?'})
+          {connectionReport.activeStandardsRelease} (BEC v{connectionReport.activeBecVersion ?? '?'} / Taxa v{connectionReport.activeTaxonomyVersion ??
+            '?'})
         {:else if pullStandardsResult}
           {pullStandardsResult.releaseId} (BEC v{pullStandardsResult.becVersion} / Taxa v{pullStandardsResult.taxonomyVersion})
         {:else}
@@ -157,11 +177,14 @@
     </summary>
     <div class="mt-3 space-y-3 border-t border-vpro-border pt-3">
       <p class="text-xs text-vpro-ink-secondary">
-        Credentials entered here apply strictly to the current desktop session and are never written to local configuration files or echoed after submission.
+        Credentials entered here apply strictly to the current desktop session and are never written to local
+        configuration files or echoed after submission.
       </p>
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-4">
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="cloud-override-host">Server Host</label>
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="cloud-override-host"
+            >Server Host</label
+          >
           <input
             id="cloud-override-host"
             type="text"
@@ -216,7 +239,9 @@
 
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-4">
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="cloud-override-user">Contributor User</label>
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="cloud-override-user"
+            >Contributor User</label
+          >
           <input
             id="cloud-override-user"
             type="text"
@@ -227,7 +252,9 @@
           />
         </div>
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="cloud-override-password">Contributor Password</label>
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="cloud-override-password"
+            >Contributor Password</label
+          >
           <input
             id="cloud-override-password"
             type="password"
@@ -238,7 +265,9 @@
           />
         </div>
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="cloud-override-admin-user">Custodian Admin User</label>
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="cloud-override-admin-user"
+            >Custodian Admin User</label
+          >
           <input
             id="cloud-override-admin-user"
             type="text"
@@ -249,7 +278,9 @@
           />
         </div>
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="cloud-override-admin-password">Custodian Admin Password</label>
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="cloud-override-admin-password"
+            >Custodian Admin Password</label
+          >
           <input
             id="cloud-override-admin-password"
             type="password"

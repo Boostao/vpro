@@ -71,10 +71,34 @@ test('actual parent preview and cancellation preserve the persistent workbook ac
 });
 
 test('root and parent wire the default-off workbook without authorizing hierarchy or incomplete summary vegetation', () => {
-  const app = readFileSync(srcPath('App.svelte'), 'utf8');
+  const { createTestReportOperationGuard } = require('./svelteTestHelpers.cjs');
   const parent = readFileSync(srcPath('LifeformSummary.svelte'), 'utf8');
-  assert.match(app, /lifeformPublicationBusy = publication.busy \|\| publication.blocked/);
-  assert.match(app, /publication.blocked && view === 'home'\) view = 'lifeform-summary'/);
+  let blocked = false;
+  let notify;
+  const h = createTestReportOperationGuard({
+    dependencies: {
+      './lifeformWorkbook': {
+        lifeformWorkbookPublicationSession: () => ({
+          view: () => ({ busy: false, blocked }),
+          subscribe: (fn) => {
+            notify = fn;
+            fn();
+            return () => {};
+          },
+        }),
+      },
+    },
+  });
+  try {
+    assert.equal(h.guard.publicationBusy, false);
+    blocked = true;
+    notify();
+    h.flush();
+    assert.equal(h.guard.publicationBusy, true);
+    assert.equal(h.view, 'lifeform-summary');
+  } finally {
+    h.dispose();
+  }
   assert.match(parent, /<LifeformWorkbookPanel owner=\{\{ contextId, project, projectPath, su, suPath \}\} disabled=\{busy\}/);
   assert.match(parent, /onBusyChange=\{\(held\) => \{ workbookBusy = held; reportBusy\(\); \}\}/);
   assert.match(parent, /disabled=\{!enabled \|\| busy \|\| workbookBusy \|\| su === 'None' \|\| su === 'USysSuTableDynamic'\}/);

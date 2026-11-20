@@ -1,8 +1,16 @@
 import type { EditorCloseState } from '../shell/closeLifecycle';
 import { wellFormedUTF16 } from './qualityEditor';
 import {
-  validateSIVIParentOriginal, stageSIVIParent, siviParentDirty, siviParentErrors, siviParentProposal,
-  type SIVIParentColumn, type SIVIParentDrafts, type SIVIParentInput, type SIVIParentOriginal, type SIVIParentProposal,
+  validateSIVIParentOriginal,
+  stageSIVIParent,
+  siviParentDirty,
+  siviParentErrors,
+  siviParentProposal,
+  type SIVIParentColumn,
+  type SIVIParentDrafts,
+  type SIVIParentInput,
+  type SIVIParentOriginal,
+  type SIVIParentProposal,
 } from './siviParentEditor';
 
 export interface SIVIParentView {
@@ -25,7 +33,8 @@ export class SIVIParentSession {
   }
 
   private requireOwner(editorId: string) {
-    if (this.disposed || editorId !== this.state.editorId) throw new Error('SIVI parent editor ownership changed; drafts were not cleared.');
+    if (this.disposed || editorId !== this.state.editorId)
+      throw new Error('SIVI parent editor ownership changed; drafts were not cleared.');
   }
 
   view(): SIVIParentView {
@@ -34,9 +43,14 @@ export class SIVIParentSession {
 
   closeState(): EditorCloseState {
     const errors = siviParentErrors(this.state.drafts);
-    return { unsaved: siviParentDirty(this.state.drafts), busy: false, blocked: errors.length > 0,
-      canSave: false, saveReason: errors[0] ?? 'SIVI parent writes remain unavailable; this is an unwired draft model.',
-      error: this.state.error };
+    return {
+      unsaved: siviParentDirty(this.state.drafts),
+      busy: false,
+      blocked: errors.length > 0,
+      canSave: false,
+      saveReason: errors[0] ?? 'SIVI parent writes remain unavailable; this is an unwired draft model.',
+      error: this.state.error,
+    };
   }
 
   stage(editorId: string, column: SIVIParentColumn, input: SIVIParentInput) {
@@ -58,7 +72,8 @@ export class SIVIParentSession {
 
   replaceOriginal(editorId: string, original: SIVIParentOriginal) {
     this.requireOwner(editorId);
-    if (siviParentDirty(this.state.drafts)) throw new Error('Finish or Undo SIVI parent drafts before switching original context.');
+    if (siviParentDirty(this.state.drafts))
+      throw new Error('Finish or Undo SIVI parent drafts before switching original context.');
     this.state.original = validateSIVIParentOriginal(original);
     this.state.drafts = {};
     this.state.error = null;

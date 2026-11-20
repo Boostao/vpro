@@ -499,9 +499,16 @@ test('coordinate inputs retain labelled relationships and configuration/schema/l
   assert.match(header, /paperPage\('Site', 'initial', coordinateMode\)/);
   assert.match(header, /onCoordinateBusyChange\?:/);
   assert.match(header, /isCoordinateControl\(control.controlName\)/);
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
-  assert.match(form, /error === headerValidationError\(previous\)/);
-  assert.match(form, /error = headerValidationError\(validation\)/);
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
+  const h = createFS882TestController();
+  try {
+    h.ctrl.validateHeader('coordinates', 'Latitude invalid');
+    h.ctrl.error = 'Latitude invalid';
+    h.ctrl.validateHeader('coordinates', null);
+    assert.equal(h.ctrl.error, null);
+  } finally {
+    h.dispose();
+  }
   for (const name of ['Latitude', 'Longitude', 'LatD', 'LatM', 'LatS', 'LatD2', 'LatMD', 'LonD', 'LonM', 'LonS', 'LonD2', 'LonMD', 'Check369', 'Check371', 'Check373', 'optCoordMethod2']) assert.equal(isCoordinateControl(name), true);
   for (const name of ['lblLatitude', 'lblLatD', 'lblLonM', 'OfficeNotes']) assert.equal(isCoordinateControl(name), false);
 });

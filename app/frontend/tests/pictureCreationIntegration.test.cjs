@@ -20,27 +20,26 @@ function makeNotifications() {
   return createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
 }
 
+function loadClientReactiveSession(client) {
+  const { compileModule } = require('svelte/compiler');
+  const ts = require('typescript');
+  const js = ts.transpileModule(readFileSync(srcPath('shared/reactiveSession.svelte.ts'), 'utf8'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const modCode = compileModule(js, { generate: 'client' }).js.code
+    .replace(/^import .*$/gm, '')
+    .replace(/export function /g, 'function ');
+  return new Function('$', 'untrack', `${modCode}\nreturn { observeSession, observeSessionView };`)(client, client.untrack);
+}
+
 test('actual creation and coupled metadata subscription effects settle, track owner changes and detach on disposal', async () => {
   const client = await import('svelte/internal/client');
-  const { compile } = require('svelte/compiler');
-  for (const [filename, name, revision] of [
-    ['PictureCreationPanel.svelte', 'session', 'revision'],
-    ['PictureManager.svelte', 'creationSession', 'creationRevision'],
-    ['PicturePanel.svelte', 'creationSession', 'creationRevision'],
-    ['PictureManager.svelte', 'metadataSession', 'metadataRevision'],
-    ['PicturePanel.svelte', 'metadataSession', 'metadataRevision'],
-  ]) {
-    const subscription = source(filename).split('\n').find(line => line.includes(`${name}${name === 'session' ? '.' : '?.'}subscribe`));
-    assert.ok(subscription, `${filename} ${name}`);
-    const compiled = compile(`<script>
-      import { untrack } from 'svelte';
-      let { ${name} } = $props();
-      let ${revision} = $state(0);
-      ${subscription}
-      $effect(() => { ${revision}; ${name}?.view(); });
-    </script>`, { generate: 'client' }).js.code;
-    const harness = new Function('$', 'untrack', compiled.replace(/^import .*$/gm, '')
-      .replace('export default function', 'function') + '\nreturn _unknown_;')(client, client.untrack);
+  const { observeSession, observeSessionView } = loadClientReactiveSession(client);
+  assert.match(source('PictureManager.svelte'), /observeSession\(\s*\(\) => creationSession/);
+  assert.match(source('PictureManager.svelte'), /observeSession\(\s*\(\) => metadataSession/);
+  assert.match(source('PicturePanel.svelte'), /observeSessionView\(\(\) => creationSession\)/);
+  assert.match(source('PicturePanel.svelte'), /observeSession\(\s*\(\) => metadataSession/);
+  for (const mode of ['view', 'close']) {
     function trackedSession() {
       const instance = new sessionModule.PictureCreationSession(owner, { choose: () => operation(null) });
       const subscribe = instance.subscribe.bind(instance), view = instance.view.bind(instance);
@@ -54,7 +53,12 @@ test('actual creation and coupled metadata subscription effects settle, track ow
       return instance;
     }
     const first = trackedSession(), second = trackedSession(), current = client.state(first);
-    const dispose = client.effect_root(() => harness(null, { get [name]() { return client.get(current); } }));
+    const dispose = client.effect_root(() => {
+      const obs = mode === 'view'
+        ? observeSessionView(() => client.get(current))
+        : observeSession(() => client.get(current), s => s.view());
+      client.user_effect(() => { void obs.current; });
+    });
     try {
       client.flush();
       assert.equal(first.subscriptions, 1);
@@ -95,9 +99,10 @@ test('actual manager derived session creation does not notify reactive root obse
   const ast = ts.createSourceFile('manager.js', compiled, ts.ScriptTarget.Latest, true);
   const code = ast.statements.filter(node => !ts.isImportDeclaration(node)).map(node => node.getText(ast)).join('\n')
     .replace('export default function', 'function');
-  const manager = new Function('$', 'untrack', 'plotLookupInputError', 'pictureMetadataSession',
+  const { observeSession } = loadClientReactiveSession(client);
+  const manager = new Function('$', 'untrack', 'observeSession', 'formatError', 'notifications', 'plotLookupInputError', 'pictureMetadataSession',
     'pictureCreationSession', 'pictureLifecycleSession', code + '\nreturn _unknown_;')(
-      client, client.untrack, () => null, () => undefined,
+      client, client.untrack, observeSession, String, makeNotifications(), () => null, () => undefined,
       registry.pictureCreationSession, () => undefined);
   const activity = [];
   const dispose = client.effect_root(() => manager(null, {
@@ -222,13 +227,13 @@ test('creation panel retains interactive safety recovery locks while routing rec
 });
 
 test('root aggregates persistent creation ownership rather than letting a disposed read clear native-close and transition guards', () => {
-  const app = source('App.svelte');
-  assert.match(app, /editorBusy = \$derived\(localEditorBusy \|\| matrixPublicationBusy \|\| pictureCreationBusy \|\| pictureLifecycleBusy \|\| twoPageSoilBusy \|\| twoPageVegetationBusy \|\| externalSUEnvironmentBusy \|\| summaryPreferenceBusy \|\| summaryFieldListBusy \|\| summaryEnvironmentalBusy \|\| projectReportBusy\)/);
-  assert.match(app, /pictureCreationBusy = activity\.busy \|\| activity\.blocked/);
+  const { readShellComposite } = require('./svelteTestHelpers.cjs');
+  const app = readShellComposite();
   assert.match(app, /subscribePictureCreationActivity/);
-  assert.match(app, /pictureManagerPlot = activity\.owner\.plotNumber/);
-  assert.match(app, /closeDisposition\(state, busy \|\| editorBusy \|\| transitionWorking/);
-  assert.match(app, /onBusyChange=\{\(value\) => \{ localEditorBusy = value; \}\}/);
+  assert.match(app, /picture-creation',\s*activity\.busy \|\| activity\.blocked/);
+  assert.match(app, /view:\s*'picture-manager',\s*plotNumber:\s*activity\.owner\.plotNumber/);
+  assert.match(app, /(?:evalDisposition\(s,\s*closeState,\s*s|closeDispositionFn\(state,\s*rt)\.operationGuard\.isBusy\(/);
+  assert.match(app, /onBusyChange=\{\(value\)\s*=>\s*\{\s*localEditorBusy = value;\s*\}\}/);
   assert.doesNotMatch(source('pictureCreationSessions.ts'), /GetImage\(|SwitchContext|CreatePlot|Delete|Restore/);
 });
 
@@ -291,10 +296,8 @@ test('retained chooser and unknown writes block actual root close/context/naviga
       ConfirmClose: id => { closed.push(['confirm', id]); },
     },
   });
-  const expression = source('App.svelte').match(/const editorBusy = \$derived\(([^;]+)\);/)[1];
-  const aggregate = new Function('localEditorBusy', 'pictureCreationBusy', 'pictureLifecycleBusy', 'twoPageSoilBusy', 'twoPageVegetationBusy', 'summaryPreferenceBusy', 'summaryFieldListBusy', 'summaryEnvironmentalBusy', 'projectReportBusy', 'externalSUEnvironmentBusy', 'matrixPublicationBusy', `return ${expression}`);
   Object.defineProperty(context, 'editorBusy', {
-    get: () => aggregate(context.localEditorBusy, context.pictureCreationBusy, context.pictureLifecycleBusy, context.twoPageSoilBusy, context.twoPageVegetationBusy, context.summaryPreferenceBusy, context.summaryFieldListBusy, context.summaryEnvironmentalBusy, context.projectReportBusy, context.externalSUEnvironmentBusy, false),
+    get: () => Boolean(context.localEditorBusy || context.pictureCreationBusy || context.pictureLifecycleBusy),
   });
   let observe = registry.subscribePictureCreationActivity(activity => {
     context.pictureCreationBusy = activity.busy || activity.blocked;
@@ -401,8 +404,9 @@ test('actual peer receipt effects refresh loaded owners once and discard late de
   const lifecycle = await import(pathToFileURL(path.join(path.dirname(require.resolve('svelte/package.json')), 'src', 'index-client.js')).href);
   const { compile } = require('svelte/compiler');
   const ts = require('typescript');
+  const { observeSession, observeSessionView } = loadClientReactiveSession(client);
   const script = source('PicturePanel.svelte').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1]
-    .replace('onBusyChange, metadataSession,', 'onBusyChange, metadataSession, inspect,')
+    .replace(/metadataSession,\s*\n/, 'metadataSession,\n    inspect,\n')
     .replace('metadataSession?: PictureMetadataSession;', 'metadataSession?: PictureMetadataSession; inspect: (value: unknown) => void;');
   const compiled = compile(`<script lang="ts">${script}
     $effect(() => inspect({ review, selected, error, busy, cancel }));
@@ -410,7 +414,7 @@ test('actual peer receipt effects refresh loaded owners once and discard late de
   const ast = ts.createSourceFile('peer.js', compiled, ts.ScriptTarget.Latest, true);
   const code = ast.statements.filter(node => !ts.isImportDeclaration(node)).map(node => node.getText(ast)).join('\n')
     .replace('export default function', 'function');
-  const harness = new Function('$', 'untrack', 'onDestroy', 'ReadRequests', 'PictureService',
+  const harness = new Function('$', 'untrack', 'onDestroy', 'observeSession', 'observeSessionView', 'formatError', 'notifications', 'ReadRequests', 'PictureService',
     'pictureMetadataFromWire', 'pictureImageFromWire', 'pictureCellLabel', 'pictureCreationSession', 'pictureLifecycleSession',
     'equalCell', code + '\nreturn _unknown_;');
   for (const mode of ['normal', 'drift', 'cancel', 'dispose', 'owner-change']) {
@@ -425,7 +429,7 @@ test('actual peer receipt effects refresh loaded owners once and discard late de
       pending.push({ contextId, plotNumber, finish, tracked });
       return tracked;
     } };
-    const peer = harness(client, client.untrack, lifecycle.onDestroy, reads.ReadRequests, service,
+    const peer = harness(client, client.untrack, lifecycle.onDestroy, observeSession, observeSessionView, String, makeNotifications(), reads.ReadRequests, service,
       picture.pictureMetadataFromWire, picture.pictureImageFromWire, picture.pictureCellLabel,
       () => session, () => undefined, metadata.equalCell);
     for (let index = 0; index < 2; index++) {

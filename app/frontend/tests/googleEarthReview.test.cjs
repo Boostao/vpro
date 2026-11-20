@@ -107,16 +107,21 @@ test('Earth page validation detaches before yielding and accepts exact empty bey
 });
 
 test('Earth UI independently gates only preparation, shares context/close barriers and cancels remounted reads', () => {
-  const component = readFileSync(srcPath('GoogleEarthReview.svelte'), 'utf8');
-  const app = readFileSync(srcPath('App.svelte'), 'utf8');
+  const rootComponent = readFileSync(srcPath('GoogleEarthReview.svelte'), 'utf8');
+  const component = [
+    rootComponent,
+    readFileSync(srcPath('GoogleEarthPreferencesSection.svelte'), 'utf8'),
+    readFileSync(srcPath('GoogleEarthKmlSection.svelte'), 'utf8'),
+    readFileSync(srcPath('GoogleEarthLocationsTable.svelte'), 'utf8'),
+  ].join('\n');
+  const deferredViews = readFileSync(srcPath('ShellDeferredViews.svelte'), 'utf8');
   const navigation = readFileSync(srcPath('Navigation.svelte'), 'utf8');
-  assert.equal(compile(component, { filename: 'GoogleEarthReview.svelte', generate: 'client' }).warnings.length, 0);
+  assert.equal(compile(rootComponent, { filename: 'GoogleEarthReview.svelte', generate: 'client' }).warnings.length, 0);
   assert.match(navigation, /name: 'Google Earth \(KML\)', icon: Globe, view: 'google-earth-review'/);
-  assert.match(app, /view === 'google-earth-review' && \$projectState/);
-  assert.match(app, /function navigate[\s\S]*?requestTransition/);
+  assert.match(deferredViews, /view === 'google-earth-review' && \$projectState/);
   assert.match(component, /onDestroy\(cancel\)/); assert.match(component, /reads\.cancelAll\(\)/);
   assert.match(component, /label for="google-earth-description"/);
   assert.match(component, /const validated = await validateGoogleEarthReview[\s\S]*?if \(request !== generation\) return;[\s\S]*?review = validated/);
-  assert.match(component, /No data, audits, preferences or files written/);
+  assert.match(component, /no data, audits, preferences or files written|Previewing plot locations does not modify/i);
   assert.doesNotMatch(component, /download=|SaveProject|CreateBlank|BuildFile/);
 });

@@ -2,6 +2,7 @@
   import { onDestroy, untrack } from 'svelte';
   import { CheckCircle2, ShieldAlert, ShieldCheck, UserCog, X } from '@lucide/svelte';
   import ModalDialogTrap from '../shared/ModalDialogTrap.svelte';
+  import { formatError, ReadRequests, trackIfCancellable } from '../shared/readRequests';
   import {
     defaultUserSetupPort,
     validatePictureOptionsInput,
@@ -39,6 +40,7 @@
   let error = $state('');
   let savedNotice = $state('');
   let loadGen = 0;
+  const reads = new ReadRequests();
 
   function applyPictureOptions(opts: PictureOptionsState) {
     pictureOptions = opts;
@@ -57,13 +59,16 @@
 
   async function refreshStatus(activeCtx: string) {
     const gen = ++loadGen;
+    reads.cancelAll();
     loading = true;
     error = '';
     savedNotice = '';
     try {
       const [current, picOpts] = await Promise.all([
-        port.getUserSetup(activeCtx),
-        port.getPictureOptions ? port.getPictureOptions().catch(() => null) : Promise.resolve(null),
+        trackIfCancellable(reads, port.getUserSetup(activeCtx)),
+        port.getPictureOptions
+          ? trackIfCancellable(reads, port.getPictureOptions()).catch(() => null)
+          : Promise.resolve(null),
       ]);
       if (gen !== loadGen) return;
       status = current;
@@ -73,7 +78,7 @@
       }
     } catch (cause) {
       if (gen === loadGen) {
-        error = `Could not load user setup: ${String(cause)}`;
+        error = `Could not load user setup: ${formatError(cause)}`;
       }
     } finally {
       if (gen === loadGen) {
@@ -103,7 +108,7 @@
       await onSaved?.(updated);
     } catch (cause) {
       if (gen === loadGen) {
-        error = `Failed to save user setup: ${String(cause)}`;
+        error = `Failed to save user setup: ${formatError(cause)}`;
       }
     } finally {
       if (gen === loadGen) {
@@ -139,7 +144,7 @@
         : 'Saved picture library and image folder paths.';
     } catch (cause) {
       if (gen === loadGen) {
-        error = `Could not save picture paths: ${String(cause)}`;
+        error = `Could not save picture paths: ${formatError(cause)}`;
       }
     } finally {
       if (gen === loadGen) {
@@ -150,6 +155,7 @@
 
   onDestroy(() => {
     loadGen++;
+    reads.cancelAll();
   });
 </script>
 
@@ -161,17 +167,21 @@
       aria-labelledby="user-setup-title"
       class="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded border border-vpro-border bg-white text-vpro-ink shadow-2xl"
     >
-      <ModalDialogTrap onEscape={onclose} escapeDisabled={saving || pictureSaving} initialFocusSelector="[data-user-setup-input]" />
-      <header class="flex items-center justify-between gap-3 border-b-[3px] border-b-vpro-gold bg-vpro-navy px-5 py-3.5 text-white">
+      <ModalDialogTrap
+        onEscape={onclose}
+        escapeDisabled={saving || pictureSaving}
+        initialFocusSelector="[data-user-setup-input]"
+      />
+      <header
+        class="flex items-center justify-between gap-3 border-b-[3px] border-b-vpro-gold bg-vpro-navy px-5 py-3.5 text-white"
+      >
         <div class="flex items-center gap-2.5">
           <UserCog size={18} class="shrink-0 text-vpro-gold" />
           <div>
             <div class="font-mono text-[11px] uppercase tracking-wider text-vpro-gold">
               Audit Identity &amp; BEC Accreditation
             </div>
-            <h2 id="user-setup-title" class="text-base font-semibold text-white">
-              VPro User Setup
-            </h2>
+            <h2 id="user-setup-title" class="text-base font-semibold text-white">VPro User Setup</h2>
           </div>
         </div>
         <button
@@ -193,13 +203,21 @@
         </p>
 
         {#if error}
-          <p role="alert" data-user-setup-error class="rounded border border-vpro-error bg-vpro-error-bg p-2.5 text-vpro-error">
+          <p
+            role="alert"
+            data-user-setup-error
+            class="rounded border border-vpro-error bg-vpro-error-bg p-2.5 text-vpro-error"
+          >
             {error}
           </p>
         {/if}
 
         {#if savedNotice}
-          <div role="status" data-user-setup-saved class="flex items-start gap-2 rounded border border-vpro-success bg-vpro-success-bg p-2.5 text-vpro-forest">
+          <div
+            role="status"
+            data-user-setup-saved
+            class="flex items-start gap-2 rounded border border-vpro-success bg-vpro-success-bg p-2.5 text-vpro-forest"
+          >
             <CheckCircle2 size={15} class="mt-0.5 shrink-0" />
             <span>{savedNotice}</span>
           </div>
@@ -246,19 +264,25 @@
         <section
           aria-label="Picture Library and Folder Paths"
           data-user-picture-options-panel
-          class="space-y-3 rounded border border-vpro-border bg-[#F9F9F8] p-3.5"
+          class="space-y-3 rounded border border-vpro-border bg-vpro-surface-subtle p-3.5"
         >
           <div>
             <h3 class="text-xs font-semibold text-vpro-navy">Picture Library &amp; Folder Paths</h3>
             <p class="mt-0.5 leading-relaxed text-vpro-ink-secondary">
-              Choose the plot photograph index (<code class="font-mono">VPics.db</code>) and default image folders used when
-              <code class="font-mono">PicDir</code> is <code class="font-mono">Default</code>. Leave any field blank to use the workspace default.
+              Choose the plot photograph index (<code class="font-mono">VPics.db</code>) and default image folders used
+              when
+              <code class="font-mono">PicDir</code> is <code class="font-mono">Default</code>. Leave any field blank to
+              use the workspace default.
             </p>
           </div>
 
           {#if pictureOptions?.envOverride}
-            <p role="note" class="rounded border border-vpro-gold bg-vpro-warning-bg px-2.5 py-1.5 text-[11px] text-vpro-ink">
-              Environment variable overrides are active for this session; saved preferences apply when launched without overrides.
+            <p
+              role="note"
+              class="rounded border border-vpro-gold bg-vpro-warning-bg px-2.5 py-1.5 text-[11px] text-vpro-ink"
+            >
+              Environment variable overrides are active for this session; saved preferences apply when launched without
+              overrides.
             </p>
           {/if}
 
@@ -283,7 +307,10 @@
                 class="w-full rounded border border-vpro-border-strong bg-white px-2.5 py-1.5 font-mono text-xs text-vpro-ink focus:border-vpro-navy focus:outline-2 focus:outline-vpro-gold"
               />
               {#if pictureOptions?.effectiveLibraryPath}
-                <p class="mt-0.5 truncate font-mono text-[11px] text-vpro-ink-secondary" title={pictureOptions.effectiveLibraryPath}>
+                <p
+                  class="mt-0.5 truncate font-mono text-[11px] text-vpro-ink-secondary"
+                  title={pictureOptions.effectiveLibraryPath}
+                >
                   Active library: {pictureOptions.effectiveLibraryPath}
                 </p>
               {/if}
@@ -318,7 +345,10 @@
                 class="w-full rounded border border-vpro-border-strong bg-white px-2.5 py-1.5 font-mono text-xs text-vpro-ink focus:border-vpro-navy focus:outline-2 focus:outline-vpro-gold"
               />
               {#if pictureOptions?.effectiveManagerDirectory}
-                <p class="mt-0.5 truncate font-mono text-[11px] text-vpro-ink-secondary" title={pictureOptions.effectiveManagerDirectory}>
+                <p
+                  class="mt-0.5 truncate font-mono text-[11px] text-vpro-ink-secondary"
+                  title={pictureOptions.effectiveManagerDirectory}
+                >
                   Active manager folder: {pictureOptions.effectiveManagerDirectory}
                 </p>
               {/if}
@@ -349,15 +379,23 @@
         {#if loading}
           <p role="status" class="text-vpro-ink-secondary">Checking BEC accreditation and restrictions…</p>
         {:else if status}
-          <section aria-label="User Accreditation Status" data-user-accreditation-panel class="space-y-2 rounded border border-vpro-border bg-vpro-canvas p-3">
+          <section
+            aria-label="User Accreditation Status"
+            data-user-accreditation-panel
+            class="space-y-2 rounded border border-vpro-border bg-vpro-canvas p-3"
+          >
             <div class="flex items-center justify-between gap-2">
               <span class="font-semibold text-vpro-navy">Provincial BEC Accreditation &amp; Restrictions</span>
               {#if status.canEditBecSiteUnit}
-                <span class="inline-flex items-center gap-1 rounded border border-vpro-success bg-vpro-success-bg px-2 py-0.5 font-mono text-[11px] font-semibold text-vpro-forest">
+                <span
+                  class="inline-flex items-center gap-1 rounded border border-vpro-success bg-vpro-success-bg px-2 py-0.5 font-mono text-[11px] font-semibold text-vpro-forest"
+                >
                   <ShieldCheck size={12} /> Site Unit Edit Permitted
                 </span>
               {:else}
-                <span class="inline-flex items-center gap-1 rounded border border-vpro-gold bg-vpro-warning-bg px-2 py-0.5 font-mono text-[11px] font-semibold text-vpro-ink">
+                <span
+                  class="inline-flex items-center gap-1 rounded border border-vpro-gold bg-vpro-warning-bg px-2 py-0.5 font-mono text-[11px] font-semibold text-vpro-ink"
+                >
                   <ShieldAlert size={12} /> Protected Master BEC Read-Only
                 </span>
               {/if}
@@ -365,16 +403,20 @@
 
             <dl class="grid grid-cols-1 gap-1.5 text-[11px] sm:grid-cols-2">
               <div class="rounded border border-vpro-border bg-white px-2.5 py-1.5">
-                <dt class="text-vpro-ink-secondary">Accredited List (<code class="font-mono">USysAccreditation</code>)</dt>
+                <dt class="text-vpro-ink-secondary">Accredited List</dt>
                 <dd class="font-mono font-semibold text-vpro-navy">{status.accredited ? 'Yes' : 'No'}</dd>
               </div>
               <div class="rounded border border-vpro-border bg-white px-2.5 py-1.5">
                 <dt class="text-vpro-ink-secondary">Master BEC Mode</dt>
-                <dd class="font-mono font-semibold text-vpro-navy">{status.masterBecAllowed ? 'Enabled' : 'Disabled'}</dd>
+                <dd class="font-mono font-semibold text-vpro-navy">
+                  {status.masterBecAllowed ? 'Enabled' : 'Disabled'}
+                </dd>
               </div>
               <div class="rounded border border-vpro-border bg-white px-2.5 py-1.5">
-                <dt class="text-vpro-ink-secondary">User Restrictions (<code class="font-mono">USysUserRestrictions</code>)</dt>
-                <dd class="font-mono font-semibold text-vpro-navy">{status.inUserRestrictions ? 'Restricted' : 'None'}</dd>
+                <dt class="text-vpro-ink-secondary">User Restrictions</dt>
+                <dd class="font-mono font-semibold text-vpro-navy">
+                  {status.inUserRestrictions ? 'Restricted' : 'None'}
+                </dd>
               </div>
               <div class="rounded border border-vpro-border bg-white px-2.5 py-1.5">
                 <dt class="text-vpro-ink-secondary">Current Identity</dt>

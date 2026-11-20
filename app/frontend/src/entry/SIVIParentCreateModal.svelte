@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import ModalDialogTrap from '../shared/ModalDialogTrap.svelte';
+  import { formatError } from '../shared/readRequests';
   import {
     defaultSIVIParentCreatePort,
     SIVI_PLOT_TYPES,
@@ -106,7 +107,7 @@
       if (hGen !== historyGen) return;
       createdPlots = list ?? [];
     } catch (cause) {
-      if (hGen === historyGen) error = `Failed reading SIVI plot creation history: ${String(cause)}`;
+      if (hGen === historyGen) error = `Failed reading SIVI plot creation history: ${formatError(cause)}`;
     } finally {
       if (hGen === historyGen) {
         historyBusy = false;
@@ -118,7 +119,7 @@
   async function runPlotMutation<T>(
     errorPrefix: string,
     execute: () => Promise<T>,
-    onApplied: (res: T) => void | Promise<void>,
+    onApplied: (res: T) => void | Promise<void>
   ) {
     const gen = ++generation;
     historyGen++;
@@ -135,7 +136,7 @@
       setBusy(false);
       await onApplied(res);
     } catch (cause) {
-      if (gen === generation) error = `${errorPrefix}: ${String(cause)}`;
+      if (gen === generation) error = `${errorPrefix}: ${formatError(cause)}`;
     } finally {
       if (gen === generation && busy) setBusy(false);
     }
@@ -163,7 +164,7 @@
         plotNumber = '';
         fieldNumber = '';
         if (oncreated) await oncreated(res);
-      },
+      }
     );
   }
 
@@ -184,17 +185,30 @@
         confirmUndoId = null;
         status = `Undid SIVI plot creation "${res.plotNumber}" cleanly.`;
         if (onundone) await onundone(res.plotNumber);
-      },
+      }
     );
   }
 </script>
 
 {#if open}
-  <div class="rounded border border-vpro-border bg-white shadow-lg" role="dialog" aria-modal="true" aria-label="Create FS1333 SIVI Parent Plot">
-    <ModalDialogTrap onEscape={() => onclose?.()} escapeDisabled={busy || !onclose} initialFocusSelector="#sivi-create-plot" />
-    <header class="flex items-center justify-between border-b-[3px] border-b-vpro-gold bg-vpro-navy px-5 py-3 text-white">
+  <div
+    class="rounded border border-vpro-border bg-white shadow-lg"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Create FS1333 SIVI Parent Plot"
+  >
+    <ModalDialogTrap
+      onEscape={() => onclose?.()}
+      escapeDisabled={busy || !onclose}
+      initialFocusSelector="#sivi-create-plot"
+    />
+    <header
+      class="flex items-center justify-between border-b-[3px] border-b-vpro-gold bg-vpro-navy px-5 py-3 text-white"
+    >
       <div>
-        <p class="text-xs font-semibold uppercase tracking-wider text-vpro-gold">FS1333 Site Inspection &amp; Vegetation Inventory</p>
+        <p class="text-xs font-semibold uppercase tracking-wider text-vpro-gold">
+          FS1333 Site Inspection &amp; Vegetation Inventory
+        </p>
         <h3 class="m-0 text-base font-semibold text-white">Create SIVI Parent Plot ({activeProject})</h3>
       </div>
       {#if onclose}
@@ -214,12 +228,16 @@
         <p role="alert" class="rounded border-l-4 border-red-700 bg-red-50 p-3 text-xs text-red-900">{error}</p>
       {/if}
       {#if status}
-        <p role="status" class="rounded border-l-4 border-vpro-navy bg-vpro-surface-subtle p-3 text-xs text-vpro-ink">{status}</p>
+        <p role="status" class="rounded border-l-4 border-vpro-navy bg-vpro-surface-subtle p-3 text-xs text-vpro-ink">
+          {status}
+        </p>
       {/if}
 
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-plot">PlotNumber (required, max 7 characters)</label>
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-plot"
+            >PlotNumber (required, max 7 characters)</label
+          >
           <input
             id="sivi-create-plot"
             type="text"
@@ -234,8 +252,14 @@
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-type">SIVI PlotType</label>
-          <select id="sivi-create-type" class="w-full rounded border border-vpro-border p-2 text-sm" bind:value={plotType} disabled={busy}>
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-type">SIVI PlotType</label
+          >
+          <select
+            id="sivi-create-type"
+            class="w-full rounded border border-vpro-border p-2 text-sm"
+            bind:value={plotType}
+            disabled={busy}
+          >
             {#each SIVI_PLOT_TYPES as pt}
               <option value={pt}>{pt}</option>
             {/each}
@@ -243,61 +267,135 @@
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-polygon">SV_PolygonNumber (max 25)</label>
-          <input id="sivi-create-polygon" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={svPolygonNumber} disabled={busy} />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-polygon"
+            >SV_PolygonNumber (max 25)</label
+          >
+          <input
+            id="sivi-create-polygon"
+            type="text"
+            class="w-full rounded border border-vpro-border p-2 text-sm font-mono"
+            bind:value={svPolygonNumber}
+            disabled={busy}
+          />
           {#if draftErrors.svPolygonNumber}
             <p role="alert" class="text-xs text-red-700">{draftErrors.svPolygonNumber}</p>
           {/if}
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-fieldnum">FieldNumber (max 50)</label>
-          <input id="sivi-create-fieldnum" type="text" class="w-full rounded border border-vpro-border p-2 text-sm" bind:value={fieldNumber} disabled={busy} />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-fieldnum"
+            >FieldNumber (max 50)</label
+          >
+          <input
+            id="sivi-create-fieldnum"
+            type="text"
+            class="w-full rounded border border-vpro-border p-2 text-sm"
+            bind:value={fieldNumber}
+            disabled={busy}
+          />
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-date">Survey Date (YYYY-MM-DD)</label>
-          <input id="sivi-create-date" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={date} disabled={busy} placeholder="2026-07-15" />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-date"
+            >Survey Date (YYYY-MM-DD)</label
+          >
+          <input
+            id="sivi-create-date"
+            type="text"
+            class="w-full rounded border border-vpro-border p-2 text-sm font-mono"
+            bind:value={date}
+            disabled={busy}
+            placeholder="2026-07-15"
+          />
           {#if draftErrors.date}
             <p role="alert" class="text-xs text-red-700">{draftErrors.date}</p>
           {/if}
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-surveyor">SiteSurveyor (max 30)</label>
-          <input id="sivi-create-surveyor" type="text" class="w-full rounded border border-vpro-border p-2 text-sm" bind:value={siteSurveyor} disabled={busy} />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-surveyor"
+            >SiteSurveyor (max 30)</label
+          >
+          <input
+            id="sivi-create-surveyor"
+            type="text"
+            class="w-full rounded border border-vpro-border p-2 text-sm"
+            bind:value={siteSurveyor}
+            disabled={busy}
+          />
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-zone">BEC Zone (max 4)</label>
-          <input id="sivi-create-zone" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={zone} disabled={busy} />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-zone"
+            >BEC Zone (max 4)</label
+          >
+          <input
+            id="sivi-create-zone"
+            type="text"
+            class="w-full rounded border border-vpro-border p-2 text-sm font-mono"
+            bind:value={zone}
+            disabled={busy}
+          />
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-subzone">SubZone (max 8)</label>
-          <input id="sivi-create-subzone" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={subZone} disabled={busy} />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-subzone"
+            >SubZone (max 8)</label
+          >
+          <input
+            id="sivi-create-subzone"
+            type="text"
+            class="w-full rounded border border-vpro-border p-2 text-sm font-mono"
+            bind:value={subZone}
+            disabled={busy}
+          />
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-series">SiteSeries (max 5)</label>
-          <input id="sivi-create-series" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={siteSeries} disabled={busy} />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-series"
+            >SiteSeries (max 5)</label
+          >
+          <input
+            id="sivi-create-series"
+            type="text"
+            class="w-full rounded border border-vpro-border p-2 text-sm font-mono"
+            bind:value={siteSeries}
+            disabled={busy}
+          />
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-pid">ProjectID (max 30, optional)</label>
-          <input id="sivi-create-pid" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={projectId} disabled={busy} placeholder={activeProject} />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-pid"
+            >ProjectID (max 30, optional)</label
+          >
+          <input
+            id="sivi-create-pid"
+            type="text"
+            class="w-full rounded border border-vpro-border p-2 text-sm font-mono"
+            bind:value={projectId}
+            disabled={busy}
+            placeholder={activeProject}
+          />
         </div>
 
         <div class="space-y-1 sm:col-span-2">
-          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-usu">UserSiteUnit (max 100, optional)</label>
-          <input id="sivi-create-usu" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={userSiteUnit} disabled={busy} />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-usu"
+            >UserSiteUnit (max 100, optional)</label
+          >
+          <input
+            id="sivi-create-usu"
+            type="text"
+            class="w-full rounded border border-vpro-border p-2 text-sm font-mono"
+            bind:value={userSiteUnit}
+            disabled={busy}
+          />
         </div>
       </div>
 
       {#if activeSu !== 'None'}
         <label class="flex items-center gap-2 text-xs text-vpro-ink">
           <input type="checkbox" bind:checked={addToActiveSu} disabled={busy} />
-          Also append new plot into active Site Unit table ({activeSu}_SU)
+          Also append new plot into active Site Unit table ({activeSu})
         </label>
       {/if}
 

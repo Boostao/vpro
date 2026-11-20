@@ -97,15 +97,26 @@ test('Actual source table owns eight controls and nullable flag clearing with ra
 });
 
 test('Other drafts gate hidden Save, Undo, Lock, close, context and unrelated mutations independently', () => {
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
+  const form =
+    readFileSync(srcPath('useFS882ChildWorkflows.svelte.ts'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormController.svelte.ts'), 'utf8') + '\n' +
     readFileSync(srcPath('fs882FormChildren.ts'), 'utf8') + '\n' +
     readFileSync(srcPath('fs882FormLoadSave.ts'), 'utf8');
-  assert.match(form, /siviCreationPeerUnsaved = \$derived\(heightUnsaved \|\| siviUnsaved \|\| siviCoverUnsaved \|\| siviCombinedUnsaved \|\| siviCollectedUnsaved \|\| siviSpeciesUnsaved \|\| siviIdentityUnsaved \|\| otherUnsaved \|\| soilUnsaved \|\| attributeUnsaved \|\| collectedUnsaved \|\| speciesUnsaved \|\| deletionReview !== null \|\| creationDraft !== null \|\| codeCheckOpen \|\| metadataOpen \|\| profileReviewBlocked \|\| environmentSUOpen\)/);
-  assert.match(form, /\[\(\) => otherUnsaved, \(\) => saveOtherDrafts\(\)\]/);
-  assert.match(form, /\[\(\) => otherUnsaved, \(\) => void cancelOtherDrafts\(\)\]/);
+  const h = createFS882TestController();
+  try {
+    h.ctrl.cw.otherDrafts = { '1': { dataName: { raw: 'X', expected: null, value: 'X', error: null } } };
+    h.flush();
+    assert.equal(h.ctrl.cw.otherUnsaved, true);
+    assert.equal(h.ctrl.siviCreationPeerUnsaved, true);
+  } finally {
+    h.dispose();
+  }
+  assert.match(form, /\[\(\) => otherUnsaved,\s*\(\) => saveOtherDrafts\(\)\]/);
+  assert.match(form, /\[\(\) => otherUnsaved,\s*\(\) => void cancelOtherDrafts\(\)\]/);
   assert.match(form, /Save or Cancel Other drafts before changing the plot lock/);
-  assert.match(form, /i\.otherInvalidCount > 0, 'Correct invalid Other drafts/);
-  assert.match(form, /PlotService\.UpdateOtherRecords\(draft\.plotNumber, updates\)/);
+  assert.match(form, /i\.otherInvalidCount > 0,\s*'Correct invalid Other drafts/);
+  assert.match(form, /UpdateOtherRecords\([^,]+,\s*updates\)/);
   assert.match(form, /Other changes committed, but refresh failed/);
   assert.match(form, /Child changes committed, but refresh failed/);
 });

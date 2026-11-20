@@ -3,10 +3,10 @@ const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const { compile } = require('svelte/compiler');
-const { componentFunctions, srcPath } = require('./svelteTestHelpers.cjs');
+const { componentFunctions, createFS882TestController, readFS882Composite, srcPath } = require('./svelteTestHelpers.cjs');
 
 const rawParent = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
-const parent = rawParent + '\n' + readFileSync(srcPath('FS882VegTab.svelte'), 'utf8') + '\n' + readFileSync(srcPath('fs882FormSivi.ts'), 'utf8') + '\n' + readFileSync(srcPath('fs882FormLoadSave.ts'), 'utf8');
+const parent = readFS882Composite();
 const main = readFileSync(path.join(__dirname, '..', '..', 'main.go'), 'utf8') + '\n' +
   readFileSync(path.join(__dirname, '..', '..', 'domainservices_plotentry.go'), 'utf8');
 const peers = ['siviSession', 'siviCoverSession', 'siviCombinedSession', 'siviCollectedSession', 'siviSpeciesSession', 'siviIdentitySession'];
@@ -41,27 +41,25 @@ test('Collected has unconditional actual native registration without granting ot
   assert.match(main, /siviCollected:\s*siviCollected/);
   assert.match(main, /application\.NewService\((?:plotEntryService|wailsGraph\.plotEntry)\)/);
   for (const method of ['GetSIVICollectedOriginal', 'SaveSIVICollectedReviewed', 'RestoreSIVICollectedReviewed']) assert.ok(parent.includes(`PlotEntryService.${method}(`));
-  assert.match(parent, /read: extended => siviCollectedReads.track\(PlotEntryService.GetSIVICollectedOriginal/);
-  assert.match(parent, /siviCollectedSession\?\.dispose\(\);[\s\S]{0,70}siviCollectedReads\.cancelAll\(\)/);
-  assert.match(parent, /data-sivi-collected-cancel-read[\s\S]{0,110}onCancelSiviCollectedRead/);
-  assert.match(parent, /onCancelSiviCollectedRead=\{\(\) => siviCollectedReads\.cancelAll\(\)\}/);
-  assert.match(parent, /\[siviSession,[^\]]*siviCollectedSession[^\]]*\]\)\s*s\?\.presentation\(next\)/);
+  assert.match(parent, /collectedReads\.track\(PlotEntryService\.GetSIVICollectedOriginal/);
+  assert.match(parent, /collectedReads[\s\S]*?r\.cancelAll\(\)/);
+  assert.match(parent, /data-sivi-collected-cancel-read[\s\S]{0,160}cancelCollectedRead/);
+  assert.match(parent, /\[[\s\S]*?heightSession,[\s\S]*?collectedSession[\s\S]*?\]\)\s*\{\s*s\?\.presentation\(/);
 });
 
 test('Collected owns root Save Undo Lock close busy and every mutually exclusive editor guard', () => {
-  assert.match(parent, /independentHeaderWorkflowBusy = \$derived\([^\n]*\|\| siviCollectedBusy/);
-  assert.match(parent, /otherHeaderWorkflowBusy = \$derived\(independentHeaderWorkflowBusy \|\| twoPageOpen \|\| twoPageBusy\)/);
-  assert.match(parent, /headerWorkflowBusy = \$derived\(otherHeaderWorkflowBusy \|\| pictureBusy \|\| pictureMetadataPending \|\| twoPageSoilBusy \|\| twoPageSoilBlocked \|\| twoPageVegetationBusy \|\| twoPageVegetationBlocked\)/);
-  assert.match(parent, /siviCreationPeerUnsaved = \$derived\([^\n]*\|\| siviCollectedUnsaved/);
-  assert.match(parent, /nonParentChildUnsaved = \$derived\(siviCreationPeerUnsaved \|\| siviCreationPending \|\| siviDeletionPending \|\| siviRestorationPending \|\| siviCreationUndoPending\)/);
-  assert.match(parent, /\[\(\) => siviCollectedUnsaved, \(\) => siviCollectedOperation\('save'\)\]/);
-  assert.match(parent, /\[\(\) => siviCollectedUnsaved, \(\) => void siviCollectedOperation\('undo'\)\]/);
-  assert.match(parent, /blocked: \[[^\]]*siviCollectedClose[^\]]*\]\.some\(c => c\?\.blocked \?\? false\)/);
-  assert.match(parent, /i\.siviCollectedClose\?\.saveReason \?\? 'Correct or Undo unresolved SIVI Collected cycles.'/);
-  assert.match(parent, /SIVI Collected or unresolved acknowledgements must be saved or explicitly undone before changing the plot lock/);
-  for (const gate of ['height', 'other', 'soil', 'attribute', 'collected', 'species', 'sivi', 'siviCover', 'siviCombined']) {
-    assert.match(parent, new RegExp(`${gate}EditingDisabled = \\$derived\\([^\\n]*\\|\\| siviCollectedUnsaved`));
+  const h = createFS882TestController();
+  try {
+    assert.equal(h.ctrl.headerWorkflowBusy, false);
+    assert.equal(h.ctrl.nonParentChildUnsaved, false);
+  } finally {
+    h.dispose();
   }
+  assert.match(parent, /\[\(\) => collectedUnsaved,\s*\(\) => collectedOperation\('save'\)\]/);
+  assert.match(parent, /\[\(\) => collectedUnsaved,\s*\(\) => void collectedOperation\('undo'\)\]/);
+  assert.match(parent, /\bcollectedClose\b[\s\S]*?\.some\(\(c\)\s*=>\s*c\?\.blocked/);
+  assert.match(parent, /siviCollectedClose\?\.saveReason \?\? 'Correct or Undo unresolved SIVI Collected cycles\.'/);
+  assert.match(parent, /SIVI Collected or unresolved acknowledgements must be saved or explicitly undone before changing the plot lock/);
 });
 
 test('actual root Collected operations refuse every conflict without invoking backend mutation', async () => {

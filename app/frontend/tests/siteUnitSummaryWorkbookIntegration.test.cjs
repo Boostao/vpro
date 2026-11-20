@@ -1,46 +1,95 @@
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
-const path = require('node:path');
 const { test } = require('node:test');
-const { componentFunctions, srcPath } = require('./svelteTestHelpers.cjs');
-const ts = require('typescript');
-const vm = require('node:vm');
+const { componentFunctions, loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
+
+function loadOperationGuardWithSummaryStubs(stubs, onEffect) {
+  const noopSub = () => () => {};
+  const noopSession = () => ({ view: () => ({ busy: false, blocked: false, closeBlocked: false }), held: () => false, subscribe: noopSub });
+  return loadTypeScript(
+    'shell/operationGuard.svelte.ts',
+    {
+      './externalSUEnvironment': { subscribeExternalSUEnvironmentActivity: noopSub },
+      './twoPageSoilActivity': { subscribeTwoPageSoilActivity: noopSub },
+      './twoPageVegetationActivity': { subscribeTwoPageVegetationActivity: noopSub },
+      './tableCSVArchiveExport': { tableCSVArchivePublicationSession: noopSession },
+      './pictureCreationActivity': { subscribePictureCreationActivity: noopSub },
+      './pictureLifecycleActivity': { subscribePictureLifecycleActivity: noopSub },
+      './lifeformWorkbook': { lifeformWorkbookPublicationSession: noopSession },
+      './longVegetationProjectWorkspaces': { projectReportWorkspace: noopSession },
+      './subzoneMatrixReport': { matrixPublicationSession: noopSession },
+      './summaryVegetationEnvironmentalDesktop': { summaryEnvironmentalEnabled: false, summaryEnvironmentalDesktop: {} },
+      './summaryVegetationFieldListDesktop': { summaryVegetationFieldListDesktop: { enabled: false } },
+      './summaryVegetationPreferences': { summaryVegetationPreferenceSession: null },
+      './summaryVegetationPresentationPreferences': { summaryVegetationPresentationPreferenceSession: null },
+      './summaryVegetationQualityPreferences': { summaryVegetationQualityPreferenceSession: null },
+      './summaryVegetationWorkbook': { summaryVegetationWorkbookSession: noopSession },
+      './vegetationWorkbook': { vegetationWorkbookPublicationSession: noopSession },
+      ...stubs,
+    },
+    {
+      $effect: (run) => onEffect(run),
+    }
+  );
+}
 
 test('actual top-level Summary authority effect subscribes and reopens a retained receipt without the panel', () => {
-  const source = readFileSync(srcPath('App.svelte'), 'utf8');
-  const script = source.match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  const ast = ts.createSourceFile('App.svelte.ts', script, ts.ScriptTarget.Latest, true);
-  const effects = ast.statements.filter(node => ts.isExpressionStatement(node) &&
-    ts.isCallExpression(node.expression) && node.expression.expression.getText(ast) === '$effect');
-  const effect = effects.filter(node => node.getText(ast).includes('siteUnitSummaryWorkbookPublicationSession'));
-  assert.equal(effect.length, 1, 'Summary subscription must be an independently reachable top-level effect');
   for (const blocked of [true, false]) {
-    let subscribed = 0, unsubscribed = 0, owner;
-    const context = vm.createContext({
-      summaryEnvironmentPublicationBusy: false, view: 'home',
-      $projectState: { contextId: 'owned', activeProject: 'Sample', projectPath: 'C:\\Sample.db',
-        activeSU: 'Summary', suPath: 'C:\\external.db' },
-      $effect(run) { this.cleanup = run(); },
-      siteUnitSummaryWorkbookPublicationSession(value) {
-        owner = value;
-        return { view: () => ({ busy: !blocked, blocked }), subscribe(listener) {
-          subscribed++; listener(); return () => { unsubscribed++; };
-        } };
+    let subscribed = 0, unsubscribed = 0, owner, redirectedView = 'home';
+    const cleanups = [];
+    const mod = loadOperationGuardWithSummaryStubs(
+      {
+        './siteUnitSummaryWorkbook': {
+          siteUnitSummaryWorkbookPublicationSession(value) {
+            owner = value;
+            return {
+              view: () => ({ busy: !blocked, blocked }),
+              subscribe(listener) {
+                subscribed++;
+                listener();
+                return () => { unsubscribed++; };
+              },
+            };
+          },
+        },
+        './siteUnitSummaryExtendedWorkbook': {
+          extendedSummaryWorkbookPublicationSession() {
+            return {
+              view: () => ({ busy: false, blocked: false }),
+              subscribe(listener) {
+                listener();
+                return () => {};
+              },
+            };
+          },
+        },
       },
-      extendedSummaryWorkbookPublicationSession() {
-        return { view: () => ({ busy: false, blocked: false }), subscribe(listener) {
-          listener(); return () => {};
-        } };
-      },
-    });
-    context.$effect = run => { context.cleanup = run(); };
-    const code = effect[0].getText(ast);
-    vm.runInContext(ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
+      (run) => {
+        const stop = run();
+        if (typeof stop === 'function') cleanups.push(stop);
+      }
+    );
+    const guard = mod.createOperationGuard();
+    mod.bindShellActivitySubscriptions(
+      guard,
+      () => ({
+        contextId: 'owned',
+        activeProject: 'Sample',
+        projectPath: 'C:\\Sample.db',
+        activeSU: 'Summary',
+        suPath: 'C:\\external.db',
+      }),
+      (target) => {
+        if (redirectedView === 'home') redirectedView = target.view;
+      }
+    );
     assert.equal(subscribed, 1);
-    assert.equal(context.summaryEnvironmentPublicationBusy, true);
-    assert.equal(context.view, blocked ? 'summary-environment' : 'home');
-    assert.equal(owner.contextId, 'owned'); assert.equal(owner.suPath, 'C:\\external.db');
-    context.cleanup(); assert.equal(unsubscribed, 1);
+    assert.equal(guard.isBusy(), true);
+    assert.equal(redirectedView, blocked ? 'summary-environment' : 'home');
+    assert.equal(owner.contextId, 'owned');
+    assert.equal(owner.suPath, 'C:\\external.db');
+    for (const stop of cleanups) stop();
+    assert.equal(unsubscribed, 1);
   }
 });
 
@@ -114,11 +163,33 @@ test('actual Summary parent prevents method, preview and preference changes whil
 });
 
 test('Summary root and parent wire persistent publication authority', () => {
-  const app = readFileSync(srcPath('App.svelte'), 'utf8');
   const parent = readFileSync(srcPath('SiteUnitSummary.svelte'), 'utf8');
-  assert.match(app, /summaryEnvironmentPublicationBusy = publication.busy \|\| publication.blocked/);
-  assert.match(app, /summaryPublicationBusy = \$derived\(summaryEnvironmentPublicationBusy \|\| summaryVegetationPublicationBusy\)/);
-  assert.match(app, /publication.blocked && view === 'home'\) view = 'summary-environment'/);
+  let redirected = '';
+  const mod = loadOperationGuardWithSummaryStubs(
+    {
+      './siteUnitSummaryWorkbook': {
+        siteUnitSummaryWorkbookPublicationSession: () => ({
+          view: () => ({ busy: false, blocked: true }),
+          subscribe: (fn) => { fn(); return () => {}; },
+        }),
+      },
+      './siteUnitSummaryExtendedWorkbook': {
+        extendedSummaryWorkbookPublicationSession: () => ({
+          view: () => ({ busy: false, blocked: false }),
+          subscribe: (fn) => { fn(); return () => {}; },
+        }),
+      },
+    },
+    (run) => run()
+  );
+  const guard = mod.createOperationGuard();
+  mod.bindShellActivitySubscriptions(
+    guard,
+    () => ({ contextId: 'owned', activeProject: 'Sample', projectPath: '/Sample.db', activeSU: 'Summary', suPath: '/ext.db' }),
+    (target) => { redirected = target.view; }
+  );
+  assert.equal(guard.isBusy(), true);
+  assert.equal(redirected, 'summary-environment');
   assert.match(parent, /<SiteUnitSummaryWorkbookPanel owner=\{\{ contextId, project, projectPath, su, suPath \}\} \{method\}/);
   assert.match(parent, /onBusyChange=\{\(held\) => \{ workbookBusy = held; reportBusy\(\); \}\}/);
   for (const selector of ['undo', 'normal', 'acknowledge']) {

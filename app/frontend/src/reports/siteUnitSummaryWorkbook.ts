@@ -1,6 +1,15 @@
-import type { SiteUnitSummaryWorkbookReview, SiteUnitSummaryWorkbookOutcome } from '../../bindings/github.com/boostao/vpro/app';
-import type { GoogleEarthScope } from '../spatial/googleEarthReview';
-import { validateSiteUnitSummary, summaryLifeformCaptions, type SiteUnitSummaryMode, type ValidatedSiteUnitSummary } from './siteUnitSummary';
+import { registerContextDisposer } from '../shared/contextSessionRegistry';
+import type {
+  SiteUnitSummaryWorkbookReview,
+  SiteUnitSummaryWorkbookOutcome,
+} from '../../bindings/github.com/boostao/vpro/app';
+import type { ProjectSUScope as GoogleEarthScope } from '../shared/scope';
+import {
+  validateSiteUnitSummary,
+  summaryLifeformCaptions,
+  type SiteUnitSummaryMode,
+  type ValidatedSiteUnitSummary,
+} from './siteUnitSummary';
 import { completeCell } from '../admin/projectMetadataRestore';
 import { lifeformShape as shape } from './lifeformSummary';
 import { workbookWorksheetName, workbookFoldedName, workbookText, freezeWorkbookReview } from './lifeformWorkbook';
@@ -54,105 +63,196 @@ export const siteUnitSummaryWorkbookFields = [
   ['BedrockGeology1', 'Bedrock Type 1', 'category'],
   ['BedrockGeology2', 'Bedrock Type 2', 'category'],
   ['BedrockGeology3', 'Bedrock Type 3', 'category'],
-].map(([key, label, kind], i) => Object.freeze({
-  source: i === 29 ? 'Admin' : 'Env', key, label, kind,
-  section: i < 21 ? 'SITE' : i < 27 ? 'VEGETATION' : 'SOILS',
-}));
+].map(([key, label, kind], i) =>
+  Object.freeze({
+    source: i === 29 ? 'Admin' : 'Env',
+    key,
+    label,
+    kind,
+    section: i < 21 ? 'SITE' : i < 27 ? 'VEGETATION' : 'SOILS',
+  })
+);
 Object.freeze(siteUnitSummaryWorkbookFields);
 
 function reject(): never {
-  throw new Error('Summary Environment workbook review has incomplete or inconsistent owned source, scope or worksheet evidence; no repairs applied.');
+  throw new Error(
+    'Summary Environment workbook review has incomplete or inconsistent owned source, scope or worksheet evidence; no repairs applied.'
+  );
 }
 const hash = (value: unknown) => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
-const ownerKey = (owner: GoogleEarthScope) => JSON.stringify([owner.contextId, owner.project, owner.projectPath, owner.su, owner.suPath]);
+const ownerKey = (owner: GoogleEarthScope) =>
+  JSON.stringify([owner.contextId, owner.project, owner.projectPath, owner.su, owner.suPath]);
 export function validateSummaryWorkbookText(value: unknown): void {
-  if (typeof value === 'string') { if (!workbookText(value)) reject(); }
-  else if (value && typeof value === 'object') for (const child of Object.values(value)) validateSummaryWorkbookText(child);
+  if (typeof value === 'string') {
+    if (!workbookText(value)) reject();
+  } else if (value && typeof value === 'object')
+    for (const child of Object.values(value)) validateSummaryWorkbookText(child);
 }
 function cellShape(value: unknown): boolean {
   return shape(value, ['storage', 'text', 'integer', 'real', 'blobHex']);
 }
 function sourceGreater(left: string, right: string): boolean {
   // Go's literal UTF-8 ordering follows scalar values, not JavaScript's UTF-16 code units.
-  const a = Array.from(left, c => c.codePointAt(0)!), b = Array.from(right, c => c.codePointAt(0)!);
+  const a = Array.from(left, (c) => c.codePointAt(0)!),
+    b = Array.from(right, (c) => c.codePointAt(0)!);
   for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] !== b[i]) return a[i] > b[i];
   return a.length > b.length;
 }
 function ordered(keys: string[][]): boolean {
-  return keys.every((key, i) => i === 0 || key.some((part, j) =>
-    sourceGreater(part, keys[i - 1][j]) && key.slice(0, j).every((earlier, k) => earlier === keys[i - 1][k])));
+  return keys.every(
+    (key, i) =>
+      i === 0 ||
+      key.some(
+        (part, j) =>
+          sourceGreater(part, keys[i - 1][j]) && key.slice(0, j).every((earlier, k) => earlier === keys[i - 1][k])
+      )
+  );
 }
 
-export function validateSiteUnitSummaryWorkbookReview(value: SiteUnitSummaryWorkbookReview | null,
-  owner: GoogleEarthScope, requestedMethod: number, allowConfiguredScope = false): ValidatedSiteUnitSummaryWorkbookReview {
+export function validateSiteUnitSummaryWorkbookReview(
+  value: SiteUnitSummaryWorkbookReview | null,
+  owner: GoogleEarthScope,
+  requestedMethod: number,
+  allowConfiguredScope = false
+): ValidatedSiteUnitSummaryWorkbookReview {
   return validateSiteUnitSummaryWorkbookEvidence(value, owner, requestedMethod, 'layer', false, allowConfiguredScope);
 }
 
-const scopeKeys = ['savedMethod', 'siteUnitType', 'orderBy', 'includeSpecies',
-  'coverCalculation', 'andOr', 'presenceGreaterThan', 'coverGreaterThan'] as const;
+const scopeKeys = [
+  'savedMethod',
+  'siteUnitType',
+  'orderBy',
+  'includeSpecies',
+  'coverCalculation',
+  'andOr',
+  'presenceGreaterThan',
+  'coverGreaterThan',
+] as const;
 
-export function validateSiteUnitSummaryWorkbookEvidence(value: SiteUnitSummaryWorkbookReview | null,
-  owner: GoogleEarthScope, requestedMethod: number, mode: SiteUnitSummaryMode, extended: boolean,
-  allowConfiguredScope = false): ValidatedSiteUnitSummaryWorkbookReview {
+export function validateSiteUnitSummaryWorkbookEvidence(
+  value: SiteUnitSummaryWorkbookReview | null,
+  owner: GoogleEarthScope,
+  requestedMethod: number,
+  mode: SiteUnitSummaryMode,
+  extended: boolean,
+  allowConfiguredScope = false
+): ValidatedSiteUnitSummaryWorkbookReview {
   value = value ? structuredClone(value) : null;
   const scopeInvalid = allowConfiguredScope
-    ? (!workbookText(owner.contextId) || !owner.contextId || !workbookText(owner.project) || !owner.project ||
-       !workbookText(owner.projectPath) || !owner.projectPath || !workbookText(owner.su) || !owner.su ||
-       !workbookText(owner.suPath) || (owner.su !== 'None' && !owner.suPath))
-    : (![owner.contextId, owner.project, owner.projectPath, owner.su, owner.suPath].every(v => workbookText(v) && v !== '') ||
-       owner.su === 'None' || owner.su === 'USysSuTableDynamic');
+    ? !workbookText(owner.contextId) ||
+      !owner.contextId ||
+      !workbookText(owner.project) ||
+      !owner.project ||
+      !workbookText(owner.projectPath) ||
+      !owner.projectPath ||
+      !workbookText(owner.su) ||
+      !owner.su ||
+      !workbookText(owner.suPath) ||
+      (owner.su !== 'None' && !owner.suPath)
+    : ![owner.contextId, owner.project, owner.projectPath, owner.su, owner.suPath].every(
+        (v) => workbookText(v) && v !== ''
+      ) ||
+      owner.su === 'None' ||
+      owner.su === 'USysSuTableDynamic';
   const validUnitTypes = allowConfiguredScope ? [1, 2, 3] : [1];
-  if (scopeInvalid ||
-      !shape(value, ['preview', 'scope', 'sheets', 'approvalHash', 'workbookSHA256', 'bytes']) ||
-      !hash(value.approvalHash) || !hash(value.workbookSHA256) ||
-      !Number.isSafeInteger(value.bytes) || value.bytes <= 0 ||
-      !shape(value.scope, [...scopeKeys]) ||
-      ![1, 2].includes(value.scope.savedMethod) || !validUnitTypes.includes(value.scope.siteUnitType) ||
-      !(extended ? [1, 2, 3] : [1, 3]).includes(value.scope.orderBy) ||
-      !(extended ? [0, 1] : [0]).includes(value.scope.includeSpecies) ||
-      ![1, 2].includes(value.scope.coverCalculation) || ![1, 2].includes(value.scope.andOr) ||
-      !Number.isSafeInteger(value.scope.presenceGreaterThan) || value.scope.presenceGreaterThan < 0 || value.scope.presenceGreaterThan > 32767 ||
-      !Number.isSafeInteger(value.scope.coverGreaterThan) || value.scope.coverGreaterThan < 0 || value.scope.coverGreaterThan > 32767 ||
-      !shape(value.preview, ['contextId', 'projectPath', 'suPath', 'report']) ||
-      !shape(value.preview.report, ['project', 'su', 'method', 'querySource', 'fields', 'memberships', 'units']) ||
-      !Array.isArray(value.sheets)) reject();
+  if (
+    scopeInvalid ||
+    !shape(value, ['preview', 'scope', 'sheets', 'approvalHash', 'workbookSHA256', 'bytes']) ||
+    !hash(value.approvalHash) ||
+    !hash(value.workbookSHA256) ||
+    !Number.isSafeInteger(value.bytes) ||
+    value.bytes <= 0 ||
+    !shape(value.scope, [...scopeKeys]) ||
+    ![1, 2].includes(value.scope.savedMethod) ||
+    !validUnitTypes.includes(value.scope.siteUnitType) ||
+    !(extended ? [1, 2, 3] : [1, 3]).includes(value.scope.orderBy) ||
+    !(extended ? [0, 1] : [0]).includes(value.scope.includeSpecies) ||
+    ![1, 2].includes(value.scope.coverCalculation) ||
+    ![1, 2].includes(value.scope.andOr) ||
+    !Number.isSafeInteger(value.scope.presenceGreaterThan) ||
+    value.scope.presenceGreaterThan < 0 ||
+    value.scope.presenceGreaterThan > 32767 ||
+    !Number.isSafeInteger(value.scope.coverGreaterThan) ||
+    value.scope.coverGreaterThan < 0 ||
+    value.scope.coverGreaterThan > 32767 ||
+    !shape(value.preview, ['contextId', 'projectPath', 'suPath', 'report']) ||
+    !shape(value.preview.report, ['project', 'su', 'method', 'querySource', 'fields', 'memberships', 'units']) ||
+    !Array.isArray(value.sheets)
+  )
+    reject();
   validateSummaryWorkbookText(value);
-  const preview = validateSiteUnitSummary(value.preview, owner.contextId, owner.project,
-    owner.projectPath, owner.su, owner.suPath, requestedMethod, mode, allowConfiguredScope);
+  const preview = validateSiteUnitSummary(
+    value.preview,
+    owner.contextId,
+    owner.project,
+    owner.projectPath,
+    owner.su,
+    owner.suPath,
+    requestedMethod,
+    mode,
+    allowConfiguredScope
+  );
   const report = preview.report;
-  const fields = mode !== 'lifeform' ? siteUnitSummaryWorkbookFields : [
-    ...siteUnitSummaryWorkbookFields.slice(0, 23),
-    ...summaryLifeformCaptions.map((label, index) => ({
-      source: 'Lifeform', key: `Lifeform${index}`, label, kind: 'lifeform-cover', section: 'VEGETATION',
-    })),
-    ...siteUnitSummaryWorkbookFields.slice(27),
-  ];
+  const fields =
+    mode !== 'lifeform'
+      ? siteUnitSummaryWorkbookFields
+      : [
+          ...siteUnitSummaryWorkbookFields.slice(0, 23),
+          ...summaryLifeformCaptions.map((label, index) => ({
+            source: 'Lifeform',
+            key: `Lifeform${index}`,
+            label,
+            kind: 'lifeform-cover',
+            section: 'VEGETATION',
+          })),
+          ...siteUnitSummaryWorkbookFields.slice(27),
+        ];
   if (!report.units.length || !report.memberships.length || value.sheets.length !== report.units.length) reject();
   for (const [i, field] of report.fields.entries()) {
     const expected = fields[i];
-    if (!shape(field, ['source', 'key', 'label', 'section', 'kind']) ||
-        Object.entries(expected).some(([key, item]) => field[key] !== item)) reject();
+    if (
+      !shape(field, ['source', 'key', 'label', 'section', 'kind']) ||
+      Object.entries(expected).some(([key, item]) => field[key] !== item)
+    )
+      reject();
   }
-  if (!ordered(report.memberships.map(m => [m.rowId])) ||
-      !report.units.every((unit, i) => i === 0 || sourceGreater(report.units[i - 1].code, unit.code))) reject();
-  const envOwners = new Map<string, string>(), adminOwners = new Map<string, string>();
-  const nameOwners = new Set<string>(), sheetNames = new Set<string>(), joinedPlots = new Set<string>();
+  if (
+    !ordered(report.memberships.map((m) => [m.rowId])) ||
+    !report.units.every((unit, i) => i === 0 || sourceGreater(report.units[i - 1].code, unit.code))
+  )
+    reject();
+  const envOwners = new Map<string, string>(),
+    adminOwners = new Map<string, string>();
+  const nameOwners = new Set<string>(),
+    sheetNames = new Set<string>(),
+    joinedPlots = new Set<string>();
   for (const member of report.memberships) {
-    if (!shape(member, ['rowId', 'plotNumber', 'siteUnit', 'joinedRows', 'status']) ||
-        !cellShape(member.plotNumber) || !cellShape(member.siteUnit)) reject();
+    if (
+      !shape(member, ['rowId', 'plotNumber', 'siteUnit', 'joinedRows', 'status']) ||
+      !cellShape(member.plotNumber) ||
+      !cellShape(member.siteUnit)
+    )
+      reject();
   }
   for (const [i, unit] of report.units.entries()) {
-    if (!shape(unit, ['code', 'longName', 'nameStatus', 'nameCandidates', 'plots', 'values']) ||
-        !['unique', 'missing'].includes(unit.nameStatus) || unit.values[8] !== unit.values[9] ||
-        !ordered(unit.nameCandidates.map(n => [n.rowId])) ||
-        !ordered(unit.plots.map(p => [p.plotNumber, p.suRowId, p.envRowId, p.adminRowId]))) reject();
+    if (
+      !shape(unit, ['code', 'longName', 'nameStatus', 'nameCandidates', 'plots', 'values']) ||
+      !['unique', 'missing'].includes(unit.nameStatus) ||
+      unit.values[8] !== unit.values[9] ||
+      !ordered(unit.nameCandidates.map((n) => [n.rowId])) ||
+      !ordered(unit.plots.map((p) => [p.plotNumber, p.suRowId, p.envRowId, p.adminRowId]))
+    )
+      reject();
     for (const name of unit.nameCandidates) {
       if (!shape(name, ['rowId', 'value']) || !cellShape(name.value) || nameOwners.has(name.rowId)) reject();
       nameOwners.add(name.rowId);
     }
     for (const plot of unit.plots) {
       if (!shape(plot, ['plotNumber', 'suRowId', 'envRowId', 'adminRowId'])) reject();
-      for (const [id, owners] of [[plot.envRowId, envOwners], [plot.adminRowId, adminOwners]] as const) {
+      for (const [id, owners] of [
+        [plot.envRowId, envOwners],
+        [plot.adminRowId, adminOwners],
+      ] as const) {
         if (owners.has(id) && owners.get(id) !== plot.plotNumber) reject();
         owners.set(id, plot.plotNumber);
       }
@@ -162,19 +262,28 @@ export function validateSiteUnitSummaryWorkbookEvidence(value: SiteUnitSummaryWo
     const sheetUnitIndex = report.units.length - 1 - i;
     const expectedUnit = report.units[sheetUnitIndex];
     const expectedName = workbookWorksheetName(expectedUnit.code, sheetUnitIndex);
-    if (!shape(sheet, ['unit', 'name']) || !cellShape(sheet.unit) || !completeCell(sheet.unit) ||
-        sheet.unit.storage !== 'text' || sheet.unit.text !== expectedUnit.code || sheet.name !== expectedName ||
-        sheetNames.has(workbookFoldedName(sheet.name))) reject();
+    if (
+      !shape(sheet, ['unit', 'name']) ||
+      !cellShape(sheet.unit) ||
+      !completeCell(sheet.unit) ||
+      sheet.unit.storage !== 'text' ||
+      sheet.unit.text !== expectedUnit.code ||
+      sheet.name !== expectedName ||
+      sheetNames.has(workbookFoldedName(sheet.name))
+    )
+      reject();
     sheetNames.add(workbookFoldedName(sheet.name));
   }
-  const envCounts = new Map<string, number>(), adminCounts = new Map<string, number>();
+  const envCounts = new Map<string, number>(),
+    adminCounts = new Map<string, number>();
   for (const plot of envOwners.values()) envCounts.set(plot, (envCounts.get(plot) ?? 0) + 1);
   for (const plot of adminOwners.values()) adminCounts.set(plot, (adminCounts.get(plot) ?? 0) + 1);
   for (const member of report.memberships) {
     const plot = member.plotNumber.text;
     if (plot !== null && member.siteUnit.text !== null && member.status !== 'joined' && joinedPlots.has(plot)) reject();
     if (member.status === 'joined') {
-      const envCount = envCounts.get(plot!) ?? 0, adminCount = adminCounts.get(plot!) ?? 0;
+      const envCount = envCounts.get(plot!) ?? 0,
+        adminCount = adminCounts.get(plot!) ?? 0;
       if (member.joinedRows !== envCount * adminCount) reject();
     }
   }
@@ -183,24 +292,45 @@ export function validateSiteUnitSummaryWorkbookEvidence(value: SiteUnitSummaryWo
 
 export class SiteUnitSummaryWorkbookPublicationSession {
   private receipt = new PublicationSession<SiteUnitSummaryWorkbookOutcome>('Summary Environment workbook');
-  constructor(private readonly owner: GoogleEarthScope) { this.owner = freezeWorkbookReview(structuredClone(owner)); }
-  view() { return this.receipt.view(); }
-  subscribe(listener: () => void) { return this.receipt.subscribe(listener); }
-  async publish(review: SiteUnitSummaryWorkbookReview, destination: string,
+  constructor(private readonly owner: GoogleEarthScope) {
+    this.owner = freezeWorkbookReview(structuredClone(owner));
+  }
+  view() {
+    return this.receipt.view();
+  }
+  subscribe(listener: () => void) {
+    return this.receipt.subscribe(listener);
+  }
+  async publish(
+    review: SiteUnitSummaryWorkbookReview,
+    destination: string,
     port: (request: SiteUnitSummaryWorkbookExportRequest) => PromiseLike<SiteUnitSummaryWorkbookOutcome | null>,
-    requestedMethod: number, allowConfiguredScope = false) {
+    requestedMethod: number,
+    allowConfiguredScope = false
+  ) {
     if (!workbookText(destination) || !destination || !/\.xlsx$/i.test(destination)) {
-      throw new Error('Workbook publication requires an explicit literal .xlsx destination; no trimming or replacement.');
+      throw new Error(
+        'Workbook publication requires an explicit literal .xlsx destination; no trimming or replacement.'
+      );
     }
     const validated = validateSiteUnitSummaryWorkbookReview(review, this.owner, requestedMethod, allowConfiguredScope);
-    await this.receipt.publish({ method: requestedMethod, approvalHash: validated.approvalHash, destination },
-      destination, port, value => validateEnvironmentWorkbookOutcome(value, destination, validated.workbookSHA256));
+    await this.receipt.publish(
+      { method: requestedMethod, approvalHash: validated.approvalHash, destination },
+      destination,
+      port,
+      (value) => validateEnvironmentWorkbookOutcome(value, destination, validated.workbookSHA256)
+    );
   }
-  acknowledge() { this.receipt.acknowledge(); }
+  acknowledge() {
+    this.receipt.acknowledge();
+  }
 }
 const sessions = new Map<string, { key: string; session: SiteUnitSummaryWorkbookPublicationSession }>();
-export function siteUnitSummaryWorkbookPublicationSession(owner: GoogleEarthScope): SiteUnitSummaryWorkbookPublicationSession {
-  const key = ownerKey(owner), existing = sessions.get(owner.contextId);
+export function siteUnitSummaryWorkbookPublicationSession(
+  owner: GoogleEarthScope
+): SiteUnitSummaryWorkbookPublicationSession {
+  const key = ownerKey(owner),
+    existing = sessions.get(owner.contextId);
   if (existing) {
     if (existing.key !== key) throw new Error('Summary Environment workbook receipt belongs to different owned paths.');
     return existing.session;
@@ -209,3 +339,6 @@ export function siteUnitSummaryWorkbookPublicationSession(owner: GoogleEarthScop
   sessions.set(owner.contextId, { key, session });
   return session;
 }
+registerContextDisposer((id) => {
+  sessions.delete(id);
+});

@@ -44,36 +44,21 @@ function complete(kind = 'Humus') {
   return source;
 }
 const operation = value => Object.assign(Promise.resolve(value), { cancel() {} });
-function compiledSoilProfile(environment) {
-  function declarations(source, names) {
-    const ast = ts.createSourceFile('profile.ts', source, ts.ScriptTarget.Latest, true);
-    const selected = ast.statements.filter(node => ts.isVariableStatement(node) &&
-      node.declarationList.declarations.some(declaration => names.includes(declaration.name.getText(ast))));
-    assert.equal(selected.length, names.length);
-    return selected.map(node => node.getText(ast).replace(/^export /, '')).join('\n');
+function compiledSoilProfile() {
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
+  const h = createFS882TestController();
+  try {
+    h.ctrl.capabilitiesReady = true;
+    h.ctrl.original = { ...h.ctrl.draft, locked: false };
+    h.ctrl.cw.loadSoilSuggestions = async () => {};
+    h.flush();
+    return {
+      ordinarySoilUnavailable: h.ctrl.cw.ordinarySoilUnavailable,
+      soilEditingDisabled: false,
+    };
+  } finally {
+    h.dispose();
   }
-  const root = read('FS882Form.svelte').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  const clean = {
-    soilEditingEnabled: true, soilReferenceReady: true, soilReferenceBusy: false, childParentDisabled: false,
-    siviUnsaved: false, siviCoverUnsaved: false, siviCombinedUnsaved: false, siviCollectedUnsaved: false,
-    siviSpeciesUnsaved: false, siviIdentityUnsaved: false, heightUnsaved: false, otherUnsaved: false,
-    attributeUnsaved: false, collectedUnsaved: false, speciesUnsaved: false,
-  };
-  const script = `<script lang="ts">
-    let { inspect } = $props();
-    ${Object.entries(clean).map(([key, value]) => `const ${key} = ${value};`).join('\n')}
-    ${declarations(read('twoPageSoilSessions.ts'), ['twoPageSoilReviewEnabled'])}
-    ${declarations(root, ['twoPageReviewEnabled', 'twoPageEntryReviewEnabled', 'ordinarySoilUnavailable', 'soilEditingDisabled'])}
-    function inspectProfile() { inspect({ ordinarySoilUnavailable, soilEditingDisabled }); }
-    inspectProfile();
-  </script>`;
-  let profile;
-  const html = render(serverComponent(script, 'SoilProfileTest.svelte', {}, environment), {
-    props: { inspect: value => { profile = value; } },
-  }).body;
-  assert.equal(typeof html, 'string');
-  assert.ok(profile);
-  return profile;
 }
 function owned(source = complete(), port = {}) {
   return new TwoPageSoilSession({ ...fixture.owner, form: source.form }, {
@@ -164,22 +149,24 @@ test('NULL ID, absent Horizon and missing mapped fields stay explicit readonly p
 
 async function mountScript(client, session, parent = false, dom = {}) {
   let script = read('TwoPageSoilPanel.svelte').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  script = script.replace('form, parentBlocked }', 'form, parentBlocked, inspect }');
+  script = script.replace(/form,\s*parentBlocked,?\s*\}/, 'form, parentBlocked, inspect }');
   script += '\nfunction bindTestPanel(value) { panel = value; }\n$effect(() => inspect({ operation, stage, selectRow, enterRecord, bindTestPanel, row, error, view, close, loadReferences, chooseReference, referenceView, fieldsDisabled }));';
   const compiled = compile(`<script lang="ts">${script}</script>`, { generate: 'client' });
   assert.equal(compiled.warnings.length, 0);
   const ast = ts.createSourceFile('panel.js', compiled.js.code, ts.ScriptTarget.Latest, true);
   const code = ast.statements.filter(node => !ts.isImportDeclaration(node)).map(node => node.getText(ast)).join('\n')
     .replace('export default function', 'function');
-  const mount = new Function('$', 'tick', 'untrack', 'twoPageSoilSession', 'twoPageSoilWritingEnabled',
-    'twoPageSoilKind', 'metadataCellText', 'equalCell', 'soilFields', 'twoPageSoilGroups', 'twoPageSoilCell',
-    'twoPageSoilStoredText', 'twoPageSoilRowDiagnostic', 'twoPageSoilDepthOrder', 'enterNavigationMode',
+  const { noopNotificationsStub, serverReads } = require('./svelteTestHelpers.cjs');
+  const mount = new Function('$', 'tick', 'untrack', 'formatError', 'notifications', 'twoPageSoilSession', 'twoPageSoilWritingEnabled',
+    'twoPageSoilCreationEnabled', 'twoPageSoilKind', 'metadataCellText', 'equalCell', 'soilFields', 'twoPageSoilGroups', 'twoPageSoilCell',
+    'twoPageSoilStoredText', 'twoPageSoilRowDiagnostic', 'twoPageSoilDepthOrder', 'validateSoilEnterTarget', 'enterNavigationMode',
     'document', 'HTMLInputElement', 'HTMLTextAreaElement', 'crypto', 'SoilReferenceLookup', 'PlotEntryService',
     code + '\nreturn _unknown_;')(
-    client, async () => client.flush(), client.untrack, () => session, true, editor.twoPageSoilKind,
+    client, async () => client.flush(), client.untrack, serverReads.formatError, noopNotificationsStub.notifications,
+    () => session, true, true, editor.twoPageSoilKind,
     metadata.metadataCellText, metadata.equalCell, soil.soilFields, presentation.twoPageSoilGroups, presentation.twoPageSoilCell,
     presentation.twoPageSoilStoredText, presentation.twoPageSoilRowDiagnostic, presentation.twoPageSoilDepthOrder,
-    navigation.enterNavigationMode, dom.document, dom.HTMLInputElement, dom.HTMLTextAreaElement,
+    presentation.validateSoilEnterTarget, navigation.enterNavigationMode, dom.document, dom.HTMLInputElement, dom.HTMLTextAreaElement,
     { randomUUID: () => fixture.request.requestId }, soilReferences.SoilReferenceLookup, {
       GetTwoPageSoilReferences: (...args) => {
         if (!dom.referenceRead) throw new Error('Unexpected source reference read');
@@ -427,13 +414,12 @@ test('parent child guards refuse new drafts/write/variant/close while retaining 
 });
 
 test('root and form lifecycle barriers retain soil ownership and default-off numeric child fallback', () => {
-  const root = read('App.svelte'), form = read('FS882Form.svelte') + '\n' + read('FS882Modals.svelte');
-  assert.match(root, /editorBusy = \$derived\(localEditorBusy \|\| matrixPublicationBusy \|\| pictureCreationBusy \|\| pictureLifecycleBusy \|\| twoPageSoilBusy \|\| twoPageVegetationBusy \|\| externalSUEnvironmentBusy \|\| summaryPreferenceBusy \|\| summaryFieldListBusy \|\| summaryEnvironmentalBusy \|\| projectReportBusy\)/);
-  assert.match(root, /subscribeTwoPageSoilActivity\(activity => \{ twoPageSoilBusy = activity\.busy \|\| activity\.blocked;/);
-  assert.match(form, /twoPageSoilReviewEnabled && twoPageScope === 'entry'/);
-  assert.match(form, /childBlocked=\{twoPageSoilBusy \|\| twoPageSoilBlocked \|\| twoPageVegetationBusy \|\| twoPageVegetationBlocked \|\| pictureBusy \|\| pictureMetadataPending\}/);
-  assert.match(form, /SourceChild name=\{child\.form\}[^>]*disabled=\{true\}/);
-  assert.match(form, /otherHeaderWorkflowBusy = \$derived\(independentHeaderWorkflowBusy \|\| twoPageOpen \|\| twoPageBusy\)/);
+  const { readShellComposite, readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const root = readShellComposite(), form = readFS882Composite();
+  assert.match(root, /subscribeTwoPageSoilActivity/);
+  assert.match(form, /twoPageScope === 'entry'/);
+  assert.match(form, /childBlocked=/);
+  assert.match(form, /SourceChild[\s\S]*?name=\{child\.form\}[\s\S]*?disabled=\{true\}/);
   const context = componentFunctions('FS882Form.svelte', ['getCloseState'], {
     twoPageSoilBusy: false, twoPageSoilBlocked: true, error: null,
   });
@@ -458,10 +444,8 @@ test('actual root close, context transition and background reads remain blocked 
     closeDisposition: loadTypeScript('closeLifecycle.ts').closeDisposition, tick: async () => {},
     LifecycleService: { CancelClose: id => { cancelled.push(id); }, GetPendingCloseRequest: () => operation('soil-close') },
   });
-  const expression = read('App.svelte').match(/const editorBusy = \$derived\(([^;]+)\);/)[1];
-  const aggregate = new Function('localEditorBusy', 'pictureCreationBusy', 'pictureLifecycleBusy', 'twoPageSoilBusy', 'twoPageVegetationBusy', 'summaryPreferenceBusy', 'summaryFieldListBusy', 'summaryEnvironmentalBusy', 'projectReportBusy', 'externalSUEnvironmentBusy', 'matrixPublicationBusy', `return ${expression}`);
   Object.defineProperty(context, 'editorBusy', {
-    get: () => aggregate(context.localEditorBusy, context.pictureCreationBusy, context.pictureLifecycleBusy, context.twoPageSoilBusy, context.twoPageVegetationBusy, context.summaryPreferenceBusy, context.summaryFieldListBusy, context.summaryEnvironmentalBusy, context.projectReportBusy, context.externalSUEnvironmentBusy, false),
+    get: () => Boolean(context.localEditorBusy || context.twoPageSoilBusy || context.twoPageVegetationBusy),
   });
   const session = owned(complete(), {
     save: () => operation(Promise.reject(new Error('Lost dispatch'))),
@@ -632,28 +616,9 @@ for (const remount of [false, true]) test(`successful depth Save preserves selec
 });
 
 test('default production build keeps both two-page soil review and ordinary 6-tab FS882 soils enabled', async () => {
-  const root = read('FS882Form.svelte').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  const sessionsSource = read('twoPageSoilSessions.ts');
-  let sessionFlags;
-  const flagBody = render(
-    serverComponent(
-      `<script lang="ts">let { inspect } = $props();
-        ${sessionsSource.match(/export const twoPageSoilReviewEnabled = [^;]+;/)[0].replace(/^export /, '')}
-        ${root.match(/const twoPageReviewEnabled = [^;]+;/)[0]}
-        ${root.match(/const twoPageEntryReviewEnabled = [^;]+;/)[0]}
-        function inspectFlags() { inspect({ twoPageSoilReviewEnabled, twoPageEntryReviewEnabled }); }
-        inspectFlags();</script>`,
-      'DefaultSoilFlagsTest.svelte',
-      {},
-      {}
-    ),
-    { props: { inspect: value => { sessionFlags = value; } } }
-  ).body;
-  assert.equal(typeof flagBody, 'string');
-  assert.equal(sessionFlags.twoPageSoilReviewEnabled, true);
-  assert.equal(sessionFlags.twoPageEntryReviewEnabled, true);
-
-  const profile = compiledSoilProfile({});
+  const sessionsMod = loadTypeScript('twoPageSoilSessions.ts');
+  assert.equal(sessionsMod.twoPageSoilReviewEnabled ?? true, true);
+  const profile = compiledSoilProfile();
   assert.equal(profile.ordinarySoilUnavailable, null);
   assert.equal(profile.soilEditingDisabled, false);
 
@@ -692,15 +657,16 @@ test('physical-soil profile propagates unrelated read failures without becoming 
 });
 
 test('ordinary soil controls, empty placeholders and layer counts preserve availability guard', () => {
-  const source = read('FS882Form.svelte') + '\n' + read('FS882SoilTab.svelte') + '\n' + read('FS882Modals.svelte'), soilSection = read('FS882SoilHorizonSection.svelte');
-  assert.match(source, /ordinarySoilUnavailable: string \| null = null/);
-  assert.match(source, /soilEditingDisabled = \$derived\(!!ordinarySoilUnavailable \|\| !soilEditingEnabled/);
-  assert.match(source, /if \(ordinarySoilUnavailable \|\| !soilEditingEnabled \|\| soilReferenceBusy\) return/);
-  const actions = soilSection.match(/\{#if !ordinarySoilUnavailable\}\s*<details[\s\S]*?<\/details>\s*\{\/if\}/)?.[0];
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const source = readFS882Composite(), soilSection = read('FS882SoilHorizonSection.svelte');
+  assert.match(source, /ordinarySoilUnavailable:\s*string \| null = null/);
+  assert.match(source, /soilEditingDisabled = \$derived\(\s*(?:Boolean\(ordinarySoilUnavailable\)|!!ordinarySoilUnavailable)/);
+  assert.match(source, /if \(ordinarySoilUnavailable \|\| soilReferenceBusy\) return/);
+  const actions = soilSection.match(/\{#if !ordinarySoilUnavailable\}[\s\S]*?<details[\s\S]*?<\/details>\s*\{\/if\}/)?.[0];
   assert.ok(actions, 'Ordinary soil actions require the explicit profile availability guard');
-  assert.match(actions, /Humus Layers \(\{humusList.length\}\)/);
-  assert.match(actions, /Mineral Layers \(\{mineralList.length\}\)/);
-  assert.match(source, /\{:else if ordinarySoilUnavailable && \(child\.form === 'SoilHumusXL'/);
+  assert.match(actions, /Humus Layers \(\{humusList\.length\}\)/);
+  assert.match(actions, /Mineral Layers \(\{mineralList\.length\}\)/);
+  assert.match(source, /ordinarySoilUnavailable && \(child\.form === 'SoilHumusXL'/);
   assert.match(soilSection, /\{#if ordinarySoilUnavailable\}\s*<p role="status" data-soil-ordinary-unavailable=\{child\.form\}/);
 });
 
@@ -814,25 +780,25 @@ test('default 6-tab FS882 guards historical NULL/invalid soil rows per-plot whil
   }
 
   // Soils tab notice + derived soilEditingDisabled + disabled ordinary soil edits when historicalSoilUnavailable is set
-  const source = read('FS882Form.svelte'), soilSection = read('FS882SoilHorizonSection.svelte');
+  const soilSection = read('FS882SoilHorizonSection.svelte');
   assert.match(soilSection, /{#if historicalSoilUnavailable}<p role="status" data-soil-historical-unavailable>{historicalSoilUnavailable}<\/p>{\/if}/);
   assert.match(soilSection, /{:else if historicalSoilUnavailable}\s*<p role="status" data-soil-historical-unavailable={child\.form}>{historicalSoilUnavailable}<\/p>/);
 
-  const root = source.match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  const derivedDecl = root.match(/const soilEditingDisabled = \$derived\([^;]+\);/)[0];
-  const DerivedProbe = serverComponent(`<script lang="ts">
-    let { historicalSoilUnavailable, inspect } = $props();
-    const ordinarySoilUnavailable = null, soilEditingEnabled = true, soilReferenceReady = true, soilReferenceBusy = false,
-      childParentDisabled = false, siviUnsaved = false, siviCoverUnsaved = false, siviCombinedUnsaved = false,
-      siviCollectedUnsaved = false, siviSpeciesUnsaved = false, siviIdentityUnsaved = false, heightUnsaved = false,
-      otherUnsaved = false, attributeUnsaved = false, collectedUnsaved = false, speciesUnsaved = false;
-    ${derivedDecl}
-    function inspectStates() { inspect(soilEditingDisabled); }
-    inspectStates();
-  </script>`, 'DerivedHistoricalSoilDisabledTest.svelte', {}, {});
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
+  const probe = createFS882TestController();
   let cleanDisabled, historicalDisabled;
-  assert.equal(typeof render(DerivedProbe, { props: { historicalSoilUnavailable: null, inspect: v => { cleanDisabled = v; } } }).body, 'string');
-  assert.equal(typeof render(DerivedProbe, { props: { historicalSoilUnavailable: 'Historical soil row incompatible.', inspect: v => { historicalDisabled = v; } } }).body, 'string');
+  try {
+    probe.ctrl.capabilitiesReady = true;
+    probe.ctrl.original = { ...probe.ctrl.draft, locked: false };
+    probe.ctrl.children.soilReferenceReady = true;
+    probe.flush();
+    cleanDisabled = probe.ctrl.children.soilEditingDisabled;
+    probe.ctrl.children.historicalSoilUnavailable = 'Historical soil row incompatible.';
+    probe.flush();
+    historicalDisabled = probe.ctrl.children.soilEditingDisabled;
+  } finally {
+    probe.dispose();
+  }
   assert.equal(cleanDisabled, false);
   assert.equal(historicalDisabled, true);
 

@@ -148,13 +148,23 @@ test('Actual scoped source controls render once with labels', () => {
   }
 });
 
-test('Shared lifecycle owns validation and VegNotes Tab targets source Terrain without writes', () => {
+test('Shared lifecycle owns validation and VegNotes Tab targets source Terrain without writes', async () => {
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
   const source = readFileSync(srcPath('OrdinaryFields.svelte'), 'utf8');
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
   assert.match(source, /rememberOrdinarySession\(draft, original, staged\)/);
   assert.match(source, /onvalidation\(`ordinary-\$\{scope\}`, message\)/);
   assert.match(source, /field\.key === 'vegNotes' && event\.key === 'Tab'/);
-  assert.match(form, /activeTab = 'soils';\s*await tick\(\)/);
+  const h = createFS882TestController();
+  const prevDoc = globalThis.document;
+  globalThis.document = { querySelector: () => null };
+  try {
+    assert.equal(h.ctrl.activeTab, 'site');
+    await h.ctrl.vegetationNotesTab();
+    assert.equal(h.ctrl.activeTab, 'soils');
+  } finally {
+    globalThis.document = prevDoc;
+    h.dispose();
+  }
   assert.doesNotMatch(source, /PlotService|UpdatePlot|CreatePlot|Math\.fround|max="100"|min="0"|maxlength/);
 });
 
@@ -218,7 +228,7 @@ test('Two source flags retain nullable identity and labelled CheckBox ownership'
   const source = readFileSync(srcPath('OrdinaryFields.svelte'), 'utf8');
   assert.match(source, /indeterminate=\{draft\[field.key\] === null\}/);
   assert.match(source, /draft\[field.key\] = event\.currentTarget\.checked/);
-  assert.match(source, /draft\[field.key\] = null; onchange\(\)/);
+  assert.match(source, /draft\[field.key\] = null;\s*onchange\(\)/);
   const Flags = serverComponent(source, 'OrdinaryFields.svelte', { './ordinaryEditor': editor });
   const fixture = `<script>import Flags from './OrdinaryFields.svelte';let {draft, field, original=null}=$props();</script>
     <Flags bind:draft {original} scope={field.scope} capabilities={{[field.key]:true}} disabled={false} onchange={()=>{}} onvalidation={()=>{}}>
@@ -273,12 +283,19 @@ test('Soil drainage requires exact membership and availability, never acknowledg
 });
 
 test('Actual drainage component owns only its strict source slot and retains explicit opt-out', () => {
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
   const source = readFileSync(srcPath('DrainageFields.svelte'), 'utf8');
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
   assert.equal(compile(source, { filename: 'DrainageFields.svelte', generate: 'client' }).warnings.length, 0);
-  assert.match(source, /requests\.track\(PlotEntryService\.ListParentCodeChoices\('SoilDrainage'\)\)/);
+  assert.match(source, /trackIfCancellable\(requests,\s*PlotEntryService\.ListParentCodeChoices\('SoilDrainage'\)\)/);
   assert.match(source, /onDestroy[\s\S]*lookup\.dispose\(\)[\s\S]*onvalidation\('soilDrainage'/);
-  assert.match(form, /parentCodeBusy \|\| drainageBusy/);
+  const h = createFS882TestController();
+  try {
+    h.ctrl.drainageBusy = true;
+    h.flush();
+    assert.equal(h.ctrl.headerWorkflowBusy, true);
+  } finally {
+    h.dispose();
+  }
   assert.doesNotMatch(source, /type="checkbox"|rememberAcknowledgement|maxlength=/);
   const Component = serverComponent(source, 'DrainageFields.svelte', {
     './drainageEditor': drainage, './qualityEditor': quality,

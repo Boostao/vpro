@@ -5,7 +5,7 @@ import { equalCell, metadataCellText, parseMetadataCell, type MetadataDraftCell 
 import { pictureMetadataFromWire, type PictureOwner, type PictureReview } from './pictureRead';
 
 export const pictureMetadataColumns = ['PicDir', 'PicName', 'PicComment'] as const;
-export type PictureMetadataColumn = typeof pictureMetadataColumns[number];
+export type PictureMetadataColumn = (typeof pictureMetadataColumns)[number];
 export interface PictureMetadataDraft extends PictureOwner {
   columns: PictureReview['records']['columns'];
   original: PictureReview['records']['rows'][number];
@@ -13,53 +13,107 @@ export interface PictureMetadataDraft extends PictureOwner {
   cells: Partial<Record<PictureMetadataColumn, MetadataDraftCell>>;
 }
 
-const policies = pictureMetadataColumns.map(name => {
-  const matches = sourcePolicy.fields.filter(field => field.name === name);
+const policies = pictureMetadataColumns.map((name) => {
+  const matches = sourcePolicy.fields.filter((field) => field.name === name);
   const field = matches[0];
-  if (matches.length !== 1 || !field || field.daoType !== 10 || field.size !== 255 ||
-      field.required || field.validationRule !== '' || field.validationText !== '') {
-    throw new Error(`The packaged ${name} picture source policy is incomplete or differs from the reviewed definition.`);
+  if (
+    matches.length !== 1 ||
+    !field ||
+    field.daoType !== 10 ||
+    field.size !== 255 ||
+    field.required ||
+    field.validationRule !== '' ||
+    field.validationText !== ''
+  ) {
+    throw new Error(
+      `The packaged ${name} picture source policy is incomplete or differs from the reviewed definition.`
+    );
   }
-  const editor: ProjectMetadataEditorField = { name, kind: 'text', maximum: field.size, collection: false,
-    referenceList: '', referenceColumn: '', limitToList: false, options: null };
+  const editor: ProjectMetadataEditorField = {
+    name,
+    kind: 'text',
+    maximum: field.size,
+    collection: false,
+    referenceList: '',
+    referenceColumn: '',
+    limitToList: false,
+    options: null,
+  };
   const index = name === 'PicDir' ? 1 : name === 'PicName' ? 2 : 4;
   return { name, allowEmpty: field.allowZeroLength, editor, index };
 });
 
 function policy(column: PictureMetadataColumn) {
-  const result = policies.find(field => field.name === column);
-  if (!result) throw new Error('Only existing picture Directory, File Name, and Comment are editable; identity and plot parent are not implicit changes.');
+  const result = policies.find((field) => field.name === column);
+  if (!result)
+    throw new Error(
+      'Only existing picture Directory, File Name, and Comment are editable; identity and plot parent are not implicit changes.'
+    );
   return result;
 }
 
-export function beginPictureMetadataDraft(review: PictureReview, rowId: string, owner: PictureOwner): PictureMetadataDraft {
+export function beginPictureMetadataDraft(
+  review: PictureReview,
+  rowId: string,
+  owner: PictureOwner
+): PictureMetadataDraft {
   if (!owner.contextId || !owner.project || !owner.plotNumber) {
     throw new Error('Picture metadata editing requires an explicit active context, project and literal parent.');
   }
-  const received = pictureMetadataFromWire({ ...review, records: {
-    columns: review.records.columns.map(column => ({ ...column })),
-    rows: review.records.rows.map(row => ({ rowId: row.rowId, cells: row.cells.map(cell => ({ ...cell })) })),
-  } }, owner);
-  const matches = received.records.rows.filter(row => row.rowId === rowId);
+  const received = pictureMetadataFromWire(
+    {
+      ...review,
+      records: {
+        columns: review.records.columns.map((column) => ({ ...column })),
+        rows: review.records.rows.map((row) => ({ rowId: row.rowId, cells: row.cells.map((cell) => ({ ...cell })) })),
+      },
+    },
+    owner
+  );
+  const matches = received.records.rows.filter((row) => row.rowId === rowId);
   const original = matches[0];
   const identity = original?.cells[0];
   const id = identity?.storage === 'integer' && identity.integer !== null ? Number(identity.integer) : NaN;
-  if (matches.length !== 1 || !original || !identity || !Number.isInteger(id) || id < -2147483648 || id > 2147483647 ||
-      String(id) !== identity?.integer || received.records.rows.filter(row => equalCell(row.cells[0], identity)).length !== 1) {
-    throw new Error('Select one reviewed physical picture row with an unambiguous signed Long ID; no first row or identity is inferred.');
+  if (
+    matches.length !== 1 ||
+    !original ||
+    !identity ||
+    !Number.isInteger(id) ||
+    id < -2147483648 ||
+    id > 2147483647 ||
+    String(id) !== identity?.integer ||
+    received.records.rows.filter((row) => equalCell(row.cells[0], identity)).length !== 1
+  ) {
+    throw new Error(
+      'Select one reviewed physical picture row with an unambiguous signed Long ID; no first row or identity is inferred.'
+    );
   }
   return { ...owner, columns: received.records.columns, original, id, cells: {} };
 }
 
-export function pictureMetadataFieldValue(draft: PictureMetadataDraft, column: PictureMetadataColumn): MetadataDraftCell {
+export function pictureMetadataFieldValue(
+  draft: PictureMetadataDraft,
+  column: PictureMetadataColumn
+): MetadataDraftCell {
   const field = policy(column);
   const original = draft.original.cells?.[field.index];
   if (!original) throw new Error(`Original ${column} picture cell is missing; reload before editing.`);
-  return draft.cells[column] ?? { raw: metadataCellText(original), nullValue: original.storage === 'null',
-    value: original, error: null };
+  return (
+    draft.cells[column] ?? {
+      raw: metadataCellText(original),
+      nullValue: original.storage === 'null',
+      value: original,
+      error: null,
+    }
+  );
 }
 
-function parsed(draft: PictureMetadataDraft, column: PictureMetadataColumn, raw: string, nullValue: boolean): MetadataDraftCell {
+function parsed(
+  draft: PictureMetadataDraft,
+  column: PictureMetadataColumn,
+  raw: string,
+  nullValue: boolean
+): MetadataDraftCell {
   if (typeof raw !== 'string' || typeof nullValue !== 'boolean') {
     throw new Error('Picture metadata draft input requires exact text and an explicit NULL choice.');
   }
@@ -87,7 +141,12 @@ function parsed(draft: PictureMetadataDraft, column: PictureMetadataColumn, raw:
   return candidate;
 }
 
-export function stagePictureMetadata(draft: PictureMetadataDraft, column: PictureMetadataColumn, raw: string, nullValue: boolean): PictureMetadataDraft {
+export function stagePictureMetadata(
+  draft: PictureMetadataDraft,
+  column: PictureMetadataColumn,
+  raw: string,
+  nullValue: boolean
+): PictureMetadataDraft {
   const cell = parsed(draft, column, raw, nullValue);
   return { ...draft, cells: { ...draft.cells, [column]: cell } };
 }
@@ -115,14 +174,34 @@ export function pictureMetadataChanges(draft: PictureMetadataDraft): ProjectMeta
 }
 
 export function pictureMetadataRequest(draft: PictureMetadataDraft, requestId: string, owner: PictureOwner) {
-  if (draft.contextId !== owner.contextId || draft.project !== owner.project || draft.plotNumber !== owner.plotNumber ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(requestId)) {
-    throw new Error('Picture Save requires the exact active owner and one stable request identity; no context or retry was inferred.');
+  if (
+    draft.contextId !== owner.contextId ||
+    draft.project !== owner.project ||
+    draft.plotNumber !== owner.plotNumber ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(requestId)
+  ) {
+    throw new Error(
+      'Picture Save requires the exact active owner and one stable request identity; no context or retry was inferred.'
+    );
   }
-  const original = beginPictureMetadataDraft({ ...owner, records: {
-    columns: draft.columns, rows: [draft.original],
-  } }, draft.original.rowId, owner);
-  if (original.id !== draft.id) throw new Error('Picture application identity changed inside the draft; reload explicitly.');
-  return { requestId, id: original.id, columns: original.columns, original: original.original,
-    changes: pictureMetadataChanges(draft) };
+  const original = beginPictureMetadataDraft(
+    {
+      ...owner,
+      records: {
+        columns: draft.columns,
+        rows: [draft.original],
+      },
+    },
+    draft.original.rowId,
+    owner
+  );
+  if (original.id !== draft.id)
+    throw new Error('Picture application identity changed inside the draft; reload explicitly.');
+  return {
+    requestId,
+    id: original.id,
+    columns: original.columns,
+    original: original.original,
+    changes: pictureMetadataChanges(draft),
+  };
 }

@@ -2,7 +2,13 @@ import { validateSIVIParentOriginal, type SIVIParentOriginal } from './siviParen
 import { SIVIParentSession } from './siviParentSession';
 import { sourceParentOriginalFromWire, type SIVIParentActionDisplay, type SIVIParentOwner } from './siviMetadataWire';
 
-export { completeMetadataCellFromWire, siviMetadataTableFromWire, sourceParentOriginalFromWire, type SIVIParentActionDisplay, type SIVIParentOwner } from './siviMetadataWire';
+export {
+  completeMetadataCellFromWire,
+  siviMetadataTableFromWire,
+  sourceParentOriginalFromWire,
+  type SIVIParentActionDisplay,
+  type SIVIParentOwner,
+} from './siviMetadataWire';
 
 export function siviParentOriginalFromWire(wire: unknown, owner: SIVIParentOwner): SIVIParentOriginal {
   return sourceParentOriginalFromWire(wire, owner, validateSIVIParentOriginal);
@@ -15,8 +21,8 @@ export function siviParentSessionFromWire(editorId: string, wire: unknown, owner
 // Display initialization never stages an option or repairs historical storage.
 export function siviParentActionDisplay(original: SIVIParentOriginal): SIVIParentActionDisplay[] {
   const review = validateSIVIParentOriginal(original);
-  return ['PlotType', 'SpeciesListComplete'].map(name => {
-    const source = review.Bindings.find(binding => binding.Binding === name);
+  return ['PlotType', 'SpeciesListComplete'].map((name) => {
+    const source = review.Bindings.find((binding) => binding.Binding === name);
     if (!source) throw new Error('SIVI parent action source was not returned.');
     const expected = review.Rows[0][source.Table === review.EnvTable ? 'Env' : 'Admin'].cells[source.Column];
     let option: number | null = null;
@@ -29,9 +35,14 @@ export function siviParentActionDisplay(original: SIVIParentOriginal): SIVIParen
         if (expected.integer === '-1') option = 1;
         else if (expected.integer === '0') option = 2;
       }
-      if (option === null) diagnostic = `${name} original storage has no verified literal display mapping; retain it unchanged or select an explicit supported action.`;
+      if (option === null)
+        diagnostic = `${name} original storage has no verified literal display mapping; retain it unchanged or select an explicit supported action.`;
     }
-    return { controlId: `form:frmSIVIsite/${name === 'PlotType' ? 'optPlotType' : 'optSpeciesListComplete'}`,
-      expected: structuredClone(expected), option, diagnostic };
+    return {
+      controlId: `form:frmSIVIsite/${name === 'PlotType' ? 'optPlotType' : 'optSpeciesListComplete'}`,
+      expected: structuredClone(expected),
+      option,
+      diagnostic,
+    };
   });
 }

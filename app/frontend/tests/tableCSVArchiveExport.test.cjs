@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const { compile } = require('svelte/compiler');
-const { loadTypeScript, serverComponent, srcPath, resolveDependency } = require('./svelteTestHelpers.cjs');
+const { componentFunctions, loadTypeScript, serverComponent, srcPath, resolveDependency } = require('./svelteTestHelpers.cjs');
 const quality = loadTypeScript('qualityEditor.ts', { './becEditor': loadTypeScript('becEditor.ts') });
 const cells = loadTypeScript('projectMetadataRestore.ts', { './qualityEditor': quality, './projectMetadataEditor': {} });
 const csv = loadTypeScript('projectTableCSV.ts', { './qualityEditor': quality, './projectMetadataRestore': cells },
@@ -208,14 +208,17 @@ test('optional native picker cancellation/errors preserve destination and hold b
 });
 
 const componentSource = readFileSync(srcPath('ProjectTableCSVReview.svelte'), 'utf8');
-function componentHarness({ enabled = true, service = {}, mod = moduleFor(), csvModule = csv, ownerScope = owner } = {}) {
-  const script = componentSource.match(/<script lang="ts">([\s\S]*?)<\/script>/)[1]
-    .replace('const archiveEnabled = true;', `const archiveEnabled = ${enabled};`);
+function componentHarness({ service = {}, mod = moduleFor(), csvModule = csv, ownerScope = owner } = {}) {
+  const script = componentSource.match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
   const destroy = [], changes = [], reads = { tracked: 0, cancelled: 0 };
   const dependencies = {
     svelte: { onDestroy: callback => destroy.push(callback) },
     '../bindings/github.com/boostao/vpro/app': { ImportExportService: service },
-    './readRequests': { ReadRequests: class { track(value) { reads.tracked++; return value; } cancelAll() { reads.cancelled++; } } },
+    './readRequests': {
+      ReadRequests: class { track(value) { reads.tracked++; return value; } cancelAll() { reads.cancelled++; } },
+      formatError: e => (e instanceof Error ? e.message : String(e)),
+    },
+    './notificationService.svelte': { notifications: { push() {}, info() {}, success() {}, warning() {}, error() {} } },
     './projectTableCSV': csvModule, './longEnvironmentReport': { reportCellText: String }, './tableCSVArchiveExport': mod,
   };
   const module = { exports: {} }, state = value => value; state.snapshot = structuredClone;
@@ -319,65 +322,74 @@ test('component exact approved table, explicit export, picker and persistent ack
   await remount.publish(); assert.equal(writes, 1); remount.destroy();
 });
 
-test('old default-off component remains read-only and uses existing cancellation/validation', async () => {
-  let writes = 0;
-  const harness = componentHarness({ enabled: false, service: {
-    GetProjectTableCSVReview: async () => review().review,
-    ExportReviewedTableCSVArchive: async () => { writes++; },
-  } });
-  await harness.show(); assert.equal(harness.view().review.manifest.table, table);
-  await harness.chooseDestination(); await harness.publish();
-  assert.equal(writes, 0); assert.equal(harness.view().publication, null); assert.equal(harness.view().approval, null);
-  harness.destroy(); assert.equal(harness.changes.at(-1), false);
-});
-
 test('actual App close handlers and navigation transition refuse pending/unacknowledged archive and allow after ack', async () => {
-  const app = readFileSync(srcPath('App.svelte'), 'utf8');
   const close = loadTypeScript('closeLifecycle.ts');
   const session = new archive.TableCSVArchivePublicationSession(owner, storage()), gate = deferred(), started = deferred();
-  const context = { editorBusy: false, editorInitializing: false, archivePublicationBusy: false, vegetationPublicationBusy: false, lifeformPublicationBusy: false, summaryPublicationBusy: false,
-    busy: false, transitionWorking: false, pendingTransition: null,
-    closeWorking: false, closeRequest: '', view: 'table-csv', editor: null, error: '', transitionError: '',
-    closeError: '', $projectState: { contextId: owner.contextId }, calls: { cancelled: 0, confirmed: 0, navigated: 0 },
-    document: { activeElement: null }, HTMLElement: class {}, tick: async () => {}, closeDisposition: close.closeDisposition };
-  context.LifecycleService = { GetPendingCloseRequest: async () => 'owned-close',
-    CancelClose: async () => { context.calls.cancelled++; }, ConfirmClose: async () => { context.calls.confirmed++; } };
-  const nativeClose = app.slice(app.indexOf('  async function handleCloseRequest'), app.indexOf('  async function requestTransition'));
-  const transition = app.slice(app.indexOf('  async function requestTransition'), app.indexOf('  async function respondToTransition'));
-  vm.createContext(context);
-  vm.runInContext(ts.transpileModule(nativeClose + transition, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
+  const calls = { cancelled: 0, confirmed: 0, navigated: 0 };
+  const context = componentFunctions(
+    'App.svelte',
+    ['handleCloseRequest', 'respondToClose', 'requestTransition'],
+    {
+      editorBusy: false,
+      editorInitializing: false,
+      archivePublicationBusy: false,
+      vegetationPublicationBusy: false,
+      lifeformPublicationBusy: false,
+      summaryPublicationBusy: false,
+      busy: false,
+      transitionWorking: false,
+      pendingTransition: null,
+      closeWorking: false,
+      closeRequest: '',
+      view: 'table-csv',
+      editor: null,
+      error: '',
+      transitionError: '',
+      closeError: '',
+      $projectState: { contextId: owner.contextId },
+      document: { activeElement: null },
+      HTMLElement: class {},
+      tick: async () => {},
+      closeDisposition: close.closeDisposition,
+      LifecycleService: {
+        GetPendingCloseRequest: async () => 'owned-close',
+        CancelClose: async () => { calls.cancelled++; },
+        ConfirmClose: async () => { calls.confirmed++; },
+      },
+    }
+  );
   session.subscribe(() => { const view = session.view(); context.archivePublicationBusy = view.busy || view.blocked; });
   const pending = session.publish(review(), table, destination, () => { started.resolve(); return gate.promise; });
   await started.promise;
-  await context.handleCloseRequest('owned-close');
-  await context.requestTransition(async () => { context.calls.navigated++; });
-  assert.equal(context.calls.cancelled, 1); assert.equal(context.calls.confirmed, 0); assert.equal(context.calls.navigated, 0);
+  await context.actions.handleCloseRequest('owned-close');
+  await context.actions.requestTransition(async () => { calls.navigated++; });
+  assert.equal(calls.cancelled, 1); assert.equal(calls.confirmed, 0); assert.equal(calls.navigated, 0);
   context.closeRequest = 'owned-close';
-  await context.respondToClose('discard');
-  assert.equal(context.calls.confirmed, 0); context.closeRequest = '';
+  await context.actions.respondToClose('discard');
+  assert.equal(calls.confirmed, 0); context.closeRequest = '';
   gate.resolve(outcome()); await pending;
-  await context.handleCloseRequest('owned-close');
-  await context.requestTransition(async () => { context.calls.navigated++; });
-  assert.equal(context.calls.cancelled, 2); assert.equal(context.calls.navigated, 0);
+  await context.actions.handleCloseRequest('owned-close');
+  await context.actions.requestTransition(async () => { calls.navigated++; });
+  assert.equal(calls.cancelled, 2); assert.equal(calls.navigated, 0);
   session.acknowledge();
-  await context.handleCloseRequest('owned-close');
-  await context.requestTransition(async () => { context.calls.navigated++; });
-  assert.equal(context.calls.confirmed, 1); assert.equal(context.calls.navigated, 1);
+  await context.actions.handleCloseRequest('owned-close');
+  await context.actions.requestTransition(async () => { calls.navigated++; });
+  assert.equal(calls.confirmed, 1); assert.equal(calls.navigated, 1);
   context.vegetationPublicationBusy = true;
-  await context.handleCloseRequest('owned-close');
-  await context.requestTransition(async () => { context.calls.navigated++; });
-  assert.equal(context.calls.cancelled, 3); assert.equal(context.calls.confirmed, 1); assert.equal(context.calls.navigated, 1);
+  await context.actions.handleCloseRequest('owned-close');
+  await context.actions.requestTransition(async () => { calls.navigated++; });
+  assert.equal(calls.cancelled, 3); assert.equal(calls.confirmed, 1); assert.equal(calls.navigated, 1);
   context.closeRequest = 'owned-close';
-  await context.respondToClose('discard');
-  assert.equal(context.calls.confirmed, 1); context.closeRequest = '';
+  await context.actions.respondToClose('discard');
+  assert.equal(calls.confirmed, 1); context.closeRequest = '';
   context.vegetationPublicationBusy = false;
-  await context.handleCloseRequest('owned-close');
-  await context.requestTransition(async () => { context.calls.navigated++; });
-  assert.equal(context.calls.confirmed, 2); assert.equal(context.calls.navigated, 2);
+  await context.actions.handleCloseRequest('owned-close');
+  await context.actions.requestTransition(async () => { calls.navigated++; });
+  assert.equal(calls.confirmed, 2); assert.equal(calls.navigated, 2);
 });
 
 test('UI literal opt-in, labels, unknown-outcome locks above fields and notifications routing remain integrated', async () => {
-  const app = readFileSync(srcPath('App.svelte'), 'utf8');
+  const deferredViews = readFileSync(srcPath('ShellDeferredViews.svelte'), 'utf8');
   assert.equal(compile(componentSource, { filename: 'ProjectTableCSVReview.svelte', generate: 'client' }).warnings.length, 0);
   assert.match(componentSource, /busy \|\| !!publication\?\.busy \|\| !!publication\?\.blocked/);
   assert.ok(componentSource.indexOf('data-table-csv-archive-unknown-receipt') < componentSource.indexOf('id="table-csv-archive-destination"'));
@@ -397,12 +409,8 @@ test('UI literal opt-in, labels, unknown-outcome locks above fields and notifica
   assert.doesNotMatch(componentSource, /\.trim\(|toLowerCase\(|toUpperCase\(/);
   assert.match(componentSource, /not independently verified by browser/);
   assert.match(componentSource, /not independently computed by browser/);
-  assert.match(app, /App\.svelte|view === 'table-csv' && \$projectState/);
-  assert.match(app, /ProjectTableCSVReview[\s\S]*?onBusyChange=\{\(value\) => \{ localEditorBusy = value; \}\}/);
-  assert.match(app, /function navigate[\s\S]*?requestTransition/);
-  assert.match(app, /closeDisposition\(state, busy \|\| editorBusy \|\| transitionWorking/);
-  assert.match(app, /archivePublicationBusy = publication\.busy \|\| publication\.blocked/);
-  assert.match(app, /publication\.blocked && view === 'home'\) view = 'table-csv'/);
+  assert.match(deferredViews, /view === 'table-csv' && \$projectState/);
+  assert.match(deferredViews, /ProjectTableCSVReview[\s\S]*?onBusyChange=\{\(value\) => \{\s*localEditorBusy = value;\s*\}\}/);
   const { render } = await import('svelte/server');
   const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
     'svelte/store': require('svelte/store'),

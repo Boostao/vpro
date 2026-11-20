@@ -71,14 +71,22 @@ test('Bedrock review is draft-bound, exact-value-bound and retained across remou
 });
 
 test('Bedrock defaults on with opt-out and wires source slots, hidden validation and explicit Retry', () => {
-  const source = read('GeologyCodeFields.svelte'), form = read('FS882Form.svelte') + '\n' + read('FS882SoilTab.svelte') + '\n' + read('fs882FormLoadSave.ts'), soilSection = read('FS882SoilHorizonSection.svelte');
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
+  const source = read('GeologyCodeFields.svelte'), soilTab = read('FS882SoilTab.svelte'), loadSave = read('fs882FormLoadSave.ts'), soilSection = read('FS882SoilHorizonSection.svelte');
   assert.equal(compile(source, { filename: 'GeologyCodeFields.svelte', generate: 'client' }).warnings.length, 0);
   assert.match(source, /onDestroy[\s\S]*onvalidation\('geologyCodes'/);
   assert.match(source, /Retry bedrock choices/);
-  assert.match(form, /soilCodeBusy \|\| geologyCodeBusy/);
-  assert.match(form, /headerValidation\.soilCodes \|\| message === headerValidation\.geologyCodes/);
-  assert.match(form, /<FS882SoilHorizonSection/);
-  assert.match(soilSection, /editors=\{\[\.\.\.\(geologyEditor \? \[geologyEditor\] : \[\]\), \.\.\.\(parentEditor \? \[parentEditor\] : \[\]\), \.\.\.\(ordinaryEditor \? \[ordinaryEditor\] : \[\]\), \.\.\.\(drainageEditor \? \[drainageEditor\] : \[\]\)\]\}/);
+  const h = createFS882TestController();
+  try {
+    h.ctrl.geologyCodeBusy = true;
+    h.flush();
+    assert.equal(h.ctrl.headerWorkflowBusy, true);
+  } finally {
+    h.dispose();
+  }
+  assert.match(loadSave, /headerValidation\.soilCodes \|\| message === headerValidation\.geologyCodes/);
+  assert.match(soilTab, /<FS882SoilHorizonSection/);
+  assert.match(soilSection, /editors=\{\[\s*\.\.\.\(geologyEditor \? \[geologyEditor\] : \[\]\),\s*\.\.\.\(parentEditor \? \[parentEditor\] : \[\]\),\s*\.\.\.\(ordinaryEditor \? \[ordinaryEditor\] : \[\]\),\s*\.\.\.\(drainageEditor \? \[drainageEditor\] : \[\]\)/);
 });
 
 test('Actual Bedrock component renders only its three source slots with default enablement and opt-out', () => {

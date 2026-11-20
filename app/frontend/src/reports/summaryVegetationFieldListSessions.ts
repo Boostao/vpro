@@ -1,47 +1,95 @@
-import { fieldListOwner, SummaryVegetationFieldListSession, type FieldListOwner, type FieldListPort } from './summaryVegetationFieldList';
+import {
+  fieldListOwner,
+  SummaryVegetationFieldListSession,
+  type FieldListOwner,
+  type FieldListPort,
+} from './summaryVegetationFieldList';
 
-export const summaryVegetationFieldListEnabled = true;
-export interface FieldListActivity { busy: boolean; blocked: boolean; owner: FieldListOwner | null }
-export function fieldListRegistry(createPort: (owner: FieldListOwner) => FieldListPort,
-  newRequestId?: () => string) {
-  const enabled = true;
-  const sessions = new Map<string, { owner: FieldListOwner; session: SummaryVegetationFieldListSession; unsubscribe: () => void }>();
+const ALWAYS_ON = Boolean(1);
+export const summaryVegetationFieldListEnabled = ALWAYS_ON;
+export interface FieldListActivity {
+  busy: boolean;
+  blocked: boolean;
+  owner: FieldListOwner | null;
+}
+export function fieldListRegistry(createPort: (owner: FieldListOwner) => FieldListPort, newRequestId?: () => string) {
+  const enabled = ALWAYS_ON;
+  const sessions = new Map<
+    string,
+    { owner: FieldListOwner; session: SummaryVegetationFieldListSession; unsubscribe: () => void }
+  >();
   const listeners = new Set<(activity: FieldListActivity) => void>();
   const key = (owner: FieldListOwner) => JSON.stringify(fieldListOwner(owner));
   const activity = (): FieldListActivity => {
-    let busy = false, blocked = false, owner: FieldListOwner | null = null;
+    let busy = false,
+      blocked = false,
+      owner: FieldListOwner | null = null;
     for (const entry of sessions.values()) {
       const state = entry.session.closeState();
-      busy ||= state.busy; blocked ||= state.blocked || state.unsaved;
+      busy ||= state.busy;
+      blocked ||= state.blocked || state.unsaved;
       if (!owner && (state.busy || state.blocked || state.unsaved)) owner = { ...entry.owner };
     }
     return { busy, blocked, owner };
   };
-  const changed = () => { for (const listener of listeners) listener(activity()); };
+  const changed = () => {
+    for (const listener of listeners) listener(activity());
+  };
+  ((globalThis as typeof globalThis & { __vproContextDisposers?: Set<(id: string) => void> }).__vproContextDisposers ??=
+    new Set()).add((id) => {
+    let removed = 0;
+    for (const [k, v] of [...sessions.entries()]) {
+      if (v.owner.contextId === id) {
+        sessions.delete(k);
+        v.session.dispose();
+        v.unsubscribe();
+        removed++;
+      }
+    }
+    if (removed > 0) changed();
+  });
   return {
-    enabled, activity,
+    enabled,
+    activity,
     subscribe(listener: (activity: FieldListActivity) => void) {
-      listeners.add(listener); listener(activity());
-      return () => { listeners.delete(listener); };
+      listeners.add(listener);
+      listener(activity());
+      return () => {
+        listeners.delete(listener);
+      };
     },
     session(ownerValue: FieldListOwner) {
-      const owner = fieldListOwner(ownerValue), id = key(owner), existing = sessions.get(id);
+      const owner = fieldListOwner(ownerValue),
+        id = key(owner),
+        existing = sessions.get(id);
       if (existing) return existing.session;
       if (sessions.size >= 16) throw new Error('Retained field-list context capacity reached; no state is evicted.');
       const session = new SummaryVegetationFieldListSession(owner, createPort(owner), enabled, newRequestId);
       let initialized = false;
-      const unsubscribe = session.subscribe(() => { if (initialized) changed(); });
-      sessions.set(id, { owner, session, unsubscribe }); initialized = true; changed();
+      const unsubscribe = session.subscribe(() => {
+        if (initialized) changed();
+      });
+      sessions.set(id, { owner, session, unsubscribe });
+      initialized = true;
+      changed();
       return session;
     },
-    detach(owner: FieldListOwner) { sessions.get(key(owner))?.session.detach(); },
+    detach(owner: FieldListOwner) {
+      sessions.get(key(owner))?.session.detach();
+    },
     release(owner: FieldListOwner) {
-      const id = key(owner), entry = sessions.get(id);
+      const id = key(owner),
+        entry = sessions.get(id);
       if (!entry) return true;
       const state = entry.session.closeState();
-      if (state.busy || state.blocked || state.unsaved) throw new Error('Resolve retained field-list lifecycle holds before release.');
+      if (state.busy || state.blocked || state.unsaved)
+        throw new Error('Resolve retained field-list lifecycle holds before release.');
       if (entry.session.view().receipts.length) return false;
-      entry.session.dispose(); entry.unsubscribe(); sessions.delete(id); changed(); return true;
+      entry.session.dispose();
+      entry.unsubscribe();
+      sessions.delete(id);
+      changed();
+      return true;
     },
   };
 }

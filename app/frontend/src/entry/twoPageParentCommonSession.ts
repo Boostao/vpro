@@ -27,33 +27,51 @@ const policies = {
 export type TwoPageParentCommonColumn = keyof typeof policies;
 export type TwoPageParentCommonInput = SIVIParentInput;
 export interface TwoPageParentCommonEdit {
-  contextId: string; table: string; rowId: string; column: TwoPageParentCommonColumn;
-  expected: ProjectMetadataCell; value: ProjectMetadataCell;
+  contextId: string;
+  table: string;
+  rowId: string;
+  column: TwoPageParentCommonColumn;
+  expected: ProjectMetadataCell;
+  value: ProjectMetadataCell;
 }
 export interface TwoPageParentCommonDraft extends TwoPageParentCommonEdit {
-  input: TwoPageParentCommonInput; error: string | null;
+  input: TwoPageParentCommonInput;
+  error: string | null;
 }
 export type TwoPageParentCommonDrafts = Partial<Record<TwoPageParentCommonColumn, TwoPageParentCommonDraft>>;
-export interface TwoPageParentCommonWrite { original: SIVIParentOriginal; edits: TwoPageParentCommonEdit[] }
+export interface TwoPageParentCommonWrite {
+  original: SIVIParentOriginal;
+  edits: TwoPageParentCommonEdit[];
+}
 export type TwoPageParentCommonSessionCache = Map<string, Map<TwoPageParentForm, TwoPageParentCommonSession>>;
 
 export function twoPageParentCommonFields(form: TwoPageParentForm) {
   const controls = twoPageParentSource(form).fields;
   const seen = new Set<TwoPageParentCommonColumn>();
-  const fields = controls.flatMap(control => {
+  const fields = controls.flatMap((control) => {
     if (!control.binding || !Object.hasOwn(policies, control.binding)) return [];
     const column = control.binding as TwoPageParentCommonColumn;
     if (seen.has(column)) return [];
     seen.add(column);
     const policy = policies[column];
-    const labelName = column === 'PlotType' ? 'Label261'
-      : column === 'SV_StandAgeEstMeas' ? form.endsWith('-CHARS') ? 'Label240' : 'Label291'
-      : column === 'SV_StandHeightEstMeas' ? 'Label541'
-      : column === 'SV_StandHeight' && !form.endsWith('-CHARS') ? 'Label292' : null;
-    const labelled = labelName ? controls.find(field => field.controlName === labelName && field.type === 'Label') : control;
+    const labelName =
+      column === 'PlotType'
+        ? 'Label261'
+        : column === 'SV_StandAgeEstMeas'
+          ? form.endsWith('-CHARS')
+            ? 'Label240'
+            : 'Label291'
+          : column === 'SV_StandHeightEstMeas'
+            ? 'Label541'
+            : column === 'SV_StandHeight' && !form.endsWith('-CHARS')
+              ? 'Label292'
+              : null;
+    const labelled = labelName
+      ? controls.find((field) => field.controlName === labelName && field.type === 'Label')
+      : control;
     const label = labelled && 'caption' in labelled ? labelled.caption : null;
     if (!label) throw new Error(`Two-page common field ${column} requires its source label.`);
-    const options = controls.flatMap(option => {
+    const options = controls.flatMap((option) => {
       const optionValue = 'OptionValue' in option.properties ? option.properties.OptionValue : undefined;
       if (!optionValue) return [];
       let parentId = option.parentId;
@@ -61,7 +79,7 @@ export function twoPageParentCommonFields(form: TwoPageParentForm) {
       while (parentId && parentId !== control.controlId) {
         if (visited.has(parentId)) throw new Error('Two-page source option ancestry is cyclic.');
         visited.add(parentId);
-        parentId = controls.find(field => field.controlId === parentId)?.parentId;
+        parentId = controls.find((field) => field.controlId === parentId)?.parentId;
       }
       if (parentId !== control.controlId) return [];
       const value = Number(optionValue.value);
@@ -69,14 +87,26 @@ export function twoPageParentCommonFields(form: TwoPageParentForm) {
       if ((value !== 1 && value !== 2) || !caption) throw new Error('Two-page Est/Meas option source changed.');
       return [{ value, label: caption }];
     });
-    if (policy.kind === 'option' && (options.length !== 2 || new Set(options.map(option => option.value)).size !== 2)) {
+    if (
+      policy.kind === 'option' &&
+      (options.length !== 2 || new Set(options.map((option) => option.value)).size !== 2)
+    ) {
       throw new Error('Two-page Est/Meas requires both exact source options.');
     }
-    return [{ column, label, policy, options, controlId: control.controlId,
-      sourceInstances: controls.filter(field => field.binding === column).map(field => field.controlId),
-      page: 'pageId' in control ? control.pageId : null }];
+    return [
+      {
+        column,
+        label,
+        policy,
+        options,
+        controlId: control.controlId,
+        sourceInstances: controls.filter((field) => field.binding === column).map((field) => field.controlId),
+        page: 'pageId' in control ? control.pageId : null,
+      },
+    ];
   });
-  if (fields.length !== (form.endsWith('-CHARS') ? 14 : 13)) throw new Error('Two-page common-field source scope changed.');
+  if (fields.length !== (form.endsWith('-CHARS') ? 14 : 13))
+    throw new Error('Two-page common-field source scope changed.');
   return fields;
 }
 
@@ -84,7 +114,7 @@ export function validateTwoPageParentCommonOriginal(original: SIVIParentOriginal
   const reviewed = validateTwoPageParentOriginal(original, form);
   for (const field of twoPageParentCommonFields(form)) {
     for (const id of field.sourceInstances) {
-      const binding = reviewed.Bindings.find(binding => binding.ControlID === id);
+      const binding = reviewed.Bindings.find((binding) => binding.ControlID === id);
       if (!binding || binding.Table !== `${reviewed.Project}_${field.policy.owner}`) {
         throw new Error('Two-page common-field physical ownership changed.');
       }
@@ -94,9 +124,15 @@ export function validateTwoPageParentCommonOriginal(original: SIVIParentOriginal
 }
 
 function target(original: SIVIParentOriginal, column: TwoPageParentCommonColumn) {
-  const field = twoPageParentCommonFields(original.Form as TwoPageParentForm).find(field => field.column === column);
-  const binding = original.Bindings.find(binding => binding.ControlID === field?.controlId);
-  if (!field || !binding || binding.Implicit || binding.Binding !== column || binding.Table !== `${original.Project}_${field.policy.owner}`) {
+  const field = twoPageParentCommonFields(original.Form as TwoPageParentForm).find((field) => field.column === column);
+  const binding = original.Bindings.find((binding) => binding.ControlID === field?.controlId);
+  if (
+    !field ||
+    !binding ||
+    binding.Implicit ||
+    binding.Binding !== column ||
+    binding.Table !== `${original.Project}_${field.policy.owner}`
+  ) {
     throw new Error('Two-page common-field source/physical ownership changed.');
   }
   const row = original.Rows[0][field.policy.owner];
@@ -106,24 +142,30 @@ export function twoPageParentCommonCell(original: SIVIParentOriginal, column: Tw
   return target(original, column).expected;
 }
 function twoPageParentCommonErrors(drafts: TwoPageParentCommonDrafts) {
-  return Object.values(drafts).flatMap(draft => draft?.error ? [draft.error] : []);
+  return Object.values(drafts).flatMap((draft) => (draft?.error ? [draft.error] : []));
 }
 export function twoPageParentCommonDirty(drafts: TwoPageParentCommonDrafts) {
-  return Object.values(drafts).some(draft => draft && (draft.error !== null || !equalCell(draft.expected, draft.value)));
+  return Object.values(drafts).some(
+    (draft) => draft && (draft.error !== null || !equalCell(draft.expected, draft.value))
+  );
 }
 const nullCell = (): ProjectMetadataCell => ({ storage: 'null', text: null, integer: null, real: null, blobHex: null });
 
-function stage(original: SIVIParentOriginal, drafts: TwoPageParentCommonDrafts,
-  column: TwoPageParentCommonColumn, input: TwoPageParentCommonInput): TwoPageParentCommonDrafts {
+function stage(
+  original: SIVIParentOriginal,
+  drafts: TwoPageParentCommonDrafts,
+  column: TwoPageParentCommonColumn,
+  input: TwoPageParentCommonInput
+): TwoPageParentCommonDrafts {
   const { field, binding, row, expected } = target(original, column);
-  let value = structuredClone(expected), error: string | null = null;
+  let value = structuredClone(expected),
+    error: string | null = null;
   if (column !== 'PlotType') {
     ({ value, error } = parseSIVIParentInput(column, expected, input));
     if (input.kind === 'text' && !error && expected.storage !== 'null' && input.raw === metadataCellText(expected)) {
       value = structuredClone(expected);
     }
-  }
-  else if (input.kind === 'clear') value = nullCell();
+  } else if (input.kind === 'clear') value = nullCell();
   else if (input.kind === 'text') {
     if (typeof input.raw !== 'string' || !wellFormedUTF16(input.raw) || input.raw.includes('\0')) {
       error = 'PlotType contains malformed Unicode or NUL; literal input was not repaired.';
@@ -131,23 +173,45 @@ function stage(original: SIVIParentOriginal, drafts: TwoPageParentCommonDrafts,
       error = ordinaryTextError({ label: field.label, kind: 'text', maximum: 10 }, input.raw, null);
       value = { ...nullCell(), storage: 'text', text: input.raw };
     }
-  } else if (input.kind !== 'original') error = 'Two-page PlotType requires literal bound text, not a SIVI action option.';
+  } else if (input.kind !== 'original')
+    error = 'Two-page PlotType requires literal bound text, not a SIVI action option.';
   if (!error && expected.storage === 'blob' && !equalCell(expected, value)) {
     error = `${column} historical BLOB replacement has no lossless source audit representation; retain original storage.`;
   }
-  return { ...drafts, [column]: { contextId: original.ContextID, table: binding.Table, rowId: row.rowId,
-    column, expected, value, input: structuredClone(input), error } };
+  return {
+    ...drafts,
+    [column]: {
+      contextId: original.ContextID,
+      table: binding.Table,
+      rowId: row.rowId,
+      column,
+      expected,
+      value,
+      input: structuredClone(input),
+      error,
+    },
+  };
 }
 
-export function twoPageParentCommonRequest(original: SIVIParentOriginal, drafts: TwoPageParentCommonDrafts,
-  form: TwoPageParentForm): TwoPageParentCommonWrite {
-  const reviewed = validateTwoPageParentCommonOriginal(original, form), edits: TwoPageParentCommonEdit[] = [];
+export function twoPageParentCommonRequest(
+  original: SIVIParentOriginal,
+  drafts: TwoPageParentCommonDrafts,
+  form: TwoPageParentForm
+): TwoPageParentCommonWrite {
+  const reviewed = validateTwoPageParentCommonOriginal(original, form),
+    edits: TwoPageParentCommonEdit[] = [];
   for (const [name, draft] of Object.entries(drafts)) {
-    const field = twoPageParentCommonFields(form).find(field => field.column === name);
-    if (!field || !draft || draft.column !== field.column) throw new Error('Two-page common writes exclude additional fields and actions.');
+    const field = twoPageParentCommonFields(form).find((field) => field.column === name);
+    if (!field || !draft || draft.column !== field.column)
+      throw new Error('Two-page common writes exclude additional fields and actions.');
     const verified = stage(reviewed, {}, field.column, draft.input)[field.column]!;
-    if (!equalCell(verified.expected, draft.expected) || !equalCell(verified.value, draft.value) ||
-        verified.contextId !== draft.contextId || verified.table !== draft.table || verified.rowId !== draft.rowId) {
+    if (
+      !equalCell(verified.expected, draft.expected) ||
+      !equalCell(verified.value, draft.value) ||
+      verified.contextId !== draft.contextId ||
+      verified.table !== draft.table ||
+      verified.rowId !== draft.rowId
+    ) {
       throw new Error('Two-page common draft belongs to another original/physical owner.');
     }
     if (verified.error) throw new Error(verified.error);
@@ -159,20 +223,28 @@ export function twoPageParentCommonRequest(original: SIVIParentOriginal, drafts:
   return { original: reviewed, edits };
 }
 
-export class TwoPageParentCommonSession extends SIVIParentScopedWriteSession<TwoPageParentCommonColumn,
-  TwoPageParentCommonWrite, TwoPageParentCommonDrafts, TwoPageParentCommonInput> {
-  constructor(owner: SIVIParentOwner, form: TwoPageParentForm, port: SIVIParentWritePort<TwoPageParentCommonWrite>,
-    notify: () => void) {
+export class TwoPageParentCommonSession extends SIVIParentScopedWriteSession<
+  TwoPageParentCommonColumn,
+  TwoPageParentCommonWrite,
+  TwoPageParentCommonDrafts,
+  TwoPageParentCommonInput
+> {
+  constructor(
+    owner: SIVIParentOwner,
+    form: TwoPageParentForm,
+    port: SIVIParentWritePort<TwoPageParentCommonWrite>,
+    notify: () => void
+  ) {
     const fields = twoPageParentCommonFields(form);
     super(owner, conservativePort(port, 'Two-page common fields'), notify, {
       label: 'Two-page common fields',
-      accepts: (value): value is TwoPageParentCommonColumn => fields.some(field => field.column === value),
+      accepts: (value): value is TwoPageParentCommonColumn => fields.some((field) => field.column === value),
       unavailable: 'Two-page common-field drafts require owned exact-variant originals.',
       drafts: { empty: () => ({}), stage, errors: twoPageParentCommonErrors, dirty: twoPageParentCommonDirty },
       request: (original, drafts) => twoPageParentCommonRequest(original, drafts, form),
-      count: request => request.edits.length,
-      decodeOriginal: (wire, active) => sourceParentOriginalFromWire(wire, active,
-        original => validateTwoPageParentCommonOriginal(original, form)),
+      count: (request) => request.edits.length,
+      decodeOriginal: (wire, active) =>
+        sourceParentOriginalFromWire(wire, active, (original) => validateTwoPageParentCommonOriginal(original, form)),
     });
   }
 }

@@ -189,12 +189,12 @@ test('unknown RPC/nullable malformed outcomes persist through remount and acknow
 });
 
 function routeHarness() {
-  const code = source();
-  const session = new workbook.VegetationWorkbookPublicationSession(owner);
+  const { componentFunctions } = require('./svelteTestHelpers.cjs');
+  const session = new workbook.VegetationWorkbookPublicationSession(owner, true);
   const reads = new (loadTypeScript('readRequests.ts', { '@wailsio/runtime': { Call: {}, CancelledRejectionError: class extends Error {} } }).ReadRequests)();
   let resolve, resolveExport, cancelled = 0, exportCancelled = 0, exports = 0;
-  const context = vm.createContext({
-    ...owner, workbookEnabled: true, lifeformEnabled: false, strataEnabled: false, codeEnabled: false, selectedFieldEnabled: false, noneUnitsEnabled: false, selectedUnitsEnabled: false,
+  const context = componentFunctions('LongVegetationReport.svelte', ['cancel', 'reviewWorkbook', 'publishWorkbook', 'acknowledgeWorkbook'], {
+    ...owner, selectedWorkbookScope: 'unlumped',
     generation: 0, busy: false, operationHeld: false, error: '', preview: null, workbookReview: null, settings: fixture().preview.settings,
     projectActive: false, projectWorkspace: null, projectView: null, sharedPreferenceBarrier: false,
     reads, preferences: null, statistics: null, preferenceBarrier: false, workbookSession: session, destination, reportBusy() {},
@@ -215,11 +215,6 @@ function routeHarness() {
   });
   session.subscribe(() => { if (session.view().blocked) context.workbookReview = null; });
   Object.defineProperty(context, 'workbookBarrier', { get: () => session.view().busy || session.view().blocked });
-  const cancel = code.slice(code.indexOf('  function cancel()'), code.indexOf('  async function options()'));
-  const actions = code.slice(code.indexOf('  async function reviewWorkbook()'), code.indexOf('  async function loadSavedTitle()'));
-  const ts = require('typescript');
-  vm.runInContext(ts.transpileModule(cancel + actions + '\nthis.actions = { cancel, reviewWorkbook, publishWorkbook, acknowledgeWorkbook };',
-    { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
   return { context, session, actions: context.actions, complete: value => resolve(value), cancelled: () => cancelled,
     completeExport: value => resolveExport(value), exportCancelled: () => exportCancelled, exports: () => exports };
 }
@@ -249,11 +244,6 @@ test('actual workbook review handler independently refuses mode4 without client 
     row.englishName=structuredClone(scalar); row.matchedName=structuredClone(scalar);
     input.sheets=[{unit:cell('U'),name:'U'}];
     harness.context.settings=input.preview.settings;
-    const refused=harness.actions.reviewWorkbook(); harness.complete(input); await refused;
-    assert.equal(harness.context.workbookReview,null);
-    assert.match(harness.context.error,/selected field display is disabled/);
-    assert.equal(harness.exports(),0);
-    harness.context.selectedFieldEnabled=true;
     const accepted=harness.actions.reviewWorkbook(); harness.complete(input); await accepted;
     assert.equal(harness.context.error,'');
     assert.equal(harness.context.workbookReview.preview.report.selectedFieldType,kind);
@@ -356,18 +346,12 @@ test('mounted LongVegetationReport publishWorkbook succeeds with live projectWor
     }
     const exportedRequests = [];
 
-    const context = vm.createContext({
+    const { componentFunctions } = require('./svelteTestHelpers.cjs');
+    const context = componentFunctions('LongVegetationReport.svelte', ['cancel', 'reviewWorkbook', 'publishWorkbook', 'acknowledgeWorkbook'], {
       ...scopedOwner,
       untrack: fn => fn(),
       effectiveHierarchy: 'None',
       hierarchy: 'None',
-      workbookEnabled: true,
-      lifeformEnabled: true,
-      strataEnabled: true,
-      codeEnabled: true,
-      selectedFieldEnabled: true,
-      noneUnitsEnabled: true,
-      selectedUnitsEnabled: true,
       selectedWorkbookScope: scope,
       generation: 0,
       busy: false,
@@ -385,27 +369,10 @@ test('mounted LongVegetationReport publishWorkbook succeeds with live projectWor
       preferenceView: prefs.view(),
       statistics: stats,
       statisticsView: stats.view(),
-      switches: null,
-      thresholds: null,
-      groups: null,
-      qualityNulls: null,
-      qualityMinima: null,
-      naming: null,
-      selectedField: null,
-      enforcement: null,
-      units: null,
-      selectedUnitSelection: null,
       publication: session.view(),
       workbookSession: session,
       destination,
       notifications,
-      notifiedPrefReceipts: 0,
-      lastPrefError: '',
-      notifiedStatReceipts: 0,
-      lastStatError: '',
-      lastPubNotificationKey: '',
-      lastProjError: '',
-      lastProjPubNotificationKey: '',
       onBusyChange() {},
       reportBusy() {},
       requireLongVegetationGrouping: report.requireLongVegetationGrouping,
@@ -421,18 +388,13 @@ test('mounted LongVegetationReport publishWorkbook succeeds with live projectWor
         },
       },
     });
+    session.subscribe(() => {
+      context.publication = session.view();
+      if (context.publication.blocked) context.workbookReview = null;
+      context.bridge.syncWorkbook();
+    });
     Object.defineProperty(context, 'projectActive', { get: () => !!context.projectView?.projectActive });
     Object.defineProperty(context, 'workbookBarrier', { get: () => context.publication.busy || context.publication.blocked });
-
-    const wiringSlice = code.slice(code.indexOf('  function resolveContextTag()'), code.indexOf('  async function options()'));
-    const workbookSlice = code.slice(code.indexOf('  async function reviewWorkbook()'), code.indexOf('  async function loadSavedTitle()'));
-    vm.runInContext(
-      ts.transpileModule(
-        wiringSlice + '\n' + workbookSlice + '\nthis.actions = { cancel, reviewWorkbook, publishWorkbook, acknowledgeWorkbook };',
-        { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
-      ).outputText,
-      context,
-    );
 
     // Subscriptions run at initialization; restore loaded options as onMount/options() does.
     context.settings = structuredClone(reviewPayload.preview.settings);
@@ -465,21 +427,14 @@ test('mounted LongVegetationReport publishWorkbook succeeds with live projectWor
 });
 
 test('actual root transition and both native-close paths reject unresolved publication even without a mounted route', async () => {
-  const app = readFileSync(srcPath('App.svelte'), 'utf8'), ts = require('typescript');
-  const close = app.slice(app.indexOf('  async function handleCloseRequest('), app.indexOf('  async function requestTransition('));
-  const transition = app.slice(app.indexOf('  async function requestTransition('), app.indexOf('  async function respondToTransition('));
+  const { componentFunctions } = require('./svelteTestHelpers.cjs');
   let confirmed = 0, cancelled = 0, navigated = 0;
-  const context = vm.createContext({
-    closeWorking: false, closeRequest: '', closeError: '', error: '', view: 'home', editor: undefined,
-    busy: false, editorBusy: false, editorInitializing: false, transitionWorking: false, archivePublicationBusy: false, vegetationPublicationBusy: true, lifeformPublicationBusy: false, summaryPublicationBusy: false,
-    pendingTransition: null, transitionError: '', $projectState: { contextId: owner.contextId },
-    document: { activeElement: null }, HTMLElement: class {}, tick: async () => {},
-    closeDisposition: loadTypeScript('closeLifecycle.ts').closeDisposition,
+  const context = componentFunctions('App.svelte', ['handleCloseRequest', 'respondToClose', 'requestTransition'], {
+    vegetationPublicationBusy: true,
+    $projectState: { contextId: owner.contextId },
     LifecycleService: { GetPendingCloseRequest: async () => 'request', CancelClose: async () => { cancelled++; },
       ConfirmClose: async () => { confirmed++; } },
   });
-  vm.runInContext(ts.transpileModule(close + transition + '\nthis.actions = { handleCloseRequest, respondToClose, requestTransition };',
-    { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
   await context.actions.handleCloseRequest('request'); assert.equal(cancelled, 1); assert.equal(confirmed, 0);
   context.closeRequest = 'request';
   await context.actions.respondToClose('discard'); assert.equal(confirmed, 0); assert.match(context.closeError, /Wait/);
@@ -492,55 +447,57 @@ test('actual root transition and both native-close paths reject unresolved publi
 });
 
 test('actual root workbook watcher and report share the immutable selected-unit consumer',()=>{
-  const ts=require('typescript');
-  const app=readFileSync(srcPath('App.svelte'),'utf8');
-  const call=app.indexOf('    const session = vegetationWorkbookPublicationSession(');
-  const effect=app.slice(app.lastIndexOf('  $effect(',call),app.indexOf('  $effect(',call));
+  const { createTestReportOperationGuard } = require('./svelteTestHelpers.cjs');
   const scope={...owner,contextId:'root-consumer-true'};
-  const callbacks=[];
-  const context=vm.createContext({
-    $projectState:{contextId:scope.contextId,activeProject:scope.project,projectPath:scope.projectPath,activeSU:scope.su,suPath:scope.suPath},
-    vegetationPublicationBusy:false,view:'home',$effect:fn=>callbacks.push(fn),
-    vegetationWorkbookPublicationSession:workbook.vegetationWorkbookPublicationSession,
+  const h=createTestReportOperationGuard({
+    initialState:{contextId:scope.contextId,activeProject:scope.project,projectPath:scope.projectPath,activeSU:scope.su,suPath:scope.suPath},
+    dependencies:{'./vegetationWorkbook':{vegetationWorkbookPublicationSession:workbook.vegetationWorkbookPublicationSession}},
   });
-  vm.runInContext(ts.transpileModule(effect,
-    {compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,context);
-  assert.equal(callbacks.length,1);
-  const unsubscribe=callbacks[0]();
-  assert.equal(typeof unsubscribe,'function');
-  assert.equal(workbook.vegetationWorkbookPublicationSession(scope,true).view().busy,false);
-  assert.throws(()=>workbook.vegetationWorkbookPublicationSession(scope,false));
-  unsubscribe();
+  try {
+    assert.equal(h.guard.publicationBusy,false);
+    assert.equal(workbook.vegetationWorkbookPublicationSession(scope,true).view().busy,false);
+    assert.throws(()=>workbook.vegetationWorkbookPublicationSession(scope,false));
+  } finally {
+    h.dispose();
+  }
 });
-test('route and root wiring keep held navigation/native close, no cancellable export, raw approval, labels and wrapped safety above guidance', () => {
-  const panel = source(), app = readFileSync(srcPath('App.svelte'), 'utf8');
-  for (const [filename, value] of [['LongVegetationReport.svelte', panel], ['App.svelte', app]]) {
+test('route and root wiring keep held navigation/native close, no cancellable export, raw approval, labels and wrapped safety above guidance', async () => {
+  const { readReportComposite, componentFunctions } = require('./svelteTestHelpers.cjs');
+  const rawPanel = source(), app = readFileSync(srcPath('App.svelte'), 'utf8');
+  for (const [filename, value] of [['LongVegetationReport.svelte', rawPanel], ['App.svelte', app]]) {
     assert.equal(compile(value, { filename, generate: 'client' }).warnings.length, 0);
   }
+  const panel = readReportComposite('long-vegetation');
   assert.match(panel, /workbookReview = \$state\.raw<ValidatedVegetationWorkbookReview/);
-  assert.match(panel, /reads\.track\(VegetationReportService\.GetVegetationWorkbookReview/);
-  assert.doesNotMatch(panel, /reads\.track\(VegetationReportService\.ExportReviewedVegetationWorkbook/);
+  assert.match(panel, /reads\.track\(\s*VegetationReportService\.GetVegetationWorkbookReview/);
+  assert.doesNotMatch(panel, /reads\.track\(\s*VegetationReportService\.ExportReviewedVegetationWorkbook/);
   assert.match(panel, /if \(publication\.blocked\) workbookReview = null/);
   assert.match(panel, /onBusyChange\(busy \|\| workbookBarrier \|\| sharedPreferenceBarrier \|\| !!projectView\?\.closeBlocked\)/);
   assert.match(panel, /label for="vegetation-workbook-destination"/);
-  assert.match(panel, /textarea id="vegetation-workbook-destination"/);
+  assert.match(panel, /textarea[\s\S]*?id="vegetation-workbook-destination"/);
   assert.match(panel, /grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(panel, /overflow-wrap: anywhere/);
   assert.ok(panel.indexOf('data-vegetation-workbook-unknown') < panel.indexOf('class="guidance"'));
-  assert.equal((app.match(/closeDisposition\(state, busy \|\| editorBusy[^\n]*vegetationPublicationBusy/g) || []).length, 3);
-  assert.equal((app.match(/closeDisposition\(ownedAction \? null : state, busy \|\| !ownedAction && editorBusy[^\n]*vegetationPublicationBusy/g) || []).length, 1);
-  for (const name of ['loadPlots', 'refresh', 'loadHierarchy']) {
-    assert.match(app, new RegExp(`async function ${name}\\([^)]*\\) \\{\\s*if \\(projectReportBusy \\|\\| twoPageVegetationBusy \\|\\| twoPageSoilBusy \\|\\| pictureCreationBusy \\|\\| pictureLifecycleBusy \\|\\| vegetationPublicationBusy`));
+  const appCtx = componentFunctions('App.svelte', ['loadPlots', 'refresh', 'loadHierarchy'], {
+    vegetationPublicationBusy: true,
+    ContextService: {
+      ListPlots: async () => assert.fail('must hold'),
+      GetState: async () => assert.fail('must hold'),
+      GetHierarchyTree: async () => assert.fail('must hold'),
+    },
+  });
+  for (const fn of ['loadPlots', 'refresh', 'loadHierarchy']) {
+    appCtx.error = '';
+    await appCtx.actions[fn](0);
+    assert.match(appCtx.error, /Wait for the current operation/);
   }
-  assert.match(app, /operationHeld=\{busy \|\| transitionWorking \|\| pendingTransition !== null \|\| !!closeRequest\}/);
-  assert.match(app, /vegetationPublicationBusy = publication.busy \|\| publication.blocked/);
 });
 
 test('SSR remount shows persistent unknown alert and explicit acknowledgement without recreating preparation', async () => {
   const owned = { ...owner, contextId: 'ssr-unknown' }, input = fixture(); input.preview.contextId = owned.contextId;
   await workbook.vegetationWorkbookPublicationSession(owned, true).publish(input, destination, async () => null);
   const component = serverComponent(source(),
-    'LongVegetationReport.svelte', {
+    'LongVegetationReport.svelte', { './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
       '../bindings/github.com/boostao/vpro/app': { VegetationReportService: {} },
       './longEnvironmentReport': environment, './longVegetationReport': report, './vegetationWorkbook': workbook, './longVegetationPreferences': {},
       './longVegetationStatisticsPreferences': {},
@@ -555,7 +512,7 @@ test('SSR remount shows persistent unknown alert and explicit acknowledgement wi
       './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
       '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
       './LongVegetationSwitchPreferences.svelte': { default() {} },
-    });
+    }) });
   const result = render(component, { props: { ...owned, onBusyChange() {} } });
   assert.match(result.body, /data-vegetation-workbook-unknown/);
   assert.match(result.body, /Acknowledge workbook outcome/);

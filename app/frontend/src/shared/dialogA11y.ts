@@ -63,14 +63,18 @@ export function trapDialogTabKey(event: KeyboardEvent, dialogEl: HTMLElement): b
 
 function getTopmostModalDialog(doc: Document): HTMLElement | null {
   const dialogs = Array.from(
-    doc.querySelectorAll<HTMLElement>('dialog[open], [role="dialog"][aria-modal="true"], [role="dialog"][data-modal-trap="true"]')
+    doc.querySelectorAll<HTMLElement>(
+      'dialog[open], [role="dialog"][aria-modal="true"], [role="dialog"][data-modal-trap="true"]'
+    )
   ).filter(isElementVisible);
   return dialogs.length > 0 ? dialogs[dialogs.length - 1] : null;
 }
 
 let globalTrapInstalled = false;
 
-export function installGlobalAriaModalTabTrap(doc: Document | undefined = typeof document !== 'undefined' ? document : undefined): void {
+export function installGlobalAriaModalTabTrap(
+  doc: Document | undefined = typeof document !== 'undefined' ? document : undefined
+): void {
   if (!doc || globalTrapInstalled) return;
   globalTrapInstalled = true;
   doc.addEventListener(
@@ -96,9 +100,7 @@ export function modalDialog(node: HTMLElement, initialOptions: ModalDialogOption
   installGlobalAriaModalTabTrap(doc);
 
   const previousFocus =
-    doc && isHtmlElementLike(doc.activeElement) && !node.contains(doc.activeElement)
-      ? doc.activeElement
-      : null;
+    doc && isHtmlElementLike(doc.activeElement) && !node.contains(doc.activeElement) ? doc.activeElement : null;
 
   if (node.tabIndex < 0 && !node.hasAttribute('tabindex')) {
     node.setAttribute('tabindex', '-1');

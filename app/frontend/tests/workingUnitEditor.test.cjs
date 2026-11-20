@@ -52,9 +52,9 @@ test('Source-positioned component gates ordinary copy and separate authorized Ma
   assert.match(source, /Confirm draft replacement/);
   assert.match(source, /proposal\.identity !== draft/);
   assert.match(source, /rememberWorkingUnitAcknowledgement\(draft, draft\.userSiteUnit, accepted\)/);
-  assert.match(source, /!masterEditingEnabled \|\| !masterAllowed \|\| disabled/);
-  assert.match(source, /readonly=\{!masterEditingEnabled \|\| !masterAllowed\}/);
-  assert.match(source, /disabled=\{disabled \|\| capabilities\.becSiteUnit !== true \|\| !control\.enabled \|\| \(masterEditingEnabled && masterAllowed && view\.busy\)\}/);
+  assert.match(source, /!masterAllowed \|\| disabled/);
+  assert.match(source, /readonly=\{!masterAllowed\}/);
+  assert.match(source, /disabled=\{disabled \|\| capabilities\.becSiteUnit !== true \|\| !control\.enabled \|\| \(masterAllowed && view\.busy\)\}/);
   assert.doesNotMatch(source, /PlotService|UpdatePlot|CreatePlot|onmousedown|oncontextmenu/);
   for (const file of ['HeaderEditor.svelte', 'FS882Form.svelte']) {
     assert.equal(compile(readFileSync(srcPath(file), 'utf8'), { filename: file, generate: 'client' }).warnings.length, 0);
@@ -227,13 +227,20 @@ test('Concurrent preference writes refused explicitly and disposal never publish
   assert.equal(events.length, count);
 });
 test('Header lifecycle and all mutation gates include Working Unit preference/lookup ownership', () => {
-  const source = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8');
-  assert.match(source, /independentHeaderWorkflowBusy = \$derived\(coordinateBusy \|\| workingUnitBusy \|\| qualityBusy \|\| siteCodeBusy \|\| regionCodeBusy \|\| soilCodeBusy \|\| geologyCodeBusy \|\| parentCodeBusy \|\| drainageBusy \|\| speciesDecisionBusy \|\| deletionBusy \|\| codeCheckBusy \|\| metadataBusy \|\| profileReviewBusy \|\| environmentSUOpen \|\| externalSUEnvironmentBusy \|\| externalSUEnvironmentBlocked \|\| siviParentBusy \|\| siviBusy \|\| siviCombinedBusy \|\| siviCoverBusy \|\| siviCollectedBusy \|\| siviSpeciesBusy \|\| siviIdentityBusy \|\| siviCreationBusy \|\| siviLifecycleBusy\)/);
-  assert.match(source, /otherHeaderWorkflowBusy = \$derived\(independentHeaderWorkflowBusy \|\| twoPageOpen \|\| twoPageBusy\)/);
-  assert.match(source, /headerWorkflowBusy = \$derived\(otherHeaderWorkflowBusy \|\| pictureBusy \|\| pictureMetadataPending \|\| twoPageSoilBusy \|\| twoPageSoilBlocked \|\| twoPageVegetationBusy \|\| twoPageVegetationBlocked\)/);
-  assert.match(source, /onWorkingUnitBusyChange=\{\(pending\) => workingUnitBusy = pending\}/);
-  assert.match(source, /busy: busy \|\| headerWorkflowBusy/);
-  assert.doesNotMatch(source, /busy \|\| coordinateBusy/);
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
+  const siteTab = readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8');
+  const h = createFS882TestController();
+  try {
+    assert.equal(h.ctrl.headerWorkflowBusy, false);
+    h.ctrl.workingUnitBusy = true;
+    h.flush();
+    assert.equal(h.ctrl.otherHeaderWorkflowBusy, true);
+    assert.equal(h.ctrl.headerWorkflowBusy, true);
+    assert.equal(h.ctrl.getCloseState().busy, true);
+  } finally {
+    h.dispose();
+  }
+  assert.match(siteTab, /onWorkingUnitBusyChange=\{\(pending\) => \{\s*workingUnitBusy = pending;\s*\}\}/);
 });
 test('Same editor mode survives Site remount and Undo without rerunning source Form_Load fallback', async () => {
   let loads = 0;

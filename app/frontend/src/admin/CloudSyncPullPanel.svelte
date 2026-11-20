@@ -45,12 +45,16 @@
 <fieldset class="space-y-3 rounded border border-vpro-border border-t-[3px] border-t-vpro-gold bg-white p-4 shadow-sm">
   <legend class="px-1 text-sm font-semibold text-vpro-navy">Checkout Regional Subset from BECMaster</legend>
   <p class="text-xs text-vpro-ink-secondary">
-    Filter BECMaster plots by BGC Zone, Subzone, Project ID, literal PlotNumber (preserving leading zeros such as <span class="font-mono">'00337'</span>), or WGS84 bounding box into a local VPro project (<span class="font-mono">.db</span>).
+    Filter BECMaster plots by BGC Zone, Subzone, Project ID, literal PlotNumber (preserving leading zeros such as <span
+      class="font-mono">'00337'</span
+    >), or WGS84 bounding box into a local VPro project (<span class="font-mono">.db</span>).
   </p>
 
   <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
     <div class="space-y-1">
-      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="subset-zones">BGC Zones (comma-separated)</label>
+      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="subset-zones"
+        >BGC Zones (comma-separated)</label
+      >
       <input
         id="subset-zones"
         type="text"
@@ -61,7 +65,9 @@
       />
     </div>
     <div class="space-y-1">
-      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="subset-subzones">Subzones / Variants (comma-separated)</label>
+      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="subset-subzones"
+        >Subzones / Variants (comma-separated)</label
+      >
       <input
         id="subset-subzones"
         type="text"
@@ -72,7 +78,9 @@
       />
     </div>
     <div class="space-y-1">
-      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="subset-project-ids">Project IDs (comma-separated)</label>
+      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="subset-project-ids"
+        >Project IDs (comma-separated)</label
+      >
       <input
         id="subset-project-ids"
         type="text"
@@ -83,7 +91,9 @@
       />
     </div>
     <div class="space-y-1">
-      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="subset-plot-numbers">Literal Plot Numbers (max 7 characters)</label>
+      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="subset-plot-numbers"
+        >Literal Plot Numbers (max 7 characters)</label
+      >
       <input
         id="subset-plot-numbers"
         type="text"
@@ -97,7 +107,9 @@
 
   <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
     <div class="space-y-1 sm:col-span-2">
-      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="subset-bbox">Spatial BBox (minLon, minLat, maxLon, maxLat)</label>
+      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="subset-bbox"
+        >Spatial BBox (minLon, minLat, maxLon, maxLat)</label
+      >
       <input
         id="subset-bbox"
         type="text"
@@ -108,7 +120,8 @@
       />
     </div>
     <div class="space-y-1">
-      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="subset-limit">Plot Limit (optional)</label>
+      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="subset-limit">Plot Limit (optional)</label
+      >
       <input
         id="subset-limit"
         type="number"
@@ -143,7 +156,8 @@
   {#if subsetPreview}
     <div class="space-y-1.5 rounded border border-vpro-border bg-vpro-surface-subtle p-3 text-xs">
       <div class="font-semibold text-vpro-navy">
-        Matched {subsetPreview.matchingPlots.toLocaleString()} plot(s) &middot; {subsetPreview.matchingVeg.toLocaleString()} vegetation row(s)
+        Matched {subsetPreview.matchingPlots.toLocaleString()} plot(s) &middot; {subsetPreview.matchingVeg.toLocaleString()}
+        vegetation row(s)
       </div>
       {#if subsetPreview.samplePlots.length > 0}
         <div>Sample Plots: <span class="font-mono">{subsetPreview.samplePlots.join(', ')}</span></div>
@@ -164,7 +178,9 @@
   <div class="space-y-2 border-t border-vpro-border pt-3">
     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="subset-target-project">Target Project Name</label>
+        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="subset-target-project"
+          >Target Project Name</label
+        >
         <input
           id="subset-target-project"
           type="text"
@@ -176,7 +192,9 @@
         />
       </div>
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="subset-dest-path">Destination .db Path (optional)</label>
+        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="subset-dest-path"
+          >Destination .db Path (optional)</label
+        >
         <input
           id="subset-dest-path"
           type="text"
@@ -204,7 +222,8 @@
     </button>
     {#if pullSubsetResult}
       <p class="break-all text-xs text-vpro-ink-secondary">
-        Saved <span class="font-mono">{pullSubsetResult.targetProject}</span> ({pullSubsetResult.plotCount} plots, log #{pullSubsetResult.downloadLogId}, SHA-256 <span class="font-mono">{pullSubsetResult.destinationSha256.slice(0, 16)}</span>).
+        Saved <span class="font-mono">{pullSubsetResult.targetProject}</span> ({pullSubsetResult.plotCount} plots, log #{pullSubsetResult.downloadLogId},
+        SHA-256 <span class="font-mono">{pullSubsetResult.destinationSha256.slice(0, 16)}</span>).
       </p>
     {/if}
   </div>

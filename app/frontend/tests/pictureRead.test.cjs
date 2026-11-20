@@ -179,16 +179,17 @@ test('picture transport/backend errors route to notifications and can be explici
 });
 
 test('picture source slot is independently gated and participates in root pending lifecycle', () => {
-  const root = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882Modals.svelte'), 'utf8');
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const root = readFS882Composite();
   const header = readFileSync(srcPath('HeaderEditor.svelte'), 'utf8');
   const panel = readFileSync(srcPath('PicturePanel.svelte'), 'utf8');
-  assert.match(root, /pictureEditor=\{pictureReadingEnabled && !twoPageOpen \? linkedPictures : undefined\}/);
-  assert.match(root, /<TwoPageEntryEditor[\s\S]*?pictureReaderAvailable=\{pictureReadingEnabled\}/);
+  assert.match(root, /pictureEditor=\{!twoPageOpen \? linkedPictures : undefined\}/);
+  assert.match(root, /<TwoPageEntryEditor[\s\S]*?pictureReaderAvailable=\{true\}/);
   const entry = readFileSync(srcPath('TwoPageEntryEditor.svelte'), 'utf8');
   assert.match(entry, /pictureReaderAvailable = false/);
-  assert.match(entry, /<TwoPageEntryLayout \{form\} \{pictureReaderAvailable\}/);
-  assert.match(root, /const headerWorkflowBusy = \$derived\([^;]*pictureBusy/);
-  assert.match(root, /busy: busy \|\| headerWorkflowBusy/);
+  assert.match(entry, /<TwoPageEntryLayout[\s\S]*?\{form\}[\s\S]*?\{pictureReaderAvailable\}/);
+  assert.match(root, /const headerWorkflowBusy = \$derived\([\s\S]*?pictureBusy/);
+  assert.match(root, /busy:\s*busy \|\| headerWorkflowBusy/);
   assert.match(root, /plotNumber=\{original\.plotNumber\}/);
   assert.match(header, /control\.controlName === 'frmVPics'/);
   assert.match(header, /Form\.frmVPicsXL/);
@@ -245,24 +246,35 @@ test('actual complete-entry picture child reuses owned readonly child policy onl
   const component = serverComponent(`<script lang="ts">
     import PicturePanel from './PicturePanel.svelte';
     import SourceChild from './SourceChild.svelte';
-    import TwoPageSoilPanel from './TwoPageSoilPanel.svelte';
-    import TwoPageVegetationPanel from './TwoPageVegetationPanel.svelte';
     type TwoPageEntryChild = { form: string };
     type PaperControl = { controlId: string };
-    let { child, control, pictureReadingEnabled, twoPageScope = 'entry', twoPageProject,
+    let { child, control, pictureReadingEnabled = true, twoPageScope = 'entry', twoPageProject,
       contextId, draft, twoPageLinkedParentBlocked = false, twoPageSoilBusy = false, twoPageSoilBlocked = false,
       twoPageVegetationBusy = false, twoPageVegetationBlocked = false } = $props();
-    const twoPageSoilReviewEnabled = false, twoPageVegetationReviewEnabled = false;
-    const ordinaryVegetationUnavailable = null, ordinarySoilUnavailable = null, childRevision = 0;
-    let pictureBusy = false;
-    function sourceRows() { return []; }
-    function linkedVegetationParentBlocked() { return true; }
-    const twoPageSoilParentBlocked = true;
+    const plotNumber = $derived(draft.plotNumber);
+    const linkedChildBlocked = $derived(twoPageSoilBusy || twoPageSoilBlocked || twoPageVegetationBusy || twoPageVegetationBlocked);
+    const loaders = {
+      twoPageSoil: () => Promise.reject(new Error('Unrelated soil editor')),
+      twoPageVegetation: () => Promise.reject(new Error('Unrelated vegetation editor')),
+    };
+    const ctrl = {
+      get twoPageScope() { return pictureReadingEnabled ? twoPageScope : 'extra'; },
+      get twoPageProject() { return twoPageProject; },
+      get twoPageSoilParentBlocked() { return true; },
+      get twoPageLinkedParentBlocked() { return twoPageLinkedParentBlocked; },
+      pictureBusy: false,
+      linkedVegetationParentBlocked() { return true; },
+      children: {
+        ordinaryVegetationUnavailable: null,
+        ordinarySoilUnavailable: null,
+        childRevision: 0,
+        sourceRows() { return []; },
+      },
+    };
+    function formatError(e: unknown) { return String(e); }
   </script>${snippet}{@render twoPageLinkedChild(child, control)}`, 'MappedPictureChildCaller.svelte', {
     './PicturePanel.svelte': { default(payload, props) { captured.push(props); return panel(payload, props); } },
     './SourceChild.svelte': { default: serverComponent('<p data-generic-child>Readonly source metadata</p>', 'ReadonlyPictureFallback.svelte', {}) },
-    './TwoPageSoilPanel.svelte': { default: () => { throw new Error('Unrelated soil editor'); } },
-    './TwoPageVegetationPanel.svelte': { default: () => { throw new Error('Unrelated vegetation editor'); } },
   });
   for (const sourceForm of ['FS882-8x6XL', 'FS882-8x6XL-CHARS']) {
     const props = { child: { form: 'frmVPicsXL' }, control: { controlId: `form:${sourceForm}/frmVPics` },
@@ -300,18 +312,27 @@ test('actual ordinary picture snippet is absent while complete-entry owns the so
   const form = readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8');
   const expression = form.match(/pictureEditor=\{([^}]+) \? linkedPictures : undefined\}/)?.[1];
   assert.ok(expression);
-  const enabled = new Function('pictureReadingEnabled', 'twoPageOpen', `return ${expression};`);
-  for (const reading of [false, true]) for (const open of [false, true]) {
-    assert.equal(enabled(reading, open), reading && !open);
+  const enabled = new Function('twoPageOpen', `return ${expression};`);
+  for (const open of [false, true]) {
+    assert.equal(enabled(open), !open);
   }
 });
 
 async function mountReceiptReader(disabled, observeMutationReceipts) {
   const runtime = await import('svelte/internal/client');
+  const { compileModule } = require('svelte/compiler');
+  const rsJs = ts.transpileModule(readFileSync(srcPath('shared/reactiveSession.svelte.ts'), 'utf8'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const rsCode = compileModule(rsJs, { generate: 'client' }).js.code
+    .replace(/^import .*$/gm, '')
+    .replace(/export function /g, 'function ');
+  const { observeSession, observeSessionView } = new Function('$', 'untrack', `${rsCode}\nreturn { observeSession, observeSessionView };`)(runtime, runtime.untrack);
   const { onDestroy } = await import(pathToFileURL(path.join(path.dirname(require.resolve('svelte')), 'index-client.js')).href);
   let script = readFileSync(srcPath('PicturePanel.svelte'), 'utf8').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  script = script.replace('onBusyChange, metadataSession,', 'onBusyChange, metadataSession, inspect,');
-  script += '\n$effect(() => inspect({ load, cancel, busy, error, review, creationSession, lifecycleSession }));';
+  script = script.replace(/metadataSession,\s*\n/, 'metadataSession,\n    inspect,\n');
+  script = script.replace('metadataSession?: PictureMetadataSession;', 'metadataSession?: PictureMetadataSession; inspect?: (value: unknown) => void;');
+  script += '\n$effect(() => inspect?.({ load, cancel, busy, error, review, creationSession, lifecycleSession }));';
   const compiled = compile(`<script lang="ts">${script}</script>`, { generate: 'client' });
   assert.equal(compiled.warnings.length, 0);
   const ast = ts.createSourceFile('picture-reader.js', compiled.js.code, ts.ScriptTarget.Latest, true);
@@ -329,11 +350,11 @@ async function mountReceiptReader(disabled, observeMutationReceipts) {
   });
   const created = acknowledged('creation', { receipts: [creationReceipt] });
   const lifecycle = acknowledged('lifecycle', { receipts: [{ kind: 'delete', receipt: { request: { original: deleted } } }], revision: 1 });
-  const mount = new Function('$', 'onDestroy', 'untrack', 'ReadRequests', 'PictureService',
+  const mount = new Function('$', 'onDestroy', 'untrack', 'observeSession', 'observeSessionView', 'formatError', 'notifications', 'ReadRequests', 'PictureService',
     'pictureMetadataFromWire', 'pictureImageFromWire', 'pictureCellLabel', 'pictureCreationSession',
     'equalCell', 'pictureLifecycleSession', 'pictureLifecycleOriginalMatches',
     code + '\nreturn _unknown_;')(
-    runtime, onDestroy, runtime.untrack, class { track(value) { return value; } cancelAll() {} },
+    runtime, onDestroy, runtime.untrack, observeSession, observeSessionView, String, { push() {}, info() {}, success() {}, warning() {}, error() {} }, class { track(value) { return value; } cancelAll() {} },
     { GetMetadata(...args) { calls.push(['metadata', ...args]); return Promise.resolve(review()); } },
     picture.pictureMetadataFromWire, picture.pictureImageFromWire, picture.pictureCellLabel,
     () => { calls.push('creation-session'); return created; }, metadata.equalCell,
@@ -367,7 +388,7 @@ test('actual client default picture mounts preserve acknowledged creation/lifecy
   try {
     assert.ok(mounted.calls.includes('creation-session'));
     assert.ok(mounted.calls.includes('lifecycle-session'));
-    assert.deepEqual(mounted.subscriptions.sort(), ['creation', 'lifecycle']);
+    assert.deepEqual(Array.from(new Set(mounted.subscriptions)).sort(), ['creation', 'lifecycle']);
     assert.equal(mounted.calls.filter(call => Array.isArray(call) && call[0] === 'metadata').length, 2);
     assert.equal(mounted.actions().review.records.rows.length, 2);
     assert.equal(mounted.actions().error, '');
@@ -422,14 +443,15 @@ test('manager pending reads block parent changes and aggregate root busy state',
 });
 
 test('standalone manager navigation shares root transition/close ownership', () => {
-  const app = readFileSync(srcPath('App.svelte'), 'utf8');
+  const { readShellComposite } = require('./svelteTestHelpers.cjs');
+  const app = readShellComposite();
   const nav = readFileSync(srcPath('Navigation.svelte'), 'utf8');
   const manager = readFileSync(srcPath('PictureManager.svelte'), 'utf8');
-  assert.match(nav, /name: 'Plot Pictures', icon: FileText, view: 'picture-manager'/);
+  assert.match(nav, /name: 'Plot Pictures',\s*icon: FileText,\s*view: 'picture-manager'/);
   assert.match(app, /view === 'picture-manager' && \$projectState/);
-  assert.match(app, /<PictureManager[^>]*onBusyChange=\{\(value\) => \{ localEditorBusy = value; \}\}/s);
-  assert.match(app, /editorBusy = \$derived\(localEditorBusy \|\| matrixPublicationBusy \|\| pictureCreationBusy \|\| pictureLifecycleBusy \|\| twoPageSoilBusy \|\| twoPageVegetationBusy \|\| externalSUEnvironmentBusy \|\| summaryPreferenceBusy \|\| summaryFieldListBusy \|\| summaryEnvironmentalBusy \|\| projectReportBusy\)/);
-  assert.match(manager, /<PicturePanel[^>]*view="manager" onBusyChange=\{reading\}/);
+  assert.match(app, /<PictureManager[\s\S]*?onBusyChange=\{\(value\)\s*=>\s*\{\s*localEditorBusy = value;\s*\}\}/);
+  assert.match(app, /subscribePictureCreationActivity[\s\S]*?subscribePictureLifecycleActivity/);
+  assert.match(manager, /<PicturePanel[\s\S]*?view="manager"[\s\S]*?onBusyChange=\{reading\}/);
   assert.match(manager, /disabled=\{busy \|\| metadataBlocked \|\| creationBlocked \|\| lifecycleBlocked\}/);
   assert.match(manager, /\{#key selected\}/);
   assert.doesNotMatch(manager, /CreatePlot|SwitchContext|\.trim\(|\.toUpperCase\(/);

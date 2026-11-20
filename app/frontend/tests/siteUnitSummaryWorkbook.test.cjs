@@ -253,11 +253,11 @@ test('panel compiles with accessible scoped source tables, current-method guard 
   assert.match(text, /method !== requestedMethod/);
   assert.match(text, /review\.preview\.report\.method === method/);
   assert.match(text, /!currentReview/);
-  assert.match(text, /reads\.track\(EnvironmentReportService\.GetSiteUnitSummaryWorkbookReview/);
-  assert.doesNotMatch(text, /reads\.track\(EnvironmentReportService\.ExportReviewedSiteUnitSummaryWorkbook/);
+  assert.match(text, /reads\.track\(\s*EnvironmentReportService\.GetSiteUnitSummaryWorkbookReview/);
+  assert.doesNotMatch(text, /reads\.track\(\s*EnvironmentReportService\.ExportReviewedSiteUnitSummaryWorkbook/);
   assert.match(text, /disposed \|\| requestGeneration !== generation/);
-  assert.match(text, /originalSession\.publish\(review, destination/);
-  assert.match(text, /session\.acknowledge\(\); review = null/);
+  assert.match(text, /originalSession\.publish\(\s*review,\s*destination/);
+  assert.match(text, /session\.acknowledge\(\);\s*review = null/);
   assert.match(text, /<caption>/); assert.match(text, /scope="row"/); assert.match(text, /scope="col"/);
   assert.match(text, /'SITE', 'VEGETATION', 'SOILS'/);
   assert.doesNotMatch(text, /data-site-unit-workbook-receipt/);
@@ -332,7 +332,7 @@ function panelScript(owned) {
     return `Object.defineProperty(derived, '${name}', {get:()=>(${expression})});`;
   }).join('\n');
   // Props are simple owned strings; emulate live prop and derived reads, not DOM layout.
-  script = script.replace('owner, method, disabled,', 'owner, method: initialMethod, disabled,');
+  script = script.replace(/owner,\s*method,\s*disabled,/, 'owner, method: initialMethod, disabled,');
   script = ts.transpileModule(script, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
     .replace(/(?<![.\w])method\b(?!\s*:)/g, 'props.method');
   const rewrittenGetters = gettersCode.replace(/(?<![.\w])method\b(?!\s*:)/g, 'props.method');
@@ -341,10 +341,13 @@ function panelScript(owned) {
     review:()=>review, busy:()=>busy, publication:()=>publication, destination:value=>destination=value
   });`;
   const state = value => value; state.raw = state;
+  const { noopNotificationsStub, serverReads } = require('./svelteTestHelpers.cjs');
   vm.runInNewContext(ts.transpileModule(code, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
     props, $props: () => props, $state: state, structuredClone, untrack: callback => callback(),
     onDestroy: callback => destroy = callback, destroyCallback: () => destroy(),
     expose: value => exports = value,
+    formatError: serverReads.formatError,
+    notifications: noopNotificationsStub.notifications,
     ReadRequests: class {
       track(request) { requests.push(request); return request; }
       cancelAll() { for (const request of requests) request.cancel(); }

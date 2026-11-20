@@ -49,14 +49,14 @@ test('settled reads leave the ownership set and operational failures are not swa
   await assert.rejects(requests.track(CancellablePromise.reject(new Error('read failure'))), /read failure/);
   requests.cancelAll();
   assert.equal(cancelled, 0);
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
-  assert.match(form, /loadRequest\+\+;[\s\S]*?reads\.cancelAll\(\)/);
-  assert.match(form, /const request = \+\+loadRequest;\s+reads\.cancelAll\(\)/);
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const form = readFS882Composite();
+  assert.match(form, /loadRequest \+= 1[\s\S]*?reads\.cancelAll\(\)/);
   for (const name of ['GetPlot', 'GetHeaderCapabilities', 'GetChildCapabilities', 'ListVegRecords',
     'ListHumusRecords', 'ListMineralRecords', 'ListOtherRecords', 'ListAuditReadEntries']) {
-    assert.match(form, new RegExp(`reads\\.track\\(PlotService\\.${name}\\(`));
+    assert.match(form, new RegExp(`reads\\.track\\((?:PlotService|deps\\.plotService)\\.${name}\\(`));
   }
-  assert.doesNotMatch(form, /reads\.track\(PlotService\.(?:Update|Save|Create|Delete|Restore|Set)/);
+  assert.doesNotMatch(form, /reads\.track\((?:PlotService|deps\.plotService)\.(?:Update|Save|Create|Delete|Restore|Set)/);
 });
 
 test('only owned cancelled read acknowledgements are handled, including after editor disposal', async () => {
@@ -80,17 +80,18 @@ test('only owned cancelled read acknowledgements are handled, including after ed
 });
 
 test('browse, hierarchy, reference and species consumers own only their read generations', () => {
-  const root = readFileSync(srcPath('App.svelte'), 'utf8');
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
-  assert.match(root, /plotReads\.track\(ContextService\.ListPlots/);
-  assert.match(root, /hierarchyReads\.track\(ContextService\.GetHierarchyNodes/);
-  assert.match(root, /if \(current === hierarchyRequest\) hierarchyNodes/);
-  assert.match(root, /request\+\+;\s+hierarchyRequest\+\+;\s+stateRequest\+\+;\s+plotReads\.cancelAll\(\);\s+hierarchyReads\.cancelAll\(\);\s+stateReads\.cancelAll\(\)/);
+  const { readShellComposite, readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const root = readShellComposite();
+  const form = readFS882Composite();
+  assert.match(root, /plotReads\.track\((?:s0?\.contextService|ContextService)\.ListPlots/);
+  assert.match(root, /hierarchyReads\.track\((?:s0?\.contextService|ContextService)\.GetHierarchyNodes/);
+  assert.match(root, /isCurrentHierarchyRequest\(current\)/);
+  assert.match(root, /request\+\+;\s*hierarchyRequest\+\+;\s*stateRequest\+\+;\s*plotReads\.cancelAll\(\);\s*hierarchyReads\.cancelAll\(\);\s*stateReads\.cancelAll\(\)/);
   assert.match(form, /referenceReads\.track\(PlotEntryService\.GetListItems/);
   assert.match(form, /speciesReads\.track\(PlotEntryService\.SearchSpecies/);
   assert.match(form, /if \(request !== speciesRequest\) return/);
   assert.match(form, /if \(request === speciesRequest\) searchingSpecies = false/);
-  assert.doesNotMatch(root, /Reads\.track\(ContextService\.SwitchContext/);
+  assert.doesNotMatch(root, /Reads\.track\((?:s0?\.contextService|ContextService)\.SwitchContext/);
 });
 
 test('catalogue lookup cancels superseded reloads and disposal without publishing stale errors', async () => {
@@ -202,10 +203,11 @@ test('Working Unit disposal cancels choice reads, never preference initializatio
 });
 
 test('state generations cancel discovery and guard publication without tracking context commits', () => {
-  const source = readFileSync(srcPath('App.svelte'), 'utf8');
-  assert.match(source, /const stateReads = new ReadRequests\(\)/);
-  assert.match(source, /stateReads\.track\(ContextService\.GetState\(\)\)/);
-  assert.match(source, /if \(current !== stateRequest\) return;\s*projectState\.set\(state\)/);
-  assert.match(source, /stateRequest\+\+;[\s\S]*stateReads\.cancelAll\(\)/);
-  assert.doesNotMatch(source, /stateReads\.track\(ContextService\.SwitchContext/);
+  const { readShellComposite } = require('./svelteTestHelpers.cjs');
+  const source = readShellComposite();
+  assert.match(source, /stateReads = new ReadRequests\(\)/);
+  assert.match(source, /stateReads\.track\((?:s\.contextService|ContextService)\.GetState\(\)\)/);
+  assert.match(source, /isCurrentStateRequest\(current\)[\s\S]*?projectState\.set\(state\)/);
+  assert.match(source, /stateRequest\+\+;[\s\S]*?stateReads\.cancelAll\(\)/);
+  assert.doesNotMatch(source, /stateReads\.track\((?:s\.contextService|ContextService)\.SwitchContext/);
 });

@@ -26,7 +26,7 @@ const policies = {
   SpeciesListComplete: { owner: 'Env', domain: 'actions', kind: 'action', maximum: 0 },
 } as const;
 export type SIVIParentColumn = keyof typeof policies;
-type Domain = typeof policies[SIVIParentColumn]['domain'];
+type Domain = (typeof policies)[SIVIParentColumn]['domain'];
 export interface SIVIParentBinding {
   ControlID: string;
   Binding: string;
@@ -34,7 +34,10 @@ export interface SIVIParentBinding {
   Column: number;
   Implicit: boolean;
 }
-interface ParentRow { rowId: string; cells: ProjectMetadataCell[] }
+interface ParentRow {
+  rowId: string;
+  cells: ProjectMetadataCell[];
+}
 export interface SIVIParentOriginal {
   ContextID: string;
   Project: string;
@@ -100,7 +103,7 @@ function computeParentLayout() {
   const parent = siviParentLayoutForm;
   return {
     parent,
-    direct: parent.fields.filter(field => field.binding),
+    direct: parent.fields.filter((field) => field.binding),
     columns: Object.keys(policies) as SIVIParentColumn[],
   };
 }
@@ -110,15 +113,22 @@ function parentLayout() {
   return cachedParentLayout;
 }
 const nullCell = (): ProjectMetadataCell => ({ storage: 'null', text: null, integer: null, real: null, blobHex: null });
-const validIdentity = (value: string) => typeof value === 'string' && value !== '' && wellFormedUTF16(value) && !value.includes('\0');
+const validIdentity = (value: string) =>
+  typeof value === 'string' && value !== '' && wellFormedUTF16(value) && !value.includes('\0');
 const isColumn = (value: string): value is SIVIParentColumn => Object.hasOwn(policies, value);
 
 function controlId(column: SIVIParentColumn): string {
   const { parent } = parentLayout();
-  const action = column === 'PlotType' ? 'optPlotType' : column === 'SpeciesListComplete' ? 'optSpeciesListComplete' : null;
-  const fields = parent.fields.filter(field => action ? field.controlName === action : field.binding === column);
-  if (fields.length !== 1 || !fields[0].readOnly || fields[0].implementation !== 'unmapped' ||
-      !fields[0].controlId || action && (fields[0].type !== 'OptionGroup' || fields[0].binding)) {
+  const action =
+    column === 'PlotType' ? 'optPlotType' : column === 'SpeciesListComplete' ? 'optSpeciesListComplete' : null;
+  const fields = parent.fields.filter((field) => (action ? field.controlName === action : field.binding === column));
+  if (
+    fields.length !== 1 ||
+    !fields[0].readOnly ||
+    fields[0].implementation !== 'unmapped' ||
+    !fields[0].controlId ||
+    (action && (fields[0].type !== 'OptionGroup' || fields[0].binding))
+  ) {
     throw new Error('SIVI parent requires its exact original source control.');
   }
   return fields[0].controlId;
@@ -126,17 +136,28 @@ function controlId(column: SIVIParentColumn): string {
 
 export function validateSIVIParentOriginal(original: SIVIParentOriginal): SIVIParentOriginal {
   const { parent, direct, columns } = parentLayout();
-  if (!original || !validIdentity(original.ContextID) || !validIdentity(original.Project) || !validIdentity(original.Plot) ||
-      original.Form !== 'frmSIVIsite' || original.Query !== 'USysEnv' ||
-      original.Membership !== 'literal-binary-inner-pairs' || original.EnvTable !== `${original.Project}_Env` ||
-      original.AdminTable !== `${original.Project}_Admin` || parent.name !== original.Form ||
-      parent.recordSource !== original.Query || direct.length !== 77 ||
-      !Array.isArray(original.Rows) || original.Rows.length !== 1 ||
-      !Array.isArray(original.Bindings) || original.Bindings.length !== 78) {
+  if (
+    !original ||
+    !validIdentity(original.ContextID) ||
+    !validIdentity(original.Project) ||
+    !validIdentity(original.Plot) ||
+    original.Form !== 'frmSIVIsite' ||
+    original.Query !== 'USysEnv' ||
+    original.Membership !== 'literal-binary-inner-pairs' ||
+    original.EnvTable !== `${original.Project}_Env` ||
+    original.AdminTable !== `${original.Project}_Admin` ||
+    parent.name !== original.Form ||
+    parent.recordSource !== original.Query ||
+    direct.length !== 77 ||
+    !Array.isArray(original.Rows) ||
+    original.Rows.length !== 1 ||
+    !Array.isArray(original.Bindings) ||
+    original.Bindings.length !== 78
+  ) {
     throw new Error('SIVI parent requires one complete owned literal physical pair; this does not authorize a write.');
   }
   validateSourceParentPhysical(original, [
-    ...direct.map(field => ({ Binding: field.binding!, ControlID: field.controlId, Implicit: false })),
+    ...direct.map((field) => ({ Binding: field.binding!, ControlID: field.controlId, Implicit: false })),
     { Binding: 'SpeciesListComplete', ControlID: '', Implicit: true },
   ]);
   for (const binding of original.Bindings) {
@@ -148,46 +169,80 @@ export function validateSIVIParentOriginal(original: SIVIParentOriginal): SIVIPa
   return structuredClone(original);
 }
 
-export function validateSourceParentPhysical(original: SIVIParentOriginal,
-  expectedBindings: readonly Pick<SIVIParentBinding, 'Binding' | 'ControlID' | 'Implicit'>[]): void {
-  if (!original || !validIdentity(original.ContextID) || !validIdentity(original.Project) || !validIdentity(original.Plot) ||
-      original.Query !== 'USysEnv' || original.Membership !== 'literal-binary-inner-pairs' ||
-      original.EnvTable !== `${original.Project}_Env` || original.AdminTable !== `${original.Project}_Admin` ||
-      !Array.isArray(original.Rows) || original.Rows.length !== 1 ||
-      !Array.isArray(original.Bindings) || original.Bindings.length !== expectedBindings.length) {
-    throw new Error('Source parent requires one complete owned literal physical pair; this does not authorize a write.');
+export function validateSourceParentPhysical(
+  original: SIVIParentOriginal,
+  expectedBindings: readonly Pick<SIVIParentBinding, 'Binding' | 'ControlID' | 'Implicit'>[]
+): void {
+  if (
+    !original ||
+    !validIdentity(original.ContextID) ||
+    !validIdentity(original.Project) ||
+    !validIdentity(original.Plot) ||
+    original.Query !== 'USysEnv' ||
+    original.Membership !== 'literal-binary-inner-pairs' ||
+    original.EnvTable !== `${original.Project}_Env` ||
+    original.AdminTable !== `${original.Project}_Admin` ||
+    !Array.isArray(original.Rows) ||
+    original.Rows.length !== 1 ||
+    !Array.isArray(original.Bindings) ||
+    original.Bindings.length !== expectedBindings.length
+  ) {
+    throw new Error(
+      'Source parent requires one complete owned literal physical pair; this does not authorize a write.'
+    );
   }
   const schemas = [original.EnvColumns, original.AdminColumns];
   const rows = [original.Rows[0]?.Env, original.Rows[0]?.Admin];
   schemas.forEach((schema, i) => {
-    if (!Array.isArray(schema) || !schema.length || Array.from(schema).some(column => !column || !validIdentity(column.name) ||
-        typeof column.declaredType !== 'string' || !wellFormedUTF16(column.declaredType) ||
-        ['rowid', '_rowid_', 'oid'].includes(column.name.toLowerCase())) ||
-        new Set(schema.map(column => column.name.toLowerCase())).size !== schema.length ||
-        !rows[i] || !exactSigned64(rows[i].rowId) || !Array.isArray(rows[i].cells) ||
-        rows[i].cells.length !== schema.length || !Array.from(rows[i].cells).every(completeCell)) {
+    if (
+      !Array.isArray(schema) ||
+      !schema.length ||
+      Array.from(schema).some(
+        (column) =>
+          !column ||
+          !validIdentity(column.name) ||
+          typeof column.declaredType !== 'string' ||
+          !wellFormedUTF16(column.declaredType) ||
+          ['rowid', '_rowid_', 'oid'].includes(column.name.toLowerCase())
+      ) ||
+      new Set(schema.map((column) => column.name.toLowerCase())).size !== schema.length ||
+      !rows[i] ||
+      !exactSigned64(rows[i].rowId) ||
+      !Array.isArray(rows[i].cells) ||
+      rows[i].cells.length !== schema.length ||
+      !Array.from(rows[i].cells).every(completeCell)
+    ) {
       throw new Error('SIVI parent requires complete unshadowed schemas and exact raw physical rows.');
     }
-    const join = schema.findIndex(column => column.name === (i === 0 ? 'PlotNumber' : 'Plot'));
+    const join = schema.findIndex((column) => column.name === (i === 0 ? 'PlotNumber' : 'Plot'));
     if (join < 0 || rows[i].cells[join].storage !== 'text' || rows[i].cells[join].text !== original.Plot) {
       throw new Error('SIVI parent literal join identity changed; no alias normalization is available.');
     }
   });
   Array.from(original.Bindings).forEach((binding, index) => {
-    const expected = expectedBindings[index], name = expected.Binding;
-    const matches = schemas.flatMap((schema, owner) => schema.flatMap((column, columnIndex) =>
-      column.name.toLowerCase() === name?.toLowerCase() ? [{ owner, columnIndex }] : []));
-    if (!binding || matches.length !== 1 || binding.Binding !== name ||
-        binding.ControlID !== expected.ControlID ||
-        binding.Implicit !== expected.Implicit || binding.Column !== matches[0].columnIndex ||
-        binding.Table !== (matches[0].owner === 0 ? original.EnvTable : original.AdminTable)) {
+    const expected = expectedBindings[index],
+      name = expected.Binding;
+    const matches = schemas.flatMap((schema, owner) =>
+      schema.flatMap((column, columnIndex) =>
+        column.name.toLowerCase() === name?.toLowerCase() ? [{ owner, columnIndex }] : []
+      )
+    );
+    if (
+      !binding ||
+      matches.length !== 1 ||
+      binding.Binding !== name ||
+      binding.ControlID !== expected.ControlID ||
+      binding.Implicit !== expected.Implicit ||
+      binding.Column !== matches[0].columnIndex ||
+      binding.Table !== (matches[0].owner === 0 ? original.EnvTable : original.AdminTable)
+    ) {
       throw new Error('SIVI parent source binding identity or physical ownership changed.');
     }
   });
 }
 
 function target(original: SIVIParentOriginal, column: SIVIParentColumn) {
-  const binding = original.Bindings.find(binding => binding.Binding === column);
+  const binding = original.Bindings.find((binding) => binding.Binding === column);
   if (!binding) throw new Error('SIVI parent source target is unavailable.');
   const row = original.Rows[0][policies[column].owner];
   return { controlId: controlId(column), table: binding.Table, rowId: row.rowId, expected: row.cells[binding.Column] };
@@ -208,20 +263,23 @@ export function parseSIVIParentInput(column: SIVIParentColumn, expected: Project
     if (policy.kind !== 'categorical') error = 'Explicit empty TEXT is available only for categorical storage.';
     else value = { ...value, storage: 'text', text: '' };
   } else if (input.kind === 'boolean') {
-    if (policy.kind !== 'boolean' || typeof input.value !== 'boolean') error = 'Select an explicit floodplain BOOLEAN or NULL.';
+    if (policy.kind !== 'boolean' || typeof input.value !== 'boolean')
+      error = 'Select an explicit floodplain BOOLEAN or NULL.';
     else value = { ...value, storage: 'integer', integer: input.value ? '-1' : '0' };
   } else if (input.kind === 'option') {
     if (policy.kind !== 'option' && policy.kind !== 'action') error = 'This field is not a source option target.';
     else if (column === 'PlotType') {
       if (!Number.isInteger(input.option) || input.option === null || input.option < 1 || input.option > 5) {
         error = 'PlotType requires a selected source option1..5; NULL/other actions are unverified.';
-      } else value = { ...value, storage: 'text', text: ['Ground', 'Visual', 'Note', 'FS882', 'Other'][input.option - 1] };
+      } else
+        value = { ...value, storage: 'text', text: ['Ground', 'Visual', 'Note', 'FS882', 'Other'][input.option - 1] };
     } else if (input.option !== null && input.option !== 1 && input.option !== 2) {
       error = 'Select source option1/2 or explicit NULL.';
     } else if (input.option !== null) {
-      value = column === 'SpeciesListComplete'
-        ? { ...value, storage: 'integer', integer: input.option === 1 ? '-1' : '0' }
-        : { ...value, storage: 'text', text: String(input.option) };
+      value =
+        column === 'SpeciesListComplete'
+          ? { ...value, storage: 'integer', integer: input.option === 1 ? '-1' : '0' }
+          : { ...value, storage: 'text', text: String(input.option) };
     }
   } else if (input.kind === 'text') {
     if (policy.kind !== 'number' && policy.kind !== 'text' && policy.kind !== 'categorical') {
@@ -237,67 +295,122 @@ export function parseSIVIParentInput(column: SIVIParentColumn, expected: Project
       if (!error && parsed.value !== null && parsed.value !== unchanged) {
         if (column === 'SV_PercentCoarseFrags' && (parsed.value < 0 || parsed.value > 100)) {
           error = `${column} must be between 0% and 100%, or NULL.`;
-        } else if ((column === 'SV_SoilDepth' || column === 'SV_AhorizonDepth' || column === 'SV_GleyingMottlingCM') && parsed.value < 0) {
+        } else if (
+          (column === 'SV_SoilDepth' || column === 'SV_AhorizonDepth' || column === 'SV_GleyingMottlingCM') &&
+          parsed.value < 0
+        ) {
           error = `${column} must be >= 0 cm, or NULL.`;
         }
       }
       if (!error && parsed.value !== null) {
-        value = parsed.value === unchanged && expected.storage === 'real'
-          ? structuredClone(expected)
-          : { ...value, storage: 'real', real: parsed.value };
+        value =
+          parsed.value === unchanged && expected.storage === 'real'
+            ? structuredClone(expected)
+            : { ...value, storage: 'real', real: parsed.value };
       }
     } else if (input.raw !== '') {
       value = { ...value, storage: 'text', text: input.raw };
-      if (input.raw.length > policy.maximum) error = `${column} exceeds${policy.maximum} UTF-16 units; literal input was not truncated.`;
+      if (input.raw.length > policy.maximum)
+        error = `${column} exceeds${policy.maximum} UTF-16 units; literal input was not truncated.`;
     }
   } else error = 'SIVI parent input intent is unavailable.';
   if (!error) error = sourceParentBooleanNullError(column, expected.storage === 'null', value.storage === 'null');
   return { value, error };
 }
 
-export function stageSIVIParent(original: SIVIParentOriginal, drafts: SIVIParentDrafts,
-  column: SIVIParentColumn, input: SIVIParentInput): SIVIParentDrafts {
+export function stageSIVIParent(
+  original: SIVIParentOriginal,
+  drafts: SIVIParentDrafts,
+  column: SIVIParentColumn,
+  input: SIVIParentInput
+): SIVIParentDrafts {
   if (!isColumn(column)) throw new Error('SIVI parent target is outside the sixteen-field draft scope.');
   const reviewed = validateSIVIParentOriginal(original);
   const identity = target(reviewed, column);
   const previous = drafts[column];
-  if (previous && (previous.contextId !== reviewed.ContextID || previous.project !== reviewed.Project ||
-      previous.plot !== reviewed.Plot || previous.column !== column || previous.controlId !== identity.controlId ||
-      previous.table !== identity.table || previous.rowId !== identity.rowId || !equalCell(previous.expected, identity.expected))) {
+  if (
+    previous &&
+    (previous.contextId !== reviewed.ContextID ||
+      previous.project !== reviewed.Project ||
+      previous.plot !== reviewed.Plot ||
+      previous.column !== column ||
+      previous.controlId !== identity.controlId ||
+      previous.table !== identity.table ||
+      previous.rowId !== identity.rowId ||
+      !equalCell(previous.expected, identity.expected))
+  ) {
     throw new Error('SIVI parent original changed; retain drafts and Undo explicitly.');
   }
-  return { ...structuredClone(drafts), [column]: { contextId: reviewed.ContextID, project: reviewed.Project,
-    plot: reviewed.Plot, column, ...structuredClone(identity),
-    ...parseSIVIParentInput(column, identity.expected, input), input: structuredClone(input) } };
+  return {
+    ...structuredClone(drafts),
+    [column]: {
+      contextId: reviewed.ContextID,
+      project: reviewed.Project,
+      plot: reviewed.Plot,
+      column,
+      ...structuredClone(identity),
+      ...parseSIVIParentInput(column, identity.expected, input),
+      input: structuredClone(input),
+    },
+  };
 }
 
 export function siviParentErrors(drafts: SIVIParentDrafts): string[] {
-  return Object.values(drafts).flatMap(draft => draft?.error ? [draft.error] : []);
+  return Object.values(drafts).flatMap((draft) => (draft?.error ? [draft.error] : []));
 }
 export function siviParentDirty(drafts: SIVIParentDrafts): boolean {
-  return Object.values(drafts).some(draft => draft && (draft.error !== null || !equalCell(draft.expected, draft.value)));
+  return Object.values(drafts).some(
+    (draft) => draft && (draft.error !== null || !equalCell(draft.expected, draft.value))
+  );
 }
 export function siviParentProposal(original: SIVIParentOriginal, drafts: SIVIParentDrafts): SIVIParentProposal {
   const reviewed = validateSIVIParentOriginal(original);
-  const result: SIVIParentProposal = { original: reviewed, scalars: [], options: [], text: [], categorical: [], actions: [] };
+  const result: SIVIParentProposal = {
+    original: reviewed,
+    scalars: [],
+    options: [],
+    text: [],
+    categorical: [],
+    actions: [],
+  };
   for (const [name, draft] of Object.entries(drafts)) {
-    if (!isColumn(name) || !draft || draft.column !== name || !completeCell(draft.expected) || !completeCell(draft.value)) {
+    if (
+      !isColumn(name) ||
+      !draft ||
+      draft.column !== name ||
+      !completeCell(draft.expected) ||
+      !completeCell(draft.value)
+    ) {
       throw new Error('SIVI parent draft target or raw cell is incomplete.');
     }
     const identity = target(reviewed, name);
     const parsed = parseSIVIParentInput(name, identity.expected, draft.input);
-    if (draft.contextId !== reviewed.ContextID || draft.project !== reviewed.Project || draft.plot !== reviewed.Plot ||
-        draft.controlId !== identity.controlId || draft.table !== identity.table || draft.rowId !== identity.rowId ||
-        !equalCell(draft.expected, identity.expected) || !equalCell(draft.value, parsed.value) || draft.error !== parsed.error) {
+    if (
+      draft.contextId !== reviewed.ContextID ||
+      draft.project !== reviewed.Project ||
+      draft.plot !== reviewed.Plot ||
+      draft.controlId !== identity.controlId ||
+      draft.table !== identity.table ||
+      draft.rowId !== identity.rowId ||
+      !equalCell(draft.expected, identity.expected) ||
+      !equalCell(draft.value, parsed.value) ||
+      draft.error !== parsed.error
+    ) {
       throw new Error('SIVI parent original or explicit draft intent changed; retain drafts and Undo explicitly.');
     }
     if (parsed.error) throw new Error(parsed.error);
     if (equalCell(draft.expected, draft.value)) continue;
-    const common = { contextId: reviewed.ContextID, table: identity.table, rowId: identity.rowId,
-      controlId: identity.controlId, expected: structuredClone(draft.expected) };
+    const common = {
+      contextId: reviewed.ContextID,
+      table: identity.table,
+      rowId: identity.rowId,
+      controlId: identity.controlId,
+      expected: structuredClone(draft.expected),
+    };
     const domain: Domain = policies[name].domain;
     if (domain === 'actions') {
-      if (draft.input.kind !== 'option' && draft.input.kind !== 'clear') throw new Error('SIVI source action intent was not selected.');
+      if (draft.input.kind !== 'option' && draft.input.kind !== 'clear')
+        throw new Error('SIVI source action intent was not selected.');
       result.actions.push({ ...common, option: draft.input.kind === 'clear' ? null : draft.input.option });
     } else result[domain].push({ ...common, column: name, value: structuredClone(draft.value) });
   }

@@ -1,16 +1,33 @@
 <script lang="ts">
-  import { onMount, onDestroy, untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { EnvironmentReportService, type LongEnvironmentPreview } from '../../bindings/github.com/boostao/vpro/app';
-  import { ReadRequests } from '../shared/readRequests';
-  import { reportTitleError, reportCellText, validateLongEnvironmentPreview } from './longEnvironmentReport';
+  import { ReadRequests, formatError } from '../shared/readRequests';
+  import { reportTitleError, validateLongEnvironmentPreview } from './longEnvironmentReport';
   import { longEnvironmentPreferencesSession } from './longEnvironmentPreferences';
-  import { environmentWorkbookPublicationSession, validateEnvironmentWorkbookReview, type ValidatedEnvironmentWorkbookReview } from './environmentWorkbook';
+  import {
+    environmentWorkbookPublicationSession,
+    validateEnvironmentWorkbookReview,
+    type ValidatedEnvironmentWorkbookReview,
+  } from './environmentWorkbook';
   import { notifications } from '../shell/notificationService.svelte';
+  import LongEnvironmentPreviewBody from './parts/LongEnvironmentPreviewBody.svelte';
 
-  let { contextId, project, projectPath, su, suPath, onBusyChange }: {
-    contextId: string; project: string; projectPath: string; su: string; suPath: string;
+  let {
+    contextId,
+    project,
+    projectPath,
+    su,
+    suPath,
+    onBusyChange,
+  }: {
+    contextId: string;
+    project: string;
+    projectPath: string;
+    su: string;
+    suPath: string;
     onBusyChange: (busy: boolean) => void;
   } = $props();
+
   let title = $state('');
   let ready = $state(false);
   let busy = $state(false);
@@ -21,29 +38,39 @@
   const titleError = $derived(reportTitleError(title));
   const reads = new ReadRequests();
   let generation = 0;
-  const preferencesEnabled = true;
-  const workbookEnabled = true;
   const workbookOwner = untrack(() => ({ contextId, project, projectPath, su, suPath }));
   const workbookSession = environmentWorkbookPublicationSession(workbookOwner);
   let publication = $state(workbookSession.view());
   const workbookBarrier = $derived(publication.busy || publication.blocked);
-  const ownedPreferences = () => longEnvironmentPreferencesSession({ contextId, project, projectPath, su, suPath });
-  const preferences = preferencesEnabled ? ownedPreferences() : null;
+  const preferences = longEnvironmentPreferencesSession?.(workbookOwner) ?? null;
   let preferenceView = $state(preferences?.view() ?? null);
-  const preferenceBarrier = $derived(!!preferenceView && (preferenceView.busy || preferenceView.blocked ||
-    preferenceView.authorityUnknown || !!preferenceView.draftError));
-  function reportBusy() { onBusyChange(busy || preferenceBarrier || workbookBarrier); }
+  const preferenceBarrier = $derived(
+    !!preferenceView &&
+      (preferenceView.busy || preferenceView.blocked || preferenceView.authorityUnknown || !!preferenceView.draftError)
+  );
+  function reportBusy() {
+    onBusyChange(busy || preferenceBarrier || workbookBarrier);
+  }
   let lastPubKey = '';
   let lastPrefError = '';
   let notifiedPrefReceipts = 0;
+
   function syncWorkbookNotifications() {
     const settled = workbookSession.view();
-    if (settled.busy) { lastPubKey = ''; return; }
+    if (settled.busy) {
+      lastPubKey = '';
+      return;
+    }
     if (!settled.outcome && !settled.error) return;
-    const key = JSON.stringify([settled.outcome?.status ?? '', settled.outcome?.path ?? '', settled.outcome?.sha256 ?? '', settled.error ?? '', settled.requestedDestination ?? '']);
+    const key = JSON.stringify([
+      settled.outcome?.status ?? '',
+      settled.outcome?.path ?? '',
+      settled.outcome?.sha256 ?? '',
+      settled.error ?? '',
+      settled.requestedDestination ?? '',
+    ]);
     if (key === lastPubKey) return;
     lastPubKey = key;
-    if (typeof notifications === 'undefined') return;
     const ctxTag = (typeof project === 'string' && project) || undefined;
     if (settled.outcome?.status === 'published' && !settled.error) {
       const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
@@ -55,15 +82,17 @@
     } else if (settled.error || settled.outcome) {
       notifications.error(
         'Long Environment workbook export failed',
-        settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
+        settled.error ||
+          `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
         {
           category: 'reports',
           source: 'Long Environment',
           contextTag: ctxTag,
-        },
+        }
       );
     }
   }
+
   function syncPreferenceNotifications() {
     const view = preferences?.view();
     if (!view) return;
@@ -72,13 +101,13 @@
     if (receipts.length < notifiedPrefReceipts) notifiedPrefReceipts = 0;
     for (let i = notifiedPrefReceipts; i < receipts.length; i++) {
       const receipt = receipts[i];
-      if (receipt.kind === 'known' && typeof notifications !== 'undefined') {
+      if (receipt.kind === 'known') {
         if (receipt.outcome.committed && !receipt.outcome.errorMessage) {
-          notifications.success('Long Environment title saved', receipt.outcome.changed ? 'Saved report title preference.' : 'No title changes.', {
-            category: 'reports',
-            source: 'Long Environment',
-            contextTag: ctxTag,
-          });
+          notifications.success(
+            'Long Environment title saved',
+            receipt.outcome.changed ? 'Saved report title preference.' : 'No title changes.',
+            { category: 'reports', source: 'Long Environment', contextTag: ctxTag }
+          );
         } else if (receipt.outcome.committed) {
           notifications.warning('Long Environment title saved with warning', receipt.outcome.errorMessage, {
             category: 'reports',
@@ -104,7 +133,7 @@
     }
     notifiedPrefReceipts = receipts.length;
     const prefErr = view.error ?? '';
-    if (prefErr && prefErr !== lastPrefError && typeof notifications !== 'undefined') {
+    if (prefErr && prefErr !== lastPrefError) {
       notifications.error('Long Environment title preference failed', prefErr, {
         category: 'reports',
         source: 'Long Environment',
@@ -113,277 +142,399 @@
     }
     lastPrefError = prefErr;
   }
+
   const unsubscribeWorkbook = workbookSession.subscribe(() => {
     publication = workbookSession.view();
     syncWorkbookNotifications();
     reportBusy();
   });
   const unsubscribe = preferences?.subscribe(() => {
-    preferenceView = preferences.view(); title = preferenceView.draft.title; ready = preferenceView.initialized; preview = null; workbookReview = null;
+    preferenceView = preferences.view();
+    title = preferenceView.draft.title;
+    ready = preferenceView.initialized;
+    preview = null;
+    workbookReview = null;
     syncPreferenceNotifications();
-    onBusyChange(busy || preferenceView.busy || preferenceView.blocked || preferenceView.authorityUnknown || !!preferenceView.draftError || workbookBarrier);
+    onBusyChange(
+      busy ||
+        preferenceView.busy ||
+        preferenceView.blocked ||
+        preferenceView.authorityUnknown ||
+        !!preferenceView.draftError ||
+        workbookBarrier
+    );
   });
   syncWorkbookNotifications();
   syncPreferenceNotifications();
 
   function cancel() {
-    generation++; reads.cancelAll(); preferences?.cancelLoad(); busy = false; reportBusy();
-  }
-  async function options() {
-    if (workbookBarrier) return;
-    cancel(); const request = generation; ready = false; error = ''; preview = null; workbookReview = null;
-    busy = true; reportBusy();
-    try {
-      const value = await reads.track(EnvironmentReportService.GetLongEnvironmentOptions(contextId));
-      if (request !== generation) return;
-      if (value.contextId !== contextId || typeof value.title !== 'string' || reportTitleError(value.title)) {
-        throw new Error('Configured report title is incomplete or belongs to another context.');
-      }
-      if (!preferencesEnabled) title = value.title;
-      ready = true;
-    } catch (cause) {
-      if (request === generation) {
-        error = `Report options unavailable: ${String(cause)}`;
-        if (typeof notifications !== 'undefined') {
-          notifications.error('Long Environment options failed', error, {
-            category: 'reports',
-            source: 'Long Environment',
-            contextTag: (typeof project === 'string' && project) || undefined,
-          });
-        }
-      }
-    } finally {
-      if (request === generation) { busy = false; reportBusy(); }
-    }
+    generation++;
+    reads.cancelAll();
+    preferences?.cancelLoad();
+    busy = false;
+    reportBusy();
   }
   async function show() {
     if (busy || preferenceBarrier || workbookBarrier || !ready || titleError || su === 'None') return;
-    cancel(); const request = generation; const requestedTitle = title; error = ''; preview = null; workbookReview = null;
-    busy = true; reportBusy();
+    cancel();
+    const request = generation;
+    const requestedTitle = title;
+    error = '';
+    preview = null;
+    workbookReview = null;
+    busy = true;
+    reportBusy();
     try {
-      const value = await reads.track(EnvironmentReportService.PreviewLongEnvironment(contextId, { title: requestedTitle }));
+      const value = await reads.track(
+        EnvironmentReportService.PreviewLongEnvironment(contextId, { title: requestedTitle })
+      );
       if (request !== generation) return;
       preview = validateLongEnvironmentPreview(value, contextId, project, projectPath, su, suPath, requestedTitle);
     } catch (cause) {
       if (request === generation) {
-        error = `Report unavailable; this report preparation made no data or configuration writes: ${String(cause)}`;
-        if (typeof notifications !== 'undefined') {
-          notifications.error('Long Environment report failed', error, {
-            category: 'reports',
-            source: 'Long Environment',
-            contextTag: (typeof project === 'string' && project) || undefined,
-          });
-        }
+        error = `Report unavailable; this report preparation made no data or configuration writes: ${formatError(cause)}`;
+        notifications.error('Long Environment report failed', error, {
+          category: 'reports',
+          source: 'Long Environment',
+          contextTag: (typeof project === 'string' && project) || undefined,
+        });
       }
     } finally {
-      if (request === generation) { busy = false; reportBusy(); }
+      if (request === generation) {
+        busy = false;
+        reportBusy();
+      }
     }
   }
   async function loadSavedTitle() {
     if (!preferences || preferenceView?.busy || preferenceView?.blocked || workbookBarrier) return;
-    cancel(); const request = generation; const token = preferences.beginLoad(); error = ''; busy = true; reportBusy();
+    cancel();
+    const request = generation;
+    const token = preferences.beginLoad();
+    error = '';
+    busy = true;
+    reportBusy();
     try {
       const value = await reads.track(EnvironmentReportService.GetLongEnvironmentPreferences(contextId));
       if (request !== generation) return;
       preferences.applyLoaded(value, token);
     } catch (cause) {
       if (request === generation) {
-        error = `Saved title unavailable; no defaults applied: ${String(cause)}`;
-        if (typeof notifications !== 'undefined') {
-          notifications.error('Long Environment title load failed', error, {
-            category: 'reports',
-            source: 'Long Environment',
-            contextTag: (typeof project === 'string' && project) || undefined,
-          });
-        }
-      }
-    } finally {
-      if (request === generation) { busy = false; reportBusy(); }
-    }
-  }
-  async function saveTitle() {
-    if (!preferences || busy || preferenceView?.busy || preferenceView?.blocked || workbookBarrier) return;
-    cancel(); error = '';
-    try {
-      await preferences.save(request => EnvironmentReportService.SaveLongEnvironmentPreferences(contextId, JSON.stringify(request)));
-      if (typeof syncPreferenceNotifications === 'function') {
-        syncPreferenceNotifications();
-      }
-    } catch (cause) {
-      error = String(cause);
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Long Environment title save failed', error, {
+        error = `Saved title unavailable; no defaults applied: ${formatError(cause)}`;
+        notifications.error('Long Environment title load failed', error, {
           category: 'reports',
           source: 'Long Environment',
           contextTag: (typeof project === 'string' && project) || undefined,
         });
       }
+    } finally {
+      if (request === generation) {
+        busy = false;
+        reportBusy();
+      }
+    }
+  }
+  async function saveTitle() {
+    if (!preferences || busy || preferenceView?.busy || preferenceView?.blocked || workbookBarrier) return;
+    cancel();
+    error = '';
+    try {
+      await preferences.save((request) =>
+        EnvironmentReportService.SaveLongEnvironmentPreferences(contextId, JSON.stringify(request))
+      );
+      if (typeof syncPreferenceNotifications === 'function') syncPreferenceNotifications();
+    } catch (cause) {
+      error = formatError(cause);
+      notifications.error('Long Environment title save failed', error, {
+        category: 'reports',
+        source: 'Long Environment',
+        contextTag: (typeof project === 'string' && project) || undefined,
+      });
     }
   }
   function editTitle(value: string) {
-    if (preferences) { cancel(); preferences.edit(value); }
-    else title = value;
-    preview = null; workbookReview = null; if (!reportTitleError(title)) error = '';
+    if (preferences) {
+      cancel();
+      preferences.edit(value);
+    } else {
+      title = value;
+    }
+    preview = null;
+    workbookReview = null;
+    if (!reportTitleError(title)) error = '';
   }
   async function reviewWorkbook() {
-    if (!workbookEnabled || busy || preferenceBarrier || workbookBarrier || !ready || titleError || su === 'None' || su === 'USysSuTableDynamic') return;
-    cancel(); const request = generation, requestedTitle = title;
-    error = ''; preview = null; workbookReview = null; busy = true; reportBusy();
+    if (
+      busy ||
+      preferenceBarrier ||
+      workbookBarrier ||
+      !ready ||
+      titleError ||
+      su === 'None' ||
+      su === 'USysSuTableDynamic'
+    ) {
+      return;
+    }
+    cancel();
+    const request = generation;
+    const requestedTitle = title;
+    error = '';
+    preview = null;
+    workbookReview = null;
+    busy = true;
+    reportBusy();
     try {
-      const value = await reads.track(EnvironmentReportService.GetEnvironmentWorkbookReview(contextId, JSON.stringify({ title: requestedTitle })));
+      const value = await reads.track(
+        EnvironmentReportService.GetEnvironmentWorkbookReview(contextId, JSON.stringify({ title: requestedTitle }))
+      );
       if (request !== generation) return;
       workbookReview = validateEnvironmentWorkbookReview(value, workbookOwner, requestedTitle);
       preview = workbookReview.preview;
     } catch (cause) {
       if (request === generation) {
-        error = `Workbook review unavailable; no file published: ${String(cause)}`;
-        if (typeof notifications !== 'undefined') {
-          notifications.error('Long Environment workbook review failed', error, {
-            category: 'reports',
-            source: 'Long Environment',
-            contextTag: (typeof project === 'string' && project) || undefined,
-          });
-        }
+        error = `Workbook review unavailable; no file published: ${formatError(cause)}`;
+        notifications.error('Long Environment workbook review failed', error, {
+          category: 'reports',
+          source: 'Long Environment',
+          contextTag: (typeof project === 'string' && project) || undefined,
+        });
       }
     } finally {
-      if (request === generation) { busy = false; reportBusy(); }
+      if (request === generation) {
+        busy = false;
+        reportBusy();
+      }
     }
   }
   async function publishWorkbook() {
-    if (!workbookEnabled || busy || preferenceBarrier || workbookBarrier || !workbookReview) return;
-    cancel(); error = '';
+    if (busy || preferenceBarrier || workbookBarrier || !workbookReview) return;
+    cancel();
+    error = '';
     const ctxTag = (typeof project === 'string' && project) || undefined;
     try {
-      await workbookSession.publish(workbookReview, destination, request =>
-        EnvironmentReportService.ExportReviewedEnvironmentWorkbook(contextId, JSON.stringify(request)));
-      if (typeof syncWorkbookNotifications === 'function') syncWorkbookNotifications();
-      else if (typeof notifications !== 'undefined') {
+      await workbookSession.publish(workbookReview, destination, (request) =>
+        EnvironmentReportService.ExportReviewedEnvironmentWorkbook(contextId, JSON.stringify(request))
+      );
+      if (typeof syncWorkbookNotifications === 'function') {
+        syncWorkbookNotifications();
+      } else {
         const s = workbookSession.view();
         const opts = { category: 'reports' as const, source: 'Long Environment', contextTag: ctxTag };
-        if (s.outcome?.status === 'published' && !s.error) notifications.success('Long Environment workbook exported', s.outcome.path || s.requestedDestination || destination, opts);
-        else if (s.error || s.outcome) notifications.error('Long Environment workbook export failed', s.error || `Publication ${s.outcome?.status ?? 'failed'} for ${s.requestedDestination || destination}`, opts);
+        if (s.outcome?.status === 'published' && !s.error) {
+          notifications.success(
+            'Long Environment workbook exported',
+            s.outcome.path || s.requestedDestination || destination,
+            opts
+          );
+        } else if (s.error || s.outcome) {
+          notifications.error(
+            'Long Environment workbook export failed',
+            s.error || `Publication ${s.outcome?.status ?? 'failed'} for ${s.requestedDestination || destination}`,
+            opts
+          );
+        }
       }
     } catch (cause) {
-      error = String(cause);
-      if (typeof notifications !== 'undefined') notifications.error('Long Environment workbook export failed', error, { category: 'reports', source: 'Long Environment', contextTag: ctxTag });
+      error = formatError(cause);
+      notifications.error('Long Environment workbook export failed', error, {
+        category: 'reports',
+        source: 'Long Environment',
+        contextTag: ctxTag,
+      });
     }
   }
   function acknowledgeWorkbook() {
     workbookSession.acknowledge();
     workbookReview = null;
   }
-  onMount(() => { if (!preferencesEnabled) void options(); });
-  onDestroy(() => { unsubscribe?.(); unsubscribeWorkbook(); cancel(); });
+  onDestroy(() => {
+    unsubscribe?.();
+    unsubscribeWorkbook();
+    cancel();
+  });
 </script>
 
 <section class="report" data-long-environment-report aria-label="Long Environment report">
-  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border report-sticky-bar" data-report-sticky-bar>
+  <header
+    class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border report-sticky-bar"
+    data-report-sticky-bar
+  >
     <h1>Long Environment</h1>
     <div class="actions">
-      <button data-source-control="btnViewReport" disabled={busy || preferenceBarrier || workbookBarrier || !ready || !!titleError || su === 'None'} onclick={show}>View Report</button>
-      <button disabled={!workbookEnabled || busy || preferenceBarrier || workbookBarrier || !ready || !!titleError || su === 'None' || su === 'USysSuTableDynamic'} onclick={reviewWorkbook}>Review XLSX workbook (no file yet)</button>
-      {#if preferencesEnabled}
-        <button data-long-environment-preferences-load disabled={!!preferenceView?.busy || !!preferenceView?.blocked || workbookBarrier} onclick={loadSavedTitle}>Load saved title</button>
-      {:else}
-        <button disabled={busy || workbookBarrier} onclick={options}>Reload report options</button>
-      {/if}
+      <button
+        data-source-control="btnViewReport"
+        disabled={busy || preferenceBarrier || workbookBarrier || !ready || !!titleError || su === 'None'}
+        onclick={show}
+      >
+        View Report
+      </button>
+      <button
+        disabled={busy ||
+          preferenceBarrier ||
+          workbookBarrier ||
+          !ready ||
+          !!titleError ||
+          su === 'None' ||
+          su === 'USysSuTableDynamic'}
+        onclick={reviewWorkbook}
+      >
+        Review XLSX workbook (no file yet)
+      </button>
+      <button
+        data-long-environment-preferences-load
+        disabled={!!preferenceView?.busy || !!preferenceView?.blocked || workbookBarrier}
+        onclick={loadSavedTitle}
+      >
+        Load saved title
+      </button>
       {#if busy}<button onclick={cancel}>Cancel report read</button>{/if}
     </div>
   </header>
   {#if titleError}<p class="error" role="alert">{titleError}</p>{/if}
   {#if preferenceView?.draftError}<p class="error" role="alert">{preferenceView.draftError}</p>{/if}
   {#if !publication.outcome && publication.blocked && !publication.busy}
-    <p data-environment-workbook-unknown role="alert">Workbook outcome unknown. Retain and inspect {publication.requestedDestination}; never replay blindly.</p>
+    <p data-environment-workbook-unknown role="alert">
+      Workbook outcome unknown. Retain and inspect {publication.requestedDestination}; never replay blindly.
+    </p>
   {/if}
   {#if publication.blocked && !publication.busy}
     <button onclick={acknowledgeWorkbook}>Acknowledge workbook outcome</button>
   {/if}
   <p>Project {project}; selected SU {su}. Whole selected-SU scope; profile navigation does not filter this report.</p>
   <label for="long-environment-title">Title</label>
-  {#if preferencesEnabled}
-    <textarea id="long-environment-title" data-source-control="rptSvTitle" rows="2" value={title}
-      disabled={!!preferenceView?.busy || !!preferenceView?.blocked || workbookBarrier}
-      oninput={(event) => { const value = event.currentTarget.value; editTitle(value); }}></textarea>
-  {:else}
-    <input id="long-environment-title" data-source-control="rptSvTitle" value={title} disabled={busy || !ready || workbookBarrier}
-      oninput={(event) => { const value = event.currentTarget.value; editTitle(value); }} />
-  {/if}
-  {#if preferencesEnabled}
-    <div class="actions">
-      <button data-long-environment-preferences-save disabled={busy || !!preferenceView?.busy || !!preferenceView?.blocked || !!preferenceView?.draftError || !preferenceView?.saved || workbookBarrier}
-        onclick={saveTitle}>Save reviewed title</button>
-      <button data-long-environment-preferences-undo disabled={!!preferenceView?.busy || !!preferenceView?.blocked || !preferenceView?.saved || workbookBarrier} onclick={() => { cancel(); preferences?.undo(); }}>Undo title</button>
-      {#if preferenceView?.blocked}
-        <button data-long-environment-preferences-acknowledge disabled={preferenceView.busy} onclick={() => preferences?.acknowledge()}>Acknowledge preference outcome</button>
-      {/if}
-    </div>
-  {/if}
+  <textarea
+    id="long-environment-title"
+    data-source-control="rptSvTitle"
+    rows="2"
+    value={title}
+    disabled={!!preferenceView?.busy || !!preferenceView?.blocked || workbookBarrier}
+    oninput={(event) => editTitle(event.currentTarget.value)}></textarea>
+  <div class="actions">
+    <button
+      data-long-environment-preferences-save
+      disabled={busy ||
+        !!preferenceView?.busy ||
+        !!preferenceView?.blocked ||
+        !!preferenceView?.draftError ||
+        !preferenceView?.saved ||
+        workbookBarrier}
+      onclick={saveTitle}
+    >
+      Save reviewed title
+    </button>
+    <button
+      data-long-environment-preferences-undo
+      disabled={!!preferenceView?.busy || !!preferenceView?.blocked || !preferenceView?.saved || workbookBarrier}
+      onclick={() => {
+        cancel();
+        preferences?.undo();
+      }}
+    >
+      Undo title
+    </button>
+    {#if preferenceView?.blocked}
+      <button
+        data-long-environment-preferences-acknowledge
+        disabled={preferenceView.busy}
+        onclick={() => preferences?.acknowledge()}
+      >
+        Acknowledge preference outcome
+      </button>
+    {/if}
+  </div>
   {#if workbookReview}
-    <p>Reviewed workbook: {workbookReview.sheets.length} source unit sheets; {workbookReview.bytes} bytes;
-      SHA256 {workbookReview.workbookSHA256}. Hidden lossless source metadata preserves typed NULL/empty values and diagnostics.</p>
-    <ul>{#each workbookReview.sheets as sheet}<li>Unit “{sheet.unit}” → worksheet “{sheet.name}”</li>{/each}</ul>
+    <p>
+      Reviewed workbook: {workbookReview.sheets.length} source unit sheets; {workbookReview.bytes} bytes; SHA256
+      {workbookReview.workbookSHA256}. Hidden lossless source metadata preserves typed NULL/empty values and
+      diagnostics.
+    </p>
+    <ul>
+      {#each workbookReview.sheets as sheet}
+        <li>Unit “{sheet.unit}” → worksheet “{sheet.name}”</li>
+      {/each}
+    </ul>
     <label for="environment-workbook-destination">New XLSX output file (existing files are never replaced)</label>
-    <textarea id="environment-workbook-destination" rows="2" disabled={busy || preferenceBarrier || workbookBarrier} bind:value={destination}></textarea>
-    <button disabled={busy || preferenceBarrier || workbookBarrier || !destination || !/\.xlsx$/i.test(destination)} onclick={publishWorkbook}>Publish reviewed XLSX workbook</button>
+    <textarea
+      id="environment-workbook-destination"
+      rows="2"
+      disabled={busy || preferenceBarrier || workbookBarrier}
+      bind:value={destination}></textarea>
+    <button
+      disabled={busy || preferenceBarrier || workbookBarrier || !destination || !/\.xlsx$/i.test(destination)}
+      onclick={publishWorkbook}
+    >
+      Publish reviewed XLSX workbook
+    </button>
   {/if}
   {#each preferenceView?.receipts ?? [] as receipt}
     {#if receipt.kind !== 'known'}
       <p data-long-environment-preferences-receipt data-long-environment-preferences-unknown-receipt role="alert">
-        Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}</p>
+        Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}
+      </p>
     {/if}
   {/each}
-  {#if preferencesEnabled}<p class="guidance">Load saved title explicitly, review the literal draft, then Save or Undo.
-    Save changes only ReportOptions.LEReportTitle in YAML. Input and report preparation never save preferences.</p>{/if}
+  <p class="guidance">
+    Load saved title explicitly, review the literal draft, then Save or Undo. Save changes only
+    ReportOptions.LEReportTitle in YAML. Input and report preparation never save preferences.
+  </p>
   {#if su === 'None'}<p>Select an SU in Projects &amp; context before viewing the report.</p>{/if}
   {#if preview}
-    <h2>{preview.report.title}</h2>
-    <p role="status">{preview.report.units?.length} units; 72 ordered rows. This report preparation made no data/configuration writes.</p>
-    {#each preview.report.diagnostics ?? [] as diagnostic}
-      <p class="diagnostic">{diagnostic.code}: unit {diagnostic.unit === null ? 'not applicable' : JSON.stringify(diagnostic.unit)};
-        plot {diagnostic.plotNumber === null ? 'not applicable' : JSON.stringify(diagnostic.plotNumber)}; count {diagnostic.count}.</p>
-    {/each}
-    {#each preview.report.units ?? [] as unit (unit.code)}
-      <section class="unit">
-        <h3>Site Unit — {unit.code === '' ? '"" (empty code)' : unit.code}</h3>
-        <p>Long name: {unit.longName === null ? unit.nameStatus : unit.longName === '' ? '"" (empty name)' : unit.longName}</p>
-        <details><summary>Reference name candidates ({unit.nameCandidates?.length})</summary>
-          {#each unit.nameCandidates ?? [] as candidate}
-            <p>Reference row {candidate.rowId}: {reportCellText(candidate.value)}</p>
-          {/each}
-        </details>
-        <div class="table-scroll" role="region" aria-label={`Environmental table for unit ${unit.code}`}>
-          <table>
-            <caption>Environment Table — Site Unit {JSON.stringify(unit.code)}</caption>
-            <thead><tr><th scope="col">Field</th>{#each unit.plots ?? [] as plot}<th scope="col">{JSON.stringify(plot.plotNumber)}<br />{plot.status}</th>{/each}</tr></thead>
-            <tbody>{#each preview.report.fields ?? [] as field, i}
-              <tr class:heading={field.heading}><th scope="row">{field.label}</th>
-                {#each unit.plots ?? [] as plot}<td>{field.heading ? '' : reportCellText(plot.values![i])}</td>{/each}
-              </tr>
-            {/each}</tbody>
-          </table>
-        </div>
-      </section>
-    {/each}
+    <LongEnvironmentPreviewBody {preview} />
   {/if}
-  <p class="guidance">Long Environment report preview.
-    {#if !preferencesEnabled}Title starts from ReportOptions.LEReportTitle in YAML; edits affect only this preview, not saved preferences.{/if}
-    NULL, empty text, and historical storage remain distinct; missing rows and conflicting unit names are surfaced without silent modification.
-    Workbook export writes to a new .xlsx destination without overwriting existing files.</p>
+  <p class="guidance">
+    Long Environment report preview. NULL, empty text, and historical storage remain distinct; missing rows and
+    conflicting unit names are surfaced without silent modification. Workbook export writes to a new .xlsx destination
+    without overwriting existing files.
+  </p>
 </section>
 
 <style>
-  .report { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; overflow-wrap: anywhere; gap: .75rem; }
-  .report-sticky-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
-  .report-sticky-bar h1 { margin: 0; }
-  h1 { font-size: 1.5rem; } h2 { font-size: 1.25rem; } h3 { font-weight: 600; }
-  input, textarea { box-sizing: border-box; min-width: 0; border: 1px solid var(--vpro-border); border-radius: .4rem; padding: .6rem; width: 100%; }
-  .actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-  button { border: 1px solid var(--vpro-border); border-radius: .4rem; padding: .5rem .75rem; background: var(--vpro-surface); }
-  button:disabled { opacity: .5; }
-  .unit { min-width: 0; display: grid; gap: .5rem; }
-  .table-scroll { overflow-x: auto; max-width: 100%; border: 1px solid var(--vpro-border); }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid var(--vpro-border); padding: .5rem; text-align: left; min-width: 9rem; white-space: pre-wrap; overflow-wrap: anywhere; }
-  th[scope="row"] { min-width: 16rem; } .heading { background: var(--vpro-canvas); }
-  .error { color: var(--vpro-error); } .diagnostic { color: var(--vpro-info); } .guidance { color: var(--vpro-ink-secondary); font-size: .875rem; }
+  .report {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+    overflow-wrap: anywhere;
+    gap: 0.75rem;
+  }
+  .report-sticky-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+  .report-sticky-bar h1 {
+    margin: 0;
+    font-size: 1.5rem;
+  }
+  textarea {
+    box-sizing: border-box;
+    min-width: 0;
+    border: 1px solid var(--vpro-border);
+    border-radius: 0.4rem;
+    padding: 0.6rem;
+    width: 100%;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  button {
+    border: 1px solid var(--vpro-border);
+    border-radius: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--vpro-surface);
+  }
+  button:disabled {
+    opacity: 0.5;
+  }
+  .error {
+    color: var(--vpro-error);
+  }
+  .guidance {
+    color: var(--vpro-ink-secondary);
+    font-size: 0.875rem;
+  }
 </style>

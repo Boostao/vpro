@@ -50,10 +50,15 @@
 <fieldset class="space-y-3 rounded border border-vpro-border border-t-[3px] border-t-vpro-gold bg-white p-4 shadow-sm">
   <legend class="px-1 text-sm font-semibold text-vpro-navy">Submit Active Project to BECMaster Staging</legend>
   <p class="text-xs text-vpro-ink-secondary">
-    Packages <span class="font-mono font-semibold">{activeProject}</span> with automated compliance validation, <span class="font-mono">VUser.USysUserSpp</span> personal species manifest, and <span class="font-mono">_Lump</span> / <span class="font-mono">_SU</span> companions into <span class="font-mono">staging.submissions</span>.
+    Packages <span class="font-mono font-semibold">{activeProject}</span> with automated compliance validation,
+    <span class="font-mono">VUser.USysUserSpp</span>
+    personal species manifest, and <span class="font-mono">_Lump</span> / <span class="font-mono">_SU</span> companions
+    into <span class="font-mono">staging.submissions</span>.
   </p>
 
-  <div class="flex flex-wrap items-center justify-between gap-2 rounded border border-vpro-border bg-vpro-surface-subtle p-2.5">
+  <div
+    class="flex flex-wrap items-center justify-between gap-2 rounded border border-vpro-border bg-vpro-surface-subtle p-2.5"
+  >
     <label class="flex items-center gap-2 text-xs text-vpro-ink">
       <input
         type="checkbox"
@@ -73,13 +78,20 @@
   </div>
 
   {#if stagingPreflight}
-    <div class="space-y-2 rounded border border-vpro-border bg-vpro-surface-subtle p-3 text-xs" data-staging-preflight-summary>
+    <div
+      class="space-y-2 rounded border border-vpro-border bg-vpro-surface-subtle p-3 text-xs"
+      data-staging-preflight-summary
+    >
       <div class="flex flex-wrap items-center justify-between gap-2">
         <span class="font-semibold text-vpro-navy">
-          Project: <span class="font-mono">{stagingPreflight.project}</span> ({stagingPreflight.plotCount} plots, {stagingPreflight.vegRowCount} veg rows)
+          Project: <span class="font-mono">{stagingPreflight.project}</span> ({stagingPreflight.plotCount} plots, {stagingPreflight.vegRowCount}
+          veg rows)
         </span>
         {#if stagingPreflight.compliancePassed}
-          <span class="rounded bg-vpro-success px-2 py-0.5 text-xs font-semibold text-white" data-preflight-badge="passed">
+          <span
+            class="rounded bg-vpro-success px-2 py-0.5 text-xs font-semibold text-white"
+            data-preflight-badge="passed"
+          >
             Compliance Passed (0 Blocking)
           </span>
         {:else}
@@ -89,7 +101,10 @@
         {/if}
       </div>
       <div class="grid grid-cols-3 gap-2 text-[11px] text-vpro-ink-secondary">
-        <div>Personal Species (<span class="font-mono">USysUserSpp</span>): <span class="font-bold">{stagingPreflight.userSpeciesManifest.rowCount}</span></div>
+        <div>
+          Personal Species (<span class="font-mono">USysUserSpp</span>):
+          <span class="font-bold">{stagingPreflight.userSpeciesManifest.rowCount}</span>
+        </div>
         <div>Lump Rows: <span class="font-bold">{stagingPreflight.lumpRowCount}</span></div>
         <div>SU Rows: <span class="font-bold">{stagingPreflight.suRowCount}</span></div>
       </div>
@@ -114,7 +129,9 @@
       {/if}
 
       {#if !stagingPreflight.compliancePassed && activeRoleMode === 'custodian'}
-        <label class="flex items-center gap-2 rounded border border-amber-400 bg-amber-50 p-2 text-xs font-medium text-amber-950">
+        <label
+          class="flex items-center gap-2 rounded border border-amber-400 bg-amber-50 p-2 text-xs font-medium text-amber-950"
+        >
           <input type="checkbox" bind:checked={stagingCustodianOverride} disabled={busy || operationHeld} />
           Custodian Admin Override: permit staging upload despite blocking compliance findings
         </label>
@@ -124,7 +141,9 @@
 
   <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
     <div class="space-y-1">
-      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="staging-submitted-by">Submitter Name / ID</label>
+      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="staging-submitted-by"
+        >Submitter Name / ID</label
+      >
       <input
         id="staging-submitted-by"
         type="text"
@@ -135,7 +154,9 @@
       />
     </div>
     <div class="space-y-1">
-      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="staging-base-tag">Base Snapshot Tag (optional)</label>
+      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="staging-base-tag"
+        >Base Snapshot Tag (optional)</label
+      >
       <input
         id="staging-base-tag"
         type="text"
@@ -155,8 +176,7 @@
       class="w-full rounded border border-vpro-border p-2 text-xs"
       bind:value={stagingSubmitterNotes}
       disabled={busy || operationHeld}
-      placeholder="Field season summary, plot range, or provisional taxonomy notes"
-    ></textarea>
+      placeholder="Field season summary, plot range, or provisional taxonomy notes"></textarea>
   </div>
 
   <div class="flex flex-wrap items-center gap-2">
@@ -180,7 +200,8 @@
 
   {#if submitStagingResult}
     <p class="text-xs font-medium text-vpro-success">
-      Submission <span class="font-mono font-semibold">{submitStagingResult.submissionId}</span> recorded ({submitStagingResult.status} at {submitStagingResult.submittedAt}).
+      Submission <span class="font-mono font-semibold">{submitStagingResult.submissionId}</span> recorded ({submitStagingResult.status}
+      at {submitStagingResult.submittedAt}).
     </p>
   {/if}
 

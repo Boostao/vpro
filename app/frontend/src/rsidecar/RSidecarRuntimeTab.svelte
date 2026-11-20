@@ -98,7 +98,9 @@
         </div>
       {/if}
     {:else}
-      <p class="muted">Click "Check R &amp; Quarto Setup" to inspect installed Rscript, Quarto CLI, and R package versions.</p>
+      <p class="muted">
+        Click "Check R &amp; Quarto Setup" to inspect installed Rscript, Quarto CLI, and R package versions.
+      </p>
     {/if}
   </div>
 

@@ -1,10 +1,12 @@
-import { becGroups, equalCode } from './becEditor';
+import { becGroups, cleanEntryError, equalCode } from './becEditor';
 
 export const qualityKeys = ['sitePlotQuality', 'vegPlotQuality', 'soilPlotQuality'] as const;
-export type QualityKey = typeof qualityKeys[number];
+export type QualityKey = (typeof qualityKeys)[number];
 export type QualityCodes = Record<QualityKey, string | null>;
 export const qualityLabels: Record<QualityKey, string> = {
-  sitePlotQuality: 'Site data quality', vegPlotQuality: 'Vegetation data quality', soilPlotQuality: 'Soil data quality'
+  sitePlotQuality: 'Site data quality',
+  vegPlotQuality: 'Vegetation data quality',
+  soilPlotQuality: 'Soil data quality',
 };
 export interface PlotQualityChoice {
   rowId: string;
@@ -28,8 +30,13 @@ export interface QualityView {
   error: string | null;
 }
 export function qualityKey(column: string | undefined): QualityKey | undefined {
-  return column === 'SitePlotQuality' ? 'sitePlotQuality' : column === 'VegPlotQuality' ? 'vegPlotQuality'
-    : column === 'SoilPlotQuality' ? 'soilPlotQuality' : undefined;
+  return column === 'SitePlotQuality'
+    ? 'sitePlotQuality'
+    : column === 'VegPlotQuality'
+      ? 'vegPlotQuality'
+      : column === 'SoilPlotQuality'
+        ? 'soilPlotQuality'
+        : undefined;
 }
 export function wellFormedUTF16(value: string): boolean {
   for (let i = 0; i < value.length; i++) {
@@ -51,36 +58,52 @@ export function qualityLengthError(codes: QualityCodes, original: QualityCodes |
 export function qualityValueError(key: QualityKey, value: string | null, original: string | null): string | null {
   if (value === null || value === original) return null;
   if (value === '') return `Clear ${qualityLabels[key]} to NULL instead of an empty string.`;
-  if (!wellFormedUTF16(value)) return `${qualityLabels[key]} contains an incomplete Unicode character. Correct it instead of truncating or replacing it.`;
-  if (value.length > 15) return `${qualityLabels[key]} must be at most 15 UTF-16 characters; the raw entry has not been truncated.`;
+  if (!wellFormedUTF16(value))
+    return `${qualityLabels[key]} contains an incomplete Unicode character. Correct it instead of truncating or replacing it.`;
+  if (value.length > 15)
+    return `${qualityLabels[key]} must be at most 15 UTF-16 characters; the raw entry has not been truncated.`;
   return null;
 }
 export function qualityChanged(codes: QualityCodes, original: QualityCodes | null): boolean {
-  return qualityKeys.some(key => codes[key] !== (original?.[key] ?? null));
+  return qualityKeys.some((key) => codes[key] !== (original?.[key] ?? null));
 }
 export function qualityGroups(rows: PlotQualityChoice[]) {
-  return becGroups(rows, row => row.selectable && row.code !== null && row.code.length <= 15 && wellFormedUTF16(row.code) ? row.code : null);
+  return becGroups(rows, (row) =>
+    row.selectable && row.code !== null && row.code.length <= 15 && wellFormedUTF16(row.code) ? row.code : null
+  );
 }
 export function qualityDefinitions(rows: PlotQualityChoice[], code: string | null): PlotQualityChoice[] {
-  return rows.filter(row => row.selectable && equalCode(row.code, code));
+  return rows.filter((row) => row.selectable && equalCode(row.code, code));
 }
 export function qualityWarnings(codes: QualityCodes, original: QualityCodes | null, view: QualityView): string[] {
   if (view.busy) return [];
-  const changed = qualityKeys.filter(key => codes[key] !== (original?.[key] ?? null) && codes[key] !== null);
+  const changed = qualityKeys.filter((key) => codes[key] !== (original?.[key] ?? null) && codes[key] !== null);
   if (!changed.length) return [];
   if (!view.ready) return [view.error ?? 'Quality choices are unavailable; changed raw codes have not been checked.'];
-  return changed.filter(key => !qualityDefinitions(view.choices, codes[key]).length)
-    .map(key => `${qualityLabels[key]} "${codes[key]}" is not in the shared PlotQualitySite list. It will be kept exactly as entered, not converted to a note code.`);
+  return changed
+    .filter((key) => !qualityDefinitions(view.choices, codes[key]).length)
+    .map(
+      (key) =>
+        `${qualityLabels[key]} "${codes[key]}" is not in the shared PlotQualitySite list. It will be kept exactly as entered, not converted to a note code.`
+    );
 }
-export function qualityValidation(codes: QualityCodes, original: QualityCodes | null, view: QualityView, acknowledged: boolean): string | null {
+export function qualityValidation(
+  codes: QualityCodes,
+  original: QualityCodes | null,
+  view: QualityView,
+  acknowledged: boolean
+): string | null {
   if (!qualityChanged(codes, original)) return null;
   const invalid = qualityLengthError(codes, original);
   if (invalid) return invalid;
   if (view.busy) return 'Wait for quality choices to finish refreshing.';
   return qualityWarnings(codes, original, view).length && !acknowledged
-    ? 'Review and explicitly acknowledge the unmatched quality codes before saving.' : null;
+    ? 'Review and explicitly acknowledge the unmatched quality codes before saving.'
+    : null;
 }
-function fingerprint(codes: QualityCodes): string { return JSON.stringify(qualityKeys.map(key => codes[key])); }
+function fingerprint(codes: QualityCodes): string {
+  return JSON.stringify(qualityKeys.map((key) => codes[key]));
+}
 const acknowledgements = new WeakMap<object, string>();
 export function rememberQualityAcknowledgement(draft: object, codes: QualityCodes, accepted: boolean): void {
   if (accepted) acknowledgements.set(draft, fingerprint(codes));
@@ -93,9 +116,15 @@ export class QualityLookup {
   private revision = 0;
   private disposed = false;
   private view: QualityView = { choices: [], busy: false, ready: false, error: null };
-  constructor(private fetch: (force: boolean) => Promise<PlotQualityChoice[]>, private state: (view: QualityView) => void,
-    private label = 'Quality', private cancel?: () => void) {}
-  snapshot(): QualityView { return { ...this.view }; }
+  constructor(
+    private fetch: (force: boolean) => Promise<PlotQualityChoice[]>,
+    private state: (view: QualityView) => void,
+    private label = 'Quality',
+    private cancel?: () => void
+  ) {}
+  snapshot(): QualityView {
+    return { ...this.view };
+  }
   private publish(update: Partial<QualityView>): void {
     this.view = { ...this.view, ...update };
     this.state(this.snapshot());
@@ -112,8 +141,16 @@ export class QualityLookup {
       this.publish({ choices, ready: true, busy: false });
     } catch (cause) {
       if (this.disposed || revision !== this.revision) return;
-      this.publish({ busy: false, ready: false, error: `${this.label} choices could not be loaded: ${String(cause)}` });
+      this.publish({
+        busy: false,
+        ready: false,
+        error: `${this.label} choices could not be loaded: ${cleanEntryError(cause)}`,
+      });
     }
   }
-  dispose(): void { this.disposed = true; this.revision++; this.cancel?.(); }
+  dispose(): void {
+    this.disposed = true;
+    this.revision++;
+    this.cancel?.();
+  }
 }

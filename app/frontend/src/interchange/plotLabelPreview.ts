@@ -15,18 +15,31 @@ const trimLabelDisplay = (value: string): string => value.replace(/^ +| +(?![\s\
 function labelText(value: unknown, field: string, limit: number): string | null {
   if (value === null) return null;
   if (typeof value !== 'string' || !wellFormedUTF16(value) || value.includes('\0') || value.length > limit) {
-    throw new Error(`${field} cannot be assigned to the source label without repairing text or exceeding its UTF-16 bound.`);
+    throw new Error(
+      `${field} cannot be assigned to the source label without repairing text or exceeding its UTF-16 bound.`
+    );
   }
   return value;
 }
 
 export function plotLabelFromHeader(value: unknown, requestedPlot: string): PlotLabelPreview {
-  if (plotLookupInputError(requestedPlot) || !value || typeof value !== 'object' || Array.isArray(value) ||
-      !('plotNumber' in value) || value.plotNumber !== requestedPlot) {
+  if (
+    plotLookupInputError(requestedPlot) ||
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    !('plotNumber' in value) ||
+    value.plotNumber !== requestedPlot
+  ) {
     throw new Error('A complete saved header for this exact literal plot was not returned.');
   }
-  if (!('zone' in value) || !('subZone' in value) || !('siteSeries' in value) ||
-      !('plotRepresenting' in value) || !('projectId' in value)) {
+  if (
+    !('zone' in value) ||
+    !('subZone' in value) ||
+    !('siteSeries' in value) ||
+    !('plotRepresenting' in value) ||
+    !('projectId' in value)
+  ) {
     throw new Error('The saved header is missing source label fields; no blank defaults were inferred.');
   }
   const plot = labelText(value.plotNumber, 'PlotNumber1', 7);
@@ -41,7 +54,10 @@ export function plotLabelFromHeader(value: unknown, requestedPlot: string): Plot
   const representing = labelText(value.plotRepresenting, 'Representing1', 255);
   const projectId = labelText(value.projectId, 'ProjectID1', 50);
   return {
-    plotNumber1: plot, zone1: combinedZone, representing1: representing, projectId1: projectId,
+    plotNumber1: plot,
+    zone1: combinedZone,
+    representing1: representing,
+    projectId1: projectId,
     displayPlotNumber: trimLabelDisplay(plot),
     displayRepresenting: representing === null ? null : trimLabelDisplay(representing),
   };

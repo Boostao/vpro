@@ -28,25 +28,31 @@
           <h2>{selectedPlot.plotNumber}</h2>
         </div>
         {#if onOpenPlot}
-          <button
-            type="button"
-            class="wb-btn wb-btn-primary"
-            onclick={() => onOpenPlot?.(selectedPlot!.plotNumber)}
-          >
+          <button type="button" class="wb-btn wb-btn-primary" onclick={() => onOpenPlot?.(selectedPlot!.plotNumber)}>
             Open in FS882 Editor
           </button>
         {/if}
       </div>
 
       <dl class="wb-kv-grid">
-        <div><dt>NAD83 Lat, Lon</dt><dd>{selectedPlot.lat.toFixed(5)}, {selectedPlot.lon.toFixed(5)}</dd></div>
-        <div><dt>Active SiteUnit</dt><dd>{selectedPlot.siteUnit || 'Unassigned'}</dd></div>
-        <div><dt>Field BGC</dt><dd>{selectedPlot.fieldBgc || 'Blank'}</dd></div>
+        <div>
+          <dt>NAD83 Lat, Lon</dt>
+          <dd>{selectedPlot.lat.toFixed(5)}, {selectedPlot.lon.toFixed(5)}</dd>
+        </div>
+        <div>
+          <dt>Active SiteUnit</dt>
+          <dd>{selectedPlot.siteUnit || 'Unassigned'}</dd>
+        </div>
+        <div>
+          <dt>Field BGC</dt>
+          <dd>{selectedPlot.fieldBgc || 'Blank'}</dd>
+        </div>
         <div>
           <dt>GIS_BGC (v13)</dt>
           <dd class:wb-flag-text={selectedPlot.bgcMismatch}>
             {selectedPlot.gisBgc || selectedSuggestion?.gisBgc || 'Pending'}
-            {#if selectedPlot.bgcMismatch} (Mismatch){/if}
+            {#if selectedPlot.bgcMismatch}
+              (Mismatch){/if}
           </dd>
         </div>
         <div>
@@ -55,23 +61,41 @@
             {selectedPlot.hasUtm ? `${selectedPlot.divergenceMeters.toFixed(1)} m` : 'No UTM entered'}
           </dd>
         </div>
-        <div><dt>Elevation / Slope</dt><dd>{selectedPlot.elevation ?? '-'} m / {selectedPlot.slope ?? '-'}%</dd></div>
-        <div><dt>Ecosection</dt><dd>{selectedPlot.ecosection || selectedSuggestion?.ecosection || '-'}</dd></div>
-        <div><dt>NR District</dt><dd>{selectedPlot.fsRegionDistrict || selectedSuggestion?.fsRegionDistrict || '-'}</dd></div>
+        <div>
+          <dt>Elevation / Slope</dt>
+          <dd>{selectedPlot.elevation ?? '-'} m / {selectedPlot.slope ?? '-'}%</dd>
+        </div>
+        <div>
+          <dt>Ecosection</dt>
+          <dd>{selectedPlot.ecosection || selectedSuggestion?.ecosection || '-'}</dd>
+        </div>
+        <div>
+          <dt>NR District</dt>
+          <dd>{selectedPlot.fsRegionDistrict || selectedSuggestion?.fsRegionDistrict || '-'}</dd>
+        </div>
       </dl>
 
       {#if suggestionBusy}
         <p class="wb-muted" role="status">Looking up local BGC &amp; boundary overlay...</p>
       {:else if selectedSuggestion}
         <div class="wb-suggestion-box">
-          <strong>Map Overlay Suggestion ({selectedSuggestion.bgcSource || 'overview'} z{selectedSuggestion.bgcZoom}):</strong>
+          <strong
+            >Map Overlay Suggestion ({selectedSuggestion.bgcSource || 'overview'} z{selectedSuggestion.bgcZoom}):</strong
+          >
           <div>BGC: {selectedSuggestion.gisBgc || '-'} ({selectedSuggestion.zoneName || 'BC'})</div>
           {#if selectedSuggestion.utmZone > 0}
-            <div>NAD83 UTM Zone {selectedSuggestion.utmZone}: {selectedSuggestion.utmEasting.toFixed(1)} E, {selectedSuggestion.utmNorthing.toFixed(1)} N</div>
+            <div>
+              NAD83 UTM Zone {selectedSuggestion.utmZone}: {selectedSuggestion.utmEasting.toFixed(1)} E, {selectedSuggestion.utmNorthing.toFixed(
+                1
+              )} N
+            </div>
           {:else}
             <div>NAD83 UTM: Outside supported Canadian / BC UTM zones</div>
           {/if}
-          <div>BCGS 1:20k Sheet: {selectedSuggestion.ntsMapSheet || '-'} | District: {selectedSuggestion.fsRegionDistrict || '-'}</div>
+          <div>
+            BCGS 1:20k Sheet: {selectedSuggestion.ntsMapSheet || '-'} | District: {selectedSuggestion.fsRegionDistrict ||
+              '-'}
+          </div>
           {#if selectedSuggestion.terrainSanityNote}
             <div class="wb-muted">{selectedSuggestion.terrainSanityNote}</div>
           {/if}
@@ -79,7 +103,9 @@
       {/if}
     </div>
   {:else}
-    <p class="wb-muted">Click any plot pin on the map or choose from the list below to inspect coordinates and BGC v13 overlay.</p>
+    <p class="wb-muted">
+      Click any plot pin on the map or choose from the list below to inspect coordinates and BGC v13 overlay.
+    </p>
   {/if}
 
   <div class="wb-list-header">Scoped Plots ({filteredPoints.length})</div>

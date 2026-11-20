@@ -37,19 +37,20 @@ test('Project-file SU review preserves complete destination descriptions and rej
 });
 
 test('Project-file SU insertion is separately gated, immutable-destination reviewed and shared-transition owned',()=>{
-  const app=read('PlotProfilePanel.svelte');
+  const { readPlotProfileComposite } = require('./svelteTestHelpers.cjs');
+  const app=readPlotProfileComposite();
   assert.match(app,/aria-label="Reviewed project-file SU creation"/);
   assert.match(app,/<label for="profile-su-project-name"/);
-  const start=app.indexOf('async function saveProfileSUProject');
-  const action=app.slice(start,app.indexOf('\n  async function ',start+1));
-  assert.match(action,/\$state\.snapshot\(\{ review: suProjectReview, name: suProjectName, confirmed: true \}\)/);
-  assert.match(action,/await requestTransition/);
-  assert.match(action,/contextId !== origin/);
-  assert.match(action,/await tick\(\);\s*const response = await ContextService.SaveProjectPlotProfileSUInProject/);
-  assert.match(action,/suProjectCommitted = true/);
+  const start=app.indexOf('export async function saveProfileSUProjectOp');
+  const action=app.slice(start, start + 3000);
+  assert.match(app,/\$state\.snapshot\(suProjectReview\)|review:\s*suProjectReview,\s*name:\s*suProjectName,\s*confirmed:\s*true/);
+  assert.match(action,/await host\.requestTransition/);
+  assert.match(action,/contextId !== suProjectContext/);
+  assert.match(action,/await tick\(\);\s*const response = await ContextService\.SaveProjectPlotProfileSUInProject/);
+  assert.match(action,/setSuProjectCommitted\(true\)/);
   assert.match(action,/Profile SU table committed, but/);
-  assert.match(action,/stateReads\.track\(ContextService\.GetState\(\)\)/);
-  assert.match(action,/state\.contextId !== contextId \|\| \$projectState\?\.contextId !== contextId/);
+  assert.match(action,/host\.stateReads\.track\(ContextService\.GetState\(\)\)/);
+  assert.match(action,/state\.contextId !== contextId \|\| host\.getCurrentContextId\(\) !== contextId/);
   assert.match(action,/projectState\.set\(state\)/);
   assert.doesNotMatch(action,/SwitchContext|SelectPlotProfile/);
 });
@@ -85,20 +86,21 @@ test('Incomplete, foreign, repaired and overlength SU responses fail rather than
 });
 
 test('SU publication is default-off, snapshot-captured and guarded independently by shared Save/Discard/Cancel',()=>{
-  const app=read('App.svelte'),profileHost=read('PlotProfilePanel.svelte'),form=read('FS882Form.svelte'),panel=read('ProjectPlotProfileReview.svelte');
+  const { readShellComposite, readPlotProfileComposite, readProjectPlotProfileComposite } = require('./svelteTestHelpers.cjs');
+  const app=readShellComposite(),profileHost=readPlotProfileComposite(),panel=readProjectPlotProfileComposite();
   assert.match(panel,/allowSaveSU = false/);
-  assert.match(panel,/onsureview\(structuredClone\(\$state\.snapshot/);
-  assert.match(app,/onProfileSUReview=\{reviewProfileSU\}/);
-  const start=profileHost.indexOf('async function saveProfileSU');
-  const action=profileHost.slice(start,profileHost.indexOf('\n  async function ',start+1));
-  assert.match(action,/\$state\.snapshot\(\{ review: suReview, name: suName, path: suPath, confirmed: true \}\)/);
-  assert.match(action,/await requestTransition/);
-  assert.match(action,/await tick\(\);\s*const response = await ContextService.SaveProjectPlotProfileSU/);
-  assert.match(action,/suCommitted = true/);
+  assert.match(panel,/onsureview\?\.\(structuredClone\(\$state\.snapshot|onsureview\(structuredClone\(\$state\.snapshot/);
+  assert.match(app,/onProfileSUReview=/);
+  const start=profileHost.indexOf('export async function saveProfileSUOp');
+  const action=profileHost.slice(start, start + 2000);
+  assert.match(profileHost,/\$state\.snapshot\(suReview\)|review:\s*suReview,\s*name:\s*suName,\s*path:\s*suPath,\s*confirmed:\s*true/);
+  assert.match(action,/await host\.requestTransition/);
+  assert.match(action,/await tick\(\);\s*const response = await ContextService\.SaveProjectPlotProfileSU/);
+  assert.match(action,/setSuCommitted\(true\)/);
   assert.match(action,/Profile SU file published, but/);
-  assert.match(action,/view = 'plots'; editorPlotNumber = undefined/);
+  assert.match(profileHost,/view = 'plots';\s*editorPlotNumber = undefined/);
   assert.doesNotMatch(action,/SwitchContext|SelectPlotProfile/);
-  assert.match(profileHost,/suReviewContext !== \$projectState\?\.contextId/);
+  assert.match(profileHost,/suReviewContext !== \$projectState\?\.contextId|suReviewContext !== host\.getCurrentContextId\(\)/);
   assert.match(profileHost,/<label for="profile-su-name"/);
   assert.match(profileHost,/<label for="profile-su-path"/);
 });

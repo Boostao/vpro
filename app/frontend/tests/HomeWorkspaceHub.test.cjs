@@ -78,7 +78,8 @@ test('HomeWorkspaceHub compiles cleanly with BC Gov styling, zero emojis, and st
 });
 
 test('App and Navigation embed HomeWorkspaceHub and clean BEC workflow terminology', () => {
-  const app = readFileSync(srcPath('App.svelte'), 'utf8');
+  const { readShellComposite } = require('./svelteTestHelpers.cjs');
+  const app = readShellComposite();
   const navigation = readFileSync(srcPath('Navigation.svelte'), 'utf8');
   assert.match(app, /HomeWorkspaceHub/);
   assert.doesNotMatch(app, /DemoReadiness/);

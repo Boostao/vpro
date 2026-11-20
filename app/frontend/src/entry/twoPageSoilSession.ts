@@ -1,10 +1,22 @@
 import type { EditorCloseState } from '../shell/closeLifecycle';
-import { ReadRequests, type CancellableRead } from '../shared/readRequests';
+import { formatError, ReadRequests, type CancellableRead } from '../shared/readRequests';
 import { equalCell } from '../admin/projectMetadataEditor';
-import { twoPageSoilOriginalFromWire, stageTwoPageSoil, twoPageSoilRequest,
-  twoPageSoilCreationRequest, validateTwoPageSoilHorizonDraft,
-  type TwoPageSoilOwner, type TwoPageSoilOriginal, type TwoPageSoilDrafts } from './twoPageSoilEditor';
-import { twoPageSoilReceiptFromWire, twoPageSoilOutcomeFromWire, type TwoPageSoilRequest, type TwoPageSoilReceipt } from './twoPageSoilReceipt';
+import {
+  twoPageSoilOriginalFromWire,
+  stageTwoPageSoil,
+  twoPageSoilRequest,
+  twoPageSoilCreationRequest,
+  validateTwoPageSoilHorizonDraft,
+  type TwoPageSoilOwner,
+  type TwoPageSoilOriginal,
+  type TwoPageSoilDrafts,
+} from './twoPageSoilEditor';
+import {
+  twoPageSoilReceiptFromWire,
+  twoPageSoilOutcomeFromWire,
+  type TwoPageSoilRequest,
+  type TwoPageSoilReceipt,
+} from './twoPageSoilReceipt';
 
 export interface TwoPageSoilPort {
   read(): CancellableRead<unknown>;
@@ -25,10 +37,21 @@ export interface TwoPageSoilView {
   noCommitCertificate: { requestId: string; reason: string } | null;
   creation?: { raw: string; error: string | null };
 }
+const DEFAULT_WRITING_ALLOWED = true;
+
 export class TwoPageSoilSession {
   private readonly owner: TwoPageSoilOwner;
-  private state: TwoPageSoilView = { original: null, drafts: {}, busy: false, blocked: false,
-    acknowledgementRequired: false, error: null, receipts: [], revision: 0, noCommitCertificate: null };
+  private state: TwoPageSoilView = {
+    original: null,
+    drafts: {},
+    busy: false,
+    blocked: false,
+    acknowledgementRequired: false,
+    error: null,
+    receipts: [],
+    revision: 0,
+    noCommitCertificate: null,
+  };
   private pending: { request: TwoPageSoilRequest; json: string } | null = null;
   private attempted = false;
   private dispatchSettled = true;
@@ -38,29 +61,57 @@ export class TwoPageSoilSession {
   private readonly listeners = new Set<() => void>();
   private readonly retiredRequests = new Set<string>();
 
-  constructor(owner: TwoPageSoilOwner, private readonly port: TwoPageSoilPort, private readonly writingEnabled = true,
-    private readonly creationEnabled = false) {
+  constructor(
+    owner: TwoPageSoilOwner,
+    private readonly port: TwoPageSoilPort,
+    private readonly writingEnabled = DEFAULT_WRITING_ALLOWED,
+    private readonly creationEnabled = false
+  ) {
     this.owner = { ...owner };
   }
   subscribe(notify: () => void) {
     if (this.disposed) throw new Error('Soil session has been disposed.');
-    this.listeners.add(notify); notify();
-    return () => { this.listeners.delete(notify); };
+    this.listeners.add(notify);
+    notify();
+    return () => {
+      this.listeners.delete(notify);
+    };
   }
-  private changed() { for (const notify of this.listeners) notify(); }
-  view(): TwoPageSoilView { return structuredClone(this.state); }
+  private changed() {
+    for (const notify of this.listeners) notify();
+  }
+  view(): TwoPageSoilView {
+    return structuredClone(this.state);
+  }
   closeState(): EditorCloseState {
-    const invalid = this.state.creation?.error ?? Object.values(this.state.drafts).find(draft => draft.error)?.error;
-    const dirty = Object.values(this.state.drafts).some(draft => draft.error || !equalCell(draft.expected, draft.value));
-    const reason = this.state.busy ? 'Wait for or cancel the soil operation.'
-      : this.state.blocked ? 'Recover the exact unknown soil request from durable history; do not repeat Save.'
-      : this.state.acknowledgementRequired ? 'Acknowledge the committed soil receipt without erasing it.'
-      : invalid ?? (this.state.creation ? 'Use the explicit Create Horizon action, not ordinary Save.' :
-        !this.writingEnabled ? 'Soil writing is disabled.' :
-        !this.state.original ? 'Load the exact physical soil original.' : !dirty ? 'No changed soil data cells.' : '');
-    return { unsaved: dirty || !!this.state.creation || this.state.blocked || this.state.acknowledgementRequired,
-      busy: this.state.busy, blocked: this.state.blocked || this.state.acknowledgementRequired || !!invalid,
-      canSave: reason === '', saveReason: reason, error: this.state.error };
+    const invalid = this.state.creation?.error ?? Object.values(this.state.drafts).find((draft) => draft.error)?.error;
+    const dirty = Object.values(this.state.drafts).some(
+      (draft) => draft.error || !equalCell(draft.expected, draft.value)
+    );
+    const reason = this.state.busy
+      ? 'Wait for or cancel the soil operation.'
+      : this.state.blocked
+        ? 'Recover the exact unknown soil request from durable history; do not repeat Save.'
+        : this.state.acknowledgementRequired
+          ? 'Acknowledge the committed soil receipt without erasing it.'
+          : (invalid ??
+            (this.state.creation
+              ? 'Use the explicit Create Horizon action, not ordinary Save.'
+              : !this.writingEnabled
+                ? 'Soil writing is disabled.'
+                : !this.state.original
+                  ? 'Load the exact physical soil original.'
+                  : !dirty
+                    ? 'No changed soil data cells.'
+                    : ''));
+    return {
+      unsaved: dirty || !!this.state.creation || this.state.blocked || this.state.acknowledgementRequired,
+      busy: this.state.busy,
+      blocked: this.state.blocked || this.state.acknowledgementRequired || !!invalid,
+      canSave: reason === '',
+      saveReason: reason,
+      error: this.state.error,
+    };
   }
   private idle() {
     if (this.disposed) throw new Error('Soil session has been disposed.');
@@ -69,16 +120,20 @@ export class TwoPageSoilSession {
   private known() {
     this.idle();
     if (this.state.blocked) throw new Error('Resolve the retained unknown soil request without replacing it.');
-    if (this.state.acknowledgementRequired) throw new Error('Acknowledge the committed soil receipt without erasing it.');
+    if (this.state.acknowledgementRequired)
+      throw new Error('Acknowledge the committed soil receipt without erasing it.');
   }
   private begin() {
     const generation = ++this.generation;
-    this.state.busy = true; this.state.error = null; this.changed();
+    this.state.busy = true;
+    this.state.error = null;
+    this.changed();
     return generation;
   }
   private finish(generation: number) {
     if (generation !== this.generation) return;
-    this.state.busy = false; this.changed();
+    this.state.busy = false;
+    this.changed();
   }
   async load(): Promise<boolean> {
     this.known();
@@ -95,32 +150,50 @@ export class TwoPageSoilSession {
       this.state.drafts = {};
       return true;
     } catch (cause) {
-      if (generation === this.generation) this.state.error = `Soil original unavailable; prior state retained: ${String(cause)}`;
+      if (generation === this.generation)
+        this.state.error = `Soil original unavailable; prior state retained: ${formatError(cause)}`;
       return false;
-    } finally { this.finish(generation); }
+    } finally {
+      this.finish(generation);
+    }
   }
   stage(rowId: string, column: string, raw: string, nullValue: boolean) {
     this.known();
-    if (this.state.creation) throw new Error('Finish or Undo the retained new Horizon before editing existing soil records.');
+    if (this.state.creation)
+      throw new Error('Finish or Undo the retained new Horizon before editing existing soil records.');
     if (!this.writingEnabled) throw new Error('Soil writing is disabled.');
     if (!this.state.original) throw new Error('Load the exact soil original before staging.');
     const draft = stageTwoPageSoil(this.state.original, rowId, column, raw, nullValue);
     const key = JSON.stringify([rowId, column]);
     if (!draft.error && equalCell(draft.expected, draft.value)) delete this.state.drafts[key];
     else this.state.drafts[key] = draft;
-    this.state.error = Object.values(this.state.drafts).find(draft => draft.error)?.error ?? null;
+    this.state.error = Object.values(this.state.drafts).find((draft) => draft.error)?.error ?? null;
     this.changed();
   }
   undo() {
     this.known();
-    this.state.drafts = {}; delete this.state.creation; this.state.error = null; this.changed();
+    this.state.drafts = {};
+    delete this.state.creation;
+    this.state.error = null;
+    this.changed();
   }
   beginCreation() {
     this.known();
-    if (!this.writingEnabled || !this.creationEnabled || !this.port.create || !this.state.original || this.closeState().unsaved) {
-      throw new Error('Add Horizon requires enabled creation, a clean loaded physical original and its unlocked owner.');
+    if (
+      !this.writingEnabled ||
+      !this.creationEnabled ||
+      !this.port.create ||
+      !this.state.original ||
+      this.closeState().unsaved
+    ) {
+      throw new Error(
+        'Add Horizon requires enabled creation, a clean loaded physical original and its unlocked owner.'
+      );
     }
-    this.state.creation = { raw: '', error: 'Enter nonempty Horizon text within8 UTF-16 units, or Undo the new horizon.' };
+    this.state.creation = {
+      raw: '',
+      error: 'Enter nonempty Horizon text within8 UTF-16 units, or Undo the new horizon.',
+    };
     this.state.error = this.state.creation.error;
     this.changed();
   }
@@ -130,27 +203,42 @@ export class TwoPageSoilSession {
       throw new Error('No enabled retained new Horizon draft is owned by this soil session.');
     }
     let error: string | null = null;
-    try { validateTwoPageSoilHorizonDraft(this.state.original, raw); }
-    catch (cause) { error = `New Horizon is invalid: ${String(cause)}`; }
-    this.state.creation = { raw, error }; this.state.error = error; this.changed();
+    try {
+      validateTwoPageSoilHorizonDraft(this.state.original, raw);
+    } catch (cause) {
+      error = `New Horizon is invalid: ${formatError(cause)}`;
+    }
+    this.state.creation = { raw, error };
+    this.state.error = error;
+    this.changed();
   }
   async create(requestId: string): Promise<boolean> {
     this.known();
-    if (!this.writingEnabled || !this.creationEnabled || !this.port.create || !this.state.original ||
-        !this.state.creation || this.state.creation.error || this.retiredRequests.has(requestId)) {
+    if (
+      !this.writingEnabled ||
+      !this.creationEnabled ||
+      !this.port.create ||
+      !this.state.original ||
+      !this.state.creation ||
+      this.state.creation.error ||
+      this.retiredRequests.has(requestId)
+    ) {
       throw new Error('Correct the enabled owned new Horizon draft and use a fresh creation UUID before dispatch.');
     }
     const request = twoPageSoilCreationRequest(this.state.original, this.owner, this.state.creation.raw, requestId);
-    this.pending = { request, json: JSON.stringify(request) }; this.attempted = false;
+    this.pending = { request, json: JSON.stringify(request) };
+    this.attempted = false;
     return this.accept(false);
   }
   cancel() {
     if (!this.state.busy) return;
     this.generation++;
-    this.reads.cancelAll(); this.state.busy = false;
+    this.reads.cancelAll();
+    this.state.busy = false;
     if (this.pending && this.attempted) {
       this.state.blocked = true;
-      this.state.error = 'Soil Save delivery cancelled; exact request retained. Recover durable history without replay.';
+      this.state.error =
+        'Soil Save delivery cancelled; exact request retained. Recover durable history without replay.';
     } else {
       this.pending = null;
       this.state.error = 'Soil operation cancelled before mutation dispatch; prior original and drafts retained.';
@@ -159,7 +247,8 @@ export class TwoPageSoilSession {
   }
   async save(requestId: string): Promise<boolean> {
     this.known();
-    if (this.retiredRequests.has(requestId)) throw new Error('This soil UUID was certified without commit; use a new UUID for an explicit new Save.');
+    if (this.retiredRequests.has(requestId))
+      throw new Error('This soil UUID was certified without commit; use a new UUID for an explicit new Save.');
     const close = this.closeState();
     if (!close.canSave || !this.state.original) throw new Error(close.saveReason);
     const request = twoPageSoilRequest(this.state.original, this.owner, this.state.drafts, requestId);
@@ -170,7 +259,8 @@ export class TwoPageSoilSession {
   async resolve(): Promise<boolean> {
     this.idle();
     if (!this.pending || !this.state.blocked) throw new Error('No exact unknown soil request is retained.');
-    if (!this.dispatchSettled) throw new Error('Wait for the retained Save transport to settle before read-only recovery.');
+    if (!this.dispatchSettled)
+      throw new Error('Wait for the retained Save transport to settle before read-only recovery.');
     return this.accept(true);
   }
   private async accept(recovery: boolean): Promise<boolean> {
@@ -179,14 +269,25 @@ export class TwoPageSoilSession {
     const generation = this.begin();
     try {
       if (generation !== this.generation) return false;
-      if (!recovery) { this.attempted = true; this.dispatchSettled = false; }
+      if (!recovery) {
+        this.attempted = true;
+        this.dispatchSettled = false;
+      }
       let wire: unknown;
       try {
-        wire = await this.reads.track(recovery ? this.port.outcome(pending.json) :
-          pending.request.horizon !== undefined ? this.port.create!(pending.json) : this.port.save(pending.json));
-      } finally { if (!recovery) this.dispatchSettled = true; }
+        wire = await this.reads.track(
+          recovery
+            ? this.port.outcome(pending.json)
+            : pending.request.horizon !== undefined
+              ? this.port.create!(pending.json)
+              : this.port.save(pending.json)
+        );
+      } finally {
+        if (!recovery) this.dispatchSettled = true;
+      }
       if (generation !== this.generation) return false;
-      if (wire === null) throw new Error('Missing history is unresolved; neither cancellation nor matching values authorizes replay.');
+      if (wire === null)
+        throw new Error('Missing history is unresolved; neither cancellation nor matching values authorizes replay.');
       let receipt: TwoPageSoilReceipt | null = null;
       let noCommit: { requestId: string; reason: string } | null = null;
       if (recovery) {
@@ -202,7 +303,8 @@ export class TwoPageSoilSession {
         this.state.noCommitCertificate = noCommit;
         this.state.blocked = false;
         this.state.error = `${noCommit.reason} Drafts retained for correction or Undo; an explicit new Save requires a new UUID.`;
-        this.pending = null; this.attempted = false;
+        this.pending = null;
+        this.attempted = false;
         return true;
       }
       if (!receipt) throw new Error('Committed soil outcome requires its complete durable receipt.');
@@ -213,29 +315,38 @@ export class TwoPageSoilSession {
       this.state.revision++;
       this.state.blocked = false;
       this.state.acknowledgementRequired = true;
-      this.pending = null; this.attempted = false;
+      this.pending = null;
+      this.attempted = false;
       return true;
     } catch (cause) {
       if (generation === this.generation) {
         if (this.attempted) {
           this.state.blocked = true;
-          this.state.error = `Soil Save outcome remains unknown; original/drafts/request retained without replay: ${String(cause)}`;
+          this.state.error = `Soil Save outcome remains unknown; original/drafts/request retained without replay: ${formatError(cause)}`;
         } else {
           this.pending = null;
-          this.state.error = `Soil request failed before dispatch; retained drafts require correction: ${String(cause)}`;
+          this.state.error = `Soil request failed before dispatch; retained drafts require correction: ${formatError(cause)}`;
         }
       }
       return false;
-    } finally { this.finish(generation); }
+    } finally {
+      this.finish(generation);
+    }
   }
   acknowledge() {
     this.idle();
-    if (this.state.blocked || !this.state.acknowledgementRequired) throw new Error('Only a verified committed soil receipt can be acknowledged.');
-    this.state.acknowledgementRequired = false; this.state.error = null; this.changed();
+    if (this.state.blocked || !this.state.acknowledgementRequired)
+      throw new Error('Only a verified committed soil receipt can be acknowledged.');
+    this.state.acknowledgementRequired = false;
+    this.state.error = null;
+    this.changed();
   }
   dispose() {
     this.known();
     if (this.closeState().unsaved) throw new Error('Correct or Undo retained soil drafts before disposal.');
-    this.generation++; this.reads.cancelAll(); this.listeners.clear(); this.disposed = true;
+    this.generation++;
+    this.reads.cancelAll();
+    this.listeners.clear();
+    this.disposed = true;
   }
 }

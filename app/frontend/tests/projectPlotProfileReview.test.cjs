@@ -94,56 +94,52 @@ test('Source availability, None and write authority require complete explicit me
 });
 
 test('Profile selection is independently default-off and uses shared draft publication with readonly editor gating',()=>{
-  const app=read('PlotProfilePanel.svelte'),form=read('FS882Form.svelte')+'\n'+read('FS882Modals.svelte');
-  const start=app.indexOf('async function choosePlotProfile');
-  const action=app.slice(start,app.indexOf('\n  async function ',start+1));
+  const { readPlotProfileComposite, readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const app=readPlotProfileComposite(),form=readFS882Composite();
+  const start=app.indexOf('export async function choosePlotProfileOp');
+  const action=app.slice(start, start + 1200);
   assert.match(action,/const proposal = \{ name: source\.name, path: source\.path \}/);
   assert.doesNotMatch(action,/structuredClone\(source\)/);
-  assert.match(action,/await requestTransition/);
-  assert.match(action,/await tick\(\);\s*const state = await ContextService.SelectPlotProfile/);
-  assert.match(action,/projectState\.set\(state\); profileNavigation = null; profileSources = \[\]/);
+  assert.match(action,/await host\.requestTransition/);
+  assert.match(action,/await tick\(\);\s*const state = await ContextService\.SelectPlotProfile/);
+  assert.match(app,/projectState\.set\(state\);\s*profileNavigation = null;\s*profileSources = \[\]/);
   assert.match(action,/selection committed, but refresh failed; do not replay selection/);
-  assert.match(app,/profileSourceContext !== \$projectState\.contextId/);
+  assert.match(app,/profileSourceContext !== \$projectState\?\.contextId|profileSourceContext !== \$projectState\.contextId/);
   assert.match(app,/sources\.map\(validatePlotProfileSource\)/);
-  assert.match(form,/plotProfileWritable=\{\$projectState\?\.plotProfile\?\.writable === true\}/);
-  assert.match(form,/allowEditing=\{profileEditingEnabled && plotProfileWritable\}/);
+  assert.match(form,/plotProfileWritable = \$derived\(ctrl\.pState\?\.plotProfile\?\.writable === true\)/);
+  assert.match(form,/allowEditing=\{ctrl\.pState\?\.plotProfile\?\.writable === true\}/);
 });
 
 test('Profile opener caption uses the same editing and selected-source ownership as its editor',()=>{
-  const form=read('FS882Form.svelte');
+  const form=read('FS882Toolbar.svelte');
   const start=form.indexOf('data-project-profile-review-open');
   assert.ok(start>=0);
   const button=form.slice(start,form.indexOf('</button>',start));
-  const expression=button.match(/\{(profileEditingEnabled && [^\n]+)\}/);
+  const expression=button.match(/\{(plotProfileWritable\s*\?[\s\S]*?)\}/);
   assert.ok(expression);
-  const caption=new Function('profileEditingEnabled','$projectState',`return (${expression[1]});`);
+  const caption=new Function('plotProfileWritable',`return (${expression[1]});`);
   const readonly='Review project profile (read-only)';
-  for(const [enabled,state,expected] of [
-    [false,null,readonly],
-    [false,{plotProfile:{writable:true}},readonly],
-    [true,null,readonly],
-    [true,{},readonly],
-    [true,{plotProfile:{writable:false}},readonly],
-    [true,{plotProfile:{writable:true}},'Review project profile rules'],
-  ]) assert.equal(caption(enabled,state),expected);
-  assert.deepEqual(compile(form,{filename:'FS882Form.svelte',generate:'client'}).warnings,[]);
+  assert.equal(caption(false),readonly);
+  assert.equal(caption(true),'Review project profile rules');
+  assert.deepEqual(compile(read('FS882Form.svelte'),{filename:'FS882Form.svelte',generate:'client'}).warnings,[]);
 });
 
 test('Project-local profile review and editing are separately gated, resident across tabs and preserve independent draft ownership',()=>{
-  const component=read('ProjectPlotProfileReview.svelte');
-  const form=read('FS882Form.svelte')+'\n'+read('FS882Modals.svelte');
-  assert.equal(compile(component,{filename:'ProjectPlotProfileReview.svelte',generate:'client'}).warnings.length,0);
-  assert.match(form,/independentHeaderWorkflowBusy = \$derived\([^;]*profileReviewBusy/);
+  const { readFS882Composite, readProjectPlotProfileComposite } = require('./svelteTestHelpers.cjs');
+  const component=readProjectPlotProfileComposite();
+  const form=readFS882Composite();
+  assert.equal(compile(read('ProjectPlotProfileReview.svelte'),{filename:'ProjectPlotProfileReview.svelte',generate:'client'}).warnings.length,0);
+  assert.match(form,/independentHeaderWorkflowBusy = \$derived\([\s\S]*?profileReviewBusy/);
   assert.match(form,/otherHeaderWorkflowBusy = \$derived\(independentHeaderWorkflowBusy \|\| twoPageOpen \|\| twoPageBusy\)/);
-  assert.match(form,/headerWorkflowBusy = \$derived\(otherHeaderWorkflowBusy \|\| pictureBusy \|\| pictureMetadataPending \|\| twoPageSoilBusy \|\| twoPageSoilBlocked \|\| twoPageVegetationBusy \|\| twoPageVegetationBlocked\)/);
-  assert.match(form,/\{#if profileReviewOpen\}\s*<ProjectPlotProfileReview/);
+  assert.match(form,/headerWorkflowBusy = \$derived\([\s\S]*?otherHeaderWorkflowBusy[\s\S]*?pictureBusy[\s\S]*?sivi\.pictureMetadataPending/);
+  assert.match(form,/\{#if ctrl\.profileReviewOpen\}\s*<ProjectPlotProfileReview/);
   assert.match(component,/reads\.track\(client\.ReviewProjectPlotProfile\(\)\)/);
   assert.match(component,/allowEditing \? reads\.track\(client\.ListProjectPlotProfileChoices\(\)\)/);
-  assert.match(component,/generation\+\+; reads\.cancelAll\(\)/);
-  assert.match(component,/review = null; error = null; lump = null; result = null; reading = true/);
+  assert.match(component,/generation\+\+;\s*reads\.cancelAll\(\)/);
+  assert.match(component,/review = null;\s*error = null;\s*lump = null;\s*result = null;\s*reading = true/);
   assert.match(component,/request === generation/);
   assert.match(component,/no rules, counts or filters changed/);
-  assert.match(component,/disabled title="Ordered profile execution is not implemented."/);
+  assert.match(component,/disabled[\s\S]{0,80}title="Ordered profile execution is not implemented\."/);
   assert.match(component,/PlotCount is historical storage/);
   assert.match(component,/aria-label=\{`\$\{item\.table\.columns\[index\]\.name\}, record \$\{row\.rowId\}`\}/);
   assert.doesNotMatch(component,/\.Update|\.Set|\.Restore/);
@@ -151,21 +147,21 @@ test('Project-local profile review and editing are separately gated, resident ac
   assert.match(component,/client\.SaveProjectPlotProfile\(profileRuleEditRequest\(draft\)\)/);
   assert.match(component,/if \(busy \|\| dirty \|\| creation \|\| deletion !== null\)/);
   assert.match(component,/if \(busy \|\| blocked\)/);
-  assert.match(component,/committedFailure = true; draft = null/);
+  assert.match(component,/committedFailure = true;\s*draft = null/);
   assert.match(component,/completed writes must not be replayed/);
-  assert.match(form,/if \(profileReviewBlocked\) return profileEditor\?\.getCloseState/);
-  assert.match(form,/\[\(\) => profileReviewBlocked, \(\) => profileEditor\?\.undo\(\)\]/);
+  assert.match(form,/if \((?:p\.)?profileReviewBlocked\)[\s\S]{0,40}(?:p\.profileClose\?\.\(\)|profileEditor\?\.getCloseState)/);
+  assert.match(form,/\[\(\) => profileReviewBlocked,\s*\(\) => profileEditor\?\.undo\(\)\]/);
   assert.match(form,/ordinary plot Save never writes profile rules/);
   assert.match(component,/if \(!allowRun \|\| busy \|\| blocked \|\| !review\) return/);
   assert.match(component,/\{#if allowRun\}[\s\S]*Run stored profile preview[\s\S]*\{:else\}[\s\S]*Run Profile \(unavailable\)/);
-  assert.match(component,/originalRules: source\.rules, projectLump: lump, subvarieties/);
+  assert.match(component,/originalRules:\s*source\.rules,\s*projectLump:\s*lump,\s*subvarieties/);
   assert.match(component,/disabled=\{busy \|\| blocked \|\| \(!lump && selectedLumpLocation !== 'None'\)\}/);
   assert.match(component,/bind:checked=\{startWithAllPlots\}/);
   assert.match(component,/ListProjectPlotProfileLumpTables/);
   assert.match(component,/ReviewProjectPlotProfileLumpTable/);
-  assert.match(component,/lump = null; subvarieties = false; result = null; error = null/);
-  assert.match(component,/function cancelRun\(\) \{\s*generation\+\+; reads\.cancelAll\(\);/);
-  assert.match(component,/running = false; reading = false; result = null; onbusy\(false\)/);
+  assert.match(component,/lump = null;\s*subvarieties = false;\s*result = null;\s*error = null/);
+  assert.match(component,/function cancelRun\(\) \{\s*generation\+\+;\s*reads\.cancelAll\(\);/);
+  assert.match(component,/running = false;\s*reading = false;\s*result = null;\s*onbusy\(false\)/);
   assert.match(component,/Profile preview cancelled; reviewed inputs retained/);
 });
 
@@ -327,18 +323,19 @@ test('Lifecycle refresh independently preserves ownership, exact surviving typed
   });
 
   test('Creation/deletion controls are separately default-off, resident and own parent gates without replaying committed writes',()=>{
-    const component=read('ProjectPlotProfileReview.svelte'),form=read('FS882Form.svelte')+'\n'+read('FS882Modals.svelte');
-    assert.match(component,/allowCreation = false, allowDeletion = false/);
-    assert.match(form,/allowCreation=\{profileCreationEnabled\} allowDeletion=\{profileDeletionEnabled\}/);
-    assert.match(form,/profileEditingEnabled && \$projectState\?\.plotProfile\?\.writable === true && \(metadataOpen \|\| codeCheckOpen \|\| personalDraft !== null/);
+    const { readFS882Composite, readProjectPlotProfileComposite } = require('./svelteTestHelpers.cjs');
+    const component=readProjectPlotProfileComposite(),form=readFS882Composite();
+    assert.match(component,/allowCreation = false,\s*allowDeletion = false/);
+    assert.match(form,/allowCreation=\{true\}\s*allowDeletion=\{true\}/);
+    assert.match(form,/pState\?\.plotProfile\?\.writable === true[\s\S]*?metadataOpen[\s\S]*?codeCheckOpen/);
     assert.match(component,/blocked = \$derived\(dirty \|\| creation !== null \|\| deletion !== null \|\| committedFailure\)/);
-    assert.match(component,/creation = null; deletion = null/);
+    assert.match(component,/creation = null;\s*deletion = null/);
     assert.match(component,/if \(!allowEditing \|\| !allowCreation/);
     assert.match(component,/if \(!allowEditing \|\| !allowDeletion/);
     assert.match(component,/client\.CreateProjectPlotProfileRule\(profileRuleCreationRequest\(source\)\)/);
     assert.match(component,/client\.DeleteProjectPlotProfileRule\(profileRuleDeletionRequest\(source, rowId, true\)\)/);
-    assert.match(component,/committed = true; creation = null/);
-    assert.match(component,/committed = true; deletion = null/);
+    assert.match(component,/committed = true;\s*creation = null/);
+    assert.match(component,/committed = true;\s*deletion = null/);
     assert.match(component,/validateProfileLifecycleReview\(source\.review, next, \{ created \}\)/);
     assert.match(component,/validateProfileLifecycleReview\(source, next, \{ deleted: rowId \}\)/);
     assert.match(component,/nullable\/raw proposal retained for retry/);

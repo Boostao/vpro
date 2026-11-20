@@ -84,16 +84,16 @@ test('Reverse committed results require exact cell and row counts with positive 
   }
 });
 test('Reverse uses shared persistent panel and independent source gate, retiring commits before reload',()=>{
-  const root=readFileSync(srcPath('FS882Form.svelte'),'utf8')+'\n'+readFileSync(srcPath('FS882Modals.svelte'),'utf8');
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const root=readFS882Composite();
   const panel=readFileSync(srcPath('EnvironmentSUTransfer.svelte'),'utf8');
-  for(const file of ['FS882Form.svelte','FS882Modals.svelte','EnvironmentSUTransfer.svelte']) {
+  for(const file of ['FS882Form.svelte','FS882SiteTab.svelte','FS882Modals.svelte','EnvironmentSUTransfer.svelte']) {
     assert.equal(compile(readFileSync(srcPath(file),'utf8'),{filename:file,generate:'client'}).warnings.length,0);
   }
   assert.match(root,/data-source-control="btnSuIntoEnv"/);
-  assert.match(root,/originalPlotNumber=\{original\?\.plotNumber\}/);
-  assert.match(root,/loadPlot=\{load\}/);
-  assert.match(root,/environmentSUDirection === 'reverse'\) void loadPlot\(originalPlotNumber\)/);
-  assert.match(panel,/committed = true; review = null;[\s\S]*validateSiteUnitEnvironmentResult/);
+  assert.match(root,/original\?\.plotNumber/);
+  assert.match(root,/environmentSUDirection === 'reverse'[\s\S]*?load\(/);
+  assert.match(panel,/committed = true;\s*review = null;[\s\S]*validateSiteUnitEnvironmentResult/);
   assert.match(panel,/Personal definitions override master names; missing definitions retain existing names/);
   assert.match(panel,/SU\/environment transfer committed, but/);
 });

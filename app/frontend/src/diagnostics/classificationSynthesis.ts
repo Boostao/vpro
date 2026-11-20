@@ -4,8 +4,8 @@ import {
   ContextService,
   ImportExportService,
   VegetationReportService,
+  type HierarchyBreakpointResolution,
 } from '../../bindings/github.com/boostao/vpro/app';
-import type { HierarchyBreakpointResolution } from '../classification/siteUnitExclusionFilter';
 
 export const EDATOPIC_SMR_ROWS = ['0', '1', '2', '3', '4', '5', '6', '7', '8'] as const;
 export const EDATOPIC_SNR_COLS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
@@ -31,10 +31,7 @@ export const SNR_DESCRIPTIONS: Record<string, string> = {
   F: 'Alkalitrophic',
 };
 
-export const DIAGNOSTIC_CODE_META: Record<
-  string,
-  { label: string; shortLabel: string; badgeClass: string }
-> = {
+export const DIAGNOSTIC_CODE_META: Record<string, { label: string; shortLabel: string; badgeClass: string }> = {
   d: {
     label: 'Differential (Constancy >= III, >= 2 classes above others)',
     shortLabel: 'd',
@@ -335,14 +332,8 @@ export interface ExportDiagnosticWorkbookResult {
 
 export interface SynthesisBackendPort {
   listSynthesisLumpTables(contextId: string): CancellableRead<SynthesisLumpTableOption[]>;
-  computeSynthesisSnapshot(
-    contextId: string,
-    opts: SynthesisOptions
-  ): CancellableRead<SynthesisSnapshot>;
-  reassignSynthesisPlotUnit(
-    contextId: string,
-    req: ReassignSynthesisPlotRequest
-  ): Promise<ReassignSynthesisPlotResult>;
+  computeSynthesisSnapshot(contextId: string, opts: SynthesisOptions): CancellableRead<SynthesisSnapshot>;
+  reassignSynthesisPlotUnit(contextId: string, req: ReassignSynthesisPlotRequest): Promise<ReassignSynthesisPlotResult>;
   undoSynthesisReassignment(
     contextId: string,
     req: UndoSynthesisReassignmentRequest
@@ -354,16 +345,14 @@ export interface SynthesisBackendPort {
 }
 
 export const defaultSynthesisBackendPort: SynthesisBackendPort = {
-  listSynthesisLumpTables: contextId =>
-    (ClassificationService.ListSynthesisLumpTables(contextId) as never),
+  listSynthesisLumpTables: (contextId) => ClassificationService.ListSynthesisLumpTables(contextId) as never,
   computeSynthesisSnapshot: (contextId, opts) =>
-    (ClassificationService.ComputeSynthesisSnapshot(contextId, opts) as never),
+    ClassificationService.ComputeSynthesisSnapshot(contextId, opts) as never,
   reassignSynthesisPlotUnit: (contextId, req) =>
-    (ClassificationService.ReassignSynthesisPlotUnit(contextId, req) as never),
+    ClassificationService.ReassignSynthesisPlotUnit(contextId, req) as never,
   undoSynthesisReassignment: (contextId, req) =>
-    (ClassificationService.UndoSynthesisReassignment(contextId, req) as never),
-  exportDiagnosticWorkbook: (contextId, req) =>
-    (ClassificationService.ExportDiagnosticWorkbook(contextId, req) as never),
+    ClassificationService.UndoSynthesisReassignment(contextId, req) as never,
+  exportDiagnosticWorkbook: (contextId, req) => ClassificationService.ExportDiagnosticWorkbook(contextId, req) as never,
 };
 
 export function createDefaultPairwiseParams(): Required<
@@ -401,7 +390,7 @@ export async function discoverExternalSynthesisLumps(
 ): Promise<SynthesisLumpTableOption[]> {
   if (!externalDbPath) return [];
   const rows = (await ImportExportService.DiscoverLumpTables(contextId, [externalDbPath])) ?? [];
-  return rows.map(row => ({
+  return rows.map((row) => ({
     name: row.name,
     tableName: row.tableName,
     dbPath: row.databasePath || externalDbPath,
@@ -429,7 +418,7 @@ export function resolveSynthesisHierarchyBreakpoints(
 ): CancellableRead<HierarchyBreakpointResolution | null> {
   return VegetationReportService.ResolveHierarchyBreakpointUnits(contextId, {
     options: { breakpointPolicy, stripTildePrefix: true },
-  } as never) as unknown as CancellableRead<HierarchyBreakpointResolution | null>;
+  } as never);
 }
 
 export interface BreakpointUnitRollup {
@@ -444,12 +433,12 @@ export function groupUnitsByHierarchyBreakpoints(
   resolution: HierarchyBreakpointResolution | null
 ): BreakpointUnitRollup[] {
   if (!snapshot || !resolution || !Array.isArray(resolution.buckets)) return [];
-  const unitMap = new Map(snapshot.units.map(u => [u.siteUnit, u]));
-  return resolution.buckets.map(bucket => {
+  const unitMap = new Map(snapshot.units.map((u) => [u.siteUnit, u]));
+  return resolution.buckets.map((bucket) => {
     const members = (bucket.sourceUnits ?? []).filter((code: string) => unitMap.has(code));
     const plotSum = members.reduce((acc: number, code: string) => acc + (unitMap.get(code)?.plotCount ?? 0), 0);
-    const activeSpecies = snapshot.species.filter(row =>
-      row.cells.some(cell => members.includes(cell.siteUnit) && cell.presentPlots > 0)
+    const activeSpecies = snapshot.species.filter((row) =>
+      row.cells.some((cell) => members.includes(cell.siteUnit) && cell.presentPlots > 0)
     ).length;
     return {
       breakpointUnit: normalizeBreakpointUnitName(bucket.breakpointUnit),
@@ -479,8 +468,7 @@ export function formatSynthesisMatrixCell(
     case 'crosstab':
       return cell.crosstabCode;
     case 'pct_cover': {
-      const cov =
-        significanceBasis === 'present_plots' ? cell.meanCoverPresentText : cell.meanCoverAllText;
+      const cov = significanceBasis === 'present_plots' ? cell.meanCoverPresentText : cell.meanCoverAllText;
       return `${cell.presencePctText}% / ${cov}`;
     }
     case 'roman_signif':
@@ -513,7 +501,7 @@ export function filterAndGroupSpeciesRows(
   if (!snapshot || snapshot.species.length === 0) return [];
   const needle = options.searchText.trim().toLowerCase();
 
-  const filtered = snapshot.species.filter(row => {
+  const filtered = snapshot.species.filter((row) => {
     if (options.diagnosticOnly && !row.diagnosticUnit) return false;
     if (!needle) return true;
     const hay = [
@@ -553,8 +541,8 @@ export function filterAndGroupSpeciesRows(
       buckets.set(k, list);
     }
     return order
-      .filter(k => (buckets.get(k)?.length ?? 0) > 0)
-      .map(k => {
+      .filter((k) => (buckets.get(k)?.length ?? 0) > 0)
+      .map((k) => {
         const rows = buckets.get(k)!;
         return {
           key: `stratum::${k}`,
@@ -632,18 +620,11 @@ export function filterOutlierQueue(
   searchText = ''
 ): OutlierPlotCandidate[] {
   const needle = searchText.trim().toLowerCase();
-  return queue.filter(item => {
+  return queue.filter((item) => {
     if (mode === 'misplaced' && !item.misplaced) return false;
     if (mode === 'top5' && !item.top5PercentAnomaly) return false;
     if (!needle) return true;
-    const hay = [
-      item.plotNumber,
-      item.fieldNumber,
-      item.assignedUnit,
-      item.nearestRivalUnit,
-      item.zone,
-      item.subZone,
-    ]
+    const hay = [item.plotNumber, item.fieldNumber, item.assignedUnit, item.nearestRivalUnit, item.zone, item.subZone]
       .join(' ')
       .toLowerCase();
     return hay.includes(needle);
@@ -657,10 +638,7 @@ export function findPairwiseComparison(
 ): PairwiseUnitComparison | null {
   if (!unitA || !unitB || unitA === unitB) return null;
   for (const comp of comparisons) {
-    if (
-      (comp.unit1 === unitA && comp.unit2 === unitB) ||
-      (comp.unit1 === unitB && comp.unit2 === unitA)
-    ) {
+    if ((comp.unit1 === unitA && comp.unit2 === unitB) || (comp.unit1 === unitB && comp.unit2 === unitA)) {
       return comp;
     }
   }
@@ -788,6 +766,6 @@ export function mergeUniqueLumpOptions(
   existing: SynthesisLumpTableOption[],
   incoming: SynthesisLumpTableOption[]
 ): SynthesisLumpTableOption[] {
-  const keys = new Set(existing.map(o => `${o.dbPath}::${o.tableName}`));
-  return [...existing, ...incoming.filter(o => !keys.has(`${o.dbPath}::${o.tableName}`))];
+  const keys = new Set(existing.map((o) => `${o.dbPath}::${o.tableName}`));
+  return [...existing, ...incoming.filter((o) => !keys.has(`${o.dbPath}::${o.tableName}`))];
 }

@@ -78,7 +78,9 @@
 
 {#if bootstrapResult}
   <div class="rounded border border-vpro-border bg-vpro-surface-subtle p-2.5 text-xs">
-    Schema v<span class="font-mono font-bold">{bootstrapResult.schemaVersion}</span> verified ({bootstrapResult.schemasVerified.join(', ')}) &middot; Role Grants: {bootstrapResult.roleGrantsApplied ? 'Applied' : 'Skipped'}
+    Schema v<span class="font-mono font-bold">{bootstrapResult.schemaVersion}</span> verified ({bootstrapResult.schemasVerified.join(
+      ', '
+    )}) &middot; Role Grants: {bootstrapResult.roleGrantsApplied ? 'Applied' : 'Skipped'}
   </div>
 {/if}
 
@@ -88,29 +90,74 @@
     <div class="grid grid-cols-3 gap-2">
       <div class="space-y-1">
         <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="pub-release-id">Release ID</label>
-        <input id="pub-release-id" type="text" class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs" bind:value={pubReleaseId} disabled={busy || operationHeld} placeholder="BECv13_Taxa19_2026" />
+        <input
+          id="pub-release-id"
+          type="text"
+          class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs"
+          bind:value={pubReleaseId}
+          disabled={busy || operationHeld}
+          placeholder="BECv13_Taxa19_2026"
+        />
       </div>
       <div class="space-y-1">
         <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="pub-bec-ver">BEC Version</label>
-        <input id="pub-bec-ver" type="text" class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs" bind:value={pubBecVersion} disabled={busy || operationHeld} />
+        <input
+          id="pub-bec-ver"
+          type="text"
+          class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs"
+          bind:value={pubBecVersion}
+          disabled={busy || operationHeld}
+        />
       </div>
       <div class="space-y-1">
-        <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="pub-taxa-ver">Taxonomy Version</label>
-        <input id="pub-taxa-ver" type="text" class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs" bind:value={pubTaxonomyVersion} disabled={busy || operationHeld} />
+        <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="pub-taxa-ver"
+          >Taxonomy Version</label
+        >
+        <input
+          id="pub-taxa-ver"
+          type="text"
+          class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs"
+          bind:value={pubTaxonomyVersion}
+          disabled={busy || operationHeld}
+        />
       </div>
     </div>
     <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
       <div class="space-y-1">
-        <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="pub-vlists-path">VLists.db Path (opt)</label>
-        <input id="pub-vlists-path" type="text" class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs" bind:value={pubVlistsPath} disabled={busy || operationHeld} />
+        <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="pub-vlists-path"
+          >VLists.db Path (opt)</label
+        >
+        <input
+          id="pub-vlists-path"
+          type="text"
+          class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs"
+          bind:value={pubVlistsPath}
+          disabled={busy || operationHeld}
+        />
       </div>
       <div class="space-y-1">
-        <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="pub-becdb-path">BECdb Path (opt)</label>
-        <input id="pub-becdb-path" type="text" class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs" bind:value={pubBecDbPath} disabled={busy || operationHeld} />
+        <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="pub-becdb-path"
+          >BECdb Path (opt)</label
+        >
+        <input
+          id="pub-becdb-path"
+          type="text"
+          class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs"
+          bind:value={pubBecDbPath}
+          disabled={busy || operationHeld}
+        />
       </div>
       <div class="space-y-1">
-        <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="pub-vmeta-path">VMetaData.db Path (opt)</label>
-        <input id="pub-vmeta-path" type="text" class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs" bind:value={pubVmetaDataPath} disabled={busy || operationHeld} />
+        <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="pub-vmeta-path"
+          >VMetaData.db Path (opt)</label
+        >
+        <input
+          id="pub-vmeta-path"
+          type="text"
+          class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs"
+          bind:value={pubVmetaDataPath}
+          disabled={busy || operationHeld}
+        />
       </div>
     </div>
     <div class="flex items-center justify-between gap-2">
@@ -142,7 +189,8 @@
     </div>
     {#if publishStandardsResult}
       <p class="text-[11px] text-vpro-ink-secondary">
-        Published <span class="font-mono">{publishStandardsResult.releaseId}</span> (VLists SHA <span class="font-mono">{publishStandardsResult.vlistsSha256.slice(0, 12)}</span>).
+        Published <span class="font-mono">{publishStandardsResult.releaseId}</span> (VLists SHA
+        <span class="font-mono">{publishStandardsResult.vlistsSha256.slice(0, 12)}</span>).
       </p>
     {/if}
   </fieldset>
@@ -154,22 +202,53 @@
     <div class="mt-3 space-y-2">
       <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div class="space-y-1">
-          <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="seed-db-path">Source VPro Project (.db) Path (required)</label>
-          <input id="seed-db-path" type="text" class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs" bind:value={seedSourceDbPath} disabled={busy || operationHeld} />
+          <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="seed-db-path"
+            >Source VPro Project (.db) Path (required)</label
+          >
+          <input
+            id="seed-db-path"
+            type="text"
+            class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs"
+            bind:value={seedSourceDbPath}
+            disabled={busy || operationHeld}
+          />
         </div>
         <div class="space-y-1">
-          <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="seed-source-proj">Source Project Prefix (opt)</label>
-          <input id="seed-source-proj" type="text" class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs" bind:value={seedSourceProject} disabled={busy || operationHeld} />
+          <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="seed-source-proj"
+            >Source Project Prefix (opt)</label
+          >
+          <input
+            id="seed-source-proj"
+            type="text"
+            class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs"
+            bind:value={seedSourceProject}
+            disabled={busy || operationHeld}
+          />
         </div>
       </div>
       <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div class="space-y-1">
-          <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="seed-snap-tag">Initial Snapshot Tag (opt)</label>
-          <input id="seed-snap-tag" type="text" class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs" bind:value={seedSnapshotTag} disabled={busy || operationHeld} placeholder="baseline_2026" />
+          <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="seed-snap-tag"
+            >Initial Snapshot Tag (opt)</label
+          >
+          <input
+            id="seed-snap-tag"
+            type="text"
+            class="w-full rounded border border-vpro-border p-1.5 font-mono text-xs"
+            bind:value={seedSnapshotTag}
+            disabled={busy || operationHeld}
+            placeholder="baseline_2026"
+          />
         </div>
         <div class="space-y-1">
           <label class="block text-[11px] font-semibold text-vpro-ink-secondary" for="seed-notes">Notes (opt)</label>
-          <input id="seed-notes" type="text" class="w-full rounded border border-vpro-border p-1.5 text-xs" bind:value={seedNotes} disabled={busy || operationHeld} />
+          <input
+            id="seed-notes"
+            type="text"
+            class="w-full rounded border border-vpro-border p-1.5 text-xs"
+            bind:value={seedNotes}
+            disabled={busy || operationHeld}
+          />
         </div>
       </div>
       <div class="flex flex-wrap items-center gap-4">
@@ -199,7 +278,8 @@
       </button>
       {#if seedBaselineResult}
         <p class="text-[11px] text-vpro-ink-secondary">
-          Seeded {seedBaselineResult.plotCount.toLocaleString()} plots / {seedBaselineResult.vegCount.toLocaleString()} veg rows (snapshot <span class="font-mono">{seedBaselineResult.snapshotTag}</span>).
+          Seeded {seedBaselineResult.plotCount.toLocaleString()} plots / {seedBaselineResult.vegCount.toLocaleString()} veg
+          rows (snapshot <span class="font-mono">{seedBaselineResult.snapshotTag}</span>).
         </p>
       {/if}
     </div>

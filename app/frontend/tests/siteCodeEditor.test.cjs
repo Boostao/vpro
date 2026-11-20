@@ -50,9 +50,17 @@ test('Native-verified five source slots compile with explicit opt-out and no imp
   assert.match(parent, /siteCodeKey\(control.column\)/);
   assert.match(parent, /@render siteCodeInputs/);
   assert.match(parent, /onbusy=\{onSiteCodeBusyChange\}/);
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8');
-  assert.match(form, /coordinateBusy \|\| workingUnitBusy \|\| qualityBusy \|\| siteCodeBusy/);
-  assert.match(form, /onSiteCodeBusyChange=\{\(pending\) => siteCodeBusy = pending\}/);
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
+  const h = createFS882TestController();
+  try {
+    h.ctrl.siteCodeBusy = true;
+    h.flush();
+    assert.equal(h.ctrl.headerWorkflowBusy, true);
+  } finally {
+    h.dispose();
+  }
+  const siteTab = readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8');
+  assert.match(siteTab, /onSiteCodeBusyChange=\{\(pending\) => \{\s*siteCodeBusy = pending;\s*\}\}/);
 });
 test('All five nullable text fields use exact measured8/2 UTF-16 bounds and reject malformed new input', () => {
   assert.deepEqual(plain(siteCodeKeys), Object.keys(codes()));

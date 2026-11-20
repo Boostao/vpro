@@ -115,13 +115,16 @@
         <div class="kpi"><span>Renderer</span><strong>{quartoResult.rendererUsed}</strong></div>
         <div class="kpi"><span>Plots Summarized</span><strong>{quartoResult.plotCount}</strong></div>
         <div class="kpi"><span>Characteristic Taxa</span><strong>{quartoResult.speciesRowCount}</strong></div>
-        <div class="kpi"><span>HTML Size</span><strong>{(quartoResult.htmlSizeBytes / 1024).toFixed(1)} KB</strong></div>
+        <div class="kpi">
+          <span>HTML Size</span><strong>{(quartoResult.htmlSizeBytes / 1024).toFixed(1)} KB</strong>
+        </div>
         {#if quartoResult.pdfStatus}
           <div class="kpi"><span>PDF Status</span><strong>{quartoResult.pdfStatus}</strong></div>
         {/if}
       </div>
       <p class="receipt-line">
-        Published Path: <code>{quartoResult.htmlPath}</code> | SHA-256: <code>{quartoResult.htmlSha256.slice(0, 16)}...</code>
+        Published Path: <code>{quartoResult.htmlPath}</code> | SHA-256:
+        <code>{quartoResult.htmlSha256.slice(0, 16)}...</code>
       </p>
 
       <h4>Standalone HTML Guide Preview</h4>

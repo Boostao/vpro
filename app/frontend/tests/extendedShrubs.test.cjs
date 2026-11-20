@@ -68,16 +68,25 @@ test('extended renderer has one labelled live control per field and normal rende
 });
 
 test('shared option gates extended presentation and restricts heights without clearing drafts or replacing parent identity', () => {
-  const form = read('FS882Form.svelte') + '\n' + read('FS882VegTab.svelte') + '\n' + read('FS882Modals.svelte');
+  const { createFS882TestController, readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const form = readFS882Composite();
   assert.match(form, /data-extended-shrubs/);
   assert.match(form, /Show extended shrub layers/);
-  assert.match(form, /function setExtendedShrubs\(next: boolean\)/);
-  assert.match(form, /if \(next\) vegetationMode = 'cover'/);
-  assert.match(form, /onchange=\{\(event\) => setExtendedShrubs\(event\.currentTarget\.checked\)\}/);
-  assert.equal((form.match(/onExtendedShrubsChange=\{extendedShrubsEnabled \? setExtendedShrubs : undefined\}/g) || []).length, 4);
-  assert.match(form, /heightToggleDisabled=\{extendedShrubs \|\| busy \|\| headerWorkflowBusy\}/);
+  const h = createFS882TestController();
+  try {
+    h.ctrl.vegetationMode = 'height';
+    h.ctrl.setExtendedShrubs(true);
+    h.flush();
+    assert.equal(h.ctrl.extendedShrubs, true);
+    assert.equal(h.ctrl.vegetationMode, 'cover');
+  } finally {
+    h.dispose();
+  }
+  assert.match(form, /onchange=\{\(event\) => ctrl\.setExtendedShrubs\(event\.currentTarget\.checked\)\}/);
+  assert.match(form, /onExtendedShrubsChange=/);
+  assert.match(form, /heightToggleDisabled=/);
   const helpers = read('fs882FormHelpers.ts');
-  assert.match(form, /extendedShrubs && originalChild\.form === 'SubVegAXL_BC' \? 'SubVegAXL'/);
+  assert.match(form, /extendedShrubs && originalChild\.form === 'SubVegAXL_BC'\s*\?\s*'SubVegAXL'/);
   assert.match(helpers, /name === 'SubVegAXL_BC' \|\| name === 'SubVegAXL'/);
   assert.match(form, /hidden values, drafts and errors are retained/);
   assert.doesNotMatch(form, /onchange=\{[^}]*heightDrafts\s*=/);

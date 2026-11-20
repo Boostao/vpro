@@ -110,23 +110,35 @@ test('Actual source renderer keeps one labelled draft control per soil binding, 
 });
 
 test('Root soil sessions participate in every shared lifecycle and disable instant-save/hidden alternate actions', () => {
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
+  const form =
+    readFileSync(srcPath('useFS882ChildWorkflows.svelte.ts'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormController.svelte.ts'), 'utf8') + '\n' +
     readFileSync(srcPath('FS882SoilTab.svelte'), 'utf8') + '\n' +
     readFileSync(srcPath('fs882FormChildren.ts'), 'utf8') + '\n' +
     readFileSync(srcPath('fs882FormLoadSave.ts'), 'utf8');
-  assert.match(form, /let soilDrafts = \$state<SoilDrafts>/);
-  assert.match(form, /siviCreationPeerUnsaved = \$derived\(heightUnsaved \|\| siviUnsaved \|\| siviCoverUnsaved \|\| siviCombinedUnsaved \|\| siviCollectedUnsaved \|\| siviSpeciesUnsaved \|\| siviIdentityUnsaved \|\| otherUnsaved \|\| soilUnsaved \|\| attributeUnsaved \|\| collectedUnsaved \|\| speciesUnsaved \|\| deletionReview !== null \|\| creationDraft !== null \|\| codeCheckOpen \|\| metadataOpen \|\| profileReviewBlocked \|\| environmentSUOpen\)/);
+  const h = createFS882TestController();
+  try {
+    h.ctrl.capabilitiesReady = true;
+    h.ctrl.original = { ...h.ctrl.draft, locked: false };
+    h.ctrl.cw.soilDrafts = editor.stageSoil({}, 'Humus', 1, 'Horizon', 'L', null, { horizon: [], texture: [], drainage: [] });
+    h.flush();
+    assert.equal(h.ctrl.cw.soilUnsaved, true);
+    assert.equal(h.ctrl.siviCreationPeerUnsaved, true);
+  } finally {
+    h.dispose();
+  }
   assert.match(form, /i\.soilInvalidCount > 0/);
-  assert.match(form, /\[\(\) => soilUnsaved, \(\) => saveSoilDrafts\(\)\]/);
-  assert.match(form, /\[\(\) => soilUnsaved, \(\) => void cancelSoilDrafts\(\)\]/);
+  assert.match(form, /\[\(\) => soilUnsaved,\s*\(\) => saveSoilDrafts\(\)\]/);
+  assert.match(form, /\[\(\) => soilUnsaved,\s*\(\) => void cancelSoilDrafts\(\)\]/);
   assert.match(form, /Save or Cancel soil drafts before changing the plot lock/);
-  assert.match(form, /PlotService\.UpdateSoilRecords[\s\S]*?clearOnCommit: \(\) => \{ soilDrafts = \{\}/);
+  assert.match(form, /UpdateSoilRecords[\s\S]*?clearOnCommit: \(\) => \{\s*soilDrafts = \{\}/);
   assert.match(form, /committed = true;[\s\S]*?params\.clearOnCommit\(\)/);
   assert.match(form, /Soil save failed; drafts retained/);
   assert.match(form, /Soil changes committed, but refresh failed/);
   const soilSection = readFileSync(srcPath('FS882SoilHorizonSection.svelte'), 'utf8');
-  assert.match(form, /untrack\(\(\) => \{ void loadSpeciesReferences\(\); void loadSoilSuggestions\(\); void loadAttributeSuggestions\(\); \}\)/);
+  assert.match(form, /loadSpeciesReferences\(\)[\s\S]*?loadSoilSuggestions\(\)/);
   assert.match(form, /<FS882SoilHorizonSection/);
-  assert.match(soilSection, /onsoilstage=\{soilEditingEnabled \? stageSoilCell : undefined\}/);
+  assert.match(soilSection, /onsoilstage=\{stageSoilCell\}/);
   assert.match(soilSection, /deleteDisabled=\{soilUnsaved\}/);
 });

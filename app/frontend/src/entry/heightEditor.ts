@@ -2,10 +2,29 @@ import { finiteSingleValue } from './numericEditor';
 import type { VegetationNumberUpdate } from '../../bindings/github.com/boostao/vpro/app';
 export { singleMaximum } from './numericEditor';
 
-const heightFields = ['cover1', 'cover2', 'cover3', 'totalA', 'cover4', 'cover5', 'totalB',
-  'cover6', 'cover7', 'cover8', 'cover9', 'height1', 'height2', 'height3', 'height4', 'height5', 'height6',
-  'cover5a', 'cover5b', 'cover5c'] as const;
-export type HeightField = typeof heightFields[number];
+const heightFields = [
+  'cover1',
+  'cover2',
+  'cover3',
+  'totalA',
+  'cover4',
+  'cover5',
+  'totalB',
+  'cover6',
+  'cover7',
+  'cover8',
+  'cover9',
+  'height1',
+  'height2',
+  'height3',
+  'height4',
+  'height5',
+  'height6',
+  'cover5a',
+  'cover5b',
+  'cover5c',
+] as const;
+export type HeightField = (typeof heightFields)[number];
 export interface HeightUpdate {
   id: number;
   values: Record<string, number | null>;
@@ -20,25 +39,34 @@ export interface HeightCell {
 }
 export type HeightDrafts = Record<string, Partial<Record<HeightField, HeightCell>>>;
 type CoverValues = Partial<Record<HeightField, number | null>>;
-export interface CoverSourceEdit { id: number; form: string; values?: CoverValues }
+export interface CoverSourceEdit {
+  id: number;
+  form: string;
+  values?: CoverValues;
+}
 export type CoverSourceRow = CoverValues & { id: number };
 const aCoverNoticeForms = new Set(['SubVegAXL_BC', 'SubVegAXL', 'SubVegAhtXL', 'SubVegA-SIVI_BC', 'SubVegA-SIVI']);
 export function aCoverSourceNotice(form: string, id: number | string, values: CoverValues): string | null {
-  return aCoverNoticeForms.has(form) &&
-    heightFields.slice(0, 7).every(field => values[field] == null)
-    ? `Vegetation row ${id}: all A/B cover values are NULL. No cover value is inferred; the vegetation record is not deleted.` : null;
+  return aCoverNoticeForms.has(form) && heightFields.slice(0, 7).every((field) => values[field] == null)
+    ? `Vegetation row ${id}: all A/B cover values are NULL. No cover value is inferred; the vegetation record is not deleted.`
+    : null;
 }
 export function aCoverSourceNotices(edits: readonly CoverSourceEdit[], rows: readonly CoverSourceRow[]): string[] {
-  return [...new Set(edits.flatMap(edit => {
-    if (!aCoverNoticeForms.has(edit.form)) return [];
-    const matching = rows.filter(row => row.id === edit.id);
-    if (matching.length !== 1) throw new Error('Cover notice source row is missing or ambiguous; reload before editing.');
-    const notice = aCoverSourceNotice(edit.form, edit.id, { ...matching[0], ...edit.values });
-    return notice ? [notice] : [];
-  }))];
+  return [
+    ...new Set(
+      edits.flatMap((edit) => {
+        if (!aCoverNoticeForms.has(edit.form)) return [];
+        const matching = rows.filter((row) => row.id === edit.id);
+        if (matching.length !== 1)
+          throw new Error('Cover notice source row is missing or ambiguous; reload before editing.');
+        const notice = aCoverSourceNotice(edit.form, edit.id, { ...matching[0], ...edit.values });
+        return notice ? [notice] : [];
+      })
+    ),
+  ];
 }
 export function heightField(column: string): HeightField | undefined {
-  return heightFields.find(field => field.toLowerCase() === column.toLowerCase());
+  return heightFields.find((field) => field.toLowerCase() === column.toLowerCase());
 }
 export function heightValue(field: HeightField, raw: string): { value: number | null; error: string | null } {
   const parsed = finiteSingleValue(field, raw);
@@ -49,8 +77,16 @@ export function heightValue(field: HeightField, raw: string): { value: number | 
   }
   return parsed;
 }
-export function stageHeight(drafts: HeightDrafts, id: number, field: HeightField, raw: string, stored: number | null, form?: string): HeightDrafts {
-  if (!Number.isInteger(id) || id < -2147483648 || id > 2147483647) throw new Error('Height row needs an exact signed32 identity.');
+export function stageHeight(
+  drafts: HeightDrafts,
+  id: number,
+  field: HeightField,
+  raw: string,
+  stored: number | null,
+  form?: string
+): HeightDrafts {
+  if (!Number.isInteger(id) || id < -2147483648 || id > 2147483647)
+    throw new Error('Height row needs an exact signed32 identity.');
   const previous = drafts[String(id)]?.[field];
   const expected = previous ? previous.expected : stored;
   const parsed = heightValue(field, raw);
@@ -58,24 +94,38 @@ export function stageHeight(drafts: HeightDrafts, id: number, field: HeightField
   return { ...drafts, [String(id)]: row };
 }
 export function heightErrors(drafts: HeightDrafts): string[] {
-  return Object.values(drafts).flatMap(row => Object.values(row).flatMap(cell => cell?.error ? [cell.error] : []));
+  return Object.values(drafts).flatMap((row) =>
+    Object.values(row).flatMap((cell) => (cell?.error ? [cell.error] : []))
+  );
 }
 export function heightDirty(drafts: HeightDrafts): boolean {
-  return Object.values(drafts).some(row => Object.values(row).some(cell => cell && (cell.error !== null || cell.value !== cell.expected)));
+  return Object.values(drafts).some((row) =>
+    Object.values(row).some((cell) => cell && (cell.error !== null || cell.value !== cell.expected))
+  );
 }
 export function heightSourceNotices(drafts: HeightDrafts, rows?: readonly CoverSourceRow[]): string[] {
   const notices = Object.entries(drafts).flatMap(([id, row]) => {
     const cover = row.cover6;
-    return cover && (cover.form === 'SubVegCXL' || cover.form === 'SubVegChtXL') &&
-      cover.error === null && cover.expected !== null && cover.value === null
-      ? [`Vegetation row ${id}: Cover6 is NULL. Saving removes this row from C and C-height views; it does not delete the vegetation record.`] : [];
+    return cover &&
+      (cover.form === 'SubVegCXL' || cover.form === 'SubVegChtXL') &&
+      cover.error === null &&
+      cover.expected !== null &&
+      cover.value === null
+      ? [
+          `Vegetation row ${id}: Cover6 is NULL. Saving removes this row from C and C-height views; it does not delete the vegetation record.`,
+        ]
+      : [];
   });
   if (rows) {
     const edits = Object.entries(drafts).flatMap(([id, row]) => {
-      if (Object.values(row).some(cell => cell?.error !== null)) return [];
+      if (Object.values(row).some((cell) => cell?.error !== null)) return [];
       const changed = Object.entries(row).filter(([, cell]) => cell && cell.value !== cell.expected);
-      const form = changed.find(([, cell]) => cell?.form === 'SubVegAXL_BC' || cell?.form === 'SubVegAXL' || cell?.form === 'SubVegAhtXL')?.[1]?.form;
-      return form ? [{ id: Number(id), form, values: Object.fromEntries(changed.map(([field, cell]) => [field, cell?.value])) }] : [];
+      const form = changed.find(
+        ([, cell]) => cell?.form === 'SubVegAXL_BC' || cell?.form === 'SubVegAXL' || cell?.form === 'SubVegAhtXL'
+      )?.[1]?.form;
+      return form
+        ? [{ id: Number(id), form, values: Object.fromEntries(changed.map(([field, cell]) => [field, cell?.value])) }]
+        : [];
     });
     notices.push(...aCoverSourceNotices(edits, rows));
   }
@@ -98,7 +148,7 @@ export function heightUpdates(drafts: HeightDrafts): HeightUpdate[] {
   });
 }
 export function vegetationNumberUpdates(drafts: HeightDrafts): VegetationNumberUpdate[] {
-  return heightUpdates(drafts).map(update => {
+  return heightUpdates(drafts).map((update) => {
     const forms: Record<string, string> = {};
     for (const property of Object.keys(update.values)) {
       const field = heightField(property);

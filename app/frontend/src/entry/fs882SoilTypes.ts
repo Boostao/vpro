@@ -13,8 +13,7 @@ export interface FS882SoilHorizonSectionProps {
   sourceHeaderValues: Map<string, unknown>;
   ordinarySoilUnavailable: string | null;
   historicalSoilUnavailable: string | null;
-  soilEditingEnabled: boolean;
-  soilCodeEditingEnabled: boolean;
+  showSoilCodeReference?: boolean;
   soilReferenceBusy: boolean;
   soilReferenceError: string | null;
   soilEditingDisabled: boolean;
@@ -36,7 +35,9 @@ export interface FS882SoilHorizonSectionProps {
   soilSuggestions: SoilSuggestion[];
   humusList: HumusRecord[];
   mineralList: MineralRecord[];
-  sourceRows: (name: string) => Array<{ id: number; values: Record<string, string | number | boolean | null | undefined> }>;
+  sourceRows: (
+    name: string
+  ) => Array<{ id: number; values: Record<string, string | number | boolean | null | undefined> }>;
   markDirty: () => void;
   validateHeader: (key: string, message: string | null) => void;
   loadSoilSuggestions: () => Promise<void>;

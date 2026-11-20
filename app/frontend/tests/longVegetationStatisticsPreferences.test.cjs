@@ -138,7 +138,7 @@ test('statistics preferences render live labelled choices and correction while b
   const source = readFileSync(srcPath('LongVegetationReport.svelte'), 'utf8');
   const owner = { ...scope, contextId: 'statistics-render-true' };
   const session = prefs.longVegetationStatisticsPreferencesSession(owner); session.apply(review(undefined, owner)); session.editAverage('');
-  const component = serverComponent(source, 'LongVegetationReport.svelte', {
+  const component = serverComponent(source, 'LongVegetationReport.svelte', { './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
     '../bindings/github.com/boostao/vpro/app': {}, './longVegetationPreferences': titles,
     './longVegetationStatisticsPreferences': prefs, './longEnvironmentReport': {}, './longVegetationReport': {},
     './longVegetationSwitchPreferences': {},
@@ -156,7 +156,7 @@ test('statistics preferences render live labelled choices and correction while b
       vegetationWorkbookPublicationSession: () => ({ view: () => ({ busy: false, blocked: false }), subscribe: () => () => {} }),
       VegetationWorkbookPublicationSession: class { view() { return { busy: false, blocked: false }; } subscribe() { return () => {}; } },
     },
-  });
+  }) });
   const barriers = []; const { body } = render(component, { props: { ...owner, onBusyChange: value => barriers.push(value) } });
   assert.equal(barriers.at(-1), true);
   assert.equal((body.match(/id="long-vegetation-average"/g) ?? []).length, 1);
@@ -165,8 +165,9 @@ test('statistics preferences render live labelled choices and correction while b
   assert.match(body, /value="10"[^>]*>Species/); assert.match(body, /value="20"[^>]*>Presence/);
   assert.match(body, /data-long-vegetation-statistics-save[^>]*disabled/);
   assert.doesNotMatch(body, /data-long-vegetation-statistics-undo[^>]*disabled/);
-  assert.match(source, /const value = event.currentTarget.value; editAverage\(value\)/);
-  assert.match(source, /const value = event.currentTarget.value; editOrder\(value\)/);
-  assert.doesNotMatch(source, /reads\.track\(LongVegetationStatisticsPreferencesService\.Save/);
-  assert.match(source, /settings\.average !==/); assert.match(source, /settings\.order !==/);
+  const composite = require('./svelteTestHelpers.cjs').readReportComposite('long-vegetation');
+  assert.match(composite, /editAverage\(event\.currentTarget\.value\)/);
+  assert.match(composite, /editOrder\(event\.currentTarget\.value\)/);
+  assert.doesNotMatch(composite, /reads\.track\(\s*LongVegetationStatisticsPreferencesService\.Save/);
+  assert.match(composite, /s\.average !==/); assert.match(composite, /s\.order !==/);
 });

@@ -132,7 +132,7 @@ test('actual enforcement handlers drop cancelled reads and capture DOM Boolean w
   ctx.mutationHeld = true; ctx.actions.edit(true); assert.equal(session.view().draft.enforce, false);
   ctx.mutationHeld = false; ctx.operationHeld = true; ctx.actions.edit(true);
   assert.equal(session.view().draft.enforce, true); assert.ok(cancelled > 0);
-  assert.match(source('LongVegetationEnforcementPreferences.svelte'), /const raw = event.currentTarget.checked; edit\(raw\)/);
+  assert.match(source('LongVegetationEnforcementPreferences.svelte'), /const raw = event\.currentTarget\.checked;\s*edit\(raw\)/);
 });
 test('actual enforcement panel preserves source label and read-only host observations', () => {
   const html = render(panel(), { props: { contextId: scope.contextId, preferences: ready(), onReadBusyChange() {} } }).body;
@@ -164,7 +164,7 @@ test('actual report retains enforcement draft barriers across remounts', () => {
     dependencies[`./longVegetation${name}`] = {};
     dependencies[`./LongVegetation${name}.svelte`] = { default() {} };
   }
-  const report = serverComponent(reportSource, 'LongVegetationReport.svelte', dependencies);
+  const report = serverComponent(reportSource, 'LongVegetationReport.svelte', { './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...(dependencies) });
   for (let mount = 0; mount < 2; mount++) {
     const holds = [];
     const html = render(report, { props: { ...owner, onBusyChange: busy => holds.push(busy) } }).body;
@@ -174,10 +174,10 @@ test('actual report retains enforcement draft barriers across remounts', () => {
     assert.doesNotMatch(html, /data-long-vegetation-enforcement-undo[^>]*disabled/);
   }
   session.undo();
-  const reportText = source('LongVegetationReport.svelte');
-  assert.match(reportText, /enforcementView = enforcement.view\(\); invalidateReports\(\)/);
-  assert.match(reportText, /function invalidateReports\(\) \{\s*preview = null; workbookReview = null;\s*projectWorkspace\?\.invalidate\(\)/);
-  assert.match(reportText, /unsubscribeEnforcement\?\.\(\)/);
-  assert.match(reportText, /selectedFieldBarrier \|\| enforcementBarrier/);
-  assert.match(reportText, /selectedFieldMutationHeld \|\| enforcementMutationHeld/);
+  const reportText = require('./svelteTestHelpers.cjs').readReportComposite('long-vegetation');
+  assert.match(reportText, /enforcementView = sessions\.enforcement!\.view\(\);\s*onInvalidate/);
+  assert.match(reportText, /function invalidateReports\(\) \{\s*preview = null;\s*workbookReview = null;\s*projectWorkspace\?\.invalidate\(\)/);
+  assert.match(reportText, /for \(const u of unsubs\) u\?\.\(\)/);
+  assert.match(reportText, /selectedFieldBarrier \|\|\s*enforcementBarrier/);
+  assert.match(reportText, /selectedFieldMutationHeld \|\|\s*enforcementMutationHeld/);
 });

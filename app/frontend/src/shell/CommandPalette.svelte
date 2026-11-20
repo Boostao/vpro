@@ -178,7 +178,9 @@
                       {/if}
                     </div>
                     <div class="vpro-cmd-item-sub">
-                      {entry.item.disabled && entry.item.disabledReason ? entry.item.disabledReason : entry.item.subtitle}
+                      {entry.item.disabled && entry.item.disabledReason
+                        ? entry.item.disabledReason
+                        : entry.item.subtitle}
                     </div>
                   </div>
                   <div class="vpro-cmd-item-right">

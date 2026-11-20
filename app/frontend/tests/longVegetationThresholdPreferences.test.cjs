@@ -117,14 +117,14 @@ test('source labels and percent suffixes preserve one live field with retained s
   assert.match(body, /data-long-vegetation-threshold-save[^>]*disabled/);
   assert.doesNotMatch(body, /data-long-vegetation-threshold-undo[^>]*disabled/);
   assert.ok(body.indexOf('role="alert"') < body.indexOf('Load saved thresholds before editing'));
-  assert.match(source('LongVegetationThresholdPreferences.svelte'), /const raw = event.currentTarget.value; edit\(field.key, raw\)/);
+  assert.match(source('LongVegetationThresholdPreferences.svelte'), /const raw = event\.currentTarget\.value;\s*edit\(field\.key, raw\)/);
   assert.doesNotMatch(source('LongVegetationThresholdPreferences.svelte'), /reads\.track\(VegetationReportService\.Save/);
 });
 test('actual parent/child composition renders thresholds and propagates retained barriers', () => {
   const owner = { ...scope, contextId: 'threshold-composition-true' };
   const session = prefs.longVegetationThresholdPreferencesSession(owner); session.apply(review(undefined, owner));
   session.editThreshold('presenceGreaterThan', '');
-  const component = serverComponent(source('LongVegetationReport.svelte'), 'LongVegetationReport.svelte', {
+  const component = serverComponent(source('LongVegetationReport.svelte'), 'LongVegetationReport.svelte', { './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
     '../bindings/github.com/boostao/vpro/app': {}, './longVegetationPreferences': {}, './longVegetationStatisticsPreferences': {},
     './longVegetationSwitchPreferences': {}, './LongVegetationSwitchPreferences.svelte': { default() {} },
     './longVegetationThresholdPreferences': prefs, './LongVegetationThresholdPreferences.svelte': { default: child() },
@@ -141,7 +141,7 @@ test('actual parent/child composition renders thresholds and propagates retained
       vegetationWorkbookPublicationSession: () => ({ view: () => ({ busy: false, blocked: false }), subscribe: () => () => {} }),
       VegetationWorkbookPublicationSession: class { view() { return { busy: false, blocked: false }; } subscribe() { return () => {}; } },
     },
-  });
+  }) });
   const barriers = []; const { body } = render(component, { props: { ...owner, onBusyChange: value => barriers.push(value) } });
   assert.equal(barriers.at(-1), true);
   assert.match(body, /data-long-vegetation-thresholds/);

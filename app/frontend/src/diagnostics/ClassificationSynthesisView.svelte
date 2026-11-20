@@ -1,14 +1,11 @@
 <script lang="ts">
   import { onDestroy, onMount, untrack } from 'svelte';
-  import { ReadRequests } from '../shared/readRequests';
+  import { ReadRequests, formatError } from '../shared/readRequests';
   import { notifications } from '../shell/notificationService.svelte';
-  import SynthesisEdatopicTab from './SynthesisEdatopicTab.svelte';
   import SynthesisExportModal from './SynthesisExportModal.svelte';
-  import SynthesisHeader from './SynthesisHeader.svelte';
-  import SynthesisMatrixTab from './SynthesisMatrixTab.svelte';
   import SynthesisOutlierQueue from './SynthesisOutlierQueue.svelte';
-  import SynthesisSimilarityTab from './SynthesisSimilarityTab.svelte';
-  import SynthesisToolbar from './SynthesisToolbar.svelte';
+  import SynthesisPrimaryPane from './SynthesisPrimaryPane.svelte';
+  import SynthesisTopChrome from './SynthesisTopChrome.svelte';
   import {
     buildDiagnosticWorkbookPayload,
     chooseExternalSQLiteTarget,
@@ -99,9 +96,7 @@
 
   let loading = $state(false);
   let mutating = $state(false);
-  let lastLatencyMs = $state<number | null>(
-    untrack(() => (initialSnapshot ? initialSnapshot.computeMs : null))
-  );
+  let lastLatencyMs = $state<number | null>(untrack(() => (initialSnapshot ? initialSnapshot.computeMs : null)));
   let statusNotice = $state('');
   let errorMessage = $state('');
 
@@ -114,10 +109,13 @@
     }
   });
 
-  function pushNotice(severity: 'success' | 'info', category: 'general' | 'background', title: string, message: string) {
-    if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
-      notifications.push({ severity, category, source: 'BEC Synthesis', title, message });
-    }
+  function pushNotice(
+    severity: 'success' | 'info',
+    category: 'general' | 'background',
+    title: string,
+    message: string
+  ) {
+    notifications.push({ severity, category, source: 'BEC Synthesis', title, message });
   }
 
   function setBusyState(nextLoading: boolean, nextMutating: boolean) {
@@ -156,7 +154,7 @@
       }
     } catch (err) {
       if (gen !== requestGeneration) return;
-      errorMessage = err instanceof Error ? err.message : String(err);
+      errorMessage = formatError(err);
     } finally {
       if (gen === requestGeneration) setBusyState(false, mutating);
     }
@@ -182,7 +180,7 @@
         statusNotice = `No *_Lump tables found in ${picked.selectedPath}.`;
       }
     } catch (err) {
-      errorMessage = err instanceof Error ? err.message : String(err);
+      errorMessage = formatError(err);
     }
   }
 
@@ -193,12 +191,13 @@
       const picked = await chooseExternalSQLiteTarget(effectiveContextId);
       if (!picked?.selectedPath) return;
       externalSuPath = picked.selectedPath;
-      externalSuNames = (picked.sus ?? []).map(s => s.name).filter(Boolean);
-      statusNotice = externalSuNames.length > 0
-        ? `Inspected external SU file (${picked.selectedPath}): ${externalSuNames.join(', ')}. Switch active SU in Classification Explorer or UserSiteUnitList mode.`
-        : `Selected ${picked.selectedPath} (no *_SU tables found).`;
+      externalSuNames = (picked.sus ?? []).map((s) => s.name).filter(Boolean);
+      statusNotice =
+        externalSuNames.length > 0
+          ? `Inspected external SU file (${picked.selectedPath}): ${externalSuNames.join(', ')}. Switch active SU in Classification Explorer or UserSiteUnitList mode.`
+          : `Selected ${picked.selectedPath} (no *_SU tables found).`;
     } catch (err) {
-      errorMessage = err instanceof Error ? err.message : String(err);
+      errorMessage = formatError(err);
     }
   }
 
@@ -206,28 +205,20 @@
     excludePatternsText = raw;
     options.excludePatterns = raw
       .split(',')
-      .map(s => s.trim())
+      .map((s) => s.trim())
       .filter(Boolean);
   }
 
   function updateOptions(patch: Partial<SynthesisOptions>, recompute = false) {
     Object.assign(options, patch);
-    if (patch.minMaxPresencePct !== undefined) {
-      options.minMaxPresencePct = patch.minMaxPresencePct;
-    }
+    if (patch.minMaxPresencePct !== undefined) options.minMaxPresencePct = patch.minMaxPresencePct;
     if (recompute) void recomputeSnapshotOnly();
   }
 
-  function updatePairwiseParam(
-    key: 'minPlots' | 'minConstancy' | 'noiseConstancy' | 'minDiff' | 'minDd',
-    raw: string
-  ) {
+  function updatePairwiseParam(key: 'minPlots' | 'minConstancy' | 'noiseConstancy' | 'minDiff' | 'minDd', raw: string) {
     const parsed = Number(raw);
     if (!Number.isFinite(parsed)) return;
-    options.pairwise = {
-      ...(options.pairwise ?? createDefaultPairwiseParams()),
-      [key]: parsed,
-    };
+    options.pairwise = { ...(options.pairwise ?? createDefaultPairwiseParams()), [key]: parsed };
   }
 
   function resetPairwiseDefaults() {
@@ -247,25 +238,22 @@
       const res = await reads.track(resolveSynthesisHierarchyBreakpoints(effectiveContextId, nextPolicy));
       breakpointRollups = groupUnitsByHierarchyBreakpoints(snapshot, res);
     } catch (err) {
-      errorMessage = err instanceof Error ? err.message : String(err);
+      errorMessage = formatError(err);
     }
   }
 
   function applyIncomingSnapshot(snap: SynthesisSnapshot, latencyMs: number) {
     snapshot = snap;
     lastLatencyMs = latencyMs;
-    if (
-      selectedEdatopicScope !== '__OVERALL__' &&
-      !snap.units.some(u => u.siteUnit === selectedEdatopicScope)
-    ) {
+    if (selectedEdatopicScope !== '__OVERALL__' && !snap.units.some((u) => u.siteUnit === selectedEdatopicScope)) {
       selectedEdatopicScope = '__OVERALL__';
     }
     if (
       snap.units.length >= 2 &&
       (!selectedPairUnits[0] ||
         !selectedPairUnits[1] ||
-        !snap.units.some(u => u.siteUnit === selectedPairUnits[0]) ||
-        !snap.units.some(u => u.siteUnit === selectedPairUnits[1]))
+        !snap.units.some((u) => u.siteUnit === selectedPairUnits[0]) ||
+        !snap.units.some((u) => u.siteUnit === selectedPairUnits[1]))
     ) {
       selectedPairUnits = [snap.units[0].siteUnit, snap.units[1].siteUnit];
     }
@@ -275,9 +263,7 @@
     const cleanTarget = targetUnit.trim();
     if (!effectiveContextId || !plotNumber || !cleanTarget || mutating) return;
     if (!snapshot?.suWritable) {
-      errorMessage =
-        snapshot?.suReadOnlyReason ||
-        'Select a writable Site Unit (SU) table before reassigning plots.';
+      errorMessage = snapshot?.suReadOnlyReason || 'Select a writable Site Unit (SU) table before reassigning plots.';
       return;
     }
 
@@ -285,11 +271,10 @@
     setBusyState(loading, true);
     errorMessage = '';
     try {
-      const plainOpts = $state.snapshot(options);
       const res = await port.reassignSynthesisPlotUnit(effectiveContextId, {
         plotNumber,
         targetSiteUnit: cleanTarget,
-        options: plainOpts,
+        options: $state.snapshot(options),
       });
       if (gen !== requestGeneration) return;
       applyIncomingSnapshot(res.snapshot, res.latencyMs);
@@ -297,15 +282,18 @@
         ? `Moved plot ${res.plotNumber} from ${res.beforeSiteUnit || 'Unassigned'} to ${res.afterSiteUnit} in ${res.latencyMs.toFixed(1)} ms.`
         : `Plot ${res.plotNumber} is already assigned to ${res.afterSiteUnit}.`;
       if (res.changed) {
-        pushNotice('success', 'general', `Moved plot ${res.plotNumber} -> ${res.afterSiteUnit}`, `From ${res.beforeSiteUnit || 'Unassigned'} (${res.latencyMs.toFixed(1)} ms)`);
+        pushNotice(
+          'success',
+          'general',
+          `Moved plot ${res.plotNumber} -> ${res.afterSiteUnit}`,
+          `From ${res.beforeSiteUnit || 'Unassigned'} (${res.latencyMs.toFixed(1)} ms)`
+        );
       }
     } catch (err) {
       if (gen !== requestGeneration) return;
-      errorMessage = err instanceof Error ? err.message : String(err);
+      errorMessage = formatError(err);
     } finally {
-      if (gen === requestGeneration) {
-        setBusyState(loading, false);
-      }
+      if (gen === requestGeneration) setBusyState(loading, false);
     }
   }
 
@@ -315,21 +303,23 @@
     setBusyState(loading, true);
     errorMessage = '';
     try {
-      const plainOpts = $state.snapshot(options);
       const res = await port.undoSynthesisReassignment(effectiveContextId, {
-        options: plainOpts,
+        options: $state.snapshot(options),
       });
       if (gen !== requestGeneration) return;
       applyIncomingSnapshot(res.snapshot, res.latencyMs);
       statusNotice = `Restored plot ${res.plotNumber} to ${res.afterSiteUnit || 'Unassigned'} in ${res.latencyMs.toFixed(1)} ms.`;
-      pushNotice('info', 'general', `Restored plot ${res.plotNumber}`, `Reverted to ${res.afterSiteUnit || 'Unassigned'} (${res.latencyMs.toFixed(1)} ms)`);
+      pushNotice(
+        'info',
+        'general',
+        `Restored plot ${res.plotNumber}`,
+        `Reverted to ${res.afterSiteUnit || 'Unassigned'} (${res.latencyMs.toFixed(1)} ms)`
+      );
     } catch (err) {
       if (gen !== requestGeneration) return;
-      errorMessage = err instanceof Error ? err.message : String(err);
+      errorMessage = formatError(err);
     } finally {
-      if (gen === requestGeneration) {
-        setBusyState(loading, false);
-      }
+      if (gen === requestGeneration) setBusyState(loading, false);
     }
   }
 
@@ -351,10 +341,15 @@
       if (gen !== requestGeneration) return;
       lastExportResult = res;
       statusNotice = `Published 4-sheet BEC Diagnostic workbook (${res.path}) in ${res.latencyMs.toFixed(1)} ms.`;
-      pushNotice('success', 'background', 'Published BEC Diagnostic Workbook (.xlsx)', `${res.path} (${res.latencyMs.toFixed(1)} ms)`);
+      pushNotice(
+        'success',
+        'background',
+        'Published BEC Diagnostic Workbook (.xlsx)',
+        `${res.path} (${res.latencyMs.toFixed(1)} ms)`
+      );
     } catch (err) {
       if (gen !== requestGeneration) return;
-      errorMessage = err instanceof Error ? err.message : String(err);
+      errorMessage = formatError(err);
     } finally {
       if (gen === requestGeneration) {
         exportingWorkbook = false;
@@ -381,9 +376,7 @@
     if (!snapshot?.suWritable || !draggingPlotNumber) return;
     ev.preventDefault();
     dragOverUnit = unitCode;
-    if (ev.dataTransfer) {
-      ev.dataTransfer.dropEffect = 'move';
-    }
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
   }
 
   function onUnitDrop(ev: DragEvent, unitCode: string) {
@@ -391,15 +384,11 @@
     const plotNum = draggingPlotNumber || ev.dataTransfer?.getData('text/plain') || '';
     draggingPlotNumber = null;
     dragOverUnit = null;
-    if (plotNum && unitCode) {
-      void handleReassignPlot(plotNum, unitCode);
-    }
+    if (plotNum && unitCode) void handleReassignPlot(plotNum, unitCode);
   }
 
   onMount(() => {
-    if (!initialSnapshot && effectiveContextId) {
-      void refreshAll();
-    }
+    if (!initialSnapshot && effectiveContextId) void refreshAll();
   });
 
   onDestroy(() => {
@@ -415,64 +404,34 @@
       grouping: matrixGrouping,
     })
   );
-
-  const visibleOutliers = $derived(
-    filterOutlierQueue(snapshot?.outlierQueue ?? [], outlierFilter, outlierSearch)
-  );
-
-  const misplacedCount = $derived(
-    (snapshot?.outlierQueue ?? []).filter(item => item.misplaced).length
-  );
-
+  const visibleOutliers = $derived(filterOutlierQueue(snapshot?.outlierQueue ?? [], outlierFilter, outlierSearch));
+  const misplacedCount = $derived((snapshot?.outlierQueue ?? []).filter((item) => item.misplaced).length);
   const activePairComparison = $derived(
-    findPairwiseComparison(
-      snapshot?.pairwiseComparisons ?? [],
-      selectedPairUnits[0],
-      selectedPairUnits[1]
-    )
+    findPairwiseComparison(snapshot?.pairwiseComparisons ?? [], selectedPairUnits[0], selectedPairUnits[1])
   );
-
   const activeEdatopicGrid = $derived.by(() => {
     if (!snapshot) return null;
-    if (selectedEdatopicScope === '__OVERALL__') {
-      return snapshot.overallEdatopicGrid;
-    }
-    return (
-      snapshot.unitEdatopicGrids.find(g => g.siteUnit === selectedEdatopicScope) ??
-      snapshot.overallEdatopicGrid
-    );
+    if (selectedEdatopicScope === '__OVERALL__') return snapshot.overallEdatopicGrid;
+    return snapshot.unitEdatopicGrids.find((g) => g.siteUnit === selectedEdatopicScope) ?? snapshot.overallEdatopicGrid;
   });
-
   const edatopicRows = $derived(getEdatopicCellMatrix(activeEdatopicGrid));
-
-  const exportValidationMessage = $derived(
-    exportModalOpen ? validateWorkbookExportDraft(exportDraft) : ''
-  );
+  const exportValidationMessage = $derived(exportModalOpen ? validateWorkbookExportDraft(exportDraft) : '');
 </script>
 
-<section class="synthesis-workbench" data-tour="diagnostic-synthesis-root" aria-label="BEC Differential and Pairwise Synthesis Workbench">
-  <SynthesisHeader
+<section
+  class="synthesis-workbench"
+  data-tour="diagnostic-synthesis-root"
+  aria-label="BEC Differential and Pairwise Synthesis Workbench"
+>
+  <SynthesisTopChrome
     {snapshot}
     {project}
     {su}
     {lastLatencyMs}
     {loading}
     {mutating}
-    onRefresh={() => void refreshAll()}
-    onUndo={() => void handleUndoReassignment()}
-    onOpenExport={() => {
-      lastExportResult = null;
-      exportModalOpen = true;
-    }}
-  />
-
-  <SynthesisToolbar
     {options}
     {lumpOptions}
-    {su}
-    {snapshot}
-    {loading}
-    {mutating}
     {matrixDisplay}
     {matrixGrouping}
     {diagnosticOnly}
@@ -482,130 +441,50 @@
     {externalLumpDbPath}
     {externalSuPath}
     {externalSuNames}
+    {errorMessage}
+    bind:statusNotice
+    onRefresh={() => void refreshAll()}
+    onUndo={() => void handleUndoReassignment()}
+    onOpenExport={() => {
+      lastExportResult = null;
+      exportModalOpen = true;
+    }}
     onUpdateOptions={updateOptions}
     onRecompute={() => void recomputeSnapshotOnly()}
     onBrowseExternalLump={() => void browseExternalLumpDatabase()}
     onBrowseExternalSU={() => void browseExternalSUFile()}
-    onMatrixDisplayChange={mode => (matrixDisplay = mode)}
-    onMatrixGroupingChange={mode => (matrixGrouping = mode)}
-    onDiagnosticOnlyChange={checked => (diagnosticOnly = checked)}
+    onMatrixDisplayChange={(mode) => (matrixDisplay = mode)}
+    onMatrixGroupingChange={(mode) => (matrixGrouping = mode)}
+    onDiagnosticOnlyChange={(checked) => (diagnosticOnly = checked)}
     onToggleBreakpoints={(enabled, policy) => void toggleBreakpointGrouping(enabled, policy)}
     onExcludePatternsInput={applyExcludePatterns}
     onUpdatePairwiseParam={updatePairwiseParam}
     onResetPairwise={resetPairwiseDefaults}
   />
 
-  {#if errorMessage}
-    <div class="syn-alert syn-alert-error" role="alert">{errorMessage}</div>
-  {/if}
-
-  {#if statusNotice}
-    <div class="syn-alert syn-alert-info" role="status">
-      <span>{statusNotice}</span>
-      <button type="button" class="syn-dismiss" onclick={() => (statusNotice = '')}>Dismiss</button>
-    </div>
-  {/if}
-
-  {#if snapshot && !snapshot.suWritable && snapshot.suReadOnlyReason}
-    <div class="syn-readonly-note">
-      Read-only classification view: {snapshot.suReadOnlyReason}
-    </div>
-  {/if}
-
   <div class="syn-workspace-grid">
-    <div class="syn-primary-pane">
-      <div class="syn-tabbar" role="tablist" aria-label="Synthesis Views">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'matrix'}
-          class="syn-tab"
-          class:active={activeTab === 'matrix'}
-          onclick={() => (activeTab = 'matrix')}
-        >
-          Diagnostic Matrix ({snapshot?.species.length ?? 0} Taxa)
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'similarity'}
-          class="syn-tab"
-          class:active={activeTab === 'similarity'}
-          onclick={() => (activeTab = 'similarity')}
-        >
-          Pairwise Similarity ({snapshot?.units.length ?? 0}x{snapshot?.units.length ?? 0})
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'edatopic'}
-          class="syn-tab"
-          class:active={activeTab === 'edatopic'}
-          onclick={() => (activeTab = 'edatopic')}
-        >
-          Edatopic Grid (rSMR 0..8 x rSNR A..F)
-        </button>
-
-        {#if activeTab === 'matrix'}
-          <input
-            type="search"
-            aria-label="Filter synthesis matrix by species, code, lifeform, or unit"
-            class="syn-inline-search"
-            placeholder="Filter species, code, lifeform, or unit..."
-            value={speciesSearch}
-            oninput={e => (speciesSearch = (e.currentTarget as HTMLInputElement).value)}
-          />
-        {/if}
-      </div>
-
-      {#if activeTab === 'matrix'}
-        <SynthesisMatrixTab
-          {snapshot}
-          {matrixSections}
-          {matrixDisplay}
-          {useBreakpointGrouping}
-          {breakpointPolicy}
-          {breakpointRollups}
-          {loading}
-          {dragOverUnit}
-          {onUnitDragOver}
-          onUnitDragLeave={unitCode => {
-            if (dragOverUnit === unitCode) dragOverUnit = null;
-          }}
-          {onUnitDrop}
-        />
-      {/if}
-
-      {#if activeTab === 'similarity'}
-        <SynthesisSimilarityTab
-          {snapshot}
-          {similarityMetric}
-          {selectedPairUnits}
-          {activePairComparison}
-          onMetricChange={metric => (similarityMetric = metric)}
-          onSelectPair={pair => (selectedPairUnits = pair)}
-        />
-      {/if}
-
-      {#if activeTab === 'edatopic'}
-        <SynthesisEdatopicTab
-          {snapshot}
-          {selectedEdatopicScope}
-          {inspectedEdatopicCell}
-          {activeEdatopicGrid}
-          {edatopicRows}
-          {dragOverUnit}
-          onSelectScope={scope => {
-            selectedEdatopicScope = scope;
-            inspectedEdatopicCell = null;
-          }}
-          onSelectCell={cell => (inspectedEdatopicCell = cell)}
-          {onUnitDragOver}
-          {onUnitDrop}
-          {onOpenPlot}
-        />
-      {/if}
-    </div>
+    <SynthesisPrimaryPane
+      {snapshot}
+      bind:activeTab
+      bind:speciesSearch
+      {matrixSections}
+      {matrixDisplay}
+      {useBreakpointGrouping}
+      {breakpointPolicy}
+      {breakpointRollups}
+      {loading}
+      bind:dragOverUnit
+      bind:similarityMetric
+      bind:selectedPairUnits
+      {activePairComparison}
+      bind:selectedEdatopicScope
+      bind:inspectedEdatopicCell
+      {activeEdatopicGrid}
+      {edatopicRows}
+      {onUnitDragOver}
+      {onUnitDrop}
+      {onOpenPlot}
+    />
 
     <SynthesisOutlierQueue
       {snapshot}
@@ -615,8 +494,8 @@
       {outlierSearch}
       {manualTargetByPlot}
       {mutating}
-      onFilterChange={mode => (outlierFilter = mode)}
-      onSearchChange={val => (outlierSearch = val)}
+      onFilterChange={(mode) => (outlierFilter = mode)}
+      onSearchChange={(val) => (outlierSearch = val)}
       onManualTargetChange={(plotNumber, val) => (manualTargetByPlot[plotNumber] = val)}
       onReassignPlot={(plotNumber, targetUnit) => void handleReassignPlot(plotNumber, targetUnit)}
       {onPlotDragStart}

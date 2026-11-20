@@ -29,25 +29,18 @@
     <div class="syn-modal">
       <div class="syn-modal-hdr">
         <h3>Publish BEC Diagnostic Synthesis Workbook (.xlsx)</h3>
-        <button type="button" class="syn-dismiss" onclick={onClose}>
-          Close
-        </button>
+        <button type="button" class="syn-dismiss" onclick={onClose}> Close </button>
       </div>
 
       <div class="syn-modal-body">
         <p class="syn-modal-desc">
-          Creates a new 4-sheet diagnostic Excel workbook (.xlsx, without overwriting existing files):
-          BEC colour-coded Diagnostic Summary, Pairwise Similarity Matrix, Leave-One-Out Outlier Queue, and
-          9x6 Edatopic Grids.
+          Creates a new 4-sheet diagnostic Excel workbook (.xlsx, without overwriting existing files): BEC colour-coded
+          Diagnostic Summary, Pairwise Similarity Matrix, Leave-One-Out Outlier Queue, and 9x6 Edatopic Grids.
         </p>
 
         <label class="syn-modal-field">
           <span>Output .xlsx File Path (Absolute Path, No Overwrite)</span>
-          <input
-            type="text"
-            placeholder="/path/to/BEC_Diagnostic_Synthesis.xlsx"
-            bind:value={draft.outputPath}
-          />
+          <input type="text" placeholder="/path/to/BEC_Diagnostic_Synthesis.xlsx" bind:value={draft.outputPath} />
         </label>
 
         <label class="syn-modal-field">
@@ -96,15 +89,17 @@
         {#if lastExportResult}
           <div class="syn-export-success">
             <strong>Published:</strong> <code>{lastExportResult.path}</code>
-            <div>SHA-256: <code>{lastExportResult.sha256.slice(0, 16)}...</code> · Sheets: {lastExportResult.sheetNames.join(', ')}</div>
+            <div>
+              SHA-256: <code>{lastExportResult.sha256.slice(0, 16)}...</code> · Sheets: {lastExportResult.sheetNames.join(
+                ', '
+              )}
+            </div>
           </div>
         {/if}
       </div>
 
       <div class="syn-modal-ftr">
-        <button type="button" class="syn-btn syn-btn-ghost-dark" onclick={onClose}>
-          Cancel
-        </button>
+        <button type="button" class="syn-btn syn-btn-ghost-dark" onclick={onClose}> Cancel </button>
         <button
           type="button"
           class="syn-btn syn-btn-navy"

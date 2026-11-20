@@ -22,22 +22,30 @@ const deferredFS882SubEditors = [
 ];
 
 test('entry panels compile as guarded deferred components with explicit loading and failure states', () => {
+  const { readShellComposite } = require('./svelteTestHelpers.cjs');
   const source = readFileSync(srcPath('App.svelte'), 'utf8');
+  const shellComposite = readShellComposite();
+  const entryHostSrc = readFileSync(srcPath('shell/ShellEntryHost.svelte'), 'utf8');
+  const deferredViewsSrc = readFileSync(srcPath('shell/ShellDeferredViews.svelte'), 'utf8');
   const compiled = compile(source, { filename: 'App.svelte', generate: 'client', dev: false });
+  const entryHostCompiled = compile(entryHostSrc, { filename: 'ShellEntryHost.svelte', generate: 'client', dev: false });
+  const deferredCompiled = compile(deferredViewsSrc, { filename: 'ShellDeferredViews.svelte', generate: 'client', dev: false });
   assert.deepEqual(compiled.warnings, []);
+  assert.deepEqual(entryHostCompiled.warnings, []);
+  assert.deepEqual(deferredCompiled.warnings, []);
   for (const [component, owner] of [['FS882Form', 'fs882']]) {
     assert.doesNotMatch(source, new RegExp(`import ${component} from`));
-    assert.match(compiled.js.code, new RegExp(`import\\(['"]\\./(?:[a-z]+/)?${component}\\.svelte['"]\\)`));
-    assert.match(source, new RegExp(`role="status" data-entry-loading="${owner}"`));
-    assert.match(source, new RegExp(`role="alert" data-entry-load-error="${owner}"`));
+    assert.match(entryHostCompiled.js.code, new RegExp(`import\\(['"]\\.\\.?/(?:[a-z]+/)?${component}\\.svelte['"]\\)`));
+    assert.match(shellComposite, new RegExp(`role="status"[^>]*data-entry-loading="${owner}"|data-entry-loading="${owner}"[^>]*role="status"`));
+    assert.match(shellComposite, new RegExp(`role="alert"[^>]*data-entry-load-error="${owner}"|data-entry-load-error="${owner}"[^>]*role="alert"`));
   }
   for (const component of deferredViews) {
     assert.doesNotMatch(source, new RegExp(`import ${component} from`));
-    assert.match(compiled.js.code, new RegExp(`import\\(['"]\\./(?:[a-z]+/)?${component}\\.svelte['"]\\)`));
+    assert.match(deferredCompiled.js.code, new RegExp(`import\\(['"]\\.\\.?/(?:[a-z]+/)?${component}\\.svelte['"]\\)`));
   }
-  assert.doesNotMatch(source, /SIVICHARSForm/);
-  assert.match(source, /\{#key \$projectState\?\.contextId\}[\s\S]*?\{#key editorEntryForm\}[\s\S]*?\{#key editorPlotNumber\}/);
-  assert.equal((source.match(/bind:this=\{editor\}/g) ?? []).length, 1);
+  assert.doesNotMatch(shellComposite, /SIVICHARSForm/);
+  assert.match(shellComposite, /\{#key \$projectState\?\.contextId\}[\s\S]*?\{#key editorEntryForm\}[\s\S]*?\{#key editorPlotNumber\}/);
+  assert.equal((entryHostSrc.match(/bind:this=\{editor\}/g) ?? []).length, 1);
 
   const fs882Source = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
   const fs882Compiled = compile(fs882Source, { filename: 'FS882Form.svelte', generate: 'client', dev: false });
@@ -49,17 +57,19 @@ test('entry panels compile as guarded deferred components with explicit loading 
 });
 
 test('only a resolved module awaiting its editor binding blocks navigation and close', () => {
+  const { readShellComposite } = require('./svelteTestHelpers.cjs');
   const source = readFileSync(srcPath('App.svelte'), 'utf8');
+  const shellComposite = readShellComposite();
   const expression = source.match(/const editorInitializing = \$derived\(([\s\S]*?)\);/);
   assert.ok(expression);
-  const initializing = new Function('view', 'editor', 'fs882ModuleLoaded', `return (${expression[1]});`);
+  const initializing = new Function('view', 'editor', 'ui', `return (${expression[1]});`);
   for (const loaded of [false, true]) {
-    assert.equal(initializing('fs882', undefined, loaded), loaded);
-    assert.equal(initializing('fs882', {}, loaded), false);
-    assert.equal(initializing('home', undefined, loaded), false);
+    assert.equal(initializing('fs882', undefined, { fs882ModuleLoaded: loaded }), loaded);
+    assert.equal(initializing('fs882', {}, { fs882ModuleLoaded: loaded }), false);
+    assert.equal(initializing('home', undefined, { fs882ModuleLoaded: loaded }), false);
   }
-  assert.equal((source.match(/closeDisposition\([^\n]*editorInitializing/g) ?? []).length, 3);
-  assert.match(source, /await import\('\.\/entry\/FS882Form\.svelte'\);\s*fs882ModuleLoaded = true/);
+  assert.match(source, /editorInit:\s*\(\)\s*=>\s*editorInitializing/);
+  assert.match(shellComposite, /await import\('\.\.?\/entry\/FS882Form\.svelte'\);\s*fs882ModuleLoaded = true/);
 });
 
 test('failed deferred FS882 sub-editor imports clear open and busy guards instead of wedging close', async () => {
@@ -89,7 +99,7 @@ test('failed deferred FS882 sub-editor imports clear open and busy guards instea
   );
   assert.equal(host.metadataOpen, false);
   assert.equal(host.metadataBusy, false);
-  assert.match(host.error, /Project metadata editor could not load: Error: network chunk missing/);
+  assert.match(host.error, /Project metadata editor could not load: network chunk missing/);
 
   let staleResetCalled = false;
   let rejectStale;
@@ -251,6 +261,7 @@ test('all legacy VITE_* per-slice feature flags remain retired across production
     const source = readFileSync(srcPath(entry), 'utf8');
     assert.doesNotMatch(source, /VITE_|import\.meta\.env/, `Production file src/${entry} must not contain legacy VITE_* env flags`);
   }
+  const { readShellComposite } = require('./svelteTestHelpers.cjs');
   assert.match(readFileSync(srcPath('Navigation.svelte'), 'utf8'), /releaseChannel === 'experimental'/);
-  assert.match(readFileSync(srcPath('App.svelte'), 'utf8'), /startupInfo\?\.releaseChannel \?\? 'stable'/);
+  assert.match(readShellComposite(), /startupInfo\?\.releaseChannel \?\? 'stable'/);
 });

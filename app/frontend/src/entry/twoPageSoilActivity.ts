@@ -1,3 +1,4 @@
+import { evictMapEntriesByContext, registerContextDisposer } from '../shared/contextSessionRegistry';
 import type { TwoPageSoilSession } from './twoPageSoilSession';
 import type { TwoPageSoilOwner } from './twoPageSoilEditor';
 import { wellFormedUTF16 } from './qualityEditor';
@@ -8,18 +9,27 @@ export interface TwoPageSoilActivity {
   owner: TwoPageSoilOwner | null;
 }
 
-export const twoPageSoilEntries = new Map<string, { owner: TwoPageSoilOwner; session: TwoPageSoilSession; unsubscribe: () => void }>();
+export const twoPageSoilEntries = new Map<
+  string,
+  { owner: TwoPageSoilOwner; session: TwoPageSoilSession; unsubscribe: () => void }
+>();
 const observers = new Set<(activity: TwoPageSoilActivity) => void>();
 
 export function twoPageSoilOwnerKey(owner: TwoPageSoilOwner): string {
-  if (![owner.contextId, owner.project, owner.plot].every(value =>
-    typeof value === 'string' && value !== '' && wellFormedUTF16(value) && !value.includes('\0')) ||
-    !['SoilHumusXL', 'SoilMineralXL'].includes(owner.form)) throw new Error('Soil session requires an exact literal context/project/parent/source-form owner.');
+  if (
+    ![owner.contextId, owner.project, owner.plot].every(
+      (value) => typeof value === 'string' && value !== '' && wellFormedUTF16(value) && !value.includes('\0')
+    ) ||
+    !['SoilHumusXL', 'SoilMineralXL'].includes(owner.form)
+  )
+    throw new Error('Soil session requires an exact literal context/project/parent/source-form owner.');
   return JSON.stringify([owner.contextId, owner.project, owner.plot, owner.form]);
 }
 
 export function twoPageSoilActivity(): TwoPageSoilActivity {
-  let busy = false, blocked = false, owner: TwoPageSoilOwner | null = null;
+  let busy = false,
+    blocked = false,
+    owner: TwoPageSoilOwner | null = null;
   for (const entry of twoPageSoilEntries.values()) {
     const state = entry.session.closeState();
     busy ||= state.busy;
@@ -34,6 +44,24 @@ export function notifyTwoPageSoilActivity() {
 }
 
 export function subscribeTwoPageSoilActivity(observer: (activity: TwoPageSoilActivity) => void) {
-  observers.add(observer); observer(twoPageSoilActivity());
-  return () => { observers.delete(observer); };
+  observers.add(observer);
+  observer(twoPageSoilActivity());
+  return () => {
+    observers.delete(observer);
+  };
 }
+registerContextDisposer((id) => {
+  if (
+    evictMapEntriesByContext(
+      twoPageSoilEntries,
+      id,
+      (_k, v) => v.owner.contextId === id,
+      (v) => {
+        v.session.dispose();
+        v.unsubscribe();
+      }
+    ) > 0
+  ) {
+    notifyTwoPageSoilActivity();
+  }
+});

@@ -1,30 +1,48 @@
-<script module lang="ts">
-  import { notifications } from '../shell/notificationService.svelte';
-</script>
-
 <script lang="ts">
-  import { onDestroy, untrack } from 'svelte';
+  import { onDestroy } from 'svelte';
   import { PictureService } from '../../bindings/github.com/boostao/vpro/app';
-  import { ReadRequests } from '../shared/readRequests';
-  import { pictureMetadataFromWire, pictureImageFromWire, pictureCellLabel, type PictureReview, type PicturePreview } from './pictureRead';
+  import { equalCell } from '../admin/projectMetadataEditor';
+  import { observeSession, observeSessionView } from '../shared/reactiveSession.svelte';
+  import { ReadRequests, formatError } from '../shared/readRequests';
+  import { notifications } from '../shell/notificationService.svelte';
+  import type { PictureCreationReceipt } from './pictureCreationEditor';
+  import { pictureCreationSession } from './pictureCreationSessions';
+  import { pictureLifecycleOriginalMatches } from './pictureLifecycleEditor';
+  import type { PictureLifecycleCommit, PictureLifecycleSession } from './pictureLifecycleSession';
+  import { pictureLifecycleSession } from './pictureLifecycleSessions';
   import PictureMetadataEditor from './PictureMetadataEditor.svelte';
   import type { PictureMetadataSession } from './pictureMetadataSession';
-  import { pictureCreationSession } from './pictureCreationSessions';
-  import type { PictureCreationReceipt } from './pictureCreationEditor';
-  import { equalCell } from '../admin/projectMetadataEditor';
-  import { pictureLifecycleSession } from './pictureLifecycleSessions';
-  import type { PictureLifecycleCommit, PictureLifecycleSession } from './pictureLifecycleSession';
-  import { pictureLifecycleOriginalMatches } from './pictureLifecycleEditor';
+  import PicturePanelLinkedList from './PicturePanelLinkedList.svelte';
+  import {
+    pictureCellLabel,
+    pictureImageFromWire,
+    pictureMetadataFromWire,
+    type PicturePreview,
+    type PictureReview,
+  } from './pictureRead';
 
-  let { contextId, project, plotNumber, view = 'child', disabled = false, metadataDisabled, onBusyChange, metadataSession,
-    observeMutationReceipts = true }: {
-    contextId: string; project: string; plotNumber: string; disabled?: boolean;
+  let {
+    contextId,
+    project,
+    plotNumber,
+    view = 'child',
+    disabled = false,
+    metadataDisabled,
+    onBusyChange,
+    metadataSession,
+    observeMutationReceipts = true,
+  }: {
+    contextId: string;
+    project: string;
+    plotNumber: string;
+    disabled?: boolean;
     metadataDisabled?: boolean;
     view?: 'child' | 'manager';
     onBusyChange: (busy: boolean) => void;
     metadataSession?: PictureMetadataSession;
     observeMutationReceipts?: boolean;
   } = $props();
+
   const reads = new ReadRequests();
   let generation = 0;
   let busy = $state(false);
@@ -38,163 +56,209 @@
   let reviewKey = $state('');
   const currentReview = $derived(reviewKey === ownerKey ? review : null);
   const currentImage = $derived(reviewKey === ownerKey ? image : null);
-  const row = $derived(currentReview?.records.rows.find(item => item.rowId === selected));
-  const creationSession = $derived(observeMutationReceipts && contextId && project && plotNumber
-    ? pictureCreationSession({ contextId, project, plotNumber }) : undefined);
-  let creationRevision = $state(0);
-  $effect(() => creationSession?.subscribe(() => untrack(() => creationRevision++)));
-  const creationView = $derived.by(() => { creationRevision; return creationSession?.view(); });
+  const row = $derived(currentReview?.records.rows.find((item) => item.rowId === selected));
+
+  const creationSession = $derived(
+    observeMutationReceipts && contextId && project && plotNumber
+      ? pictureCreationSession({ contextId, project, plotNumber })
+      : undefined
+  );
+  const observedCreation = observeSessionView(() => creationSession);
+  const creationView = $derived(observedCreation.current);
   let appliedCreationRequest = '';
-  const deletionEnabled = true;
-  const lifecycleSession = $derived(observeMutationReceipts && contextId && project && plotNumber
-    ? pictureLifecycleSession({ contextId, project, plotNumber }) : undefined);
-  let lifecycleRevision = $state(0);
-  $effect(() => lifecycleSession?.subscribe(() => untrack(() => lifecycleRevision++)));
-  const lifecycleView = $derived.by(() => { lifecycleRevision; return lifecycleSession?.view(); });
-  const lifecyclePending = $derived.by(() => {
-    lifecycleRevision;
-    const close = lifecycleSession?.closeState();
-    return !!close && (close.unsaved || close.busy || close.blocked);
-  });
+
+  const lifecycleSession = $derived(
+    observeMutationReceipts && contextId && project && plotNumber
+      ? pictureLifecycleSession({ contextId, project, plotNumber })
+      : undefined
+  );
+  const observedLifecycle = observeSessionView(() => lifecycleSession);
+  const lifecycleView = $derived(observedLifecycle.current);
+  const observedLifecycleClose = observeSession(
+    () => lifecycleSession,
+    (s) => s.closeState()
+  );
+  const lifecyclePending = $derived(
+    !!observedLifecycleClose.current &&
+      (observedLifecycleClose.current.unsaved ||
+        observedLifecycleClose.current.busy ||
+        observedLifecycleClose.current.blocked)
+  );
   let appliedLifecycleSession: PictureLifecycleSession | undefined;
   let appliedLifecycleRevision = 0;
-  let metadataRevision = $state(0);
-  $effect(() => metadataSession?.subscribe(() => untrack(() => metadataRevision++)));
-  const metadataClose = $derived.by(() => { metadataRevision; return metadataSession?.closeState(); });
-  const metadataView = $derived.by(() => { metadataRevision; return metadataSession?.view(); });
+
+  const observedMetadata = observeSession(
+    () => metadataSession,
+    (s) => ({ view: s.view(), close: s.closeState() })
+  );
+  const metadataClose = $derived(observedMetadata.current?.close);
+  const metadataView = $derived(observedMetadata.current?.view);
   const metadataPending = $derived(!!metadataClose && (metadataClose.unsaved || metadataClose.busy));
   let appliedMetadataSession: PictureMetadataSession | undefined;
   let appliedMetadataRevision = 0;
+
   function synchronizeMetadataOriginal() {
-    if (metadataSession !== appliedMetadataSession) {
-      appliedMetadataSession = metadataSession;
-      appliedMetadataRevision = 0;
-    }
+    if (metadataSession !== appliedMetadataSession)
+      [appliedMetadataSession, appliedMetadataRevision] = [metadataSession, 0];
     const update = metadataView?.originalUpdate;
     if (!update || update.revision === appliedMetadataRevision) return;
     appliedMetadataRevision = update.revision;
-    if (!review || reviewKey !== ownerKey || update.contextId !== contextId ||
-        update.project !== project || update.plotNumber !== plotNumber) return;
-    review = { ...review, records: { ...review.records,
-      rows: review.records.rows.map(item => item.rowId === update.original.rowId ? update.original : item) } };
-    image = null; viewerOpen = false;
+    if (
+      !review ||
+      reviewKey !== ownerKey ||
+      update.contextId !== contextId ||
+      update.project !== project ||
+      update.plotNumber !== plotNumber
+    )
+      return;
+    review = {
+      ...review,
+      records: {
+        ...review.records,
+        rows: review.records.rows.map((item) => (item.rowId === update.original.rowId ? update.original : item)),
+      },
+    };
+    [image, viewerOpen] = [null, false];
   }
   $effect(synchronizeMetadataOriginal);
 
   async function refreshCreated(receipt: PictureCreationReceipt) {
     cancel();
-    const request = generation, key = ownerKey, owner = { contextId, project, plotNumber };
-    busy = true; error = ''; image = null; viewerOpen = false;
+    const [request, key, owner] = [generation, ownerKey, { contextId, project, plotNumber }];
+    [busy, error, image, viewerOpen] = [true, '', null, false];
     onBusyChange(true);
     try {
       const value = await reads.track(PictureService.GetMetadata(contextId, plotNumber));
       if (request !== generation || key !== ownerKey) return;
       const refreshed = pictureMetadataFromWire(value, owner);
-      const committed = refreshed.records.rows.find(item => item.rowId === receipt.rowId);
+      const committed = refreshed.records.rows.find((item) => item.rowId === receipt.rowId);
       if (!committed || committed.cells.some((cell, index) => !equalCell(cell, receipt.committed.cells[index]))) {
         throw new Error('The complete committed physical row differs from the refreshed owned picture list.');
       }
-      review = refreshed; reviewKey = key; selected = receipt.rowId;
+      [review, reviewKey, selected] = [refreshed, key, receipt.rowId];
     } catch (cause) {
       if (request === generation && key === ownerKey) {
-        error = `Picture creation committed; linked-list refresh failed and receipt is retained: ${String(cause)}`;
-        if (typeof notifications !== 'undefined') {
-          notifications.error('Picture list refresh failed', error, {
-            category: 'entry',
-            source: 'Plot Pictures',
-            contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
-          });
-        }
+        const contextTag = plotNumber ? `Plot ${plotNumber}` : project || undefined;
+        error = `Picture creation committed; linked-list refresh failed and receipt is retained: ${formatError(cause)}`;
+        notifications.error('Picture list refresh failed', error, {
+          category: 'entry',
+          source: 'Plot Pictures',
+          contextTag,
+        });
       }
     } finally {
-      if (request === generation) { busy = false; onBusyChange(false); }
+      if (request === generation) {
+        busy = false;
+        onBusyChange(false);
+      }
     }
   }
   $effect(() => {
     const receipt = creationView?.receipts.at(-1);
-    if (!receipt || metadataPending || receipt.requestId === appliedCreationRequest ||
-        receipt.contextId !== contextId || receipt.project !== project || receipt.plotNumber !== plotNumber) return;
+    if (
+      !receipt ||
+      metadataPending ||
+      receipt.requestId === appliedCreationRequest ||
+      receipt.contextId !== contextId ||
+      receipt.project !== project ||
+      receipt.plotNumber !== plotNumber
+    )
+      return;
     appliedCreationRequest = receipt.requestId;
     void refreshCreated(receipt);
   });
 
   async function refreshLifecycle(commit: PictureLifecycleCommit) {
     cancel();
-    const request = generation, key = ownerKey, owner = { contextId, project, plotNumber };
-    busy = true; error = ''; review = null; reviewKey = ''; selected = ''; image = null; viewerOpen = false;
+    const [request, key, owner] = [generation, ownerKey, { contextId, project, plotNumber }];
+    [busy, error, review, reviewKey, selected, image, viewerOpen] = [true, '', null, '', '', null, false];
     onBusyChange(true);
     try {
       const value = await reads.track(PictureService.GetMetadata(contextId, plotNumber));
       if (request !== generation || key !== ownerKey) return;
       const refreshed = pictureMetadataFromWire(value, owner);
-      const original = commit.kind === 'delete' ? commit.receipt.request.original : commit.receipt.request.deletion.original;
+      const original =
+        commit.kind === 'delete' ? commit.receipt.request.original : commit.receipt.request.deletion.original;
       if (commit.kind === 'delete') {
-        if (refreshed.records.rows.some(row => row.rowId === original.rowId ||
-            row.cells[0].storage === 'integer' && row.cells[0].integer === original.cells[0].integer)) {
+        if (
+          refreshed.records.rows.some(
+            (r) =>
+              r.rowId === original.rowId ||
+              (r.cells[0].storage === 'integer' && r.cells[0].integer === original.cells[0].integer)
+          )
+        ) {
           throw new Error('The deleted physical row/identity reappeared; no replacement is inferred.');
         }
       } else {
-        const expected = [...commit.receipt.request.peers, original].sort((left, right) =>
-          BigInt(left.rowId) < BigInt(right.rowId) ? -1 : BigInt(left.rowId) > BigInt(right.rowId) ? 1 : 0);
-        if (refreshed.records.rows.length !== expected.length ||
-            refreshed.records.rows.some((row, index) => !pictureLifecycleOriginalMatches(row, expected[index]))) {
+        const expected = [...commit.receipt.request.peers, original].sort((l, r) =>
+          BigInt(l.rowId) < BigInt(r.rowId) ? -1 : BigInt(l.rowId) > BigInt(r.rowId) ? 1 : 0
+        );
+        if (
+          refreshed.records.rows.length !== expected.length ||
+          refreshed.records.rows.some((r, index) => !pictureLifecycleOriginalMatches(r, expected[index]))
+        ) {
           throw new Error('The complete restored physical row/peers differ from the retained committed plan.');
         }
         selected = original.rowId;
       }
-      review = refreshed; reviewKey = key;
+      [review, reviewKey] = [refreshed, key];
     } catch (cause) {
       if (request === generation && key === ownerKey) {
-        error = `Picture lifecycle committed; linked-list refresh failed and irreversible receipt is retained: ${String(cause)}`;
-        if (typeof notifications !== 'undefined') {
-          notifications.error('Picture list refresh failed', error, {
-            category: 'entry',
-            source: 'Plot Pictures',
-            contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
-          });
-        }
+        const contextTag = plotNumber ? `Plot ${plotNumber}` : project || undefined;
+        error = `Picture lifecycle committed; linked-list refresh failed and irreversible receipt is retained: ${formatError(cause)}`;
+        notifications.error('Picture list refresh failed', error, {
+          category: 'entry',
+          source: 'Plot Pictures',
+          contextTag,
+        });
       }
     } finally {
-      if (request === generation) { busy = false; onBusyChange(false); }
+      if (request === generation) {
+        busy = false;
+        onBusyChange(false);
+      }
     }
   }
   $effect(() => {
-    if (appliedLifecycleSession !== lifecycleSession) {
-      appliedLifecycleSession = lifecycleSession; appliedLifecycleRevision = 0;
-    }
-    const state = lifecycleView, commit = state?.receipts.at(-1);
+    if (appliedLifecycleSession !== lifecycleSession)
+      [appliedLifecycleSession, appliedLifecycleRevision] = [lifecycleSession, 0];
+    const state = lifecycleView;
+    const commit = state?.receipts.at(-1);
     if (!state || !commit || metadataPending || state.revision === appliedLifecycleRevision) return;
     appliedLifecycleRevision = state.revision;
     void refreshLifecycle(commit);
   });
 
   async function reviewDeletion() {
-    if (!lifecycleSession || !row || !deletionEnabled || view !== 'manager' || disabled || busy || metadataPending || lifecyclePending) return;
-    try { await lifecycleSession.reviewDeletion(row.rowId); error = ''; }
-    catch (cause) {
-      error = `Picture deletion review unavailable: ${String(cause)}`;
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Picture deletion review unavailable', error, {
-          category: 'entry',
-          source: 'Plot Pictures',
-          contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
-        });
-      }
+    if (!lifecycleSession || !row || view !== 'manager' || disabled || busy || metadataPending || lifecyclePending)
+      return;
+    try {
+      await lifecycleSession.reviewDeletion(row.rowId);
+      error = '';
+    } catch (cause) {
+      const contextTag = plotNumber ? `Plot ${plotNumber}` : project || undefined;
+      error = `Picture deletion review unavailable: ${formatError(cause)}`;
+      notifications.error('Picture deletion review unavailable', error, {
+        category: 'entry',
+        source: 'Plot Pictures',
+        contextTag,
+      });
     }
   }
 
   function editMetadata() {
     if (!metadataSession || !currentReview || !row || disabled || busy || metadataPending || lifecyclePending) return;
-    try { metadataSession.select(currentReview, row.rowId); error = ''; }
-    catch (cause) {
-      error = `Picture metadata editing unavailable: ${String(cause)}`;
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Picture metadata editing unavailable', error, {
-          category: 'entry',
-          source: 'Plot Pictures',
-          contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
-        });
-      }
+    try {
+      metadataSession.select(currentReview, row.rowId);
+      error = '';
+    } catch (cause) {
+      const contextTag = plotNumber ? `Plot ${plotNumber}` : project || undefined;
+      error = `Picture metadata editing unavailable: ${formatError(cause)}`;
+      notifications.error('Picture metadata editing unavailable', error, {
+        category: 'entry',
+        source: 'Plot Pictures',
+        contextTag,
+      });
     }
   }
 
@@ -204,110 +268,121 @@
     busy = false;
     onBusyChange(false);
   }
+
   async function load() {
     if (disabled || busy || metadataPending || lifecyclePending) return;
     cancel();
-    const request = generation, key = ownerKey, owner = { contextId, project, plotNumber };
-    busy = true; error = ''; review = null; image = null; selected = ''; viewerOpen = false;
+    const [request, key, owner] = [generation, ownerKey, { contextId, project, plotNumber }];
+    [busy, error, review, image, selected, viewerOpen] = [true, '', null, null, '', false];
     onBusyChange(true);
     try {
       const value = await reads.track(PictureService.GetMetadata(contextId, plotNumber));
       if (request !== generation || key !== ownerKey) return;
-      review = pictureMetadataFromWire(value, owner);
-      reviewKey = key;
+      [review, reviewKey, selected] = [pictureMetadataFromWire(value, owner), key, ''];
       selected = review.records.rows[0]?.rowId ?? '';
     } catch (cause) {
       if (request === generation && key === ownerKey) {
-        error = `Linked pictures unavailable; no files or data changed: ${String(cause)}`;
-        if (typeof notifications !== 'undefined') {
-          notifications.error('Linked pictures unavailable', error, {
-            category: 'entry',
-            source: 'Plot Pictures',
-            contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
-          });
-        }
-      }
-    } finally {
-      if (request === generation) { busy = false; onBusyChange(false); }
-    }
-  }
-  function select(value: string) {
-    if (metadataPending) {
-      error = 'Finish or discard the retained picture metadata draft before changing selection.';
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Picture selection blocked', error, {
+        const contextTag = plotNumber ? `Plot ${plotNumber}` : project || undefined;
+        error = `Linked pictures unavailable; no files or data changed: ${formatError(cause)}`;
+        notifications.error('Linked pictures unavailable', error, {
           category: 'entry',
           source: 'Plot Pictures',
-          contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
+          contextTag,
         });
       }
+    } finally {
+      if (request === generation) {
+        busy = false;
+        onBusyChange(false);
+      }
+    }
+  }
+
+  function select(value: string) {
+    const contextTag = plotNumber ? `Plot ${plotNumber}` : project || undefined;
+    if (metadataPending) {
+      error = 'Finish or discard the retained picture metadata draft before changing selection.';
+      notifications.error('Picture selection blocked', error, {
+        category: 'entry',
+        source: 'Plot Pictures',
+        contextTag,
+      });
       return;
     }
     if (lifecyclePending) {
-      error = 'Finish the retained picture lifecycle review or resolve/acknowledge its receipt before changing selection.';
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Picture selection blocked', error, {
-          category: 'entry',
-          source: 'Plot Pictures',
-          contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
-        });
-      }
+      error =
+        'Finish the retained picture lifecycle review or resolve/acknowledge its receipt before changing selection.';
+      notifications.error('Picture selection blocked', error, {
+        category: 'entry',
+        source: 'Plot Pictures',
+        contextTag,
+      });
       return;
     }
     cancel();
-    selected = value; image = null; error = ''; viewerOpen = false;
+    [selected, image, error, viewerOpen] = [value, null, '', false];
   }
+
   async function preview() {
     if (disabled || busy || !row || lifecyclePending) return;
     cancel();
-    const request = generation, key = ownerKey, owner = { contextId, project, plotNumber };
-    busy = true; error = ''; image = null; viewerOpen = false;
+    const [request, key, owner] = [generation, ownerKey, { contextId, project, plotNumber }];
+    [busy, error, image, viewerOpen] = [true, '', null, false];
     onBusyChange(true);
     try {
       const original = $state.snapshot(row);
-      const value = await reads.track(PictureService.GetImage(contextId, plotNumber, JSON.stringify({ view, original })));
+      const value = await reads.track(
+        PictureService.GetImage(contextId, plotNumber, JSON.stringify({ view, original }))
+      );
       if (request !== generation || key !== ownerKey || selected !== original.rowId) return;
       image = pictureImageFromWire(value, owner, original.rowId);
     } catch (cause) {
       if (request === generation && key === ownerKey) {
-        error = `Picture preview unavailable; metadata and original files retained: ${String(cause)}`;
-        if (typeof notifications !== 'undefined') {
-          notifications.error('Picture preview unavailable', error, {
-            category: 'entry',
-            source: 'Plot Pictures',
-            contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
-          });
-        }
-      }
-    } finally {
-      if (request === generation) { busy = false; onBusyChange(false); }
-    }
-  }
-  function measured(event: Event) {
-    if (!(event.currentTarget instanceof HTMLImageElement) || !currentImage) return;
-    if (event.currentTarget.naturalWidth !== currentImage.width || event.currentTarget.naturalHeight !== currentImage.height) {
-      error = 'Displayed picture dimensions disagree with the owned decoded image; reload before viewing.';
-      image = null; viewerOpen = false;
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Picture preview mismatch', error, {
+        const contextTag = plotNumber ? `Plot ${plotNumber}` : project || undefined;
+        error = `Picture preview unavailable; metadata and original files retained: ${formatError(cause)}`;
+        notifications.error('Picture preview unavailable', error, {
           category: 'entry',
           source: 'Plot Pictures',
-          contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
+          contextTag,
         });
+      }
+    } finally {
+      if (request === generation) {
+        busy = false;
+        onBusyChange(false);
       }
     }
   }
-  function displayError() {
-    error = 'The owned picture bytes could not be displayed; metadata and files are unchanged.';
-    image = null; viewerOpen = false;
-    if (typeof notifications !== 'undefined') {
-      notifications.error('Picture preview unavailable', error, {
-        category: 'entry',
-        source: 'Plot Pictures',
-        contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
-      });
+
+  function failPreview(title: string, message: string) {
+    [error, image, viewerOpen] = [message, null, false];
+    notifications.error(title, message, {
+      category: 'entry',
+      source: 'Plot Pictures',
+      contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
+    });
+  }
+
+  function measured(event: Event) {
+    if (!(event.currentTarget instanceof HTMLImageElement) || !currentImage) return;
+    if (
+      event.currentTarget.naturalWidth !== currentImage.width ||
+      event.currentTarget.naturalHeight !== currentImage.height
+    ) {
+      failPreview(
+        'Picture preview mismatch',
+        'Displayed picture dimensions disagree with the owned decoded image; reload before viewing.'
+      );
     }
   }
+
+  function displayError() {
+    failPreview(
+      'Picture preview unavailable',
+      'The owned picture bytes could not be displayed; metadata and files are unchanged.'
+    );
+  }
+
   $effect(() => {
     if (viewerOpen && currentImage && viewer && !viewer.open) viewer.showModal();
     else if (!viewerOpen && viewer?.open) viewer.close();
@@ -318,72 +393,123 @@
 <section class="pictures" data-picture-panel aria-label="Linked plot pictures">
   <h3>Pictures</h3>
   <div class="actions">
-    <button onclick={load} disabled={disabled || busy || metadataPending || lifecyclePending}>Load linked pictures</button>
+    <button onclick={load} disabled={disabled || busy || metadataPending || lifecyclePending}
+      >Load linked pictures</button
+    >
     {#if busy}<button onclick={cancel}>Cancel picture read</button>{/if}
   </div>
-  {#if currentReview}
-    {#if currentReview.records.rows.length === 0}
-      <p>No linked picture metadata for this literal plot.</p>
-    {:else}
-      <label for="picture-record">Linked picture record</label>
-      <select id="picture-record" value={selected} disabled={busy || disabled || metadataPending || lifecyclePending} onchange={event => select(event.currentTarget.value)}>
-        {#each currentReview.records.rows as item (item.rowId)}
-          <option value={item.rowId}>{pictureCellLabel(item.cells[2])} — ID {pictureCellLabel(item.cells[0])}; physical row {item.rowId}</option>
-        {/each}
-      </select>
-      {#if row}
-        <dl class="metadata">
-          <div><dt>{view === 'manager' ? 'Picture File Name' : 'PicName'}</dt><dd>{pictureCellLabel(row.cells[2])}</dd></div>
-          <div><dt>{view === 'manager' ? 'Picture Directory' : 'PicDir'}</dt><dd>{pictureCellLabel(row.cells[1])}</dd></div>
-          <div><dt>PicComment</dt><dd>{pictureCellLabel(row.cells[4])}</dd></div>
-        </dl>
-        <button onclick={preview} disabled={disabled || busy || lifecyclePending}>Preview selected picture</button>
-        {#if metadataSession}<button onclick={editMetadata} disabled={disabled || busy || metadataPending || lifecyclePending}>Edit selected picture metadata</button>{/if}
-        {#if deletionEnabled && view === 'manager'}
-          <button data-picture-delete-review onclick={reviewDeletion} disabled={disabled || busy || metadataPending || lifecyclePending}>Review deletion of selected picture reference</button>
-        {/if}
-      {/if}
+
+  <PicturePanelLinkedList
+    review={currentReview}
+    {selected}
+    {row}
+    {view}
+    {disabled}
+    {busy}
+    {metadataPending}
+    {lifecyclePending}
+    hasMetadataSession={Boolean(metadataSession)}
+    cellLabel={pictureCellLabel}
+    onSelect={select}
+    onPreview={preview}
+    onEditMetadata={editMetadata}
+    onReviewDeletion={reviewDeletion}
+  >
+    {#if metadataSession}
+      <PictureMetadataEditor
+        session={metadataSession}
+        disabled={(metadataDisabled ?? disabled) || busy || lifecyclePending}
+      />
     {/if}
-  {/if}
-  {#if metadataSession}
-    <PictureMetadataEditor session={metadataSession} disabled={(metadataDisabled ?? disabled) || busy || lifecyclePending} />
-  {/if}
-  {#if currentImage}
-    <button class="preview" aria-label="Open full-size picture" ondblclick={() => viewerOpen = true} onclick={() => viewerOpen = true}>
-      <img src={currentImage.dataUrl} alt={row ? pictureCellLabel(row.cells[2]) : 'Selected plot picture'} onload={measured} onerror={displayError} />
-    </button>
-    <p>{currentImage.width} × {currentImage.height}; verified {currentImage.mime}. Click or double-click to open the viewer.</p>
-  {/if}
-  <p class="guidance">Read-only linked metadata and JPEG/PNG preview. Each selected row uses its own PicDir.
-    {#if view === 'manager'}Default uses the explicitly authorized manager directory, not the FS882 child directory.
-    {:else}Default uses the explicitly authorized child directory, not the manager PictureDir.{/if}
-    {#if deletionEnabled && view === 'manager'}Deletion requires the separate lifecycle review and backend permission.
-    {:else}Record deletion remains unavailable here.{/if}
-    {#if metadataSession}External directories and adding records remain unavailable here.
-    {:else}External directories, adding records and metadata editing remain unavailable here.{/if}
-    Files are never copied or repaired.</p>
+    {#if currentImage}
+      <button
+        class="preview"
+        aria-label="Open full-size picture"
+        ondblclick={() => (viewerOpen = true)}
+        onclick={() => (viewerOpen = true)}
+      >
+        <img
+          src={currentImage.dataUrl}
+          alt={row ? pictureCellLabel(row.cells[2]) : 'Selected plot picture'}
+          onload={measured}
+          onerror={displayError}
+        />
+      </button>
+      <p>
+        {currentImage.width} × {currentImage.height}; verified {currentImage.mime}. Click or double-click to open the
+        viewer.
+      </p>
+    {/if}
+  </PicturePanelLinkedList>
 </section>
 {#if viewerOpen && currentImage}
-    <dialog bind:this={viewer} class="viewer" aria-label="Pictures viewer" oncancel={() => viewerOpen = false} onclose={() => viewerOpen = false}>
-      <button onclick={() => viewerOpen = false}>Close picture viewer</button>
-      <img src={currentImage.dataUrl} alt={row ? pictureCellLabel(row.cells[2]) : 'Selected plot picture'} onload={measured} onerror={displayError} />
-    </dialog>
+  <dialog
+    bind:this={viewer}
+    class="viewer"
+    aria-label="Pictures viewer"
+    oncancel={() => (viewerOpen = false)}
+    onclose={() => (viewerOpen = false)}
+  >
+    <button onclick={() => (viewerOpen = false)}>Close picture viewer</button>
+    <img
+      src={currentImage.dataUrl}
+      alt={row ? pictureCellLabel(row.cells[2]) : 'Selected plot picture'}
+      onload={measured}
+      onerror={displayError}
+    />
+  </dialog>
 {/if}
 
 <style>
-  .pictures { display: grid; gap: .65rem; min-width: 0; padding: .75rem; }
-  .pictures h3 { font-weight: 600; color: var(--vpro-navy); }
-  .actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-  button, select { border: 1px solid var(--vpro-border-strong); border-radius: .25rem; padding: .35rem .5rem; color: var(--vpro-ink); background: var(--vpro-surface); min-width: 0; }
-  button:disabled, select:disabled { opacity: .5; }
-  select { min-width: 0; max-width: 100%; }
-  .metadata { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr)); gap: .5rem; }
-  dt { font-weight: 600; color: var(--vpro-ink); }
-  dd { white-space: pre-wrap; overflow-wrap: anywhere; }
-  .preview { width: fit-content; max-width: 100%; }
-  img { max-width: 100%; height: auto; }
-  .guidance { font-size: .8rem; color: var(--vpro-ink-secondary); }
-  .viewer::backdrop { background: rgba(0, 34, 68, 0.55); }
-  .viewer { background: var(--vpro-surface); padding: 1rem; max-width: calc(100% - 2rem); max-height: calc(100% - 2rem); overflow: auto; border: 1px solid var(--vpro-border); border-radius: .25rem; }
-  .viewer[open] { display: grid; gap: .75rem; }
+  .pictures {
+    display: grid;
+    gap: 0.65rem;
+    min-width: 0;
+    padding: 0.75rem;
+  }
+  .pictures h3 {
+    font-weight: 600;
+    color: var(--vpro-navy);
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  button {
+    border: 1px solid var(--vpro-border-strong);
+    border-radius: 0.25rem;
+    padding: 0.35rem 0.5rem;
+    color: var(--vpro-ink);
+    background: var(--vpro-surface);
+    min-width: 0;
+  }
+  button:disabled {
+    opacity: 0.5;
+  }
+  .preview {
+    width: fit-content;
+    max-width: 100%;
+  }
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+  .viewer::backdrop {
+    background: rgba(0, 34, 68, 0.55);
+  }
+  .viewer {
+    background: var(--vpro-surface);
+    padding: 1rem;
+    max-width: calc(100% - 2rem);
+    max-height: calc(100% - 2rem);
+    overflow: auto;
+    border: 1px solid var(--vpro-border);
+    border-radius: 0.25rem;
+  }
+  .viewer[open] {
+    display: grid;
+    gap: 0.75rem;
+  }
 </style>

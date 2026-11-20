@@ -162,7 +162,8 @@
           <div class="vpro-notif-empty">
             <p class="font-semibold text-vpro-ink">No notifications in this view</p>
             <p class="mt-1 text-xs text-vpro-ink-secondary">
-              Completed saves, exports, LMH25 pedon/edatopic advisories, R/Quarto jobs, and Access import logs appear here.
+              Completed saves, exports, LMH25 pedon/edatopic advisories, R/Quarto jobs, and Access import logs appear
+              here.
             </p>
           </div>
         {:else}
@@ -173,11 +174,7 @@
               class:unread={!item.read}
               data-notification-entry={item.id}
             >
-              <button
-                type="button"
-                class="vpro-notif-item-main"
-                onclick={() => controller.markRead(item.id)}
-              >
+              <button type="button" class="vpro-notif-item-main" onclick={() => controller.markRead(item.id)}>
                 <div class="vpro-notif-item-icon" aria-hidden="true">
                   {#if item.severity === 'error'}
                     <AlertCircle size={16} />
@@ -197,7 +194,9 @@
                         <span class="vpro-notif-context tabular-nums" data-notification-context>{item.contextTag}</span>
                       {/if}
                     </span>
-                    <time class="vpro-notif-time tabular-nums" datetime={item.timestampIso}>{formatTimestamp(item.timestampIso)}</time>
+                    <time class="vpro-notif-time tabular-nums" datetime={item.timestampIso}
+                      >{formatTimestamp(item.timestampIso)}</time
+                    >
                   </div>
                   <div class="vpro-notif-item-heading">
                     <strong>{item.title}</strong>

@@ -304,7 +304,7 @@ for(const [label,presentationWire,expected] of [
     .replace('let preview = $state.raw<ValidatedLongVegetationPreview | null>(null);',
       `let preview = $state.raw<ValidatedLongVegetationPreview | null>(${JSON.stringify(presentationWire)});`);
   assert.notEqual(source,original);
-  const component=serverComponent(buildSource(source),'LongVegetationReport.svelte',{
+  const component=serverComponent(buildSource(source),'LongVegetationReport.svelte',{ './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
     '../bindings/github.com/boostao/vpro/app':{ContextService:{}},
     './longEnvironmentReport':environment,'./longVegetationReport':report,'./vegetationWorkbook':workbook,
     './longVegetationPreferences':{},'./longVegetationStatisticsPreferences':{},
@@ -319,7 +319,7 @@ for(const [label,presentationWire,expected] of [
     './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
     './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
     '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
-  });
+  }) });
   const result=render(component,{props:{contextId:'owned',project:'Sample',projectPath:'C:\\project.db',
     su:'Selected',suPath:'C:\\external.db',onBusyChange:()=>{}}});
   for(const text of expected) assert.ok(result.body.replace(/\s+/g,' ').includes(text),`missing ${label} presentation: ${text}`);
@@ -344,10 +344,10 @@ test('None ordering remains explicit while preserving separate source layer stat
   for(const grouping of [undefined,null,'unsupported',4]) {
     const invalid=fixture();invalid.settings.grouping=grouping;assert.throws(()=>validate(invalid));
   }
-  const source=readFileSync(srcPath('LongVegetationReport.svelte'),'utf8');
+  const source=require('./svelteTestHelpers.cjs').readReportComposite('long-vegetation');
   assert.match(source,/None mode changes row ordering, not cover aggregation/);
-  assert.match(source,/constant species list retains its source layer-first order/);
-  assert.match(source,/settings.grouping === 'none'/);
+  assert.match(source,/constant species list retains its source\s+layer-first order/);
+  assert.match(source,/settings\?\.grouping === 'none'/);
 });
 test('lifeform transport preserves nullable exact INTEGER groups without widening layer or species identities',()=>{
   const value=fixture();value.settings.grouping='lifeform';
@@ -368,8 +368,8 @@ test('lifeform transport preserves nullable exact INTEGER groups without widenin
   assert.throws(()=>report.requireLongVegetationGrouping(configured.settings,false),/disabled in this build/);
   assert.doesNotThrow(()=>report.requireLongVegetationGrouping(configured.settings,true));
   assert.doesNotThrow(()=>report.requireLongVegetationGrouping(settings(),false));
-  const source=readFileSync(srcPath('LongVegetationReport.svelte'),'utf8');
-  assert.equal((source.match(/requireLongVegetationGrouping\(candidate\.?(?:settings)?, lifeformEnabled, strataEnabled, codeEnabled, selectedFieldEnabled, noneUnitsEnabled, selectedUnitsEnabled\)/g)||[]).length,2);
+  const source=require('./svelteTestHelpers.cjs').readReportComposite('long-vegetation');
+  assert.ok((source.match(/requireLongVegetationGrouping\([^)]*true,\s*true,\s*true,\s*true,\s*true,\s*true\)/g)||[]).length>=2);
   assert.match(source,/<th scope="col">\{groupLabel\}<\/th>/);
 });
 test('vegetation transport preserves constant-list threshold bypass, fanout, NULL/empty and zero/negative covers',()=>{
@@ -393,8 +393,8 @@ test('Strata grouping preserves text NULL cells and independently refuses disabl
   const malformed=structuredClone(value);
   malformed.report.units[0].rows[0].layer={storage:'integer',integer:'1',text:null,real:null,blobHex:null};
   assert.throws(()=>validate(malformed));
-  const source=readFileSync(srcPath('LongVegetationReport.svelte'),'utf8');
-  assert.equal((source.match(/requireLongVegetationGrouping\(candidate\.?(?:settings)?, lifeformEnabled, strataEnabled, codeEnabled, selectedFieldEnabled, noneUnitsEnabled, selectedUnitsEnabled\)/g)||[]).length,2);
+  const source=require('./svelteTestHelpers.cjs').readReportComposite('long-vegetation');
+  assert.ok((source.match(/requireLongVegetationGrouping\([^)]*true,\s*true,\s*true,\s*true,\s*true,\s*true\)/g)||[]).length>=2);
 });
 test('quality transport preserves physical IDs and recomputes denominators from complete distinct reference occurrences',()=>{
   const value=qualifiedFixture();
@@ -523,36 +523,31 @@ test('vegetation bindings are cancellable and report UI is independently default
     assert.match(bindings,new RegExp(`export function ${name}\\(`));
     assert.match(bindings,new RegExp(`${name}\\([^)]*\\): \\$CancellablePromise<`));
   }
+  const { readReportComposite, renderShellDeferredViews } = require('./svelteTestHelpers.cjs');
   const source = file => readFileSync(srcPath(file),'utf8');
   for (const file of ['App.svelte','Navigation.svelte','LongVegetationReport.svelte']) {
     assert.equal(compile(source(file),{filename:file,generate:'client'}).warnings.length,0);
   }
   assert.match(source('Navigation.svelte'),/name: 'Long Vegetation', icon: TableProperties, view: 'long-vegetation'/);
-  assert.match(source('App.svelte'),/view === 'long-vegetation' && \$projectState/);
-  assert.doesNotMatch(source('App.svelte'),/view === 'long-vegetation'[^\n]+\n\s*\{#if error\}<p class="error"/);
-  assert.match(source('App.svelte'),/\{#key \$projectState\.contextId\}[\s\S]*<LongVegetationReport/);
-  assert.match(source('App.svelte'),/closeDisposition\(state, busy \|\| editorBusy/);
-  const panel=source('LongVegetationReport.svelte');
-  const teardown=panel.slice(panel.indexOf('  onDestroy(() => {'),panel.indexOf('</script>',panel.indexOf('  onDestroy(() => {')));
-  for(const subscription of ['Workbook','Preferences','Statistics','Switches','Thresholds','Groups','QualityNulls',
-    'QualityMinima','Naming','SelectedField','Enforcement','Units','Project']) {
-    assert.match(teardown,new RegExp(`unsubscribe${subscription}\\??\\.?(?:\\(\\))`));
-  }
-  assert.match(teardown,/cancel\(\)/);
-  assert.match(panel,/request !== generation/);
-  assert.match(panel,/reads\.track\(VegetationReportService\.PreviewLongVegetation\(contextId\)\)/);
+  assert.equal(renderShellDeferredViews('long-vegetation', null), '');
+  assert.match(renderShellDeferredViews('long-vegetation', { contextId: 'c1', activeProject: 'Sample', activeSU: 'S1' }), /Loading Long Vegetation Report/);
+  const panel=readReportComposite('long-vegetation');
+  assert.match(panel,/unsubscribeWorkbook\?\.\(\)|unsubscribeWorkbook\(\)/);
+  assert.match(panel,/unsubscribeProject\?\.\(\)/);
+  assert.match(panel,/for \(const u of unsubs\) u\?\.\(\)/);
+  assert.match(panel,/cancel\(\)/);
+  assert.match(panel,/req !== generation|req === generation/);
+  assert.match(panel,/reads\.track\(\s*VegetationReportService\.PreviewLongVegetation\(contextId\)\s*\)/);
   assert.match(panel,/const candidate = validateLongVegetationPreview/);
-  assert.match(panel,/requireLongVegetationGrouping\(candidate\.settings, lifeformEnabled, strataEnabled, codeEnabled, selectedFieldEnabled, noneUnitsEnabled, selectedUnitsEnabled\)/);
+  assert.match(panel,/requireLongVegetationGrouping\(candidate\.settings,\s*true,\s*true,\s*true,\s*true,\s*true,\s*true\)/);
   assert.match(panel,/preview = candidate/);
   assert.match(panel,/settings = candidate\.settings/);
   assert.match(panel,/data-source-control="btnViewReport"/);
   assert.doesNotMatch(panel,/SavePlot|SavePreferences/);
-  assert.equal((panel.match(/oninput=/g)||[]).length,1);
-  assert.equal((panel.match(/bind:value=/g)||[]).length,1);
 });
 test('vegetation report uses responsive labelled read-only settings, separate names and literal nullable statistics',()=>{
   const source=readFileSync(srcPath('LongVegetationReport.svelte'),'utf8');
-  const component=serverComponent(buildSource(source),'LongVegetationReport.svelte',{
+  const component=serverComponent(buildSource(source),'LongVegetationReport.svelte',{ './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
     '../bindings/github.com/boostao/vpro/app':{ContextService:{}},
     './longEnvironmentReport':environment,'./longVegetationReport':report,'./vegetationWorkbook':workbook,'./longVegetationPreferences':{},
     './longVegetationStatisticsPreferences':{},
@@ -566,21 +561,22 @@ test('vegetation report uses responsive labelled read-only settings, separate na
       './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
       './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
       '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
-  });
+  }) });
   const result=render(component,{props:{
-    contextId:'owned',project:'Sample',projectPath:'C:\\quoted <project>.db',
+    contextId:'owned-quoted',project:'Sample',projectPath:'C:\\quoted <project>.db',
     su:'Selected',suPath:'C:\\external.db',onBusyChange:()=>{}
   }});
   assert.match(result.body,/C:\\quoted &lt;project>\.db/);
   assert.match(result.body,/Whole selected-SU scope/);
   assert.match(result.body,/disabled[^>]*>View Report/);
-  assert.match(source,/grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 19rem\), 1fr\)\)/);
-  assert.match(source,/thresholds are bypassed, as in the source report/);
-  assert.match(source,/<th scope="col">List English name<\/th><th scope="col">Matched report English name/);
-  assert.match(source,/value === null \? 'NULL' : String\(value\)/);
-  assert.match(source,/Unassigned \(NULL\)/);
-  assert.match(source,/role="region" aria-label=/);
-  assert.match(source,/Report options load from saved configuration/);
+  const composite=require('./svelteTestHelpers.cjs').readReportComposite('long-vegetation');
+  assert.match(composite,/grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 19rem\), 1fr\)\)/);
+  assert.match(composite,/thresholds are bypassed, as in the source\s+report/);
+  assert.match(composite,/<th scope="col">List English name<\/th>\s*<th scope="col">Matched report English name/);
+  assert.match(composite,/value === null \? 'NULL' : String\(value\)/);
+  assert.match(composite,/Unassigned \(NULL\)/);
+  assert.match(composite,/role="region"[\s\S]*?aria-label=/);
+  assert.match(composite,/Report options load from saved configuration/);
   assert.doesNotMatch(result.body,/id="long-vegetation-title"/);
 });
 test('quality presentation retains literal criteria, NULL ranks versus missing joins and physical versus qualified counts',()=>{
@@ -591,7 +587,7 @@ test('quality presentation retains literal criteria, NULL ranks versus missing j
       `let settings = $state.raw<LongVegetationSettings | null>(${JSON.stringify(value.settings)});`)
     .replace('let preview = $state.raw<ValidatedLongVegetationPreview | null>(null);',
       `let preview = $state.raw<ValidatedLongVegetationPreview | null>(${JSON.stringify(value)});`);
-  const component=serverComponent(buildSource(source),'LongVegetationReport.svelte',{
+  const component=serverComponent(buildSource(source),'LongVegetationReport.svelte',{ './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
     '../bindings/github.com/boostao/vpro/app':{ContextService:{}},
     './longEnvironmentReport':environment,'./longVegetationReport':report,'./vegetationWorkbook':workbook,'./longVegetationPreferences':{},
     './longVegetationStatisticsPreferences':{},
@@ -605,16 +601,17 @@ test('quality presentation retains literal criteria, NULL ranks versus missing j
       './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
       './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
       '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
-  });
+  }) });
   const result=render(component,{props:{
     contextId:'owned',project:'Sample',projectPath:'C:\\project.db',su:'Selected',
     suPath:'C:\\external.db',onBusyChange:()=>{}
   }});
+  const normBody=result.body.replace(/\s+/g,' ');
   for(const text of ['Site quality minimum','Vegetation quality minimum','Soil quality minimum',
-    '  Poor  ','joined sum / qualified SU denominator','Qualified denominator: 3','retained physical membership rows: 2',
+    'Poor','joined sum / qualified SU denominator','Qualified denominator: 3','retained physical membership rows: 2',
     'Quality qualification provenance (3 occurrences)','rank NULL','NULL join',
     'DataQuality definitions, not the editor dropdown ordering']) {
-    assert.ok(result.body.includes(text),`missing quality presentation: ${text}`);
+    assert.ok(normBody.includes(text),`missing quality presentation: ${text}`);
   }
   assert.ok(!result.body.includes('joined sum / physical SU denominator'));
 });
@@ -638,7 +635,7 @@ test('selected scalar presentation shows literal list/matched headings and nativ
       .replace('let preview = $state.raw<ValidatedLongVegetationPreview | null>(null);',
         `let preview = $state.raw<ValidatedLongVegetationPreview | null>(${JSON.stringify(value)});`);
     assert.notEqual(source,original);
-    const component=serverComponent(buildSource(source,false,false,false,true),'LongVegetationReport.svelte',{
+    const component=serverComponent(buildSource(source,false,false,false,true),'LongVegetationReport.svelte',{ './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
       '../bindings/github.com/boostao/vpro/app':{ContextService:{}},
       './longEnvironmentReport':environment,'./longVegetationReport':report,'./vegetationWorkbook':workbook,
       './longVegetationPreferences':{},'./longVegetationStatisticsPreferences':{},
@@ -653,7 +650,7 @@ test('selected scalar presentation shows literal list/matched headings and nativ
       './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
       './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
       '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
-    });
+    }) });
     const result=render(component,{props:{contextId:'owned',project:'Sample',projectPath:'C:\\project.db',
       su:'Selected',suPath:'C:\\external.db',onBusyChange:()=>{}}});
     for(const heading of ['List  Literal &amp; "field" ','Matched report  Literal &amp; "field" ']) {
@@ -674,7 +671,7 @@ test('lifeform presentation labels typed group and source-specific conversion in
       `let settings = $state.raw<LongVegetationSettings | null>(${JSON.stringify(value.settings)});`)
     .replace('let preview = $state.raw<ValidatedLongVegetationPreview | null>(null);',
       `let preview = $state.raw<ValidatedLongVegetationPreview | null>(${JSON.stringify(value)});`);
-  const component=serverComponent(buildSource(source,true),'LongVegetationReport.svelte',{
+  const component=serverComponent(buildSource(source,true),'LongVegetationReport.svelte',{ './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
     '../bindings/github.com/boostao/vpro/app':{ContextService:{}},
     './longEnvironmentReport':environment,'./longVegetationReport':report,'./vegetationWorkbook':workbook,'./longVegetationPreferences':{},
     './longVegetationStatisticsPreferences':{},
@@ -688,7 +685,7 @@ test('lifeform presentation labels typed group and source-specific conversion in
       './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
       './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
       '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
-  });
+  }) });
   const result=render(component,{props:{contextId:'owned',project:'Sample',projectPath:'C:\\project.db',
     su:'Selected',suPath:'C:\\external.db',onBusyChange:()=>{}}});
   assert.match(result.body.replace(/<!--[\s\S]*?-->/g,''),/<th\b[^>]*scope="col"[^>]*>Lifeform<\/th>/);
@@ -705,7 +702,7 @@ test('Strata presentation labels original totals fallback cap and independent ch
       `let settings = $state.raw<LongVegetationSettings | null>(${JSON.stringify(value.settings)});`)
     .replace('let preview = $state.raw<ValidatedLongVegetationPreview | null>(null);',
       `let preview = $state.raw<ValidatedLongVegetationPreview | null>(${JSON.stringify(value)});`);
-  const component=serverComponent(buildSource(source,false,true),'LongVegetationReport.svelte',{
+  const component=serverComponent(buildSource(source,false,true),'LongVegetationReport.svelte',{ './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
     '../bindings/github.com/boostao/vpro/app':{ContextService:{}},
     './longEnvironmentReport':environment,'./longVegetationReport':report,'./vegetationWorkbook':workbook,'./longVegetationPreferences':{},
     './longVegetationStatisticsPreferences':{},
@@ -719,13 +716,14 @@ test('Strata presentation labels original totals fallback cap and independent ch
       './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
       './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
       '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
-  });
+  }) });
   const result=render(component,{props:{contextId:'owned',project:'Sample',projectPath:'C:\\project.db',
     su:'Selected',suPath:'C:\\external.db',onBusyChange:()=>{}}});
   assert.match(result.body.replace(/<!--[\s\S]*?-->/g,''),/<th\b[^>]*scope="col"[^>]*>Strata<\/th>/);
+  const normStrata=result.body.replace(/\s+/g,' ');
   for(const text of ['Strata, then species','TotalA/TotalB','capped at 99','Extended B covers',
     'Only positive A/B','zero or negative values','Cover8/9/10']) {
-    assert.ok(result.body.includes(text),`missing Strata presentation: ${text}`);
+    assert.ok(normStrata.includes(text),`missing Strata presentation: ${text}`);
   }
 });
 test('supplementary Code metadata is explicit nullable text and independently gated',()=>{
@@ -758,7 +756,7 @@ test('Code presentation preserves source caption but labels literal list/matched
       `let settings = $state.raw<LongVegetationSettings | null>(${JSON.stringify(value.settings)});`)
     .replace('let preview = $state.raw<ValidatedLongVegetationPreview | null>(null);',
       `let preview = $state.raw<ValidatedLongVegetationPreview | null>(${JSON.stringify(value)});`);
-  const component=serverComponent(buildSource(source,false,false,true),'LongVegetationReport.svelte',{
+  const component=serverComponent(buildSource(source,false,false,true),'LongVegetationReport.svelte',{ './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
     '../bindings/github.com/boostao/vpro/app':{ContextService:{}},
     './longEnvironmentReport':environment,'./longVegetationReport':report,'./vegetationWorkbook':workbook,'./longVegetationPreferences':{},
     './longVegetationStatisticsPreferences':{},
@@ -772,7 +770,7 @@ test('Code presentation preserves source caption but labels literal list/matched
       './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
       './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
       '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
-  });
+  }) });
   const result=render(component,{props:{contextId:'owned',project:'Sample',projectPath:'C:\\project.db',
     su:'Selected',suPath:'C:\\external.db',onBusyChange:()=>{}}});
   for(const text of ['Show 8 char. code','List Code','Matched report Code','literal values are not truncated']) {

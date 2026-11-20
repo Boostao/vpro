@@ -212,7 +212,7 @@ test('compiled private panel has one labeled control per original quality field 
   }
   assert.equal(html.split('data-source-control="optEnforceQC"').length - 1, 1);
   assert.doesNotMatch(html.match(/<input[^>]*data-source-control="optEnforceQC"[^>]*>/)[0], /\bdisabled\b/);
-  assert.match(html, /Save updates these quality YAML options including Enforce QC/);
+  assert.match(html.replace(/\s+/g, ' '), /Save updates these quality YAML options including Enforce QC/);
 });
 test('actual private panel handlers preserve failed reload guards and cancel late reads without replay', async () => {
   const session = ready();
@@ -251,29 +251,26 @@ test('actual private panel handlers preserve failed reload guards and cancel lat
   unsubscribe();
 });
 test('production root effect combines both retained preference holds without one clearing the other', async () => {
-  const ts = req('typescript'), vm = require('node:vm');
-  const source = readFileSync(srcPath('App.svelte'), 'utf8').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  const ast = ts.createSourceFile('App.ts', source, ts.ScriptTarget.Latest, true);
-  const effect = ast.statements.find(node => ts.isExpressionStatement(node) && node.getText(ast).includes('const views = [preferences?.view(), quality?.view(), presentation?.view()]'));
-  assert.ok(effect);
+  const { createTestReportOperationGuard } = require('./svelteTestHelpers.cjs');
   const rootOwner = { ...scope, su: 'NormalSU', suPath: scope.projectPath + '.su.sqlite' };
   const qualitySession = new prefs.SummaryVegetationQualityPreferencesSession(rootOwner);
   qualitySession.apply({ ...wire.review, ...rootOwner });
   const optionsSession = new shared.ReportTitlePreferencesSession(rootOwner, 'test sibling');
   optionsSession.apply({ ...rootOwner, values: { title: 'saved' } });
-  let cleanup;
-  const context = vm.createContext({
-    summaryPreferenceBusy: false, view: 'home',
-    $projectState: { contextId: rootOwner.contextId, activeProject: rootOwner.project, projectPath: rootOwner.projectPath,
+  const h = createTestReportOperationGuard({
+    initialState: { contextId: rootOwner.contextId, activeProject: rootOwner.project, projectPath: rootOwner.projectPath,
       activeSU: rootOwner.su, suPath: rootOwner.suPath },
-    summaryVegetationPreferenceSession: () => optionsSession,
-    summaryVegetationQualityPreferenceSession: () => qualitySession,
-    summaryVegetationPresentationPreferenceSession: null,
-    $effect(callback) { cleanup = callback(); },
+    dependencies: {
+      './summaryVegetationPreferences': { summaryVegetationPreferenceSession: () => optionsSession },
+      './summaryVegetationQualityPreferences': { summaryVegetationQualityPreferenceSession: () => qualitySession },
+      './summaryVegetationPresentationPreferences': { summaryVegetationPresentationPreferenceSession: null },
+    },
   });
-  vm.runInContext(ts.transpileModule(effect.getText(ast), {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
-  }).outputText, context);
+  const context = {
+    get summaryPreferenceBusy() { h.flush(); return h.guard.editorBusy; },
+    get view() { return h.view; },
+  };
+  const cleanup = () => h.dispose();
   qualitySession.editMinimum('siteMinimum', 'bad\0new');
   assert.equal(context.summaryPreferenceBusy, true);
   assert.equal(context.view, 'summary-vegetation');

@@ -5,33 +5,59 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { compile } = require('svelte/compiler');
 const ts = require('typescript');
-const { componentFunctions, loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
+const { componentFunctions, loadTypeScript, noopNotificationsStub, serverReads, srcPath } = require('./svelteTestHelpers.cjs');
 
 const owner = { contextId: 'owned-context', project: 'OwnedProject', plot: 'P1' };
 const forms = ['FS882-8x6XL', 'FS882-8x6XL-CHARS'];
 const cell = (storage, text = null) => ({ storage, text, integer: null, real: null, blobHex: null });
 const clean = () => ({ unsaved: false, busy: false, blocked: false, error: null, canSave: false });
-let compiledScript;
+const cachedEntryOps = loadTypeScript('entry/twoPageEntryOps.ts', {
+  './twoPageEntrySession': { TwoPageEntrySession: class {} },
+});
+let compiledScript, compiledReadersFn;
 
 async function mountEntry(flags = {}, options = {}) {
+  const { compileModule } = require('svelte/compiler');
   const runtime = await import('svelte/internal/client');
   const { onDestroy } = await import(pathToFileURL(path.join(path.dirname(require.resolve('svelte')), 'index-client.js')).href);
   if (!compiledScript) {
     let script = readFileSync(srcPath('TwoPageEntryEditor.svelte'), 'utf8').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-    script = script.replace('projectMetadataClient, metadataRestorationAvailable', 'inspect, projectMetadataClient, metadataRestorationAvailable');
+    script = script.replace(/projectMetadataClient,\s*metadataRestorationAvailable/, 'inspect, projectMetadataClient, metadataRestorationAvailable');
     script += `\n$effect(() => inspect({
       canOpenMetadataEditor, openMetadataEditor, getCloseState, getDraftState, undo, cancel,
-      stage, selectProject, acknowledge, operation, chooseForm, closeReview, refreshMetadataPeers,
-      openProjectMetadata, returnFromProjectMetadata, mode: projectMetadataOpen, error, form, session,
-      closeState: getCloseState(), draftState: getDraftState(), client: metadataClient,
-      attachMetadata: value => metadataEditor = value
+      stage, selectProject, acknowledge, operation, chooseForm, closeReview,
+      refreshMetadataPeers: readers.refreshMetadataPeers,
+      openProjectMetadata: readers.openProjectMetadata,
+      returnFromProjectMetadata: readers.returnFromProjectMetadata,
+      mode: readers.projectMetadataOpen, error, form, session,
+      closeState: getCloseState(), draftState: getDraftState(), client: readers.metadataClient,
+      attachMetadata: value => { readers.metadataEditor = value; }
     }));`;
     const compiled = compile(`<script lang="ts">${script}</script>`, { generate: 'client' });
     assert.equal(compiled.warnings.length, 0);
     const ast = ts.createSourceFile('two-page-metadata-client.js', compiled.js.code, ts.ScriptTarget.Latest, true);
     compiledScript = ast.statements.filter(node => !ts.isImportDeclaration(node)).map(node => node.getText(ast))
       .join('\n').replace('export default function', 'function');
+
+    const readersTs = readFileSync(srcPath('entry/useTwoPageEntryReaders.svelte.ts'), 'utf8');
+    const readersEs = ts.transpileModule(readersTs, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+    const readersMod = compileModule(readersEs, { filename: 'useTwoPageEntryReaders.svelte.js', generate: 'client' });
+    const rAst = ts.createSourceFile('readers.js', readersMod.js.code, ts.ScriptTarget.Latest, true);
+    const rCode = rAst.statements.filter(n => !ts.isImportDeclaration(n)).map(n => n.getText(rAst)).join('\n')
+      .replace(/export\s+function\s+/g, 'function ');
+    compiledReadersFn = new Function('$', 'twoPageEntryCell', 'externalSUEnvironmentSession', 'formatError', 'metadataCellText', 'buildFieldCardViewModel',
+      rCode + '\nreturn { buildTwoPageFieldCard, createTwoPageEntryReaders };');
   }
+  const entryOps = cachedEntryOps;
+  const twoPageEntryCellFn = (original, column) => { assert.equal(column, 'ProjectID'); return original.projectId; };
+  const readersRuntime = compiledReadersFn(
+    runtime,
+    twoPageEntryCellFn,
+    () => ({ view: () => ({ blocked: false }), reviewSourceForm() {} }),
+    serverReads.formatError,
+    () => '',
+    () => null
+  );
   let props, actions;
   const calls = [];
   class Session {
@@ -61,9 +87,19 @@ async function mountEntry(flags = {}, options = {}) {
     onchange: () => props.revision++, onbusy: value => calls.push(['busy', value]),
     onclosed: () => calls.push('close'), oncommitted: async () => calls.push('root'),
     embedded() {}, inspect: value => actions = value, ...options });
-  const mount = new Function('$', 'onDestroy', 'untrack', 'twoPageEntryCell',
-    compiledScript + '\nreturn _unknown_;')(runtime, onDestroy, runtime.untrack,
-    (original, column) => { assert.equal(column, 'ProjectID'); return original.projectId; });
+  const mount = new Function(
+    '$', 'onDestroy', 'untrack', 'PlotEntryService', 'formatError', 'ReadRequests',
+    'TwoPageEntrySession', 'twoPageEntryCell', 'twoPageEntryProjection', 'notifications',
+    'computeTwoPageCloseState', 'computeTwoPageDraftState', 'createOrReuseTwoPageSession',
+    'executeTwoPageParentOperation', 'resolveTwoPageReaderFlags', 'buildTwoPageFieldCard', 'createTwoPageEntryReaders',
+    compiledScript + '\nreturn _unknown_;'
+  )(
+    runtime, onDestroy, runtime.untrack, {}, serverReads.formatError, serverReads.ReadRequests,
+    Session, twoPageEntryCellFn, () => ({ pages: [] }), noopNotificationsStub.notifications,
+    entryOps.computeTwoPageCloseState, entryOps.computeTwoPageDraftState, entryOps.createOrReuseTwoPageSession,
+    entryOps.executeTwoPageParentOperation, entryOps.resolveTwoPageReaderFlags,
+    readersRuntime.buildTwoPageFieldCard, readersRuntime.createTwoPageEntryReaders
+  );
   const dispose = runtime.effect_root(() => mount(null, props));
   runtime.flush();
   return { actions: () => actions, props, sessions, cache, calls, dispose, flush: runtime.flush };
@@ -228,11 +264,16 @@ test('metadata recovery retries failed outer cohorts through the actual root cal
 });
 
 test('original action and Forms menu use one owned opener without enabling another two-page scope', () => {
-  const source = readFileSync(srcPath('TwoPageEntryEditor.svelte'), 'utf8');
+  const source =
+    readFileSync(srcPath('TwoPageEntryEditor.svelte'), 'utf8') +
+    '\n' +
+    readFileSync(srcPath('TwoPageEntryToolbar.svelte'), 'utf8') +
+    '\n' +
+    readFileSync(srcPath('TwoPageEntryReadersHost.svelte'), 'utf8');
   const root = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882Modals.svelte'), 'utf8');
-  assert.match(root, /sourceBlocked=\{twoPageLinkedParentBlocked \|\| Object\.keys\(headerValidation\)\.length > 0/);
-  assert.match(source, /disabled=\{!canOpenMetadataEditor\(\)\} onclick=\{openMetadataEditor\}/);
-  assert.match(source, /<ProjectMetadataEditor[\s\S]*?oncommitted=\{refreshMetadataPeers\}/);
+  assert.match(root, /sourceBlocked=\{ctrl\.twoPageLinkedParentBlocked \|\|\s*Object\.keys\(ctrl\.headerValidation\)\.length > 0/);
+  assert.match(source, /disabled=\{!s\.canOpenMetadataEditor\}[\s\S]*?onclick=\{h\.onopenmetadataeditor\}/);
+  assert.match(source, /<ProjectMetadataEditor[\s\S]*?oncommitted=\{readers\.refreshMetadataPeers\}/);
   const child = { canOpenMetadataEditor: () => true, openMetadataEditor: () => opened++ };
   let opened = 0;
   const host = componentFunctions('FS882Form.svelte', ['canOpenProjectMetadata', 'openProjectMetadata'], {

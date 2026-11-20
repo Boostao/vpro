@@ -1,21 +1,26 @@
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { test } = require('node:test');
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const { editor, transport } = require('./siviParentTestHelpers.cjs');
 
-const path = process.env.VPRO_SIVI_PARENT_WIRE_RECEIPT;
-if (!path) throw new Error('Set VPRO_SIVI_PARENT_WIRE_RECEIPT to a successful verbose TestSIVIParentOriginalWireRoundTrip receipt.');
-const raw = readFileSync(path);
-const receipt = raw.toString(raw[0] === 0xff && raw[1] === 0xfe ? 'utf16le' : 'utf8');
-assert.match(receipt, /^ok\s+github\.com\/boostao\/(?:vpro\/app|vpro-wails)\s+[0-9.]+s\s*$/m);
-assert.doesNotMatch(receipt, /^FAIL/m);
-function emitted(name) {
-  const matches = [...receipt.matchAll(new RegExp(`SIVI_PARENT_WIRE_${name}:([A-Za-z0-9+/=]+)`, 'g'))];
-  assert.equal(matches.length, 1, `Exactly one successful owned ${name} fixture is required.`);
-  return JSON.parse(Buffer.from(matches[0][1], 'base64').toString('utf8'));
+function loadWireFixture() {
+  const receiptPath = process.env.VPRO_SIVI_PARENT_WIRE_RECEIPT;
+  if (!receiptPath) {
+    return readJsonFixture('siviParentWire.json.gz');
+  }
+  const raw = readFileSync(receiptPath);
+  const receipt = raw.toString(raw[0] === 0xff && raw[1] === 0xfe ? 'utf16le' : 'utf8');
+  assert.match(receipt, /^ok\s+github\.com\/boostao\/(?:vpro\/app|vpro-wails)\s+[0-9.]+s\s*$/m);
+  assert.doesNotMatch(receipt, /^FAIL/m);
+  function emitted(name) {
+    const matches = [...receipt.matchAll(new RegExp(`SIVI_PARENT_WIRE_${name}:([A-Za-z0-9+/=]+)`, 'g'))];
+    assert.equal(matches.length, 1, `Exactly one successful owned ${name} fixture is required.`);
+    return JSON.parse(Buffer.from(matches[0][1], 'base64').toString('utf8'));
+  }
+  return { owner: emitted('OWNER'), wire: emitted('ORIGINAL') };
 }
-const owner = emitted('OWNER');
-const wire = emitted('ORIGINAL');
+const { owner, wire } = loadWireFixture();
 
 test('actual owned Go parent JSON initializes the frontend without normalizing schema rows or raw cells', () => {
   const original = transport.siviParentOriginalFromWire(wire, owner);

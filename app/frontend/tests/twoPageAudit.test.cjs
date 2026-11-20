@@ -71,7 +71,7 @@ async function mountPanel(service) {
   const runtime = await import('svelte/internal/client');
   const { onDestroy } = await import(pathToFileURL(path.join(path.dirname(require.resolve('svelte')), 'index-client.js')).href);
   let script = readFileSync(srcPath('TwoPageAuditPanel.svelte'), 'utf8').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  script = script.replace('form, onBusyChange }:', 'form, onBusyChange, inspect }:');
+  script = script.replace(/form,\s*onBusyChange,?\s*\}:/, 'form, onBusyChange, inspect }:');
   script += '\n$effect(() => inspect({ load, cancel, busy, restoreBusy, error, statusMsg, selectedIds, toggleRestoreRow, restoreSelected, review, current: () => review }));';
   const compiled = compile(`<script lang="ts">${script}</script>`, { generate: 'client' });
   assert.equal(compiled.warnings.length, 0);
@@ -81,9 +81,9 @@ async function mountPanel(service) {
   const reads = loadTypeScript('readRequests.ts', {
     '@wailsio/runtime': { Call: { RuntimeError: class extends Error {} }, CancelledRejectionError: class extends Error {} },
   });
-  const mount = new Function('$', 'onDestroy', 'untrack', 'ReadRequests', 'AuditRestoreAction', 'PlotEntryService',
+  const mount = new Function('$', 'onDestroy', 'untrack', 'ReadRequests', 'formatError', 'AuditRestoreAction', 'PlotEntryService',
     'sourceAuditFields', 'twoPageAuditFromWire', 'twoPageAuditLabel', code + '\nreturn _unknown_;')(
-    runtime, onDestroy, runtime.untrack, reads.ReadRequests,
+    runtime, onDestroy, runtime.untrack, reads.ReadRequests, reads.formatError,
     { AuditRestoreRetain: 'retain', AuditRestorePrune: 'prune' },
     {
       GetTwoPageSourceAuditOriginal: service.GetTwoPageSourceAuditOriginal ?? service.GetOriginal,

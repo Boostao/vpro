@@ -8,8 +8,16 @@ export interface EnterPosition {
 }
 
 export const sourceNextRecordForms: ReadonlySet<string> = new Set([
-  'SubVegAXL_BC', 'SubVegAXL', 'SubVegAhtXL', 'SubVegCXL', 'SubVegChtXL',
-  'SubVegDXL', 'SubOtherXL', 'SubOther', 'SoilHumusXL', 'SoilMineralXL',
+  'SubVegAXL_BC',
+  'SubVegAXL',
+  'SubVegAhtXL',
+  'SubVegCXL',
+  'SubVegChtXL',
+  'SubVegDXL',
+  'SubOtherXL',
+  'SubOther',
+  'SoilHumusXL',
+  'SoilMineralXL',
 ]);
 
 export function enterNavigationMode(form: string | null): 'field' | 'record' | null {
@@ -26,7 +34,7 @@ export function nextEnterPosition(
     throw new Error('Enter navigation requires the currently observed source control.');
   }
   const source = positions[current];
-  if (!source.column || mode === 'record' && (source.form === null || source.record === null)) {
+  if (!source.column || (mode === 'record' && (source.form === null || source.record === null))) {
     throw new Error('Enter navigation requires an observed literal column and existing physical record.');
   }
   if (!source.enabled || !source.visible || source.invalid) return null;
@@ -34,39 +42,61 @@ export function nextEnterPosition(
   for (let index = current + step; index >= 0 && index < positions.length; index += step) {
     const candidate = positions[index];
     if (!candidate.enabled || !candidate.visible) continue;
-    if (mode === 'field' || candidate.form === source.form && candidate.record !== null &&
-        candidate.record !== source.record && candidate.column === source.column) return index;
+    if (
+      mode === 'field' ||
+      (candidate.form === source.form &&
+        candidate.record !== null &&
+        candidate.record !== source.record &&
+        candidate.column === source.column)
+    )
+      return index;
   }
   return null;
 }
 
 function entryControl(element: Element): element is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement {
-  return element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement &&
-    ['text', 'number', 'date', 'time', 'datetime-local'].includes(element.type);
+  return (
+    element instanceof HTMLSelectElement ||
+    element instanceof HTMLTextAreaElement ||
+    (element instanceof HTMLInputElement && ['text', 'number', 'date', 'time', 'datetime-local'].includes(element.type))
+  );
 }
 
 export function navigateSourceEnter(event: KeyboardEvent, root: HTMLElement): void {
   const source = event.target;
-  if (event.key !== 'Enter' || event.defaultPrevented || event.isComposing || event.repeat ||
-      event.altKey || event.ctrlKey || event.metaKey ||
-      source instanceof HTMLTextAreaElement ||
-      !(source instanceof HTMLInputElement || source instanceof HTMLSelectElement) ||
-      !entryControl(source) ||
-      !root.contains(source) || document.activeElement !== source ||
-      source.closest('dialog,[role=dialog]')) return;
+  if (
+    event.key !== 'Enter' ||
+    event.defaultPrevented ||
+    event.isComposing ||
+    event.repeat ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    source instanceof HTMLTextAreaElement ||
+    !(source instanceof HTMLInputElement || source instanceof HTMLSelectElement) ||
+    !entryControl(source) ||
+    !root.contains(source) ||
+    document.activeElement !== source ||
+    source.closest('dialog,[role=dialog]')
+  )
+    return;
   const child = source.closest<HTMLElement>('[data-source-form]');
   const area = child ?? source.closest<HTMLElement>('[data-source-page]');
   if (!area) return;
   const mode = enterNavigationMode(child?.dataset.sourceForm ?? null);
   if (!mode) return;
-  const controls = Array.from(area.querySelectorAll('input[data-column],select[data-column],textarea[data-column]')).filter(entryControl);
+  const controls = Array.from(
+    area.querySelectorAll('input[data-column],select[data-column],textarea[data-column]')
+  ).filter(entryControl);
   const current = controls.indexOf(source);
   if (current < 0) return;
-  const positions = controls.map(control => ({
+  const positions = controls.map((control) => ({
     form: control.closest<HTMLElement>('[data-source-form]')?.dataset.sourceForm ?? null,
     record: control.closest<HTMLElement>('[data-record-id]')?.dataset.recordId ?? null,
     column: control.dataset.column ?? '',
-    enabled: !control.matches(':disabled') && !((control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) && control.readOnly),
+    enabled:
+      !control.matches(':disabled') &&
+      !((control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) && control.readOnly),
     visible: control.checkVisibility(),
     invalid: control.getAttribute('aria-invalid') === 'true',
   }));

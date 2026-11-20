@@ -209,8 +209,8 @@ test('actual panel preserves labels, one unrestricted control per field and dist
       assert.doesNotMatch(body, /data-long-vegetation-quality-minimum-undo[^>]*disabled/);
       assert.equal((body.match(/<option value="Same"/g) ?? []).length, 2);
       assert.match(body, /first/); assert.match(body, /second/);
-      assert.match(body, /Item null null/);
-      assert.match(body, /Item text ""/);
+      assert.match(body, /Item null\s+null/);
+      assert.match(body, /Item text\s+""/);
     }
   }
 });
@@ -219,7 +219,7 @@ test('actual report retains minimum validation on remount and gates root and sib
   const owner = { ...scope, contextId: 'quality-minimum-composition-true' };
   const session = prefs.longVegetationQualityMinimumPreferencesSession(owner);
   session.apply(review(undefined, owner)); session.editMinimum('vegMinimum', '\ud800');
-  const component = serverComponent(reportSource, 'LongVegetationReport.svelte', {
+  const component = serverComponent(reportSource, 'LongVegetationReport.svelte', { './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
     '../bindings/github.com/boostao/vpro/app': {}, './longVegetationPreferences': {},
     './longVegetationStatisticsPreferences': {}, './longVegetationSwitchPreferences': {},
     './longVegetationThresholdPreferences': {}, './LongVegetationThresholdPreferences.svelte': { default() {} },
@@ -237,7 +237,7 @@ test('actual report retains minimum validation on remount and gates root and sib
       vegetationWorkbookPublicationSession: () => ({ view: () => ({ busy: false, blocked: false }), subscribe: () => () => {} }),
       VegetationWorkbookPublicationSession: class { view() { return { busy: false, blocked: false }; } subscribe() { return () => {}; } },
     },
-  });
+  }) });
   for (let mount = 0; mount < 2; mount++) {
     const barriers = [];
     const { body } = render(component, { props: { ...owner, onBusyChange: value => barriers.push(value) } });
@@ -247,11 +247,12 @@ test('actual report retains minimum validation on remount and gates root and sib
     assert.doesNotMatch(body, /data-long-vegetation-quality-minimum-undo[^>]*disabled/);
   }
   session.undo();
-  assert.match(reportSource, /qualityMinimumView = qualityMinima.view\(\); invalidateReports\(\)/);
-  assert.match(reportSource, /function invalidateReports\(\) \{\s*preview = null; workbookReview = null;\s*projectWorkspace\?\.invalidate\(\)/);
-  assert.match(reportSource, /qualityNullBarrier \|\| qualityMinimumBarrier/);
-  assert.match(reportSource, /unsubscribeQualityMinima\?\.\(\)/);
+  const composite = require('./svelteTestHelpers.cjs').readReportComposite('long-vegetation');
+  assert.match(composite, /qualityMinimumView = sessions\.qualityMinima!\.view\(\);\s*onInvalidate/);
+  assert.match(composite, /function invalidateReports\(\) \{\s*preview = null;\s*workbookReview = null;\s*projectWorkspace\?\.invalidate\(\)/);
+  assert.match(composite, /qualityNullBarrier \|\|\s*qualityMinimumBarrier/);
+  assert.match(composite, /for \(const u of unsubs\) u\?\.\(\)/);
   const panel = source('LongVegetationQualityMinimumPreferences.svelte');
-  assert.match(panel, /const value = event.currentTarget.value; edit\(field.key, value\)/);
+  assert.match(panel, /const value = event\.currentTarget\.value;\s*edit\(field\.key, value\)/);
   assert.doesNotMatch(panel, /reads\.track\(VegetationReportService\.Save/);
 });

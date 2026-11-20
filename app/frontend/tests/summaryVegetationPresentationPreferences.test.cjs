@@ -152,7 +152,7 @@ test('regression independently reproduces the reviewed stale-ack bug with the ex
   assert.equal(source.split(before).length, 2);
   const previous = source.replace(before, 'if (view.outcome &&');
   const module = { exports: {} };
-  const dependencies = { './googleEarthReview': earth, './qualityEditor': quality,
+  const dependencies = { './googleEarthReview': earth, './scope': earth, './qualityEditor': quality,
     './lifeformSummary': lifeform, './reportTitlePreferences': shared };
   vm.runInNewContext(ts.transpileModule(previous, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -330,10 +330,10 @@ test('actual compiled pane preserves unique associated original labels and unava
   assert.match(html, /7\.25/);
   assert.match(html, /Stored presentation drafts, not original report-output formatting parity/);
   assert.match(html, /original Report output or printing/);
-  assert.match(html, /separately gated workbook inspection can consume the loaded\s+Constancy draft without Save/);
+  assert.match(html.replace(/\s+/g, ' '), /separately gated workbook inspection can consume the loaded Constancy draft without Save/);
   assert.match(html, /does not apply the other presentation flags/);
-  assert.match(panelSource, /const raw = event\.currentTarget\.value; editTitle\(raw\)/);
-  assert.match(panelSource, /const raw = event\.currentTarget\.checked; editFlag\(field\.key, raw\)/);
+  assert.match(panelSource, /const raw = event\.currentTarget\.value;\s*editTitle\(raw\)/);
+  assert.match(panelSource, /const raw = event\.currentTarget\.checked;\s*editFlag\(field\.key, raw\)/);
   assert.match(panelSource, /\$state\.raw/);
   assert.match(panelSource, /minmax\(0, 1fr\)/);
   const unloaded = new prefs.SummaryVegetationPresentationPreferencesSession(scope);
@@ -419,12 +419,7 @@ test('actual pane Save sends exact callback wire once and surfaces disabled-comm
 });
 
 test('production root aggregates three sessions without sibling Undo or acknowledgement clearing another hold', async () => {
-  const ts = req('typescript'), vm = require('node:vm');
-  const script = readFileSync(srcPath('App.svelte'), 'utf8').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  const ast = ts.createSourceFile('App.ts', script, ts.ScriptTarget.Latest, true);
-  const effect = ast.statements.find(node => ts.isExpressionStatement(node) &&
-    node.getText(ast).includes('const views = [preferences?.view(), quality?.view(), presentation?.view()]'));
-  assert.ok(effect);
+  const { createTestReportOperationGuard } = require('./svelteTestHelpers.cjs');
   const rootOwner = { ...scope, su: 'NormalSU', suPath: scope.projectPath + '.su.sqlite' };
   const presentation = new prefs.SummaryVegetationPresentationPreferencesSession(rootOwner);
   presentation.apply({ ...wire.review, ...rootOwner });
@@ -432,40 +427,47 @@ test('production root aggregates three sessions without sibling Undo or acknowle
   const qualityPeer = new shared.ReportTitlePreferencesSession(rootOwner, 'test quality peer');
   options.apply({ ...rootOwner, values: { title: 'saved' } });
   qualityPeer.apply({ ...rootOwner, values: { title: 'saved' } });
-  let cleanup;
-  const context = vm.createContext({ summaryPreferenceBusy: false, view: 'home',
-    $projectState: { contextId: rootOwner.contextId, activeProject: rootOwner.project, projectPath: rootOwner.projectPath,
+  const h = createTestReportOperationGuard({
+    initialState: { contextId: rootOwner.contextId, activeProject: rootOwner.project, projectPath: rootOwner.projectPath,
       activeSU: rootOwner.su, suPath: rootOwner.suPath },
-    summaryVegetationPreferenceSession: () => options,
-    summaryVegetationQualityPreferenceSession: () => qualityPeer,
-    summaryVegetationPresentationPreferenceSession: () => presentation,
-    $effect(callback) { cleanup = callback(); },
+    dependencies: {
+      './summaryVegetationPreferences': { summaryVegetationPreferenceSession: () => options },
+      './summaryVegetationQualityPreferences': { summaryVegetationQualityPreferenceSession: () => qualityPeer },
+      './summaryVegetationPresentationPreferences': { summaryVegetationPresentationPreferenceSession: () => presentation },
+    },
   });
-  vm.runInContext(ts.transpileModule(effect.getText(ast), {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
-  }).outputText, context);
-  presentation.editTitle('bad\0new');
-  assert.equal(context.summaryPreferenceBusy, true);
-  assert.equal(context.view, 'summary-vegetation');
-  options.undo(); qualityPeer.undo();
-  assert.equal(context.summaryPreferenceBusy, true);
-  presentation.undo();
-  assert.equal(context.summaryPreferenceBusy, false);
-  presentation.editFlag('constancy', true);
-  let release;
-  const saving = presentation.save(() => new Promise(resolve => release = resolve));
-  options.undo(); qualityPeer.undo();
-  assert.equal(context.summaryPreferenceBusy, true);
-  release(outcome(true)); await saving;
-  assert.equal(context.summaryPreferenceBusy, true);
-  qualityPeer.edit('invalid\0peer');
-  presentation.acknowledge();
-  assert.equal(context.summaryPreferenceBusy, true);
-  qualityPeer.undo();
-  assert.equal(context.summaryPreferenceBusy, false);
-  cleanup();
+  try {
+    presentation.editTitle('bad\0new');
+    h.flush();
+    assert.equal(h.guard.editorBusy, true);
+    assert.equal(h.view, 'summary-vegetation');
+    options.undo(); qualityPeer.undo();
+    h.flush();
+    assert.equal(h.guard.editorBusy, true);
+    presentation.undo();
+    h.flush();
+    assert.equal(h.guard.editorBusy, false);
+    presentation.editFlag('constancy', true);
+    let release;
+    const saving = presentation.save(() => new Promise(resolve => release = resolve));
+    options.undo(); qualityPeer.undo();
+    h.flush();
+    assert.equal(h.guard.editorBusy, true);
+    release(outcome(true)); await saving;
+    h.flush();
+    assert.equal(h.guard.editorBusy, true);
+    qualityPeer.edit('invalid\0peer');
+    presentation.acknowledge();
+    h.flush();
+    assert.equal(h.guard.editorBusy, true);
+    qualityPeer.undo();
+    h.flush();
+    assert.equal(h.guard.editorBusy, false);
+  } finally {
+    h.dispose();
+  }
   presentation.editTitle('invalid\0after cleanup');
-  assert.equal(context.summaryPreferenceBusy, false);
+  assert.equal(h.guard.editorBusy, false);
 });
 
 test('production report wires one presentation pane, peer mutation holds and explicitly separate raw preview', async () => {

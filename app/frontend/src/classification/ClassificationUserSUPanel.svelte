@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatError } from '../shared/readRequests';
   import type {
     ClassificationBackendPort,
     UserSiteUnitEntry,
@@ -46,7 +47,7 @@
 
   const filteredUserSiteUnits = $derived(
     userSUFilter.trim()
-      ? userSiteUnits.filter(entry => {
+      ? userSiteUnits.filter((entry) => {
           const needle = userSUFilter.trim().toLowerCase();
           return (
             entry.siteSeries.toLowerCase().includes(needle) ||
@@ -82,10 +83,6 @@
     }
   }
 
-  function formatUserSUError(cause: unknown): string {
-    return String(cause ?? '').replace(/^(?:\s*(?:RuntimeError|Error)\s*:\s*)+/i, '').trim();
-  }
-
   async function submitUserSiteUnitEntry() {
     if (!effectiveContextId || !port.saveUserSiteUnitEntry || !userSUSeries.trim() || mutating) return;
     onMutatingChange(true);
@@ -102,7 +99,7 @@
       resetUserSiteUnitForm();
       await onLoadUserSiteUnitList();
     } catch (err) {
-      onError(`Save UserSiteUnit failed: ${formatUserSUError(err)}`);
+      onError(`Save UserSiteUnit failed: ${formatError(err)}`);
     } finally {
       onMutatingChange(false);
     }
@@ -118,7 +115,7 @@
       onStatus(`Deleted UserSiteUnit "${entry.siteSeries}".`);
       await onLoadUserSiteUnitList();
     } catch (err) {
-      onError(`Delete UserSiteUnit failed: ${formatUserSUError(err)}`);
+      onError(`Delete UserSiteUnit failed: ${formatError(err)}`);
     } finally {
       onMutatingChange(false);
     }
@@ -142,7 +139,7 @@
       }
       onStatus('Exported UserSiteUnitList CSV.');
     } catch (err) {
-      onError(`Export UserSiteUnit CSV failed: ${formatUserSUError(err)}`);
+      onError(`Export UserSiteUnit CSV failed: ${formatError(err)}`);
     } finally {
       onMutatingChange(false);
     }
@@ -167,7 +164,7 @@
       );
       await onLoadUserSiteUnitList();
     } catch (err) {
-      onError(`Import UserSiteUnit CSV failed: ${formatUserSUError(err)}`);
+      onError(`Import UserSiteUnit CSV failed: ${formatError(err)}`);
     } finally {
       onMutatingChange(false);
     }
@@ -176,19 +173,59 @@
 
 <div class="vpro-cls-user-su-panel" aria-label="User Site Unit List Editor">
   <div class="vpro-cls-subtoolbar">
-    <input type="search" aria-label="Filter personal site unit list" class="vpro-cls-filter" placeholder="Filter UserSiteUnitList..." bind:value={userSUFilter} />
+    <input
+      type="search"
+      aria-label="Filter personal site unit list"
+      class="vpro-cls-filter"
+      placeholder="Filter UserSiteUnitList..."
+      bind:value={userSUFilter}
+    />
     <button type="button" class="vpro-btn-secondary" disabled={userSULoading} onclick={refreshList}>Refresh</button>
     {#if port.exportUserSiteUnitListCSV}
-      <button type="button" class="vpro-btn-secondary" disabled={mutating} onclick={exportUserSiteUnitsCSV}>Export CSV</button>
+      <button type="button" class="vpro-btn-secondary" disabled={mutating} onclick={exportUserSiteUnitsCSV}
+        >Export CSV</button
+      >
     {/if}
   </div>
 
   <div class="vpro-cls-dialog-row">
-    <label><span>SiteSeries</span><input type="text" class="mono" bind:value={userSUSeries} placeholder="e.g. CWHvm1/01" /></label>
-    <label><span>Long Name</span><input type="text" bind:value={userSULongName} placeholder="Descriptive unit name" /></label>
-    <label><span>Scientific Name</span><input type="text" bind:value={userSUSciName} placeholder="Plant association" /></label>
-    <label><span>Level</span><input type="number" class="vpro-cls-sep-input" bind:value={userSULevel} min={1} max={11} /></label>
-    <button type="button" class="vpro-btn-primary" disabled={mutating || !userSUSeries.trim() || !port.saveUserSiteUnitEntry} onclick={submitUserSiteUnitEntry}>
+    <label
+      ><span>SiteSeries</span><input
+        type="text"
+        class="mono"
+        bind:value={userSUSeries}
+        placeholder="e.g. CWHvm1/01"
+      /></label
+    >
+    <label
+      ><span>Long Name</span><input
+        type="text"
+        bind:value={userSULongName}
+        placeholder="Descriptive unit name"
+      /></label
+    >
+    <label
+      ><span>Scientific Name</span><input
+        type="text"
+        bind:value={userSUSciName}
+        placeholder="Plant association"
+      /></label
+    >
+    <label
+      ><span>Level</span><input
+        type="number"
+        class="vpro-cls-sep-input"
+        bind:value={userSULevel}
+        min={1}
+        max={11}
+      /></label
+    >
+    <button
+      type="button"
+      class="vpro-btn-primary"
+      disabled={mutating || !userSUSeries.trim() || !port.saveUserSiteUnitEntry}
+      onclick={submitUserSiteUnitEntry}
+    >
       {userSUFormId !== null ? 'Update Entry' : 'Add Entry'}
     </button>
     {#if userSUFormId !== null}
@@ -210,12 +247,22 @@
               <td>{entry.siteSeriesScientificName}</td>
               <td class="mono">{entry.level}</td>
               <td class="vpro-cls-actions">
-                <button type="button" class="vpro-btn-mini" disabled={selectedPlots.length === 0 || mutating} onclick={() => onAssignPlots(selectedPlots, entry.siteSeries)}>
+                <button
+                  type="button"
+                  class="vpro-btn-mini"
+                  disabled={selectedPlots.length === 0 || mutating}
+                  onclick={() => onAssignPlots(selectedPlots, entry.siteSeries)}
+                >
                   Assign ({selectedPlots.length})
                 </button>
                 <button type="button" class="vpro-btn-mini" onclick={() => editUserSiteUnitEntry(entry)}>Edit</button>
                 {#if port.deleteUserSiteUnitEntry}
-                  <button type="button" class="vpro-btn-mini" disabled={mutating} onclick={() => removeUserSiteUnitEntry(entry)}>Delete</button>
+                  <button
+                    type="button"
+                    class="vpro-btn-mini"
+                    disabled={mutating}
+                    onclick={() => removeUserSiteUnitEntry(entry)}>Delete</button
+                  >
                 {/if}
               </td>
             </tr>
@@ -235,11 +282,28 @@
   {#if port.importUserSiteUnitListCSV}
     <div class="vpro-cls-csv-import">
       <div class="vpro-cls-subtoolbar">
-        <label class="vpro-cls-check"><input type="checkbox" bind:checked={userSUOverwrite} /><span>Overwrite matching SiteSeries</span></label>
-        <input type="file" aria-label="Choose personal site unit CSV file" accept=".csv,text/csv" onchange={handleUserSUCSVFile} />
-        <button type="button" class="vpro-btn-secondary" disabled={mutating || !userSUCSVText.trim()} onclick={importUserSiteUnitsCSV}>Import CSV</button>
+        <label class="vpro-cls-check"
+          ><input type="checkbox" bind:checked={userSUOverwrite} /><span>Overwrite matching SiteSeries</span></label
+        >
+        <input
+          type="file"
+          aria-label="Choose personal site unit CSV file"
+          accept=".csv,text/csv"
+          onchange={handleUserSUCSVFile}
+        />
+        <button
+          type="button"
+          class="vpro-btn-secondary"
+          disabled={mutating || !userSUCSVText.trim()}
+          onclick={importUserSiteUnitsCSV}>Import CSV</button
+        >
       </div>
-      <textarea rows="3" aria-label="Personal site unit CSV content" class="vpro-cls-csv-box" placeholder="Paste or load UserSiteUnitList CSV rows..." bind:value={userSUCSVText}></textarea>
+      <textarea
+        rows="3"
+        aria-label="Personal site unit CSV content"
+        class="vpro-cls-csv-box"
+        placeholder="Paste or load UserSiteUnitList CSV rows..."
+        bind:value={userSUCSVText}></textarea>
       {#if userSUImportResult}
         <p class="vpro-cls-preview-note">
           Imported: {userSUImportResult.inserted} inserted · {userSUImportResult.updated}

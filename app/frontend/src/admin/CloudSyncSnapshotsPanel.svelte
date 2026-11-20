@@ -53,8 +53,15 @@
         </p>
       </div>
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="snapshot-export-format">Optional Archive Export</label>
-        <select id="snapshot-export-format" class="w-full rounded border border-vpro-border p-2 text-xs" bind:value={snapshotExportFormat} disabled={busy || operationHeld}>
+        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="snapshot-export-format"
+          >Optional Archive Export</label
+        >
+        <select
+          id="snapshot-export-format"
+          class="w-full rounded border border-vpro-border p-2 text-xs"
+          bind:value={snapshotExportFormat}
+          disabled={busy || operationHeld}
+        >
           <option value="">Cloud Snapshot Only</option>
           <option value="sqlite">VPro Project (.db)</option>
           <option value="rds">R Serialized Dataset (.rds)</option>
@@ -67,17 +74,41 @@
     {/if}
     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="snapshot-dest-path">Export Destination Path (opt)</label>
-        <input id="snapshot-dest-path" type="text" class="w-full rounded border border-vpro-border p-2 font-mono text-xs" bind:value={snapshotDestinationPath} disabled={busy || operationHeld} />
+        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="snapshot-dest-path"
+          >Export Destination Path (opt)</label
+        >
+        <input
+          id="snapshot-dest-path"
+          type="text"
+          class="w-full rounded border border-vpro-border p-2 font-mono text-xs"
+          bind:value={snapshotDestinationPath}
+          disabled={busy || operationHeld}
+        />
       </div>
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="snapshot-zone-filter">Zone Filter (opt)</label>
-        <input id="snapshot-zone-filter" type="text" class="w-full rounded border border-vpro-border p-2 font-mono text-xs" bind:value={snapshotZoneFilter} disabled={busy || operationHeld} placeholder="All zones" />
+        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="snapshot-zone-filter"
+          >Zone Filter (opt)</label
+        >
+        <input
+          id="snapshot-zone-filter"
+          type="text"
+          class="w-full rounded border border-vpro-border p-2 font-mono text-xs"
+          bind:value={snapshotZoneFilter}
+          disabled={busy || operationHeld}
+          placeholder="All zones"
+        />
       </div>
     </div>
     <div class="space-y-1">
-      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="snapshot-notes-input">Release Notes</label>
-      <input id="snapshot-notes-input" type="text" class="w-full rounded border border-vpro-border p-2 text-xs" bind:value={snapshotNotes} disabled={busy || operationHeld} />
+      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="snapshot-notes-input">Release Notes</label
+      >
+      <input
+        id="snapshot-notes-input"
+        type="text"
+        class="w-full rounded border border-vpro-border p-2 text-xs"
+        bind:value={snapshotNotes}
+        disabled={busy || operationHeld}
+      />
     </div>
     <div class="flex flex-wrap gap-2">
       <button
@@ -104,7 +135,8 @@
     </div>
     {#if latestSnapshotCreated}
       <p class="text-xs text-vpro-ink-secondary">
-        Snapshot <span class="font-mono font-semibold">{latestSnapshotCreated.snapshotTag}</span> manifest SHA-256: <span class="font-mono">{latestSnapshotCreated.manifestSha256.slice(0, 16)}</span>
+        Snapshot <span class="font-mono font-semibold">{latestSnapshotCreated.snapshotTag}</span> manifest SHA-256:
+        <span class="font-mono">{latestSnapshotCreated.manifestSha256.slice(0, 16)}</span>
       </p>
     {/if}
   </fieldset>
@@ -115,7 +147,11 @@
       <div class="max-h-36 overflow-auto rounded border border-vpro-border">
         <table class="w-full text-left text-[11px]">
           <thead class="bg-vpro-canvas text-vpro-ink-secondary">
-            <tr><th class="p-1.5">Tag</th><th class="p-1.5">Plots</th><th class="p-1.5">Standards</th><th class="p-1.5">Created</th></tr>
+            <tr
+              ><th class="p-1.5">Tag</th><th class="p-1.5">Plots</th><th class="p-1.5">Standards</th><th class="p-1.5"
+                >Created</th
+              ></tr
+            >
           </thead>
           <tbody>
             {#each snapshots as snap (snap.snapshotTag)}
@@ -135,7 +171,11 @@
       <div class="max-h-36 overflow-auto rounded border border-vpro-border">
         <table class="w-full text-left text-[11px]">
           <thead class="bg-vpro-canvas text-vpro-ink-secondary">
-            <tr><th class="p-1.5">#</th><th class="p-1.5">Actor</th><th class="p-1.5">Role</th><th class="p-1.5">Format</th><th class="p-1.5">Plots</th><th class="p-1.5">Timestamp</th></tr>
+            <tr
+              ><th class="p-1.5">#</th><th class="p-1.5">Actor</th><th class="p-1.5">Role</th><th class="p-1.5"
+                >Format</th
+              ><th class="p-1.5">Plots</th><th class="p-1.5">Timestamp</th></tr
+            >
           </thead>
           <tbody>
             {#each downloadLog as entry (entry.id)}
@@ -152,7 +192,9 @@
         </table>
       </div>
     {:else if snapshots.length === 0}
-      <p class="text-xs text-vpro-ink-secondary">Click Refresh Snapshots &amp; Download Log to inspect historical provincial releases and subset checkouts.</p>
+      <p class="text-xs text-vpro-ink-secondary">
+        Click Refresh Snapshots &amp; Download Log to inspect historical provincial releases and subset checkouts.
+      </p>
     {/if}
   </fieldset>
 </div>

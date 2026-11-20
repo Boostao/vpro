@@ -148,7 +148,7 @@ test('source-labelled Unit Groups presentation preserves one responsive live con
     assert.match(body,/resets the saved Unit Groups to Site unit table/);
   }
   assert.match(source('LongVegetationUnitPreferences.svelte'),/grid-template-columns: minmax\(0, 1fr\)/);
-  assert.match(source('LongVegetationUnitPreferences.svelte'),/const raw = event\.currentTarget\.value; edit\(raw\)/);
+  assert.match(source('LongVegetationUnitPreferences.svelte'),/const raw = event\.currentTarget\.value;\s*edit\(raw\)/);
 });
 test('actual parent unit registry retains invalid drafts across remount and reaches aggregate report/native-close barriers',()=>{
   let created=0;
@@ -159,7 +159,7 @@ test('actual parent unit registry retains invalid drafts across remount and reac
     subscribe(){return ()=>{}}
   }
   const component=serverComponent(source('LongVegetationReport.svelte'),
-    'LongVegetationReport.svelte',{
+    'LongVegetationReport.svelte',{ './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
       '../bindings/github.com/boostao/vpro/app':{},
       './longVegetationUnitPreferences':{createLongVegetationUnitPreferencesRegistry(){created++;return registry}},
       './LongVegetationUnitPreferences.svelte':{default:child()},
@@ -176,7 +176,7 @@ test('actual parent unit registry retains invalid drafts across remount and reac
       './longVegetationThresholdPreferences':{},'./LongVegetationThresholdPreferences.svelte':{default(){}},
       './longVegetationReport':{},'./longEnvironmentReport':{},
       './vegetationWorkbook':{vegetationWorkbookPublicationSession:()=>new Publication(),VegetationWorkbookPublicationSession:Publication},
-    });
+    }) });
   for(let mount=0;mount<2;mount++){
     const body=render(component,{props:{...scope,onBusyChange(){}}}).body;
     assert.match(body,/This Unit Groups choice is unavailable/);
@@ -184,17 +184,17 @@ test('actual parent unit registry retains invalid drafts across remount and reac
     assert.equal(registry(scope).view().draft.unitGroups,'2');
   }
   assert.equal(created,1);
-  const parent=source('LongVegetationReport.svelte');
-  assert.match(parent,/const sharedPreferenceBarrier = \$derived\([^\n]*ordinaryUnitBarrier\)/);
+  const parent=require('./svelteTestHelpers.cjs').readReportComposite('long-vegetation');
+  assert.match(parent,/const sharedPreferenceBarrier = \$derived\(\s*[^\n]*ordinaryUnitBarrier\s*\)/);
   assert.match(parent,/const preferenceBarrier = \$derived\(sharedPreferenceBarrier \|\| projectBarrier\)/);
   assert.match(parent,/onBusyChange\(busy \|\| workbookBarrier \|\| sharedPreferenceBarrier \|\| !!projectView\?\.closeBlocked\)/);
-  assert.match(parent,/unsubscribeUnits\?\.\(\)/);
+  assert.match(parent,/for \(const u of unsubs\) u\?\.\(\)/);
   for(const name of ['Switch','Threshold','Group','QualityNull','QualityMinimum','Naming','SelectedField','Enforcement']){
-    const start=parent.indexOf(`<LongVegetation${name}Preferences `);
+    const start=parent.indexOf(`<LongVegetation${name}Preferences`);
     assert.notEqual(start,-1,`missing ${name} sibling`);
     const end=parent.indexOf('/>',start);
     const props=parent.slice(start,end);
-    assert.match(props,/operationHeld=\{unitBarrier \|\|/);
-    assert.match(props,/mutationHeld=\{unitMutationHeld \|\|/);
+    assert.match(props,/operationHeld=\{commonOpBase \|\|/);
+    assert.match(props,/mutationHeld=\{commonMutBase \|\|/);
   }
 });

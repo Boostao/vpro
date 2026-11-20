@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
+  import { formatError } from '../shared/readRequests';
   import {
     defaultProjectMetadataAutomationPort,
     COVER_DESCRIPTION_ORDER,
@@ -63,7 +64,7 @@
     trackedContextId = contextId;
   });
 
-  const selectedPreset = $derived(presets.find(p => p.id === selectedPresetId) ?? null);
+  const selectedPreset = $derived(presets.find((p) => p.id === selectedPresetId) ?? null);
 
   onMount(() => {
     void loadPreviewAndPresets();
@@ -93,7 +94,7 @@
       }
       status = `Derived metadata preview computed across ${derived.totalPlotsInScope} plot(s).`;
     } catch (cause) {
-      if (gen === generation) error = `Metadata derivation preview unavailable: ${String(cause)}`;
+      if (gen === generation) error = `Metadata derivation preview unavailable: ${formatError(cause)}`;
     } finally {
       if (gen === generation) setBusy(false);
     }
@@ -126,17 +127,22 @@
       status = `Applied ${res.updatedColumns.length} metadata column(s) to ProjectID "${res.projectId}" (ID ${res.metadataId}, ${res.auditRowCount} audit entries).`;
       if (onapplied) onapplied(res);
     } catch (cause) {
-      if (gen === generation) error = `Apply ProjectMetadata automation failed: ${String(cause)}`;
+      if (gen === generation) error = `Apply ProjectMetadata automation failed: ${formatError(cause)}`;
     } finally {
       if (gen === generation) setBusy(false);
     }
   }
 </script>
 
-<section class="min-w-0 space-y-4 rounded border border-vpro-border bg-white shadow-sm" aria-label="Auto-Derived ProjectMetadata and Standards Presets">
+<section
+  class="min-w-0 space-y-4 rounded border border-vpro-border bg-white shadow-sm"
+  aria-label="Auto-Derived ProjectMetadata and Standards Presets"
+>
   <header class="border-b-[3px] border-b-vpro-gold bg-vpro-navy px-4 py-3 text-white">
     <p class="text-xs font-semibold uppercase tracking-wider text-vpro-gold">PROJECT METADATA</p>
-    <h3 class="m-0 text-base font-semibold text-white">Auto-Populate Project Metadata from Plots &amp; LMH25 Presets</h3>
+    <h3 class="m-0 text-base font-semibold text-white">
+      Auto-Populate Project Metadata from Plots &amp; LMH25 Presets
+    </h3>
   </header>
 
   <div class="space-y-4 px-4 pb-4">
@@ -144,17 +150,34 @@
       <p role="alert" class="rounded border-l-4 border-red-700 bg-red-50 p-3 text-xs text-red-900">{error}</p>
     {/if}
     {#if status}
-      <p role="status" class="rounded border-l-4 border-vpro-navy bg-vpro-surface-subtle p-3 text-xs text-vpro-ink">{status}</p>
+      <p role="status" class="rounded border-l-4 border-vpro-navy bg-vpro-surface-subtle p-3 text-xs text-vpro-ink">
+        {status}
+      </p>
     {/if}
 
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="auto-meta-pid">Target ProjectID (max 20 characters)</label>
-        <input id="auto-meta-pid" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={targetProjectId} disabled={busy} />
+        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="auto-meta-pid"
+          >Target ProjectID (max 20 characters)</label
+        >
+        <input
+          id="auto-meta-pid"
+          type="text"
+          class="w-full rounded border border-vpro-border p-2 text-sm font-mono"
+          bind:value={targetProjectId}
+          disabled={busy}
+        />
       </div>
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="auto-meta-preset">Standards Preset Template</label>
-        <select id="auto-meta-preset" class="w-full rounded border border-vpro-border p-2 text-sm" bind:value={selectedPresetId} disabled={busy}>
+        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="auto-meta-preset"
+          >Standards Preset Template</label
+        >
+        <select
+          id="auto-meta-preset"
+          class="w-full rounded border border-vpro-border p-2 text-sm"
+          bind:value={selectedPresetId}
+          disabled={busy}
+        >
           {#each presets as preset (preset.id)}
             <option value={preset.id}>{preset.label}</option>
           {/each}
@@ -194,10 +217,14 @@
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
       {#if derivedPreview}
         <fieldset class="space-y-2 rounded border border-vpro-border border-t-[3px] border-t-vpro-gold p-3">
-          <legend class="px-1 text-xs font-semibold text-vpro-navy">Non-Destructive Plot Aggregation Preview ({derivedPreview.totalPlotsInScope} plots)</legend>
+          <legend class="px-1 text-xs font-semibold text-vpro-navy"
+            >Non-Destructive Plot Aggregation Preview ({derivedPreview.totalPlotsInScope} plots)</legend
+          >
           <dl class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
             <dt class="text-vpro-ink-secondary">Survey Years (StartDate..EndDate)</dt>
-            <dd class="font-mono font-semibold">{derivedPreview.startDate ?? 'NULL'} .. {derivedPreview.endDate ?? 'NULL'}</dd>
+            <dd class="font-mono font-semibold">
+              {derivedPreview.startDate ?? 'NULL'} .. {derivedPreview.endDate ?? 'NULL'}
+            </dd>
             <dt class="text-vpro-ink-secondary">NumberOfFS882Plots</dt>
             <dd class="font-mono font-semibold">{derivedPreview.numberOfFs882Plots}</dd>
             <dt class="text-vpro-ink-secondary">NumberOfSiteVisits (SIVI)</dt>
@@ -249,7 +276,9 @@
     </div>
 
     {#if lastResult}
-      <p class="text-xs text-vpro-ink-secondary">Saved Metadata ID {lastResult.metadataId} ({lastResult.updatedColumns.length} updated field(s)).</p>
+      <p class="text-xs text-vpro-ink-secondary">
+        Saved Metadata ID {lastResult.metadataId} ({lastResult.updatedColumns.length} updated field(s)).
+      </p>
     {/if}
   </div>
 </section>

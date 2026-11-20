@@ -26,28 +26,37 @@ test('Find rejects incomplete, normalized or foreign responses rather than openi
 });
 
 test('Read-only Find and explicit Open retain SU/profile scope, immutable identity and shared transition ownership', () => {
-  const app = readFileSync(srcPath('App.svelte'), 'utf8');
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882VegTab.svelte'), 'utf8');
+  const { readShellComposite, readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const app = readShellComposite();
+  const form = readFS882Composite();
   assert.match(app, /aria-label="Find scoped plot"/);
   assert.match(app, /<label for="find-scoped-plot"/);
   assert.match(form, /\{#if onFindPlot\}/);
-  assert.match(form, /\{onFindPlot\} findPlotDisabled=\{busy \|\| headerWorkflowBusy \|\| !capabilitiesReady\}/);
-  for (const name of ['lookupPlot', 'findScopedPlot', 'openFoundPlot']) {
-    const start = app.indexOf(`async function ${name}`);
-    const action = app.slice(start, app.indexOf('\n  async function ', start + 1));
+  assert.match(form, /\{onFindPlot\}[\s\S]{0,120}findPlotDisabled=\{(?:ctrl\.)?busy \|\| (?:ctrl\.)?headerWorkflowBusy \|\| !(?:ctrl\.)?capabilitiesReady\}/);
+  for (const [label, fnHeader] of [
+    ['lookupScopedPlotOp', 'export async function lookupScopedPlotOp'],
+    ['runFindScopedPlotOp', 'export async function runFindScopedPlotOp'],
+    ['openFoundPlot', 'async function openFoundPlot'],
+  ]) {
+    const start = app.indexOf(fnHeader);
+    assert.ok(start >= 0, label);
+    const action = app.slice(start, start + 1500);
     assert.doesNotMatch(action, /SwitchContext|profileNavigation = null|CreatePlot|\.trim\(|\.toUpperCase\(/);
-    if (name === 'lookupPlot') {
-      assert.match(action, /await resolveNavigation\(source.proposal, contextId\)/);
-      assert.match(action, /next.plots.some/);
-      assert.match(action, /ContextService.LookupScopedPlot/);
+    if (label === 'lookupScopedPlotOp') {
+      assert.match(
+        action,
+        /ResolveProjectPlotProfileNavigation\(contextId,\s*profileNavigation\.proposal\)[\s\S]*?validateProfileNavigation\(rawNav,\s*profileNavigation\.proposal,\s*contextId\)/
+      );
+      assert.match(action, /next\.plots\.some/);
+      assert.match(action, /LookupScopedPlot/);
     }
-    if (name === 'findScopedPlot') assert.doesNotMatch(action, /requestTransition|editorPlotNumber =/);
-    if (name === 'openFoundPlot') {
-      assert.match(action, /\$state.snapshot\(plotFindResult\)/);
-      assert.match(action, /proposal.plot.plotNumber === editorPlotNumber/);
-      assert.match(action, /await requestTransition/);
-      assert.match(action, /await lookupPlot\(proposal.plot.plotNumber, contextId\)/);
-      assert.match(action, /JSON.stringify\(current\) !== JSON.stringify\(proposal\)/);
+    if (label === 'runFindScopedPlotOp') assert.doesNotMatch(action, /requestTransition|editorPlotNumber:/);
+    if (label === 'openFoundPlot') {
+      assert.match(action, /\$state\.snapshot\(plotFindResult\)/);
+      assert.match(action, /proposal\.plot\.plotNumber === snap\.editorPlotNumber/);
+      assert.match(action, /await bridge\.requestTransition/);
+      assert.match(action, /await lookupScopedPlotOp\(\{\s*number:\s*proposal\.plot\.plotNumber/);
+      assert.match(action, /JSON\.stringify\(current\) !== JSON\.stringify\(proposal\)/);
     }
   }
 });

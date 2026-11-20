@@ -1,11 +1,19 @@
 import { PlotEntryService } from '../../bindings/github.com/boostao/vpro/app';
 import { TwoPageVegetationSession } from './twoPageVegetationSession';
 import type { TwoPageVegetationOwner } from './twoPageVegetationWire';
-import { notifyTwoPageVegetationActivity, subscribeTwoPageVegetationActivity, twoPageVegetationActivity, twoPageVegetationEntries, twoPageVegetationOwnerKey, type TwoPageVegetationActivity } from './twoPageVegetationActivity';
+import {
+  notifyTwoPageVegetationActivity,
+  subscribeTwoPageVegetationActivity,
+  twoPageVegetationActivity,
+  twoPageVegetationEntries,
+  twoPageVegetationOwnerKey,
+  type TwoPageVegetationActivity,
+} from './twoPageVegetationActivity';
 
-export const twoPageVegetationReviewEnabled = true;
-export const twoPageVegetationWritingEnabled = true;
-export const twoPageVegetationSpeciesListEnabled = true;
+const ALWAYS_ON = true;
+export const twoPageVegetationReviewEnabled = ALWAYS_ON;
+export const twoPageVegetationWritingEnabled = ALWAYS_ON;
+export const twoPageVegetationSpeciesListEnabled = ALWAYS_ON;
 export { subscribeTwoPageVegetationActivity, twoPageVegetationActivity, type TwoPageVegetationActivity };
 export function twoPageVegetationSession(owner: TwoPageVegetationOwner): TwoPageVegetationSession {
   const key = twoPageVegetationOwnerKey(owner);
@@ -13,15 +21,22 @@ export function twoPageVegetationSession(owner: TwoPageVegetationOwner): TwoPage
   if (existing) return existing.session;
   const retainedOwner = { contextId: owner.contextId, project: owner.project, plot: owner.plot, form: owner.form };
   const { contextId, plot, form } = retainedOwner;
-  const session = new TwoPageVegetationSession(retainedOwner, {
-    read: () => PlotEntryService.GetTwoPageVegetationOriginal(contextId, plot, form),
-    save: request => PlotEntryService.SaveTwoPageVegetation(contextId, request),
-    saveSpeciesList: request => PlotEntryService.SaveTwoPageVegetationSpeciesList(contextId, request),
-    outcome: request => PlotEntryService.RecoverTwoPageVegetationOutcome(contextId, request),
-    references: () => PlotEntryService.GetTwoPageVegetationSpeciesReferences(contextId, plot, form),
-  }, twoPageVegetationWritingEnabled, twoPageVegetationSpeciesListEnabled);
+  const session = new TwoPageVegetationSession(
+    retainedOwner,
+    {
+      read: () => PlotEntryService.GetTwoPageVegetationOriginal(contextId, plot, form),
+      save: (request) => PlotEntryService.SaveTwoPageVegetation(contextId, request),
+      saveSpeciesList: (request) => PlotEntryService.SaveTwoPageVegetationSpeciesList(contextId, request),
+      outcome: (request) => PlotEntryService.RecoverTwoPageVegetationOutcome(contextId, request),
+      references: () => PlotEntryService.GetTwoPageVegetationSpeciesReferences(contextId, plot, form),
+    },
+    twoPageVegetationWritingEnabled,
+    twoPageVegetationSpeciesListEnabled
+  );
   let initialized = false;
-  const unsubscribe = session.subscribe(() => { if (initialized) notifyTwoPageVegetationActivity(); });
+  const unsubscribe = session.subscribe(() => {
+    if (initialized) notifyTwoPageVegetationActivity();
+  });
   twoPageVegetationEntries.set(key, { owner: retainedOwner, session, unsubscribe });
   initialized = true;
   return session;
@@ -31,8 +46,12 @@ export function releaseTwoPageVegetationSession(owner: TwoPageVegetationOwner): 
   const entry = twoPageVegetationEntries.get(key);
   if (!entry) return false;
   const state = entry.session.closeState();
-  if (state.busy || state.blocked || state.unsaved) throw new Error('Resolve retained vegetation drafts/operations/receipts before releasing their owner.');
+  if (state.busy || state.blocked || state.unsaved)
+    throw new Error('Resolve retained vegetation drafts/operations/receipts before releasing their owner.');
   if (entry.session.view().receipts.length) return false;
-  entry.session.dispose(); entry.unsubscribe(); twoPageVegetationEntries.delete(key); notifyTwoPageVegetationActivity();
+  entry.session.dispose();
+  entry.unsubscribe();
+  twoPageVegetationEntries.delete(key);
+  notifyTwoPageVegetationActivity();
   return true;
 }

@@ -250,17 +250,16 @@ test('action errors precede fields and both scoped editors preserve distinct his
   assert.equal(await session.restore('prune'), true);
 });
 test('mounted source actions join Save/Undo/Lock/close ownership and refresh only clean peer originals', () => {
-  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
-    readFileSync(srcPath('FS882Modals.svelte'), 'utf8') + '\n' +
-    readFileSync(srcPath('fs882FormSivi.ts'), 'utf8');
-  for (const api of ['GetSIVIParentActionOriginal', 'SaveSIVIParentActions', 'RestoreSIVIParentActions']) assert.ok(parent.includes(`ContextService.${api}`));
-  assert.match(parent, /\[\(\) => siviParentActionUnsaved, \(\) => siviParentActionOperation\('save'\)\]/);
-  assert.match(parent, /\[\(\) => siviParentActionUnsaved, \(\) => void siviParentActionOperation\('undo'\)\]/);
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const parent = readFS882Composite();
+  for (const api of ['GetSIVIParentActionOriginal', 'SaveSIVIParentActions', 'RestoreSIVIParentActions']) assert.ok(parent.includes(`PlotEntryService.${api}`) || parent.includes(`ContextService.${api}`));
+  assert.match(parent, /\[\(\) => parentActionUnsaved,\s*\(\) => parentActionOperation\('save'\)\]/);
+  assert.match(parent, /\[\(\) => parentActionUnsaved,\s*\(\) => void parentActionOperation\('undo'\)\]/);
   assert.match(parent, /Undo SIVI source-action drafts\/recovery before changing the plot lock/);
-  assert.match(parent, /siviParentActionSession\.closeState\(\)\.unsaved/);
-  assert.match(parent, /blocked: \[[^\]]*siviParentActionClose[^\]]*\]\.some\(c => c\?\.blocked \?\? false\)/);
-  assert.match(parent, /refreshSIVIParent\(plot, \[siviParentWriteSession, siviProjectAssignmentSession, siviParentSharedSession\]\)/);
-  assert.match(parent, /refreshSIVIParent\(plot, \[siviParentActionSession, siviProjectAssignmentSession, siviParentSharedSession\]\)/);
+  assert.match(parent, /parentActionSession\.closeState\(\)\.unsaved/);
+  assert.match(parent, /\bparentActionClose\b[\s\S]*?\.some\(\(c\)\s*=>\s*c\?\.blocked/);
+  assert.match(parent, /refreshParent\(plot,\s*\[parentWriteSession,\s*projectAssignmentSession,\s*parentSharedSession\]\)/);
+  assert.match(parent, /refreshParent\(plot,\s*\[parentActionSession,\s*projectAssignmentSession,\s*parentSharedSession\]\)/);
   assert.match(parent, /peer\.closeState\(\)\.unsaved \|\| peer\.closeState\(\)\.busy/);
   assert.match(parent, /peer && \(peer\.view\(\)\.original \|\| peer\.view\(\)\.error\) && !\(await peer\.load\(\)\)/);
 });

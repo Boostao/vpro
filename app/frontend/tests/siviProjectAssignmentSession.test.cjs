@@ -365,23 +365,22 @@ test('unsupported new metadata remains distinguishable but disabled, and unavail
 });
 
 test('FS882 candidate owns assignment across Save/Undo/Lock/close/remount/source and refreshes both clean peers', () => {
-  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
-    readFileSync(srcPath('FS882Modals.svelte'), 'utf8') + '\n' +
-    readFileSync(srcPath('fs882FormSivi.ts'), 'utf8');
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const parent = readFS882Composite();
   for (const api of ['GetSIVIProjectAssignmentOriginal', 'SaveSIVIProjectAssignment', 'RestoreSIVIProjectAssignment']) {
-    assert.ok(parent.includes(`ContextService.${api}`));
+    assert.ok(parent.includes(`PlotEntryService.${api}`) || parent.includes(`ContextService.${api}`));
   }
-  assert.match(parent, /\[\(\) => siviProjectAssignmentUnsaved, \(\) => siviProjectAssignmentOperation\('save'\)\]/);
-  assert.match(parent, /\[\(\) => siviProjectAssignmentUnsaved, \(\) => void siviProjectAssignmentOperation\('undo'\)\]/);
+  assert.match(parent, /\[\(\) => projectAssignmentUnsaved,\s*\(\) => projectAssignmentOperation\('save'\)\]/);
+  assert.match(parent, /\[\(\) => projectAssignmentUnsaved,\s*\(\) => void projectAssignmentOperation\('undo'\)\]/);
   assert.match(parent, /Undo ProjectID selection\/recovery before changing the plot lock/);
-  assert.match(parent, /siviProjectAssignmentSession\.closeState\(\)\.unsaved/);
-  assert.match(parent, /blocked: \[[^\]]*siviProjectAssignmentClose[^\]]*\]\.some\(c => c\?\.blocked \?\? false\)/);
-  assert.match(parent, /refreshSIVIParent\(plot, \[siviParentWriteSession, siviParentActionSession, siviParentSharedSession\]\)/);
-  assert.match(parent, /refreshSIVIParent\(plot, \[siviParentActionSession, siviProjectAssignmentSession, siviParentSharedSession\]\)/);
-  assert.match(parent, /refreshSIVIParent\(plot, \[siviParentWriteSession, siviProjectAssignmentSession, siviParentSharedSession\]\)/);
-  assert.match(parent, /onSourceChange=\{source => \{ void changeSIVIProjectSource\(source\); \}\}/);
-  assert.match(parent, /onSourceReload=\{\(\) => \{ void reloadSIVIProjectSource\(\); \}\}/);
-  assert.match(parent, /Boolean\(siviParentSourceView\?\.error\)/);
+  assert.match(parent, /projectAssignmentSession\.closeState\(\)\.unsaved/);
+  assert.match(parent, /\bprojectAssignmentClose\b[\s\S]*?\.some\(\(c\)\s*=>\s*c\?\.blocked/);
+  assert.match(parent, /refreshParent\(plot,\s*\[parentWriteSession,\s*parentActionSession,\s*parentSharedSession\]\)/);
+  assert.match(parent, /refreshParent\(plot,\s*\[parentActionSession,\s*projectAssignmentSession,\s*parentSharedSession\]\)/);
+  assert.match(parent, /refreshParent\(plot,\s*\[parentWriteSession,\s*projectAssignmentSession,\s*parentSharedSession\]\)/);
+  assert.match(parent, /onSourceChange=\{\(source\) => \{\s*void sivi\.changeProjectSource\(source\);\s*\}\}/);
+  assert.match(parent, /onSourceReload=\{\(\) => \{\s*void sivi\.reloadProjectSource\(\);\s*\}\}/);
+  assert.match(parent, /Boolean\(sivi\.parentSourceView\?\.error\)|Boolean\(parentSourceView\?\.error\)/);
 });
 
 test('SIVI metadata entry is independently absent by default and guarded by parent/peer drafts and operations', async () => {
@@ -404,41 +403,44 @@ test('SIVI metadata entry is independently absent by default and guarded by pare
 });
 
 test('SIVI metadata reuses the existing guarded editor and commit recovery instead of assigning or creating an identity implicitly', () => {
-  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
-    readFileSync(srcPath('FS882Modals.svelte'), 'utf8') + '\n' +
-    readFileSync(srcPath('fs882FormSivi.ts'), 'utf8');
-  assert.match(parent, /siviParentView && !metadataOpen/);
-  assert.match(parent, /onMetadata=\{metadataEnabled \? openProjectMetadata : undefined\}/);
-  assert.match(parent, /metadataDisabled=\{!canOpenProjectMetadata\(\)\}/);
-  const clean = { metadataEnabled: true, twoPageOpen: false, childParentDisabled: false, childUnsaved: false, headerValidation: {} };
-  for (const [change, expected] of [[{}, true], [{ metadataEnabled: false }, false],
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const parent = readFS882Composite();
+  assert.match(parent, /sivi\.parentView && !(?:ctrl\.)?metadataOpen/);
+  assert.match(parent, /onMetadata=\{(?:ctrl\.)?openProjectMetadata\}/);
+  assert.match(parent, /metadataDisabled=\{!(?:ctrl\.)?canOpenProjectMetadata\(\)\}/);
+  const clean = { twoPageOpen: false, childParentDisabled: false, childUnsaved: false, headerValidation: {} };
+  for (const [change, expected] of [[{}, true],
     [{ childParentDisabled: true }, false], [{ childUnsaved: true }, false], [{ headerValidation: { fieldNo: 'invalid' } }, false]]) {
     const context = componentFunctions('FS882Form.svelte', ['canOpenProjectMetadata'], { ...clean, ...change });
     assert.equal(context.actions.canOpenProjectMetadata(), expected);
   }
-  assert.match(parent, /oncommitted=\{refreshProjectMetadata\}/);
-  const refresh = parent.slice(parent.indexOf('async function refreshProjectMetadata()'), parent.indexOf('async function refreshProjectMetadata()') + 700);
+  assert.match(parent, /oncommitted=\{[\s\S]{0,120}refreshProjectMetadata/);
+  const siviControllerSrc = readFileSync(srcPath('useSiviSessions.svelte.ts'), 'utf8');
+  const refresh = siviControllerSrc.slice(siviControllerSrc.indexOf('async function refreshProjectMetadata('), siviControllerSrc.indexOf('async function refreshProjectMetadata(') + 800);
   const siviHelper = readFileSync(srcPath('fs882FormSivi.ts'), 'utf8');
-  assert.match(refresh, /refreshSIVIParent\(draft\.plotNumber, \[siviParentWriteSession, siviParentActionSession, siviProjectAssignmentSession, siviParentSharedSession\]\)/);
-  assert.match(refresh, /siviParentSourceSession\.load\(\)/);
+  assert.match(refresh, /refreshAllParentPeers\(plotNumber\)/);
+  assert.match(siviControllerSrc, /function refreshAllParentPeers[\s\S]*?\[[\s\S]*?parentWriteSession,\s*parentActionSession,\s*projectAssignmentSession,\s*parentSharedSession[\s\S]*?\]/);
+  assert.match(refresh, /parentSourceSession\.load\(\)/);
   assert.match(siviHelper, /siviParentSession\.view\(\)\.error/);
-  assert.match(refresh, /siviParentSourceSession\.view\(\)\.error/);
+  assert.match(refresh, /parentSourceSession\.view\(\)\.error/);
   assert.match(parent, /peer\.view\(\)\.original \|\| peer\.view\(\)\.error/);
   assert.match(refresh, /throw new Error/);
   assert.doesNotMatch(refresh, /\.save\(|\.restore\(|CreateBlankProjectMetadata|SaveSIVIProjectAssignment/);
 });
 
 test('metadata commit refresh recovery blocks manual/native close and Undo until refresh-only retry succeeds', () => {
-  const component = readFileSync(srcPath('ProjectMetadataEditor.svelte'), 'utf8');
+  const component = readFileSync(srcPath('ProjectMetadataEditor.svelte'), 'utf8') + '\n' + readFileSync(srcPath('projectMetadataEditor.ts'), 'utf8');
   const restore = readFileSync(srcPath('ProjectMetadataRestore.svelte'), 'utf8');
-  assert.match(component, /blocked: committedFailure \|\| errors\.length > 0/);
-  assert.match(restore, /blocked: committedFailure/);
-  assert.match(component, /if \(committedFailure\) \{ error = 'Reload the committed metadata refresh before Undo or close/);
-  assert.match(component, /if \(busy \|\| dirty \|\| errors\.length \|\| committedFailure\)/);
-  assert.match(component, /onclick=\{close\} disabled=\{busy \|\| dirty \|\| errors\.length > 0 \|\| committedFailure\}/);
-  const reload = component.slice(component.indexOf('async function reload()'), component.indexOf('function select('));
+  assert.match(component, /committedFailure \|\| errors\.length > 0/);
+  assert.match(restore, /blocked:\s*committedFailure/);
+  assert.match(component, /if \(committedFailure\) \{\s*error = 'Reload the committed metadata refresh before Undo or close/);
+  assert.match(component, /if \(busy \|\| dirty \|\| errors\.length \|\| committedFailure\)|disabled=\{busy \|\| dirty \|\| errors\.length > 0 \|\| committedFailure\}/);
+  const fieldsPanel = readFileSync(srcPath('ProjectMetadataFieldsPanel.svelte'), 'utf8') + '\n' + component;
+  assert.match(fieldsPanel, /committedFailure/);
+  const editorOnly = readFileSync(srcPath('ProjectMetadataEditor.svelte'), 'utf8');
+  const reload = editorOnly.slice(editorOnly.indexOf('async function reload()'), editorOnly.indexOf('function select('));
   assert.match(reload, /if \(committedFailure\) await oncommitted\(\)/);
-  assert.ok(reload.indexOf('await oncommitted()') < reload.indexOf('client.ReviewProjectMetadata'));
-  assert.ok(reload.indexOf('client.ReviewProjectMetadata') < reload.indexOf('committedFailure = false'));
+  assert.ok(reload.indexOf('await oncommitted()') < reload.indexOf('ReviewProjectMetadata'));
+  assert.ok(reload.indexOf('ReviewProjectMetadata') < reload.indexOf('committedFailure = false'));
   assert.doesNotMatch(reload, /SaveProjectMetadata|CreateBlankProjectMetadata|CreateProjectMetadataFromTemplate|RestoreProjectMetadata/);
 });

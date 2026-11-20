@@ -14,9 +14,7 @@ export interface DecodedFlatGeobufPlot {
   siteUnit: string;
 }
 
-export const FLATGEOBUF_MAGIC_V3 = new Uint8Array([
-  0x66, 0x67, 0x62, 0x03, 0x66, 0x67, 0x62, 0x01,
-]);
+export const FLATGEOBUF_MAGIC_V3 = new Uint8Array([0x66, 0x67, 0x62, 0x03, 0x66, 0x67, 0x62, 0x01]);
 
 const BASE64_LOOKUP = (() => {
   const table = new Int16Array(128).fill(-1);
@@ -284,18 +282,12 @@ export function decodeFlatGeobufPoints(
 /**
  * Even-odd Jordan curve ray-casting test for an EPSG:4326 [lon, lat] polygon ring.
  */
-export function pointInPolygonRing(
-  lon: number,
-  lat: number,
-  ring: ReadonlyArray<readonly [number, number]>
-): boolean {
+export function pointInPolygonRing(lon: number, lat: number, ring: ReadonlyArray<readonly [number, number]>): boolean {
   if (!Number.isFinite(lon) || !Number.isFinite(lat) || ring.length < 3) {
     return false;
   }
   const effectiveLen =
-    ring.length >= 4 &&
-    ring[ring.length - 1][0] === ring[0][0] &&
-    ring[ring.length - 1][1] === ring[0][1]
+    ring.length >= 4 && ring[ring.length - 1][0] === ring[0][0] && ring[ring.length - 1][1] === ring[0][1]
       ? ring.length - 1
       : ring.length;
   if (effectiveLen < 3) return false;

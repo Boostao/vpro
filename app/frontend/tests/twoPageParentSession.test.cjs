@@ -245,10 +245,11 @@ test('two-page panel defaults to disabled and keeps safety feedback above routin
   const view = f.session.view();
   view.blocked = true; view.error = 'Independent write outcome unknown';
   const html = panel('FS882-8x6XL', view);
-  assert.equal((html.match(/<input[^>]*disabled/g) || []).length, 9);
-  assert.ok(html.indexOf('Independent write outcome unknown') < html.indexOf('desktop safety adaptations'));
-  assert.match(html, /never replay Save/);
-  assert.match(html, /<button[^>]*>Undo \/ reload<\/button>/);
+  const normHtml = html.replace(/\s+/g, ' ');
+  assert.equal((normHtml.match(/<input[^>]*disabled/g) || []).length, 9);
+  assert.ok(normHtml.indexOf('Independent write outcome unknown') < normHtml.indexOf('desktop safety adaptations'));
+  assert.match(normHtml, /never replay Save/);
+  assert.match(normHtml, /<button[^>]*>Undo \/ reload<\/button>/);
 });
 test('two-page panel offers cancellation only for an active original read', () => {
   const view = { original: null, drafts: {}, busy: true, operation: 'read',
@@ -321,18 +322,23 @@ test('actual root guards delegate additional-field errors and refuse ordinary Sa
   assert.equal(root.actions.getCloseState().busy, true);
 });
 test('additional-field review excludes ordinary parent drafts until its owner is explicitly closed', () => {
-  const source = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882SoilTab.svelte'), 'utf8');
-  const expression = source.match(/const childUnsaved = \$derived\(([^;]+)\);/)[1];
-  const clean = { nonParentChildUnsaved: false, siviParentWriteUnsaved: false,
-    siviParentActionUnsaved: false, siviProjectAssignmentUnsaved: false,
-    siviParentSharedUnsaved: false, twoPageOpen: false, twoPageSoilBusy: false, twoPageSoilBlocked: false,
-    twoPageVegetationBusy: false, twoPageVegetationBlocked: false };
-  assert.equal(runInNewContext(expression, clean), false);
-  for (const owner of Object.keys(clean)) {
-    assert.equal(runInNewContext(expression, { ...clean, [owner]: true }), true, owner);
+  const { createFS882TestController, readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const source = readFS882Composite();
+  const h = createFS882TestController();
+  try {
+    h.ctrl.capabilitiesReady = true;
+    h.ctrl.draft = { ...h.ctrl.draft, locked: false };
+    h.flush();
+    assert.equal(h.ctrl.childUnsaved, false);
+    assert.equal(h.ctrl.headerInputsDisabled, false);
+    h.ctrl.twoPageOpen = true;
+    h.flush();
+    assert.equal(h.ctrl.childUnsaved, true);
+    assert.equal(h.ctrl.headerInputsDisabled, true);
+  } finally {
+    h.dispose();
   }
-  assert.match(source, /const headerInputsDisabled = \$derived\([^;]*childUnsaved/);
   for (const component of ['HeaderEditor', 'ParentCodeFields', 'OrdinaryFields']) {
-    assert.match(source, new RegExp(`<${component}[^>]*disabled=\\{headerInputsDisabled\\}`));
+    assert.match(source, new RegExp(`<${component}[\\s\\S]*?disabled=\\{headerInputsDisabled`));
   }
 });

@@ -230,11 +230,12 @@ test('buildFieldCardViewModel handles wetland downward organic horizons, extende
 
 test('FieldCardPreviewModal compiles with zero warnings and SSRs both modal and docked modes cleanly', () => {
   const modalSource = read('FieldCardPreviewModal.svelte');
+  const modalCss = read('fieldCardPreviewModal.css');
   assert.equal(compile(modalSource, { filename: 'FieldCardPreviewModal.svelte', generate: 'client' }).warnings.length, 0);
   assert.equal(compile(modalSource, { filename: 'FieldCardPreviewModal.svelte', generate: 'server' }).warnings.length, 0);
-  assert.doesNotMatch(modalSource, /position:\s*absolute|transform:scale|ResizeObserver|appendChild|appendTo/);
-  assert.match(modalSource, /@media print/);
-  assert.match(modalSource, /@page/);
+  assert.doesNotMatch(modalSource + '\n' + modalCss, /position:\s*absolute|transform:scale|ResizeObserver|appendChild|appendTo/);
+  assert.match(modalCss, /@media print/);
+  assert.match(modalCss, /@page/);
 
   const lucideStub = new Proxy({}, { get: () => () => '' });
   const ModalComp = serverComponent(modalSource, 'FieldCardPreviewModal.svelte', { '@lucide/svelte': lucideStub });
@@ -281,7 +282,10 @@ test('FS882Form and TwoPageEntryEditor wire View Field Card, Dock Split View, va
   assert.equal(compile(fs882Src, { filename: 'FS882Form.svelte', generate: 'client' }).warnings.length, 0);
   assert.equal(compile(twoPageSrc, { filename: 'TwoPageEntryEditor.svelte', generate: 'client' }).warnings.length, 0);
 
-  for (const src of [fs882Src, twoPageSrc]) {
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const fs882Composite = readFS882Composite();
+  const twoPageComposite = twoPageSrc + '\n' + read('TwoPageEntryToolbar.svelte') + '\n' + read('TwoPageEntryReadersHost.svelte');
+  for (const src of [fs882Composite, twoPageComposite]) {
     assert.match(src, /data-view-field-card-btn/);
     assert.match(src, /data-dock-field-card-btn/);
     assert.match(src, /FieldCardPreviewModal/);

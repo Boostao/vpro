@@ -129,10 +129,10 @@ test('actual grouping panel preserves source labels, unavailable saved choices a
   for (const label of ['Group by', 'Layer', 'Strata', 'Lifeform', 'None', 'Load saved report grouping', 'Save report grouping', 'Undo report grouping draft']) assert.ok(rendered.includes(label));
   assert.match(rendered, /data-source-control="rptLvGroupBy"/); assert.match(rendered, /value="2" disabled/);
   assert.doesNotMatch(rendered, /value="4" disabled/);
-  const parent = source('LongVegetationReport.svelte');
+  const parent = require('./svelteTestHelpers.cjs').readReportComposite('long-vegetation');
   assert.match(parent, /<script module lang="ts">/); assert.match(parent, /const groupingSession/);
-  assert.match(parent, /titleBarrier \|\| statisticsBarrier \|\| switchBarrier \|\| thresholdBarrier \|\| groupBarrier/);
-  assert.match(parent, /unsubscribeGroups\?\.\(\)/); assert.match(source('LongVegetationGroupPreferences.svelte'), /minmax\(0, 1fr\)/);
+  assert.match(parent, /switchBarrier \|\|\s*thresholdBarrier \|\|\s*groupBarrier/);
+  assert.match(parent, /for \(const u of unsubs\) u\?\.\(\)/); assert.match(source('LongVegetationGroupPreferences.svelte'), /minmax\(0, 1fr\)/);
 });
 test('actual parent module retains grouping validation across remount without recreating its registry', () => {
   let created = 0;
@@ -143,7 +143,7 @@ test('actual parent module retains grouping validation across remount without re
     subscribe() { return () => {}; }
   }
   const component = serverComponent(source('LongVegetationReport.svelte'),
-    'LongVegetationReport.svelte', {
+    'LongVegetationReport.svelte', { './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
       '../bindings/github.com/boostao/vpro/app': {},
       './longVegetationQualityNullPreferences': {}, './LongVegetationQualityNullPreferences.svelte': { default() {} }, './longVegetationGroupPreferences': { createLongVegetationGroupPreferencesRegistry() { created++; return registry; } },
       './longVegetationQualityMinimumPreferences': {}, './LongVegetationQualityMinimumPreferences.svelte': { default() {} },
@@ -159,7 +159,7 @@ test('actual parent module retains grouping validation across remount without re
       './longVegetationThresholdPreferences': {}, './LongVegetationThresholdPreferences.svelte': { default() {} },
       './longVegetationReport': {}, './longEnvironmentReport': {},
       './vegetationWorkbook': { vegetationWorkbookPublicationSession: () => new Publication(), VegetationWorkbookPublicationSession: Publication },
-    });
+    }) });
   for (let mount = 0; mount < 2; mount++) {
     const result = render(component, { props: { ...scope, onBusyChange() {} } }).body;
     assert.match(result, /Choose a supported Group by value/);

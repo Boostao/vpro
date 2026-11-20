@@ -8,10 +8,28 @@
 
   type Projection = ReturnType<typeof twoPageEntryProjection>;
   type Child = Projection['children'][number];
-  type Editor = { scope: TwoPageEntryScope; columns: readonly string[]; controls?: readonly string[]; input: Snippet<[PaperControl, string]>; labelled?: boolean };
-  let { form, coordinateMode = 'dd', values = new Map<string, unknown>(), editors = [], identity, embedded: childContent, pictureReaderAvailable = false }: {
-    form: TwoPageParentForm; coordinateMode?: CoordinateDisplayMode; values?: Map<string, unknown>;
-    editors?: readonly Editor[]; identity: Snippet<[TwoPageEntryField]>; embedded: Snippet<[Child, PaperControl]>;
+  type Editor = {
+    scope: TwoPageEntryScope;
+    columns: readonly string[];
+    controls?: readonly string[];
+    input: Snippet<[PaperControl, string]>;
+    labelled?: boolean;
+  };
+  let {
+    form,
+    coordinateMode = 'dd',
+    values = new Map<string, unknown>(),
+    editors = [],
+    identity,
+    embedded: childContent,
+    pictureReaderAvailable = false,
+  }: {
+    form: TwoPageParentForm;
+    coordinateMode?: CoordinateDisplayMode;
+    values?: Map<string, unknown>;
+    editors?: readonly Editor[];
+    identity: Snippet<[TwoPageEntryField]>;
+    embedded: Snippet<[Child, PaperControl]>;
     pictureReaderAvailable?: boolean;
   } = $props();
   const projection = $derived(twoPageEntryProjection(form, coordinateMode));
@@ -20,7 +38,7 @@
     const controls = new Set<string>();
     for (const editor of editors) {
       for (const column of editor.columns) {
-        const field = projection.fields.find(field => field.column === column);
+        const field = projection.fields.find((field) => field.column === column);
         if (!field || field.scope !== editor.scope || field.page === null) {
           throw new Error(`Two-page ${column} has no matching ${editor.scope} page editor owner.`);
         }
@@ -28,9 +46,14 @@
         owned.add(column);
       }
       for (const id of editor.controls ?? []) {
-        const control = projection.pages.flatMap(page => page.controls).find(control => control.controlId === id);
-        if (editor.scope !== 'xl' || !control || control.column ||
-            !Object.hasOwn(coordinateControls, control.controlName ?? '') && !Object.hasOwn(coordinateOptions, control.controlName ?? '')) {
+        const control = projection.pages.flatMap((page) => page.controls).find((control) => control.controlId === id);
+        if (
+          editor.scope !== 'xl' ||
+          !control ||
+          control.column ||
+          (!Object.hasOwn(coordinateControls, control.controlName ?? '') &&
+            !Object.hasOwn(coordinateOptions, control.controlName ?? ''))
+        ) {
           throw new Error(`Two-page control ${id} has no matching unbound coordinate editor owner.`);
         }
         if (controls.has(id)) throw new Error(`Multiple two-page editors own control ${id}.`);
@@ -40,7 +63,7 @@
     return editors;
   });
   function childLink(control: PaperControl): Child {
-    const child = projection.children.find(child => child.controlId === control.controlId);
+    const child = projection.children.find((child) => child.controlId === control.controlId);
     if (!child) throw new Error(`Two-page child ${control.controlName} has no exact source link.`);
     return child;
   }
@@ -57,8 +80,11 @@
         {#snippet embedded(control)}
           {@const child = childLink(control)}
           {#if child.availability === 'unavailable' && !(pictureReaderAvailable && child.form === 'frmVPicsXL')}
-            <div class="rounded border p-3 text-sm text-vpro-ink-secondary" data-source-form={child.form}
-              aria-label="Pictures unavailable">
+            <div
+              class="rounded border p-3 text-sm text-vpro-ink-secondary"
+              data-source-form={child.form}
+              aria-label="Pictures unavailable"
+            >
               Pictures: source storage is mapped; the picture workflow remains unavailable.
             </div>
           {:else}

@@ -77,16 +77,13 @@ function computeUnreadSummary(entries: readonly NotificationEntry[]) {
     }
   }
   const badgeSeverity: NotificationStateSnapshot['badgeSeverity'] =
-    unreadErrorCount > 0 ? 'error'
-    : unreadWarningCount > 0 ? 'warning'
-    : unreadCount > 0 ? 'info'
-    : 'none';
+    unreadErrorCount > 0 ? 'error' : unreadWarningCount > 0 ? 'warning' : unreadCount > 0 ? 'info' : 'none';
   return { unreadCount, unreadErrorCount, unreadWarningCount, badgeSeverity };
 }
 
 export function filterNotificationEntries(
   entries: readonly NotificationEntry[],
-  filter: NotificationFilter,
+  filter: NotificationFilter
 ): NotificationEntry[] {
   if (filter === 'errors') {
     return entries.filter((item) => item.severity === 'error');
@@ -95,7 +92,9 @@ export function filterNotificationEntries(
     return entries.filter((item) => item.category === 'entry');
   }
   if (filter === 'lmh25') {
-    return entries.filter((item) => item.category === 'lmh25' || (item.severity === 'warning' && item.category === 'general'));
+    return entries.filter(
+      (item) => item.category === 'lmh25' || (item.severity === 'warning' && item.category === 'general')
+    );
   }
   if (filter === 'reports') {
     return entries.filter((item) => item.category === 'reports');
@@ -106,11 +105,13 @@ export function filterNotificationEntries(
   return [...entries];
 }
 
-export function createNotificationController(options: {
-  now?: () => number;
-  schedule?: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
-  cancelSchedule?: (handle: ReturnType<typeof setTimeout>) => void;
-} = {}) {
+export function createNotificationController(
+  options: {
+    now?: () => number;
+    schedule?: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
+    cancelSchedule?: (handle: ReturnType<typeof setTimeout>) => void;
+  } = {}
+) {
   const now = options.now ?? (() => Date.now());
   const schedule = options.schedule ?? ((fn, ms) => setTimeout(fn, ms));
   const cancelSchedule = options.cancelSchedule ?? ((h) => clearTimeout(h));
@@ -189,10 +190,10 @@ export function createNotificationController(options: {
     const ts = now();
     const cleanTitle = String(input.title ?? '').trim() || 'Notification';
     const cleanMsg = String(input.message ?? '').trim();
-    const cleanContextTag =
-      input.contextTag === undefined ? undefined : (String(input.contextTag).trim() || undefined);
+    const cleanContextTag = input.contextTag === undefined ? undefined : String(input.contextTag).trim() || undefined;
     const category: NotificationCategory = input.category ?? 'general';
-    const showToast = input.toast ?? (input.severity === 'success' || input.severity === 'info' || input.severity === 'error');
+    const showToast =
+      input.toast ?? (input.severity === 'success' || input.severity === 'info' || input.severity === 'error');
     const durationMs = input.durationMs ?? DEFAULT_TOAST_DURATION_MS;
 
     const recentIdx = entries.findIndex(
@@ -202,7 +203,7 @@ export function createNotificationController(options: {
         item.title === cleanTitle &&
         item.message === cleanMsg &&
         (!item.contextTag || !cleanContextTag || item.contextTag === cleanContextTag) &&
-        ts - item.createdAtMs <= DEDUPE_WINDOW_MS,
+        ts - item.createdAtMs <= DEDUPE_WINDOW_MS
     );
 
     if (recentIdx !== -1) {

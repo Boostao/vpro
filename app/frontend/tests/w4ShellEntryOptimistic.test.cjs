@@ -7,8 +7,10 @@ const { render } = require('svelte/server');
 const { componentFunctions, loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
 
 test('UX-ADMIN-004: FS882Form passes loaded original baseline to UpdatePlot, strips RuntimeError on conflict, and offers Reload / Review actions', async () => {
-  const fs882Src = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
-  assert.equal(compile(fs882Src, { filename: 'FS882Form.svelte', generate: 'client' }).warnings.length, 0);
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const rawFs882 = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const fs882Src = readFS882Composite();
+  assert.equal(compile(rawFs882, { filename: 'FS882Form.svelte', generate: 'client' }).warnings.length, 0);
   assert.match(fs882Src, /data-fs882-conflict-reload/);
   assert.match(fs882Src, /data-fs882-conflict-review/);
   assert.match(fs882Src, /Reload Latest Plot/);
@@ -106,7 +108,8 @@ test('UX-ADMIN-004: FS882Form passes loaded original baseline to UpdatePlot, str
 });
 
 test('UX-ADMIN-006: ProjectAdminWorkbench refreshes project list when creating, copying, or splintering without activating', async () => {
-  const appSrc = readFileSync(srcPath('App.svelte'), 'utf8');
+  const { readShellComposite, serverReads, noopNotificationsStub } = require('./svelteTestHelpers.cjs');
+  const appSrc = readShellComposite();
   assert.match(appSrc, /<ProjectAdminWorkbench[\s\S]*?onprojectlistchanged=\{async \(\) => \{[\s\S]*?ContextService\.GetState\(\)[\s\S]*?projectState\.set\(nextState\)/);
 
   const client = await import('svelte/internal/client');
@@ -134,14 +137,7 @@ test('UX-ADMIN-006: ProjectAdminWorkbench refreshes project list when creating, 
   const mountFn = new Function(
     '$',
     'onDestroy',
-    'defaultProjectAdminPort',
-    'validateNewProjectDraft',
-    'validateProjectNameInput',
-    'validateSplinterDraft',
-    'parseLiteralTokenList',
-    'buildInitialMergeFieldResolutions',
-    'buildInitialMergePlotResolutions',
-    'formatCompareDiffsDelimited',
+    'adminLib',
     code + '\nreturn _unknown_;',
   );
 
@@ -185,14 +181,7 @@ test('UX-ADMIN-006: ProjectAdminWorkbench refreshes project list when creating, 
     mountFn(
       client,
       () => {},
-      workbench.defaultProjectAdminPort,
-      workbench.validateNewProjectDraft,
-      workbench.validateProjectNameInput,
-      workbench.validateSplinterDraft,
-      workbench.parseLiteralTokenList,
-      workbench.buildInitialMergeFieldResolutions,
-      workbench.buildInitialMergePlotResolutions,
-      workbench.formatCompareDiffsDelimited,
+      { ...workbench, formatError: serverReads.formatError, notifications: noopNotificationsStub.notifications },
     )(null, {
       contextId: 'ctx-1',
       activeProject: 'Sample',
@@ -298,5 +287,5 @@ test('UX-VEG-006: Two-Page Vegetation validation and table messages include prop
       onBusyChange() {},
     },
   }).body;
-  assert.match(html, /limited to 100000 rows; pages contain up to 50 joined rows/);
+  assert.match(html, /limited to 100000 rows;\s+pages\s+contain up to 50 joined rows/);
 });

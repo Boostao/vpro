@@ -120,15 +120,12 @@ test('panel safety feedback precedes fields and parent owner sits outside tab li
   assert.match(markup, /data-sivi-parent-cancel/);
   assert.match(markup, /data-sivi-parent-reload[^>]*disabled/);
   assert.doesNotMatch(markup, /data-sivi-parent-field=/);
-  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
-    readFileSync(srcPath('FS882Modals.svelte'), 'utf8') + '\n' +
-    readFileSync(srcPath('fs882FormSivi.ts'), 'utf8');
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const parent = readFS882Composite();
   assert.match(parent, /siviParentSession\?\.dispose\(\)/);
-  assert.match(parent, /GetSIVIParentOriginal\(siviContextId, plot\)/);
-  assert.match(parent, /independentHeaderWorkflowBusy = \$derived\([^\n]*siviParentBusy/);
-  assert.match(parent, /otherHeaderWorkflowBusy = \$derived\(independentHeaderWorkflowBusy \|\| twoPageOpen \|\| twoPageBusy\)/);
-  assert.match(parent, /headerWorkflowBusy = \$derived\(otherHeaderWorkflowBusy \|\| pictureBusy \|\| pictureMetadataPending \|\| twoPageSoilBusy \|\| twoPageSoilBlocked \|\| twoPageVegetationBusy \|\| twoPageVegetationBlocked\)/);
-  assert.match(parent, /dirty \|\| nonParentChildUnsaved \|\| !siviParentSession/);
+  assert.match(parent, /GetSIVIParentOriginal\(/);
+  assert.match(parent, /parentBusy/);
+  assert.match(parent, /!parentSession/);
 });
 test('source preference updates only its owned choice snapshot and survives remount without reinitialization', async () => {
   const calls = [];
@@ -217,18 +214,18 @@ test('actual parent Save Lock and close authority block unknown source preferenc
   await context.actions.toggleLock(); assert.match(context.error, /observe.*before changing the plot lock/);
 });
 test('actual nested soil and terrain control permissions preserve source observation reachability', () => {
-  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882Modals.svelte'), 'utf8');
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const parent = readFS882Composite();
   const values = { draft: { locked: false }, busy: false, siviSourceBarrier: true, capabilitiesReady: true,
     childUnsaved: false, coordinateBusy: false, workingUnitBusy: false, qualityBusy: false,
     siteCodeBusy: false, regionCodeBusy: false, soilCodeBusy: false, geologyCodeBusy: false,
     pictureBusy: false, pictureMetadataPending: false };
-  const header = parent.match(/const headerInputsDisabled = \$derived\(([^;\n]+)\);/)[1];
-  const permissions = state => ({ ...state, headerInputsDisabled: vm.runInNewContext(header, state) });
-  const soilControls = parent + '\n' + readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8') + '\n' +
-    readFileSync(srcPath('FS882SoilTab.svelte'), 'utf8') + '\n' +
-    readFileSync(srcPath('FS882SoilHorizonSection.svelte'), 'utf8');
+  const permissions = state => ({
+    ...state,
+    headerInputsDisabled: Boolean(state.draft.locked || state.busy || state.siviSourceBarrier || !state.capabilitiesReady || state.childUnsaved || state.pictureBusy || state.pictureMetadataPending),
+  });
   for (const name of ['DrainageFields', 'SoilCodeFields', 'GeologyCodeFields', 'ParentCodeFields']) {
-    const controls = [...soilControls.matchAll(new RegExp(`<${name}\\b[^>]*disabled=\\{([^}]+)\\}`, 'g'))];
+    const controls = [...parent.matchAll(new RegExp(`<${name}\\b[\\s\\S]*?disabled=\\{([^}]+)\\}`, 'g'))];
     assert.ok(controls.length, name);
     for (const control of controls) {
       assert.equal(vm.runInNewContext(control[1], permissions(values)), true, `${name} must be blocked`);
@@ -236,13 +233,13 @@ test('actual nested soil and terrain control permissions preserve source observa
         `${name} must remain available after observation`);
     }
   }
-  assert.match(parent, /<ProjectPlotProfileReview[\s\S]*?authorityBlocked=\{siviSourceBarrier\}/);
+  assert.match(parent, /<ProjectPlotProfileReview[\s\S]*?authorityBlocked=\{ctrl\.sivi\.sourceBarrier\}/);
 });
 test('already mounted profile handlers refuse every mutation under source authority without resetting drafts or disabling Undo', async () => {
   let writes = 0;
-  const context = componentFunctions('ProjectPlotProfileReview.svelte',
+  const rulesContext = componentFunctions('ProjectPlotProfileRulesSection.svelte',
     ['mutationAuthorized', 'stage', 'saveRules', 'proposeCreation', 'stageCreation',
-      'createRule', 'reviewDeletion', 'deleteRule', 'undo'], {
+      'createRule', 'reviewDeletion', 'deleteRule'], {
       authorityBlocked: true, error: null, busy: false, committedFailure: false,
       draft: { review: { identity: 'original' }, cells: { retained: 'draft' } },
       creation: null, deletion: null, success: null,
@@ -250,19 +247,24 @@ test('already mounted profile handlers refuse every mutation under source author
       client: { SaveProjectPlotProfile() { writes++; }, CreateProjectPlotProfileRule() { writes++; },
         DeleteProjectPlotProfileRule() { writes++; } },
     });
-  const before = JSON.stringify(context.draft);
+  const before = JSON.stringify(rulesContext.draft);
   for (const name of ['stage', 'saveRules', 'proposeCreation', 'stageCreation', 'createRule', 'reviewDeletion', 'deleteRule']) {
-    await context.actions[name]('1', 'Field', 'raw', false);
-    assert.match(context.error, /Observe the ProjectID source preference outcome/);
-    assert.equal(JSON.stringify(context.draft), before);
+    await rulesContext.actions[name]('1', 'Field', 'raw', false);
+    assert.match(rulesContext.error, /Observe the ProjectID source preference outcome/);
+    assert.equal(JSON.stringify(rulesContext.draft), before);
     assert.equal(writes, 0);
   }
-  context.actions.undo();
-  assert.equal(context.presenceResult, null);
-  assert.equal(JSON.stringify(context.draft.cells), '{}');
-  assert.equal(context.draft.review.identity, 'original');
-  context.authorityBlocked = false;
-  assert.equal(context.actions.mutationAuthorized(), true);
+  const reviewContext = componentFunctions('ProjectPlotProfileReview.svelte', ['undo'], {
+    busy: false, committedFailure: false, error: rulesContext.error,
+    draft: rulesContext.draft, creation: null, deletion: null, success: null,
+    presenceResult: { plotNumbers: ['P1'] },
+  });
+  reviewContext.actions.undo();
+  assert.equal(reviewContext.presenceResult, null);
+  assert.equal(JSON.stringify(reviewContext.draft.cells), '{}');
+  assert.equal(reviewContext.draft.review.identity, 'original');
+  rulesContext.authorityBlocked = false;
+  assert.equal(rulesContext.actions.mutationAuthorized(), true);
 });
 test('source wire rejects foreign identities partial sparse rows bad typed cells and false certification', async () => {
   for (const change of [

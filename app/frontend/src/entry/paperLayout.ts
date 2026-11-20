@@ -57,7 +57,7 @@ export interface PaperControl extends SourceControl {
 
 const layout: SourceLayout = definition;
 function rootForm(): SourceForm {
-  const found = layout.forms.find(item => item.name === layout.root);
+  const found = layout.forms.find((item) => item.name === layout.root);
   if (!found || layout.geometryUnit !== 'twips') throw new Error('Invalid packaged FS882 layout metadata');
   return found;
 }
@@ -120,18 +120,24 @@ function coordinateVisibility(mode: CoordinateDisplayMode): Record<string, boole
     [['Latitude', 'Longitude', 'lblLatitude', 'lblLongitude'], mode === 'dd'],
     [['lblLat', 'lblLon', 'lblLatD', 'lblLonD', 'lblLonM'], mode !== 'dd'],
     [['LatD', 'LatM', 'LatS', 'LonD', 'LonM', 'LonS', 'lblLatM', 'lblLatS', 'lblLonS'], mode === 'dms'],
-    [['LatD2', 'LatMD', 'LonD2', 'LonMD', 'lblLatD2', 'lblLatMD', 'lblLonD2', 'lblLonMD'], mode === 'dm']
+    [['LatD2', 'LatMD', 'LonD2', 'LonMD', 'lblLatD2', 'lblLatMD', 'lblLonD2', 'lblLonMD'], mode === 'dm'],
   ];
-  return Object.fromEntries(groups.flatMap(([names, visible]) => names.map(name => [name, visible])));
+  return Object.fromEntries(groups.flatMap(([names, visible]) => names.map((name) => [name, visible])));
 }
 
 export function accessCaption(value: string) {
-  return value.replace(/&&|&/g, marker => marker === '&&' ? '&' : '');
+  return value.replace(/&&|&/g, (marker) => (marker === '&&' ? '&' : ''));
 }
 
-function paperControls(source: SourceForm, candidates: SourceControl[], originX: number, originY: number, visibility: Record<string, boolean | undefined> = {}) {
-  const byID = new Map(source.controls.map(control => [control.controlId, control]));
-  const fields = new Map(source.fields.map(field => [field.controlId, field]));
+function paperControls(
+  source: SourceForm,
+  candidates: SourceControl[],
+  originX: number,
+  originY: number,
+  visibility: Record<string, boolean | undefined> = {}
+) {
+  const byID = new Map(source.controls.map((control) => [control.controlId, control]));
+  const fields = new Map(source.fields.map((field) => [field.controlId, field]));
   function visible(control: SourceControl) {
     const visited = new Set<string>();
     const independentLabel = control.type === 'Label' && visibility[control.controlName ?? ''] === true;
@@ -139,8 +145,10 @@ function paperControls(source: SourceForm, candidates: SourceControl[], originX:
     while (current) {
       if (visited.has(current.controlId)) throw new Error('Cycle in source containment');
       visited.add(current.controlId);
-      const independentOwner = independentLabel && current !== control && ['TextBox', 'ComboBox'].includes(current.type);
-      if (!independentOwner && !(visibility[current.controlName ?? ''] ?? flag(current.properties, 'Visible', true))) return false;
+      const independentOwner =
+        independentLabel && current !== control && ['TextBox', 'ComboBox'].includes(current.type);
+      if (!independentOwner && !(visibility[current.controlName ?? ''] ?? flag(current.properties, 'Visible', true)))
+        return false;
       if (current.parentId && !byID.has(current.parentId)) {
         throw new Error(`Missing source parent ${current.parentId} at line ${current.line}`);
       }
@@ -148,9 +156,12 @@ function paperControls(source: SourceForm, candidates: SourceControl[], originX:
     }
     return true;
   }
-  const controls: PaperControl[] = candidates.filter(visible)
-    .filter(control => !['Page', 'Group', 'Section', 'Form', 'Tab', 'FormHeader', 'FormFooter'].includes(control.type))
-    .map(control => {
+  const controls: PaperControl[] = candidates
+    .filter(visible)
+    .filter(
+      (control) => !['Page', 'Group', 'Section', 'Form', 'Tab', 'FormHeader', 'FormFooter'].includes(control.type)
+    )
+    .map((control) => {
       const field = fields.get(control.controlId);
       return {
         ...control,
@@ -160,42 +171,65 @@ function paperControls(source: SourceForm, candidates: SourceControl[], originX:
         y: (number(control.properties, 'Top', 0) - originY) / 15,
         width: extent(control, 'Width') / 15,
         height: extent(control, 'Height') / 15,
-        fontSize: number(control.properties, 'FontSize', 8) * 4 / 3,
+        fontSize: (number(control.properties, 'FontSize', 8) * 4) / 3,
         ...typography(control),
-        bold: control.properties.FontBold !== undefined
-          ? flag(control.properties, 'FontBold', false)
-          : number(control.properties, 'FontWeight', 400) >= 700,
+        bold:
+          control.properties.FontBold !== undefined
+            ? flag(control.properties, 'FontBold', false)
+            : number(control.properties, 'FontWeight', 400) >= 700,
         italic: flag(control.properties, 'FontItalic', false),
         locked: flag(control.properties, 'Locked', false),
         enabled: flag(control.properties, 'Enabled', true),
-        tabOrder: number(control.properties, 'TabIndex', 0)
+        tabOrder: number(control.properties, 'TabIndex', 0),
       };
     })
-    .filter(control => control.width > 0 && control.height > 0);
+    .filter((control) => control.width > 0 && control.height > 0);
   return controls;
 }
 
-export function paperPage(name: string, vegetationMode: VegetationMode = 'initial', coordinateMode: CoordinateDisplayMode = 'dd') {
+export function paperPage(
+  name: string,
+  vegetationMode: VegetationMode = 'initial',
+  coordinateMode: CoordinateDisplayMode = 'dd'
+) {
   return sourcePaperPage(form, name, vegetationMode, coordinateMode);
 }
 
-export function sourcePaperPage(source: SourceForm, name: string, vegetationMode: VegetationMode = 'initial',
-  coordinateMode: CoordinateDisplayMode = 'dd') {
-  const page = source.pages.find(item => item.name?.replaceAll('&', '') === name || item.caption?.replaceAll('&', '') === name);
+export function sourcePaperPage(
+  source: SourceForm,
+  name: string,
+  vegetationMode: VegetationMode = 'initial',
+  coordinateMode: CoordinateDisplayMode = 'dd'
+) {
+  const page = source.pages.find(
+    (item) => item.name?.replaceAll('&', '') === name || item.caption?.replaceAll('&', '') === name
+  );
   if (!page) throw new Error(`Source page ${name} is missing`);
   const originX = number(page.properties, 'Left', 0);
   const originY = number(page.properties, 'Top', 0);
   const switching = name === 'Vegetation' && vegetationMode !== 'initial';
   const isHeight = vegetationMode === 'height';
-  const visibility = name === 'Site' || name === 'Site/Veg' ? coordinateVisibility(coordinateMode)
-    : switching ? { SubVegA: !isHeight, SubVegAht: isHeight, SubVegC: !isHeight, SubVegCht: isHeight } : {};
-  let controls = paperControls(source, source.controls.filter(control => control.pageId === page.controlId), originX, originY, visibility);
+  const visibility =
+    name === 'Site' || name === 'Site/Veg'
+      ? coordinateVisibility(coordinateMode)
+      : switching
+        ? { SubVegA: !isHeight, SubVegAht: isHeight, SubVegC: !isHeight, SubVegCht: isHeight }
+        : {};
+  let controls = paperControls(
+    source,
+    source.controls.filter((control) => control.pageId === page.controlId),
+    originX,
+    originY,
+    visibility
+  );
   if (switching) {
     // FS882 btnCoverAndHeight_Click; verified on a clean reference Access form.
-    controls = controls.map(control => {
+    controls = controls.map((control) => {
       if (control.controlName === 'SubVegD') return { ...control, x: ((isHeight ? 10900 : 8320) - originX) / 15 };
-      if (control.controlName === 'VegNotes' || control.controlName === 'lblNotes') return { ...control, width: (isHeight ? 14250 : 11700) / 15 };
-      if (control.controlName === 'btnCoverAndHeight') return { ...control, caption: isHeight ? 'Cover Only' : 'Cover && Height' };
+      if (control.controlName === 'VegNotes' || control.controlName === 'lblNotes')
+        return { ...control, width: (isHeight ? 14250 : 11700) / 15 };
+      if (control.controlName === 'btnCoverAndHeight')
+        return { ...control, caption: isHeight ? 'Cover Only' : 'Cover && Height' };
       return control;
     });
   }
@@ -206,14 +240,14 @@ export function sourcePaperPage(source: SourceForm, name: string, vegetationMode
     source: source.source,
     sha256: source.sha256,
     width,
-    contentWidth: Math.max(width, ...controls.map(control => control.x + control.width)),
+    contentWidth: Math.max(width, ...controls.map((control) => control.x + control.width)),
     height,
-    controls
+    controls,
   };
 }
 
 export function embeddedForm(controlId: string) {
-  const embedded = form.embedded.find(item => item.controlId === controlId);
+  const embedded = form.embedded.find((item) => item.controlId === controlId);
   if (!embedded?.resolved || !embedded.form) throw new Error(`Unresolved source embedded form ${controlId}`);
   return { ...embedded, form: embedded.form };
 }
@@ -223,13 +257,15 @@ export function paperChild(name: string) {
   if (extended.root !== 'SubVegAXL' || extended.geometryUnit !== 'twips' || extended.forms.length !== 1) {
     throw new Error('Invalid packaged extended-shrub layout metadata');
   }
-  const child = (name === 'SubVegAXL' ? extended.forms : layout.forms).find(item => item.name === name);
+  const child = (name === 'SubVegAXL' ? extended.forms : layout.forms).find((item) => item.name === name);
   if (!child) throw new Error(`Source child form ${name} is missing`);
-  const root = child.controls.find(control => control.type === 'Form');
-  const detail = child.controls.find(control => control.type === 'Section' && control.controlName?.startsWith('Detail'));
-  const header = child.controls.find(control => control.type === 'FormHeader');
+  const root = child.controls.find((control) => control.type === 'Form');
+  const detail = child.controls.find(
+    (control) => control.type === 'Section' && control.controlName?.startsWith('Detail')
+  );
+  const header = child.controls.find((control) => control.type === 'FormHeader');
   if (!root || !detail) throw new Error(`Source child detail is missing for ${name}`);
-  const byID = new Map(child.controls.map(control => [control.controlId, control]));
+  const byID = new Map(child.controls.map((control) => [control.controlId, control]));
   function inSection(control: SourceControl, section: SourceControl) {
     const visited = new Set<string>();
     let current: SourceControl | undefined = control;
@@ -241,15 +277,29 @@ export function paperChild(name: string) {
     }
     return false;
   }
-  let controls = paperControls(child, child.controls.filter(control => inSection(control, detail) &&
-    !['ID', 'PlotNumber'].includes(control.properties.ControlSource?.value ?? '')), 0, 0);
-  const headerControls = header ? paperControls(child, child.controls.filter(control => inSection(control, header)), 0, 0) : [];
+  let controls = paperControls(
+    child,
+    child.controls.filter(
+      (control) =>
+        inSection(control, detail) && !['ID', 'PlotNumber'].includes(control.properties.ControlSource?.value ?? '')
+    ),
+    0,
+    0
+  );
+  const headerControls = header
+    ? paperControls(
+        child,
+        child.controls.filter((control) => inSection(control, header)),
+        0,
+        0
+      )
+    : [];
   if (name === 'SubVegAXL') {
     const labels: Record<string, string> = { Cover5a: 'lblB2a', Cover5b: 'lblB2b', Cover5c: 'lblB2c' };
-    controls = controls.map(control => {
+    controls = controls.map((control) => {
       const labelName = control.column ? labels[control.column] : undefined;
       if (!labelName) return control;
-      const label = headerControls.find(item => item.controlName === labelName);
+      const label = headerControls.find((item) => item.controlName === labelName);
       if (!label?.caption) throw new Error(`Missing extended-shrub label for ${control.column}`);
       return { ...control, caption: label.caption };
     });

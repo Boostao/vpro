@@ -1,8 +1,13 @@
 import type { EditorCloseState } from '../shell/closeLifecycle';
-import { ReadRequests, type CancellableRead } from '../shared/readRequests';
-import { siviDeletionRestorationReviewFromWire, siviDeletionRestorationRequest,
-  siviDeletionRestorationReceiptFromWire, type SIVIDeletionRestorationReview,
-  type SIVIDeletionRestorationRequest, type SIVIDeletionRestorationReceipt } from './siviDeletionRestoration';
+import { formatError, ReadRequests, type CancellableRead } from '../shared/readRequests';
+import {
+  siviDeletionRestorationReviewFromWire,
+  siviDeletionRestorationRequest,
+  siviDeletionRestorationReceiptFromWire,
+  type SIVIDeletionRestorationReview,
+  type SIVIDeletionRestorationRequest,
+  type SIVIDeletionRestorationReceipt,
+} from './siviDeletionRestoration';
 import type { SIVISpeciesOwner } from './siviSpeciesEditor';
 import { siviDeletionHistoryFromWire, type SIVIDeletionHistory } from './siviDeletionHistory';
 
@@ -26,42 +31,75 @@ export interface SIVIDeletionRestorationView {
 }
 export class SIVIDeletionRestorationSession {
   private readonly owner: SIVISpeciesOwner;
-  private state: SIVIDeletionRestorationView = { history: null, review: null, action: null, confirmed: false,
-    busy: false, blocked: false, error: null, requestId: null, receipt: null, revision: 0 };
+  private state: SIVIDeletionRestorationView = {
+    history: null,
+    review: null,
+    action: null,
+    confirmed: false,
+    busy: false,
+    blocked: false,
+    error: null,
+    requestId: null,
+    receipt: null,
+    revision: 0,
+  };
   private pending: SIVIDeletionRestorationRequest | null = null;
   private generation = 0;
   private readonly requests = new ReadRequests();
   private readonly listeners = new Set<() => void>();
 
-  constructor(owner: SIVISpeciesOwner, private readonly port: SIVIDeletionRestorationPort) {
+  constructor(
+    owner: SIVISpeciesOwner,
+    private readonly port: SIVIDeletionRestorationPort
+  ) {
     this.owner = { contextId: owner.contextId, project: owner.project, plot: owner.plot };
   }
   subscribe(notify: () => void) {
     this.listeners.add(notify);
     notify();
-    return () => { this.listeners.delete(notify); };
+    return () => {
+      this.listeners.delete(notify);
+    };
   }
-  private changed() { for (const notify of this.listeners) notify(); }
-  view(): SIVIDeletionRestorationView { return structuredClone(this.state); }
+  private changed() {
+    for (const notify of this.listeners) notify();
+  }
+  view(): SIVIDeletionRestorationView {
+    return structuredClone(this.state);
+  }
   closeState(): EditorCloseState {
-    const reason = this.state.busy ? 'Wait for or cancel the deleted-row restoration operation.'
-      : this.state.blocked ? 'Resolve the retained restoration request read-only; do not repeat Restore.'
-      : !this.state.review ? 'Review the exact deleted row and its current vacancy before restoring.'
-      : !this.state.action ? 'Choose whether to retain or prune the exact deletion source audits.'
-      : !this.state.confirmed ? 'Confirm restoring the exact reviewed physical row and historical44 cells.' : '';
-    return { unsaved: this.state.review !== null || this.state.blocked, busy: this.state.busy,
-      blocked: this.state.blocked, canSave: reason === '', saveReason: reason, error: this.state.error };
+    const reason = this.state.busy
+      ? 'Wait for or cancel the deleted-row restoration operation.'
+      : this.state.blocked
+        ? 'Resolve the retained restoration request read-only; do not repeat Restore.'
+        : !this.state.review
+          ? 'Review the exact deleted row and its current vacancy before restoring.'
+          : !this.state.action
+            ? 'Choose whether to retain or prune the exact deletion source audits.'
+            : !this.state.confirmed
+              ? 'Confirm restoring the exact reviewed physical row and historical44 cells.'
+              : '';
+    return {
+      unsaved: this.state.review !== null || this.state.blocked,
+      busy: this.state.busy,
+      blocked: this.state.blocked,
+      canSave: reason === '',
+      saveReason: reason,
+      error: this.state.error,
+    };
   }
   private requireIdle() {
     if (this.state.busy) throw new Error('Wait for or cancel the deleted-row restoration operation.');
   }
   private requireKnown() {
     this.requireIdle();
-    if (this.state.blocked) throw new Error('Resolve the retained restoration outcome without replacing its review or request.');
+    if (this.state.blocked)
+      throw new Error('Resolve the retained restoration outcome without replacing its review or request.');
   }
   async loadHistory(): Promise<boolean> {
     this.requireKnown();
-    if (this.state.review) throw new Error('Explicitly Undo the reviewed restoration before reloading historical choices.');
+    if (this.state.review)
+      throw new Error('Explicitly Undo the reviewed restoration before reloading historical choices.');
     const generation = ++this.generation;
     this.state.busy = true;
     this.changed();
@@ -72,17 +110,23 @@ export class SIVIDeletionRestorationSession {
       this.state.error = null;
       return true;
     } catch (cause) {
-      if (generation === this.generation) this.state.error = `Deletion history read failed; prior owned choices retained without inference: ${String(cause)}`;
+      if (generation === this.generation)
+        this.state.error = `Deletion history read failed; prior owned choices retained without inference: ${formatError(cause)}`;
       return false;
     } finally {
-      if (generation === this.generation) { this.state.busy = false; this.changed(); }
+      if (generation === this.generation) {
+        this.state.busy = false;
+        this.changed();
+      }
     }
   }
   async review(historyId: string): Promise<boolean> {
     this.requireKnown();
-    if (this.state.review) throw new Error('Explicitly Undo the unsubmitted restoration review before choosing another history.');
-    const event = this.state.history?.events.find(event => event.historyId === historyId);
-    if (!event || event.consumed) throw new Error('Select an explicit unconsumed event from loaded owned deletion history.');
+    if (this.state.review)
+      throw new Error('Explicitly Undo the unsubmitted restoration review before choosing another history.');
+    const event = this.state.history?.events.find((event) => event.historyId === historyId);
+    if (!event || event.consumed)
+      throw new Error('Select an explicit unconsumed event from loaded owned deletion history.');
     const generation = ++this.generation;
     this.state.busy = true;
     this.changed();
@@ -96,15 +140,20 @@ export class SIVIDeletionRestorationSession {
       this.state.error = null;
       return true;
     } catch (cause) {
-      if (generation === this.generation) this.state.error = `Deleted-row restoration review failed; no vacancy or history was inferred: ${String(cause)}`;
+      if (generation === this.generation)
+        this.state.error = `Deleted-row restoration review failed; no vacancy or history was inferred: ${formatError(cause)}`;
       return false;
     } finally {
-      if (generation === this.generation) { this.state.busy = false; this.changed(); }
+      if (generation === this.generation) {
+        this.state.busy = false;
+        this.changed();
+      }
     }
   }
   choose(action: 'retain' | 'prune') {
     this.requireKnown();
-    if (!this.state.review || action !== 'retain' && action !== 'prune') throw new Error('Choose exact retain or prune for the retained restoration review.');
+    if (!this.state.review || (action !== 'retain' && action !== 'prune'))
+      throw new Error('Choose exact retain or prune for the retained restoration review.');
     Object.assign(this.state, { action, confirmed: false, error: null });
     this.changed();
   }
@@ -131,7 +180,8 @@ export class SIVIDeletionRestorationSession {
     this.state.busy = false;
     if (this.pending) {
       this.state.blocked = true;
-      this.state.error = 'Restoration acknowledgement cancelled; exact review/request remain unknown. Resolve read-only history without replay.';
+      this.state.error =
+        'Restoration acknowledgement cancelled; exact review/request remain unknown. Resolve read-only history without replay.';
     } else this.state.error = 'Restoration review read cancelled; no vacancy or confirmation was inferred.';
     this.changed();
   }
@@ -139,7 +189,13 @@ export class SIVIDeletionRestorationSession {
     this.requireKnown();
     const close = this.closeState();
     if (!close.canSave || !this.state.review || !this.state.action) throw new Error(close.saveReason);
-    this.pending = siviDeletionRestorationRequest(this.state.review, this.owner, requestId, this.state.action, this.state.confirmed);
+    this.pending = siviDeletionRestorationRequest(
+      this.state.review,
+      this.owner,
+      requestId,
+      this.state.action,
+      this.state.confirmed
+    );
     this.state.requestId = requestId;
     return this.acceptReceipt('restore');
   }
@@ -149,7 +205,8 @@ export class SIVIDeletionRestorationSession {
     return this.acceptReceipt('lookup');
   }
   private async acceptReceipt(operation: 'restore' | 'lookup'): Promise<boolean> {
-    const request = this.pending, review = this.state.review;
+    const request = this.pending,
+      review = this.state.review;
     if (!request || !review) throw new Error('The retained restoration review/request is unavailable.');
     const generation = ++this.generation;
     this.state.busy = true;
@@ -157,21 +214,36 @@ export class SIVIDeletionRestorationSession {
     this.changed();
     try {
       const json = JSON.stringify(request);
-      const wire = await this.requests.track(operation === 'restore' ? this.port.restore(json) : this.port.receipt(json));
+      const wire = await this.requests.track(
+        operation === 'restore' ? this.port.restore(json) : this.port.receipt(json)
+      );
       if (generation !== this.generation) return false;
-      if (wire === null && operation === 'lookup') throw new Error('Missing restoration history is unresolved, not proof that Restore failed.');
+      if (wire === null && operation === 'lookup')
+        throw new Error('Missing restoration history is unresolved, not proof that Restore failed.');
       const receipt = siviDeletionRestorationReceiptFromWire(wire, review, request, this.owner, operation);
-      Object.assign(this.state, { receipt, history: null, review: null, action: null, confirmed: false, blocked: false, requestId: null, revision: this.state.revision + 1 });
+      Object.assign(this.state, {
+        receipt,
+        history: null,
+        review: null,
+        action: null,
+        confirmed: false,
+        blocked: false,
+        requestId: null,
+        revision: this.state.revision + 1,
+      });
       this.pending = null;
       return true;
     } catch (cause) {
       if (generation === this.generation) {
         this.state.blocked = true;
-        this.state.error = `Restoration outcome remains unknown; exact review/request retained without replay: ${String(cause)}`;
+        this.state.error = `Restoration outcome remains unknown; exact review/request retained without replay: ${formatError(cause)}`;
       }
       return false;
     } finally {
-      if (generation === this.generation) { this.state.busy = false; this.changed(); }
+      if (generation === this.generation) {
+        this.state.busy = false;
+        this.changed();
+      }
     }
   }
 }

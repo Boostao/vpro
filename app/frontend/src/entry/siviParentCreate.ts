@@ -71,12 +71,17 @@ export interface SIVIParentCreatePort {
 }
 
 export const defaultSIVIParentCreatePort: SIVIParentCreatePort = {
-  createPlot: (contextId, req) => (ContextService.CreateSIVIPlot(contextId, req) as never),
-  undoCreatePlot: (contextId, req) => (ContextService.UndoCreateSIVIPlot(contextId, req) as never),
-  listCreatedPlots: contextId => (ContextService.ListCreatedSIVIPlots(contextId) as never),
+  createPlot: (contextId, req) => ContextService.CreateSIVIPlot(contextId, req) as never,
+  undoCreatePlot: (contextId, req) => ContextService.UndoCreateSIVIPlot(contextId, req) as never,
+  listCreatedPlots: (contextId) => ContextService.ListCreatedSIVIPlots(contextId) as never,
 };
 
-function validateSIVIFieldUTF16(label: string, value: string | undefined, maxUnits: number, required = false): string | null {
+function validateSIVIFieldUTF16(
+  label: string,
+  value: string | undefined,
+  maxUnits: number,
+  required = false
+): string | null {
   const text = value ?? '';
   if (!wellFormedUTF16(text) || text.includes('\0')) {
     return `${label} contains malformed Unicode or NUL bytes.`;

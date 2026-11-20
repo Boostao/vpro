@@ -177,14 +177,7 @@ test('ProjectAdminWorkbench client actions detach Svelte 5 proxies and cover lif
   const mountFn = new Function(
     '$',
     'onDestroy',
-    'defaultProjectAdminPort',
-    'validateNewProjectDraft',
-    'validateProjectNameInput',
-    'validateSplinterDraft',
-    'parseLiteralTokenList',
-    'buildInitialMergeFieldResolutions',
-    'buildInitialMergePlotResolutions',
-    'formatCompareDiffsDelimited',
+    'adminLib',
     code + '\nreturn _unknown_;'
   );
 
@@ -420,14 +413,7 @@ test('ProjectAdminWorkbench client actions detach Svelte 5 proxies and cover lif
     mountFn(
       client,
       () => {},
-      workbench.defaultProjectAdminPort,
-      workbench.validateNewProjectDraft,
-      workbench.validateProjectNameInput,
-      workbench.validateSplinterDraft,
-      workbench.parseLiteralTokenList,
-      workbench.buildInitialMergeFieldResolutions,
-      workbench.buildInitialMergePlotResolutions,
-      workbench.formatCompareDiffsDelimited
+      { ...workbench, formatError: e => (e instanceof Error ? e.message : String(e)), notifications: { push() {}, success() {}, info() {}, warning() {}, error() {} } }
     )(null, {
       contextId: 'ctx-live',
       activeProject: 'Sample',
@@ -547,7 +533,7 @@ test('ProjectAdminWorkbench client actions detach Svelte 5 proxies and cover lif
 });
 
 test('App.svelte keeps ProjectAdminWorkbench mounted across context activation so lifecycle receipts remain visible', () => {
-  const appSrc = read('App.svelte');
+  const appSrc = read('shell/ShellDeferredViews.svelte');
   const sectionStart = appSrc.indexOf("{:else if view === 'project-admin'");
   const sectionEnd = appSrc.indexOf("{:else if view === 'lump-editor'");
   assert.ok(sectionStart > 0 && sectionEnd > sectionStart);

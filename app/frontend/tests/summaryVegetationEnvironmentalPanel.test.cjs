@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const compiler = require('svelte/compiler');
 const runtime = require('svelte/internal/client');
-const { loadTypeScript, srcPath, resolveDependency } = require('./svelteTestHelpers.cjs');
+const { loadTypeScript, srcPath, resolveDependency, noopNotificationsStub, serverReads } = require('./svelteTestHelpers.cjs');
 const lifeform = loadTypeScript('lifeformSummary.ts');
 const fields = loadTypeScript('summaryVegetationFieldList.ts');
 const vegetation = loadTypeScript('summaryVegetation.ts', { './lifeformSummary': lifeform }, { setTimeout });
@@ -46,6 +46,8 @@ function mount(session, port, held = false, numeric = false, lifeform = false) {
   const component = execute(compiled.js.code, {
     'svelte/internal/client': runtime,
     svelte: { onDestroy: callback => { destroy = callback; }, untrack: runtime.untrack },
+    '../shared/readRequests': serverReads,
+    '../shell/notificationService.svelte': noopNotificationsStub,
   }, { __props: { session, port, numeric, lifeform, operationHeld: held, onBusyChange: busy => notifications.push(busy) } });
   return { ...component.handlers, notifications, destroy: () => destroy() };
 }
@@ -222,16 +224,15 @@ test('desktop environmental module enables lifeform/numeric/base flags and dispa
 });
 
 test('actual root derived hold survives pane teardown until cancelled dispatch settles', async () => {
-  const app = fs.readFileSync(srcPath('App.svelte'), 'utf8').replaceAll('\r\n', '\n');
-  const effect = app.match(/  \$effect\(\(\) => \{\n    if \(!summaryEnvironmentalEnabled\)[\s\S]*?\n  \}\);/)[0];
-  const derived = app.match(/  const editorBusy = \$derived\([^\n]+/)[0];
+  const opGuard = fs.readFileSync(srcPath('shell/operationGuard.svelte.ts'), 'utf8').replaceAll('\r\n', '\n');
+  const effect = opGuard.match(/  \$effect\(\(\) => \{\n    if \(!summaryEnvironmentalEnabled\)[\s\S]*?\n  \}\);/)[0];
   const registry = client.summaryEnvironmentalRegistry(true);
   const compiled = compiler.compileModule(`
-    let localEditorBusy = $state(false), pictureCreationBusy = false, pictureLifecycleBusy = false,
-      twoPageSoilBusy = false, twoPageVegetationBusy = false, summaryPreferenceBusy = false,
-      summaryFieldListBusy = false, projectReportBusy = false, externalSUEnvironmentBusy = false, matrixPublicationBusy = false;
+    let localEditorBusy = $state(false);
     let summaryEnvironmentalBusy = $state(false), view = 'home';
-    ${derived}
+    const setFlag = (_key, active) => { summaryEnvironmentalBusy = active; };
+    const onBlockedFromHome = (opts) => { if (view === 'home') view = opts.view; };
+    const editorBusy = $derived(localEditorBusy || summaryEnvironmentalBusy);
     ${effect.replace('$effect(', 'installEffect(')}
     export const handlers = { held: () => editorBusy, route: () => view,
       releaseLocal: () => { localEditorBusy = false; } };

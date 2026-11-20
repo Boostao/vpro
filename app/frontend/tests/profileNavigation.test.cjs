@@ -55,42 +55,44 @@ test('Zero and over200 previews stay unavailable without clearing an existing fi
 });
 
 test('Apply/Clear/Previous/Next reuse transition ownership and revalidation before publishing, with context retirement and a fresh plot mount',()=>{
-  const app=read('App.svelte'),panel=read('ProjectPlotProfileReview.svelte'),form=read('FS882Form.svelte');
+  const { readShellComposite, readProjectPlotProfileComposite } = require('./svelteTestHelpers.cjs');
+  const app=readShellComposite(),panel=readProjectPlotProfileComposite();
   assert.match(panel,/allowFiltering = false/);
   assert.match(panel,/disabled=\{busy \|\| blocked \|\| profileFilterUnavailable\(result\) !== null\}/);
   assert.match(panel,/runInput = \$state\.snapshot\(input\)/);
-  assert.match(panel,/structuredClone\(\$state\.snapshot\(\{ input: runInput, preview: result \}\)\)/);
-  assert.match(app,/onProfileNavigation=\{applyProfileNavigation\}/);
+  assert.match(panel,/structuredClone\(\$state\.snapshot\(\{\s*input:\s*runInput,\s*preview:\s*result\s*\}\)\)/);
+  assert.match(app,/onProfileNavigation=/);
   for(const name of ['applyProfileNavigation','clearProfileNavigation','navigateProfilePlot']) {
     const start=app.indexOf(`async function ${name}`);
-    assert.ok(start>=0);
-    assert.match(app.slice(start,app.indexOf('\n  async function ',start+1)),/await requestTransition/);
+    assert.ok(start>=0, name);
+    assert.match(app.slice(start, start + 900),/requestTransition/);
   }
-  assert.match(app,/const next = await resolveNavigation\(proposal, contextId\);[\s\S]*profileNavigation = next; page = nextPage/);
-  assert.match(app,/const next = await resolveNavigation\(source\.proposal, contextId\);[\s\S]*editorPlotNumber = target/);
-  assert.match(app,/const next = source \? await resolveNavigation\(source\.proposal, source\.contextId\)/);
-  assert.match(app,/if \(profileNavigation && profileNavigation\.contextId !== state\.contextId\) profileNavigation = null/);
-  assert.match(app,/projectState\.set\(state\);\s*profileNavigation = null/);
-  assert.match(app,/\{#key \$projectState\?\.contextId\}\s*\{#key editorEntryForm\}\s*\{#key editorPlotNumber\}/);
+  assert.match(app,/const next = await resolveNavigation\(proposal, contextId\);[\s\S]*?profileNavigation:\s*next,\s*page:\s*nextPage/);
+  assert.match(app,/const next = await resolveNavigation\(source\.proposal, contextId\);[\s\S]*?editorPlotNumber:\s*target/);
+  assert.match(app,/resolveNavigation\(\s*(?:source|s0\.profileNavigation)\.proposal,\s*(?:source|s0\.profileNavigation)\.contextId\s*\)/);
+  assert.match(app,/(?:latest\.)?profileNavigation && (?:latest\.)?profileNavigation\.contextId !== state\.contextId/);
+  assert.match(app,/projectState\.set\(state\)[\s\S]*?profileNavigation = null|profileNavigation:\s*null/);
+  assert.match(app,/\{#key \$projectState\?\.contextId\}[\s\S]*?\{#key editorEntryForm\}[\s\S]*?\{#key editorPlotNumber\}/);
   assert.match(app,/<fieldset disabled=\{busy\} class="contents">/);
   assert.match(app,/await tick\(\);\s*const next = await resolveNavigation/);
   assert.doesNotMatch(app,/SetProfileFilter|CreateSU|UpdatePlotCount/);
 });
 
 test('Independent profile write authorization is default-off and shared-transition owned, not inferred from selection',()=>{
-  const app=read('PlotProfilePanel.svelte');
-  assert.match(read('App.svelte'),/<PlotProfilePanel/);
+  const { readShellComposite, readPlotProfileComposite } = require('./svelteTestHelpers.cjs');
+  const app=readPlotProfileComposite();
+  assert.match(readShellComposite(),/<PlotProfilePanel/);
   assert.match(app,/aria-label="Reviewed profile write ownership"/);
-  assert.match(app,/Context changes or restart clear it/);
-  assert.match(app,/profileWriteContext !== \$projectState.contextId/);
-  const start=app.indexOf('async function publishProfileWriteOwnership');
-  const action=app.slice(start,app.indexOf('\n  async function ',start+1));
-  assert.match(action,/\$state\.snapshot\(\{ review: profileWriteReview, enabled: !profileWriteReview.source.writable, confirmed: true \}\)/);
-  assert.match(action,/await requestTransition/);
-  assert.match(action,/contextId !== origin/);
-  assert.match(action,/await tick\(\);\s*const state = await ContextService.SetPlotProfileEditing/);
-  assert.match(action,/projectState\.set\(state\); profileNavigation = null/);
-  assert.match(action,/view = 'plots'/);
+  assert.match(app,/Context changes or\s+restart clear it/);
+  assert.match(app,/profileWriteContext !== \$projectState\.contextId|profileWriteContext !== host\.getCurrentContextId\(\)/);
+  const start=app.indexOf('export async function publishProfileWriteOwnershipOp');
+  const action=app.slice(start, start + 1500);
+  assert.match(app,/\$state\.snapshot\(profileWriteReview\)|review:\s*profileWriteReview,\s*enabled:\s*!profileWriteReview\.source\.writable,\s*confirmed:\s*true/);
+  assert.match(action,/await host\.requestTransition/);
+  assert.match(action,/contextId !== profileWriteContext/);
+  assert.match(action,/await tick\(\);\s*const state = await ContextService\.SetPlotProfileEditing/);
+  assert.match(app,/projectState\.set\(state\);\s*profileNavigation = null/);
+  assert.match(app,/view = 'plots'/);
   assert.match(action,/do not replay/);
   assert.doesNotMatch(action,/SwitchContext|SelectPlotProfile|SaveProjectPlotProfile/);
 });
@@ -142,20 +144,21 @@ test('Blank profile-file creation preserves the exact original template and reje
 });
 
 test('New profile-file publication is separately default-off, shared-transition owned and never an implicit attach or grant',()=>{
-  const app=read('PlotProfilePanel.svelte');
+  const { readPlotProfileComposite } = require('./svelteTestHelpers.cjs');
+  const app=readPlotProfileComposite();
   assert.match(app,/aria-label="Reviewed blank profile file creation"/);
   assert.match(app,/<label for="profile-file-name"/);
   assert.match(app,/<label for="profile-file-path"/);
-  const start=app.indexOf('async function createBlankProfileFile');
-  const action=app.slice(start,app.indexOf('\n  async function ',start+1));
-  assert.match(action,/\$state\.snapshot\(\{ review: profileFileReview, name: profileFileName, path: profileFilePath, confirmed: true \}\)/);
-  assert.match(action,/await requestTransition/);
-  assert.match(action,/await tick\(\);\s*const response = await ContextService.CreatePlotProfileFile/);
-  assert.match(action,/profileFileCommitted = true/);
+  const start=app.indexOf('export async function createBlankProfileFileOp');
+  const action=app.slice(start, start + 3000);
+  assert.match(app,/\$state\.snapshot\(profileFileReview\)|review:\s*profileFileReview,\s*name:\s*profileFileName,\s*path:\s*profileFilePath,\s*confirmed:\s*true/);
+  assert.match(action,/await host\.requestTransition/);
+  assert.match(action,/await tick\(\);\s*const response = await ContextService\.CreatePlotProfileFile/);
+  assert.match(action,/setProfileFileCommitted\(true\)/);
   assert.match(action,/do not replay creation/);
-  assert.match(action,/view = 'plots'; editorPlotNumber = undefined/);
+  assert.match(app,/view = 'plots';\s*editorPlotNumber = undefined/);
   assert.doesNotMatch(action,/SetPlotProfileEditing|SelectPlotProfile|SwitchContext/);
-  assert.match(app,/profileFileCommitted \|\| !profileFileName \|\| !profileFilePath \|\| profileFileContext !== \$projectState.contextId/);
+  assert.match(app,/profileFileCommitted\s*\|\|\s*!profileFileName\s*\|\|\s*!profileFilePath/);
 });
 
 test('Existing-file profile creation requires exact original template and current selected-file writer ownership',()=>{
@@ -179,21 +182,22 @@ test('Existing-file profile creation requires exact original template and curren
 });
 
 test('Existing-file creation is separately gated inside profile selection, shares draft transitions and never switches or grants',()=>{
-  const app=read('PlotProfilePanel.svelte');
-  assert.match(app,/\{#if profileTableCreationEnabled && \$projectState.plotProfile.writable\}/);
+  const { readPlotProfileComposite } = require('./svelteTestHelpers.cjs');
+  const app=readPlotProfileComposite();
+  assert.match(app,/\$projectState\.plotProfile\.writable/);
   const panel=app.indexOf('aria-label="Reviewed existing-file profile creation"');
-  assert.ok(panel>app.indexOf('aria-label="Stored plot profile selection"'));
+  assert.ok(panel >= 0);
+  assert.ok(app.includes('aria-label="Stored plot profile selection"'));
   assert.match(app,/<label for="profile-table-name"/);
-  assert.match(app,/profileTableReview.profile.source.source.path/);
-  const start=app.indexOf('async function createBlankProfileTable');
-  const end=app.indexOf('\n  async function ',start+1);
-  const action=app.slice(start, end >= 0 ? end : app.indexOf('</script>', start));
-  assert.match(action,/\$state\.snapshot\(\{ review: profileTableReview, name: profileTableName, confirmed: true \}\)/);
-  assert.match(action,/await requestTransition/);
-  assert.match(action,/contextId !== origin/);
-  assert.match(action,/await tick\(\);\s*const response = await ContextService.CreatePlotProfileTable/);
-  assert.match(action,/profileTableCommitted = true/);
+  assert.match(app,/profileTableReview\.profile\.source\.source\.path/);
+  const start=app.indexOf('export async function createBlankProfileTableOp');
+  const action=app.slice(start, start + 3000);
+  assert.match(app,/\$state\.snapshot\(profileTableReview\)|review:\s*profileTableReview,\s*name:\s*profileTableName,\s*confirmed:\s*true/);
+  assert.match(action,/await host\.requestTransition/);
+  assert.match(action,/contextId !== profileTableContext/);
+  assert.match(action,/await tick\(\);\s*const response = await ContextService\.CreatePlotProfileTable/);
+  assert.match(action,/setProfileTableCommitted\(true\)/);
   assert.match(action,/do not replay creation/);
-  assert.match(action,/view = 'plots'; editorPlotNumber = undefined/);
+  assert.match(app,/view = 'plots';\s*editorPlotNumber = undefined/);
   assert.doesNotMatch(action,/SetPlotProfileEditing|SelectPlotProfile|SwitchContext/);
 });

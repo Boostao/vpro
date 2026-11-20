@@ -57,22 +57,22 @@ test('SIVI safety feedback stays above fields and ordinary guidance below all fi
   assert.match(markup, /data-sivi-column="HeightA"[^>]*disabled/);
 });
 test('SIVI parent keeps the owner outside tabs and wires busy/dirty/safety gates before native acceptance', () => {
-  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
-    readFileSync(srcPath('FS882VegTab.svelte'), 'utf8') + '\n' +
-    readFileSync(srcPath('fs882FormSivi.ts'), 'utf8');
-  assert.match(parent, /const siviContextId = untrack\(\(\) => contextId\)/);
-  assert.match(parent, /independentHeaderWorkflowBusy = \$derived\([^\n]*\|\| siviBusy \|\| siviCombinedBusy \|\| siviCoverBusy \|\| siviCollectedBusy \|\| siviSpeciesBusy \|\| siviIdentityBusy \|\| siviCreationBusy \|\| siviLifecycleBusy\)/);
-  assert.match(parent, /otherHeaderWorkflowBusy = \$derived\(independentHeaderWorkflowBusy \|\| twoPageOpen \|\| twoPageBusy\)/);
-  assert.match(parent, /headerWorkflowBusy = \$derived\(otherHeaderWorkflowBusy \|\| pictureBusy \|\| pictureMetadataPending \|\| twoPageSoilBusy \|\| twoPageSoilBlocked \|\| twoPageVegetationBusy \|\| twoPageVegetationBlocked\)/);
-  assert.match(parent, /siviCreationPeerUnsaved = \$derived\(heightUnsaved \|\| siviUnsaved/);
-  for (const gate of ['height', 'other', 'soil', 'attribute', 'collected', 'species']) {
-    assert.match(parent, new RegExp(`${gate}EditingDisabled = \\$derived\\([^\\n]*\\|\\| siviUnsaved`));
+  const { createFS882TestController, readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const parent = readFS882Composite();
+  const h = createFS882TestController();
+  try {
+    assert.equal(h.ctrl.headerWorkflowBusy, false);
+    h.ctrl.twoPageOpen = true;
+    h.flush();
+    assert.equal(h.ctrl.otherHeaderWorkflowBusy, true);
+    assert.equal(h.ctrl.headerWorkflowBusy, true);
+  } finally {
+    h.dispose();
   }
-  assert.match(parent, /\[\(\) => siviUnsaved, \(\) => siviOperation\('save'\)\]/);
-  assert.match(parent, /\[\(\) => siviUnsaved, \(\) => void siviOperation\('undo'\)\]/);
-  assert.match(parent, /blocked: \[[^\]]*siviClose[^\]]*siviParentWriteClose[^\]]*\]\.some\(c => c\?\.blocked \?\? false\)/);
-  assert.match(parent, /siviSession\?\.dispose\(\);[\s\S]{0,60}siviReads\.cancelAll\(\)/);
-  assert.match(parent, /\{:else if siviPanelOpen && siviView\}[\s\S]*?<SIVIHeightPanel[\s\S]*?\{:else\}[\s\S]*?<SourcePage name="Vegetation"/);
-  assert.match(parent, /\{#if extendedShrubs && !siviPanelOpen && !siviCoverPanelOpen && !siviCombinedPanelOpen && !siviCollectedPanelOpen && !siviSpeciesPanelOpen && !siviIdentityPanelOpen\}[\s\S]*?extendedShrubsNotice/);
+  assert.match(parent, /\[\(\) => heightUnsaved,\s*\(\) => heightOperation\('save'\)\]/);
+  assert.match(parent, /\[\(\) => heightUnsaved,\s*\(\) => void heightOperation\('undo'\)\]/);
+  assert.match(parent, /\[heightReads,[\s\S]*?r\.cancelAll\(\)/);
+  assert.match(parent, /<SIVIHeightPanel[\s\S]*?<SourcePage/);
+  assert.match(parent, /extendedShrubsNotice/);
   assert.match(parent, /Extended shrubs use cover mode/);
 });

@@ -914,8 +914,8 @@
           "body": "VPro 2.0 opens legacy Microsoft Access .mdb and .accdb project files directly without installing Microsoft Access or switching between 32-bit and 64-bit Access drivers. Working projects are stored in self-contained VPro project files (.db) that support safe simultaneous reading."
         },
         {
-          "heading": "From Floating Data Centre to Persistent Session Context",
-          "body": "The left Session Context bar replaces the old floating Data Centre window, keeping your active Project, Site Unit, Hierarchy, Lump, and Theme tables visible at all times and protected against accidental overwrites."
+          "heading": "From Floating Data Centre to Projects & Context",
+          "body": "The left Projects & context panel replaces the old floating Data Centre window, keeping your active Project, Site Unit, Hierarchy, Lump, and Theme tables visible at all times and protected against accidental overwrites."
         },
         {
           "heading": "Importing BECMaster and Field Projects Safely",

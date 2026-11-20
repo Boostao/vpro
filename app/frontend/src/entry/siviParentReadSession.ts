@@ -1,3 +1,4 @@
+import { formatError } from '../shared/readRequests';
 import { siviParentOriginalFromWire, type SIVIParentOwner } from './siviParentTransport';
 import type { SIVIParentOriginal } from './siviParentEditor';
 
@@ -12,12 +13,18 @@ export class SIVIParentReadSession {
   private disposed = false;
   private readonly owner: SIVIParentOwner;
 
-  constructor(owner: SIVIParentOwner, private readonly read: () => PromiseLike<unknown>,
-    private readonly cancelRead: () => void, private readonly notify: () => void) {
+  constructor(
+    owner: SIVIParentOwner,
+    private readonly read: () => PromiseLike<unknown>,
+    private readonly cancelRead: () => void,
+    private readonly notify: () => void
+  ) {
     this.owner = structuredClone(owner);
   }
 
-  view(): SIVIParentReadView { return structuredClone(this.state); }
+  view(): SIVIParentReadView {
+    return structuredClone(this.state);
+  }
 
   async load(): Promise<boolean> {
     if (this.disposed) throw new Error('SIVI parent reader ownership ended.');
@@ -32,7 +39,7 @@ export class SIVIParentReadSession {
       return true;
     } catch (cause) {
       if (this.disposed || generation !== this.generation) return false;
-      this.state.error = `SIVI parent read failed: ${String(cause)}`;
+      this.state.error = `SIVI parent read failed: ${formatError(cause)}`;
       return false;
     } finally {
       if (!this.disposed && generation === this.generation) {

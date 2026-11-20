@@ -1,9 +1,5 @@
 <script lang="ts">
-  import type {
-    OutlierFilterMode,
-    OutlierPlotCandidate,
-    SynthesisSnapshot,
-  } from './classificationSynthesis';
+  import type { OutlierFilterMode, OutlierPlotCandidate, SynthesisSnapshot } from './classificationSynthesis';
 
   interface Props {
     snapshot: SynthesisSnapshot | null;
@@ -84,7 +80,7 @@
       class="outlier-search"
       placeholder="Search plot or unit..."
       value={outlierSearch}
-      oninput={e => onSearchChange((e.currentTarget as HTMLInputElement).value)}
+      oninput={(e) => onSearchChange((e.currentTarget as HTMLInputElement).value)}
     />
   </div>
 
@@ -93,14 +89,13 @@
       <div class="syn-empty-small">No plots match the selected outlier filter.</div>
     {:else}
       {#each visibleOutliers as cand (cand.plotNumber)}
-        {@const chosenUnit =
-          manualTargetByPlot[cand.plotNumber] || cand.nearestRivalUnit || ''}
+        {@const chosenUnit = manualTargetByPlot[cand.plotNumber] || cand.nearestRivalUnit || ''}
         <article
           class="outlier-card"
           class:is-misplaced={cand.misplaced}
           class:is-top5={cand.top5PercentAnomaly}
           draggable={Boolean(snapshot?.suWritable)}
-          ondragstart={ev => onPlotDragStart(ev, cand.plotNumber)}
+          ondragstart={(ev) => onPlotDragStart(ev, cand.plotNumber)}
           ondragend={onPlotDragEnd}
         >
           <div class="outlier-card-top">
@@ -162,7 +157,7 @@
                 aria-label={`Select target unit for plot ${cand.plotNumber}`}
                 value={chosenUnit}
                 disabled={!snapshot.suWritable || mutating}
-                onchange={e => {
+                onchange={(e) => {
                   const val = (e.currentTarget as HTMLSelectElement).value;
                   onManualTargetChange(cand.plotNumber, val);
                   if (val && val !== cand.assignedUnit) {

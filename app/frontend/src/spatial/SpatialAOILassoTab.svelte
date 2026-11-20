@@ -40,19 +40,21 @@
 <div class="wb-panel-body">
   <div class="wb-card">
     <h2>Polygon / Lasso AOI -&gt; Site Unit (*_SU)</h2>
-    <p class="wb-muted">Click vertices directly on the map or capture the current map view extent to select plots spatially.</p>
+    <p class="wb-muted">
+      Click vertices directly on the map or capture the current map view extent to select plots spatially.
+    </p>
     <div class="wb-btn-row">
       <button
         type="button"
         class="wb-btn"
         class:wb-btn-gold={aoiDrawMode}
-        onclick={() => { aoiDrawMode = !aoiDrawMode; }}
+        onclick={() => {
+          aoiDrawMode = !aoiDrawMode;
+        }}
       >
         {aoiDrawMode ? 'Finish Drawing AOI' : 'Draw Polygon on Map'}
       </button>
-      <button type="button" class="wb-btn" onclick={onSeedViewport}>
-        Use Current Map View
-      </button>
+      <button type="button" class="wb-btn" onclick={onSeedViewport}> Use Current Map View </button>
       <button type="button" class="wb-btn" onclick={onClear} disabled={aoiVerticesCount === 0}>
         Clear ({aoiVerticesCount} pts)
       </button>

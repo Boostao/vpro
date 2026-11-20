@@ -1,57 +1,54 @@
 <script module lang="ts">
+  import { formatError } from '../shared/readRequests';
   import { notifications } from '../shell/notificationService.svelte';
 </script>
 
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { Map as MapLibreMap, NavigationControl, ScaleControl, addProtocol, setWorkerUrl, type IControl } from 'maplibre-gl';
+  import { Map as MapLibreMap, NavigationControl, ScaleControl, addProtocol, setWorkerUrl } from 'maplibre-gl';
   import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { Protocol } from 'pmtiles';
   import { MapboxOverlay } from '@deck.gl/mapbox';
   import { LineLayer, ScatterplotLayer } from '@deck.gl/layers';
-  import {
-    ImportExportService,
-    SpatialService,
-    type ApplySpatialAttributesRequest,
-    type AssignSpatialAOIToSURequest,
-    type SpatialAOISelectionResult,
-    type SpatialAttributeSuggestion,
-    type SpatialBatchAuditReport,
-    type SpatialWorkbenchPayload,
-  } from '../../bindings/github.com/boostao/vpro/app';
+  import { ImportExportService, SpatialService } from '../../bindings/github.com/boostao/vpro/app';
   import type { GeoPackageExportOutcome } from '../../bindings/github.com/boostao/vpro/app/internal/interchange/models';
+  import * as geoOps from './geospatialWorkbench';
   import {
-    DEFAULT_BC_VIEW_STATE, buildDefaultGeoPackageExportPath, buildMapLibreGeospatialStyle, buildSpatialDeckLayers,
-    classifyPMTilesMapError, classifyWMSMapError, computeViewportAOIRectangle,
-    detectSpatialComputeBackend, executeSpatialFilterKernel, extractDistinctZones, filterWorkbenchPlots,
-    fitMapToPayloadBounds, hasInvalidOrDiagnosticQACoordinates, initQASelectedPlots, isAbsoluteFilesystemPath,
-    materializeWorkbenchPlots, pointInPolygonRing, resolveGeoPackageDestinationPath, summarizePMTilesManifestWarnings,
-    syncMapAOIOverlay,
-    type DiscrepancyVectorSegment, type MapLayerVisibility, type SpatialAOICommitInput,
-    type SpatialComputeBackendInfo, type SpatialGpkgExportInput, type SpatialStampOptions, type WorkbenchPlotPoint,
+    buildDefaultGeoPackageExportPath,
+    buildMapLibreGeospatialStyle,
+    classifyWMSMapError,
+    fitMapToPayloadBounds,
+    initQASelectedPlots,
+    isAbsoluteFilesystemPath,
+    materializeWorkbenchPlots,
+    resolveGeoPackageDestinationPath,
+    summarizePMTilesManifestWarnings,
   } from './geospatialWorkbench';
-  import SpatialAOILassoTab from './SpatialAOILassoTab.svelte';
-  import SpatialAuto1QATab from './SpatialAuto1QATab.svelte';
-  import SpatialGpkgExportPanel from './SpatialGpkgExportPanel.svelte';
-  import SpatialMapLegend from './SpatialMapLegend.svelte';
-  import SpatialPlotInspectorTab from './SpatialPlotInspectorTab.svelte';
-  import SpatialWorkbenchHeader from './SpatialWorkbenchHeader.svelte';
+  import GeospatialMapStage from './GeospatialMapStage.svelte';
+  import GeospatialSidebarDrawer from './GeospatialSidebarDrawer.svelte';
 
   let {
-    contextId, project, su, onBusyChange, onContextChanged, onOpenPlot,
+    contextId,
+    project,
+    su,
+    onBusyChange,
+    onContextChanged,
+    onOpenPlot,
   }: {
-    contextId: string; project: string; su: string;
+    contextId: string;
+    project: string;
+    su: string;
     onBusyChange?: (busy: boolean) => void;
     onContextChanged?: () => Promise<void> | void;
     onOpenPlot?: (plotNumber: string) => void;
   } = $props();
 
   let mapContainer: HTMLDivElement | undefined = $state();
-  let mapInstance: MapLibreMap | null = null;
-  let deckOverlay: MapboxOverlay | null = null;
+  let [mapInstance, deckOverlay]: [MapLibreMap | null, MapboxOverlay | null] = [null, null];
   let alive = true;
-  let loadGeneration = 0, qaGeneration = 0, aoiGeneration = 0, inspectorGeneration = 0;
+  let [loadGeneration, qaGeneration, inspectorGeneration] = [0, 0, 0];
+  let removeWindowListeners: (() => void) | null = null;
 
   let loading = $state(false);
   let mutating = $state(false);
@@ -61,258 +58,249 @@
   let wmsOfflineWarning = $state('');
   let pmtilesArchiveWarning = $state('');
   let pmtilesGraticuleFallback = $state(false);
-  let computeInfo = $state<SpatialComputeBackendInfo>({
-    backend: 'webgl2-cpu', available: false, adapterLabel: 'Probing GPU compute...', maxComputeWorkgroupSizeX: 0, fallbackReason: null,
-  });
+  let computeInfo = $state<geoOps.SpatialComputeBackendInfo>({ ...geoOps.INITIAL_COMPUTE_INFO });
 
-  let payload = $state<SpatialWorkbenchPayload | null>(null);
-  let plotPoints = $state.raw<WorkbenchPlotPoint[]>([]);
+  let payload = $state<Parameters<typeof fitMapToPayloadBounds>[1]>(null);
+  let plotPoints = $state.raw<geoOps.WorkbenchPlotPoint[]>([]);
   let plotCoordsF32 = $state.raw<Float32Array>(new Float32Array(0));
-  let discrepancySegments = $state.raw<DiscrepancyVectorSegment[]>([]);
+  let discrepancySegments = $state.raw<geoOps.DiscrepancyVectorSegment[]>([]);
   let flatGeobufCount = $state(0);
   let viewportMatchedCount = $state(0);
-  let visibility = $state<MapLayerVisibility>({
-    bgcFill: true, bgcLabels: true, ecosections: false, nrDistricts: false, hillshade3D: false, bcOpenMapsWMS: false, discrepancyVectors: true,
-  });
-  let zoneFilter = $state(''), plotSearch = $state('');
+  let visibility = $state<geoOps.MapLayerVisibility>({ ...geoOps.INITIAL_LAYER_VISIBILITY });
+  let zoneFilter = $state('');
+  let plotSearch = $state('');
   let activePanel = $state<'inspector' | 'aoi' | 'qa'>('inspector');
 
-  let selectedPlot = $state<WorkbenchPlotPoint | null>(null);
-  let selectedSuggestion = $state<SpatialAttributeSuggestion | null>(null);
+  let selectedPlot = $state<geoOps.WorkbenchPlotPoint | null>(null);
+  let selectedSuggestion = $state<Awaited<ReturnType<typeof SpatialService.SuggestSpatialAttributes>> | null>(null);
   let suggestionBusy = $state(false);
 
-  let aoiDrawMode = $state(false), aoiPreviewBusy = $state(false);
+  let aoiDrawMode = $state(false);
   let aoiVertices = $state<Array<[number, number]>>([]);
-  let aoiPreview = $state<SpatialAOISelectionResult | null>(null);
+  let aoiPreview = $state<Awaited<ReturnType<typeof SpatialService.SelectPlotsInPolygonAOI>> | null>(null);
   let aoiTargetMode = $state<'update_active' | 'create_project_su' | 'create_su_file'>('create_project_su');
-  let aoiSUName = $state(''), aoiSiteUnit = $state('');
+  let aoiSUName = $state('');
+  let aoiSiteUnit = $state('');
 
-  let qaReport = $state<SpatialBatchAuditReport | null>(null);
+  let qaReport = $state<Awaited<ReturnType<typeof SpatialService.BatchAuditSpatialQA>> | null>(null);
   let qaSelectedPlots = $state<Record<string, boolean>>({});
 
-  let gpkgPanelOpen = $state(false), gpkgExporting = $state(false);
+  let gpkgPanelOpen = $state(false);
+  let gpkgExporting = $state(false);
   let gpkgDestPath = $state('');
   let gpkgOutcome = $state.raw<GeoPackageExportOutcome | null>(null);
 
   const aoiMatchedSet = $derived(new Set(aoiPreview?.plotNumbers ?? []));
-  const filteredPoints = $derived(filterWorkbenchPlots(plotPoints, zoneFilter, plotSearch));
-  const distinctZones = $derived(extractDistinctZones(plotPoints));
-  const qaCoordinateDiagnosticRows = $derived(
-    (qaReport?.rows ?? []).filter(
-      (r) =>
-        hasInvalidOrDiagnosticQACoordinates(r) &&
-        !(r.bgcMismatch && (r.diagnostics?.length ?? 0) === 1 && (r.diagnostics?.[0] ?? '').startsWith('Field BGC'))
-    )
-  );
-
+  const filteredPoints = $derived(geoOps.filterWorkbenchPlots(plotPoints, zoneFilter, plotSearch));
+  const distinctZones = $derived(geoOps.extractDistinctZones(plotPoints));
+  const qaCoordinateDiagnosticRows = $derived(geoOps.filterCoordinateDiagnosticRows(qaReport?.rows));
   const setBusyState = (nextBusy: boolean) => onBusyChange?.(nextBusy);
 
-  let maplibreWorkerConfigured = false, pmtilesProtocolAdded = false;
+  function pushGeoError(title: string, msg: string) {
+    errorMsg = msg;
+    notifications.error(title, msg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
+  }
+
   function ensurePMTilesProtocol() {
-    if (!maplibreWorkerConfigured) {
-      if (typeof setWorkerUrl === 'function' && maplibreWorkerUrl) setWorkerUrl(maplibreWorkerUrl);
-      maplibreWorkerConfigured = true;
-    }
-    if (pmtilesProtocolAdded) return;
-    try {
-      const protocol = new Protocol();
-      addProtocol('pmtiles', protocol.tile);
-    } catch {
-      // Ignore duplicate registration
-    }
-    pmtilesProtocolAdded = true;
+    geoOps.ensureMapLibrePMTilesProtocol(setWorkerUrl, maplibreWorkerUrl, addProtocol, Protocol);
   }
 
   function refreshDeckOverlay() {
     if (!deckOverlay) return;
-    const layers = buildSpatialDeckLayers({
-      LineLayerCtor: LineLayer, ScatterplotLayerCtor: ScatterplotLayer, pts: filteredPoints,
-      matched: aoiMatchedSet, selPlotNum: selectedPlot?.plotNumber ?? '', showVectors: visibility.discrepancyVectors,
-      discrepancySegments, aoiPreviewTrigger: aoiPreview,
-      onPinClick: (pt) => { if (!aoiDrawMode) void inspectPlotPin(pt); },
-    });
+    const onPin = (pt: geoOps.WorkbenchPlotPoint) => {
+      if (!aoiDrawMode) void inspectPlotPin(pt);
+    };
+    const selNum = selectedPlot?.plotNumber ?? '';
+    const layers = geoOps.makeWorkbenchDeckLayers(
+      LineLayer,
+      ScatterplotLayer,
+      filteredPoints,
+      aoiMatchedSet,
+      selNum,
+      visibility.discrepancyVectors,
+      discrepancySegments,
+      aoiPreview,
+      onPin
+    );
     deckOverlay.setProps({ layers });
   }
 
+  function syncAOIOverlay() {
+    geoOps.syncMapAOIOverlay(mapInstance, aoiVertices);
+    refreshDeckOverlay();
+  }
+
   function applyLayerVisibilities() {
+    const bgOpt = { category: 'background' as const, source: '3D Map', contextTag: project || undefined, toast: true };
     if (!visibility.bcOpenMapsWMS) wmsOfflineWarning = '';
     else if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      const nextWarn = classifyWMSMapError({}, true, false) ?? 'BC OpenMaps WMS imagery is unreachable while offline. Offline map layers remain active.';
-      if (nextWarn !== wmsOfflineWarning && typeof notifications !== 'undefined') {
-        notifications.warning('BC OpenMaps WMS offline', nextWarn, {
-          category: 'background',
-          source: '3D Map',
-          contextTag: project || undefined,
-          toast: true,
-        });
-      }
+      const nextWarn =
+        classifyWMSMapError({}, true, false) ??
+        'BC OpenMaps WMS imagery is unreachable while offline. Offline map layers remain active.';
+      if (nextWarn !== wmsOfflineWarning) notifications.warning('BC OpenMaps WMS offline', nextWarn, bgOpt);
       wmsOfflineWarning = nextWarn;
     } else wmsOfflineWarning = '';
     if (!mapInstance) return;
-    const forceGraticule = typeof pmtilesGraticuleFallback !== 'undefined' ? pmtilesGraticuleFallback : false;
-    const style = forceGraticule
-      ? buildMapLibreGeospatialStyle(payload?.manifest, $state.snapshot(visibility), { forceGraticuleFallback: true })
-      : buildMapLibreGeospatialStyle(payload?.manifest, $state.snapshot(visibility));
-    mapInstance.setStyle(style as any);
-    mapInstance.easeTo({ pitch: visibility.hillshade3D ? 52 : 0, bearing: visibility.hillshade3D ? -14 : 0, duration: 450 });
-    mapInstance.once('styledata', () => { syncMapAOIOverlay(mapInstance, aoiVertices); refreshDeckOverlay(); });
+    const snap = $state.snapshot(visibility);
+    const force = typeof pmtilesGraticuleFallback !== 'undefined' && pmtilesGraticuleFallback;
+    mapInstance.setStyle(
+      force
+        ? buildMapLibreGeospatialStyle(payload?.manifest, snap, { forceGraticuleFallback: true })
+        : buildMapLibreGeospatialStyle(payload?.manifest, snap)
+    );
+    mapInstance.easeTo({
+      pitch: visibility.hillshade3D ? 52 : 0,
+      bearing: visibility.hillshade3D ? -14 : 0,
+      duration: 450,
+    });
+    mapInstance.once('styledata', syncAOIOverlay);
   }
 
   async function runViewportKernel() {
-    if (plotCoordsF32.length === 0) { viewportMatchedCount = 0; return; }
-    let bounds: [number, number, number, number] = [-140, 47, -113, 61];
-    if (mapInstance) {
-      const b = mapInstance.getBounds();
-      bounds = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
-    } else if (payload?.boundingBox) {
-      bounds = [payload.boundingBox[0], payload.boundingBox[1], payload.boundingBox[2], payload.boundingBox[3]];
+    if (plotCoordsF32.length === 0) {
+      viewportMatchedCount = 0;
+      return;
     }
-    const res = await executeSpatialFilterKernel(plotCoordsF32, bounds, { gridSize: 16 });
+    const bounds = geoOps.computeViewportFilterBounds(mapInstance, payload?.boundingBox);
+    const res = await geoOps.executeSpatialFilterKernel(plotCoordsF32, bounds, { gridSize: 16 });
     if (alive) viewportMatchedCount = res.matchedCount;
+  }
+
+  function onMapError(m: { setStyle(s: ReturnType<typeof buildMapLibreGeospatialStyle>): unknown }, evt: unknown) {
+    const bgOpt = { category: 'background' as const, source: '3D Map', contextTag: project || undefined, toast: true };
+    const st: [boolean, string, string, boolean] = [
+      visibility.bcOpenMapsWMS,
+      wmsOfflineWarning,
+      pmtilesArchiveWarning,
+      pmtilesGraticuleFallback,
+    ];
+    geoOps.routeGeospatialMapError(
+      evt,
+      st,
+      payload?.manifest,
+      $state.snapshot(visibility),
+      (w, pm, s) => {
+        if (w !== null) wmsOfflineWarning = w;
+        if (pm !== null) pmtilesArchiveWarning = pm;
+        if (s !== null) {
+          pmtilesGraticuleFallback = true;
+          m.setStyle(s);
+        }
+      },
+      (t, msg) => notifications.warning(t, msg, bgOpt)
+    );
+  }
+
+  function onMapClick(pt: [number, number]) {
+    if (!aoiDrawMode) return;
+    aoiVertices = [...aoiVertices, pt];
+    syncAOIOverlay();
   }
 
   function initializeMapCanvas() {
     if (!mapContainer || mapInstance) return;
     ensurePMTilesProtocol();
+    const bgOpt = { category: 'background' as const, source: '3D Map', contextTag: project || undefined, toast: true };
     try {
       setWorkerUrl(maplibreWorkerUrl);
       const style = buildMapLibreGeospatialStyle(payload?.manifest, $state.snapshot(visibility));
-      const map = new MapLibreMap({
-        container: mapContainer, style: style as any,
-        center: [DEFAULT_BC_VIEW_STATE.longitude, DEFAULT_BC_VIEW_STATE.latitude],
-        zoom: DEFAULT_BC_VIEW_STATE.zoom, pitch: 0, bearing: 0,
-      });
-      map.addControl(new NavigationControl({ visualizePitch: true }), 'top-right');
-      map.addControl(new ScaleControl({ maxWidth: 140, unit: 'metric' }), 'bottom-left');
-      deckOverlay = new MapboxOverlay({ interleaved: false, layers: [] });
-      map.addControl(deckOverlay as unknown as IControl);
-      map.on('load', () => {
-        if (!alive) return;
-        syncMapAOIOverlay(mapInstance, aoiVertices);
-        refreshDeckOverlay();
+      const onLoad = () => {
+        syncAOIOverlay();
         fitMapToPayloadBounds(mapInstance, payload);
         void runViewportKernel();
-      });
-      map.on('moveend', () => { if (alive) void runViewportKernel(); });
-      map.on('error', (evt) => {
-        if (!alive) return;
-        const online = typeof navigator !== 'undefined' ? navigator.onLine : undefined;
-        const wmsWarn = classifyWMSMapError(evt, visibility.bcOpenMapsWMS, online);
-        if (wmsWarn) {
-          if (wmsWarn !== wmsOfflineWarning && typeof notifications !== 'undefined') {
-            notifications.warning('BC OpenMaps WMS unavailable', wmsWarn, {
-              category: 'background',
-              source: '3D Map',
-              contextTag: project || undefined,
-              toast: true,
-            });
-          }
-          wmsOfflineWarning = wmsWarn;
-          return;
-        }
-        if (typeof classifyPMTilesMapError === 'function') {
-          const pmWarn = classifyPMTilesMapError(evt);
-          if (pmWarn) {
-            if (typeof pmtilesArchiveWarning !== 'undefined' && pmWarn !== pmtilesArchiveWarning && typeof notifications !== 'undefined') {
-              notifications.warning('Local map archive unreadable', pmWarn, {
-                category: 'background',
-                source: '3D Map',
-                contextTag: project || undefined,
-                toast: true,
-              });
-            }
-            if (typeof pmtilesArchiveWarning !== 'undefined') pmtilesArchiveWarning = pmWarn;
-            if (typeof pmtilesGraticuleFallback !== 'undefined' && !pmtilesGraticuleFallback) {
-              pmtilesGraticuleFallback = true;
-              const fallbackStyle = buildMapLibreGeospatialStyle(payload?.manifest, $state.snapshot(visibility), {
-                forceGraticuleFallback: true,
-              });
-              map.setStyle(fallbackStyle as any);
-            }
-          }
-        }
-      });
-      map.on('click', (evt) => {
-        if (!alive || !aoiDrawMode) return;
-        const nextPt: [number, number] = [Math.round(evt.lngLat.lng * 1e6) / 1e6, Math.round(evt.lngLat.lat * 1e6) / 1e6];
-        aoiVertices = [...aoiVertices, nextPt];
-        syncMapAOIOverlay(mapInstance, aoiVertices);
-        if (aoiVertices.length >= 3) void previewAOIPolygon();
-      });
-      mapInstance = map;
+      };
+      const hooks = {
+        isAlive: () => alive,
+        onLoad,
+        onMoveEnd: () => void runViewportKernel(),
+        onError: onMapError,
+        onClick: onMapClick,
+      };
+      const created = geoOps.createGeospatialMapInstance<MapLibreMap, MapboxOverlay>(
+        [MapLibreMap as never, NavigationControl, ScaleControl, MapboxOverlay],
+        [mapContainer, style],
+        hooks
+      );
+      [mapInstance, deckOverlay] = [created.map, created.overlay];
     } catch (cause) {
-      mapRenderWarning = `Hardware 3D map rendering is unavailable in this environment (${cause instanceof Error ? cause.message : String(cause)}). Table-based Coordinate Check, BGC Stamp, and Site Unit selection remain active.`;
-      if (typeof notifications !== 'undefined') {
-        notifications.warning('3D map rendering fallback', mapRenderWarning, {
-          category: 'background',
-          source: '3D Map',
-          contextTag: project || undefined,
-          toast: true,
-        });
-      }
+      mapRenderWarning = `Hardware 3D map rendering is unavailable in this environment (${formatError(cause)}). Table-based Coordinate Check, BGC Stamp, and Site Unit selection remain active.`;
+      notifications.warning('3D map rendering fallback', mapRenderWarning, bgOpt);
     }
   }
 
   async function loadWorkbenchData() {
     if (!contextId) return;
     const gen = ++loadGeneration;
-    loading = true; errorMsg = ''; setBusyState(true);
+    const bgOpt = { category: 'background' as const, source: '3D Map', contextTag: project || undefined, toast: true };
+    [loading, errorMsg] = [true, ''];
+    setBusyState(true);
     try {
       const wb = await SpatialService.GetSpatialWorkbenchPayload(contextId);
       if (!alive || gen !== loadGeneration) return;
-      payload = wb;
-      pmtilesGraticuleFallback = false;
+      [payload, pmtilesGraticuleFallback] = [wb, false];
       const manifestWarn = summarizePMTilesManifestWarnings(wb?.manifest) ?? '';
-      if (manifestWarn && manifestWarn !== pmtilesArchiveWarning && typeof notifications !== 'undefined') {
-        notifications.warning('Local map archive unreadable', manifestWarn, {
-          category: 'background',
-          source: '3D Map',
-          contextTag: project || undefined,
-          toast: true,
-        });
-      }
+      if (manifestWarn && manifestWarn !== pmtilesArchiveWarning)
+        notifications.warning('Local map archive unreadable', manifestWarn, bgOpt);
       pmtilesArchiveWarning = manifestWarn;
       if (wb?.projectPath && (!gpkgDestPath.trim() || !isAbsoluteFilesystemPath(gpkgDestPath))) {
         gpkgDestPath = buildDefaultGeoPackageExportPath(wb.project || project, wb.projectPath);
       }
       const mat = materializeWorkbenchPlots(wb?.geoArrow);
-      plotPoints = mat.points; plotCoordsF32 = mat.coordsFloat32; discrepancySegments = mat.discrepancyVectors;
-      flatGeobufCount = wb?.plottableCount ?? mat.points.length;
+      [plotPoints, plotCoordsF32, discrepancySegments, flatGeobufCount] = [
+        mat.points,
+        mat.coordsFloat32,
+        mat.discrepancyVectors,
+        wb?.plottableCount ?? mat.points.length,
+      ];
       if (su && su !== 'None') aoiTargetMode = 'update_active';
-      else { aoiTargetMode = 'create_project_su'; if (!aoiSUName) aoiSUName = `${project}_AOI`; }
-      if (mapInstance) { applyLayerVisibilities(); fitMapToPayloadBounds(mapInstance, payload); }
-      else initializeMapCanvas();
+      else {
+        aoiTargetMode = 'create_project_su';
+        if (!aoiSUName) aoiSUName = `${project}_AOI`;
+      }
+      if (mapInstance) {
+        applyLayerVisibilities();
+        fitMapToPayloadBounds(mapInstance, payload);
+      } else initializeMapCanvas();
       refreshDeckOverlay();
       await runViewportKernel();
       if (plotPoints.length > 0 && !selectedPlot) void inspectPlotPin(plotPoints[0], false);
     } catch (cause) {
       if (alive && gen === loadGeneration) {
-        errorMsg = `Failed to load spatial workbench: ${cause instanceof Error ? cause.message : String(cause)}`;
-        if (typeof notifications !== 'undefined') {
-          notifications.error('3D Map load failed', errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
-        }
+        errorMsg = `Failed to load spatial workbench: ${formatError(cause)}`;
+        notifications.error('3D Map load failed', errorMsg, {
+          category: 'entry',
+          source: '3D Map',
+          contextTag: project || undefined,
+        });
       }
     } finally {
-      if (alive && gen === loadGeneration) { loading = false; setBusyState(mutating); }
+      if (alive && gen === loadGeneration) {
+        loading = false;
+        setBusyState(mutating);
+      }
     }
   }
 
-  async function inspectPlotPin(pt: WorkbenchPlotPoint, fly = true) {
-    selectedPlot = pt; selectedSuggestion = null; activePanel = 'inspector';
+  async function inspectPlotPin(pt: geoOps.WorkbenchPlotPoint, fly = true) {
+    [selectedPlot, selectedSuggestion, activePanel] = [pt, null, 'inspector'];
     refreshDeckOverlay();
-    if (fly && mapInstance) mapInstance.easeTo({ center: [pt.lon, pt.lat], zoom: Math.max(mapInstance.getZoom(), 8.5), duration: 400 });
+    if (fly && mapInstance)
+      mapInstance.easeTo({ center: [pt.lon, pt.lat], zoom: Math.max(mapInstance.getZoom(), 8.5), duration: 400 });
     const gen = ++inspectorGeneration;
     suggestionBusy = true;
     try {
       const sug = await SpatialService.SuggestSpatialAttributes(pt.lat, pt.lon);
       if (alive && gen === inspectorGeneration) {
         selectedSuggestion = sug;
-        if (fly && typeof notifications !== 'undefined') {
-          notifications.info(
-            `Inspected plot ${pt.plotNumber}`,
-            sug?.gisBgc ? `Overlay BGC: ${sug.gisBgc}; field: ${pt.fieldBgc || 'blank'}.` : `Lat ${pt.lat.toFixed(5)}, Lon ${pt.lon.toFixed(5)}.`,
-            { category: 'entry', source: '3D Map', contextTag: project || undefined },
-          );
+        if (fly) {
+          const desc = sug?.gisBgc
+            ? `Overlay BGC: ${sug.gisBgc}; field: ${pt.fieldBgc || 'blank'}.`
+            : `Lat ${pt.lat.toFixed(5)}, Lon ${pt.lon.toFixed(5)}.`;
+          notifications.info(`Inspected plot ${pt.plotNumber}`, desc, {
+            category: 'entry',
+            source: '3D Map',
+            contextTag: project || undefined,
+          });
         }
       }
     } catch {
@@ -322,331 +310,223 @@
     }
   }
 
-  async function previewAOIPolygon() {
-    aoiPreview = null;
-    if (!contextId || aoiVertices.length < 3) { aoiPreviewBusy = false; refreshDeckOverlay(); return; }
-    const gen = ++aoiGeneration;
-    aoiPreviewBusy = true;
-    const ringSnapshot = $state.snapshot(aoiVertices);
-    const localMatches = plotPoints.filter((p) => pointInPolygonRing(p.lon, p.lat, ringSnapshot));
+  async function runMutation(action: () => Promise<void>, label: string, keepBusyGpkg = false) {
+    [mutating, errorMsg, statusMsg] = [true, '', ''];
+    setBusyState(true);
     try {
-      const res = await SpatialService.SelectPlotsInPolygonAOI(contextId, { polygon: ringSnapshot, rings: [] as number[][][], zone: zoneFilter.trim() });
-      if (!alive || gen !== aoiGeneration) return;
-      aoiPreview = res;
-      if (!aoiSiteUnit && localMatches[0]?.gisBgc) aoiSiteUnit = `${localMatches[0].gisBgc}/01`;
-      refreshDeckOverlay();
+      await action();
     } catch (cause) {
-      if (alive && gen === aoiGeneration) {
-        errorMsg = `AOI polygon preview failed: ${cause instanceof Error ? cause.message : String(cause)}`;
-        if (typeof notifications !== 'undefined') {
-          notifications.error('AOI preview failed', errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
-        }
+      if (alive) {
+        errorMsg = `${label}: ${formatError(cause)}`;
+        notifications.error(label, errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
       }
     } finally {
-      if (alive && gen === aoiGeneration) aoiPreviewBusy = false;
-    }
-  }
-
-  function seedAOIFromCurrentViewport() {
-    aoiVertices = computeViewportAOIRectangle(mapInstance ? mapInstance.getBounds() : null, payload?.boundingBox);
-    syncMapAOIOverlay(mapInstance, aoiVertices);
-    void previewAOIPolygon();
-  }
-
-  function clearAOIPolygon() {
-    aoiGeneration++; aoiVertices = []; aoiPreview = null;
-    syncMapAOIOverlay(mapInstance, aoiVertices);
-    refreshDeckOverlay();
-  }
-
-  async function runMutation(action: () => Promise<void>, label: string, keepBusyGpkg = false) {
-    mutating = true; errorMsg = ''; statusMsg = ''; setBusyState(true);
-    try { await action(); }
-    catch (cause) {
       if (alive) {
-        errorMsg = `${label}: ${cause instanceof Error ? cause.message : String(cause)}`;
-        if (typeof notifications !== 'undefined') {
-          notifications.error(label, errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
-        }
+        mutating = false;
+        setBusyState(loading || (keepBusyGpkg && gpkgExporting));
       }
     }
-    finally { if (alive) { mutating = false; setBusyState(loading || (keepBusyGpkg && gpkgExporting)); } }
-  }
-
-  async function commitAOIToSU(opts: SpatialAOICommitInput) {
-    if (!contextId || mutating || loading || aoiPreviewBusy || !aoiPreview || aoiPreview.matchedCount === 0) return;
-    if (!opts.siteUnit) {
-      errorMsg = 'Enter a target SiteUnit code (for example SBSmk1/01) before saving the AOI selection.';
-      if (typeof notifications !== 'undefined') {
-        notifications.error('AOI SiteUnit required', errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
-      }
-      return;
-    }
-    await runMutation(async () => {
-      const req: AssignSpatialAOIToSURequest = $state.snapshot({ ...opts, plotNumbers: aoiPreview?.plotNumbers ?? [], polygon: aoiVertices, rings: [] });
-      const res = await SpatialService.AssignSpatialAOIToSU(contextId, req);
-      if (!alive || !res) return;
-      statusMsg = `Committed ${res.matchedPlots} AOI plots to ${res.tableName} as ${res.siteUnit} (${res.changedRows} row writes).`;
-      if (typeof notifications !== 'undefined') {
-        notifications.success('AOI plots assigned to SU', statusMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
-      }
-      if (res.activated) await onContextChanged?.(); else await loadWorkbenchData();
-    }, 'AOI SU assignment failed');
   }
 
   async function loadBatchAuditQA(announce = true) {
     if (!contextId) return;
     const gen = ++qaGeneration;
-    loading = true; errorMsg = ''; setBusyState(true);
+    const meta = { category: 'entry' as const, source: '3D Map', contextTag: project || undefined };
+    [loading, errorMsg] = [true, ''];
+    setBusyState(true);
     try {
       const report = await SpatialService.BatchAuditSpatialQA(contextId);
       if (!alive || gen !== qaGeneration) return;
-      qaReport = report;
-      qaSelectedPlots = initQASelectedPlots(report?.rows ?? []);
-      if (announce && typeof notifications !== 'undefined') {
+      [qaReport, qaSelectedPlots] = [report, initQASelectedPlots(report?.rows ?? [])];
+      if (announce) {
         notifications.info(
           'Spatial QA audit ready',
           `Audited ${report?.rows?.length ?? 0} plot(s) (${report?.bgcMismatchCount ?? 0} BGC mismatch, ${report?.utmDivergenceCount ?? 0} UTM divergence).`,
-          { category: 'entry', source: '3D Map', contextTag: project || undefined },
+          meta
         );
       }
     } catch (cause) {
       if (alive && gen === qaGeneration) {
-        errorMsg = `Spatial QA batch audit failed: ${cause instanceof Error ? cause.message : String(cause)}`;
-        if (typeof notifications !== 'undefined') {
-          notifications.error('Spatial QA audit failed', errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
-        }
+        errorMsg = `Spatial QA batch audit failed: ${formatError(cause)}`;
+        notifications.error('Spatial QA audit failed', errorMsg, meta);
       }
     } finally {
-      if (alive && gen === qaGeneration) { loading = false; setBusyState(mutating); }
+      if (alive && gen === qaGeneration) {
+        loading = false;
+        setBusyState(mutating);
+      }
     }
   }
 
-  async function applyAuto1SpatialStamp(opts: SpatialStampOptions) {
+  async function applyAuto1SpatialStamp(opts: geoOps.SpatialStampOptions) {
     if (!contextId || mutating || loading) return;
+    const meta = { category: 'entry' as const, source: '3D Map', contextTag: project || undefined };
     if (!opts.allScoped && opts.plotNumbers.length === 0) {
       errorMsg = 'Select at least one plot in the Spatial QA table or run across all scoped plots.';
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Coordinate & BGC stamp blocked', errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
-      }
+      notifications.error('Coordinate & BGC stamp blocked', errorMsg, meta);
       return;
     }
-    await runMutation(async () => {
-      const req: ApplySpatialAttributesRequest = $state.snapshot({
-        plotNumbers: opts.allScoped ? [] : opts.plotNumbers,
-        allScopedPlots: opts.allScoped,
-        stampGisBgc: opts.stampGisBgc,
-        stampAdminFields: opts.stampAdminFields,
-        onlyWhenBlank: opts.onlyWhenBlank,
-        normalizeLongitudeSign: opts.normalizeLongitudeSign,
-        syncUtmFromLatLon: opts.syncUtmFromLatLon,
-        syncLatLonFromUtm: opts.syncLatLonFromUTM,
-      });
-      const res = await SpatialService.ApplySpatialAttributes(contextId, req);
-      if (!alive || !res) return;
-      statusMsg = `Stamped ${res.updatedPlots} plot(s) (${res.updatedCells} cell updates, ${res.auditRows} <Project>_Audit entries).`;
-      if (typeof notifications !== 'undefined') {
-        notifications.success('Coordinate & BGC stamp applied', statusMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
-      }
-      await loadWorkbenchData();
-      await loadBatchAuditQA(false);
-    }, 'Coordinate & BGC stamp failed', true);
+    const p1 = {
+      plotNumbers: opts.allScoped ? [] : opts.plotNumbers,
+      allScopedPlots: opts.allScoped,
+      onlyWhenBlank: opts.onlyWhenBlank,
+    };
+    const p2 = {
+      stampGisBgc: opts.stampGisBgc,
+      stampAdminFields: opts.stampAdminFields,
+      normalizeLongitudeSign: opts.normalizeLongitudeSign,
+    };
+    const req = $state.snapshot({
+      ...p1,
+      ...p2,
+      syncUtmFromLatLon: opts.syncUtmFromLatLon,
+      syncLatLonFromUtm: opts.syncLatLonFromUTM,
+    });
+    await runMutation(
+      async () => {
+        const res = await SpatialService.ApplySpatialAttributes(contextId, req);
+        if (!alive || !res) return;
+        statusMsg = `Stamped ${res.updatedPlots} plot(s) (${res.updatedCells} cell updates, ${res.auditRows} <Project>_Audit entries).`;
+        notifications.success('Coordinate & BGC stamp applied', statusMsg, meta);
+        await loadWorkbenchData();
+        await loadBatchAuditQA(false);
+      },
+      'Coordinate & BGC stamp failed',
+      true
+    );
   }
 
-  async function exportGeoPackageShortcut(opts: SpatialGpkgExportInput) {
+  async function exportGeoPackageShortcut(opts: geoOps.SpatialGpkgExportInput) {
     if (!contextId || gpkgExporting || mutating || loading) return;
+    const meta = { category: 'entry' as const, source: '3D Map', contextTag: project || undefined };
     const rawDest = opts.destinationPath.trim();
     if (!rawDest) {
       errorMsg = 'Enter a destination .gpkg file path before exporting.';
-      if (typeof notifications !== 'undefined') {
-        notifications.error('GeoPackage destination required', errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
-      }
+      notifications.error('GeoPackage destination required', errorMsg, meta);
       return;
     }
+    const isAbs = rawDest.startsWith('/') || /^[A-Za-z]:[\\/]/.test(rawDest) || rawDest.startsWith('\\\\');
+    const fallbackDest = isAbs ? (rawDest.toLowerCase().endsWith('.gpkg') ? rawDest : `${rawDest}.gpkg`) : null;
     const resolvedDest =
       typeof resolveGeoPackageDestinationPath === 'function'
         ? resolveGeoPackageDestinationPath(rawDest, project, payload?.projectPath)
-        : rawDest.startsWith('/') || /^[A-Za-z]:[\\/]/.test(rawDest) || rawDest.startsWith('\\\\')
-          ? rawDest.toLowerCase().endsWith('.gpkg')
-            ? rawDest
-            : `${rawDest}.gpkg`
-          : null;
+        : fallbackDest;
     if (!resolvedDest) {
-      errorMsg = 'Enter an absolute destination folder path (not a bare relative filename) before exporting GeoPackage.';
-      if (typeof notifications !== 'undefined') {
-        notifications.error('GeoPackage destination required', errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
-      }
+      errorMsg =
+        'Enter an absolute destination folder path (not a bare relative filename) before exporting GeoPackage.';
+      notifications.error('GeoPackage destination required', errorMsg, meta);
       return;
     }
-    const destinationPath = resolvedDest;
-    gpkgExporting = true; errorMsg = ''; statusMsg = ''; setBusyState(true);
+    [gpkgExporting, errorMsg, statusMsg] = [true, '', ''];
+    setBusyState(true);
     try {
-      const outcome = await ImportExportService.ExportGeoPackage(contextId, { ...opts, destinationPath });
+      const outcome = await ImportExportService.ExportGeoPackage(contextId, { ...opts, destinationPath: resolvedDest });
       if (!alive || !outcome) return;
       gpkgOutcome = outcome;
       statusMsg = `Exported ${outcome.featureCount} GeoPackage plot features (${outcome.crs}, SRS ${outcome.srsId}) to ${outcome.path}.`;
-      if (typeof notifications !== 'undefined') {
-        notifications.success('GeoPackage exported', statusMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
-      }
+      notifications.success('GeoPackage exported', statusMsg, meta);
     } catch (cause) {
       if (alive) {
-        errorMsg = `GeoPackage (.gpkg) export failed: ${cause instanceof Error ? cause.message : String(cause)}`;
-        if (typeof notifications !== 'undefined') {
-          notifications.error('GeoPackage export failed', errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
-        }
+        errorMsg = `GeoPackage (.gpkg) export failed: ${formatError(cause)}`;
+        notifications.error('GeoPackage export failed', errorMsg, meta);
       }
     } finally {
-      if (alive) { gpkgExporting = false; setBusyState(loading || mutating); }
+      if (alive) {
+        gpkgExporting = false;
+        setBusyState(loading || mutating);
+      }
     }
   }
 
-  $effect(() => { void zoneFilter; void plotSearch; refreshDeckOverlay(); });
+  $effect(() => {
+    void zoneFilter;
+    void plotSearch;
+    refreshDeckOverlay();
+  });
 
   const handleBrowserOffline = () => {
     if (!alive || !visibility.bcOpenMapsWMS) return;
     const msg = classifyWMSMapError({}, true, false);
-    if (msg) {
-      if (msg !== wmsOfflineWarning && typeof notifications !== 'undefined') {
-        notifications.warning('BC OpenMaps WMS offline', msg, {
-          category: 'background',
-          source: '3D Map',
-          contextTag: project || undefined,
-          toast: true,
-        });
-      }
-      wmsOfflineWarning = msg;
-    }
+    if (!msg) return;
+    const bgOpt = { category: 'background' as const, source: '3D Map', contextTag: project || undefined, toast: true };
+    if (msg !== wmsOfflineWarning) notifications.warning('BC OpenMaps WMS offline', msg, bgOpt);
+    wmsOfflineWarning = msg;
   };
-  const handleBrowserOnline = () => { if (alive) wmsOfflineWarning = ''; };
+  const handleBrowserOnline = () => {
+    if (alive) wmsOfflineWarning = '';
+  };
 
   onMount(() => {
-    void detectSpatialComputeBackend().then((info) => { if (alive) computeInfo = info; });
-    if (typeof window !== 'undefined') {
-      window.addEventListener('offline', handleBrowserOffline);
-      window.addEventListener('online', handleBrowserOnline);
-    }
+    void geoOps.detectSpatialComputeBackend().then((info) => {
+      if (alive) computeInfo = info;
+    });
+    removeWindowListeners = geoOps.bindWindowConnectivityListeners(handleBrowserOffline, handleBrowserOnline);
     initializeMapCanvas();
     void loadWorkbenchData();
   });
 
   onDestroy(() => {
     alive = false;
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('offline', handleBrowserOffline);
-      window.removeEventListener('online', handleBrowserOnline);
-    }
-    loadGeneration++; qaGeneration++; aoiGeneration++; inspectorGeneration++;
+    removeWindowListeners?.();
+    [loadGeneration, qaGeneration, inspectorGeneration] = [
+      loadGeneration + 1,
+      qaGeneration + 1,
+      inspectorGeneration + 1,
+    ];
     setBusyState(false);
-    if (deckOverlay && mapInstance) {
-      try { mapInstance.removeControl(deckOverlay as unknown as IControl); } catch { /* ignore */ }
-    }
-    deckOverlay = null;
-    if (mapInstance) { mapInstance.remove(); mapInstance = null; }
+    geoOps.disposeGeospatialMap(mapInstance, deckOverlay);
+    [deckOverlay, mapInstance] = [null, null];
   });
+
+  async function handleCommittedAOI(msg: string, activated: boolean) {
+    statusMsg = msg;
+    if (activated) await onContextChanged?.();
+    else await loadWorkbenchData();
+  }
+
+  const fitBounds = () => fitMapToPayloadBounds(mapInstance, payload);
+  const refreshStream = () => void loadWorkbenchData();
+  const getBounds = () => (mapInstance ? mapInstance.getBounds() : null);
+  const stgA = $derived({ contextId, project, computeInfo, payload, flatGeobufCount, plotCount: plotPoints.length });
+  const stgB = $derived({ distinctZones, discrepancyCount: discrepancySegments.length, pmtilesArchiveWarning });
+  const stgC = $derived({ gpkgExporting, gpkgOutcome, loading, mutating, aoiDrawMode, viewportMatchedCount });
+  const stgD = $derived({
+    aoiMatchedCount: aoiPreview?.matchedCount ?? 0,
+    onFitBounds: fitBounds,
+    onRefreshStream: refreshStream,
+  });
+  const stgE = { onApplyLayers: applyLayerVisibilities, onRefreshDeck: refreshDeckOverlay };
+  const stgAll = $derived({ ...stgA, ...stgB, ...stgC, ...stgD, ...stgE, onExportGpkg: exportGeoPackageShortcut });
+  const drwA = $derived({ contextId, project, su, zoneFilter, boundingBox: payload?.boundingBox, plotPoints });
+  const drwB = $derived({ selectedPlot, selectedSuggestion, suggestionBusy, filteredPoints, qaReport });
+  const drwC = $derived({ qaCoordinateDiagnosticRows, loading, mutating, onOpenPlot, onInspectPlot: inspectPlotPin });
+  const drwD = { getViewportBounds: getBounds, onSyncAOIOverlay: syncAOIOverlay, onRunMutation: runMutation };
+  const drwE = { onPushError: pushGeoError, onCommittedAOI: handleCommittedAOI, onLoadBatchAuditQA: loadBatchAuditQA };
+  const drwAll = $derived({ ...drwA, ...drwB, ...drwC, ...drwD, ...drwE, onApplyStamp: applyAuto1SpatialStamp });
 </script>
 
 <section class="geospatial-workbench" data-tour="geospatial-workbench-root" aria-label="3D Map">
-  <SpatialWorkbenchHeader
-    {contextId} {project} {computeInfo} {payload} {flatGeobufCount} discrepancyCount={discrepancySegments.length}
-    plotCount={plotPoints.length} {distinctZones} bind:visibility bind:zoneFilter bind:plotSearch
-    {loading} {mutating} {gpkgExporting}
-    onApplyLayers={applyLayerVisibilities}
-    onRefreshDeck={refreshDeckOverlay}
-    onFitBounds={() => fitMapToPayloadBounds(mapInstance, payload)}
-    onRefreshStream={() => void loadWorkbenchData()}
-    onToggleGpkgPanel={(defaultPath) => {
-      if (defaultPath && (!gpkgDestPath.trim() || !isAbsoluteFilesystemPath(gpkgDestPath))) {
-        gpkgDestPath = defaultPath;
-      }
-      gpkgPanelOpen = !gpkgPanelOpen;
-    }}
-  />
-
-  {#if pmtilesArchiveWarning}
-    <div class="wb-alert wb-alert-warn" role="alert" data-pmtiles-fallback-warning>
-      {pmtilesArchiveWarning}
-    </div>
-  {/if}
-
-  {#if gpkgPanelOpen}
-    <SpatialGpkgExportPanel
-      bind:gpkgDestPath {gpkgExporting} {gpkgOutcome} {loading} {mutating}
-      onExport={exportGeoPackageShortcut} onClose={() => { gpkgPanelOpen = false; }}
+  <GeospatialMapStage
+    {...stgAll}
+    bind:visibility
+    bind:zoneFilter
+    bind:plotSearch
+    bind:gpkgPanelOpen
+    bind:gpkgDestPath
+    bind:mapContainer
+  >
+    <GeospatialSidebarDrawer
+      {...drwAll}
+      bind:activePanel
+      bind:aoiDrawMode
+      bind:aoiTargetMode
+      bind:aoiSUName
+      bind:aoiSiteUnit
+      bind:aoiVertices
+      bind:aoiPreview
+      bind:qaSelectedPlots
     />
-  {/if}
-
-  <div class="wb-main-split">
-    <div class="wb-map-stage">
-      <div
-        bind:this={mapContainer}
-        class="wb-map-canvas"
-        class:wb-crosshair={aoiDrawMode}
-        data-testid="maplibre-geospatial-canvas"
-      ></div>
-      <SpatialMapLegend aoiMatchedCount={aoiPreview?.matchedCount ?? 0} {viewportMatchedCount} />
-    </div>
-
-    <aside class="wb-drawer" aria-label="Spatial Inspector, AOI and QA Tools">
-      <div class="wb-tabs" role="tablist">
-        <button
-          type="button" role="tab" aria-selected={activePanel === 'inspector'} class:active={activePanel === 'inspector'}
-          onclick={() => { aoiDrawMode = false; activePanel = 'inspector'; }}
-        >
-          Plot Inspector
-        </button>
-        <button
-          type="button" role="tab" aria-selected={activePanel === 'aoi'} class:active={activePanel === 'aoi'}
-          onclick={() => { activePanel = 'aoi'; }}
-        >
-          Lasso / AOI -&gt; SU
-        </button>
-        <button
-          type="button" role="tab" aria-selected={activePanel === 'qa'} class:active={activePanel === 'qa'}
-          onclick={() => { aoiDrawMode = false; activePanel = 'qa'; if (!qaReport) void loadBatchAuditQA(); }}
-        >
-          Coordinate &amp; BGC Stamp
-        </button>
-      </div>
-
-      {#if activePanel === 'inspector'}
-        <SpatialPlotInspectorTab
-          {selectedPlot} {selectedSuggestion} {suggestionBusy} {filteredPoints} {onOpenPlot} onInspectPlot={inspectPlotPin}
-        />
-      {:else if activePanel === 'aoi'}
-        <SpatialAOILassoTab
-          {project} {su} bind:aoiDrawMode bind:aoiTargetMode bind:aoiSUName bind:aoiSiteUnit
-          aoiVerticesCount={aoiVertices.length} {aoiPreview} {loading} {mutating}
-          onSeedViewport={seedAOIFromCurrentViewport} onClear={clearAOIPolygon} onCommit={commitAOIToSU}
-        />
-      {:else if activePanel === 'qa'}
-        <SpatialAuto1QATab
-          {qaReport} bind:qaSelectedPlots {loading} {mutating}
-          onReaudit={loadBatchAuditQA} onApplyStamp={applyAuto1SpatialStamp} {onOpenPlot}
-        />
-        {#if qaCoordinateDiagnosticRows.length > 0}
-          <div class="wb-panel-body wb-coord-diag-wrap" data-qa-coordinate-diagnostics>
-            <div class="wb-card">
-              <h3>Coordinate Diagnostics ({qaCoordinateDiagnosticRows.length})</h3>
-              <ul class="wb-diag-list">
-                {#each qaCoordinateDiagnosticRows.slice(0, 60) as row (row.plotNumber)}
-                  <li>
-                    <button
-                      type="button"
-                      class="wb-link-btn mono"
-                      onclick={() => onOpenPlot?.(row.plotNumber)}
-                    >
-                      {row.plotNumber}
-                    </button>:
-                    {(row.diagnostics ?? []).join('; ') || 'Invalid or incomplete plot coordinates'}
-                  </li>
-                {/each}
-              </ul>
-            </div>
-          </div>
-        {/if}
-      {/if}
-    </aside>
-  </div>
+  </GeospatialMapStage>
 </section>
 
 <style>
@@ -661,33 +541,5 @@
   .geospatial-workbench :global(.wb-badge-gold) {
     background: var(--vpro-gold);
     color: var(--vpro-navy);
-  }
-  .wb-alert-warn {
-    background: var(--vpro-canvas);
-    border: 1px solid var(--vpro-border);
-    border-left: 4px solid var(--vpro-gold);
-    color: var(--vpro-navy);
-    padding: 0.5rem 0.75rem;
-    border-radius: 0.25rem;
-    font-size: 0.875rem;
-    margin: 0.35rem 0;
-  }
-  .wb-coord-diag-wrap {
-    padding-top: 0;
-  }
-  .wb-coord-diag-wrap h3 {
-    font-size: 0.875rem;
-    font-weight: 700;
-    color: var(--vpro-navy);
-    margin: 0 0 0.4rem 0;
-  }
-  .wb-diag-list {
-    margin: 0;
-    padding-left: 1rem;
-    font-size: 0.8125rem;
-    color: var(--vpro-ink);
-  }
-  .wb-diag-list li {
-    margin-bottom: 0.25rem;
   }
 </style>

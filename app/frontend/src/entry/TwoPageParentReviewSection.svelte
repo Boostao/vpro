@@ -32,7 +32,7 @@
         data-extended-shrubs
         checked={form === 'FS882-8x6XL-CHARS'}
         disabled={locked}
-        onchange={event => onchooseform(event.currentTarget.checked ? 'FS882-8x6XL-CHARS' : 'FS882-8x6XL')}
+        onchange={(event) => onchooseform(event.currentTarget.checked ? 'FS882-8x6XL-CHARS' : 'FS882-8x6XL')}
       />
       Show extended shrub layers
     </label>

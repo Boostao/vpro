@@ -26,7 +26,7 @@ test('Native-verified substrate component compiles, stages lexical input and ret
   const source = readFileSync(srcPath('SubstrateFields.svelte'), 'utf8');
   assert.equal(compile(source, { filename: 'SubstrateFields.svelte', generate: 'client' }).warnings.length, 0);
   assert.match(source, /style=\{position\(control\)\}/);
-  assert.match(source, /type="text" inputmode="decimal"/);
+  assert.match(source, /type="text"\s+inputmode="decimal"/);
   assert.match(source, /staged\[key\]\?\.raw \?\?/);
   assert.match(source, /rememberSubstrateSession\(draft, staged, original\)/);
   assert.match(source, /untrack\(\(\) => onvalidation\('substrate', message\)\)/);

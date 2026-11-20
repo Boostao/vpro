@@ -61,8 +61,9 @@ test('Enter adapter extends across datalists and <select> while preserving multi
   assert.doesNotMatch(source,/\.list\b/);
   assert.doesNotMatch(source,/!\(source instanceof HTMLInputElement\)/);
   assert.doesNotMatch(source,/\.click\(|\.submit\(|Save|Create|ByID|fetch\(/);
-  assert.match(form,/<svelte:window onkeydown=\{sourceEnter\}/);
-  assert.match(form,/error = `Source Enter navigation failed/);
+  assert.match(form,/<svelte:window onkeydown=\{(?:ctrl\.)?sourceEnter\}/);
+  const ctrlSrc=readFileSync(srcPath('fs882FormController.svelte.ts'),'utf8');
+  assert.match(ctrlSrc,/error = `Source Enter navigation failed/);
   assert.match(source,/element instanceof HTMLTextAreaElement/);
   assert.match(source,/textarea\[data-column\]/);
 

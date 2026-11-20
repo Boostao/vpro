@@ -5,15 +5,17 @@ const { compile } = require('svelte/compiler');
 const { componentFunctions, loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
 
 test('WorkspaceSidebar Access Import Wizard compiles with zero warnings, zero emojis, progress bar, and Cancel button (UX-IMPORT-002)', () => {
+  const { readSidebarComposite } = require('./svelteTestHelpers.cjs');
   const sidebarSrc = readFileSync(srcPath('shell/WorkspaceSidebar.svelte'), 'utf8');
-  assert.equal(/\p{Extended_Pictographic}/u.test(sidebarSrc), false);
+  const compositeSrc = readSidebarComposite();
+  assert.equal(/\p{Extended_Pictographic}/u.test(compositeSrc), false);
   assert.deepEqual(compile(sidebarSrc, { filename: 'WorkspaceSidebar.svelte', generate: 'client' }).warnings, []);
   assert.deepEqual(compile(sidebarSrc, { filename: 'WorkspaceSidebar.svelte', generate: 'server' }).warnings, []);
-  assert.match(sidebarSrc, /data-access-import-progress/);
-  assert.match(sidebarSrc, /<progress/);
-  assert.match(sidebarSrc, /id="cancel-access-import-btn"/);
-  assert.match(sidebarSrc, /Cancel import/);
-  assert.match(sidebarSrc, /Cancel inspection/);
+  assert.match(compositeSrc, /data-access-import-progress/);
+  assert.match(compositeSrc, /<progress/);
+  assert.match(compositeSrc, /id="cancel-access-import-btn"/);
+  assert.match(compositeSrc, /Cancel import/);
+  assert.match(compositeSrc, /Cancel inspection/);
 });
 
 test('Access Import Wizard streams live progress updates and cancels cleanly via Wails $CancellablePromise.cancel() (UX-IMPORT-002)', async () => {

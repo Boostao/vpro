@@ -1,8 +1,9 @@
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { EnvironmentReportService } from '../../bindings/github.com/boostao/vpro/app';
+import { formatError } from '../shared/readRequests';
 import { notifications } from '../shell/notificationService.svelte';
 
-export { notifications };
+export { formatError, notifications };
 
 const CANDIDATE_PREFIX_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,13}$/;
 const SU_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
@@ -325,22 +326,22 @@ export interface RSidecarBackendPort {
 
 export const defaultRSidecarPort: RSidecarBackendPort = {
   detectRRuntime() {
-    return (EnvironmentReportService.DetectRRuntime() as never);
+    return EnvironmentReportService.DetectRRuntime() as never;
   },
   getCachedPlotClimate(contextId: string, refPeriod: string) {
-    return (EnvironmentReportService.GetCachedPlotClimate(contextId, refPeriod) as never);
+    return EnvironmentReportService.GetCachedPlotClimate(contextId, refPeriod) as never;
   },
   computePlotClimateAndDualEdatopic(contextId: string, request: ClimateEdatopicRequest) {
-    return (EnvironmentReportService.ComputePlotClimateAndDualEdatopic(contextId, request as never) as never);
+    return EnvironmentReportService.ComputePlotClimateAndDualEdatopic(contextId, request as never) as never;
   },
   runMultivariateClustering(contextId: string, request: ClusteringRequest) {
-    return (EnvironmentReportService.RunMultivariateClustering(contextId, request as never) as never);
+    return EnvironmentReportService.RunMultivariateClustering(contextId, request as never) as never;
   },
   promoteClusterCandidateToSU(contextId: string, request: PromoteCandidateSURequest) {
-    return (EnvironmentReportService.PromoteClusterCandidateToSU(contextId, request) as never);
+    return EnvironmentReportService.PromoteClusterCandidateToSU(contextId, request) as never;
   },
   renderQuartoGuide(contextId: string, request: QuartoGuideRequest) {
-    return (EnvironmentReportService.RenderQuartoGuide(contextId, request as never) as never);
+    return EnvironmentReportService.RenderQuartoGuide(contextId, request as never) as never;
   },
 };
 
@@ -371,7 +372,10 @@ export function validateClusteringDraft(req: ClusteringRequest): string | null {
     }
   }
   if (req.materializeCandidate && req.candidatePrefix !== undefined && req.candidatePrefix.trim() !== '') {
-    const clean = req.candidatePrefix.trim().replace(/_SU$/, '').replace(/_ClusterCandidate$/, '');
+    const clean = req.candidatePrefix
+      .trim()
+      .replace(/_SU$/, '')
+      .replace(/_ClusterCandidate$/, '');
     if (!CANDIDATE_PREFIX_PATTERN.test(clean)) {
       return 'Candidate prefix must start with a letter and use ASCII letters, digits, or underscores (max 14 characters).';
     }
@@ -382,10 +386,7 @@ export function validateClusteringDraft(req: ClusteringRequest): string | null {
   return null;
 }
 
-export function validatePromoteCandidateDraft(
-  req: PromoteCandidateSURequest,
-  activeSu: string
-): string | null {
+export function validatePromoteCandidateDraft(req: PromoteCandidateSURequest, activeSu: string): string | null {
   const cand = req.candidateSuName.trim().replace(/_SU$/, '');
   if (!cand.endsWith('_ClusterCandidate') || !SU_IDENTIFIER_PATTERN.test(cand)) {
     return 'Select or materialize a valid *_ClusterCandidate_SU table before promoting.';
@@ -423,7 +424,10 @@ export function validateQuartoGuideDraft(req: QuartoGuideRequest): string | null
   if (req.conceptNotes && (!wellFormedUTF16(req.conceptNotes) || req.conceptNotes.length > 16000)) {
     return 'Concept notes must be valid text up to 16,000 characters.';
   }
-  if (req.minConstancyPct !== undefined && (!Number.isFinite(req.minConstancyPct) || req.minConstancyPct < 0 || req.minConstancyPct > 100)) {
+  if (
+    req.minConstancyPct !== undefined &&
+    (!Number.isFinite(req.minConstancyPct) || req.minConstancyPct < 0 || req.minConstancyPct > 100)
+  ) {
     return 'Minimum constancy threshold must be between 0% and 100%.';
   }
   return null;
@@ -539,14 +543,14 @@ export function computeDendrogramSVGLayout(
       ? customCutHeight
       : dendro.cutHeight || maxH * 0.55;
 
-  const segments = (dendro.segments || []).map(seg => ({
+  const segments = (dendro.segments || []).map((seg) => ({
     x1: Number(mapX(seg.x1).toFixed(1)),
     y1: Number(mapY(seg.y1).toFixed(1)),
     x2: Number(mapX(seg.x2).toFixed(1)),
     y2: Number(mapY(seg.y2).toFixed(1)),
   }));
 
-  const leaves = dendro.leaves.map(leaf => ({
+  const leaves = dendro.leaves.map((leaf) => ({
     plotNumber: leaf.plotNumber,
     clusterUnit: leaf.clusterUnit,
     isNoise: leaf.isNoise,
@@ -560,5 +564,40 @@ export function computeDendrogramSVGLayout(
     cutLineY: Number(mapY(effectiveCut).toFixed(1)),
     segments,
     leaves,
+  };
+}
+
+export function resolveActiveEdatopicView(
+  climateResult: ClimateEdatopicResult | null,
+  selectedUnitGroup: string
+): {
+  label: string;
+  plotCount: number;
+  meanShift: number | null;
+  meanCmd: number | null;
+  relativeGrid: EdatopicGridMatrix;
+  actualGrid: EdatopicGridMatrix;
+} | null {
+  if (!climateResult) return null;
+  if (selectedUnitGroup !== '__overall__') {
+    const found = climateResult.unitSummaries.find((u) => u.groupKey === selectedUnitGroup);
+    if (found) {
+      return {
+        label: found.groupKey,
+        plotCount: found.plotCount,
+        meanShift: found.meanShift ?? null,
+        meanCmd: found.meanCmd,
+        relativeGrid: found.relativeGrid,
+        actualGrid: found.actualGrid,
+      };
+    }
+  }
+  return {
+    label: `All Scoped Plots (${climateResult.project})`,
+    plotCount: climateResult.coordinatizedPlots,
+    meanShift: null,
+    meanCmd: null,
+    relativeGrid: climateResult.overallRelative,
+    actualGrid: climateResult.overallActual,
   };
 }

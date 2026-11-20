@@ -1,9 +1,6 @@
 <script lang="ts">
-  import type {
-    ClassificationBackendPort,
-    CreateSUFromEnvFieldsResult,
-    SUFromEnvMode,
-  } from './classificationExplorer';
+  import { formatError } from '../shared/readRequests';
+  import type { ClassificationBackendPort, CreateSUFromEnvFieldsResult, SUFromEnvMode } from './classificationExplorer';
 
   type DialogKind = 'none' | 'new_su' | 'save_su_as' | 'su_from_env' | 'new_hierarchy' | 'save_hierarchy_as';
 
@@ -94,7 +91,7 @@
       );
       if (picked) applyPath(picked);
     } catch (err) {
-      onError(`Select external SQLite path failed: ${String(err)}`);
+      onError(`Select external SQLite path failed: ${formatError(err)}`);
     }
   }
 
@@ -122,7 +119,7 @@
       onStatus(`Saved SU copy as ${res.tableName} (${res.plotCount} plot(s)).`);
       await onReloadSU();
     } catch (err) {
-      onError(`Save SU As failed: ${String(err)}`);
+      onError(`Save SU As failed: ${formatError(err)}`);
     } finally {
       onMutatingChange(false);
     }
@@ -144,10 +141,7 @@
         mode: envConcatMode,
         targetSuName: envConcatMode === 'new_table' ? envNewSUName.trim() : undefined,
         destination: envConcatMode === 'new_table' ? envDestination : 'project',
-        filePath:
-          envConcatMode === 'new_table' && envDestination === 'new_file'
-            ? envFilePath.trim()
-            : undefined,
+        filePath: envConcatMode === 'new_table' && envDestination === 'new_file' ? envFilePath.trim() : undefined,
         scopeToExistingSuRowsOnly: envScopeToExistingOnly,
         skipIncompleteRows: envSkipIncomplete,
         previewOnly,
@@ -159,11 +153,13 @@
         if (res.activated) onActivated(res.contextId, res.newState);
         envConcatPreview = null;
         onClose();
-        onStatus(`Populated ${res.tableName}: ${res.insertedCount} inserted, ${res.updatedCount} updated, ${res.preservedCount} preserved.`);
+        onStatus(
+          `Populated ${res.tableName}: ${res.insertedCount} inserted, ${res.updatedCount} updated, ${res.preservedCount} preserved.`
+        );
         await onReloadSU();
       }
     } catch (err) {
-      onError(`Create SU from Env Fields failed: ${String(err)}`);
+      onError(`Create SU from Env Fields failed: ${formatError(err)}`);
     } finally {
       onMutatingChange(false);
     }
@@ -192,7 +188,7 @@
       onStatus(`Created and activated ${res.tableName}.`);
       await onReloadHierarchy();
     } catch (err) {
-      onError(`Create Hierarchy failed: ${String(err)}`);
+      onError(`Create Hierarchy failed: ${formatError(err)}`);
     } finally {
       onMutatingChange(false);
     }
@@ -211,8 +207,7 @@
         sourceHierarchy: activeHierarchy,
         newName: saveHierarchyAsName.trim(),
         destination: saveHierarchyAsDestination,
-        filePath:
-          saveHierarchyAsDestination === 'new_file' ? saveHierarchyAsFilePath.trim() : '',
+        filePath: saveHierarchyAsDestination === 'new_file' ? saveHierarchyAsFilePath.trim() : '',
         activate: true,
       });
       if (res?.activated) onActivated(res.contextId, res.newState);
@@ -223,7 +218,7 @@
       onStatus(res ? `Saved hierarchy copy as ${res.tableName}.` : 'Saved hierarchy table copy.');
       await onReloadHierarchy();
     } catch (err) {
-      onError(`Save Hierarchy As failed: ${String(err)}`);
+      onError(`Save Hierarchy As failed: ${formatError(err)}`);
     } finally {
       onMutatingChange(false);
     }
@@ -251,16 +246,31 @@
           <div class="vpro-cls-inline-browse">
             <input type="text" bind:value={newSUFilePath} placeholder="/path/to/WorkingSU.db" />
             {#if port.chooseNewSQLiteProjectFile}
-              <button type="button" class="vpro-btn-secondary" onclick={() => browseNewSQLitePath(newSUName || 'WorkingSU', picked => { newSUFilePath = picked; })}>
+              <button
+                type="button"
+                class="vpro-btn-secondary"
+                onclick={() =>
+                  browseNewSQLitePath(newSUName || 'WorkingSU', (picked) => {
+                    newSUFilePath = picked;
+                  })}
+              >
                 Browse...
               </button>
             {/if}
           </div>
         </label>
       {/if}
-      <label class="vpro-cls-check"><input type="checkbox" bind:checked={populateAllPlots} /><span>Include all project plots</span></label>
-      <label class="vpro-cls-check"><input type="checkbox" bind:checked={seedFromUserSU} disabled={!populateAllPlots} /><span>Seed from Admin.UserSiteUnit</span></label>
-      <button type="button" class="vpro-btn-primary" disabled={mutating} onclick={onSubmitCreateSU}>Create &amp; Activate</button>
+      <label class="vpro-cls-check"
+        ><input type="checkbox" bind:checked={populateAllPlots} /><span>Include all project plots</span></label
+      >
+      <label class="vpro-cls-check"
+        ><input type="checkbox" bind:checked={seedFromUserSU} disabled={!populateAllPlots} /><span
+          >Seed from Admin.UserSiteUnit</span
+        ></label
+      >
+      <button type="button" class="vpro-btn-primary" disabled={mutating} onclick={onSubmitCreateSU}
+        >Create &amp; Activate</button
+      >
       <button type="button" class="vpro-btn-secondary" onclick={onClose}>Cancel</button>
     </div>
   </section>
@@ -268,7 +278,13 @@
   <section class="vpro-cls-dialog" aria-label="Save Site Unit Table As">
     <h3>Save Active SU Table Under New Name</h3>
     <div class="vpro-cls-dialog-row">
-      <label><span>New SU Name</span><input type="text" bind:value={saveAsNewName} placeholder="e.g. RegionalSubset" /></label>
+      <label
+        ><span>New SU Name</span><input
+          type="text"
+          bind:value={saveAsNewName}
+          placeholder="e.g. RegionalSubset"
+        /></label
+      >
       <label>
         <span>Destination</span>
         <select bind:value={saveAsDestination}>
@@ -282,14 +298,23 @@
           <div class="vpro-cls-inline-browse">
             <input type="text" bind:value={saveAsFilePath} placeholder="/path/to/RegionalSubset.db" />
             {#if port.chooseNewSQLiteProjectFile}
-              <button type="button" class="vpro-btn-secondary" onclick={() => browseNewSQLitePath(saveAsNewName || 'RegionalSubset', picked => { saveAsFilePath = picked; })}>
+              <button
+                type="button"
+                class="vpro-btn-secondary"
+                onclick={() =>
+                  browseNewSQLitePath(saveAsNewName || 'RegionalSubset', (picked) => {
+                    saveAsFilePath = picked;
+                  })}
+              >
                 Browse...
               </button>
             {/if}
           </div>
         </label>
       {/if}
-      <button type="button" class="vpro-btn-primary" disabled={mutating} onclick={submitSaveSUAs}>Save Copy &amp; Activate</button>
+      <button type="button" class="vpro-btn-primary" disabled={mutating} onclick={submitSaveSUAs}
+        >Save Copy &amp; Activate</button
+      >
       <button type="button" class="vpro-btn-secondary" onclick={onClose}>Cancel</button>
     </div>
   </section>
@@ -306,7 +331,13 @@
         </select>
       </label>
       {#if envConcatMode === 'new_table'}
-        <label><span>New SU Table Name</span><input type="text" bind:value={envNewSUName} placeholder="e.g. FieldBEC" /></label>
+        <label
+          ><span>New SU Table Name</span><input
+            type="text"
+            bind:value={envNewSUName}
+            placeholder="e.g. FieldBEC"
+          /></label
+        >
         <label>
           <span>Destination</span>
           <select bind:value={envDestination}>
@@ -320,7 +351,14 @@
             <div class="vpro-cls-inline-browse">
               <input type="text" bind:value={envFilePath} placeholder="/path/to/FieldBEC.db" />
               {#if port.chooseNewSQLiteProjectFile}
-                <button type="button" class="vpro-btn-secondary" onclick={() => browseNewSQLitePath(envNewSUName || 'FieldBEC', picked => { envFilePath = picked; })}>
+                <button
+                  type="button"
+                  class="vpro-btn-secondary"
+                  onclick={() =>
+                    browseNewSQLitePath(envNewSUName || 'FieldBEC', (picked) => {
+                      envFilePath = picked;
+                    })}
+                >
                   Browse...
                 </button>
               {/if}
@@ -329,9 +367,17 @@
         {/if}
       {/if}
       <label><span>Separator</span><input type="text" class="vpro-cls-sep-input" bind:value={envSeparator} /></label>
-      <label class="vpro-cls-check"><input type="checkbox" bind:checked={envUseBECSlash} /><span>BEC format (Zone+SubZone + "/" + SiteSeries)</span></label>
-      <label class="vpro-cls-check"><input type="checkbox" bind:checked={envScopeToExistingOnly} /><span>Limit to plots already in SU table</span></label>
-      <label class="vpro-cls-check"><input type="checkbox" bind:checked={envSkipIncomplete} /><span>Skip incomplete rows</span></label>
+      <label class="vpro-cls-check"
+        ><input type="checkbox" bind:checked={envUseBECSlash} /><span>BEC format (Zone+SubZone + "/" + SiteSeries)</span
+        ></label
+      >
+      <label class="vpro-cls-check"
+        ><input type="checkbox" bind:checked={envScopeToExistingOnly} /><span>Limit to plots already in SU table</span
+        ></label
+      >
+      <label class="vpro-cls-check"
+        ><input type="checkbox" bind:checked={envSkipIncomplete} /><span>Skip incomplete rows</span></label
+      >
     </div>
 
     <div class="vpro-cls-field-chips" aria-label="Selected Env/Admin Columns">
@@ -342,7 +388,9 @@
           class="vpro-cls-chip"
           class:selected
           onclick={() => {
-            envConcatFields = selected ? envConcatFields.filter(f => f !== fieldName) : [...envConcatFields, fieldName];
+            envConcatFields = selected
+              ? envConcatFields.filter((f) => f !== fieldName)
+              : [...envConcatFields, fieldName];
           }}
         >
           {selected ? `${envConcatFields.indexOf(fieldName) + 1}. ` : '+ '}{fieldName}
@@ -351,8 +399,18 @@
     </div>
 
     <div class="vpro-cls-dialog-row">
-      <button type="button" class="vpro-btn-secondary" disabled={mutating || envConcatFields.length === 0} onclick={() => runSUFromEnv(true)}>Preview Assignments</button>
-      <button type="button" class="vpro-btn-primary" disabled={mutating || envConcatFields.length === 0} onclick={() => runSUFromEnv(false)}>Apply to SU</button>
+      <button
+        type="button"
+        class="vpro-btn-secondary"
+        disabled={mutating || envConcatFields.length === 0}
+        onclick={() => runSUFromEnv(true)}>Preview Assignments</button
+      >
+      <button
+        type="button"
+        class="vpro-btn-primary"
+        disabled={mutating || envConcatFields.length === 0}
+        onclick={() => runSUFromEnv(false)}>Apply to SU</button
+      >
       <button type="button" class="vpro-btn-secondary" onclick={onClose}>Close</button>
     </div>
 
@@ -370,7 +428,13 @@
   <section class="vpro-cls-dialog" aria-label="Create New Hierarchy Table">
     <h3>Create Standalone *_Hierarchy Table</h3>
     <div class="vpro-cls-dialog-row">
-      <label><span>Hierarchy Name (without _Hierarchy)</span><input type="text" bind:value={newHierarchyTableName} placeholder="e.g. Coast2026" /></label>
+      <label
+        ><span>Hierarchy Name (without _Hierarchy)</span><input
+          type="text"
+          bind:value={newHierarchyTableName}
+          placeholder="e.g. Coast2026"
+        /></label
+      >
       <label>
         <span>Destination</span>
         <select bind:value={newHierarchyDestination}>
@@ -384,14 +448,23 @@
           <div class="vpro-cls-inline-browse">
             <input type="text" bind:value={newHierarchyFilePath} placeholder="/path/to/Coast2026_Hierarchy.db" />
             {#if port.chooseNewSQLiteProjectFile}
-              <button type="button" class="vpro-btn-secondary" onclick={() => browseNewSQLitePath(newHierarchyTableName || 'Coast2026', picked => { newHierarchyFilePath = picked; })}>
+              <button
+                type="button"
+                class="vpro-btn-secondary"
+                onclick={() =>
+                  browseNewSQLitePath(newHierarchyTableName || 'Coast2026', (picked) => {
+                    newHierarchyFilePath = picked;
+                  })}
+              >
                 Browse...
               </button>
             {/if}
           </div>
         </label>
       {/if}
-      <button type="button" class="vpro-btn-primary" disabled={mutating} onclick={submitCreateHierarchyTable}>Create &amp; Activate</button>
+      <button type="button" class="vpro-btn-primary" disabled={mutating} onclick={submitCreateHierarchyTable}
+        >Create &amp; Activate</button
+      >
       <button type="button" class="vpro-btn-secondary" onclick={onClose}>Cancel</button>
     </div>
   </section>
@@ -399,7 +472,13 @@
   <section class="vpro-cls-dialog" aria-label="Save Hierarchy Table As">
     <h3>Save Active Hierarchy Table As</h3>
     <div class="vpro-cls-dialog-row">
-      <label><span>New Hierarchy Name</span><input type="text" bind:value={saveHierarchyAsName} placeholder="e.g. CoastBackup" /></label>
+      <label
+        ><span>New Hierarchy Name</span><input
+          type="text"
+          bind:value={saveHierarchyAsName}
+          placeholder="e.g. CoastBackup"
+        /></label
+      >
       <label>
         <span>Destination</span>
         <select bind:value={saveHierarchyAsDestination}>
@@ -413,14 +492,26 @@
           <div class="vpro-cls-inline-browse">
             <input type="text" bind:value={saveHierarchyAsFilePath} placeholder="/path/to/CoastBackup.db" />
             {#if port.chooseNewSQLiteProjectFile}
-              <button type="button" class="vpro-btn-secondary" onclick={() => browseNewSQLitePath(saveHierarchyAsName || 'CoastBackup', picked => { saveHierarchyAsFilePath = picked; })}>
+              <button
+                type="button"
+                class="vpro-btn-secondary"
+                onclick={() =>
+                  browseNewSQLitePath(saveHierarchyAsName || 'CoastBackup', (picked) => {
+                    saveHierarchyAsFilePath = picked;
+                  })}
+              >
                 Browse...
               </button>
             {/if}
           </div>
         </label>
       {/if}
-      <button type="button" class="vpro-btn-primary" disabled={mutating || !saveHierarchyAsName.trim()} onclick={submitSaveHierarchyAs}>Save Copy &amp; Activate</button>
+      <button
+        type="button"
+        class="vpro-btn-primary"
+        disabled={mutating || !saveHierarchyAsName.trim()}
+        onclick={submitSaveHierarchyAs}>Save Copy &amp; Activate</button
+      >
       <button type="button" class="vpro-btn-secondary" onclick={onClose}>Cancel</button>
     </div>
   </section>

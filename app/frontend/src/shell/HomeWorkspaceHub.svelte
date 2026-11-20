@@ -87,7 +87,7 @@
       title: 'SU & Hierarchy Explorer',
       subtitle: 'BEC Classification Hypothesis',
       description:
-        'Organize working Site Unit (*_SU) assignments, manage ~NodeName hierarchy breakpoints, and refine candidate units.',
+        'Organize working Site Unit assignments, manage tilde (~) hierarchy breakpoints, and refine candidate units.',
       icon: Network,
       cta: 'Open Explorer',
       view: 'classification-explorer',
@@ -135,7 +135,9 @@
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div class="flex items-center gap-2 font-bold text-vpro-navy">
           <ShieldCheck size={16} class="text-vpro-navy" aria-hidden="true" />
-          <span>VPro Alpha Preview{appVersion ? ` (v${appVersion})` : ''} — B.C. Ministry of Forests BEC Evaluation</span>
+          <span
+            >VPro Alpha Preview{appVersion ? ` (v${appVersion})` : ''} — B.C. Ministry of Forests BEC Evaluation</span
+          >
         </div>
         <a
           href="https://github.com/Boostao/vpro/issues"
@@ -148,7 +150,9 @@
       </div>
       <p class="mt-1.5 leading-relaxed text-vpro-ink">
         Keep backup copies of archival databases before running bulk Access imports or multi-project merges. Preview
-        packages are unsigned — verify installer checksums against <code class="font-mono text-vpro-navy">SHA256SUMS.txt</code>.
+        packages are unsigned — verify installer checksums against <code class="font-mono text-vpro-navy"
+          >SHA256SUMS.txt</code
+        >.
       </p>
     </section>
   {:else if buildMode === 'dev'}
@@ -216,7 +220,7 @@
         <dd class="mt-0.5 text-sm font-bold text-vpro-navy">{plotCount}</dd>
       </div>
       <div class="rounded bg-vpro-canvas px-2.5 py-2">
-        <dt class="font-mono text-[10px] uppercase text-vpro-ink-secondary">Site Unit (*_SU)</dt>
+        <dt class="font-mono text-[10px] uppercase text-vpro-ink-secondary">Site Unit</dt>
         <dd class="mt-0.5 truncate font-semibold text-vpro-ink" title={activeSU}>{activeSU || 'None'}</dd>
       </div>
       <div class="rounded bg-vpro-canvas px-2.5 py-2">
@@ -225,9 +229,7 @@
       </div>
       <div class="rounded bg-vpro-canvas px-2.5 py-2">
         <dt class="font-mono text-[10px] uppercase text-vpro-ink-secondary">2026 Master Standards</dt>
-        <dd class="mt-0.5 font-mono text-[11px] font-semibold text-vpro-success">
-          BECdb v13 · Taxa v19 · LMH25
-        </dd>
+        <dd class="mt-0.5 font-mono text-[11px] font-semibold text-vpro-success">BECdb v13 · Taxa v19 · LMH25</dd>
       </div>
     </dl>
   </section>
@@ -274,7 +276,9 @@
       <div class="flex items-center gap-2">
         <BookOpen size={15} class="text-vpro-navy" aria-hidden="true" />
         <span>
-          <strong>Offline Field Manual &amp; Guided Onboarding:</strong> Press <kbd class="rounded border border-vpro-border bg-white px-1.5 py-0.5 font-mono text-[11px]">F1</kbd> on any field for LMH25 (2023) rules, rSMR/rSNR keys, and visual % cover plates.
+          <strong>Offline Field Manual &amp; Guided Onboarding:</strong> Press
+          <kbd class="rounded border border-vpro-border bg-white px-1.5 py-0.5 font-mono text-[11px]">F1</kbd> on any field
+          for LMH25 (2023) rules, rSMR/rSNR keys, and visual % cover plates.
         </span>
       </div>
       <div class="flex flex-wrap items-center gap-2">

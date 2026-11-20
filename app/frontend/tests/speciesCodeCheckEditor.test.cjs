@@ -80,22 +80,36 @@ test('Shared personal fields keep visible source labels, original IDs and distin
   }
   assert.match(html,/store NULL, not an empty string/);
 });
-test('Code-check scope and raw errors remain outside remounted tabs and explicitly gate Save/Lock/close/Undo',()=>{
-  const form=readFileSync(srcPath('FS882Form.svelte'),'utf8');
+test('Code-check scope and raw errors remain outside remounted tabs and explicitly gate Save/Lock/close/Undo',async ()=>{
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
   const component=readFileSync(srcPath('SpeciesCodeCheck.svelte'),'utf8');
   const page=readFileSync(srcPath('SourcePage.svelte'),'utf8');
-  assert.match(form,/siviCreationPeerUnsaved = \$derived\([^;]*codeCheckOpen/);
-  assert.match(form,/childParentDisabled = \$derived\([^;]*codeCheckOpen/);
-  assert.match(form,/if \(codeCheckOpen\) return codeCheckEditor\?\.getCloseState/);
-  assert.match(form,/\[\(\) => codeCheckOpen, \(\) => codeCheckEditor\?\.undo\(\)\]/);
-  assert.match(form,/ordinary plot Save never applies them/);
-  assert.match(form,/Finish or close species-code review before changing the plot lock/);
+  const h=createFS882TestController();
+  try {
+    let undone=0;
+    h.ctrl.codeCheckEditor={
+      getCloseState:()=>({unsaved:true,canSave:false,busy:false,blocked:false,saveReason:'Species-code review active; ordinary plot Save never applies them.',error:null}),
+      undo:()=>{undone++;},
+    };
+    h.ctrl.codeCheckOpen=true;
+    h.flush();
+    assert.equal(h.ctrl.siviCreationPeerUnsaved,true);
+    assert.equal(h.ctrl.childParentDisabled,true);
+    assert.match(h.ctrl.getCloseState().saveReason,/ordinary plot Save never applies them/);
+    h.ctrl.undo();
+    assert.equal(undone,1);
+    h.ctrl.capabilitiesReady=true;
+    await h.ctrl.toggleLock();
+    assert.match(h.ctrl.error ?? '',/Finish or close species-code review before changing the plot lock/);
+  } finally {
+    h.dispose();
+  }
   assert.match(page,/btnCheckSppCodes' && onSpeciesCheck/);
   assert.match(component,/await client\.SaveSpeciesCodeCheck\(updates\)/);
   assert.match(component,/await client\.CreatePersonalSpeciesDefinition\(request\)/);
   assert.match(component,/matchesCodeCheckPersonalSpeciesSource\(proposed, rows\[0\]\)/);
   assert.match(component,/matchesCodeCheckPersonalSpeciesSource\(proposed, sources\[0\]\)/);
-  assert.match(component,/Ignore never creates or deletes temporary LifeForm999/);
+  assert.match(component,/Ignore never creates or deletes\s+temporary LifeForm999/);
   assert.match(component,/applySuggested/);
   assert.match(component,/row\.suggestedCode/);
   assert.match(component,/capped at 99%/);

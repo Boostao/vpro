@@ -167,16 +167,16 @@ test('saved-label server render and navigation remain independently default-off/
   const component = serverComponent(source, 'PlotLabelPreview.svelte', {
     '../bindings/github.com/boostao/vpro/app': { ContextService: {} },
     './scopedPlotLookup': lookup, './plotLabelPreview': labels, './plotLabelRegional': regional,
-    './plotLabelPDFExport': {},
+    './plotLabelPDFExport': { plotLabelPDFPublicationSession: () => ({ view: () => ({ busy: false, blocked: false, outcome: null, error: '', requestedDestination: '' }), subscribe: () => () => {} }) },
   });
   const body = render(component, { props: { contextId: 'owned', project: 'Sample', onBusyChange() {} } }).body;
   assert.match(body, /VPro Plot Labels/);
   assert.match(body, /for="plot-label-number"/);
   assert.match(body, /six-position printing and Print All Plots remain unavailable/);
   const nav = readFileSync(srcPath('Navigation.svelte'), 'utf8');
-  const app = readFileSync(srcPath('App.svelte'), 'utf8');
+  const { renderShellDeferredViews } = require('./svelteTestHelpers.cjs');
   assert.match(nav, /name: 'Plot Label PDF', icon: Tag, view: 'plot-label-preview'/);
-  assert.match(app, /view === 'plot-label-preview' && \$projectState/);
-  assert.match(app, /<PlotLabelPreview[^>]*onBusyChange=\{\(value\) => \{ localEditorBusy = value; \}\}/s);
-  assert.match(source, /onDestroy\(\(\) => \{ unsubscribe\?\.\(\); cancel\(\); \}\)/);
+  assert.equal(renderShellDeferredViews('plot-label-preview', null), '');
+  assert.match(renderShellDeferredViews('plot-label-preview', { contextId: 'owned', activeProject: 'Sample' }), /Loading Plot Label Preview/);
+  assert.match(source, /onDestroy\(\(\) => \{\s*unsubscribe\?\.\(\);\s*cancel\(\);\s*\}\)/);
 });

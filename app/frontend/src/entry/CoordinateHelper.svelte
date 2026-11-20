@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
+  import { ReadRequests, formatError } from '../shared/readRequests';
 
   let {
     idPrefix,
@@ -13,7 +14,13 @@
     disabled?: boolean;
     variant?: 'sivi' | 'two-page';
     defaultMode?: 'dm' | 'dms' | 'utm';
-    onApplyUTM: (result: { zone: number; latitude: number; longitude: number; easting: number; northing: number }) => void;
+    onApplyUTM: (result: {
+      zone: number;
+      latitude: number;
+      longitude: number;
+      easting: number;
+      northing: number;
+    }) => void;
     onApplyAxis: (axis: 'latitude' | 'longitude', dd: number) => void;
   } = $props();
 
@@ -28,6 +35,11 @@
   let utmNorthing = $state('');
   let coordBusy = $state(false);
   let coordError = $state<string | null>(null);
+  const coordReads = new ReadRequests();
+
+  onDestroy(() => {
+    coordReads.cancelAll();
+  });
 
   async function applyCoordConversion() {
     if (disabled || coordBusy) return;
@@ -35,10 +47,7 @@
     coordError = null;
     try {
       const [{ SpatialService, CoordinateMode }, { projectNAD83UTMZoneToLatLon, convertDMOrDMSToDecimalDegrees }] =
-        await Promise.all([
-          import('../../bindings/github.com/boostao/vpro/app'),
-          import('./coordinateConversion'),
-        ]);
+        await Promise.all([import('../../bindings/github.com/boostao/vpro/app'), import('./coordinateConversion')]);
       if (coordHelperMode === 'utm') {
         const z = Number.parseInt(utmZone.trim(), 10);
         const e = Number.parseFloat(utmEasting.trim());
@@ -46,7 +55,7 @@
         if (!Number.isFinite(z) || !Number.isFinite(e) || !Number.isFinite(n)) {
           throw new Error('Enter valid NAD83 UTM Zone, Easting, and Northing.');
         }
-        const projected = await projectNAD83UTMZoneToLatLon(SpatialService, z, e, n, false);
+        const projected = await projectNAD83UTMZoneToLatLon(SpatialService, z, e, n, false, coordReads);
         onApplyUTM(projected);
       } else {
         const dd = await convertDMOrDMSToDecimalDegrees(
@@ -58,11 +67,12 @@
           coordMin,
           coordSec,
           coordDir,
+          coordReads
         );
         onApplyAxis(coordHelperAxis, dd);
       }
     } catch (cause) {
-      coordError = cause instanceof Error ? cause.message : String(cause);
+      coordError = formatError(cause);
     } finally {
       coordBusy = false;
     }
@@ -76,7 +86,11 @@
 >
   <div class="flex flex-wrap items-center gap-2">
     <label class="font-medium" for={`${idPrefix}-coord-mode`}>Mode</label>
-    <select id={`${idPrefix}-coord-mode`} class="rounded border border-vpro-border bg-white px-2 py-1" bind:value={coordHelperMode}>
+    <select
+      id={`${idPrefix}-coord-mode`}
+      class="rounded border border-vpro-border bg-white px-2 py-1"
+      bind:value={coordHelperMode}
+    >
       <option value="dm">DM (Deg / Min)</option>
       <option value="dms">DMS (Deg / Min / Sec)</option>
       <option value="utm">NAD83 UTM</option>
@@ -145,7 +159,11 @@
           bind:value={coordSec}
         />
       {/if}
-      <select aria-label="Hemisphere" class="rounded border border-vpro-border bg-white px-2 py-1" bind:value={coordDir}>
+      <select
+        aria-label="Hemisphere"
+        class="rounded border border-vpro-border bg-white px-2 py-1"
+        bind:value={coordDir}
+      >
         {#if coordHelperAxis === 'latitude'}
           <option value="N">N</option>
           <option value="S">S</option>

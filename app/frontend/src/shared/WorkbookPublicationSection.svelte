@@ -58,7 +58,7 @@
     settled: WorkbookPublicationSnapshot,
     revErr: string,
     destFallback: string,
-    ctx: string | undefined,
+    ctx: string | undefined
   ) {
     if (typeof notifications === 'undefined') return;
     const tag = ctx || undefined;
@@ -95,12 +95,13 @@
     } else if (settled.error || settled.outcome) {
       notifications.error(
         `${sourceName} workbook export failed`,
-        settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destFallback}`,
+        settled.error ||
+          `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destFallback}`,
         {
           category: 'reports',
           source: sourceName,
           contextTag: tag,
-        },
+        }
       );
     }
   }
@@ -123,7 +124,8 @@
   {/if}
   {#if !publication.outcome && publication.requestedDestination && !publication.busy}
     <p {...{ [unknownAttr]: '' }} role="alert" class="alert-text">
-      Workbook outcome unknown. Retain and inspect {publication.requestedDestination} {unknownMessageSuffix}
+      Workbook outcome unknown. Retain and inspect {publication.requestedDestination}
+      {unknownMessageSuffix}
     </p>
   {/if}
   {#if publication.blocked && !publication.busy}

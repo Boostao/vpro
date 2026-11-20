@@ -506,8 +506,9 @@ test('panel compiles without warnings and renders one visible associated cover c
   assert.equal((extended.match(/data-sivi-cover-column=/g) || []).length, 14);
   owner.stage(id, 'Cover5a', '100', false); owner.presentation(false);
   const blocked = html();
-  assert.match(blocked, /Show extended controls/);
-  assert.ok(blocked.indexOf('strictly less than 100') < blocked.indexOf('data-sivi-cover-group'));
-  assert.match(blocked, /data-sivi-cover-save[^>]*disabled/);
-  assert.ok(blocked.indexOf('No totals are calculated automatically') > blocked.indexOf('data-sivi-cover-group'));
+  const normBlocked = blocked.replace(/\s+/g, ' ');
+  assert.match(normBlocked, /Show extended controls/);
+  assert.ok(normBlocked.indexOf('strictly less than 100') < normBlocked.indexOf('data-sivi-cover-group'));
+  assert.match(normBlocked, /data-sivi-cover-save[^>]*disabled/);
+  assert.ok(normBlocked.indexOf('No totals are calculated automatically') > normBlocked.indexOf('data-sivi-cover-group'));
 });

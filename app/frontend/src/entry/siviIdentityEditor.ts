@@ -22,13 +22,20 @@ export interface SIVIIdentityEdit {
 
 function signed32(raw: string): boolean {
   const value = Number(raw);
-  return /^-?(0|[1-9]\d*)$/.test(raw) && Number.isInteger(value) &&
-    value >= -2147483648 && value <= 2147483647 && String(value) === raw;
+  return (
+    /^-?(0|[1-9]\d*)$/.test(raw) &&
+    Number.isInteger(value) &&
+    value >= -2147483648 &&
+    value <= 2147483647 &&
+    String(value) === raw
+  );
 }
 
 export function siviIdentityEditable(cell: ProjectMetadataCell): boolean {
-  return completeCell(cell) && (cell.storage === 'null' ||
-    cell.storage === 'integer' && cell.integer !== null && signed32(cell.integer));
+  return (
+    completeCell(cell) &&
+    (cell.storage === 'null' || (cell.storage === 'integer' && cell.integer !== null && signed32(cell.integer)))
+  );
 }
 
 export function siviIdentityRows(review: readonly SIVIProjection[]) {
@@ -50,17 +57,25 @@ function parsed(raw: string, nullValue: boolean, expected: ProjectMetadataCell) 
   let value: ProjectMetadataCell = { storage: 'null', text: null, integer: null, real: null, blobHex: null };
   let error: string | null = null;
   if (!wellFormedUTF16(raw)) error = 'ID contains incomplete Unicode; raw input was not repaired.';
-  else if (!nullValue && expected.storage !== 'null' && raw === metadataCellText(expected)) value = structuredClone(expected);
-  else if (!siviIdentityEditable(expected)) error = 'Historical unsupported ID storage is read-only; no identity was repaired.';
+  else if (!nullValue && expected.storage !== 'null' && raw === metadataCellText(expected))
+    value = structuredClone(expected);
+  else if (!siviIdentityEditable(expected))
+    error = 'Historical unsupported ID storage is read-only; no identity was repaired.';
   else if (!nullValue) {
-    if (!signed32(raw)) error = 'ID requires an exact signed32 integer or explicit NULL; no trimming or coercion is applied.';
+    if (!signed32(raw))
+      error = 'ID requires an exact signed32 integer or explicit NULL; no trimming or coercion is applied.';
     else value = { ...value, storage: 'integer', integer: raw };
   }
   return { value, error };
 }
 
-export function stageSIVIIdentity(review: readonly SIVIProjection[], drafts: SIVIIdentityDrafts,
-  rowId: string, raw: string, nullValue: boolean): SIVIIdentityDrafts {
+export function stageSIVIIdentity(
+  review: readonly SIVIProjection[],
+  drafts: SIVIIdentityDrafts,
+  rowId: string,
+  raw: string,
+  nullValue: boolean
+): SIVIIdentityDrafts {
   const original = source(review, rowId).value;
   const expected = drafts[rowId]?.expected ?? original;
   if (!completeCell(expected) || !equalCell(expected, original)) {
@@ -71,9 +86,14 @@ export function stageSIVIIdentity(review: readonly SIVIProjection[], drafts: SIV
 }
 
 export function siviIdentityErrors(drafts: SIVIIdentityDrafts, review?: readonly SIVIProjection[]): string[] {
-  const errors = Object.values(drafts).flatMap(cell => {
-    if (!cell || typeof cell.raw !== 'string' || typeof cell.nullValue !== 'boolean' ||
-        !completeCell(cell.expected) || !completeCell(cell.value)) {
+  const errors = Object.values(drafts).flatMap((cell) => {
+    if (
+      !cell ||
+      typeof cell.raw !== 'string' ||
+      typeof cell.nullValue !== 'boolean' ||
+      !completeCell(cell.expected) ||
+      !completeCell(cell.value)
+    ) {
       return ['SIVI identity draft has incomplete intent or raw cells; Undo/reload explicitly.'];
     }
     const result = parsed(cell.raw, cell.nullValue, cell.expected);
@@ -91,14 +111,19 @@ export function siviIdentityErrors(drafts: SIVIIdentityDrafts, review?: readonly
     }
   }
   if (review && Object.keys(drafts).length) {
-    const rows = review.some(group => group.Rows.length) ? siviIdentityRows(review) : [];
+    const rows = review.some((group) => group.Rows.length) ? siviIdentityRows(review) : [];
     for (const [rowId, cell] of Object.entries(drafts)) {
       const owner = rows.find(({ row }) => row.rowId === rowId);
       if (!exactSigned64(rowId) || !owner || !equalCell(owner.row.cells[0], cell.expected)) {
         errors.push('SIVI original ID changed; retained drafts require explicit reload.');
-      } else if (!equalCell(cell.expected, cell.value) && cell.value.storage === 'integer' &&
-          rows.some(({ row }) => row.rowId !== rowId && row.cells[0].storage === 'integer' &&
-            row.cells[0].integer === cell.value.integer)) {
+      } else if (
+        !equalCell(cell.expected, cell.value) &&
+        cell.value.storage === 'integer' &&
+        rows.some(
+          ({ row }) =>
+            row.rowId !== rowId && row.cells[0].storage === 'integer' && row.cells[0].integer === cell.value.integer
+        )
+      ) {
         errors.push('SIVI ID belongs to another source row; identity swaps are unavailable.');
       }
     }
@@ -107,7 +132,9 @@ export function siviIdentityErrors(drafts: SIVIIdentityDrafts, review?: readonly
 }
 
 export function siviIdentityDirty(drafts: SIVIIdentityDrafts): boolean {
-  return siviIdentityErrors(drafts).length > 0 || Object.values(drafts).some(cell => !equalCell(cell.expected, cell.value));
+  return (
+    siviIdentityErrors(drafts).length > 0 || Object.values(drafts).some((cell) => !equalCell(cell.expected, cell.value))
+  );
 }
 
 export function siviIdentityEdits(review: readonly SIVIProjection[], drafts: SIVIIdentityDrafts): SIVIIdentityEdit[] {
@@ -117,8 +144,15 @@ export function siviIdentityEdits(review: readonly SIVIProjection[], drafts: SIV
     const original = source(review, rowId);
     if (!equalCell(original.value, cell.expected)) throw new Error('SIVI original ID changed; reload explicitly.');
     if (equalCell(cell.expected, cell.value)) return [];
-    return [{ rowId, form: original.form, column: 'ID' as const,
-      expected: structuredClone(cell.expected), value: structuredClone(cell.value) }];
+    return [
+      {
+        rowId,
+        form: original.form,
+        column: 'ID' as const,
+        expected: structuredClone(cell.expected),
+        value: structuredClone(cell.value),
+      },
+    ];
   });
 }
 

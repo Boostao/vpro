@@ -11,24 +11,35 @@ const app = readFileSync(srcPath('App.svelte'), 'utf8');
 const nav = readFileSync(srcPath('Navigation.svelte'), 'utf8');
 
 test('summary report native route and component state are wired cleanly', () => {
+  const { renderShellDeferredViews } = require('./svelteTestHelpers.cjs');
   assert.equal(compile(component, { filename: 'SummaryVegetationReport.svelte', generate: 'client' }).warnings.length, 0);
   assert.match(nav, /name: 'Summary Vegetation', icon: ChartColumn, view: 'summary-vegetation'/);
-  assert.match(app, /view === 'summary-vegetation' && \$projectState/);
+  assert.equal(renderShellDeferredViews('summary-vegetation', null), '');
+  assert.match(renderShellDeferredViews('summary-vegetation', { contextId: 'c1', activeProject: 'Sample', activeSU: 'S1' }), /Loading Summary Vegetation/);
   assert.match(component, /\$state\.raw\(session\.view\(\)\)/);
   assert.doesNotMatch(component, /structuredClone|VegetationReportService\.SaveSummaryVegetation\(|ExportReviewed|\.update/);
   assert.match(component, /VegetationReportService\.SaveSummaryVegetationPreferences/);
 });
 
-test('owned tab remount and cancellable root-close/navigation/selection holds are wired', () => {
-  assert.match(app, /\{#key \$projectState\.contextId\}\s*<SummaryVegetationReport/);
-  assert.match(app, /<SummaryVegetationReport[\s\S]*?operationHeld=\{busy \|\| transitionWorking \|\| pendingTransition !== null \|\| !!closeRequest\}/);
+test('owned tab remount and cancellable root-close/navigation/selection holds are wired', async () => {
+  const { componentFunctions } = require('./svelteTestHelpers.cjs');
   assert.match(component, /session\.subscribe\([\s\S]*onBusyChange/);
   assert.match(component, /onBusyChange\(viewState\.busy \|\| \(!preferences && !!viewState\.draftError\) \|\| preferenceReadBusy/);
   assert.match(component, /onDestroy\(\(\) => \{\s*session\.cancel\(port\); unsubscribe\(\); unsubscribePreferences\?\.\(\); unsubscribeQuality\?\.\(\); unsubscribePresentation\?\.\(\);\s*unsubscribeFieldList\?\.\(\); unsubscribeEnvironment\?\.\(\); if \(fieldListScopeAvailable\) fieldList\.detach\(ownedContext\(\)\);\s*cancelPreferenceRead\(\); onBusyChange\(false\);\s*\}\)/);
-  assert.match(app, /closeDisposition\(state, busy \|\| editorBusy \|\| transitionWorking/);
-  for (const name of ['loadPlots', 'refresh', 'loadHierarchy']) {
-    assert.match(app, new RegExp(`async function ${name}\\([^)]*\\) \\{\\s*if \\([^\\n]*view === 'summary-vegetation'[^\\n]*editorBusy\\) return`));
-  }
+  const context = componentFunctions('App.svelte', ['loadPlots', 'refresh', 'loadHierarchy', 'requestTransition'], {
+    view: 'summary-vegetation',
+    editorBusy: true,
+    ContextService: {
+      ListPlots: async () => assert.fail('must hold'),
+      GetState: async () => assert.fail('must hold'),
+      GetHierarchyTree: async () => assert.fail('must hold'),
+    },
+  });
+  await context.actions.loadPlots(0);
+  await context.actions.refresh();
+  await context.actions.loadHierarchy();
+  await context.actions.requestTransition(async () => assert.fail('must hold'));
+  assert.match(context.error, /Wait for the current operation/);
 });
 
 test('source labels, unsupported options and DOM-value-before-validation remain explicit', () => {

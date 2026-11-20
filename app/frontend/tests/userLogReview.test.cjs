@@ -156,8 +156,8 @@ async function renderComponent(source, props, populated = false) {
   let code = compile(source, { filename: 'UserLogReview.svelte', generate: 'server' }).js.code;
   code = code.replace(/import\s*(?:\{\s*LifecycleService\s*\}|\*\s*as\s*LifecycleService)\s*from\s*['"][^'"]+['"];?/,
     'const LifecycleService = {GetUserLogReview(){throw new Error("SSR must not invoke reads")}};');
-  code = code.replace(/import\s*\{\s*ReadRequests\s*\}\s*from\s*['"][^'"]+['"];?/,
-    'class ReadRequests {cancelAll(){}}');
+  code = code.replace(/import\s*\{[^}]*ReadRequests[^}]*\}\s*from\s*['"][^'"]+['"];?/,
+    'class ReadRequests {cancelAll(){}} const formatError = String;');
   code = code.replace(/import\s*\{[^}]*userLogFromWire[^}]*\}\s*from\s*['"][^'"]+['"];?/,
     `const userLogFields=${JSON.stringify(log.userLogFields)}; const userLogCellLabel=JSON.stringify;`);
   for (const name of ['svelte/internal/server', 'svelte']) {

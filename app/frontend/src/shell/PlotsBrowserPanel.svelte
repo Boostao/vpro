@@ -2,6 +2,7 @@
   import { ChevronLeft, ChevronRight, RefreshCw, X } from '@lucide/svelte';
   import type { HierarchyNode, PlotPage } from '../../bindings/github.com/boostao/vpro/app';
   import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
+  import { formatError } from '../shared/readRequests';
   import { projectState } from '../shared/state';
 
   let {
@@ -15,7 +16,7 @@
     pageSize = 25,
     hierarchyNodes = [],
     selected = $bindable(null),
-    siviStandaloneEnabled = true,
+    siviAvailable = true,
     canUndoSelectedPlot = false,
     editorBusy = false,
     transitionWorking = false,
@@ -41,7 +42,7 @@
     pageSize?: number;
     hierarchyNodes?: HierarchyNode[];
     selected?: PlotSummary | null;
-    siviStandaloneEnabled?: boolean;
+    siviAvailable?: boolean;
     canUndoSelectedPlot?: boolean;
     editorBusy?: boolean;
     transitionWorking?: boolean;
@@ -82,7 +83,8 @@
     if (!trimmedFilter) return page?.plots ?? [];
     const pool = allPlots.length > 0 ? allPlots : (page?.plots ?? []);
     return pool.filter((p) => {
-      const hay = `${p.plotNumber ?? ''} ${p.fieldNumber ?? ''} ${p.plotRepresenting ?? ''} ${p.zone ?? ''} ${p.subZone ?? ''} ${p.siteSeries ?? ''}`.toLowerCase();
+      const hay =
+        `${p.plotNumber ?? ''} ${p.fieldNumber ?? ''} ${p.plotRepresenting ?? ''} ${p.zone ?? ''} ${p.subZone ?? ''} ${p.siteSeries ?? ''}`.toLowerCase();
       return hay.includes(trimmedFilter);
     });
   });
@@ -105,7 +107,7 @@
     try {
       await oncopyplot(selected.plotNumber, targetPlotDraft);
     } catch (cause) {
-      actionError = String(cause instanceof Error ? cause.message : cause);
+      actionError = formatError(cause);
     } finally {
       actionBusy = false;
     }
@@ -118,7 +120,7 @@
     try {
       await onremoveplot(selected.plotNumber, canUndoSelectedPlot ? '' : cleanProjectDraft);
     } catch (cause) {
-      actionError = String(cause instanceof Error ? cause.message : cause);
+      actionError = formatError(cause);
     } finally {
       actionBusy = false;
     }
@@ -144,11 +146,16 @@
       </div>
       <h2 class="tabular-nums">{selected.plotNumber}</h2>
       <dl>
-        <dt>Field number</dt><dd class="tabular-nums">{selected.fieldNumber ?? '—'}</dd>
-        <dt>Representing</dt><dd>{selected.plotRepresenting ?? '—'}</dd>
-        <dt>Zone</dt><dd>{selected.zone ?? '—'}</dd>
-        <dt>Subzone</dt><dd>{selected.subZone ?? '—'}</dd>
-        <dt>Site series</dt><dd class="tabular-nums">{selected.siteSeries ?? '—'}</dd>
+        <dt>Field number</dt>
+        <dd class="tabular-nums">{selected.fieldNumber ?? '—'}</dd>
+        <dt>Representing</dt>
+        <dd>{selected.plotRepresenting ?? '—'}</dd>
+        <dt>Zone</dt>
+        <dd>{selected.zone ?? '—'}</dd>
+        <dt>Subzone</dt>
+        <dd>{selected.subZone ?? '—'}</dd>
+        <dt>Site series</dt>
+        <dd class="tabular-nums">{selected.siteSeries ?? '—'}</dd>
       </dl>
       <div class="mt-4 pt-3 border-t border-vpro-border">
         <button
@@ -167,27 +174,38 @@
         >
           Open Two-Page (FS882-8x6XL)
         </button>
-        {#if siviStandaloneEnabled}
+        {#if siviAvailable}
           <button
             type="button"
             data-sivi-standalone-open
             class="mt-2 w-full py-2 px-3 border border-vpro-navy text-vpro-navy hover:bg-vpro-navy-tint rounded text-xs font-semibold"
             disabled={busy || editorBusy || transitionWorking || pendingTransition !== null}
-            onclick={onopensivi}
-          >Open SIVI / FS1333</button>
+            onclick={onopensivi}>Open SIVI / FS1333</button
+          >
         {/if}
 
         {#if oncopyplot || onremoveplot}
-          <details class="mt-3 rounded border border-vpro-border bg-vpro-surface-subtle p-2.5 text-xs" data-plot-identity-actions>
+          <details
+            class="mt-3 rounded border border-vpro-border bg-vpro-surface-subtle p-2.5 text-xs"
+            data-plot-identity-actions
+          >
             <summary class="cursor-pointer font-semibold text-vpro-navy">Rename or Remove Plot</summary>
             <div class="mt-2 space-y-2.5 text-vpro-ink-secondary">
               {#if actionError}
-                <p role="alert" class="rounded border border-vpro-error bg-vpro-error-bg p-1.5 text-[11px] text-vpro-error-ink">{actionError}</p>
+                <p
+                  role="alert"
+                  class="rounded border border-vpro-error bg-vpro-error-bg p-1.5 text-[11px] text-vpro-error-ink"
+                >
+                  {actionError}
+                </p>
               {/if}
 
               {#if oncopyplot}
                 <div class="space-y-1">
-                  <label for="inspector-copy-plot-input" class="block text-[11px] font-semibold text-vpro-ink-secondary">
+                  <label
+                    for="inspector-copy-plot-input"
+                    class="block text-[11px] font-semibold text-vpro-ink-secondary"
+                  >
                     Copy to corrected Plot Number (up to 7 characters)
                   </label>
                   <div class="flex gap-1.5">
@@ -230,7 +248,10 @@
                       Delete Newly Created Plot
                     </button>
                   {:else}
-                    <label for="inspector-clean-project-input" class="block text-[11px] font-semibold text-vpro-ink-secondary">
+                    <label
+                      for="inspector-clean-project-input"
+                      class="block text-[11px] font-semibold text-vpro-ink-secondary"
+                    >
                       Remove plot into clean project copy (keeps original .db backup)
                     </label>
                     <input
@@ -276,19 +297,28 @@
       </div>
       <h2>{$projectState?.activeProject ?? 'No project'}</h2>
       <dl>
-        <dt>Active Site Unit</dt><dd>{$projectState?.activeSU ?? 'None'}</dd>
-        <dt>Active Hierarchy</dt><dd>{$projectState?.activeHierarchy ?? 'None'}</dd>
-        <dt>Plot Profile</dt><dd>{$projectState?.plotProfile?.source?.name ?? 'None'}</dd>
-        <dt>Plots in Scope</dt><dd class="tabular-nums">{page?.total ?? 0}</dd>
+        <dt>Active Site Unit</dt>
+        <dd>{$projectState?.activeSU ?? 'None'}</dd>
+        <dt>Active Hierarchy</dt>
+        <dd>{$projectState?.activeHierarchy ?? 'None'}</dd>
+        <dt>Plot Profile</dt>
+        <dd>{$projectState?.plotProfile?.source?.name ?? 'None'}</dd>
+        <dt>Plots in Scope</dt>
+        <dd class="tabular-nums">{page?.total ?? 0}</dd>
       </dl>
       <p class="mt-4 text-xs text-vpro-ink-secondary leading-relaxed">
-        Select a plot row to inspect BEC attributes, or press <kbd class="px-1 py-0.5 rounded border border-vpro-border bg-vpro-surface-subtle font-mono text-[11px]">Ctrl+K</kbd> to jump directly to any plot, report, or LMH25 topic.
+        Select a plot row to inspect BEC attributes, or press <kbd
+          class="px-1 py-0.5 rounded border border-vpro-border bg-vpro-surface-subtle font-mono text-[11px]">Ctrl+K</kbd
+        > to jump directly to any plot, report, or LMH25 topic.
       </p>
     </aside>
   {/if}
 {:else if view === 'hierarchy'}
   <div class="content-heading">
-    <div><div class="eyebrow">{$projectState?.hierarchyFile ?? 'HIERARCHY'}</div><h1>Hierarchy</h1></div>
+    <div>
+      <div class="eyebrow">{$projectState?.hierarchyFile ?? 'HIERARCHY'}</div>
+      <h1>Hierarchy</h1>
+    </div>
     <div class="flex flex-wrap items-center gap-2">
       <button
         type="button"
@@ -298,16 +328,27 @@
       >
         Open SU &amp; Hierarchy Explorer
       </button>
-      <button class="icon-button" title="Refresh hierarchy" aria-label="Refresh hierarchy" disabled={busy} onclick={onrefresh}><RefreshCw size={18} strokeWidth={1.8} /></button>
+      <button
+        class="icon-button"
+        title="Refresh hierarchy"
+        aria-label="Refresh hierarchy"
+        disabled={busy}
+        onclick={onrefresh}><RefreshCw size={18} strokeWidth={1.8} /></button
+      >
     </div>
   </div>
-  <div class="table-bar"><span>{hierarchyNodes.length} units</span><span>{$projectState?.activeHierarchy ?? 'None'}</span></div>
+  <div class="table-bar">
+    <span>{hierarchyNodes.length} units</span><span>{$projectState?.activeHierarchy ?? 'None'}</span>
+  </div>
   <div class="table-scroll">
     <table>
       <thead><tr><th>Unit</th><th>ID</th><th>Parent ID</th><th>Level</th></tr></thead>
       <tbody>
         {#each hierarchyNodes as node (node.id)}
-          <tr><td>{node.name ?? 'Unnamed'}</td><td>{node.id}</td><td>{node.parent ?? '—'}</td><td>{node.level ?? '—'}</td></tr>
+          <tr
+            ><td>{node.name ?? 'Unnamed'}</td><td>{node.id}</td><td>{node.parent ?? '—'}</td><td>{node.level ?? '—'}</td
+            ></tr
+          >
         {:else}
           <tr><td colspan="4" class="empty-row">No hierarchy selected.</td></tr>
         {/each}
@@ -316,11 +357,24 @@
   </div>
 {:else}
   <div class="content-heading">
-    <div><div class="eyebrow">{$projectState?.activeProject ?? 'PROJECT'}</div><h1>Plots</h1></div>
-    <button class="icon-button" title="Refresh projects and plots" aria-label="Refresh projects and plots" disabled={busy} onclick={onrefresh}><RefreshCw size={18} strokeWidth={1.8} /></button>
+    <div>
+      <div class="eyebrow">{$projectState?.activeProject ?? 'PROJECT'}</div>
+      <h1>Plots</h1>
+    </div>
+    <button
+      class="icon-button"
+      title="Refresh projects and plots"
+      aria-label="Refresh projects and plots"
+      disabled={busy}
+      onclick={onrefresh}><RefreshCw size={18} strokeWidth={1.8} /></button
+    >
   </div>
   <div class="table-bar">
-    <span>{trimmedFilter ? `${displayedPlots.length} matching of ${page?.total ?? allPlots.length} plots` : `${page?.total ?? 0} plots`}</span>
+    <span
+      >{trimmedFilter
+        ? `${displayedPlots.length} matching of ${page?.total ?? allPlots.length} plots`
+        : `${page?.total ?? 0} plots`}</span
+    >
     <div class="flex flex-wrap items-center gap-2">
       <input
         bind:this={filterInputEl}
@@ -336,26 +390,64 @@
   </div>
   <div class="table-scroll">
     <table>
-      <thead><tr><th>Plot number</th><th>Field number</th><th>Representing</th><th>Zone</th><th>Subzone</th><th>Site series</th></tr></thead>
+      <thead
+        ><tr
+          ><th>Plot number</th><th>Field number</th><th>Representing</th><th>Zone</th><th>Subzone</th><th
+            >Site series</th
+          ></tr
+        ></thead
+      >
       <tbody>
         {#each displayedPlots as plot (plot.plotNumber)}
           <tr class:selected={selected?.plotNumber === plot.plotNumber}>
-            <td><button class="plot-link tabular-nums" onclick={() => { selected = plot; onselectplot(plot); }}>{plot.plotNumber}</button></td>
+            <td
+              ><button
+                class="plot-link tabular-nums"
+                onclick={() => {
+                  selected = plot;
+                  onselectplot(plot);
+                }}>{plot.plotNumber}</button
+              ></td
+            >
             <td class="tabular-nums">{plot.fieldNumber ?? '—'}</td><td>{plot.plotRepresenting ?? '—'}</td>
-            <td>{plot.zone ?? '—'}</td><td>{plot.subZone ?? '—'}</td><td class="tabular-nums">{plot.siteSeries ?? '—'}</td>
+            <td>{plot.zone ?? '—'}</td><td>{plot.subZone ?? '—'}</td><td class="tabular-nums"
+              >{plot.siteSeries ?? '—'}</td
+            >
           </tr>
         {:else}
-          <tr><td colspan="6" class="empty-row">{busy ? 'Loading plots...' : trimmedFilter ? `No plots matched "${plotFilter.trim()}".` : 'No plots in this project.'}</td></tr>
+          <tr
+            ><td colspan="6" class="empty-row"
+              >{busy
+                ? 'Loading plots...'
+                : trimmedFilter
+                  ? `No plots matched "${plotFilter.trim()}".`
+                  : 'No plots in this project.'}</td
+            ></tr
+          >
         {/each}
       </tbody>
     </table>
   </div>
   {#if !trimmedFilter}
     <div class="table-footer">
-      <span class="tabular-nums">{page?.total ? `${offset + 1}–${Math.min(offset + pageSize, page.total)} of ${page.total}` : '0 of 0'}</span>
+      <span class="tabular-nums"
+        >{page?.total ? `${offset + 1}–${Math.min(offset + pageSize, page.total)} of ${page.total}` : '0 of 0'}</span
+      >
       <div class="page-controls">
-        <button class="icon-button" title="Previous page" aria-label="Previous page" disabled={busy || offset === 0} onclick={() => onloadpage(Math.max(0, offset - pageSize))}><ChevronLeft size={18} /></button>
-        <button class="icon-button" title="Next page" aria-label="Next page" disabled={busy || offset + pageSize >= (page?.total ?? 0)} onclick={() => onloadpage(offset + pageSize)}><ChevronRight size={18} /></button>
+        <button
+          class="icon-button"
+          title="Previous page"
+          aria-label="Previous page"
+          disabled={busy || offset === 0}
+          onclick={() => onloadpage(Math.max(0, offset - pageSize))}><ChevronLeft size={18} /></button
+        >
+        <button
+          class="icon-button"
+          title="Next page"
+          aria-label="Next page"
+          disabled={busy || offset + pageSize >= (page?.total ?? 0)}
+          onclick={() => onloadpage(offset + pageSize)}><ChevronRight size={18} /></button
+        >
       </div>
     </div>
   {/if}

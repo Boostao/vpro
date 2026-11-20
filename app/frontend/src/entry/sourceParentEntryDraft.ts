@@ -4,20 +4,41 @@ import { wellFormedUTF16 } from './qualityEditor';
 import { ordinaryTextError, sourceParentBooleanNullError } from './ordinaryEditor';
 import { siviDateTimestampError } from './siviDateTimestamp';
 
-export type SourceParentEntryInput = { kind: 'original' | 'clear' } | { kind: 'text'; raw: string }
-  | { kind: 'boolean'; value: boolean } | { kind: 'option'; option: number | null };
-export interface SourceParentEntryParsed { value: ProjectMetadataCell; error: string | null }
-export interface SourceParentEntryPolicy { column: string; kind: string; maximum: number }
-export const sourceParentEntryNull = (): ProjectMetadataCell =>
-  ({ storage: 'null', text: null, integer: null, real: null, blobHex: null });
+export type SourceParentEntryInput =
+  | { kind: 'original' | 'clear' }
+  | { kind: 'text'; raw: string }
+  | { kind: 'boolean'; value: boolean }
+  | { kind: 'option'; option: number | null };
+export interface SourceParentEntryParsed {
+  value: ProjectMetadataCell;
+  error: string | null;
+}
+export interface SourceParentEntryPolicy {
+  column: string;
+  kind: string;
+  maximum: number;
+}
+export const sourceParentEntryNull = (): ProjectMetadataCell => ({
+  storage: 'null',
+  text: null,
+  integer: null,
+  real: null,
+  blobHex: null,
+});
 
-export function parseSourceParentEntryValue<Policy extends SourceParentEntryPolicy>(policy: Policy,
-  expected: ProjectMetadataCell, input: SourceParentEntryInput, parser: {
-    label: string; kinds: readonly string[];
+export function parseSourceParentEntryValue<Policy extends SourceParentEntryPolicy>(
+  policy: Policy,
+  expected: ProjectMetadataCell,
+  input: SourceParentEntryInput,
+  parser: {
+    label: string;
+    kinds: readonly string[];
     allowsEmpty(policy: Policy): boolean;
     number(policy: Policy, raw: string): SourceParentEntryParsed;
-  }): SourceParentEntryParsed {
-  let value = structuredClone(expected), error: string | null = null;
+  }
+): SourceParentEntryParsed {
+  let value = structuredClone(expected),
+    error: string | null = null;
   if (!parser.kinds.includes(policy.kind) || !Number.isInteger(policy.maximum) || policy.maximum < 0) {
     throw new Error(`${parser.label} ${policy.column} has an unavailable parser policy.`);
   }
@@ -38,10 +59,18 @@ export function parseSourceParentEntryValue<Policy extends SourceParentEntryPoli
       return { value, error };
     } else if (['text', 'categorical', 'plot-type', 'date'].includes(policy.kind)) {
       value = { ...sourceParentEntryNull(), storage: 'text', text: input.raw };
-      error = policy.kind === 'date' ? siviDateTimestampError(input.raw)
-        : parser.allowsEmpty(policy) && input.raw === '' ? null
-        : ordinaryTextError(policy.maximum === 0 ? { label: policy.column, kind: 'memo' }
-          : { label: policy.column, kind: 'text', maximum: policy.maximum }, input.raw, null);
+      error =
+        policy.kind === 'date'
+          ? siviDateTimestampError(input.raw)
+          : parser.allowsEmpty(policy) && input.raw === ''
+            ? null
+            : ordinaryTextError(
+                policy.maximum === 0
+                  ? { label: policy.column, kind: 'memo' }
+                  : { label: policy.column, kind: 'text', maximum: policy.maximum },
+                input.raw,
+                null
+              );
     } else if (['integer', 'single', 'double', 'latitude', 'longitude'].includes(policy.kind)) {
       ({ value, error } = parser.number(policy, input.raw));
     } else error = `${policy.column} requires an explicit Boolean or source option selection.`;
@@ -49,6 +78,7 @@ export function parseSourceParentEntryValue<Policy extends SourceParentEntryPoli
   if (!error && expected.storage === 'blob' && !equalCell(expected, value)) {
     error = `${policy.column} historical BLOB replacement has no lossless source audit representation; retain original storage.`;
   }
-  if (!error) error = sourceParentBooleanNullError(policy.column, expected.storage === 'null', value.storage === 'null');
+  if (!error)
+    error = sourceParentBooleanNullError(policy.column, expected.storage === 'null', value.storage === 'null');
   return { value, error };
 }

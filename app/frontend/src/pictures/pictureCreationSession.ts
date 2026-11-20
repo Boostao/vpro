@@ -2,8 +2,14 @@ import type { EditorCloseState } from '../shell/closeLifecycle';
 import { ReadRequests, type CancellableRead } from '../shared/readRequests';
 import { pictureImageFromWire, type PictureOwner, type PicturePreview } from './pictureRead';
 import { validSIVIRequestId } from '../entry/siviRequestId';
-import { pictureSelectionFromWire, pictureCreationRequest, pictureCreationReceiptFromWire,
-  type PictureSelection, type PictureCreationRequest, type PictureCreationReceipt } from './pictureCreationEditor';
+import {
+  pictureSelectionFromWire,
+  pictureCreationRequest,
+  pictureCreationReceiptFromWire,
+  type PictureSelection,
+  type PictureCreationRequest,
+  type PictureCreationReceipt,
+} from './pictureCreationEditor';
 
 export interface PictureCreationPort {
   choose(): PromiseLike<unknown>;
@@ -20,7 +26,15 @@ export interface PictureCreationView {
   receipt: PictureCreationReceipt | null;
   receipts: PictureCreationReceipt[];
   image: PicturePreview | null;
-  phase: 'idle' | 'choosing' | 'recovering-selection' | 'creating' | 'recovering-receipt' | 'previewing' | 'releasing' | 'acknowledging';
+  phase:
+    | 'idle'
+    | 'choosing'
+    | 'recovering-selection'
+    | 'creating'
+    | 'recovering-receipt'
+    | 'previewing'
+    | 'releasing'
+    | 'acknowledging';
   busy: boolean;
   blocked: boolean;
   error: string | null;
@@ -31,8 +45,18 @@ export interface PictureCreationView {
 
 export class PictureCreationSession {
   private readonly owner: PictureOwner;
-  private state: Omit<PictureCreationView, 'attempted' | 'noCommitVerified'> = { selection: null, request: null, receipt: null, receipts: [], image: null,
-    phase: 'idle', busy: false, blocked: false, error: null, acknowledged: false };
+  private state: Omit<PictureCreationView, 'attempted' | 'noCommitVerified'> = {
+    selection: null,
+    request: null,
+    receipt: null,
+    receipts: [],
+    image: null,
+    phase: 'idle',
+    busy: false,
+    blocked: false,
+    error: null,
+    acknowledged: false,
+  };
   private plannedId: string | null = null;
   private attempted = false;
   private noCommitVerified = false;
@@ -41,24 +65,40 @@ export class PictureCreationSession {
   private readonly reads = new ReadRequests();
   private readonly listeners = new Set<() => void>();
 
-  constructor(owner: PictureOwner, private readonly port: PictureCreationPort) {
+  constructor(
+    owner: PictureOwner,
+    private readonly port: PictureCreationPort
+  ) {
     pictureSelectionFromWire(null, owner);
     this.owner = { contextId: owner.contextId, project: owner.project, plotNumber: owner.plotNumber };
   }
   subscribe(notify: () => void) {
     this.listeners.add(notify);
     notify();
-    return () => { this.listeners.delete(notify); };
+    return () => {
+      this.listeners.delete(notify);
+    };
   }
-  private changed() { for (const notify of this.listeners) notify(); }
+  private changed() {
+    for (const notify of this.listeners) notify();
+  }
   view(): PictureCreationView {
     return structuredClone({ ...this.state, attempted: this.attempted, noCommitVerified: this.noCommitVerified });
   }
   closeState(): EditorCloseState {
-    return { unsaved: this.state.blocked, busy: this.state.busy, blocked: this.state.blocked, canSave: false,
-      saveReason: this.state.phase === 'choosing' ? 'Finish or Cancel the native picture chooser.'
-        : this.state.blocked ? 'Recover, release or acknowledge the retained picture creation outcome before leaving.' : '',
-      error: this.state.error };
+    return {
+      unsaved: this.state.blocked,
+      busy: this.state.busy,
+      blocked: this.state.blocked,
+      canSave: false,
+      saveReason:
+        this.state.phase === 'choosing'
+          ? 'Finish or Cancel the native picture chooser.'
+          : this.state.blocked
+            ? 'Recover, release or acknowledge the retained picture creation outcome before leaving.'
+            : '',
+      error: this.state.error,
+    };
   }
   private idle() {
     if (this.state.busy) throw new Error('Finish the current picture operation first.');
@@ -79,7 +119,7 @@ export class PictureCreationSession {
   }
   private committed(wire: unknown, request: PictureCreationRequest) {
     this.state.receipt = pictureCreationReceiptFromWire(wire, request, this.owner);
-    if (!this.state.receipts.some(receipt => receipt.requestId === request.requestId)) {
+    if (!this.state.receipts.some((receipt) => receipt.requestId === request.requestId)) {
       this.state.receipts = [...this.state.receipts, this.state.receipt];
     }
     this.state.blocked = true;
@@ -89,7 +129,9 @@ export class PictureCreationSession {
   cancel() {
     if (!this.state.busy) return;
     if (this.state.phase === 'choosing' || this.state.phase === 'releasing' || this.state.phase === 'acknowledging') {
-      throw new Error('Finish this operation in its native dialog or wait for its capability acknowledgement; promise cancellation cannot dismiss it.');
+      throw new Error(
+        'Finish this operation in its native dialog or wait for its capability acknowledgement; promise cancellation cannot dismiss it.'
+      );
     }
     const phase = this.state.phase;
     this.generation++;
@@ -97,8 +139,10 @@ export class PictureCreationSession {
     this.state.busy = false;
     this.state.phase = 'idle';
     this.state.blocked = true;
-    this.state.error = phase === 'previewing' ? 'Picture preview cancelled; the committed receipt is retained.'
-      : 'Picture operation acknowledgement cancelled; recover the retained outcome without repeating Create.';
+    this.state.error =
+      phase === 'previewing'
+        ? 'Picture preview cancelled; the committed receipt is retained.'
+        : 'Picture operation acknowledgement cancelled; recover the retained outcome without repeating Create.';
     this.changed();
   }
   async add(requestId: string): Promise<boolean> {
@@ -110,7 +154,15 @@ export class PictureCreationSession {
     this.attempted = false;
     this.noCommitVerified = false;
     this.selectionAbsentVerified = false;
-    this.state = { ...this.state, selection: null, request: null, receipt: null, image: null, acknowledged: false, blocked: true };
+    this.state = {
+      ...this.state,
+      selection: null,
+      request: null,
+      receipt: null,
+      image: null,
+      acknowledged: false,
+      blocked: true,
+    };
     const generation = this.begin('choosing');
     let selected = false;
     try {
@@ -133,12 +185,15 @@ export class PictureCreationSession {
         this.plannedId = null;
         this.state.error = `Picture selection unavailable; no picture was attached: ${String(cause)}`;
       }
-    } finally { this.finish(generation); }
+    } finally {
+      this.finish(generation);
+    }
     return selected ? this.create() : false;
   }
   async recoverSelection(plannedRequestId?: string): Promise<boolean> {
     this.idle();
-    const fallbackRequestId = this.plannedId ?? (plannedRequestId && validSIVIRequestId(plannedRequestId) ? plannedRequestId : null);
+    const fallbackRequestId =
+      this.plannedId ?? (plannedRequestId && validSIVIRequestId(plannedRequestId) ? plannedRequestId : null);
     if (!this.state.blocked && !fallbackRequestId) {
       throw new Error('No retained picture selection requires recovery.');
     }
@@ -148,14 +203,20 @@ export class PictureCreationSession {
       const wire = await this.reads.track(this.port.recoverSelection());
       if (generation !== this.generation) return false;
       const recovered = pictureSelectionFromWire(wire, this.owner);
-      if (recovered && ((this.state.request && recovered.selectedPath !== this.state.request.selectedPath) ||
-          (this.state.selection && recovered.token !== this.state.selection.token))) {
-        throw new Error('Recovered selection differs from the retained literal or capability; do not replace its identity.');
+      if (
+        recovered &&
+        ((this.state.request && recovered.selectedPath !== this.state.request.selectedPath) ||
+          (this.state.selection && recovered.token !== this.state.selection.token))
+      ) {
+        throw new Error(
+          'Recovered selection differs from the retained literal or capability; do not replace its identity.'
+        );
       }
       this.state.selection = recovered;
       this.selectionAbsentVerified = recovered === null;
       if (this.state.selection && !this.state.request) {
-        if (!fallbackRequestId) throw new Error('The original planned creation UUID is unavailable; do not infer a new request.');
+        if (!fallbackRequestId)
+          throw new Error('The original planned creation UUID is unavailable; do not infer a new request.');
         this.plannedId = fallbackRequestId;
         this.state.request = pictureCreationRequest(this.state.selection, this.owner, fallbackRequestId);
         this.state.blocked = true;
@@ -177,13 +238,18 @@ export class PictureCreationSession {
         }
       }
       return false;
-    } finally { this.finish(generation); }
+    } finally {
+      this.finish(generation);
+    }
   }
   async create(): Promise<boolean> {
     this.idle();
-    const selection = this.state.selection, request = this.state.request;
+    const selection = this.state.selection,
+      request = this.state.request;
     if (!selection || !request || this.attempted || this.state.receipt) {
-      throw new Error('Create requires one recovered, unattempted selection; resolve durable history instead of replaying.');
+      throw new Error(
+        'Create requires one recovered, unattempted selection; resolve durable history instead of replaying.'
+      );
     }
     this.attempted = true;
     const generation = this.begin('creating');
@@ -194,14 +260,18 @@ export class PictureCreationSession {
       this.committed(wire, request);
       return true;
     } catch (cause) {
-      if (generation === this.generation) this.state.error = `Picture Create outcome is unknown; recover its exact durable receipt, never repeat Create: ${String(cause)}`;
+      if (generation === this.generation)
+        this.state.error = `Picture Create outcome is unknown; recover its exact durable receipt, never repeat Create: ${String(cause)}`;
       return false;
-    } finally { this.finish(generation); }
+    } finally {
+      this.finish(generation);
+    }
   }
   async recoverReceipt(): Promise<boolean> {
     this.idle();
     const request = this.state.request;
-    if (!request || !this.attempted) throw new Error('No attempted picture creation request requires receipt recovery.');
+    if (!request || !this.attempted)
+      throw new Error('No attempted picture creation request requires receipt recovery.');
     this.noCommitVerified = false;
     const generation = this.begin('recovering-receipt');
     try {
@@ -210,17 +280,23 @@ export class PictureCreationSession {
       if (generation !== this.generation) return false;
       if (wire === null) {
         this.noCommitVerified = true;
-        this.state.error = 'No durable receipt was found; explicitly release the selection rather than repeat this request.';
+        this.state.error =
+          'No durable receipt was found; explicitly release the selection rather than repeat this request.';
       } else this.committed(wire, request);
       return true;
     } catch (cause) {
-      if (generation === this.generation) this.state.error = `Picture receipt recovery failed; the original request remains blocked: ${String(cause)}`;
+      if (generation === this.generation)
+        this.state.error = `Picture receipt recovery failed; the original request remains blocked: ${String(cause)}`;
       return false;
-    } finally { this.finish(generation); }
+    } finally {
+      this.finish(generation);
+    }
   }
   async preview(): Promise<boolean> {
     this.idle();
-    const selection = this.state.selection, request = this.state.request, receipt = this.state.receipt;
+    const selection = this.state.selection,
+      request = this.state.request,
+      receipt = this.state.receipt;
     if (!selection || !request || !receipt || this.state.acknowledged) {
       throw new Error('Selected-file preview requires the retained capability and verified committed receipt.');
     }
@@ -232,15 +308,20 @@ export class PictureCreationSession {
       this.state.image = pictureImageFromWire(wire, this.owner, receipt.rowId);
       return true;
     } catch (cause) {
-      if (generation === this.generation) this.state.error = `Selected-file preview unavailable; metadata commit and receipt retained: ${String(cause)}`;
+      if (generation === this.generation)
+        this.state.error = `Selected-file preview unavailable; metadata commit and receipt retained: ${String(cause)}`;
       return false;
-    } finally { this.finish(generation); }
+    } finally {
+      this.finish(generation);
+    }
   }
   async release(): Promise<boolean> {
     this.idle();
     const selection = this.state.selection;
     if (this.state.receipt || (this.attempted && !this.noCommitVerified)) {
-      throw new Error('Resolve durable history before releasing an attempted selection; committed receipts require acknowledgement.');
+      throw new Error(
+        'Resolve durable history before releasing an attempted selection; committed receipts require acknowledgement.'
+      );
     }
     const generation = this.begin('releasing');
     try {
@@ -254,7 +335,9 @@ export class PictureCreationSession {
     } catch (cause) {
       this.state.error = `Picture selection release acknowledgement failed; recover selection before leaving: ${String(cause)}`;
       return false;
-    } finally { this.finish(generation); }
+    } finally {
+      this.finish(generation);
+    }
   }
   async acknowledge(): Promise<boolean> {
     this.idle();
@@ -272,6 +355,8 @@ export class PictureCreationSession {
     } catch (cause) {
       this.state.error = `Picture receipt acknowledgement failed; receipt retained and close remains blocked: ${String(cause)}`;
       return false;
-    } finally { this.finish(generation); }
+    } finally {
+      this.finish(generation);
+    }
   }
 }

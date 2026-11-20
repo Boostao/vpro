@@ -33,15 +33,23 @@ test('Native-verified quality source renderer compiles, preserves lexical input,
   assert.equal(compile(source, { filename: 'QualityFields.svelte', generate: 'client' }).warnings.length, 0);
   assert.match(source, /style=\{position\(control\)\}/);
   assert.match(source, /data-column=\{control.column\}/);
-  assert.match(source, /oninput=\{event => setCode/);
+  assert.match(source, /oninput=\{\(event\) => setCode|oninput=\{event => setCode/);
   assert.doesNotMatch(source, /maxlength|\.slice\(|\.substring\(|\.trim\(|PlotService|UpdatePlot|CreatePlot/);
   const parent = readFileSync(srcPath('HeaderEditor.svelte'), 'utf8');
   assert.match(parent, /qualityKey\(control.column\)/);
   assert.match(parent, /@render qualityInputs/);
   assert.match(parent, /onbusy=\{onQualityBusyChange\}/);
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
-  assert.match(form, /coordinateBusy \|\| workingUnitBusy \|\| qualityBusy/);
-  assert.match(form, /onclick=\{toggleLock\}\s+disabled=\{busy \|\| headerWorkflowBusy \|\| !capabilitiesReady \|\| siviStandalone &&/);
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
+  const h = createFS882TestController();
+  try {
+    h.ctrl.qualityBusy = true;
+    h.flush();
+    assert.equal(h.ctrl.headerWorkflowBusy, true);
+  } finally {
+    h.dispose();
+  }
+  const toolbar = readFileSync(srcPath('FS882Toolbar.svelte'), 'utf8');
+  assert.match(toolbar, /onclick=\{onToggleLock\}[\s\S]*?disabled=\{ctrl\.busy \|\| ctrl\.headerWorkflowBusy/);
 });
 test('All three raw nullable Admin columns have15 UTF-16 bounds without silent truncation', () => {
   assert.deepEqual(plain(qualityKeys), ['sitePlotQuality', 'vegPlotQuality', 'soilPlotQuality']);
@@ -150,7 +158,7 @@ test('explicit catalogue Retry forces verification while normal refresh remains 
     ['SoilCodeReference.svelte', 'ReloadSoilCodeCatalogue']
   ]) {
     const source = readFileSync(srcPath(file), 'utf8');
-    assert.match(source, new RegExp(`if \\(force\\) await requests\\.track\\(PlotEntryService\\.${service}\\(\\)\\)`));
+    assert.match(source, new RegExp(`if \\(force\\) await (?:requests\\.track\\(|trackIfCancellable\\(requests,\\s*)PlotEntryService\\.${service}\\(\\)\\)`));
     assert.match(source, /refresh\(true\)/);
     assert.equal(compile(source, { filename: file, generate: 'client' }).warnings.length, 0);
   }

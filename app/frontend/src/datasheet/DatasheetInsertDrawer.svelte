@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { formatError } from '../shared/readRequests';
   import {
     defaultDatasheetBackendPort,
     isColumnEditable,
@@ -47,7 +48,7 @@
   const insertableColumns = $derived(
     orderedColumns
       .filter(
-        c =>
+        (c) =>
           c.meta.name !== 'ID' &&
           c.meta.name !== 'PlotNumber' &&
           isColumnEditable(page.tableKey, c.meta, page.canEditMaster)
@@ -96,7 +97,7 @@
         `Inserted row ID ${res.id} for plot ${res.plotNumber} in ${res.tableName} (${res.auditRows} audit record(s)).`
       );
     } catch (err) {
-      onError(`Insert child row failed: ${String(err)}`);
+      onError(`Insert child row failed: ${formatError(err)}`);
     } finally {
       insertBusy = false;
     }
@@ -116,7 +117,7 @@
           type="text"
           data-insert-field={colEntry.meta.name}
           value={insertFieldDrafts[colEntry.meta.name] ?? ''}
-          oninput={e => {
+          oninput={(e) => {
             insertFieldDrafts = { ...insertFieldDrafts, [colEntry.meta.name]: e.currentTarget.value };
           }}
         />

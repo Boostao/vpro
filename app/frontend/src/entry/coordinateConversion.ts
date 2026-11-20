@@ -1,4 +1,5 @@
 import type { CoordinateParts } from '../../bindings/github.com/boostao/vpro/app';
+import { trackIfCancellable, type ReadRequests } from '../shared/readRequests';
 import type { CoordinateAPI, CoordinateAxis, CoordinateDisplayMode } from './coordinateEditor';
 
 export type CoordinateHelperMode = 'dm' | 'dms' | 'utm';
@@ -9,7 +10,11 @@ export interface SpatialCoordinateRuntimeService {
   SetCoordinateMode(mode: string): Promise<void>;
   DecomposeCoordinate(value: number | null, mode: string): Promise<CoordinateParts>;
   ConvertCoordinate(axis: string, mode: string, parts: CoordinateParts): Promise<number | null>;
-  ProjectNAD83UTMToLatLon(zone: number, easting: number, northing: number): Promise<{ latitude: number; longitude: number }>;
+  ProjectNAD83UTMToLatLon(
+    zone: number,
+    easting: number,
+    northing: number
+  ): Promise<{ latitude: number; longitude: number }>;
 }
 
 export interface SpatialCoordinateModeMap {
@@ -18,9 +23,17 @@ export interface SpatialCoordinateModeMap {
   CoordinateModeDMS: string;
 }
 
+function runRead<T>(reads: ReadRequests | undefined, request: PromiseLike<T>): Promise<T> {
+  return reads ? trackIfCancellable(reads, request) : Promise.resolve(request);
+}
+
 export function createSpatialCoordinatePort(
-  service: Pick<SpatialCoordinateRuntimeService, 'GetCoordinateMode' | 'SetCoordinateMode' | 'DecomposeCoordinate' | 'ConvertCoordinate'>,
+  service: Pick<
+    SpatialCoordinateRuntimeService,
+    'GetCoordinateMode' | 'SetCoordinateMode' | 'DecomposeCoordinate' | 'ConvertCoordinate'
+  >,
   modes: SpatialCoordinateModeMap,
+  reads?: ReadRequests
 ): CoordinateAPI {
   const serviceModes: Record<CoordinateDisplayMode, string> = {
     dd: modes.CoordinateModeDD,
@@ -28,10 +41,11 @@ export function createSpatialCoordinatePort(
     dms: modes.CoordinateModeDMS,
   };
   return {
-    getMode: () => service.GetCoordinateMode(),
+    getMode: () => runRead(reads, service.GetCoordinateMode()),
     setMode: (value) => service.SetCoordinateMode(serviceModes[value]),
-    decompose: (value, valueMode) => service.DecomposeCoordinate(value, serviceModes[valueMode]),
-    convert: (axis, valueMode, parts) => service.ConvertCoordinate(axis, serviceModes[valueMode], parts),
+    decompose: (value, valueMode) => runRead(reads, service.DecomposeCoordinate(value, serviceModes[valueMode])),
+    convert: (axis, valueMode, parts) =>
+      runRead(reads, service.ConvertCoordinate(axis, serviceModes[valueMode], parts)),
   };
 }
 
@@ -51,6 +65,7 @@ export async function projectNAD83UTMZoneToLatLon(
   easting: number,
   northing: number,
   strictNorthernZone = true,
+  reads?: ReadRequests
 ): Promise<{ zone: number; latitude: number; longitude: number; easting: number; northing: number }> {
   const zone = strictNorthernZone
     ? parseNorthernNAD83UTMZone(rawZone)
@@ -58,7 +73,7 @@ export async function projectNAD83UTMZoneToLatLon(
   if (!Number.isFinite(zone) || !Number.isFinite(easting) || !Number.isFinite(northing)) {
     throw new Error('Enter valid NAD83 UTM Zone, Easting, and Northing.');
   }
-  const projected = await service.ProjectNAD83UTMToLatLon(zone, easting, northing);
+  const projected = await runRead(reads, service.ProjectNAD83UTMToLatLon(zone, easting, northing));
   return {
     zone,
     latitude: Math.round(projected.latitude * 1e6) / 1e6,
@@ -77,13 +92,14 @@ export async function convertDMOrDMSToDecimalDegrees(
   rawMin: string,
   rawSec: string,
   hemisphere: CoordinateHemisphere,
+  reads?: ReadRequests
 ): Promise<number> {
   const degrees = rawDeg.trim() === '' ? null : Number(rawDeg);
   const minutes = rawMin.trim() === '' ? null : Number(rawMin);
   const seconds = helperMode === 'dms' ? (rawSec.trim() === '' ? null : Number(rawSec)) : null;
   const negative = hemisphere === 'S' || hemisphere === 'W';
   const mode = helperMode === 'dms' ? modes.CoordinateModeDMS : modes.CoordinateModeDM;
-  const dd = await service.ConvertCoordinate(axis, mode, { degrees, minutes, seconds, negative });
+  const dd = await runRead(reads, service.ConvertCoordinate(axis, mode, { degrees, minutes, seconds, negative }));
   if (dd === null || !Number.isFinite(dd)) {
     throw new Error('Coordinate conversion returned empty result.');
   }

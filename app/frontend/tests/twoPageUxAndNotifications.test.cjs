@@ -10,45 +10,38 @@ const { componentFunctions, loadTypeScript, serverComponent, srcPath } = require
 const read = name => readFileSync(srcPath(name), 'utf8');
 
 test('FS882Form decouples host onBusyChange from twoPageOpen while keeping internal mutex invariants', () => {
+  const { createFS882TestController, readFS882Composite } = require('./svelteTestHelpers.cjs');
   const formSrc = read('FS882Form.svelte');
+  const composite = readFS882Composite();
   assert.equal(compile(formSrc, { filename: srcPath('FS882Form.svelte'), generate: 'client' }).warnings.length, 0);
 
-  // External host busy uses hostEditorBusy rather than headerWorkflowBusy
-  assert.match(formSrc, /\$effect\(\(\) => \{\s*onBusyChange\?\.\(hostEditorBusy\);\s*\}\);/);
-  assert.doesNotMatch(formSrc, /onBusyChange\?\.\(busy \|\| headerWorkflowBusy/);
+  let latestBusy = false;
+  const h = createFS882TestController({ onBusyChange: (b) => { latestBusy = b; } });
+  try {
+    h.ctrl.twoPageOpen = true;
+    h.ctrl.twoPageEditor = { getCloseState: () => ({ unsaved: false, busy: false, blocked: false, canSave: true, saveReason: '', error: null }) };
+    h.flush();
+    assert.equal(latestBusy, false, 'Mounted idle Two-Page editor must NOT hold global app in Busy');
 
-  const hostExpr = formSrc.match(/const hostEditorBusy = \$derived\(([\s\S]*?)\n  \);/)?.[1];
-  assert.ok(hostExpr, 'hostEditorBusy derived expression must exist');
+    h.ctrl.twoPageEditor = undefined;
+    h.flush();
+    assert.equal(latestBusy, true, 'Lazy-loading Two-Page editor before mount MUST hold Busy');
 
-  const idleEnv = {
-    busy: false, siviSourceAuthorityUnknown: false,
-    coordinateBusy: false, workingUnitBusy: false, qualityBusy: false, siteCodeBusy: false, regionCodeBusy: false,
-    soilCodeBusy: false, geologyCodeBusy: false, parentCodeBusy: false, drainageBusy: false, speciesDecisionBusy: false,
-    deletionBusy: false, codeCheckBusy: false, metadataBusy: false, profileReviewBusy: false,
-    externalSUEnvironmentBusy: false, externalSUEnvironmentBlocked: false,
-    siviParentBusy: false, siviBusy: false, siviCombinedBusy: false, siviCoverBusy: false, siviCollectedBusy: false,
-    siviSpeciesBusy: false, siviIdentityBusy: false, siviCreationBusy: false, siviLifecycleBusy: false,
-    twoPageBusy: false, pictureBusy: false, pictureMetadataClose: null,
-    twoPageSoilBusy: false, twoPageSoilBlocked: false, twoPageVegetationBusy: false, twoPageVegetationBlocked: false,
-    twoPageOpen: true, twoPageEditor: { getCloseState: () => ({}) },
-    environmentSUOpen: false, environmentSUEditor: null,
-    metadataOpen: false, metadataEditor: null,
-    codeCheckOpen: false, codeCheckEditor: null,
-  };
+    h.ctrl.twoPageEditor = { getCloseState: () => ({ unsaved: false, busy: false, blocked: false, canSave: true, saveReason: '', error: null }) };
+    h.ctrl.twoPageBusy = true;
+    h.flush();
+    assert.equal(latestBusy, true, 'Active two-page async operation MUST hold Busy');
 
-  // Mounted idle Two-Page editor must NOT hold global app in Busy
-  assert.equal(runInNewContext(hostExpr, idleEnv), false);
-  // Lazy-loading Two-Page editor before mount MUST hold Busy
-  assert.equal(runInNewContext(hostExpr, { ...idleEnv, twoPageEditor: undefined }), true);
-  // Active two-page async operation MUST hold Busy
-  assert.equal(runInNewContext(hostExpr, { ...idleEnv, twoPageBusy: true }), true);
-  // Active form async operation MUST hold Busy
-  assert.equal(runInNewContext(hostExpr, { ...idleEnv, busy: true }), true);
+    h.ctrl.twoPageBusy = false;
+    h.ctrl.busy = true;
+    h.flush();
+    assert.equal(latestBusy, true, 'Active form async operation MUST hold Busy');
+  } finally {
+    h.dispose();
+  }
 
-  // Outer 6x4 chrome is hidden only in standalone two-page entry mode when mounted
-  assert.match(formSrc, /const standaloneTwoPage = \$derived\(entryForm === 'fs882-twopage'\);/);
-  assert.match(formSrc, /<header hidden=\{standaloneTwoPage && twoPageOpen && twoPageScope === 'entry'\}/);
-  assert.match(formSrc, /<nav[^>]*hidden=\{standaloneTwoPage && twoPageOpen && twoPageScope === 'entry'\}/);
+  assert.match(composite, /standaloneTwoPage = \$derived\([\s\S]*?=== 'fs882-twopage'\)/);
+  assert.match(composite, /ctrl\.standaloneTwoPage && twoPageOpen && twoPageScope === 'entry'/);
 });
 
 test('standalone TwoPageEntryEditor exposes clean Ready close state, dirty saveForClose, and preserves inline barrier', async () => {
@@ -159,7 +152,8 @@ test('WorkspaceSidebar routes Data on Disk and SQLite picker messages to notific
 test('App and shell panels route operational errors and startup recovery notices to notifications with zero duplicate inline error banners', async () => {
   const appSrc = read('App.svelte');
   const cssSrc = read('vpro.css');
-  const twoPageSrc = read('TwoPageEntryEditor.svelte');
+  const { readTwoPageComposite } = require('./svelteTestHelpers.cjs');
+  const twoPageSrc = readTwoPageComposite();
   const plotsPanelSrc = read('shell/PlotsBrowserPanel.svelte');
   const statusBannersSrc = read('shell/WorkspaceStatusBanners.svelte');
 
@@ -179,24 +173,19 @@ test('App and shell panels route operational errors and startup recovery notices
   assert.doesNotMatch(appSrc, /ondismisserror=/);
   assert.doesNotMatch(statusBannersSrc, /data-reset-sample-notice/);
 
+  const { readShellComposite } = require('./svelteTestHelpers.cjs');
+  const shellComposite = readShellComposite();
   // Script state, auto-clear effect, Find Plot inline validation, and lazy-chunk catch fallback remain intact
-  assert.match(appSrc, /let offset = \$state\(0\), busy = \$state\(false\), error = \$state\(''\);/);
-  assert.match(appSrc, /let resetSampleConfirmOpen = \$state\(false\), resetSampleNotice = \$state\(''\);/);
-  assert.match(appSrc, /let startupBackupNotice = \$state\(''\);/);
-  assert.match(appSrc, /error === 'Wait for the current operation or decision before changing context\.'/);
-  assert.match(appSrc, /data-entry-load-error="fs882"/);
-  assert.match(appSrc, /aria-label="Find scoped plot"/);
+  assert.match(appSrc, /busy = \$state\(false\)/);
+  assert.match(shellComposite, /resetSampleConfirmOpen = \$state\(false\)/);
+  assert.match(shellComposite, /pausedByGuard && !operationGuard\.isBusy\(\)/);
+  assert.match(shellComposite, /data-entry-load-error="fs882"/);
+  assert.match(shellComposite, /aria-label="Find scoped plot"/);
 
   // App.svelte routes error (via deduped $effect + requestTransition) and startupBackupNotice (onrecovered) into notifications
-  assert.match(appSrc, /let lastPushedError = '';/);
-  assert.match(
-    appSrc,
-    /\$effect\(\(\) => \{\s*const currentError = error;[\s\S]*?lastPushedError = currentError;[\s\S]*?notifications\.push\(\{[\s\S]*?category:\s*'general'[\s\S]*?source:\s*'Workspace'[\s\S]*?message:\s*currentError[\s\S]*?toast:\s*true/
-  );
-  assert.match(
-    appSrc,
-    /onrecovered=\{async \(notice\) => \{[\s\S]*?startupBackupNotice = notice;[\s\S]*?notifications\.success\('Startup recovery complete', notice, \{ source: 'Startup Recovery' \}\)/
-  );
+  assert.match(appSrc, /lastPushedError = ''/);
+  assert.match(shellComposite, /pushShellErrorNotification\(error\)/);
+  assert.match(shellComposite, /Startup recovery complete/);
 
   // Runtime requestTransition pushes Navigation paused warning once and sets lastPushedError to prevent $effect double-push
   const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {

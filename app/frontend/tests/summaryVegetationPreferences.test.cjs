@@ -230,10 +230,25 @@ test('saved reads cancel by generation and cannot populate remounted Summary con
   assert.equal(context.preferenceReadBusy, false); assert.ok(cancelled >= 2); assert.ok(reports >= 2);
 });
 test('saved preference mutation barrier remains rooted independently of active report tab', async () => {
-  const source = readFileSync(srcPath('App.svelte'), 'utf8');
-  assert.match(source, /editorBusy = \$derived\([^;]*summaryPreferenceBusy/);
-  assert.match(source, /summaryPreferenceBusy = views\.some\(current => !!current && \(current\.busy \|\| current\.blocked \|\| !!current\.draftError\)\)/);
-  assert.match(source, /const views = \[preferences\?\.view\(\), quality\?\.view\(\), presentation\?\.view\(\)\]/);
+  const { createTestReportOperationGuard } = require('./svelteTestHelpers.cjs');
+  const rootOwner = { ...scope, su: 'NormalSU', suPath: scope.projectPath + '.su.sqlite' };
+  const session = new prefs.SummaryVegetationPreferencesSession(rootOwner, true);
+  session.apply(review({ ...wire.review.values }, true, rootOwner));
+  const h = createTestReportOperationGuard({
+    initialState: { contextId: rootOwner.contextId, activeProject: rootOwner.project, projectPath: rootOwner.projectPath, activeSU: rootOwner.su, suPath: rootOwner.suPath },
+    dependencies: { './summaryVegetationPreferences': { summaryVegetationPreferenceSession: () => session } },
+  });
+  try {
+    session.editOption('groupBy', '99');
+    h.flush();
+    assert.equal(h.guard.editorBusy, true);
+    assert.equal(h.view, 'summary-vegetation');
+    session.undo();
+    h.flush();
+    assert.equal(h.guard.editorBusy, false);
+  } finally {
+    h.dispose();
+  }
   const context = componentFunctions('App.svelte', ['loadPlots', 'refresh', 'loadHierarchy'], {
     summaryPreferenceBusy: true, pictureCreationBusy: false, pictureLifecycleBusy: false,
     vegetationPublicationBusy: false, lifeformPublicationBusy: false, summaryPublicationBusy: false,

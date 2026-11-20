@@ -1,4 +1,8 @@
-import type { ProfileSUProjectReview, ProfileSUCreated, ProjectPlotProfileFilterRequest } from '../../bindings/github.com/boostao/vpro/app';
+import type {
+  ProfileSUProjectReview,
+  ProfileSUCreated,
+  ProjectPlotProfileFilterRequest,
+} from '../../bindings/github.com/boostao/vpro/app';
 import { validateProfileSUReview, validateProfileSUCreated, type ReviewedProfileSU } from './profileSU';
 import { validateTable, type ProfileReviewTable } from './projectPlotProfileReview';
 
@@ -7,8 +11,12 @@ export type ReviewedProjectSU = Omit<ProfileSUProjectReview, 'su' | 'metadata'> 
   metadata: ProfileReviewTable;
 };
 
-export function validateProjectSUReview(review: ProfileSUProjectReview, filter: ProjectPlotProfileFilterRequest,
-  project: string, path: string): ReviewedProjectSU {
+export function validateProjectSUReview(
+  review: ProfileSUProjectReview,
+  filter: ProjectPlotProfileFilterRequest,
+  project: string,
+  path: string
+): ReviewedProjectSU {
   if (!review || review.project !== project || review.path !== path || !path) {
     throw new Error('Existing-file SU review belongs to another project or physical path.');
   }
@@ -20,7 +28,13 @@ export function validateProjectSUReview(review: ProfileSUProjectReview, filter: 
   return { ...review, su, metadata };
 }
 
-export function validateProjectSUCreated(created: ProfileSUCreated, name: string, count: number, path: string): ProfileSUCreated {
-  if (created?.path !== path) throw new Error('SU table committed in an unexpected destination; do not replay creation.');
+export function validateProjectSUCreated(
+  created: ProfileSUCreated,
+  name: string,
+  count: number,
+  path: string
+): ProfileSUCreated {
+  if (created?.path !== path)
+    throw new Error('SU table committed in an unexpected destination; do not replay creation.');
   return validateProfileSUCreated(created, name, count);
 }

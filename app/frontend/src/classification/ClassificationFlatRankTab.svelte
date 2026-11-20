@@ -87,7 +87,7 @@
                   aria-label={`${col.label} for row ${idx + 1}`}
                   value={cellVal}
                   placeholder={col.label}
-                  oninput={e => {
+                  oninput={(e) => {
                     flatDraftRows[idx] = {
                       ...flatDraftRows[idx],
                       [col.key]: e.currentTarget.value,

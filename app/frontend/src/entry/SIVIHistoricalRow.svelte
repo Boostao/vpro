@@ -2,7 +2,10 @@
   import { metadataCellText } from '../admin/projectMetadataEditor';
   import type { SIVIDeletionOriginal } from './siviDeletionEditor';
 
-  let { columns, row }: {
+  let {
+    columns,
+    row,
+  }: {
     columns: SIVIDeletionOriginal['columns'];
     row: SIVIDeletionOriginal['original'];
   } = $props();
@@ -13,7 +16,13 @@
     {@const cell = row.cells[index]}
     <div class="min-w-0 rounded border border-vpro-border p-2">
       <dt class="break-words text-sm font-medium">{column.name}</dt>
-      <dd class="whitespace-pre-wrap break-words text-sm" data-sivi-historical-cell={column.name}>{cell.storage === 'null' ? 'NULL' : cell.storage === 'text' && cell.text === '' ? '(empty text)' : metadataCellText(cell)}</dd>
+      <dd class="whitespace-pre-wrap break-words text-sm" data-sivi-historical-cell={column.name}>
+        {cell.storage === 'null'
+          ? 'NULL'
+          : cell.storage === 'text' && cell.text === ''
+            ? '(empty text)'
+            : metadataCellText(cell)}
+      </dd>
       <dd class="break-words text-xs text-vpro-ink-muted">Original storage: {cell.storage}</dd>
     </div>
   {/each}

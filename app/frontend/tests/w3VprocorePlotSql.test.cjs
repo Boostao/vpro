@@ -249,7 +249,7 @@ test('UX-ENV-004 & UX-ENV-005: HeaderEditor SSR renders inline validation alerts
 test('UX-ENV-004: CoordinateFields rejects Southern UTM zone 9S and reports out-of-BC status for (0, 0)', async () => {
   const client = await import('svelte/internal/client');
   let script = read('CoordinateFields.svelte').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  script = script.replace('children }:', 'children, inspect }:');
+  script = script.replace(/children,?\s*\}:/, 'children, inspect }:');
   script += `\n$effect(() => inspect({
     runAuto1: runAuto1CoordinateAttribution,
     getState: () => ({ auto1Summary, auto1OutOfBounds, auto1Busy }),
@@ -264,6 +264,7 @@ test('UX-ENV-004: CoordinateFields rejects Southern UTM zone 9S and reports out-
     .join('\n')
     .replace('export default function', 'function');
 
+  const { serverReads } = require('./svelteTestHelpers.cjs');
   const coordConvMod = loadTypeScript('coordinateConversion.ts');
   const mountFn = new Function(
     '$',
@@ -272,6 +273,9 @@ test('UX-ENV-004: CoordinateFields rejects Southern UTM zone 9S and reports out-
     'untrack',
     'SpatialService',
     'CoordinateMode',
+    'ReadRequests',
+    'formatError',
+    'trackIfCancellable',
     'CoordinateEditor',
     'coordinateSession',
     'rememberCoordinateSession',
@@ -330,6 +334,9 @@ test('UX-ENV-004: CoordinateFields rejects Southern UTM zone 9S and reports out-
     client.untrack,
     mockSpatial,
     native.CoordinateMode,
+    serverReads.ReadRequests,
+    serverReads.formatError,
+    serverReads.trackIfCancellable,
     coordMod.CoordinateEditor,
     coordMod.coordinateSession,
     coordMod.rememberCoordinateSession,

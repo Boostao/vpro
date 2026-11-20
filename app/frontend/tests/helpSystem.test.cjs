@@ -288,8 +288,10 @@ test('Navigation Help menu exposes all 6 active items, unread badge, Tour target
   }
   assert.deepEqual(dispatched, ['guide', 'tours', 'shortcuts', 'whats-new', 'reset-sample', 'about']);
 
-  // Verify App.svelte lazy-loads all 5 Help components rather than static-importing them
+  // Verify App.svelte / ShellOverlays.svelte lazy-loads all 5 Help components rather than static-importing them
+  const { readShellComposite, readTwoPageComposite } = require('./svelteTestHelpers.cjs');
   const appSource = readSrc('App.svelte');
+  const shellComposite = readShellComposite();
   for (const comp of [
     'HelpDrawer',
     'OnboardingTour',
@@ -298,19 +300,18 @@ test('Navigation Help menu exposes all 6 active items, unread badge, Tour target
     'AboutVProModal',
   ]) {
     assert.doesNotMatch(appSource, new RegExp(`import ${comp} from`));
-    assert.match(appSource, new RegExp(`import\\(['"]\\./help/${comp}\\.svelte['"]\\)`));
+    assert.match(shellComposite, new RegExp(`import\\(['"]\\.\\.?/help/${comp}\\.svelte['"]\\)`));
   }
 
   // Verify entry forms carry data-help-id without static component imports
-  for (const entryFile of [
-    'HeaderEditor.svelte',
-    'FS882Form.svelte',
-    'TwoPageEntryEditor.svelte',
-    'TwoPageSoilPanel.svelte',
+  for (const [entryLabel, src] of [
+    ['HeaderEditor.svelte', readSrc('HeaderEditor.svelte')],
+    ['FS882Form.svelte', readSrc('FS882Form.svelte')],
+    ['TwoPageEntryEditor.svelte', readTwoPageComposite()],
+    ['TwoPageSoilPanel.svelte', readSrc('TwoPageSoilPanel.svelte') + '\n' + readSrc('TwoPageSoilRecordFields.svelte')],
   ]) {
-    const src = readSrc(entryFile);
-    assert.match(src, /data-help-id=/, `${entryFile} must include data-help-id attributes`);
-    assert.doesNotMatch(src, /HelpDrawer|helpSystem/, `${entryFile} must have zero new static help imports`);
+    assert.match(src, /data-help-id=/, `${entryLabel} must include data-help-id attributes`);
+    assert.doesNotMatch(src, /HelpDrawer|helpSystem/, `${entryLabel} must have zero new static help imports`);
   }
 });
 

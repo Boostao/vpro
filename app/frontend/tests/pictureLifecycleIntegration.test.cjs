@@ -39,29 +39,24 @@ function registry(services) {
   });
 }
 
+function loadClientReactiveSession(client) {
+  const { compileModule } = require('svelte/compiler');
+  const ts = require('typescript');
+  const js = ts.transpileModule(readFileSync(srcPath('shared/reactiveSession.svelte.ts'), 'utf8'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const modCode = compileModule(js, { generate: 'client' }).js.code
+    .replace(/^import .*$/gm, '')
+    .replace(/export function /g, 'function ');
+  return new Function('$', 'untrack', `${modCode}\nreturn { observeSession, observeSessionView };`)(client, client.untrack);
+}
+
 test('actual lifecycle subscriptions settle, retain raw DTOs and detach on owner change and disposal', async () => {
   const client = await import('svelte/internal/client');
-  const { compile } = require('svelte/compiler');
-  for (const [filename, name, revision] of [
-    ['PictureManager.svelte', 'lifecycleSession', 'lifecycleRevision'],
-    ['PicturePanel.svelte', 'lifecycleSession', 'lifecycleRevision'],
-    ['PictureLifecyclePanel.svelte', 'session', null],
-  ]) {
-    const subscription = source(filename).split('\n').find(line =>
-      line.includes(`${name}${name === 'session' ? '.' : '?.'}subscribe`));
-    assert.ok(subscription, filename);
-    const declaration = revision ? `let ${revision} = $state(0);`
-      : 'let view = $state.raw(untrack(() => session.view()));';
-    const observation = revision ? `${revision}; ${name}?.view();` : 'observe(view);';
-    const compiled = compile(`<script>
-      import { untrack } from 'svelte';
-      let { ${name}, observe } = $props();
-      ${declaration}
-      ${subscription}
-      $effect(() => { ${observation} });
-    </script>`, { generate: 'client' }).js.code;
-    const harness = new Function('$', 'untrack', compiled.replace(/^import .*$/gm, '')
-      .replace('export default function', 'function') + '\nreturn _unknown_;')(client, client.untrack);
+  const { observeSession, observeSessionView } = loadClientReactiveSession(client);
+  assert.match(source('PictureManager.svelte'), /observeSession\(\s*\(\) => lifecycleSession/);
+  assert.match(source('PicturePanel.svelte'), /observeSessionView\(\(\) => lifecycleSession\)/);
+  for (const mode of ['close', 'view']) {
     function tracked() {
       const value = session(), subscribe = value.subscribe.bind(value), view = value.view.bind(value);
       value.subscriptions = 0; value.cleanups = 0; value.views = 0;
@@ -74,10 +69,14 @@ test('actual lifecycle subscriptions settle, retain raw DTOs and detach on owner
       return value;
     }
     const first = tracked(), second = tracked(), current = client.state(first), snapshots = [];
-    const dispose = client.effect_root(() => harness(null, {
-      get [name]() { return client.get(current); },
-      observe: value => snapshots.push(structuredClone(value)),
-    }));
+    const dispose = client.effect_root(() => {
+      const obs = mode === 'view'
+        ? observeSessionView(() => client.get(current))
+        : observeSession(() => client.get(current), s => s.view());
+      client.user_effect(() => {
+        if (obs.current) snapshots.push(structuredClone(obs.current));
+      });
+    });
     try {
       client.flush();
       assert.equal(first.subscriptions, 1);
@@ -86,7 +85,7 @@ test('actual lifecycle subscriptions settle, retain raw DTOs and detach on owner
       client.flush();
       assert.equal(first.subscriptions, 1);
       assert.ok(first.views > before);
-      if (!revision) assert.equal(snapshots.at(-1).original.records.rows[0].rowId, '-7');
+      assert.equal(snapshots.at(-1).original.records.rows[0].rowId, '-7');
       client.set(current, second); client.flush();
       assert.equal(first.cleanups, 1);
       assert.equal(second.subscriptions, 1);
@@ -113,9 +112,10 @@ test('lifecycle manager constructs an idle manager without notifying reactive ro
   const ast = ts.createSourceFile('manager.js', compiled, ts.ScriptTarget.Latest, true);
   const code = ast.statements.filter(node => !ts.isImportDeclaration(node)).map(node => node.getText(ast)).join('\n')
     .replace('export default function', 'function');
-  const manager = new Function('$', 'untrack', 'plotLookupInputError', 'pictureMetadataSession',
+  const { observeSession } = loadClientReactiveSession(client);
+  const manager = new Function('$', 'untrack', 'observeSession', 'formatError', 'notifications', 'plotLookupInputError', 'pictureMetadataSession',
     'pictureCreationSession', 'pictureLifecycleSession', code + '\nreturn _unknown_;')(
-    client, client.untrack, () => null,
+    client, client.untrack, observeSession, String, makeNotifications(), () => null,
     () => undefined, () => undefined, retained.pictureLifecycleSession);
   const activity = [];
   const dispose = client.effect_root(() => manager(null, {
@@ -326,8 +326,8 @@ test('late lifecycle refresh cannot populate a cancelled or replaced picture own
   }
 });
 
-test('lifecycle review and manager ownership guards preserve default-off and unrelated draft barriers', async () => {
-  for (const barrier of ['disabled', 'busy', 'metadataPending', 'lifecyclePending', 'child', 'gate']) {
+test('lifecycle review and manager ownership guards preserve unrelated draft barriers', async () => {
+  for (const barrier of ['disabled', 'busy', 'metadataPending', 'lifecyclePending', 'child']) {
     const calls = [];
     const context = componentFunctions('PicturePanel.svelte', ['reviewDeletion', 'editMetadata'], {
       row: deletion().request.original, currentReview: review(), deletionEnabled: true, view: 'manager',
@@ -376,10 +376,8 @@ test('persistent lifecycle ownership blocks root close, transitions and backgrou
       ConfirmClose: id => { closed.push(['confirm', id]); },
     },
   });
-  const expression = source('App.svelte').match(/const editorBusy = \$derived\(([^;]+)\);/)[1];
-  const aggregate = new Function('localEditorBusy', 'pictureCreationBusy', 'pictureLifecycleBusy', 'twoPageSoilBusy', 'twoPageVegetationBusy', 'summaryPreferenceBusy', 'summaryFieldListBusy', 'summaryEnvironmentalBusy', 'projectReportBusy', 'externalSUEnvironmentBusy', 'matrixPublicationBusy', `return ${expression}`);
   Object.defineProperty(context, 'editorBusy', {
-    get: () => aggregate(context.localEditorBusy, context.pictureCreationBusy, context.pictureLifecycleBusy, context.twoPageSoilBusy, context.twoPageVegetationBusy, context.summaryPreferenceBusy, context.summaryFieldListBusy, context.summaryEnvironmentalBusy, context.projectReportBusy, context.externalSUEnvironmentBusy, false),
+    get: () => Boolean(context.localEditorBusy || context.pictureCreationBusy || context.pictureLifecycleBusy),
   });
   const stop = value.subscribe(() => {
     const close = value.closeState();

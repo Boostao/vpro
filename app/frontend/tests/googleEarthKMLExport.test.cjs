@@ -121,8 +121,14 @@ test('KML publication receipt and busy barrier survive remount and reject owners
 });
 
 test('KML export panel keeps interactive unknown locks and data summaries while routing operational errors and receipts to notifications', async () => {
-  const source = readFileSync(srcPath('GoogleEarthReview.svelte'), 'utf8');
-  assert.ok(compile(source, { filename: 'GoogleEarthReview.svelte', generate: 'client' }).js.code);
+  const rootSource = readFileSync(srcPath('GoogleEarthReview.svelte'), 'utf8');
+  const source = [
+    rootSource,
+    readFileSync(srcPath('GoogleEarthPreferencesSection.svelte'), 'utf8'),
+    readFileSync(srcPath('GoogleEarthKmlSection.svelte'), 'utf8'),
+    readFileSync(srcPath('GoogleEarthLocationsTable.svelte'), 'utf8'),
+  ].join('\n');
+  assert.ok(compile(rootSource, { filename: 'GoogleEarthReview.svelte', generate: 'client' }).js.code);
   assert.equal((source.match(/id="google-earth-place-name"/g) || []).length, 1);
   assert.match(source, /<label for="google-earth-kml-destination">New output file:/);
   assert.match(source, /data-google-earth-kml-acknowledge/);
@@ -147,7 +153,7 @@ test('KML export panel keeps interactive unknown locks and data summaries while 
   const retainedSession = exportsModule.googleEarthKMLPublicationSession(retainedScope);
   await retainedSession.publish(review(retainedScope), destination, async () => { throw new Error('KML write lost'); });
 
-  const component = serverComponent(source, 'GoogleEarthReview.svelte', {
+  const component = serverComponent(rootSource, 'GoogleEarthReview.svelte', {
     '../../bindings/github.com/boostao/vpro/app': { SpatialService: {} },
     './googleEarthReview': earth,
     './googleEarthKMLReview': { validateGoogleEarthKMLReview: async v => v, googleEarthXMLText: () => true },

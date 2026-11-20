@@ -1,4 +1,4 @@
-import { ownedScope, type GoogleEarthScope } from '../spatial/googleEarthReview';
+import { ownedScope, type ProjectSUScope as GoogleEarthScope } from '../shared/scope';
 import { ReportPreferencesSession, reportPreferencesRegistry } from './reportTitlePreferences';
 
 export interface LongVegetationSwitchPreferenceValues {
@@ -17,39 +17,52 @@ export const longVegetationSwitchFields = [
   { key: 'constantSpeciesList', control: 'optConstantSppList', label: 'Use constant species list' },
 ] as const;
 const valid = (values: LongVegetationSwitchPreferenceValues | null): values is LongVegetationSwitchPreferenceValues =>
-  !!values && longVegetationSwitchFields.every(field => typeof values[field.key] === 'boolean');
+  !!values && longVegetationSwitchFields.every((field) => typeof values[field.key] === 'boolean');
 const copy = (values: LongVegetationSwitchPreferenceValues): LongVegetationSwitchPreferenceValues => ({
-  quickReport: values.quickReport, spaceBetweenGroups: values.spaceBetweenGroups,
-  reportSummary: values.reportSummary, constantSpeciesList: values.constantSpeciesList,
+  quickReport: values.quickReport,
+  spaceBetweenGroups: values.spaceBetweenGroups,
+  reportSummary: values.reportSummary,
+  constantSpeciesList: values.constantSpeciesList,
 });
-export function validateLongVegetationSwitchPreferences(value: LongVegetationSwitchPreferencesReview | null,
-  scope: GoogleEarthScope): LongVegetationSwitchPreferencesReview {
+export function validateLongVegetationSwitchPreferences(
+  value: LongVegetationSwitchPreferencesReview | null,
+  scope: GoogleEarthScope
+): LongVegetationSwitchPreferencesReview {
   if (!value || !ownedScope(value, scope) || !valid(value.values)) {
-    throw new Error('Saved Long Vegetation switches are missing, malformed or belong to another owned context; no defaults applied.');
+    throw new Error(
+      'Saved Long Vegetation switches are missing, malformed or belong to another owned context; no defaults applied.'
+    );
   }
   return { ...scope, values: copy(value.values) };
 }
 export class LongVegetationSwitchPreferencesSession extends ReportPreferencesSession<
-  LongVegetationSwitchPreferenceValues, LongVegetationSwitchPreferenceValues | null, LongVegetationSwitchPreferencesReview> {
+  LongVegetationSwitchPreferenceValues,
+  LongVegetationSwitchPreferenceValues | null,
+  LongVegetationSwitchPreferencesReview
+> {
   constructor(scope: GoogleEarthScope) {
     super(scope, {
-      initialDraft: null, savedLabel: 'saved report switches',
+      initialDraft: null,
+      savedLabel: 'saved report switches',
       review: (value, owner) => validateLongVegetationSwitchPreferences(value, owner).values,
       draft: copy,
-      validate: draft => valid(draft) ? '' : 'Correct all four boolean report switches or Undo the preference draft.',
-      proposed: draft => {
+      validate: (draft) =>
+        valid(draft) ? '' : 'Correct all four boolean report switches or Undo the preference draft.',
+      proposed: (draft) => {
         if (!valid(draft)) throw new Error('Report switches require four complete boolean values.');
         return copy(draft);
       },
-      equal: (a, b) => longVegetationSwitchFields.every(field => a[field.key] === b[field.key]),
+      equal: (a, b) => longVegetationSwitchFields.every((field) => a[field.key] === b[field.key]),
     });
   }
   editSwitch(key: keyof LongVegetationSwitchPreferenceValues, value: boolean) {
-    if (!longVegetationSwitchFields.some(field => field.key === key)) throw new Error('Unsupported report switch field.');
+    if (!longVegetationSwitchFields.some((field) => field.key === key))
+      throw new Error('Unsupported report switch field.');
     const draft = this.view().draft;
     if (!draft) throw new Error('Load saved report switches before editing.');
     this.editDraft({ ...draft, [key]: value });
   }
 }
 export const longVegetationSwitchPreferencesSession = reportPreferencesRegistry(
-  scope => new LongVegetationSwitchPreferencesSession(scope));
+  (scope) => new LongVegetationSwitchPreferencesSession(scope)
+);

@@ -152,9 +152,20 @@
   const resolvedAuthorityUnknown = $derived(authorityUnknown ?? Boolean(view?.authorityUnknown));
   const resolvedLoadDisabled = $derived(loadDisabled ?? Boolean(busy || operationHeld || view?.busy || view?.blocked));
   const resolvedSaveDisabled = $derived(
-    saveDisabled ?? Boolean(busy || operationHeld || view?.busy || view?.blocked || view?.authorityUnknown || view?.draftError || !view?.saved)
+    saveDisabled ??
+      Boolean(
+        busy ||
+        operationHeld ||
+        view?.busy ||
+        view?.blocked ||
+        view?.authorityUnknown ||
+        view?.draftError ||
+        !view?.saved
+      )
   );
-  const resolvedUndoDisabled = $derived(undoDisabled ?? Boolean(busy || mutationHeld || view?.busy || view?.blocked || !view?.saved));
+  const resolvedUndoDisabled = $derived(
+    undoDisabled ?? Boolean(busy || mutationHeld || view?.busy || view?.blocked || !view?.saved)
+  );
   const resolvedAckVisible = $derived(acknowledgeVisible ?? Boolean(view?.blocked && !view?.busy));
   const resolvedAckDisabled = $derived(acknowledgeDisabled ?? Boolean(busy || mutationHeld));
   const resolvedCancelVisible = $derived(cancelVisible ?? busy);
@@ -169,7 +180,7 @@
     nextViewErr: string,
     nextReadErr: string,
     nextExtraErr: string,
-    ctx: string | undefined,
+    ctx: string | undefined
   ) {
     if (typeof notifications === 'undefined') return;
     if (nextReceipts.length < notifiedReceipts) notifiedReceipts = 0;
@@ -280,9 +291,8 @@
       {#if projReq}
         <div class="receipt" {...{ [receiptAttr]: '' }} role="alert">
           <p>
-            Preference receipt for revision {projReq.revision}:
-            expected {projReq.expected.unitGroups}; proposed {projReq.proposed.unitGroups}.
-            Changed unknown; committed unknown. {receipt.errorMessage ?? ''}
+            Preference receipt for revision {projReq.revision}: expected {projReq.expected.unitGroups}; proposed {projReq
+              .proposed.unitGroups}. Changed unknown; committed unknown. {receipt.errorMessage ?? ''}
           </p>
           <p>Approval: <code>{projReq.approvalHash}</code></p>
         </div>
@@ -312,7 +322,7 @@
       </button>
     {/if}
     {#if resolvedCancelVisible}
-      <button {...(cancelAttr ? { [`${actionPrefix}-cancel`]: '' } : {})} onclick={oncancel}>
+      <button {...cancelAttr ? { [`${actionPrefix}-cancel`]: '' } : {}} onclick={oncancel}>
         {cancelLabel}
       </button>
     {/if}

@@ -117,7 +117,7 @@ async function mountPanel(service) {
   const runtime = await import('svelte/internal/client');
   const { onDestroy } = await import(pathToFileURL(path.join(path.dirname(require.resolve('svelte')), 'index-client.js')).href);
   let script = readFileSync(srcPath('TwoPageProjectMetadataPanel.svelte'), 'utf8').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  script = script.replace('form, onBusyChange }:', 'form, onBusyChange, inspect }:');
+  script = script.replace(/form,\s*onBusyChange,?\s*\}:/, 'form, onBusyChange, inspect }:');
   script += '\n$effect(() => inspect({ load, cancel, busy, error, review, current: () => review }));';
   const compiled = compile(`<script lang="ts">${script}</script>`, { generate: 'client' });
   const ast = ts.createSourceFile('metadata-panel.js', compiled.js.code, ts.ScriptTarget.Latest, true);
@@ -125,8 +125,8 @@ async function mountPanel(service) {
   const reads = loadTypeScript('readRequests.ts', {
     '@wailsio/runtime': { Call: { RuntimeError: class extends Error {} }, CancelledRejectionError: class extends Error {} },
   });
-  const mount = new Function('$', 'onDestroy', 'untrack', 'ReadRequests', 'PlotEntryService', 'twoPageProjectMetadataFromWire',
-    code + '\nreturn _unknown_;')(runtime, onDestroy, runtime.untrack, reads.ReadRequests, {
+  const mount = new Function('$', 'onDestroy', 'untrack', 'ReadRequests', 'formatError', 'PlotEntryService', 'twoPageProjectMetadataFromWire',
+    code + '\nreturn _unknown_;')(runtime, onDestroy, runtime.untrack, reads.ReadRequests, reads.formatError, {
       GetTwoPageProjectMetadataReview: service.GetTwoPageProjectMetadataReview ?? service.GetReview,
     }, table.twoPageProjectMetadataFromWire);
   let actions; const activity = [];

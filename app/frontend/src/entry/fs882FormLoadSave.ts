@@ -18,6 +18,7 @@ import { ordinaryNumberValue, ordinarySession, rememberOrdinarySession } from '.
 import { stageSpecies, type SpeciesDrafts, type SpeciesLists } from './vegetationSpeciesEditor';
 import { vegetationReadAvailability } from './vegetationReadAvailability';
 import type { SIVIDeletionRestorationView } from './siviDeletionRestorationSession';
+import { formatError } from '../shared/readRequests';
 import type { EditorCloseState } from '../shell/closeLifecycle';
 
 export interface SaveReasonInputs {
@@ -73,28 +74,76 @@ export function computeSaveReason(i: SaveReasonInputs): string {
   const checks: Array<[boolean, string]> = [
     [i.busy || i.headerWorkflowBusy || !i.capabilitiesReady, 'Wait for the plot to finish loading or header workflow.'],
     [i.locked, 'Unlock the plot before saving.'],
-    [i.siviParentActionUnsaved && !(i.siviParentActionClose?.canSave ?? false), i.siviParentActionClose?.saveReason ?? 'Correct or Undo unresolved SIVI source actions.'],
-    [i.siviParentWriteUnsaved && !(i.siviParentWriteClose?.canSave ?? false), i.siviParentWriteClose?.saveReason ?? 'Correct or Undo unresolved SIVI parent drafts.'],
-    [i.siviParentSharedUnsaved && !(i.siviParentSharedClose?.canSave ?? false), i.siviParentSharedClose?.saveReason ?? 'Correct or Undo unresolved shared SIVI drafts.'],
-    [i.siviProjectAssignmentUnsaved && !(i.siviProjectAssignmentClose?.canSave ?? false), i.siviProjectAssignmentClose?.saveReason ?? 'Correct or Undo unresolved ProjectID selections.'],
-    [i.siviUnsaved && !(i.siviClose?.canSave ?? false), i.siviClose?.saveReason ?? 'Correct or Undo unresolved SIVI heights.'],
-    [i.siviCoverUnsaved && !(i.siviCoverClose?.canSave ?? false), i.siviCoverClose?.saveReason ?? 'Correct or Undo unresolved SIVI covers.'],
-    [i.siviCombinedUnsaved && !(i.siviCombinedClose?.canSave ?? false), i.siviCombinedClose?.saveReason ?? 'Correct or Undo unresolved combined SIVI drafts.'],
-    [i.siviCollectedUnsaved && !(i.siviCollectedClose?.canSave ?? false), i.siviCollectedClose?.saveReason ?? 'Correct or Undo unresolved SIVI Collected cycles.'],
-    [i.siviSpeciesUnsaved && !(i.siviSpeciesClose?.canSave ?? false), i.siviSpeciesClose?.saveReason ?? 'Correct or Undo unresolved SIVI Species drafts.'],
-    [i.siviIdentityUnsaved && !(i.siviIdentityClose?.canSave ?? false), i.siviIdentityClose?.saveReason ?? 'Correct or Undo unresolved SIVI ID drafts.'],
-    [i.hasPersonalDraft, 'Save the personal definition explicitly or Cancel its entry before saving the plot or closing.'],
-    [i.hasDeletionReview, 'Confirm reviewed vegetation deletion explicitly or Cancel deletion review before saving and closing.'],
+    [
+      i.siviParentActionUnsaved && !(i.siviParentActionClose?.canSave ?? false),
+      i.siviParentActionClose?.saveReason ?? 'Correct or Undo unresolved SIVI source actions.',
+    ],
+    [
+      i.siviParentWriteUnsaved && !(i.siviParentWriteClose?.canSave ?? false),
+      i.siviParentWriteClose?.saveReason ?? 'Correct or Undo unresolved SIVI parent drafts.',
+    ],
+    [
+      i.siviParentSharedUnsaved && !(i.siviParentSharedClose?.canSave ?? false),
+      i.siviParentSharedClose?.saveReason ?? 'Correct or Undo unresolved shared SIVI drafts.',
+    ],
+    [
+      i.siviProjectAssignmentUnsaved && !(i.siviProjectAssignmentClose?.canSave ?? false),
+      i.siviProjectAssignmentClose?.saveReason ?? 'Correct or Undo unresolved ProjectID selections.',
+    ],
+    [
+      i.siviUnsaved && !(i.siviClose?.canSave ?? false),
+      i.siviClose?.saveReason ?? 'Correct or Undo unresolved SIVI heights.',
+    ],
+    [
+      i.siviCoverUnsaved && !(i.siviCoverClose?.canSave ?? false),
+      i.siviCoverClose?.saveReason ?? 'Correct or Undo unresolved SIVI covers.',
+    ],
+    [
+      i.siviCombinedUnsaved && !(i.siviCombinedClose?.canSave ?? false),
+      i.siviCombinedClose?.saveReason ?? 'Correct or Undo unresolved combined SIVI drafts.',
+    ],
+    [
+      i.siviCollectedUnsaved && !(i.siviCollectedClose?.canSave ?? false),
+      i.siviCollectedClose?.saveReason ?? 'Correct or Undo unresolved SIVI Collected cycles.',
+    ],
+    [
+      i.siviSpeciesUnsaved && !(i.siviSpeciesClose?.canSave ?? false),
+      i.siviSpeciesClose?.saveReason ?? 'Correct or Undo unresolved SIVI Species drafts.',
+    ],
+    [
+      i.siviIdentityUnsaved && !(i.siviIdentityClose?.canSave ?? false),
+      i.siviIdentityClose?.saveReason ?? 'Correct or Undo unresolved SIVI ID drafts.',
+    ],
+    [
+      i.hasPersonalDraft,
+      'Save the personal definition explicitly or Cancel its entry before saving the plot or closing.',
+    ],
+    [
+      i.hasDeletionReview,
+      'Confirm reviewed vegetation deletion explicitly or Cancel deletion review before saving and closing.',
+    ],
     [i.creationInvalidCount > 0, 'Correct invalid vegetation creation or Cancel creation before saving.'],
-    [i.hasCreationDraft && (!i.speciesReferenceReady || i.speciesReferenceBusy), 'Restore canonical species references before saving vegetation creation.'],
+    [
+      i.hasCreationDraft && (!i.speciesReferenceReady || i.speciesReferenceBusy),
+      'Restore canonical species references before saving vegetation creation.',
+    ],
     [i.hasNewChild || i.invalidChild, 'Finish or cancel child entry before saving and closing.'],
     [i.otherInvalidCount > 0, 'Correct invalid Other drafts or Cancel Other drafts before saving.'],
     [i.soilInvalidCount > 0, 'Correct invalid soil drafts or Cancel soil drafts before saving.'],
-    [i.soilUnsaved && (!i.soilReferenceReady || i.soilReferenceBusy), 'Restore available soil references before saving drafts.'],
+    [
+      i.soilUnsaved && (!i.soilReferenceReady || i.soilReferenceBusy),
+      'Restore available soil references before saving drafts.',
+    ],
     [i.attributeInvalidCount > 0, 'Correct invalid vegetation attributes or Cancel attribute drafts before saving.'],
-    [i.attributeUnsaved && (!i.attributeReferenceReady || i.attributeReferenceBusy), 'Restore available attribute references before saving drafts.'],
+    [
+      i.attributeUnsaved && (!i.attributeReferenceReady || i.attributeReferenceBusy),
+      'Restore available attribute references before saving drafts.',
+    ],
     [i.speciesInvalidCount > 0, 'Correct invalid species drafts or Cancel species drafts before saving.'],
-    [i.speciesUnsaved && (!i.speciesReferenceReady || i.speciesReferenceBusy), 'Restore available species references before saving drafts.'],
+    [
+      i.speciesUnsaved && (!i.speciesReferenceReady || i.speciesReferenceBusy),
+      'Restore available species references before saving drafts.',
+    ],
     [i.invalid, 'Correct invalid header inputs or Undo before saving.'],
     [!i.plotNumber.trim(), 'Plot Number is required before saving.'],
   ];
@@ -106,17 +155,22 @@ export function computeSaveReason(i: SaveReasonInputs): string {
 
 /** Map a header validation error to the tab-specific banner prompt. */
 export function computeHeaderValidationError(message: string, headerValidation: Record<string, string>): string {
-  if (message === headerValidation['ordinary-veg']) return `Correct the invalid header input on Vegetation or Undo changes before saving. ${message}`;
-  if (message === headerValidation['ordinary-soils']) return `Correct the invalid header input on Soils or Undo changes before saving. ${message}`;
-  if (message === headerValidation['parentCodes-soils']) return `Correct the invalid header input on Soils or Undo changes before saving. ${message}`;
-  if (message === headerValidation.soilDrainage) return `Correct the invalid header input on Soils or Undo changes before saving. ${message}`;
-  if (message === headerValidation.soilCodes || message === headerValidation.geologyCodes) return `Correct the invalid header input on Soils or Undo changes before saving. ${message}`;
+  if (message === headerValidation['ordinary-veg'])
+    return `Correct the invalid header input on Vegetation or Undo changes before saving. ${message}`;
+  if (message === headerValidation['ordinary-soils'])
+    return `Correct the invalid header input on Soils or Undo changes before saving. ${message}`;
+  if (message === headerValidation['parentCodes-soils'])
+    return `Correct the invalid header input on Soils or Undo changes before saving. ${message}`;
+  if (message === headerValidation.soilDrainage)
+    return `Correct the invalid header input on Soils or Undo changes before saving. ${message}`;
+  if (message === headerValidation.soilCodes || message === headerValidation.geologyCodes)
+    return `Correct the invalid header input on Soils or Undo changes before saving. ${message}`;
   return `Correct the invalid header input on Site or Undo changes before saving. ${message}`;
 }
 
 /** Format deletion restoration targets from SIVIDeletionRestorationView history events. */
 export function formatSiviRestorationTargets(view: SIVIDeletionRestorationView | null | undefined) {
-  return (view?.history?.events ?? []).map(event => ({
+  return (view?.history?.events ?? []).map((event) => ({
     historyId: event.historyId,
     restored: event.consumed,
     label: `${event.form}; Species ${event.species === null ? 'NULL' : event.species === '' ? '(empty text)' : event.species}; application ID ${event.id}; physical row ${event.rowId}; ${event.editWhen}`,
@@ -156,26 +210,26 @@ export async function executeChildDataLoad(ports: {
         ? { records: [] as VegRecord[], reason: ports.ordinaryVegetationUnavailable }
         : ports.siviIdentityEnabled
           ? ports.readVegetationAvailability().then(vegetationReadAvailability)
-          : ports.listVegRecords().then(records => ({ records: records ?? [], reason: null as string | null })),
+          : ports.listVegRecords().then((records) => ({ records: records ?? [], reason: null as string | null })),
       ports.ordinarySoilUnavailable
         ? { records: [] as HumusRecord[], reason: null as string | null }
         : ports.listHumusRecords().then(
-            records => validateOrdinarySoilRecordIds('Humus', records ?? []),
-            cause => {
+            (records) => validateOrdinarySoilRecordIds('Humus', records ?? []),
+            (cause) => {
               const reason = historicalSoilReadError('Humus', cause);
               if (reason) return { records: [] as HumusRecord[], reason };
               throw cause;
-            },
+            }
           ),
       ports.ordinarySoilUnavailable
         ? { records: [] as MineralRecord[], reason: null as string | null }
         : ports.listMineralRecords().then(
-            records => validateOrdinarySoilRecordIds('Mineral', records ?? []),
-            cause => {
+            (records) => validateOrdinarySoilRecordIds('Mineral', records ?? []),
+            (cause) => {
               const reason = historicalSoilReadError('Mineral', cause);
               if (reason) return { records: [] as MineralRecord[], reason };
               throw cause;
-            },
+            }
           ),
       ports.listOtherRecords(),
       ports.listAuditReadEntries(),
@@ -199,7 +253,7 @@ export async function executeChildDataLoad(ports: {
       auditList: a ?? [],
     };
   } catch (e) {
-    throw new Error(`Child records could not be loaded: ${String(e)}`);
+    throw new Error(`Child records could not be loaded: ${formatError(e)}`);
   }
 }
 
@@ -228,7 +282,7 @@ export async function executeSuggestionLoad(params: {
     params.setSuggestions(rows);
     params.setReady(true);
   } catch (cause) {
-    if (request === params.currentRequest()) params.setError(`${params.unavailablePrefix}: ${String(cause)}`);
+    if (request === params.currentRequest()) params.setError(`${params.unavailablePrefix}: ${formatError(cause)}`);
   } finally {
     if (request === params.currentRequest()) params.setBusy(false);
   }
@@ -254,7 +308,7 @@ export async function executeSpeciesReferencesLoad(params: {
   params.setReady(false);
   params.setError(null);
   try {
-    const rows = await Promise.all(params.forms.map(form => params.fetchFormSpecies(form)));
+    const rows = await Promise.all(params.forms.map((form) => params.fetchFormSpecies(form)));
     if (request !== params.currentRequest()) return;
     const lists: SpeciesLists = {};
     params.forms.forEach((form, index) => {
@@ -270,14 +324,17 @@ export async function executeSpeciesReferencesLoad(params: {
     params.setSpeciesDrafts(drafts);
     params.setReady(true);
   } catch (cause) {
-    if (request === params.currentRequest()) params.setError(`Species references unavailable: ${String(cause)}`);
+    if (request === params.currentRequest()) params.setError(`Species references unavailable: ${formatError(cause)}`);
   } finally {
     if (request === params.currentRequest()) params.setBusy(false);
   }
 }
 
 /** Resolve any retained external-SU prompt action when opening an FS882 host. */
-export function resolveRetainedExternalSU(retained: { view: () => { blocked: boolean }; requestSourceForm: () => 'FS882-8x6XL' | 'FS882-8x6XL-CHARS' | null }, twoPageEntryReviewEnabled: boolean): { mode: 'twoPage'; sourceForm: 'FS882-8x6XL' | 'FS882-8x6XL-CHARS' } | { mode: 'external-reverse' } | null {
+export function resolveRetainedExternalSU(
+  retained: { view: () => { blocked: boolean }; requestSourceForm: () => 'FS882-8x6XL' | 'FS882-8x6XL-CHARS' | null },
+  twoPageEntryReviewEnabled: boolean
+): { mode: 'twoPage'; sourceForm: 'FS882-8x6XL' | 'FS882-8x6XL-CHARS' } | { mode: 'external-reverse' } | null {
   if (!retained.view().blocked) return null;
   const sourceForm = retained.requestSourceForm();
   return sourceForm && twoPageEntryReviewEnabled ? { mode: 'twoPage', sourceForm } : { mode: 'external-reverse' };
@@ -296,7 +353,13 @@ export function applyDiagnosticHumusThicknessImpl(params: {
   bumpRevision: () => void;
 }): void {
   if (params.disabled || !params.supported || !Number.isFinite(params.value)) return;
-  const field = { key: 'humusThickness' as const, column: 'HumusThickness', label: 'Humus thickness', scope: 'soils' as const, kind: 'single' as const };
+  const field = {
+    key: 'humusThickness' as const,
+    column: 'HumusThickness',
+    label: 'Humus thickness',
+    scope: 'soils' as const,
+    kind: 'single' as const,
+  };
   const cell = ordinaryNumberValue(field, String(params.value), params.original?.humusThickness ?? null);
   if (cell.error !== null) {
     params.setError(cell.error);
@@ -322,4 +385,100 @@ export function isNonArcticHeaderDirty(dirty: boolean, draft: FS882Header, origi
   const { snowCoverRegime: _ds, activeLayerDepth: _da, ...restDraft } = draft;
   const { snowCoverRegime: _os, activeLayerDepth: _oa, ...restOrig } = original;
   return JSON.stringify(restDraft) !== JSON.stringify(restOrig);
+}
+
+export function computeFS882SubEditorCloseOverride(p: {
+  twoPageVegetationBusy: boolean;
+  twoPageVegetationBlocked: boolean;
+  twoPageSoilBusy: boolean;
+  twoPageSoilBlocked: boolean;
+  lifecycleOverride: EditorCloseState | null;
+  twoPageOpen: boolean;
+  twoPageClose: (() => EditorCloseState) | undefined;
+  environmentSUOpen: boolean;
+  environmentSUClose: (() => EditorCloseState) | undefined;
+  profileReviewBlocked: boolean;
+  profileClose: (() => EditorCloseState) | undefined;
+  metadataOpen: boolean;
+  metadataClose: (() => EditorCloseState) | undefined;
+  codeCheckOpen: boolean;
+  codeCheckClose: (() => EditorCloseState) | undefined;
+  creationOverride: EditorCloseState | null;
+  error: string | null;
+}): EditorCloseState | null {
+  if (p.twoPageVegetationBusy || p.twoPageVegetationBlocked) {
+    return {
+      unsaved: true,
+      busy: p.twoPageVegetationBusy,
+      blocked: true,
+      canSave: false,
+      error: p.error,
+      saveReason:
+        'Finish retained linked-vegetation drafts/operations, recover unknown outcomes and acknowledge receipts before parent Save, Lock or close.',
+    };
+  }
+  if (p.twoPageSoilBusy || p.twoPageSoilBlocked) {
+    return {
+      unsaved: true,
+      busy: p.twoPageSoilBusy,
+      blocked: true,
+      canSave: false,
+      error: p.error,
+      saveReason:
+        'Finish retained linked-soil drafts/operations, recover unknown outcomes and acknowledge receipts before parent Save, Lock or close.',
+    };
+  }
+  if (p.lifecycleOverride) return p.lifecycleOverride;
+  if (p.twoPageOpen)
+    return (
+      p.twoPageClose?.() ?? {
+        unsaved: true,
+        busy: true,
+        blocked: true,
+        canSave: false,
+        error: p.error,
+        saveReason: 'Wait for two-page field review, then finish and close it explicitly.',
+      }
+    );
+  if (p.environmentSUOpen)
+    return (
+      p.environmentSUClose?.() ?? {
+        unsaved: true,
+        busy: true,
+        canSave: false,
+        error: p.error,
+        saveReason: 'Wait for SU transfer review, then finish or dismiss and close it explicitly.',
+      }
+    );
+  if (p.profileReviewBlocked)
+    return (
+      p.profileClose?.() ?? {
+        unsaved: true,
+        busy: true,
+        canSave: false,
+        error: p.error,
+        saveReason: 'Finish profile rules explicitly before saving or closing the plot.',
+      }
+    );
+  if (p.metadataOpen)
+    return (
+      p.metadataClose?.() ?? {
+        unsaved: true,
+        busy: true,
+        canSave: false,
+        error: p.error,
+        saveReason: 'Wait for metadata review, then finish or close it before saving or closing the plot.',
+      }
+    );
+  if (p.codeCheckOpen)
+    return (
+      p.codeCheckClose?.() ?? {
+        unsaved: true,
+        busy: true,
+        canSave: false,
+        error: p.error,
+        saveReason: 'Wait for species-code review to load, then finish or close it before saving or closing the plot.',
+      }
+    );
+  return p.creationOverride;
 }

@@ -99,16 +99,18 @@ test('lost or malformed workbook receipts stay unknown instead of becoming no-fi
 });
 
 test('workbook panel keeps title/preferences/read/navigation/native-close barriers and receipts above guidance', () => {
-  const source = readFileSync(srcPath('LongEnvironmentReport.svelte'), 'utf8');
-  assert.equal(compile(source, { filename: 'LongEnvironmentReport.svelte', generate: 'client' }).warnings.length, 0);
+  const { readReportComposite } = require('./svelteTestHelpers.cjs');
+  const raw = readFileSync(srcPath('LongEnvironmentReport.svelte'), 'utf8');
+  const source = readReportComposite('long-environment');
+  assert.equal(compile(raw, { filename: 'LongEnvironmentReport.svelte', generate: 'client' }).warnings.length, 0);
   assert.match(source, /workbookReview = \$state\.raw<ValidatedEnvironmentWorkbookReview/);
   assert.match(source, /onBusyChange\(busy \|\| preferenceBarrier \|\| workbookBarrier\)/);
-  assert.match(source, /reads\.track\(EnvironmentReportService\.GetEnvironmentWorkbookReview/);
-  assert.doesNotMatch(source, /reads\.track\(EnvironmentReportService\.ExportReviewedEnvironmentWorkbook/);
-  assert.match(source, /workbookSession\.publish\(workbookReview, destination/);
-  assert.match(source, /generation\+\+; reads\.cancelAll/);
+  assert.match(source, /reads\.track\(\s*EnvironmentReportService\.GetEnvironmentWorkbookReview/);
+  assert.doesNotMatch(source, /reads\.track\(\s*EnvironmentReportService\.ExportReviewedEnvironmentWorkbook/);
+  assert.match(source, /workbookSession\.publish\(\s*workbookReview,\s*destination/);
+  assert.match(source, /generation\+\+;\s*reads\.cancelAll/);
   assert.match(source, /function acknowledgeWorkbook\(\) \{\s*workbookSession\.acknowledge\(\);\s*workbookReview = null;/);
-  assert.match(source, /input, textarea \{ box-sizing: border-box; min-width: 0;/);
+  assert.match(source, /textarea \{\s*box-sizing: border-box;\s*min-width: 0;/);
   assert.match(source, /\.report \{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*overflow-wrap: anywhere;/);
   assert.doesNotMatch(source, /data-environment-workbook-receipt/);
   assert.ok(source.indexOf('data-environment-workbook-unknown') >= 0 && source.indexOf('data-environment-workbook-unknown') < source.indexOf('class="guidance"'));

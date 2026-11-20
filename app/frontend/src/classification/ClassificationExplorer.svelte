@@ -1,13 +1,10 @@
 <script lang="ts">
   import { onDestroy, onMount, tick, untrack } from 'svelte';
-  import { ReadRequests } from '../shared/readRequests';
+  import { ReadRequests, formatError } from '../shared/readRequests';
   import { computeVirtualWindow } from '../datasheet/universalDatasheetGrid';
   import SiteUnitExclusionFilter from './SiteUnitExclusionFilter.svelte';
-  import ClassificationDialogs from './ClassificationDialogs.svelte';
-  import ClassificationLeftTreePane from './ClassificationLeftTreePane.svelte';
-  import ClassificationPlotInspectorPane from './ClassificationPlotInspectorPane.svelte';
-  import ClassificationHierarchyNodePanel from './ClassificationHierarchyNodePanel.svelte';
-  import ClassificationFlatRankTab from './ClassificationFlatRankTab.svelte';
+  import ClassificationExplorerHeader from './ClassificationExplorerHeader.svelte';
+  import ClassificationExplorerDualPane from './ClassificationExplorerDualPane.svelte';
   import {
     defaultClassificationBackendPort,
     flattenVisibleHierarchyTree,
@@ -87,9 +84,9 @@
   let exclusionBusy = $state(false);
 
   // Create SU & modal dialogs
-  let activeDialog = $state<
-    'none' | 'new_su' | 'save_su_as' | 'su_from_env' | 'new_hierarchy' | 'save_hierarchy_as'
-  >('none');
+  let activeDialog = $state<'none' | 'new_su' | 'save_su_as' | 'su_from_env' | 'new_hierarchy' | 'save_hierarchy_as'>(
+    'none'
+  );
   let newSUName = $state('');
   let newSUDestination = $state<'project' | 'new_file'>('project');
   let newSUFilePath = $state('');
@@ -118,21 +115,13 @@
   const suVirtualSlice = $derived(
     computeVirtualWindow(treeScrollTop, treeViewportHeight, TREE_ROW_HEIGHT, flatSUItems.length, 8)
   );
-  const visibleSUItems = $derived(
-    flatSUItems.slice(suVirtualSlice.startIndex, suVirtualSlice.endIndex)
-  );
+  const visibleSUItems = $derived(flatSUItems.slice(suVirtualSlice.startIndex, suVirtualSlice.endIndex));
 
   const flatHierarchyItems = $derived(
     flattenVisibleHierarchyTree(hierarchyView?.roots ?? [], new Set(expandedHierarchyIds))
   );
   const hierVirtualSlice = $derived(
-    computeVirtualWindow(
-      treeScrollTop,
-      treeViewportHeight,
-      TREE_ROW_HEIGHT,
-      flatHierarchyItems.length,
-      8
-    )
+    computeVirtualWindow(treeScrollTop, treeViewportHeight, TREE_ROW_HEIGHT, flatHierarchyItems.length, 8)
   );
   const visibleHierarchyItems = $derived(
     flatHierarchyItems.slice(hierVirtualSlice.startIndex, hierVirtualSlice.endIndex)
@@ -140,7 +129,7 @@
 
   const flatValidationError = $derived(flatDirty ? validateFlatHierarchyRows(flatDraftRows) : '');
   const selectedHierarchyNode = $derived(
-    hierarchyView?.flatNodes.find(n => n.id === selectedHierarchyNodeId) ?? null
+    hierarchyView?.flatNodes.find((n) => n.id === selectedHierarchyNodeId) ?? null
   );
 
   $effect(() => {
@@ -149,7 +138,9 @@
   });
 
   function formatExplorerError(cause: unknown): string {
-    return String(cause ?? '').replace(/(?:RuntimeError|Error):\s*/gi, '').trim();
+    return formatError(cause)
+      .replace(/(?:RuntimeError|Error):\s*/gi, '')
+      .trim();
   }
 
   async function reloadActivePane() {
@@ -173,10 +164,7 @@
       if (reqGen !== generation) return;
       suTree = tree;
       if (expandedSUIds.length <= 1 && tree.units.length > 0) {
-        expandedSUIds = [
-          UNASSIGNED_BUCKET_ID,
-          ...tree.units.slice(0, 5).map(u => `unit::${u.siteUnit}`),
-        ];
+        expandedSUIds = [UNASSIGNED_BUCKET_ID, ...tree.units.slice(0, 5).map((u) => `unit::${u.siteUnit}`)];
       }
     } catch (err) {
       if (reqGen === generation) errorMessage = formatExplorerError(err);
@@ -188,9 +176,7 @@
   async function inspectPlot(plotNumber: string) {
     if (!effectiveContextId || !plotNumber) return;
     try {
-      inspectedPlot = await reads.track(
-        port.getPlotInspectorSummary(effectiveContextId, plotNumber)
-      );
+      inspectedPlot = await reads.track(port.getPlotInspectorSummary(effectiveContextId, plotNumber));
     } catch (err) {
       errorMessage = `Plot inspector failed: ${formatExplorerError(err)}`;
     }
@@ -208,9 +194,9 @@
       if (reqGen !== generation) return;
       hierarchyView = view;
       if (expandedHierarchyIds.length === 0 && view.flatNodes.length > 0) {
-        expandedHierarchyIds = view.flatNodes.filter(n => n.depth <= 2).map(n => n.id);
+        expandedHierarchyIds = view.flatNodes.filter((n) => n.depth <= 2).map((n) => n.id);
       }
-      flatDraftRows = (view.flatRankRows ?? []).map(r => ({ ...r }));
+      flatDraftRows = (view.flatRankRows ?? []).map((r) => ({ ...r }));
       flatDirty = false;
     } catch (err) {
       if (reqGen === generation) errorMessage = formatExplorerError(err);
@@ -221,19 +207,17 @@
 
   function toggleSUExpand(folderId: string) {
     expandedSUIds = expandedSUIds.includes(folderId)
-      ? expandedSUIds.filter(id => id !== folderId)
+      ? expandedSUIds.filter((id) => id !== folderId)
       : [...expandedSUIds, folderId];
   }
 
   function handlePlotClick(plotNumber: string, event: MouseEvent | KeyboardEvent) {
     if (event.ctrlKey || event.metaKey) {
       selectedPlots = selectedPlots.includes(plotNumber)
-        ? selectedPlots.filter(p => p !== plotNumber)
+        ? selectedPlots.filter((p) => p !== plotNumber)
         : [...selectedPlots, plotNumber];
     } else if (event.shiftKey && lastClickedPlot) {
-      const leafPlots = flatSUItems
-        .filter(i => i.kind === 'plot_leaf' && i.plot)
-        .map(i => i.plot!.plotNumber);
+      const leafPlots = flatSUItems.filter((i) => i.kind === 'plot_leaf' && i.plot).map((i) => i.plot!.plotNumber);
       const a = leafPlots.indexOf(lastClickedPlot);
       const b = leafPlots.indexOf(plotNumber);
       if (a >= 0 && b >= 0) {
@@ -320,7 +304,7 @@
 
   function toggleHierarchyExpand(nodeId: number) {
     expandedHierarchyIds = expandedHierarchyIds.includes(nodeId)
-      ? expandedHierarchyIds.filter(id => id !== nodeId)
+      ? expandedHierarchyIds.filter((id) => id !== nodeId)
       : [...expandedHierarchyIds, nodeId];
   }
 
@@ -437,76 +421,17 @@
   data-tour="classification-explorer-root"
   aria-label="Dual-Pane Classification Explorer"
 >
-  <header class="vpro-cls-header">
-    <div>
-      <p class="vpro-cls-eyebrow">BEC CLASSIFICATION WORKBENCH</p>
-      <h2 class="vpro-cls-title">
-        Classification Explorer
-        {#if project}<span class="vpro-cls-pill">Project: {project}</span>{/if}
-        <span class="vpro-cls-pill">SU: {suTree?.su || su}</span>
-        <span class="vpro-cls-pill">Hierarchy: {hierarchyView?.hierarchy || hierarchy}</span>
-      </h2>
-    </div>
-
-    <div class="vpro-cls-mode-bar" role="tablist" aria-label="Classification Explorer Views">
-      <button
-        type="button"
-        role="tab"
-        aria-selected={mode === 'su_tree'}
-        class="vpro-cls-mode-btn"
-        class:active={mode === 'su_tree'}
-        onclick={() => {
-          mode = 'su_tree';
-          treeScrollTop = 0;
-          void loadSUTreeAndPicker();
-        }}
-      >
-        SU -&gt; Plots Tree
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={mode === 'hierarchy_tree'}
-        class="vpro-cls-mode-btn"
-        class:active={mode === 'hierarchy_tree'}
-        onclick={() => {
-          mode = 'hierarchy_tree';
-          treeScrollTop = 0;
-          void loadHierarchy();
-        }}
-      >
-        Hierarchy Tree (~)
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={mode === 'hierarchy_flat'}
-        class="vpro-cls-mode-btn"
-        class:active={mode === 'hierarchy_flat'}
-        onclick={() => {
-          mode = 'hierarchy_flat';
-          void loadHierarchy();
-        }}
-      >
-        Flat Rank Table
-      </button>
-    </div>
-  </header>
-
-  {#if operationHeld}
-    <p role="status" class="vpro-cls-status">Sync/operation in progress — some edits are queued.</p>
-  {/if}
-  {#if errorMessage}
-    <p role="alert" class="vpro-cls-alert">{formatExplorerError(errorMessage)}</p>
-  {/if}
-  {#if statusBanner}
-    <p role="status" class="vpro-cls-status">{statusBanner}</p>
-  {/if}
-
-  <ClassificationDialogs
+  <ClassificationExplorerHeader
+    {project}
+    activeSuLabel={suTree?.su || su}
+    activeHierarchyLabel={hierarchyView?.hierarchy || hierarchy}
+    activeHierarchy={hierarchyView?.hierarchy ?? ''}
+    {mode}
+    {operationHeld}
+    errorMessage={errorMessage ? formatExplorerError(errorMessage) : ''}
+    {statusBanner}
     {activeDialog}
     {effectiveContextId}
-    activeHierarchy={hierarchyView?.hierarchy ?? ''}
     {port}
     {mutating}
     bind:newSUName
@@ -514,11 +439,17 @@
     bind:newSUFilePath
     bind:populateAllPlots
     bind:seedFromUserSU
-    onClose={() => (activeDialog = 'none')}
+    onSwitchMode={(nextMode) => {
+      mode = nextMode;
+      if (nextMode !== 'hierarchy_flat') treeScrollTop = 0;
+      if (nextMode === 'su_tree') void loadSUTreeAndPicker();
+      else void loadHierarchy();
+    }}
+    onCloseDialog={() => (activeDialog = 'none')}
     onSubmitCreateSU={submitCreateSU}
-    onMutatingChange={v => (mutating = v)}
-    onError={msg => (errorMessage = formatExplorerError(msg))}
-    onStatus={msg => (statusBanner = msg)}
+    onMutatingChange={(v) => (mutating = v)}
+    onError={(msg) => (errorMessage = formatExplorerError(msg))}
+    onStatus={(msg) => (statusBanner = msg)}
     onActivated={(cid, st) => {
       effectiveContextId = cid;
       onContextChanged?.(cid, st);
@@ -527,90 +458,53 @@
     onReloadHierarchy={loadHierarchy}
   />
 
-  {#if mode === 'hierarchy_flat'}
-    <ClassificationFlatRankTab
-      bind:flatDraftRows
-      bind:flatDirty
-      {flatValidationError}
-      {mutating}
-      onOpenDialog={d => (activeDialog = d)}
-      onSaveFlatRows={submitSaveFlatRows}
-    />
-  {:else}
-    <div class="vpro-cls-dual-grid">
-      <ClassificationLeftTreePane
-        {mode}
-        treeRowHeight={TREE_ROW_HEIGHT}
-        bind:suFilterText
-        {suTree}
-        {flatSUItems}
-        {suVirtualSlice}
-        {visibleSUItems}
-        {selectedPlots}
-        {lastHistoryId}
-        {hierarchyView}
-        {flatHierarchyItems}
-        {hierVirtualSlice}
-        {visibleHierarchyItems}
-        {selectedHierarchyNodeId}
-        bind:expandedHierarchyIds
-        bind:treeScrollTop
-        bind:treeViewportHeight
-        {mutating}
-        onLoadSUTree={loadSUTreeAndPicker}
-        onOpenDialog={d => (activeDialog = d)}
-        onUndoLast={undoLastAssignment}
-        onToggleSUExpand={toggleSUExpand}
-        onPlotClick={handlePlotClick}
-        onPlotDragStart={handlePlotDragStart}
-        onBucketDrop={handleBucketDrop}
-        onAssignPlots={assignPlots}
-        {onOpenPlot}
-        onToggleHierarchyExpand={toggleHierarchyExpand}
-        onSelectHierarchyNode={(id, name, pid) => {
-          selectedHierarchyNodeId = id;
-          renameDraft = name;
-          reparentTargetId = pid === null ? '' : String(pid);
-        }}
-        onToggleBreak={submitToggleBreak}
-      />
-
-      <section class="vpro-cls-right-pane" aria-label="Inspector and Editors">
-        {#if mode === 'su_tree'}
-          <ClassificationPlotInspectorPane
-            {effectiveContextId}
-            {project}
-            {port}
-            {inspectedPlot}
-            {selectedPlots}
-            {mutating}
-            {onRequestSUSync}
-            onAssignPlots={assignPlots}
-            onMutatingChange={v => (mutating = v)}
-            onError={msg => (errorMessage = formatExplorerError(msg))}
-            onStatus={msg => (statusBanner = msg)}
-          />
-        {:else}
-          <ClassificationHierarchyNodePanel
-            {effectiveContextId}
-            {port}
-            {hierarchyView}
-            {selectedHierarchyNodeId}
-            {selectedHierarchyNode}
-            bind:expandedHierarchyIds
-            bind:renameDraft
-            bind:reparentTargetId
-            {mutating}
-            onMutatingChange={v => (mutating = v)}
-            onError={msg => (errorMessage = formatExplorerError(msg))}
-            onStatus={msg => (statusBanner = msg)}
-            onClearSelection={() => (selectedHierarchyNodeId = null)}
-            onReloadHierarchy={loadHierarchy}
-          />
-        {/if}
-      </section>
-    </div>
-  {/if}
+  <ClassificationExplorerDualPane
+    {mode}
+    bind:flatDraftRows
+    bind:flatDirty
+    {flatValidationError}
+    onSaveFlatRows={submitSaveFlatRows}
+    treeRowHeight={TREE_ROW_HEIGHT}
+    bind:suFilterText
+    {suTree}
+    {flatSUItems}
+    {suVirtualSlice}
+    {visibleSUItems}
+    {selectedPlots}
+    {lastHistoryId}
+    {hierarchyView}
+    {flatHierarchyItems}
+    {hierVirtualSlice}
+    {visibleHierarchyItems}
+    bind:selectedHierarchyNodeId
+    {selectedHierarchyNode}
+    bind:expandedHierarchyIds
+    bind:renameDraft
+    bind:reparentTargetId
+    bind:treeScrollTop
+    bind:treeViewportHeight
+    {effectiveContextId}
+    {project}
+    {port}
+    {inspectedPlot}
+    {mutating}
+    onLoadSUTree={loadSUTreeAndPicker}
+    onOpenDialog={(d) => (activeDialog = d)}
+    onUndoLast={undoLastAssignment}
+    onToggleSUExpand={toggleSUExpand}
+    onPlotClick={handlePlotClick}
+    onPlotDragStart={handlePlotDragStart}
+    onBucketDrop={handleBucketDrop}
+    onAssignPlots={assignPlots}
+    {onOpenPlot}
+    onToggleHierarchyExpand={toggleHierarchyExpand}
+    onToggleBreak={submitToggleBreak}
+    {onRequestSUSync}
+    onMutatingChange={(v) => (mutating = v)}
+    onError={(msg) => (errorMessage = formatExplorerError(msg))}
+    onStatus={(msg) => (statusBanner = msg)}
+    onReloadHierarchy={loadHierarchy}
+  />
 
   {#if effectiveContextId}
     <details class="vpro-cls-exclusion-drawer">
@@ -623,7 +517,7 @@
           su={suTree?.su || su}
           hierarchy={hierarchyView?.hierarchy || (hierarchy && hierarchy !== 'None' ? hierarchy : '') || 'None'}
           reportMode="summary"
-          onBusyChange={val => (exclusionBusy = val)}
+          onBusyChange={(val) => (exclusionBusy = val)}
         />
       </div>
     </details>

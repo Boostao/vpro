@@ -1,3 +1,4 @@
+import { evictMapEntriesByContext, registerContextDisposer } from '../shared/contextSessionRegistry';
 import type { PictureLifecycleSession } from './pictureLifecycleSession';
 import type { PictureOwner } from './pictureRead';
 
@@ -11,7 +12,9 @@ export const pictureLifecycleEntries = new Map<string, { owner: PictureOwner; se
 const observers = new Set<(activity: PictureLifecycleActivity) => void>();
 
 function activity(): PictureLifecycleActivity {
-  let busy = false, blocked = false, owner: PictureOwner | null = null;
+  let busy = false,
+    blocked = false,
+    owner: PictureOwner | null = null;
   for (const entry of pictureLifecycleEntries.values()) {
     const state = entry.session.closeState();
     busy ||= state.busy;
@@ -28,5 +31,12 @@ export function notifyPictureLifecycleActivity() {
 export function subscribePictureLifecycleActivity(observer: (activity: PictureLifecycleActivity) => void) {
   observers.add(observer);
   observer(activity());
-  return () => { observers.delete(observer); };
+  return () => {
+    observers.delete(observer);
+  };
 }
+registerContextDisposer((id) => {
+  if (evictMapEntriesByContext(pictureLifecycleEntries, id, (_k, v) => v.owner.contextId === id) > 0) {
+    notifyPictureLifecycleActivity();
+  }
+});

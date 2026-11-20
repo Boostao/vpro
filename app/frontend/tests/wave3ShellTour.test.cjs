@@ -104,7 +104,8 @@ test('Unified VPro Shield+Conifer SVG crest replaces placeholder V badge in App.
   assert.match(indexHtml, /%231E5128/);
   assert.match(indexHtml, /%23FCBA19/);
 
-  const appSrc = readFileSync(path.join(SRC_DIR, 'App.svelte'), 'utf8');
+  const { readShellComposite } = require('./svelteTestHelpers.cjs');
+  const appSrc = readShellComposite();
   assert.doesNotMatch(appSrc, /<span class="brand-symbol"[^>]*>V<\/span>/);
   assert.match(appSrc, /<span class="brand-symbol" aria-hidden="true">\s*<svg\b[^>]*viewBox="36 36 952 952"/);
   assert.match(appSrc, /#FCBA19/);
@@ -422,7 +423,9 @@ test('UserSetupModal (S6.12), Navigation graduation, PlotsBrowserPanel (S1.1/S3.
   assert.match(hierHtml, /Open SU &amp; Hierarchy Explorer/);
 
   // 5. WorkspaceSidebar.svelte quarantine alert details
+  const { readSidebarComposite, readShellComposite } = require('./svelteTestHelpers.cjs');
   const sidebarSrc = readFileSync(srcPath('shell/WorkspaceSidebar.svelte'), 'utf8');
+  const sidebarComposite = readSidebarComposite();
   assert.deepEqual(compile(sidebarSrc, { filename: 'WorkspaceSidebar.svelte', generate: 'client' }).warnings, []);
   const sidebarHtml = render(
     serverComponent(sidebarSrc, 'WorkspaceSidebar.svelte', {
@@ -458,17 +461,17 @@ test('UserSetupModal (S6.12), Navigation graduation, PlotsBrowserPanel (S1.1/S3.
       },
     }
   );
-  // Note: accessResult is local component state populated after import; verify template handles all 3 quarantine fields cleanly
-  assert.match(sidebarSrc, /data-access-quarantine-summary/);
-  assert.match(sidebarSrc, /quarantinedMalformedRows/);
-  assert.match(sidebarSrc, /quarantinedOrphanRows/);
-  assert.match(sidebarSrc, /quarantinedOverflowRows/);
+  assert.match(sidebarComposite, /data-access-quarantine-summary/);
+  assert.match(sidebarComposite, /quarantinedMalformedRows/);
+  assert.match(sidebarComposite, /quarantinedOrphanRows/);
+  assert.match(sidebarComposite, /quarantinedOverflowRows/);
   assert.ok(sidebarHtml.body.includes('PROJECTS'));
 
   // 6. App.svelte compiles cleanly with 0 warnings and integrates S1.1, S1.10, S4.3, S5.9, S6.12
-  const appSrc = readFileSync(srcPath('App.svelte'), 'utf8');
-  assert.deepEqual(compile(appSrc, { filename: 'App.svelte', generate: 'client' }).warnings, []);
-  assert.match(appSrc, /editorEntryForm\s*=\s*'fs882-twopage'/);
+  const rawAppSrc = readFileSync(srcPath('App.svelte'), 'utf8');
+  const appSrc = readShellComposite();
+  assert.deepEqual(compile(rawAppSrc, { filename: 'App.svelte', generate: 'client' }).warnings, []);
+  assert.match(appSrc, /'fs882-twopage'/);
   assert.match(appSrc, /onOpenPictureManager=/);
   assert.match(appSrc, /onDiagnosticsContextChange=/);
   assert.match(appSrc, /onApplyHumusThickness=\{/);
@@ -478,11 +481,11 @@ test('UserSetupModal (S6.12), Navigation graduation, PlotsBrowserPanel (S1.1/S3.
   assert.doesNotMatch(appSrc, /vpro:site-unit-exclusion-update/);
   assert.match(
     appSrc,
-    /<SummaryVegetationReport[\s\S]*hierarchy=\{\$projectState\.activeHierarchy \?\? 'None'\}[\s\S]*onExclusionBusyChange=\{\(value\) => \{ secondaryPanelBusy = value; \}\}/
+    /<SummaryVegetationReport[\s\S]*hierarchy=\{\$projectState\.activeHierarchy \?\? 'None'\}[\s\S]*onExclusionBusyChange=\{\(value\)\s*=>\s*\{\s*secondaryPanelBusy = value;\s*\}\}/
   );
   assert.match(
     appSrc,
     /<LongVegetationReport[\s\S]*hierarchy=\{\$projectState\.activeHierarchy \?\? 'None'\}/
   );
-  assert.match(appSrc, /import\('\.\/shell\/UserSetupModal\.svelte'\)/);
+  assert.match(appSrc, /import\('\.\.?\/shell\/UserSetupModal\.svelte'\)|import\('\.\/UserSetupModal\.svelte'\)/);
 });

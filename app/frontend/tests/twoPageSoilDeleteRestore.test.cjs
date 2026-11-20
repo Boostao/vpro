@@ -144,12 +144,16 @@ test('TwoPageSoilPanel client guarded delete and restore enforce clean draft sta
     .replace('export default function', 'function');
 
   let uuidSeq = 0;
+  const { noopNotificationsStub, serverReads } = require('./svelteTestHelpers.cjs');
   const mountFn = new Function(
     '$',
     'tick',
     'untrack',
+    'formatError',
+    'notifications',
     'twoPageSoilSession',
     'twoPageSoilWritingEnabled',
+    'twoPageSoilCreationEnabled',
     'twoPageSoilKind',
     'metadataCellText',
     'equalCell',
@@ -159,6 +163,7 @@ test('TwoPageSoilPanel client guarded delete and restore enforce clean draft sta
     'twoPageSoilStoredText',
     'twoPageSoilRowDiagnostic',
     'twoPageSoilDepthOrder',
+    'validateSoilEnterTarget',
     'enterNavigationMode',
     'document',
     'HTMLInputElement',
@@ -171,7 +176,10 @@ test('TwoPageSoilPanel client guarded delete and restore enforce clean draft sta
     client,
     async () => client.flush(),
     client.untrack,
+    serverReads.formatError,
+    noopNotificationsStub.notifications,
     () => session,
+    true,
     true,
     editor.twoPageSoilKind,
     metadata.metadataCellText,
@@ -182,6 +190,7 @@ test('TwoPageSoilPanel client guarded delete and restore enforce clean draft sta
     presentation.twoPageSoilStoredText,
     presentation.twoPageSoilRowDiagnostic,
     presentation.twoPageSoilDepthOrder,
+    presentation.validateSoilEnterTarget,
     navigation.enterNavigationMode,
     undefined,
     undefined,

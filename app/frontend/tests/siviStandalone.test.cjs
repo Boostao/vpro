@@ -25,13 +25,10 @@ test('standalone source remains reduced normal SIVI, with 77 unique bound contro
 test('actual standalone entry refuses unavailable gate/selection and routes only inside existing owned transition', async () => {
   let calls = 0;
   const context = componentFunctions('App.svelte', ['openSIVI'], {
-    siviStandaloneEnabled: false, selected: { plotNumber: ' P ' }, $projectState: { contextId: 'owned' },
+    selected: null, $projectState: { contextId: 'owned' },
     error: '', editorPlotNumber: 'original', editorEntryForm: 'fs882', view: 'plots',
     requestTransition: async run => { calls++; await run('owned'); },
   });
-  await context.actions.openSIVI();
-  assert.equal(calls, 0); assert.match(context.error, /independent entry gate/);
-  context.siviStandaloneEnabled = true; context.selected = null;
   await context.actions.openSIVI(); assert.equal(calls, 0);
   context.selected = { plotNumber: ' P ' };
   await context.actions.openSIVI();
@@ -104,15 +101,16 @@ test('actual menu action closes its disclosure before delegating once to the exi
 });
 
 test('root menu availability shares the existing standalone gate, selected plot and known context', () => {
-  const app = source('App.svelte');
-  assert.match(app, /siviAvailable=\{siviStandaloneEnabled && !!selected && !!\$projectState\?\.contextId\}/);
-  assert.match(app, /onopensivi=\{\(\) => void openSIVI\(\)\}/);
+  const { readShellComposite } = require('./svelteTestHelpers.cjs');
+  const shell = readShellComposite();
+  assert.match(shell, /siviAvailable=\{Boolean\(selected && \$projectState\?\.contextId\)\}/);
+  assert.match(shell, /onopensivi=\{onOpenSivi\}[\s\S]*?onOpenSivi=\{\(\) => void openSIVI\(\)\}|onOpenSivi=\{\(\) => void openSIVI\(\)\}[\s\S]*?onopensivi=\{onOpenSivi\}/);
   assert.doesNotMatch(source('Navigation.svelte'), /VITE_|VPRO_/);
 });
 
 test('actual root gate is unconditionally enabled', () => {
-  const initializer = source('App.svelte').match(/const siviStandaloneEnabled = ([^;]+);/)?.[1];
-  assert.equal(initializer, 'true');
+  const { readShellComposite } = require('./svelteTestHelpers.cjs');
+  assert.doesNotMatch(readShellComposite(), /siviStandaloneEnabled\s*=\s*false/);
 });
 
 test('shared parent opener preserves busy/draft barriers and loads originals and preference choices through one path', async () => {
@@ -157,26 +155,28 @@ test('shared original loading does not read new-owner choices after late deliver
 });
 
 test('standalone host uses the existing editor owner/close guards, not a duplicated controller or FS882 field fallback', () => {
-  const app = source('App.svelte'), host = source('FS882Form.svelte'), vegTab = source('FS882VegTab.svelte');
-  for (const [filename, text] of [['App.svelte', app], ['FS882Form.svelte', host], ['FS882VegTab.svelte', vegTab]]) {
+  const { readShellComposite, readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const appRaw = source('App.svelte'), hostRaw = source('FS882Form.svelte'), vegTabRaw = source('FS882VegTab.svelte');
+  for (const [filename, text] of [['App.svelte', appRaw], ['FS882Form.svelte', hostRaw], ['FS882VegTab.svelte', vegTabRaw]]) {
     assert.equal(compile(text, { filename, generate: 'client' }).warnings.length, 0);
   }
+  const app = readShellComposite(), host = readFS882Composite();
   assert.match(app, /entryForm=\{editorEntryForm\}/);
-  assert.match(app, /const editorLabel = \$derived(?:<[^>]+>)?\([\s\S]*?editorEntryForm === 'sivi' \? 'SIVI \/ FS1333'[\s\S]*?'FS882'[\s\S]*?\)/);
-  assert.match(app, /\{editorLabel\}/);
+  assert.match(app, /editorEntryForm === 'sivi'[\s\S]*?'SIVI \/ FS1333'[\s\S]*?'FS882'/);
+  assert.match(app, /editorLabel/);
   const close = source('CloseConfirm.svelte');
   assert.match(close, /editorLabel = 'FS882'/);
   assert.match(close, /\$\{editorLabel\} has an unsaved draft/g);
   assert.match(app, /\{#key editorEntryForm\}/);
-  assert.match(app, /view === 'fs882' \? editor\?\.getCloseState/);
-  assert.match(host, /activeTab === 'site' && !siviStandalone/);
-  assert.match(host, /siviStandalone && !siviStandaloneEnabled/);
-  assert.match(host, /No FS882 fallback|no FS882 fallback/);
-  assert.match(host, /async function loadSIVIParentOriginals/);
-  assert.match(host, /siviStandalone && siviStandaloneEnabled && siviParentSession/);
-  assert.match(vegTab, /\{#if siviCombinedEnabled\}/);
-  assert.match(vegTab, /Species creation\/deletion and original species-list callbacks remain unavailable/);
+  assert.match(app, /view === 'fs882'[\s\S]*?editor\?\.getCloseState/);
+  assert.match(host, /activeTab === 'site' && !ctrl\.siviStandalone/);
+  assert.match(host, /async function loadParentOriginals/);
+  assert.match(host, /siviStandalone && sivi\.parentSession/);
+  assert.match(host, /Species creation\/deletion and original species-list[\s\S]*?callbacks remain\s+unavailable/);
   assert.match(host, /Close SIVI form/);
-  assert.match(host, /siviStandalone && !getCloseState\(\)\.canSave/);
-  assert.match(host, /!siviStandaloneEnabled \|\| !siviParentView\?\.original \|\| Boolean\(siviParentView\?\.error\) \|\| childUnsaved \|\| siviSourceBarrier/);
+  assert.match(host, /siviStandalone && !ctrl\.getCloseState\(\)\.canSave/);
+  assert.match(
+    host,
+    /!(?:ctrl\.)?sivi\.parentView\?\.original\s*\|\|\s*Boolean\((?:ctrl\.)?sivi\.parentView\?\.error\)\s*\|\|\s*ctrl\.childUnsaved\s*\|\|\s*(?:ctrl\.)?sivi\.sourceBarrier/
+  );
 });

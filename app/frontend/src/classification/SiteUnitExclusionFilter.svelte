@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount, untrack } from 'svelte';
-  import { ReadRequests } from '../shared/readRequests';
+  import { ReadRequests, formatError } from '../shared/readRequests';
+  import SiteUnitExclusionUnitList from './SiteUnitExclusionUnitList.svelte';
   import {
     createDefaultBreakpointOptions,
     createDefaultSiteUnitExclusionRules,
@@ -59,7 +60,7 @@
   let rules = $state<SiteUnitExclusionRule[]>(
     untrack(() =>
       initialRules && initialRules.length > 0
-        ? initialRules.map(r => ({ ...r }))
+        ? initialRules.map((r) => ({ ...r }))
         : createDefaultSiteUnitExclusionRules()
     )
   );
@@ -78,10 +79,12 @@
     onBusyChange?.(busy);
   });
 
-  function dispatchExclusionEvent(extra: {
-    summaryPreview?: SummaryVegetationExclusionPreview;
-    longPreview?: LongVegetationExclusionPreview;
-  } = {}) {
+  function dispatchExclusionEvent(
+    extra: {
+      summaryPreview?: SummaryVegetationExclusionPreview;
+      longPreview?: LongVegetationExclusionPreview;
+    } = {}
+  ) {
     if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') return;
     window.dispatchEvent(
       new CustomEvent('vpro:site-unit-exclusion-update', {
@@ -97,11 +100,7 @@
   }
 
   function emitChange() {
-    onRulesChange?.(
-      $state.snapshot(rules),
-      useHierarchyBreakpoints,
-      $state.snapshot(breakpointOptions)
-    );
+    onRulesChange?.($state.snapshot(rules), useHierarchyBreakpoints, $state.snapshot(breakpointOptions));
     dispatchExclusionEvent();
   }
 
@@ -128,13 +127,9 @@
       if (reqGen !== generation) return;
       preview = res;
     } catch (err) {
-      if (reqGen === generation) {
-        errorMessage = String(err);
-      }
+      if (reqGen === generation) errorMessage = formatError(err);
     } finally {
-      if (reqGen === generation) {
-        busy = false;
-      }
+      if (reqGen === generation) busy = false;
     }
   }
 
@@ -193,20 +188,16 @@
         dispatchExclusionEvent({ longPreview: res });
       }
     } catch (err) {
-      if (reqGen === generation) {
-        errorMessage = String(err);
-      }
+      if (reqGen === generation) errorMessage = formatError(err);
     } finally {
-      if (reqGen === generation) {
-        busy = false;
-      }
+      if (reqGen === generation) busy = false;
     }
   }
 
   function addRule() {
     const trimmed = newPattern.trim();
     if (!trimmed) return;
-    if (rules.some(r => r.pattern.toLowerCase() === trimmed.toLowerCase() && r.matchMode === newMatchMode)) {
+    if (rules.some((r) => r.pattern.toLowerCase() === trimmed.toLowerCase() && r.matchMode === newMatchMode)) {
       newPattern = '';
       return;
     }
@@ -275,11 +266,7 @@
         disabled={busy || !su || su === 'None'}
         onclick={runFilteredReportPreview}
       >
-        {busy
-          ? 'Computing...'
-          : reportMode === 'summary'
-            ? 'Preview Summary Vegetation'
-            : 'Preview Long Vegetation'}
+        {busy ? 'Computing...' : reportMode === 'summary' ? 'Preview Summary Vegetation' : 'Preview Long Vegetation'}
       </button>
     </div>
   </header>
@@ -288,167 +275,79 @@
     <p role="alert" class="vpro-sux-alert">{errorMessage}</p>
   {/if}
 
-  <div class="vpro-sux-rules" role="list" aria-label="Active SiteUnit Exclusion Rules">
-    {#each rules as rule, idx (`${rule.pattern}:${rule.matchMode}:${idx}`)}
-      <div role="listitem" class="vpro-sux-chip" class:disabled={!rule.enabled}>
+  <SiteUnitExclusionUnitList
+    {rules}
+    bind:newPattern
+    bind:newMatchMode
+    {preview}
+    onToggleRule={toggleRule}
+    onRemoveRule={removeRule}
+    onAddRule={addRule}
+  >
+    <div class="vpro-sux-breakpoints">
+      <label class="vpro-sux-check">
         <input
           type="checkbox"
-          checked={rule.enabled}
-          aria-label={`Enable exclusion rule ${rule.pattern}`}
-          onchange={() => toggleRule(idx)}
+          bind:checked={useHierarchyBreakpoints}
+          disabled={!hierarchy || hierarchy === 'None'}
+          onchange={() => {
+            emitChange();
+            void refreshExclusionPreview();
+          }}
         />
-        <code class="mono">{rule.pattern}</code>
-        <span class="vpro-sux-mode-tag">{rule.matchMode}</span>
-        <button
-          type="button"
-          class="vpro-sux-remove"
-          aria-label={`Remove exclusion rule ${rule.pattern}`}
-          onclick={() => removeRule(idx)}
-        >
-          x
-        </button>
-      </div>
-    {/each}
-  </div>
+        <span>
+          Roll up descendant Site Units under <code>~Branch</code> Hierarchy Breakpoints
+          {#if !hierarchy || hierarchy === 'None'}
+            <em>(Select an active Hierarchy in the sidebar to enable)</em>
+          {:else}
+            (Active Hierarchy: <strong>{hierarchy}</strong>)
+          {/if}
+        </span>
+      </label>
 
-  <div class="vpro-sux-add-row">
-    <label>
-      <span>Exclude Suffix / Phrase / Wildcard</span>
-      <input
-        type="text"
-        bind:value={newPattern}
-        placeholder="e.g. .transitional or *unassigned*"
-        onkeydown={e => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            addRule();
-          }
-        }}
-      />
-    </label>
-    <label>
-      <span>Match Mode</span>
-      <select bind:value={newMatchMode}>
-        <option value="auto">Auto (Dot-Suffix / Phrase / *?)</option>
-        <option value="suffix">Case-Insensitive Suffix</option>
-        <option value="contains">Case-Insensitive Substring</option>
-        <option value="wildcard">Wildcard (* / ?)</option>
-      </select>
-    </label>
-    <button type="button" class="vpro-btn-secondary" onclick={addRule}>
-      + Add Exclusion
-    </button>
-  </div>
-
-  <div class="vpro-sux-breakpoints">
-    <label class="vpro-sux-check">
-      <input
-        type="checkbox"
-        bind:checked={useHierarchyBreakpoints}
-        disabled={!hierarchy || hierarchy === 'None'}
-        onchange={() => {
-          emitChange();
-          void refreshExclusionPreview();
-        }}
-      />
-      <span>
-        Roll up descendant Site Units under <code>~Branch</code> Hierarchy Breakpoints
-        {#if !hierarchy || hierarchy === 'None'}
-          <em>(Select an active Hierarchy in the sidebar to enable)</em>
-        {:else}
-          (Active Hierarchy: <strong>{hierarchy}</strong>)
-        {/if}
-      </span>
-    </label>
-
-    {#if useHierarchyBreakpoints && hierarchy && hierarchy !== 'None'}
-      <div class="vpro-sux-bp-opts">
-        <label>
-          <span>Nested '~' Breakpoint Policy</span>
-          <select
-            bind:value={breakpointOptions.breakpointPolicy}
-            onchange={() => {
-              emitChange();
-              void refreshExclusionPreview();
-            }}
-          >
-            <option value="lowest">Lowest '~' Ancestor (Nearest Branch)</option>
-            <option value="highest">Highest '~' Ancestor (Top Branch)</option>
-          </select>
-        </label>
-        <label>
-          <span>Units Without '~' Ancestor</span>
-          <select
-            bind:value={breakpointOptions.unbrokenUnitPolicy}
-            onchange={() => {
-              emitChange();
-              void refreshExclusionPreview();
-            }}
-          >
-            <option value="keep_original">Keep Original SiteUnit</option>
-            <option value="exclude_unbroken">Exclude Unbroken Units</option>
-          </select>
-        </label>
-        <label class="vpro-sux-check">
-          <input
-            type="checkbox"
-            bind:checked={breakpointOptions.stripTildePrefix}
-            onchange={() => {
-              emitChange();
-              void refreshExclusionPreview();
-            }}
-          />
-          <span>Strip '~' prefix in column header</span>
-        </label>
-      </div>
-    {/if}
-  </div>
-
-  {#if preview}
-    <div class="vpro-sux-summary" role="status">
-      <p>
-        SU <code>{preview.su}</code>:
-        <strong>{preview.exclusions.retainedPlots}</strong> of
-        <strong>{preview.exclusions.totalPlotsBefore}</strong> plots retained ·
-        <strong>{preview.exclusions.excludedPlots}</strong> plots excluded across
-        <strong>{preview.exclusions.excludedUnits.length}</strong> unit(s).
-        {#if preview.breakpoints}
-          Dynamic <code>~</code> rollup:
-          <strong>{preview.breakpoints.totalUnitsBefore}</strong> unit(s) -&gt;
-          <strong>{preview.breakpoints.totalUnitsAfter}</strong> report unit(s)
-          ({preview.breakpoints.rolledUpPlotCount} plot(s) aggregated).
-        {/if}
-      </p>
-
-      {#if preview.exclusions.excludedUnits.length > 0}
-        <details class="vpro-sux-details">
-          <summary>Excluded Site Units ({preview.exclusions.excludedUnits.length})</summary>
-          <ul>
-            {#each preview.exclusions.excludedUnits as ex (ex.siteUnit)}
-              <li>
-                <code class="mono">{ex.siteUnit}</code> — {ex.plotCount} plot(s) (matched
-                <code>{ex.matchedPattern}</code>)
-              </li>
-            {/each}
-          </ul>
-        </details>
-      {/if}
-
-      {#if preview.breakpoints && preview.breakpoints.buckets.length > 0}
-        <details class="vpro-sux-details" open>
-          <summary>Dynamic '~' Breakpoint Rollup Buckets ({preview.breakpoints.buckets.length})</summary>
-          <ul>
-            {#each preview.breakpoints.buckets as b (b.breakpointUnit)}
-              <li>
-                <strong class="mono">{b.breakpointUnit}</strong> ({b.plotCount} plot(s)) &lt;=
-                {b.sourceUnits.join(', ')}
-              </li>
-            {/each}
-          </ul>
-        </details>
+      {#if useHierarchyBreakpoints && hierarchy && hierarchy !== 'None'}
+        <div class="vpro-sux-bp-opts">
+          <label>
+            <span>Nested '~' Breakpoint Policy</span>
+            <select
+              bind:value={breakpointOptions.breakpointPolicy}
+              onchange={() => {
+                emitChange();
+                void refreshExclusionPreview();
+              }}
+            >
+              <option value="lowest">Lowest '~' Ancestor (Nearest Branch)</option>
+              <option value="highest">Highest '~' Ancestor (Top Branch)</option>
+            </select>
+          </label>
+          <label>
+            <span>Units Without '~' Ancestor</span>
+            <select
+              bind:value={breakpointOptions.unbrokenUnitPolicy}
+              onchange={() => {
+                emitChange();
+                void refreshExclusionPreview();
+              }}
+            >
+              <option value="keep_original">Keep Original SiteUnit</option>
+              <option value="exclude_unbroken">Exclude Unbroken Units</option>
+            </select>
+          </label>
+          <label class="vpro-sux-check">
+            <input
+              type="checkbox"
+              bind:checked={breakpointOptions.stripTildePrefix}
+              onchange={() => {
+                emitChange();
+                void refreshExclusionPreview();
+              }}
+            />
+            <span>Strip '~' prefix in column header</span>
+          </label>
+        </div>
       {/if}
     </div>
-  {/if}
+  </SiteUnitExclusionUnitList>
 </section>
 
 <style>
@@ -489,47 +388,12 @@
     flex-wrap: wrap;
     gap: 0.4rem;
   }
-  .vpro-sux-rules {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-  }
-  .vpro-sux-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.25rem 0.5rem;
-    background: var(--vpro-surface);
-    border: 1px solid var(--vpro-navy);
-    border-radius: 999px;
-    font-size: 0.78rem;
-  }
-  .vpro-sux-chip.disabled {
-    opacity: 0.55;
-    border-color: var(--vpro-border);
-  }
-  .vpro-sux-mode-tag {
-    font-size: 0.66rem;
-    background: var(--vpro-border);
-    color: var(--vpro-ink);
-    padding: 0.05rem 0.35rem;
-    border-radius: 3px;
-  }
-  .vpro-sux-remove {
-    border: 0;
-    background: transparent;
-    color: var(--vpro-error);
-    font-weight: 700;
-    padding: 0 2px;
-  }
-  .vpro-sux-add-row,
   .vpro-sux-bp-opts {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
     gap: 0.5rem;
   }
-  .vpro-sux-add-row label,
   .vpro-sux-bp-opts label {
     display: flex;
     flex-direction: column;
@@ -538,8 +402,6 @@
     font-weight: 600;
     color: var(--vpro-navy);
   }
-  .vpro-sux-add-row input,
-  .vpro-sux-add-row select,
   .vpro-sux-bp-opts select {
     min-height: 30px;
     padding: 0.2rem 0.45rem;
@@ -562,25 +424,6 @@
     gap: 0.4rem !important;
     font-size: 0.8rem;
     color: var(--vpro-ink);
-  }
-  .vpro-sux-summary {
-    background: var(--vpro-surface);
-    border: 1px solid var(--vpro-border);
-    border-top: 2px solid var(--vpro-gold);
-    padding: 0.55rem 0.75rem;
-    border-radius: 4px;
-    font-size: 0.8rem;
-  }
-  .vpro-sux-summary p {
-    margin: 0;
-  }
-  .vpro-sux-details {
-    margin-top: 0.4rem;
-    font-size: 0.76rem;
-  }
-  .vpro-sux-details ul {
-    margin: 0.25rem 0 0;
-    padding-left: 1.2rem;
   }
   .vpro-sux-alert {
     margin: 0;
@@ -609,8 +452,5 @@
     border: 1px solid var(--vpro-navy);
     border-radius: 4px;
     font-size: 0.8rem;
-  }
-  .mono {
-    font-family: var(--font-mono, monospace);
   }
 </style>

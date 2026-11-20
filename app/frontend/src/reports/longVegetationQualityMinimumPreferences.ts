@@ -1,5 +1,5 @@
 import type { ProjectMetadataTable } from '../../bindings/github.com/boostao/vpro/app';
-import { ownedScope, type GoogleEarthScope } from '../spatial/googleEarthReview';
+import { ownedScope, type ProjectSUScope as GoogleEarthScope } from '../shared/scope';
 import { validateQualityMinimumReference } from './qualityMinimumReference';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { ReportPreferencesSession, reportPreferencesRegistry } from './reportTitlePreferences';
@@ -13,7 +13,8 @@ interface LongVegetationQualityMinimumReference {
   source: string;
   definitions: ProjectMetadataTable;
 }
-interface LongVegetationQualityMinimumPreferencesReview extends GoogleEarthScope, LongVegetationQualityMinimumReference {
+interface LongVegetationQualityMinimumPreferencesReview
+  extends GoogleEarthScope, LongVegetationQualityMinimumReference {
   values: LongVegetationQualityMinimumPreferenceValues;
 }
 export const longVegetationQualityMinimumFields = [
@@ -24,41 +25,58 @@ export const longVegetationQualityMinimumFields = [
 const longVegetationQualityMinimumSource =
   'configured-owned-imported-SQLite VLists.USysTableOfLists; PlotQualitySite; ItemOrder then physical rowid; suggestions only';
 const literal = (value: unknown): value is string => typeof value === 'string' && wellFormedUTF16(value);
-const valid = (values: LongVegetationQualityMinimumPreferenceValues | null): values is LongVegetationQualityMinimumPreferenceValues =>
-  !!values && longVegetationQualityMinimumFields.every(field => literal(values[field.key]));
+const valid = (
+  values: LongVegetationQualityMinimumPreferenceValues | null
+): values is LongVegetationQualityMinimumPreferenceValues =>
+  !!values && longVegetationQualityMinimumFields.every((field) => literal(values[field.key]));
 const copy = (values: LongVegetationQualityMinimumPreferenceValues): LongVegetationQualityMinimumPreferenceValues => ({
-  siteMinimum: values.siteMinimum, vegMinimum: values.vegMinimum, soilMinimum: values.soilMinimum,
+  siteMinimum: values.siteMinimum,
+  vegMinimum: values.vegMinimum,
+  soilMinimum: values.soilMinimum,
 });
 function reference(value: LongVegetationQualityMinimumReference): LongVegetationQualityMinimumReference {
   if (value.source !== longVegetationQualityMinimumSource) {
-    throw new Error('Owned quality minimum suggestion schema or provenance is incomplete; no copied catalogue applied.');
+    throw new Error(
+      'Owned quality minimum suggestion schema or provenance is incomplete; no copied catalogue applied.'
+    );
   }
   return { source: value.source, definitions: validateQualityMinimumReference(value.definitions, 'PlotQualitySite') };
 }
-export function validateLongVegetationQualityMinimumPreferences(value: LongVegetationQualityMinimumPreferencesReview | null,
-  scope: GoogleEarthScope): LongVegetationQualityMinimumPreferencesReview {
+export function validateLongVegetationQualityMinimumPreferences(
+  value: LongVegetationQualityMinimumPreferencesReview | null,
+  scope: GoogleEarthScope
+): LongVegetationQualityMinimumPreferencesReview {
   if (!value || !ownedScope(value, scope) || !valid(value.values)) {
-    throw new Error('Saved Long Vegetation quality minimum strings are missing, malformed or belong to another owned context; no defaults applied.');
+    throw new Error(
+      'Saved Long Vegetation quality minimum strings are missing, malformed or belong to another owned context; no defaults applied.'
+    );
   }
   return { ...scope, values: copy(value.values), ...reference(value) };
 }
 export class LongVegetationQualityMinimumPreferencesSession extends ReportPreferencesSession<
-  LongVegetationQualityMinimumPreferenceValues, LongVegetationQualityMinimumPreferenceValues | null,
-  LongVegetationQualityMinimumPreferencesReview> {
+  LongVegetationQualityMinimumPreferenceValues,
+  LongVegetationQualityMinimumPreferenceValues | null,
+  LongVegetationQualityMinimumPreferencesReview
+> {
   private suggestions: LongVegetationQualityMinimumReference | null = null;
   constructor(scope: GoogleEarthScope) {
     super(scope, {
-      initialDraft: null, savedLabel: 'saved quality minimum strings',
+      initialDraft: null,
+      savedLabel: 'saved quality minimum strings',
       review: (value, owner) => validateLongVegetationQualityMinimumPreferences(value, owner).values,
       draft: copy,
-      validate: (draft, saved) => !valid(draft) ||
-        longVegetationQualityMinimumFields.some(field => draft[field.key] !== saved?.[field.key] && draft[field.key].includes('\0'))
-        ? 'Changed quality minima require complete Unicode without NUL; correct them or Undo the draft.' : '',
-      proposed: draft => {
+      validate: (draft, saved) =>
+        !valid(draft) ||
+        longVegetationQualityMinimumFields.some(
+          (field) => draft[field.key] !== saved?.[field.key] && draft[field.key].includes('\0')
+        )
+          ? 'Changed quality minima require complete Unicode without NUL; correct them or Undo the draft.'
+          : '',
+      proposed: (draft) => {
         if (!valid(draft)) throw new Error('Load three complete quality minimum strings before Save.');
         return copy(draft);
       },
-      equal: (a, b) => longVegetationQualityMinimumFields.every(field => a[field.key] === b[field.key]),
+      equal: (a, b) => longVegetationQualityMinimumFields.every((field) => a[field.key] === b[field.key]),
     });
   }
   override apply(value: LongVegetationQualityMinimumPreferencesReview | null) {
@@ -75,13 +93,17 @@ export class LongVegetationQualityMinimumPreferencesSession extends ReportPrefer
       throw error;
     }
   }
-  reference(): LongVegetationQualityMinimumReference | null { return structuredClone(this.suggestions); }
+  reference(): LongVegetationQualityMinimumReference | null {
+    return structuredClone(this.suggestions);
+  }
   editMinimum(key: keyof LongVegetationQualityMinimumPreferenceValues, value: string) {
-    if (!longVegetationQualityMinimumFields.some(field => field.key === key)) throw new Error('Unsupported quality minimum field.');
+    if (!longVegetationQualityMinimumFields.some((field) => field.key === key))
+      throw new Error('Unsupported quality minimum field.');
     const draft = this.view().draft;
     if (!draft) throw new Error('Load saved quality minimum strings before editing.');
     this.editDraft({ ...draft, [key]: value });
   }
 }
 export const longVegetationQualityMinimumPreferencesSession = reportPreferencesRegistry(
-  scope => new LongVegetationQualityMinimumPreferencesSession(scope));
+  (scope) => new LongVegetationQualityMinimumPreferencesSession(scope)
+);

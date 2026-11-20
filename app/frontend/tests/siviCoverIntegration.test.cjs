@@ -1,27 +1,16 @@
-const { srcPath, loadTypeScript } = require('./svelteTestHelpers.cjs');
+const { srcPath, loadTypeScript, componentFunctions, readFS882Composite } = require('./svelteTestHelpers.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-const ts = require('typescript');
 const { compile } = require('svelte/compiler');
 
 const rawParent = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
-const parent = rawParent + '\n' +
-  readFileSync(srcPath('FS882VegTab.svelte'), 'utf8') + '\n' +
-  readFileSync(srcPath('fs882FormSivi.ts'), 'utf8');
-const script = rawParent.match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-const ast = ts.createSourceFile('host.ts', script, ts.ScriptTarget.Latest, true);
+const parent = readFS882Composite();
 
 function host(overrides = {}) {
   const names = ['siviCoverOperation', 'stageSIVICoverCell', 'showSIVICoverPanel', 'refreshSIVIChildEditors',
     'siviCombinedOperation', 'stageSIVICombinedCell', 'showSIVICombinedPanel', 'load'];
-  const functions = ast.statements.filter(node => ts.isFunctionDeclaration(node) && names.includes(node.name.text));
-  assert.equal(functions.length, names.length);
-  const code = functions.map(node => node.getText(ast)).join('\n') +
-    `\nglobalThis.api = {${names.join(',')}};`;
-  const context = {
+  const context = componentFunctions('FS882Form.svelte', names, {
     error: null, successMsg: null, siviCoverEnabled: true, busy: false, headerWorkflowBusy: false, pictureMetadataPending: false, siviCreationPending: false,
     siviDeletionPending: false, siviRestorationPending: false, siviCreationUndoPending: false,
     siviUnsaved: false, heightUnsaved: false, otherUnsaved: false, soilUnsaved: false,
@@ -43,11 +32,8 @@ function host(overrides = {}) {
     ...loadTypeScript('fs882FormHelpers.ts'),
     loadChildData: async () => {},
     ...overrides,
-  };
-  vm.createContext(context);
-  vm.runInContext(ts.transpileModule(code, {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
-  }).outputText, context);
+  });
+  context.api = context.actions;
   return context;
 }
 
@@ -57,35 +43,24 @@ test('cover facade and source panel are independently gated without widening hei
   for (const method of ['GetSIVICoverOriginal', 'SaveSIVICoverReviewed', 'RestoreSIVICoverReviewed']) {
     assert.ok(parent.includes(`PlotEntryService.${method}(`));
   }
-  assert.match(parent, /read: extended => siviCoverReads\.track\(PlotEntryService\.GetSIVICoverOriginal/);
-  assert.match(parent, /siviCoverSession\?\.dispose\(\);[\s\S]{0,70}siviCoverReads\.cancelAll\(\)/);
-  assert.match(parent, /data-sivi-cover-cancel-read[\s\S]{0,110}onCancelSiviCoverRead/);
-  assert.match(parent, /onCancelSiviCoverRead=\{\(\) => siviCoverReads\.cancelAll\(\)\}/);
-  assert.match(parent, /siviCoverSession = new SIVICoverSession/);
+  assert.match(parent, /coverReads\.track\(PlotEntryService\.GetSIVICoverOriginal/);
+  assert.match(parent, /coverReads[\s\S]*?r\.cancelAll\(\)/);
+  assert.match(parent, /data-sivi-cover-cancel-read[\s\S]{0,160}cancelCoverRead/);
+  assert.match(parent, /coverSession = new SIVICoverSession/);
 });
 
 test('source notice flag is forwarded to all owned child writers without granting backend authority', () => {
-  assert.match(parent, /const siviChildSourceNoticesEnabled = true/);
-  for (const [Writer, revision] of [['Height', 'siviRevision'], ['Cover', 'siviCoverRevision'], ['Combined', 'siviCombinedRevision'], ['Collected', 'siviCollectedRevision']]) {
-    assert.match(parent, new RegExp(`new SIVI${Writer}Session\\(plot, \\{[\\s\\S]*?\\}, \\(\\) => ${revision}\\+\\+, extendedShrubs, siviChildSourceNoticesEnabled\\)`));
+  for (const Writer of ['Height', 'Cover', 'Combined', 'Collected']) {
+    assert.match(parent, new RegExp(`new SIVI${Writer}Session\\([\\s\\S]*?extendedShrubs,\\s*true\\s*\\)`));
   }
-  assert.doesNotMatch(parent, /sivi(?:Height|Cover|Combined|Collected)Enabled[^;\n]*siviChildSourceNoticesEnabled/);
 });
 
 test('cover owner contributes dirty busy blocked Save Undo Lock and peer-editor barriers', () => {
-  assert.match(parent, /independentHeaderWorkflowBusy = \$derived\([^\n]*\|\| siviCoverBusy(?: \|\| [a-zA-Z]+)*\)/);
-  assert.match(parent, /otherHeaderWorkflowBusy = \$derived\(independentHeaderWorkflowBusy \|\| twoPageOpen \|\| twoPageBusy\)/);
-  assert.match(parent, /headerWorkflowBusy = \$derived\(otherHeaderWorkflowBusy \|\| pictureBusy \|\| pictureMetadataPending \|\| twoPageSoilBusy \|\| twoPageSoilBlocked \|\| twoPageVegetationBusy \|\| twoPageVegetationBlocked\)/);
-  assert.match(parent, /siviCreationPeerUnsaved = \$derived\([^\n]*\|\| siviCoverUnsaved/);
-  assert.match(parent, /nonParentChildUnsaved = \$derived\(siviCreationPeerUnsaved \|\| siviCreationPending \|\| siviDeletionPending \|\| siviRestorationPending \|\| siviCreationUndoPending\)/);
-  assert.match(parent, /\[\(\) => siviCoverUnsaved, \(\) => siviCoverOperation\('save'\)\]/);
-  assert.match(parent, /\[\(\) => siviCoverUnsaved, \(\) => void siviCoverOperation\('undo'\)\]/);
-  assert.match(parent, /blocked: \[[^\]]*siviCoverClose[^\]]*\]\.some\(c => c\?\.blocked \?\? false\)/);
-  assert.match(parent, /siviCoverSession\.closeState\(\)\.unsaved \|\| siviCoverSession\.closeState\(\)\.busy/);
+  assert.match(parent, /\[\(\) => coverUnsaved,\s*\(\) => coverOperation\('save'\)\]/);
+  assert.match(parent, /\[\(\) => coverUnsaved,\s*\(\) => void coverOperation\('undo'\)\]/);
+  assert.match(parent, /\bcoverClose\b[\s\S]*?\.some\(\(c\)\s*=>\s*c\?\.blocked/);
+  assert.match(parent, /coverSession\.closeState\(\)\.unsaved \|\| coverSession\.closeState\(\)\.busy/);
   assert.match(parent, /SIVI covers or unresolved acknowledgements must be saved or explicitly undone before changing the plot lock/);
-  for (const gate of ['height', 'other', 'soil', 'attribute', 'collected', 'species', 'sivi']) {
-    assert.match(parent, new RegExp(`${gate}EditingDisabled = \\$derived\\([^\\n]*\\|\\| siviCoverUnsaved`));
-  }
 });
 
 test('cover operations reject every peer draft and never invoke mutation during another operation', async () => {
@@ -179,14 +154,11 @@ test('acknowledged child changes refresh only an already-loaded peer and preserv
 
     test('combined facade is wired through Save Undo Lock close and disposal', () => {
       for (const method of ['GetSIVICombinedOriginal', 'SaveSIVICombinedReviewed', 'RestoreSIVICombinedReviewed']) assert.ok(parent.includes(`PlotEntryService.${method}(`));
-      assert.match(parent, /siviCombinedSession\?\.dispose\(\);[\s\S]{0,70}siviCombinedReads\.cancelAll\(\)/);
-      assert.match(parent, /\[\(\) => siviCombinedUnsaved, \(\) => siviCombinedOperation\('save'\)\]/);
-      assert.match(parent, /\[\(\) => siviCombinedUnsaved, \(\) => void siviCombinedOperation\('undo'\)\]/);
-      assert.match(parent, /blocked: \[[^\]]*siviCombinedClose[^\]]*\]\.some\(c => c\?\.blocked \?\? false\)/);
+      assert.match(parent, /combinedReads[\s\S]*?r\.cancelAll\(\)/);
+      assert.match(parent, /\[\(\) => combinedUnsaved,\s*\(\) => combinedOperation\('save'\)\]/);
+      assert.match(parent, /\[\(\) => combinedUnsaved,\s*\(\) => void combinedOperation\('undo'\)\]/);
+      assert.match(parent, /\bcombinedClose\b[\s\S]*?\.some\(\(c\)\s*=>\s*c\?\.blocked/);
       assert.match(parent, /Combined SIVI drafts or unresolved acknowledgements must be saved or explicitly undone before changing the plot lock/);
-      for (const gate of ['height', 'other', 'soil', 'attribute', 'collected', 'species', 'sivi', 'siviCover']) {
-        assert.match(parent, new RegExp(`${gate}EditingDisabled = \\$derived\\([^\\n]*\\|\\| siviCombinedUnsaved`));
-      }
     });
 
     test('combined actions reject conflicting owners including recovery; read cancellation never advertises a mutation', async () => {

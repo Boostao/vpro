@@ -168,10 +168,10 @@ test('UX-SOIL-005 FS882 ordinary soil header and SIVI parent enforce pit depth a
   assert.equal(siviProp.scalars.length, 0);
   assert.equal(siviProp.text.length, 1);
 
-  // FS882Form.svelte wires mineralList into both soilErrors(soilDrafts, mineralList) and soilUpdates(soilDrafts, mineralList)
+  // useFS882ChildWorkflows.svelte.ts wires mineralList into both soilErrors(soilDrafts, mineralList) and soilUpdates(soilDrafts, mineralList)
   const fs = require('node:fs');
   const path = require('node:path');
-  const fs882Src = fs.readFileSync(path.join(__dirname, '..', 'src', 'entry', 'FS882Form.svelte'), 'utf8');
+  const fs882Src = fs.readFileSync(path.join(__dirname, '..', 'src', 'entry', 'useFS882ChildWorkflows.svelte.ts'), 'utf8');
   assert.match(fs882Src, /soilErrors\(soilDrafts,\s*mineralList\)/);
   assert.match(fs882Src, /soilUpdates\(soilDrafts,\s*mineralList\)/);
   let partialDraft = {};

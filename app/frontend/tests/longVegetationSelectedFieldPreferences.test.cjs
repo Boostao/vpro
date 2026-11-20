@@ -131,7 +131,7 @@ test('actual field handlers cancel stale reads and distinguish operation holds f
   assert.equal(session.view().draft.selectedField, 'Native');
   context.mutationHeld = false; context.view = session.view(); await context.actions.save(); assert.equal(saves, 1);
   const text = source('LongVegetationSelectedFieldPreferences.svelte');
-  assert.match(text, /oninput=\{event => \{ const raw = event\.currentTarget\.value; edit\(raw\); \}\}/);
+  assert.match(text, /oninput=\{\(event\) => \{\s*const raw = event\.currentTarget\.value;\s*edit\(raw\);\s*\}\}/);
 });
 test('actual field panel associates one live source control with its label and literal suggestions/physical types', () => {
   const component = serverComponent(source('LongVegetationSelectedFieldPreferences.svelte'), 'LongVegetationSelectedFieldPreferences.svelte', {
@@ -154,7 +154,7 @@ test('actual root remount retains field errors and gates every report operation'
   const child = serverComponent(source('LongVegetationSelectedFieldPreferences.svelte'), 'LongVegetationSelectedFieldPreferences.svelte', {
     '../bindings/github.com/boostao/vpro/app': {}, './longVegetationSelectedFieldPreferences': prefs,
   });
-  const component = serverComponent(reportSource, 'LongVegetationReport.svelte', {
+  const component = serverComponent(reportSource, 'LongVegetationReport.svelte', { './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
     '../bindings/github.com/boostao/vpro/app': {}, './longVegetationPreferences': {},
     './longVegetationStatisticsPreferences': {}, './longVegetationSwitchPreferences': {},
     './LongVegetationSwitchPreferences.svelte': { default() {} }, './longVegetationThresholdPreferences': {},
@@ -173,7 +173,7 @@ test('actual root remount retains field errors and gates every report operation'
       vegetationWorkbookPublicationSession: () => ({ view: () => ({ busy: false, blocked: false }), subscribe: () => () => {} }),
       VegetationWorkbookPublicationSession: class { view() { return { busy: false, blocked: false }; } subscribe() { return () => {}; } },
     },
-  });
+  }) });
   for (let mount = 0; mount < 2; mount++) {
     const barriers = [];
     const { body } = render(component, { props: { ...owner, onBusyChange: value => barriers.push(value) } });
@@ -183,10 +183,10 @@ test('actual root remount retains field errors and gates every report operation'
     assert.doesNotMatch(body, /data-long-vegetation-selected-field-undo[^>]*disabled/);
   }
   session.undo();
-  const report = source('LongVegetationReport.svelte');
-  assert.match(report, /selectedFieldView = selectedField.view\(\); invalidateReports\(\)/);
-  assert.match(report, /function invalidateReports\(\) \{\s*preview = null; workbookReview = null;\s*projectWorkspace\?\.invalidate\(\)/);
-  assert.match(report, /unsubscribeSelectedField\?\.\(\)/);
-  assert.match(report, /namingBarrier \|\| selectedFieldBarrier/);
-  assert.match(report, /namingMutationHeld \|\| selectedFieldMutationHeld/);
+  const report = require('./svelteTestHelpers.cjs').readReportComposite('long-vegetation');
+  assert.match(report, /selectedFieldView = sessions\.selectedField!\.view\(\);\s*onInvalidate/);
+  assert.match(report, /function invalidateReports\(\) \{\s*preview = null;\s*workbookReview = null;\s*projectWorkspace\?\.invalidate\(\)/);
+  assert.match(report, /for \(const u of unsubs\) u\?\.\(\)/);
+  assert.match(report, /namingBarrier \|\|\s*selectedFieldBarrier/);
+  assert.match(report, /namingMutationHeld \|\|\s*selectedFieldMutationHeld/);
 });

@@ -5,7 +5,16 @@
   import type { SIVIHeightView } from './siviHeightSession';
   import SIVIChildSourceNotices from './SIVIChildSourceNotices.svelte';
 
-  let { view, disabled, canSave, onstage, onsave, onundo, onreload, onrestore }: {
+  let {
+    view,
+    disabled,
+    canSave,
+    onstage,
+    onsave,
+    onundo,
+    onreload,
+    onrestore,
+  }: {
     view: SIVIHeightView;
     disabled: boolean;
     canSave: boolean;
@@ -17,9 +26,20 @@
   } = $props();
   const groups = ['Tree/Shrubs', 'Herb', 'Moss/Lichen'];
   const coverLabels: Record<string, string> = {
-    Cover1: 'A1', Cover2: 'A2', Cover3: 'A3', TotalA: 'A',
-    Cover4: 'B1', Cover5: 'B2', Cover5a: 'B3', Cover5b: 'B4', Cover5c: 'B5', TotalB: 'B',
-    Cover6: 'C', Cover7: 'D', Cover8: 'Dr/Dw', Cover9: 'Ep',
+    Cover1: 'A1',
+    Cover2: 'A2',
+    Cover3: 'A3',
+    TotalA: 'A',
+    Cover4: 'B1',
+    Cover5: 'B2',
+    Cover5a: 'B3',
+    Cover5b: 'B4',
+    Cover5c: 'B5',
+    TotalB: 'B',
+    Cover6: 'C',
+    Cover7: 'D',
+    Cover8: 'Dr/Dw',
+    Cover9: 'Ep',
   };
   const heightLabels = { HeightA: 'Ht A', HeightB: 'Ht B', Height6: 'Ht' };
   function text(group: SIVIProjection, row: SIVIRow, column: string): string {
@@ -32,23 +52,60 @@
   const dirty = $derived(siviHeightDirty(view.drafts));
 </script>
 
-<section class="space-y-4 rounded border border-vpro-border p-4" data-sivi-height-panel aria-label="SIVI aggregate heights">
+<section
+  class="space-y-4 rounded border border-vpro-border p-4"
+  data-sivi-height-panel
+  aria-label="SIVI aggregate heights"
+>
   <header>
     <h2 class="font-semibold">SIVI aggregate heights</h2>
-    <p class="text-sm text-vpro-ink-secondary">Height-only source adaptation, not the complete FS1333 form. Species, cover, Collected and parent workflows are not editable here.</p>
+    <p class="text-sm text-vpro-ink-secondary">
+      Height-only source adaptation, not the complete FS1333 form. Species, cover, Collected and parent workflows are
+      not editable here.
+    </p>
   </header>
   {#if view.error}<p class="text-sm text-red-700" role="alert">{view.error}</p>{/if}
-  {#if view.blocked}<p class="text-sm text-red-700" role="alert">Acknowledgement or refresh is unresolved. Undo/reload explicitly; do not replay Save or restoration.</p>{/if}
+  {#if view.blocked}<p class="text-sm text-red-700" role="alert">
+      Acknowledgement or refresh is unresolved. Undo/reload explicitly; do not replay Save or restoration.
+    </p>{/if}
   {#if view.busy}<p role="status">Loading or saving owned SIVI heights...</p>{/if}
   <div class="flex flex-wrap gap-2">
-    <button type="button" class="rounded border px-3 py-1 disabled:opacity-50" data-sivi-save disabled={disabled || !dirty || !canSave} onclick={onsave}>Save SIVI heights</button>
-    <button type="button" class="rounded border px-3 py-1 disabled:opacity-50" data-sivi-undo disabled={view.busy || (!dirty && !view.blocked)} onclick={onundo}>Undo / reload heights</button>
-    <button type="button" class="rounded border px-3 py-1 disabled:opacity-50" data-sivi-reload disabled={disabled || dirty || view.blocked} onclick={onreload}>Reload source rows</button>
+    <button
+      type="button"
+      class="rounded border px-3 py-1 disabled:opacity-50"
+      data-sivi-save
+      disabled={disabled || !dirty || !canSave}
+      onclick={onsave}>Save SIVI heights</button
+    >
+    <button
+      type="button"
+      class="rounded border px-3 py-1 disabled:opacity-50"
+      data-sivi-undo
+      disabled={view.busy || (!dirty && !view.blocked)}
+      onclick={onundo}>Undo / reload heights</button
+    >
+    <button
+      type="button"
+      class="rounded border px-3 py-1 disabled:opacity-50"
+      data-sivi-reload
+      disabled={disabled || dirty || view.blocked}
+      onclick={onreload}>Reload source rows</button
+    >
     {#if view.historyId}
-      <button type="button" class="rounded border px-3 py-1 disabled:opacity-50" data-sivi-restore="retain" disabled={disabled || dirty || view.blocked}
-        onclick={() => onrestore(AuditRestoreAction.AuditRestoreRetain)}>Restore heights, retain audit</button>
-      <button type="button" class="rounded border px-3 py-1 disabled:opacity-50" data-sivi-restore="prune" disabled={disabled || dirty || view.blocked}
-        onclick={() => onrestore(AuditRestoreAction.AuditRestorePrune)}>Restore heights, prune selected audit</button>
+      <button
+        type="button"
+        class="rounded border px-3 py-1 disabled:opacity-50"
+        data-sivi-restore="retain"
+        disabled={disabled || dirty || view.blocked}
+        onclick={() => onrestore(AuditRestoreAction.AuditRestoreRetain)}>Restore heights, retain audit</button
+      >
+      <button
+        type="button"
+        class="rounded border px-3 py-1 disabled:opacity-50"
+        data-sivi-restore="prune"
+        disabled={disabled || dirty || view.blocked}
+        onclick={() => onrestore(AuditRestoreAction.AuditRestorePrune)}>Restore heights, prune selected audit</button
+      >
     {/if}
   </div>
   {#if view.review}
@@ -63,10 +120,16 @@
               <span class="text-xs text-vpro-ink-muted">Physical row {row.rowId}; ID {text(group, row, 'ID')}</span>
             </header>
             <dl class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-              {#each group.Columns.filter(column => coverLabels[column] && (view.extended || !['Cover5a', 'Cover5b', 'Cover5c'].includes(column))) as column}
-                <div class="min-w-0"><dt class="text-xs text-vpro-ink-secondary">{coverLabels[column]}</dt><dd class="break-words">{text(group, row, column)}</dd></div>
+              {#each group.Columns.filter((column) => coverLabels[column] && (view.extended || !['Cover5a', 'Cover5b', 'Cover5c'].includes(column))) as column}
+                <div class="min-w-0">
+                  <dt class="text-xs text-vpro-ink-secondary">{coverLabels[column]}</dt>
+                  <dd class="break-words">{text(group, row, column)}</dd>
+                </div>
               {/each}
-              <div class="min-w-0"><dt class="text-xs text-vpro-ink-secondary">Collected (?)</dt><dd class="break-words">{text(group, row, 'Collected')}</dd></div>
+              <div class="min-w-0">
+                <dt class="text-xs text-vpro-ink-secondary">Collected (?)</dt>
+                <dd class="break-words">{text(group, row, 'Collected')}</dd>
+              </div>
             </dl>
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {#each heights(index) as column}
@@ -76,29 +139,51 @@
                 {@const raw = draft?.raw ?? metadataCellText(original)}
                 {@const id = `sivi-${row.rowId}-${column}`}
                 <div class="min-w-0">
-                  <label for={id} class="mb-1 block text-sm font-medium">{heightLabels[column]}{column === 'HeightB' ? ' (literal text)' : ''}</label>
+                  <label for={id} class="mb-1 block text-sm font-medium"
+                    >{heightLabels[column]}{column === 'HeightB' ? ' (literal text)' : ''}</label
+                  >
                   {#if column === 'HeightB'}
-                    <textarea {id} rows="2" value={raw} class="w-full min-w-0 rounded border border-vpro-border px-3 py-2"
-                      data-sivi-column={column} data-sivi-identity={row.rowId}
+                    <textarea
+                      {id}
+                      rows="2"
+                      value={raw}
+                      class="w-full min-w-0 rounded border border-vpro-border px-3 py-2"
+                      data-sivi-column={column}
+                      data-sivi-identity={row.rowId}
                       aria-label={`Ht B for ${text(group, row, 'Species')}, physical row ${row.rowId}`}
-                      aria-invalid={Boolean(draft?.error)} aria-describedby={draft?.error ? `${id}-error` : undefined}
+                      aria-invalid={Boolean(draft?.error)}
+                      aria-describedby={draft?.error ? `${id}-error` : undefined}
                       disabled={disabled || view.blocked || nullValue}
                       oninput={(event) => onstage(row.rowId, column, event.currentTarget.value, false)}></textarea>
                     <label class="mt-2 flex items-center gap-2 text-sm" for={`${id}-null`}>
-                      <input id={`${id}-null`} type="checkbox" checked={nullValue} disabled={disabled || view.blocked}
+                      <input
+                        id={`${id}-null`}
+                        type="checkbox"
+                        checked={nullValue}
+                        disabled={disabled || view.blocked}
                         aria-label={`Ht B NULL for ${text(group, row, 'Species')}, physical row ${row.rowId}`}
-                        onchange={(event) => onstage(row.rowId, column, raw, event.currentTarget.checked)} />
+                        onchange={(event) => onstage(row.rowId, column, raw, event.currentTarget.checked)}
+                      />
                       NULL (distinct from empty text)
                     </label>
                   {:else}
-                    <input {id} type="text" value={raw} class="w-full min-w-0 rounded border border-vpro-border px-3 py-2"
-                      data-sivi-column={column} data-sivi-identity={row.rowId}
+                    <input
+                      {id}
+                      type="text"
+                      value={raw}
+                      class="w-full min-w-0 rounded border border-vpro-border px-3 py-2"
+                      data-sivi-column={column}
+                      data-sivi-identity={row.rowId}
                       aria-label={`${heightLabels[column]} for ${text(group, row, 'Species')}, physical row ${row.rowId}`}
-                      aria-invalid={Boolean(draft?.error)} aria-describedby={draft?.error ? `${id}-error` : undefined}
+                      aria-invalid={Boolean(draft?.error)}
+                      aria-describedby={draft?.error ? `${id}-error` : undefined}
                       disabled={disabled || view.blocked}
-                      oninput={(event) => onstage(row.rowId, column, event.currentTarget.value, false)} />
+                      oninput={(event) => onstage(row.rowId, column, event.currentTarget.value, false)}
+                    />
                   {/if}
-                  {#if draft?.error}<p id={`${id}-error`} class="mt-1 text-sm text-red-700" role="alert">{draft.error}</p>{/if}
+                  {#if draft?.error}<p id={`${id}-error`} class="mt-1 text-sm text-red-700" role="alert">
+                      {draft.error}
+                    </p>{/if}
                 </div>
               {/each}
             </div>
@@ -111,7 +196,13 @@
   {/if}
   <SIVIChildSourceNotices notices={view.sourceNotices ?? []} saved={view.sourceNoticesSaved ?? false} />
   {#if view.extended}
-    <p class="text-xs text-vpro-ink-secondary" data-sivi-extended-guidance>Extended shrub presentation shows B3/B4/B5 cover context; aggregate height editing remains available. Switching presentation never saves or resets drafts.</p>
+    <p class="text-xs text-vpro-ink-secondary" data-sivi-extended-guidance>
+      Extended shrub presentation shows B3/B4/B5 cover context; aggregate height editing remains available. Switching
+      presentation never saves or resets drafts.
+    </p>
   {/if}
-  <p class="text-xs text-vpro-ink-secondary">Numeric heights may be cleared to NULL; Ht B retains literal text up to 255 UTF-16 units, including empty text. No height units, totals or metadata updates are inferred. Changing shrub presentation never saves or resets drafts.</p>
+  <p class="text-xs text-vpro-ink-secondary">
+    Numeric heights may be cleared to NULL; Ht B retains literal text up to 255 UTF-16 units, including empty text. No
+    height units, totals or metadata updates are inferred. Changing shrub presentation never saves or resets drafts.
+  </p>
 </section>

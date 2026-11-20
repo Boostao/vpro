@@ -125,7 +125,7 @@ test('remount presentation retains unknown and committed-warning publication saf
         assert.ok(notifications.getSnapshot().entries.some(e=>e.category==='reports'&&e.severity==='error'&&/linked then cleanup failed/.test(e.message)));
       } else {
         assert.ok(body.indexOf('data-project-workbook-unknown')>=0&&body.indexOf('data-project-workbook-unknown')<body.indexOf('data-project-report-source'));
-        assert.match(body,/never replay blindly/);
+        assert.match(body,/never replay\s+blindly/);
       }
       assert.ok(busy.includes(true));
     }
@@ -134,18 +134,17 @@ test('remount presentation retains unknown and committed-warning publication saf
 });
 
 function routeHarness(value) {
-  const code=source('LongVegetationReport.svelte');
-  const handlers=code.slice(code.indexOf('  function cancel()'),code.indexOf('  async function loadSavedTitle()'));
+  const { componentFunctions } = require('./svelteTestHelpers.cjs');
   const rejectLegacy=()=>{throw new Error('Project route called a selected-list service');};
-  const context=vm.createContext({...value.physicalOwner,projectWorkspace:value.workspace,projectActive:true,
+  const context=componentFunctions('LongVegetationReport.svelte',['options','show','reviewWorkbook','publishWorkbook','cancel'],{
+    ...value.physicalOwner,projectWorkspace:value.workspace,projectActive:true,
     projectView:value.workspace.view(),sharedPreferenceBarrier:false,preferenceBarrier:false,workbookBarrier:false,
-    busy:false,operationHeld:false,workbookEnabled:true,error:'',settings:null,preview:null,workbookReview:null,
+    busy:false,operationHeld:false,error:'',settings:null,preview:null,workbookReview:null,
     preferences:null,statistics:null,generation:0,destination:value.input.exportRequest.destination,
     reportBusy(){},reads:{cancelAll(){}},
     VegetationReportService:{GetLongVegetationOptions:rejectLegacy,PreviewLongVegetation:rejectLegacy,
-      GetVegetationWorkbookReview:rejectLegacy,ExportReviewedVegetationWorkbook:rejectLegacy}});
-  vm.runInContext(ts.transpileModule(handlers+'\nthis.actions={options,show,reviewWorkbook,publishWorkbook,cancel};',
-    {compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,context);
+      GetVegetationWorkbookReview:rejectLegacy,ExportReviewedVegetationWorkbook:rejectLegacy},
+  });
   return {context,actions:context.actions};
 }
 
@@ -175,53 +174,50 @@ test('actual project report Cancel never invokes publication cancellation or rep
 });
 
 test('actual root owner watcher keeps unmounted None-context project work in aggregate close Lock and context barriers',async()=>{
-  const value=workspaceFixture(1),app=source('App.svelte');
-  const call=app.indexOf('    const workspace = projectReportWorkspace(');
-  const effect=app.slice(app.lastIndexOf('  $effect(',call),app.indexOf('  $effect(',call));
-  const close=app.slice(app.indexOf('  async function handleCloseRequest('),app.indexOf('  async function requestTransition('));
-  const transition=app.slice(app.indexOf('  async function requestTransition('),app.indexOf('  async function respondToTransition('));
-  const effects=[];
+  const { createTestReportOperationGuard, componentFunctions } = require('./svelteTestHelpers.cjs');
+  const value=workspaceFixture(1);
   let confirmed=0,cancelled=0,navigated=0;
-  const context=vm.createContext({
-    $effect:fn=>effects.push(fn),projectReportWorkspace:()=>value.workspace,projectReportBusy:false,
+  const h=createTestReportOperationGuard({
+    initialState:{contextId:value.physicalOwner.contextId,activeProject:value.physicalOwner.project,
+      projectPath:value.physicalOwner.projectPath,activeSU:'None',suPath:''},
+    dependencies:{'./longVegetationProjectWorkspaces':{projectReportWorkspace:()=>value.workspace}},
+  });
+  const context=componentFunctions('App.svelte',['handleCloseRequest','respondToClose','requestTransition'],{
     $projectState:{contextId:value.physicalOwner.contextId,activeProject:value.physicalOwner.project,
       projectPath:value.physicalOwner.projectPath,activeSU:'None',suPath:''},
-    view:'home',busy:false,transitionWorking:false,archivePublicationBusy:false,vegetationPublicationBusy:false,
-    lifeformPublicationBusy:false,summaryPublicationBusy:false,pendingTransition:null,closeWorking:false,
-    closeRequest:'',closeError:'',error:'',editor:undefined,transitionError:'',
-    document:{activeElement:null},HTMLElement:class{},tick:async()=>{},
-    closeDisposition:loadTypeScript('closeLifecycle.ts').closeDisposition,
     LifecycleService:{GetPendingCloseRequest:async()=>'close',CancelClose:async()=>{cancelled++;},ConfirmClose:async()=>{confirmed++;}},
   });
-  Object.defineProperty(context,'editorBusy',{get:()=>context.projectReportBusy});
-  vm.runInContext(ts.transpileModule(effect+
-    close+transition+'\nthis.actions={handleCloseRequest,respondToClose,requestTransition};',
-    {compilerOptions:{target:ts.ScriptTarget.ES2022, editorInitializing: false}}).outputText,Object.assign(context,{editorInitializing:false}));
-  assert.equal(effects.length,1);const unsubscribe=effects[0]();
-  value.state.closeBlocked=true;value.notify();
-  assert.equal(context.projectReportBusy,true);assert.equal(context.view,'long-vegetation');
-  context.view='home';
-  await context.actions.handleCloseRequest('close');
-  assert.equal(cancelled,1);assert.equal(confirmed,0);
-  context.closeRequest='close';await context.actions.respondToClose('discard');assert.equal(confirmed,0);
-  context.closeRequest='';await context.actions.requestTransition(async()=>{navigated++;});assert.equal(navigated,0);
-  value.state.closeBlocked=false;value.notify();
-  await context.actions.requestTransition(async()=>{navigated++;});assert.equal(navigated,1);
-  unsubscribe();
+  context.operationGuard.register('project-report',()=>({busy:h.guard.editorBusy}),{publicationOnly:true});
+  try {
+    value.state.closeBlocked=true;value.notify();h.flush();
+    assert.equal(h.guard.editorBusy,true);assert.equal(h.view,'long-vegetation');
+    h.view='home';
+    await context.actions.handleCloseRequest('close');
+    assert.equal(cancelled,1);assert.equal(confirmed,0);
+    context.closeRequest='close';await context.actions.respondToClose('discard');assert.equal(confirmed,0);
+    context.closeRequest='';await context.actions.requestTransition(async()=>{navigated++;});assert.equal(navigated,0);
+    value.state.closeBlocked=false;value.notify();h.flush();
+    await context.actions.requestTransition(async()=>{navigated++;});assert.equal(navigated,1);
+  } finally {
+    h.dispose();
+  }
 });
 
 test('full project report and root compile with one central immutable factory and correction versus mutation holds',()=>{
-  const panel=source('LongVegetationReport.svelte'),app=source('App.svelte');
-  for(const [filename,input] of [['LongVegetationReport.svelte',panel],['App.svelte',app]]) {
+  const { readReportComposite } = require('./svelteTestHelpers.cjs');
+  const rawPanel=source('LongVegetationReport.svelte'),app=source('App.svelte'),opGuard=source('shell/operationGuard.svelte.ts');
+  for(const [filename,input] of [['LongVegetationReport.svelte',rawPanel],['App.svelte',app]]) {
     assert.equal(compile(input,{filename,generate:'client'}).warnings.length,0);
-    assert.match(input,/import \{ projectReportWorkspace \} from '\.\/(?:reports\/)?longVegetationProjectWorkspaces'/);
   }
+  assert.match(rawPanel,/import \{ projectReportWorkspace \} from '\.\/longVegetationProjectWorkspaces'/);
+  assert.match(opGuard,/import \{ projectReportWorkspace \} from '\.\.\/reports\/longVegetationProjectWorkspaces'/);
+  const panel=readReportComposite('long-vegetation');
   assert.match(panel,/settings = \$state\.raw/);assert.match(panel,/preview = \$state\.raw/);
-  assert.match(panel,/mutationHeld=\{busy \|\| operationHeld \|\| workbookBarrier \|\| sharedMutationHeld \|\| projectView\.unitMutationHeld\}/);
-  assert.match(panel,/if \(disposed\) return/);
-  assert.match(app,/editorBusy = \$derived\([^\n]*projectReportBusy\)/);
-  assert.match(panel,/projectWorkspace\?\.cancelScopeReads\(\); projectWorkspace\?\.selection\.cancel\(\)/);
-  assert.match(panel,/projectWorkspace\?\.cancelUnitReads\(\); projectWorkspace\?\.units\.cancelRead\(\)/);
+  assert.match(panel,/mutationHeld=\{holds\.projectMutationHeld \|\|[\s\S]*?secState\.selectedUnitMutationHeld \|\|[\s\S]*?nonUnitMutations\}/);
+  assert.match(panel,/if \(!disposed\)/);
+  assert.match(opGuard,/setFlag\('project-report-workspace'/);
+  assert.match(panel,/cancelReads=\{\(\) => pw\.cancelScopeReads\(\)\}/);
+  assert.match(panel,/cancelReads=\{\(\) => pw\.cancelUnitReads\(\)\}/);
 });
 
 test('ordinary Unit and selected-field controls inherit pending project scope holds while retained unknown receipts remain acknowledgeable',()=>{

@@ -101,7 +101,7 @@ async function mountPanel(service) {
   const runtime = await import('svelte/internal/client');
   const { onDestroy } = await import(pathToFileURL(path.join(path.dirname(require.resolve('svelte')), 'index-client.js')).href);
   let script = readFileSync(srcPath('TwoPageVegetationTablePanel.svelte'), 'utf8').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  script = script.replace('form, onBusyChange }:', 'form, onBusyChange, inspect }:');
+  script = script.replace(/form,\s*onBusyChange,?\s*\}:/, 'form, onBusyChange, inspect }:');
   script += '\n$effect(() => inspect({ load, cancel, busy, error, review, current: () => review }));';
   const compiled = compile(`<script lang="ts">${script}</script>`, { generate: 'client' });
   const ast = ts.createSourceFile('vegetation-table.js', compiled.js.code, ts.ScriptTarget.Latest, true);
@@ -109,8 +109,8 @@ async function mountPanel(service) {
   const reads = loadTypeScript('readRequests.ts', {
     '@wailsio/runtime': { Call: { RuntimeError: class extends Error {} }, CancelledRejectionError: class extends Error {} },
   });
-  const mount = new Function('$', 'onDestroy', 'untrack', 'ReadRequests', 'DatasheetService', 'twoPageVegetationTableFromWire',
-    code + '\nreturn _unknown_;')(runtime, onDestroy, runtime.untrack, reads.ReadRequests, {
+  const mount = new Function('$', 'onDestroy', 'untrack', 'ReadRequests', 'formatError', 'DatasheetService', 'twoPageVegetationTableFromWire',
+    code + '\nreturn _unknown_;')(runtime, onDestroy, runtime.untrack, reads.ReadRequests, reads.formatError, {
       GetVegetationTableReview: service.GetVegetationTableReview ?? service.GetReview,
     }, table.twoPageVegetationTableFromWire);
   let actions; const activity = [];

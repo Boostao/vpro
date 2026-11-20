@@ -191,7 +191,7 @@ test('ClassificationExplorer avoids duplicate reload races on self-activated SU 
   const { compile } = require('svelte/compiler');
   const client = await import('svelte/internal/client');
 
-  const appSrc = readFileSync(srcPath('App.svelte'), 'utf8');
+  const appSrc = readFileSync(srcPath('shell/ShellDeferredViews.svelte'), 'utf8');
   const clsSectionStart = appSrc.indexOf("{:else if view === 'classification-explorer'");
   const clsSectionEnd = appSrc.indexOf("{:else if view === 'project-admin'");
   assert.ok(clsSectionStart > 0 && clsSectionEnd > clsSectionStart);

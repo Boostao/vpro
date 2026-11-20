@@ -47,9 +47,17 @@ test('Native-verified source controls compile with explicit opt-out, shared gate
   assert.match(parent, /regionCodeKey\(control.column\)/);
   assert.match(parent, /@render regionCodeInputs/);
   assert.match(parent, /onbusy=\{onRegionCodeBusyChange\}/);
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8');
-  assert.match(form, /siteCodeBusy \|\| regionCodeBusy/);
-  assert.match(form, /onRegionCodeBusyChange=\{\(pending\) => regionCodeBusy = pending\}/);
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
+  const h = createFS882TestController();
+  try {
+    h.ctrl.regionCodeBusy = true;
+    h.flush();
+    assert.equal(h.ctrl.headerWorkflowBusy, true);
+  } finally {
+    h.dispose();
+  }
+  const siteTab = readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8');
+  assert.match(siteTab, /onRegionCodeBusyChange=\{\(pending\) => \{\s*regionCodeBusy = pending;\s*\}\}/);
 });
 test('Measured7/3 UTF16 bounds reject new empty/malformed/overlength text without repair', () => {
   assert.deepEqual(plain(editor.regionCodeKeys), Object.keys(codes()));

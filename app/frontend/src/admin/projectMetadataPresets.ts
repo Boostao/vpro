@@ -51,13 +51,17 @@ export interface ApplyProjectMetadataAutomationResult {
 export interface ProjectMetadataAutomationPort {
   listPresets(): Promise<ProjectMetadataPreset[]>;
   deriveFromPlots(contextId: string, projectId: string): Promise<DerivedProjectMetadata>;
-  applyAutomation(contextId: string, req: ApplyProjectMetadataAutomationRequest): Promise<ApplyProjectMetadataAutomationResult>;
+  applyAutomation(
+    contextId: string,
+    req: ApplyProjectMetadataAutomationRequest
+  ): Promise<ApplyProjectMetadataAutomationResult>;
 }
 
 export const defaultProjectMetadataAutomationPort: ProjectMetadataAutomationPort = {
-  listPresets: () => (ContextService.ListProjectMetadataPresets() as never),
-  deriveFromPlots: (contextId, projectId) => (ContextService.DeriveProjectMetadataFromPlots(contextId, projectId) as never),
-  applyAutomation: (contextId, req) => (ContextService.ApplyProjectMetadataAutomation(contextId, req) as never),
+  listPresets: () => ContextService.ListProjectMetadataPresets() as never,
+  deriveFromPlots: (contextId, projectId) =>
+    ContextService.DeriveProjectMetadataFromPlots(contextId, projectId) as never,
+  applyAutomation: (contextId, req) => ContextService.ApplyProjectMetadataAutomation(contextId, req) as never,
 };
 
 export const COVER_DESCRIPTION_ORDER: readonly string[] = [

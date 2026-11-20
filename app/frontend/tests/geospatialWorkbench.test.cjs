@@ -233,8 +233,9 @@ test('GeospatialWorkbench, Navigation, App, and CoordinateFields compile cleanly
   assert.match(wbSource, /maplibre-gl\/dist\/maplibre-gl-worker\.mjs\?worker&url/);
   assert.match(wbSource, /setWorkerUrl\(/);
 
-  // Lazy route in App.svelte, Spatial entry in Navigation.svelte, Auto-1 button in CoordinateFields.svelte
-  assert.match(appSource, /import\('\.\/spatial\/GeospatialWorkbench\.svelte'\)/);
+  // Lazy route in ShellDeferredViews.svelte, Spatial entry in Navigation.svelte, Auto-1 button in CoordinateFields.svelte
+  const { readShellComposite } = require('./svelteTestHelpers.cjs');
+  assert.match(readShellComposite(), /import\('\.\.?\/spatial\/GeospatialWorkbench\.svelte'\)/);
   assert.match(navSource, /3D Map \(BGC, Coordinate Check & Site Units\)/);
   assert.match(navSource, /3D Map/);
   assert.match(coordSource, /data-auto1-spatial-stamp/);

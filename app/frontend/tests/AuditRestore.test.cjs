@@ -87,12 +87,28 @@ test('real Go nullable ordinary wire stays readable but explicitly unavailable t
   assert.match(empty, /\(empty text\).*<br\s*\/?>\(empty text\)/);
 });
 test('form gates restoration and refreshes both header and child revision after all outcomes', () => {
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882SoilTab.svelte'), 'utf8');
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
+  const soilTab = readFileSync(srcPath('FS882SoilTab.svelte'), 'utf8');
   const auditSection = readFileSync(srcPath('FS882AuditTrailSection.svelte'), 'utf8');
-  assert.match(form, /auditBlocked = \$derived\(childEditingDisabled \|\| Object\.keys\(headerValidation\)\.length > 0\)/);
-  assert.match(form, /<FS882AuditTrailSection/);
+  const h = createFS882TestController();
+  try {
+    h.ctrl.capabilitiesReady = true;
+    h.ctrl.original = { ...h.ctrl.draft, locked: false };
+    h.ctrl.draft = { ...h.ctrl.draft, locked: false };
+    h.flush();
+    assert.equal(h.ctrl.cw.auditBlocked, false);
+    h.ctrl.validateHeader('zone', 'Invalid zone');
+    h.flush();
+    assert.equal(h.ctrl.cw.auditBlocked, true);
+    h.ctrl.validateHeader('zone', null);
+    h.ctrl.draft = { ...h.ctrl.draft, locked: true };
+    h.flush();
+    assert.equal(h.ctrl.cw.auditBlocked, true);
+  } finally {
+    h.dispose();
+  }
+  assert.match(soilTab, /<FS882AuditTrailSection/);
   assert.match(auditSection, /await PlotService\.SetAuditRestoreSelection\(plot, \[\]\)/);
   assert.match(auditSection, /await onRefreshAfterRestore\(plot, request\)/);
-  assert.match(form, /const locked = draft\.locked/);
   assert.match(auditSection, /cleanedVegRows !== 0/);
 });

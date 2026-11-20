@@ -1,5 +1,9 @@
 export const singleMaximum = 3.4028234663852886e38;
-export function finiteSingleValue(field: string, raw: string, unchanged?: number | null): { value: number | null; error: string | null } {
+export function finiteSingleValue(
+  field: string,
+  raw: string,
+  unchanged?: number | null
+): { value: number | null; error: string | null } {
   const text = raw.trim();
   if (text === '') return { value: null, error: null };
   if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(text)) {

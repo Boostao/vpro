@@ -1305,8 +1305,9 @@ test('ProjectAdminWorkbench, Navigation, and App wire Cloud BECMaster Sync clean
   cbCtx.actions.activate({ action: 'cloud-sync' });
   assert.deepEqual(calls, ['focus', 'open-cloud-sync']);
 
-  const appSrc = read('App.svelte');
-  assert.match(appSrc, /onopencloudsync=\{\(\)\s*=>\s*\{\s*void requestTransition\(/);
+  const { readShellComposite } = require('./svelteTestHelpers.cjs');
+  const appSrc = readShellComposite();
+  assert.match(appSrc, /onOpenCloudSync=\{\(\)\s*=>\s*\{\s*void requestTransition\(/);
   assert.match(appSrc, /projectAdminTab = 'cloudsync'/);
   assert.match(appSrc, /initialTab=\{projectAdminTab\}/);
 });

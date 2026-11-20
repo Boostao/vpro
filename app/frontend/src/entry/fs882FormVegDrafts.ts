@@ -41,7 +41,7 @@ import {
 import { validateDeletionReview } from './vegetationDeletionEditor';
 import { newHumusFields, newMineralFields, newOtherFields } from './fs882FormHelpers';
 import { paperChild } from './paperLayout';
-import type { CancellableRead, ReadRequests } from '../shared/readRequests';
+import { formatError, type CancellableRead, type ReadRequests } from '../shared/readRequests';
 
 export interface SpeciesLookupPort {
   speciesChoiceReads: ReadRequests;
@@ -75,10 +75,12 @@ export async function reviewSpeciesChoicesImpl(params: {
   params.setDecisionBusy(true);
   params.setError(null);
   try {
-    const aliases = await params.port.speciesChoiceReads.track(params.port.ListVegetationSpeciesAliases({ code: cell.raw }));
+    const aliases = await params.port.speciesChoiceReads.track(
+      params.port.ListVegetationSpeciesAliases({ code: cell.raw })
+    );
     if (request !== params.currentRequest()) return;
     if (aliases === null) throw new Error('Species alias metadata was not returned.');
-    const users = aliases.some(option => option.code !== null)
+    const users = aliases.some((option) => option.code !== null)
       ? []
       : await params.port.speciesChoiceReads.track(params.port.ListVegetationSpeciesUsers({ code: cell.raw }));
     if (request !== params.currentRequest()) return;
@@ -93,7 +95,7 @@ export async function reviewSpeciesChoicesImpl(params: {
     });
   } catch (cause) {
     if (request === params.currentRequest()) {
-      params.setError(`Species choices unavailable; draft retained: ${String(cause)}`);
+      params.setError(`Species choices unavailable; draft retained: ${formatError(cause)}`);
     }
   } finally {
     if (request === params.currentRequest()) params.setDecisionBusy(false);
@@ -161,7 +163,11 @@ export async function savePersonalSpeciesImpl(params: {
       params.speciesChoiceReads.track(params.ListVegetationSpeciesUsers({ code: proposed.entered })),
       params.speciesChoiceReads.track(params.ListVegetationSpeciesAliases({ code: proposed.entered })),
     ]);
-    if (users === null || aliases === null || users.filter(option => personalSpeciesMatches(option, request)).length !== 1) {
+    if (
+      users === null ||
+      aliases === null ||
+      users.filter((option) => personalSpeciesMatches(option, request)).length !== 1
+    ) {
       throw new Error('Saved personal definition differs from independently reloaded metadata.');
     }
     if (!params.personalSourceMatches(proposed)) {
@@ -169,7 +175,9 @@ export async function savePersonalSpeciesImpl(params: {
     }
     const reloaded = { form: proposed.form, entered: proposed.entered, users, aliases };
     if (proposed.source.kind === 'existing') {
-      params.setSpeciesDrafts(chooseSpecies(params.getSpeciesDrafts(), proposed.source.id, reloaded, 'user', definition.code ?? undefined));
+      params.setSpeciesDrafts(
+        chooseSpecies(params.getSpeciesDrafts(), proposed.source.id, reloaded, 'user', definition.code ?? undefined)
+      );
       const choices = { ...params.getSpeciesChoices() };
       delete choices[String(proposed.source.id)];
       params.setSpeciesChoices(choices);
@@ -183,7 +191,7 @@ export async function savePersonalSpeciesImpl(params: {
     params.setSuccess(
       `Personal definition ${definition.code} saved in the user database. The plot assignment is still unsaved; ${
         proposed.source.kind === 'existing' ? 'Save species drafts' : 'Save new vegetation record'
-      } commits it. Undo never removes this explicitly saved definition.`,
+      } commits it. Undo never removes this explicitly saved definition.`
     );
   } catch (cause) {
     committed = committed || personalSpeciesCommittedError(cause);
@@ -193,8 +201,8 @@ export async function savePersonalSpeciesImpl(params: {
     }
     params.setError(
       committed
-        ? `Personal definition committed, but cleanup, refresh or source verification failed. The plot was not saved; reopen it before editing: ${String(cause)}`
-        : `Personal definition save failed; metadata and plot drafts retained: ${String(cause)}`,
+        ? `Personal definition committed, but cleanup, refresh or source verification failed. The plot was not saved; reopen it before editing: ${formatError(cause)}`
+        : `Personal definition save failed; metadata and plot drafts retained: ${formatError(cause)}`
     );
   } finally {
     params.setBusy(false);
@@ -211,17 +219,21 @@ export function startVegetationCreationImpl(params: {
   setSuccess: (s: string | null) => void;
 }): void {
   if (!params.allowed) {
-    params.setError('Finish or cancel other drafts and load canonical species references before starting vegetation creation.');
+    params.setError(
+      'Finish or cancel other drafts and load canonical species references before starting vegetation creation.'
+    );
     return;
   }
-  const columns = [...paperChild(params.form).controls].sort((a, b) => a.tabOrder - b.tabOrder).flatMap(control => (control.column ? [control.column] : []));
+  const columns = [...paperChild(params.form).controls]
+    .sort((a, b) => a.tabOrder - b.tabOrder)
+    .flatMap((control) => (control.column ? [control.column] : []));
   try {
     params.setCreationDraft(beginVegetationCreation(params.form, columns));
     params.setCreationChoices(null);
     params.setError(null);
     params.setSuccess(null);
   } catch (cause) {
-    params.setError(`Vegetation creation could not start: ${String(cause)}`);
+    params.setError(`Vegetation creation could not start: ${formatError(cause)}`);
   }
 }
 
@@ -253,10 +265,12 @@ export async function reviewCreationSpeciesChoicesImpl(params: {
   params.setCreationChoices(null);
   params.setError(null);
   try {
-    const aliases = await params.port.speciesChoiceReads.track(params.port.ListVegetationSpeciesAliases({ code: proposed.species }));
+    const aliases = await params.port.speciesChoiceReads.track(
+      params.port.ListVegetationSpeciesAliases({ code: proposed.species })
+    );
     if (request !== params.currentRequest()) return;
     if (aliases === null) throw new Error('Species alias metadata was not returned.');
-    const users = aliases.some(option => option.code !== null)
+    const users = aliases.some((option) => option.code !== null)
       ? []
       : await params.port.speciesChoiceReads.track(params.port.ListVegetationSpeciesUsers({ code: proposed.species }));
     if (request !== params.currentRequest()) return;
@@ -268,7 +282,7 @@ export async function reviewCreationSpeciesChoicesImpl(params: {
     params.setCreationChoices({ form: proposed.form, entered: proposed.species, aliases, users });
   } catch (cause) {
     if (request === params.currentRequest()) {
-      params.setError(`Creation species choices unavailable; draft retained: ${String(cause)}`);
+      params.setError(`Creation species choices unavailable; draft retained: ${formatError(cause)}`);
     }
   } finally {
     if (request === params.currentRequest()) params.setDecisionBusy(false);
@@ -308,20 +322,23 @@ export async function saveVegetationCreationImpl(params: {
       throw new Error('Creation returned an invalid allocated identity.');
     }
     await params.loadChildData(params.plotNumber);
-    const observed = params.getVegList().filter(row => row.id === id && row.plotNumber === params.plotNumber);
+    const observed = params.getVegList().filter((row) => row.id === id && row.plotNumber === params.plotNumber);
     if (observed.length !== 1 || observed[0].species !== request.species) {
       throw new Error('Committed creation differs from independently reloaded identity/species.');
     }
     const notice = aCoverSourceNotice(proposed.form, id, observed[0]);
     params.setSuccess(
-      [`Vegetation row ${id} created in ${proposed.form}. No Layer or other cover values were inferred.`, ...(notice ? [notice] : [])].join(' '),
+      [
+        `Vegetation row ${id} created in ${proposed.form}. No Layer or other cover values were inferred.`,
+        ...(notice ? [notice] : []),
+      ].join(' ')
     );
   } catch (cause) {
     if (committed) params.invalidateCapabilities();
     params.setError(
       committed
-        ? `Vegetation creation committed, but refresh or identity verification failed. Reopen the plot before editing: ${String(cause)}`
-        : `Vegetation creation failed; draft retained: ${String(cause)}`,
+        ? `Vegetation creation committed, but refresh or identity verification failed. Reopen the plot before editing: ${formatError(cause)}`
+        : `Vegetation creation failed; draft retained: ${formatError(cause)}`
     );
   } finally {
     params.setBusy(false);
@@ -351,8 +368,8 @@ export async function reviewVegetationDeletionImpl(params: {
     params.setError('Finish or cancel other drafts before reviewing vegetation deletion.');
     return;
   }
-  const rows = params.vegList.filter(row => row.id === params.id && row.plotNumber === params.plotNumber);
-  if (rows.length !== 1 || !params.sourceRows(params.form).some(row => row.id === params.id)) {
+  const rows = params.vegList.filter((row) => row.id === params.id && row.plotNumber === params.plotNumber);
+  if (rows.length !== 1 || !params.sourceRows(params.form).some((row) => row.id === params.id)) {
     params.setError('Vegetation deletion source row is missing or ambiguous; reload before reviewing.');
     return;
   }
@@ -365,11 +382,12 @@ export async function reviewVegetationDeletionImpl(params: {
   try {
     const reviewed = await params.deletionReads.track(params.ReviewVegetationDeletion(plot, params.form, params.id));
     if (request !== params.currentRequest()) return;
-    if (params.getPlotNumber() !== plot) throw new Error('Vegetation deletion plot changed during lookup; reload before reviewing.');
+    if (params.getPlotNumber() !== plot)
+      throw new Error('Vegetation deletion plot changed during lookup; reload before reviewing.');
     params.setDeletionReview(validateDeletionReview(reviewed, params.form, params.id, species));
   } catch (cause) {
     if (request === params.currentRequest()) {
-      params.setError(`Vegetation deletion review failed; no data changed: ${String(cause)}`);
+      params.setError(`Vegetation deletion review failed; no data changed: ${formatError(cause)}`);
     }
   } finally {
     if (request === params.currentRequest()) params.setDeletionBusy(false);
@@ -381,7 +399,10 @@ export async function confirmVegetationDeletionImpl(params: {
   allowed: boolean;
   reviewed: VegetationDeletionReview | null;
   plotNumber: string;
-  DeleteReviewedVegetation: (plot: string, req: { id: number; form: string; expected: VegetationDeletionReview['expected'] }) => Promise<void>;
+  DeleteReviewedVegetation: (
+    plot: string,
+    req: { id: number; form: string; expected: VegetationDeletionReview['expected'] }
+  ) => Promise<void>;
   loadChildData: (plot: string) => Promise<void>;
   setBusy: (b: boolean) => void;
   setError: (e: string | null) => void;
@@ -399,7 +420,11 @@ export async function confirmVegetationDeletionImpl(params: {
   params.setError(null);
   params.setSuccess(null);
   try {
-    await params.DeleteReviewedVegetation(params.plotNumber, { id: reviewed.id, form: reviewed.form, expected: reviewed.expected });
+    await params.DeleteReviewedVegetation(params.plotNumber, {
+      id: reviewed.id,
+      form: reviewed.form,
+      expected: reviewed.expected,
+    });
     committed = true;
     params.clearReview();
     await params.loadChildData(params.plotNumber);
@@ -408,8 +433,8 @@ export async function confirmVegetationDeletionImpl(params: {
     if (committed) params.invalidateCapabilities();
     params.setError(
       committed
-        ? `Vegetation deletion committed, but refresh failed. Reopen the plot before editing: ${String(cause)}`
-        : `Vegetation deletion failed; review retained: ${String(cause)}`,
+        ? `Vegetation deletion committed, but refresh failed. Reopen the plot before editing: ${formatError(cause)}`
+        : `Vegetation deletion failed; review retained: ${formatError(cause)}`
     );
   } finally {
     params.setBusy(false);

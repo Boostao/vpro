@@ -157,7 +157,7 @@ test('actual report composition renders switches and propagates retained draft b
   const owner = { ...scope, contextId: 'switch-composition-true' };
   const session = prefs.longVegetationSwitchPreferencesSession(owner); session.apply(review(undefined, owner));
   session.editSwitch('reportSummary', null);
-  const component = serverComponent(reportSource, 'LongVegetationReport.svelte', {
+  const component = serverComponent(reportSource, 'LongVegetationReport.svelte', { './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
     '../bindings/github.com/boostao/vpro/app': {}, './longVegetationPreferences': {},
     './longVegetationStatisticsPreferences': {}, './longVegetationSwitchPreferences': prefs,
     './longVegetationThresholdPreferences': {}, './LongVegetationThresholdPreferences.svelte': { default() {} },
@@ -174,14 +174,15 @@ test('actual report composition renders switches and propagates retained draft b
       vegetationWorkbookPublicationSession: () => ({ view: () => ({ busy: false, blocked: false }), subscribe: () => () => {} }),
       VegetationWorkbookPublicationSession: class { view() { return { busy: false, blocked: false }; } subscribe() { return () => {}; } },
     },
-  });
+  }) });
   const barriers = []; const { body } = render(component, { props: { ...owner, onBusyChange: value => barriers.push(value) } });
   assert.equal(barriers.at(-1), true);
   assert.match(body, /data-long-vegetation-switches/);
   const panel = source('LongVegetationSwitchPreferences.svelte');
-  assert.match(panel, /const value = event.currentTarget.checked; edit\(field.key, value\)/);
-  assert.doesNotMatch(panel, /reads\.track\(VegetationReportService\.Save/);
-  assert.match(reportSource, /switchView = switches.view\(\); invalidateReports\(\)/);
-  assert.match(reportSource, /function invalidateReports\(\) \{\s*preview = null; workbookReview = null;\s*projectWorkspace\?\.invalidate\(\)/);
-  assert.ok(reportSource.indexOf('data-vegetation-workbook-unknown') < reportSource.indexOf('<LongVegetationSwitchPreferences'));
+  const composite = require('./svelteTestHelpers.cjs').readReportComposite('long-vegetation');
+  assert.match(panel, /const value = event\.currentTarget\.checked;\s*edit\(field\.key, value\)/);
+  assert.doesNotMatch(panel, /reads\.track\(\s*VegetationReportService\.Save/);
+  assert.match(composite, /switchView = sessions\.switches!\.view\(\);\s*onInvalidate/);
+  assert.match(composite, /function invalidateReports\(\) \{\s*preview = null;\s*workbookReview = null;\s*projectWorkspace\?\.invalidate\(\)/);
+  assert.ok(composite.indexOf('data-vegetation-workbook-unknown') < composite.indexOf('<LongVegetationSwitchPreferences'));
 });

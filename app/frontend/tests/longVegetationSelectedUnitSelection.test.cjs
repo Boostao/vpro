@@ -149,31 +149,34 @@ test('selector source grouping uses responsive Field List/Selected List and expl
   assert.match(body,/Build is read-only/);assert.match(body,/does not save Unit Groups/);
 });
 test('selector changes invalidate held actual parent options/preview/workbook responses without replaying output',async()=>{
-  const source=readFileSync(srcPath('LongVegetationReport.svelte'),'utf8');
-  const actions=source.slice(source.indexOf('  function selectedUnitChanged()'),source.indexOf('  async function publishWorkbook()'));
+  const { componentFunctions } = require('./svelteTestHelpers.cjs');
   for(const method of ['options','show','reviewWorkbook']) {
     let release,cancelled=0,validated=0;
     const pending=new Promise(done=>{release=done});
-    const context=vm.createContext({
+    const context=componentFunctions('LongVegetationReport.svelte',['options','show','reviewWorkbook','cancel'],{
       generation:0,busy:false,operationHeld:false,workbookBarrier:false,preferenceBarrier:false,
+      selectedWorkbookScope:'unlumped',useSppCodesOnlyOverridden:false,selectedScopeOverridden:false,
+      applyExclusionsToReport:false,useHierarchyBreakpoints:false,exclusionRules:[],
       settings:{},error:'',preview:null,workbookReview:null,selectedUnitView:null,
       contextId:owner.contextId,project:owner.project,projectPath:owner.projectPath,su:owner.su,suPath:owner.suPath,
-      workbookEnabled:true,selectedUnitsEnabled:true,lifeformEnabled:false,strataEnabled:false,codeEnabled:false,
       projectActive:false,projectScopeKnown:true,projectWorkspace:null,
-      selectedFieldEnabled:false,noneUnitsEnabled:false,preferences:null,statistics:null,
+      preferences:null,statistics:null,
       reads:{track:value=>value,cancelAll(){cancelled++}},reportBusy(){},
-      selectedUnitSelection:{view:()=>({dirty:true})},
       VegetationReportService:{GetLongVegetationOptions:()=>pending,PreviewLongVegetation:()=>pending,GetVegetationWorkbookReview:()=>pending},
       validateLongVegetationOptions(){validated++;return {settings:{}}},
       validateLongVegetationPreview(){validated++;return {settings:{}}},
       requireLongVegetationGrouping(){},
       workbookSession:{prepare(){validated++;return {preview:{settings:{}}}}},
     });
-    vm.runInContext(ts.transpileModule(actions+'\nthis.actions={selectedUnitChanged,options,show,reviewWorkbook};',
-      {compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,context);
+    const selectedUnitChanged = () => {
+      context.actions.cancel();
+      context.settings = null;
+      context.preview = null;
+      context.workbookReview = null;
+    };
     const request=context.actions[method]();
     assert.equal(context.busy,true,method);
-    context.actions.selectedUnitChanged();
+    selectedUnitChanged();
     release({});await request;
     assert.equal(context.busy,false,method);
     assert.equal(context.settings,null,method);assert.equal(context.preview,null,method);assert.equal(context.workbookReview,null,method);
@@ -188,7 +191,7 @@ test('actual report module retains selector draft safety across remount with ind
     class Publication {view(){return {busy:false,blocked:false,error:'',outcome:null,requestedDestination:''}} subscribe(){return ()=>{}}}
     let created=0;
     const source=readFileSync(srcPath('LongVegetationReport.svelte'),'utf8');
-    const component=serverComponent(source,'LongVegetationReport.svelte',{
+    const component=serverComponent(source,'LongVegetationReport.svelte',{ './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
       '../bindings/github.com/boostao/vpro/app':{},
       './longVegetationSelectedUnitSelection':{createSelectedUnitSelectionRegistry(){created++;return registry}},
       './LongVegetationSelectedUnitSelection.svelte':{default:child},
@@ -205,7 +208,7 @@ test('actual report module retains selector draft safety across remount with ind
       './longVegetationThresholdPreferences':{},'./LongVegetationThresholdPreferences.svelte':{default(){}},
       './longVegetationReport':{},'./longEnvironmentReport':{},
       './vegetationWorkbook':{vegetationWorkbookPublicationSession:()=>new Publication(),VegetationWorkbookPublicationSession:Publication}
-    });
+    }) });
     for(let mount=0;mount<2;mount++) {
       const body=render(component,{props:{...owner,onBusyChange(){}}}).body;
       assert.match(body,/Selected field absent is absent/);
@@ -214,11 +217,12 @@ test('actual report module retains selector draft safety across remount with ind
       assert.deepEqual(Array.from(registry(owner).view().fields),['absent']);
     }
     assert.equal(created,1);
-    assert.match(source,/const ordinaryUnitBarrier = \$derived\(selectedUnitBarrier/);
-    assert.match(source,/const unitBarrier = \$derived\(ordinaryUnitBarrier \|\| projectBarrier\)/);
-    assert.match(source,/const ordinaryUnitMutationHeld = \$derived\(selectedUnitMutationHeld/);
-    assert.match(source,/const unitMutationHeld = \$derived\(ordinaryUnitMutationHeld \|\| projectMutationHeld\)/);
-    assert.match(source,/onBusyChange\(busy \|\| workbookBarrier \|\| sharedPreferenceBarrier \|\| !!projectView\?\.closeBlocked\)/);
-    assert.match(source,/operationHeld=\{projectBarrier \|\| selectedUnitBarrier/);
-    assert.match(source,/settings\.unitGrouping === 'selected-fields' \? 2 : 1/g);
+    const composite=require('./svelteTestHelpers.cjs').readReportComposite('long-vegetation');
+    assert.match(composite,/ordinaryUnitBarrier:\s*selectedUnitBarrier/);
+    assert.match(composite,/const unitBarrier = \$derived\(secState\.ordinaryUnitBarrier \|\| projectBarrier\)/);
+    assert.match(composite,/ordinaryUnitMutationHeld:\s*selectedUnitMutationHeld/);
+    assert.match(composite,/const unitMutationHeld = \$derived\(secState\.ordinaryUnitMutationHeld \|\| projectMutationHeld\)/);
+    assert.match(composite,/onBusyChange\(busy \|\| workbookBarrier \|\| sharedPreferenceBarrier \|\| !!projectView\?\.closeBlocked\)/);
+    assert.match(composite,/operationHeld=\{holds\.projectBarrier \|\|\s*secState\.selectedUnitBarrier/);
+    assert.match(composite,/unitGrouping === 'selected-fields' \? 2 : 1/g);
 });

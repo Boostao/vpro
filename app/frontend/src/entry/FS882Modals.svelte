@@ -1,26 +1,21 @@
 <script lang="ts">
-  import type { PlotProfileSource, ProjectPlotProfileFilterRequest } from '../../bindings/github.com/boostao/vpro/app';
+  import type { ProjectPlotProfileFilterRequest } from '../../bindings/github.com/boostao/vpro/app';
   import PicturePanel from '../pictures/PicturePanel.svelte';
+  import { formatError } from '../shared/readRequests';
+  import FS882SiviParentModalHost from './FS882SiviParentModalHost.svelte';
   import SourceChild from './SourceChild.svelte';
-  import type { EditorCloseState } from '../shell/closeLifecycle';
+  import type { FS882Controller } from './fs882FormController.svelte';
   import type { PaperControl } from './paperLayout';
-  import type { SIVIParentActionWriteSession } from './siviParentActionWriteSession';
-  import type { SIVIParentInput } from './siviParentEditor';
-  import type { SIVIParentReadSession, SIVIParentReadView } from './siviParentReadSession';
-  import type { SIVIParentSharedColumn, SIVIParentSharedInput, SIVIParentSharedSession, SIVIParentSharedView } from './siviParentSharedSession';
-  import type { SIVIParentSourceSession, SIVIParentSourceView } from './siviParentSourceSession';
-  import type { SIVIParentWriteSession, SIVIParentWriteView } from './siviParentWriteSession';
-  import type { SIVIProjectAssignmentInput, SIVIProjectAssignmentSession, SIVIProjectAssignmentView } from './siviProjectAssignmentSession';
   import type { TwoPageEntryChild } from './twoPageEntryProjection';
-  import type { TwoPageEntrySessionCache } from './twoPageEntrySession';
-  import type { TwoPageParentCommonSessionCache } from './twoPageParentCommonSession';
-  import type { TwoPageParentForm, TwoPageParentSessionCache } from './twoPageParentSession';
-  import type { TwoPageVegetationForm } from './twoPageVegetationWire';
 
   export interface FS882SubEditorLoaders {
     environmentSU: () => Promise<{ default: typeof import('../classification/EnvironmentSUTransfer.svelte').default }>;
-    externalSU: () => Promise<{ default: typeof import('../classification/ExternalSUEnvironmentTransfer.svelte').default }>;
-    profileReview: () => Promise<{ default: typeof import('../classification/ProjectPlotProfileReview.svelte').default }>;
+    externalSU: () => Promise<{
+      default: typeof import('../classification/ExternalSUEnvironmentTransfer.svelte').default;
+    }>;
+    profileReview: () => Promise<{
+      default: typeof import('../classification/ProjectPlotProfileReview.svelte').default;
+    }>;
     twoPageEntry: () => Promise<{ default: typeof import('./TwoPageEntryEditor.svelte').default }>;
     twoPageCommon: () => Promise<{ default: typeof import('./TwoPageParentCommonEditor.svelte').default }>;
     twoPageExtra: () => Promise<{ default: typeof import('./TwoPageParentEditor.svelte').default }>;
@@ -31,378 +26,407 @@
   }
 
   let {
+    ctrl,
     loaders,
     loadSubEditor,
-    environmentSUEditor = $bindable(),
-    profileEditor = $bindable(),
-    twoPageEditor = $bindable(),
-    metadataEditor = $bindable(),
-    codeCheckEditor = $bindable(),
-    twoPageOpen = $bindable(),
-    twoPageBusy = $bindable(),
-    twoPageProject = $bindable(),
-    twoPageRevision = $bindable(),
-    profileReviewOpen = $bindable(),
-    profileReviewBusy = $bindable(),
-    profileReviewBlocked = $bindable(),
-    environmentSUOpen = $bindable(),
-    metadataOpen = $bindable(),
-    metadataBusy = $bindable(),
-    codeCheckOpen = $bindable(),
-    codeCheckBusy = $bindable(),
-    pictureBusy = $bindable(),
-    contextId,
-    draft,
-    plotNumber,
-    originalPlotNumber,
-    activeProject,
-    activeSU,
-    projectPath,
-    suPath,
-    plotProfileWritable,
-    plotProfileSource,
-    busy,
-    dirty,
-    childUnsaved,
-    headerValidation,
-    activeTab,
-    siviStandalone,
-    standaloneTwoPage = false,
     onCloseStandalone,
-    siviStandaloneEnabled,
-    siviParentOpen,
-    siviParentSession, siviParentView, siviParentSourceSession, siviParentSourceView, siviParentBusy, siviSourceBarrier,
-    siviParentSharedColumns, siviParentSharedSession, siviParentSharedView, siviParentSharedClose, siviParentSharedUnsaved, siviParentSharedEditingDisabled,
-    siviParentWriteSession, siviParentWriteView, siviParentWriteClose, siviParentWriteEditingDisabled,
-    siviParentActionSession, siviParentActionView, siviParentActionClose, siviParentActionEditingDisabled,
-    siviProjectAssignmentSession, siviProjectAssignmentView, siviProjectAssignmentClose, siviProjectAssignmentEditingDisabled,
-    extendedShrubs, extendedShrubsEnabled, setExtendedShrubs,
-    snowCoverRegimeInput, activeLayerDepthInput, arcticInputsDisabled, snowCoverRegimeSupported, activeLayerDepthSupported,
-    stageSnowCoverRegime, stageActiveLayerDepth,
-    metadataEnabled, metadataCreationEnabled, metadataTemplateCreationEnabled, metadataRestorationEnabled,
-    openProjectMetadata, canOpenProjectMetadata,
-    stageSIVIParentShared, siviParentSharedOperation, stageSIVIParentCell, siviParentWriteOperation,
-    stageSIVIParentAction, siviParentActionOperation, stageSIVIProjectAssignment, siviProjectAssignmentOperation,
-    reloadSIVIProjectSource, changeSIVIProjectSource,
-    PlotService, environmentSUDirection,
-    profileReviewEnabled, profileRunEnabled, profileSpeciesPresenceEnabled, profileEditingEnabled,
-    profileCreationEnabled, profileDeletionEnabled, profileFilteringEnabled, profileSaveSUEnabled,
-    onProfileSUReview, onProfileNavigation,
-    twoPageScope, twoPageEntryInitialForm,
-    twoPageSessions, twoPageCommonSessions, twoPageEntrySessions,
-    twoPageSoilReviewEnabled, twoPageVegetationReviewEnabled, pictureReadingEnabled,
-    ordinaryVegetationUnavailable, ordinarySoilUnavailable,
-    twoPageLinkedParentBlocked, twoPageSoilParentBlocked, linkedVegetationParentBlocked,
-    twoPageSoilBusy, twoPageSoilBlocked, twoPageVegetationBusy, twoPageVegetationBlocked, pictureMetadataPending,
-    externalSUEnvironmentEnabled, separateSUSelected,
-    childRevision, sourceRows,
-    openProfileSUFromTwoPage, refreshTwoPagePeers, refreshProjectMetadata, loadPlot, loadChildData, onClearError,
+    onProfileSUReview,
+    onProfileNavigation,
   }: {
+    ctrl: FS882Controller;
     loaders: FS882SubEditorLoaders;
     loadSubEditor: <T>(loader: () => Promise<T>, label: string, onFailed: () => void) => Promise<T>;
-    environmentSUEditor: { getCloseState(): EditorCloseState; undo(): void } | undefined;
-    profileEditor: { getCloseState(): EditorCloseState; undo(): void } | undefined;
-    twoPageEditor: { getCloseState(): EditorCloseState; getDraftState?(): EditorCloseState; undo(): void; saveForClose?(): Promise<boolean>; canOpenMetadataEditor?(): boolean; openMetadataEditor?(): void } | undefined;
-    metadataEditor: { getCloseState(): EditorCloseState; undo(): void } | undefined;
-    codeCheckEditor: { getCloseState(): EditorCloseState; undo(): void } | undefined;
-    twoPageOpen: boolean; twoPageBusy: boolean; twoPageProject: string | null; twoPageRevision: number;
-    profileReviewOpen: boolean; profileReviewBusy: boolean; profileReviewBlocked: boolean;
-    environmentSUOpen: boolean;
-    metadataOpen: boolean; metadataBusy: boolean;
-    codeCheckOpen: boolean; codeCheckBusy: boolean;
-    pictureBusy: boolean;
-    contextId: string; draft: { plotNumber: string }; plotNumber: string; originalPlotNumber: string | undefined;
-    activeProject: string; activeSU: string; projectPath: string; suPath: string;
-    plotProfileWritable: boolean; plotProfileSource: PlotProfileSource | null;
-    busy: boolean; dirty: boolean; childUnsaved: boolean; headerValidation: Record<string, string>;
-    activeTab: string; siviStandalone: boolean; standaloneTwoPage?: boolean; onCloseStandalone?: () => void; siviStandaloneEnabled: boolean; siviParentOpen: boolean;
-    siviParentSession: SIVIParentReadSession | null; siviParentView: SIVIParentReadView | null;
-    siviParentSourceSession: SIVIParentSourceSession | null; siviParentSourceView: SIVIParentSourceView | null;
-    siviParentBusy: boolean; siviSourceBarrier: boolean;
-    siviParentSharedColumns: readonly SIVIParentSharedColumn[];
-    siviParentSharedSession: SIVIParentSharedSession | null; siviParentSharedView: SIVIParentSharedView | null;
-    siviParentSharedClose: EditorCloseState | null; siviParentSharedUnsaved: boolean; siviParentSharedEditingDisabled: boolean;
-    siviParentWriteSession: SIVIParentWriteSession | null; siviParentWriteView: SIVIParentWriteView | null;
-    siviParentWriteClose: EditorCloseState | null; siviParentWriteEditingDisabled: boolean;
-    siviParentActionSession: SIVIParentActionWriteSession | null; siviParentActionView: SIVIParentWriteView | null;
-    siviParentActionClose: EditorCloseState | null; siviParentActionEditingDisabled: boolean;
-    siviProjectAssignmentSession: SIVIProjectAssignmentSession | null; siviProjectAssignmentView: SIVIProjectAssignmentView | null;
-    siviProjectAssignmentClose: EditorCloseState | null; siviProjectAssignmentEditingDisabled: boolean;
-    extendedShrubs: boolean; extendedShrubsEnabled: boolean; setExtendedShrubs: (v: boolean) => void;
-    snowCoverRegimeInput: string; activeLayerDepthInput: string; arcticInputsDisabled: boolean;
-    snowCoverRegimeSupported: boolean; activeLayerDepthSupported: boolean;
-    stageSnowCoverRegime: (raw: string) => void; stageActiveLayerDepth: (raw: string) => void;
-    metadataEnabled: boolean; metadataCreationEnabled: boolean; metadataTemplateCreationEnabled: boolean; metadataRestorationEnabled: boolean;
-    openProjectMetadata: () => void; canOpenProjectMetadata: () => boolean;
-    stageSIVIParentShared: (col: SIVIParentSharedColumn, input: SIVIParentSharedInput) => void;
-    siviParentSharedOperation: (op: 'load' | 'save' | 'undo' | 'retain' | 'prune') => Promise<boolean>;
-    stageSIVIParentCell: (col: string, input: SIVIParentInput) => void;
-    siviParentWriteOperation: (op: 'load' | 'save' | 'undo' | 'retain' | 'prune') => Promise<boolean>;
-    stageSIVIParentAction: (col: string, input: SIVIParentInput) => void;
-    siviParentActionOperation: (op: 'load' | 'save' | 'undo' | 'retain' | 'prune') => Promise<boolean>;
-    stageSIVIProjectAssignment: (input: SIVIProjectAssignmentInput) => void;
-    siviProjectAssignmentOperation: (op: 'load' | 'save' | 'undo' | 'retain' | 'prune') => Promise<boolean>;
-    reloadSIVIProjectSource: () => Promise<void>;
-    changeSIVIProjectSource: (source: number) => Promise<void>;
-    PlotService: typeof import('../../bindings/github.com/boostao/vpro/app').PlotEntryService & ReturnType<typeof import('../shared/contextPlots').bindContextPlots>;
-    environmentSUDirection: 'forward' | 'reverse' | 'external-reverse';
-    profileReviewEnabled: boolean; profileRunEnabled: boolean; profileSpeciesPresenceEnabled: boolean; profileEditingEnabled: boolean;
-    profileCreationEnabled: boolean; profileDeletionEnabled: boolean; profileFilteringEnabled: boolean; profileSaveSUEnabled: boolean;
+    onCloseStandalone?: () => void;
     onProfileSUReview?: (proposal: ProjectPlotProfileFilterRequest, contextId: string) => Promise<void>;
     onProfileNavigation?: (proposal: ProjectPlotProfileFilterRequest, contextId: string) => Promise<void>;
-    twoPageScope: 'extra' | 'common' | 'entry'; twoPageEntryInitialForm: TwoPageParentForm;
-    twoPageSessions: TwoPageParentSessionCache; twoPageCommonSessions: TwoPageParentCommonSessionCache; twoPageEntrySessions: TwoPageEntrySessionCache;
-    twoPageSoilReviewEnabled: boolean; twoPageVegetationReviewEnabled: boolean; pictureReadingEnabled: boolean;
-    ordinaryVegetationUnavailable: string | null; ordinarySoilUnavailable: string | null;
-    twoPageLinkedParentBlocked: boolean; twoPageSoilParentBlocked: boolean;
-    linkedVegetationParentBlocked: (form: TwoPageVegetationForm) => boolean;
-    twoPageSoilBusy: boolean; twoPageSoilBlocked: boolean; twoPageVegetationBusy: boolean; twoPageVegetationBlocked: boolean; pictureMetadataPending: boolean;
-    externalSUEnvironmentEnabled: boolean; separateSUSelected: boolean;
-    childRevision: number;
-    sourceRows: (name: string) => Array<{ id: number; values: Record<string, string | number | boolean | null | undefined> }>;
-    openProfileSUFromTwoPage: () => void;
-    refreshTwoPagePeers: (scope: 'extra' | 'common' | 'entry') => Promise<void>;
-    refreshProjectMetadata: () => Promise<void>;
-    loadPlot: (p?: string) => Promise<void>;
-    loadChildData: (p: string) => Promise<void>;
-    onClearError: () => void;
   } = $props();
+
+  const contextId = $derived(ctrl.contextId);
+  const activeProject = $derived(ctrl.pState?.activeProject ?? '');
+  const activeSU = $derived(ctrl.pState?.activeSU ?? '');
+  const projectPath = $derived(ctrl.pState?.projectPath ?? '');
+  const suPath = $derived(ctrl.pState?.suPath ?? '');
+  const plotNumber = $derived(ctrl.draft.plotNumber);
+  const originalPlotNumber = $derived(ctrl.original?.plotNumber);
+  const linkedChildBlocked = $derived(
+    ctrl.twoPageSoilBusy || ctrl.twoPageSoilBlocked || ctrl.twoPageVegetationBusy || ctrl.twoPageVegetationBlocked
+  );
 </script>
 
-{#snippet sharedSIVIFields()}
-  {#if siviParentSharedView}
-    {#await import('./SIVIParentSharedFields.svelte')}
-      <p role="status" class="p-2 text-xs">Loading shared SIVI fields...</p>
-    {:then { default: SIVIParentSharedFields }}
-      <SIVIParentSharedFields view={siviParentSharedView} disabled={siviParentSharedEditingDisabled}
-        canSave={siviParentSharedClose?.canSave ?? false} onstage={stageSIVIParentShared}
-        onoperation={operation => { void siviParentSharedOperation(operation); }}
-        onreferences={() => { void siviParentSharedSession?.refreshReferences(); }}
-        oncancel={() => siviParentSharedSession?.cancel()}
-        {extendedShrubs}
-        onExtendedShrubsChange={extendedShrubsEnabled ? setExtendedShrubs : undefined}
-        snowCoverRegime={snowCoverRegimeInput}
-        activeLayerDepth={activeLayerDepthInput}
-        snowCoverRegimeDisabled={arcticInputsDisabled || !snowCoverRegimeSupported}
-        activeLayerDepthDisabled={arcticInputsDisabled || !activeLayerDepthSupported}
-        snowCoverRegimeError={headerValidation.snowCoverRegime ?? null}
-        activeLayerDepthError={headerValidation.activeLayerDepth ?? null}
-        onSnowCoverRegimeChange={stageSnowCoverRegime}
-        onActiveLayerDepthChange={stageActiveLayerDepth} />
-    {:catch loadError}
-      <p role="alert" class="p-2 text-xs text-red-700">Shared SIVI fields could not load: {String(loadError)}</p>
-    {/await}
-  {/if}
-{/snippet}
-{#if activeTab === 'siviParent' && siviParentOpen && siviParentView && !metadataOpen && (!siviStandalone || siviStandaloneEnabled)}
-  {#await import('./SIVIParentReadPanel.svelte')}
-    <p role="status" class="p-3 text-xs">Loading SIVI parent panel...</p>
-  {:then { default: SIVIParentReadPanel }}
-    <SIVIParentReadPanel view={siviParentView} sourceView={siviParentSourceView}
-      sharedEditor={siviParentSharedView ? {
-        liveColumns: siviParentSharedView.original ? siviParentSharedColumns : [],
-        content: sharedSIVIFields, busy: siviParentSharedView.busy,
-        unsaved: siviParentSharedUnsaved || (siviParentSharedClose?.blocked ?? false),
-      } : null}
-      onMetadata={metadataEnabled ? openProjectMetadata : undefined}
-      metadataDisabled={!canOpenProjectMetadata()}
-      writeView={siviParentWriteView} writeDisabled={siviParentWriteEditingDisabled}
-      writeCanSave={siviParentWriteClose?.canSave ?? false}
-      onWriteOperation={operation => { void siviParentWriteOperation(operation); }}
-      onWriteStage={stageSIVIParentCell}
-      onWriteCancel={() => siviParentWriteSession?.cancel()}
-      actionView={siviParentActionView} actionDisabled={siviParentActionEditingDisabled}
-      actionCanSave={siviParentActionClose?.canSave ?? false}
-      onActionOperation={operation => { void siviParentActionOperation(operation); }}
-      onActionStage={stageSIVIParentAction}
-      onActionCancel={() => siviParentActionSession?.cancel()}
-      assignmentView={siviProjectAssignmentView} assignmentDisabled={siviProjectAssignmentEditingDisabled}
-      assignmentCanSave={siviProjectAssignmentClose?.canSave ?? false}
-      onAssignmentOperation={operation => { void siviProjectAssignmentOperation(operation); }}
-      onAssignmentStage={stageSIVIProjectAssignment}
-      onAssignmentCancel={() => siviProjectAssignmentSession?.cancel()}
-      reloadDisabled={busy || dirty || childUnsaved || siviParentBusy}
-      onreload={() => { if (siviParentSession) void siviParentSession.load(); }}
-      onSourceReload={() => { void reloadSIVIProjectSource(); }}
-      onSourceCancel={() => siviParentSourceSession?.cancel()}
-      onSourceChange={source => { void changeSIVIProjectSource(source); }}
-      oncancel={() => siviParentSession?.cancel()} />
-  {:catch loadError}
-    <p role="alert" class="p-3 text-xs text-red-700">SIVI parent panel could not load: {String(loadError)}</p>
-  {/await}
-{/if}
-{#if environmentSUOpen && environmentSUDirection !== 'external-reverse' && projectPath}
-  {#await loadSubEditor(loaders.environmentSU, 'SU transfer review', () => { environmentSUOpen = false; })}
+<FS882SiviParentModalHost
+  sivi={ctrl.sivi}
+  activeTab={ctrl.activeTab}
+  metadataOpen={ctrl.metadataOpen}
+  busy={ctrl.busy}
+  dirty={ctrl.dirty}
+  childUnsaved={ctrl.childUnsaved}
+  extendedShrubs={ctrl.extendedShrubs}
+  setExtendedShrubs={ctrl.setExtendedShrubs}
+  snowCoverRegimeInput={ctrl.snowCoverRegimeInput}
+  activeLayerDepthInput={ctrl.activeLayerDepthInput}
+  arcticInputsDisabled={ctrl.arcticInputsDisabled}
+  snowCoverRegimeSupported={ctrl.capabilities.snowCoverRegime === true}
+  activeLayerDepthSupported={ctrl.capabilities.activeLayerDepth === true}
+  headerValidation={ctrl.headerValidation}
+  stageSnowCoverRegime={ctrl.stageSnowCoverRegime}
+  stageActiveLayerDepth={ctrl.stageActiveLayerDepth}
+  openProjectMetadata={ctrl.openProjectMetadata}
+  canOpenProjectMetadata={ctrl.canOpenProjectMetadata}
+/>
+
+{#if ctrl.environmentSUOpen && ctrl.environmentSUDirection !== 'external-reverse' && projectPath}
+  {#await loadSubEditor(loaders.environmentSU, 'SU transfer review', () => {
+    ctrl.environmentSUOpen = false;
+  })}
     <p role="status" class="p-3 text-xs">Loading SU transfer review...</p>
   {:then { default: EnvironmentSUTransfer }}
-    <EnvironmentSUTransfer bind:this={environmentSUEditor} client={PlotService} {contextId}
-      project={activeProject} su={activeSU} path={projectPath}
-      direction={environmentSUDirection === 'reverse' ? 'reverse' : 'forward'}
-      onclosed={() => { environmentSUOpen = false; onClearError(); if (environmentSUDirection === 'reverse') void loadPlot(originalPlotNumber); }} />
+    <EnvironmentSUTransfer
+      bind:this={ctrl.environmentSUEditor}
+      client={ctrl.PlotService}
+      {contextId}
+      project={activeProject}
+      su={activeSU}
+      path={projectPath}
+      direction={ctrl.environmentSUDirection === 'reverse' ? 'reverse' : 'forward'}
+      onclosed={() => {
+        ctrl.environmentSUOpen = false;
+        ctrl.error = null;
+        if (ctrl.environmentSUDirection === 'reverse') void ctrl.load(originalPlotNumber);
+      }}
+    />
   {:catch loadError}
-    <p role="alert" class="p-3 text-xs text-red-700">SU transfer review could not load: {String(loadError)}</p>
+    <p role="alert" class="p-3 text-xs text-red-700">SU transfer review could not load: {formatError(loadError)}</p>
   {/await}
 {/if}
-{#if environmentSUOpen && environmentSUDirection === 'external-reverse' && projectPath && suPath}
-  {#await loadSubEditor(loaders.externalSU, 'External SU transfer review', () => { environmentSUOpen = false; })}
+
+{#if ctrl.environmentSUOpen && ctrl.environmentSUDirection === 'external-reverse' && projectPath && suPath}
+  {#await loadSubEditor(loaders.externalSU, 'External SU transfer review', () => {
+    ctrl.environmentSUOpen = false;
+  })}
     <p role="status" class="p-3 text-xs">Loading external SU transfer review...</p>
   {:then { default: ExternalSUEnvironmentTransfer }}
-    <ExternalSUEnvironmentTransfer bind:this={environmentSUEditor} {contextId}
-      project={activeProject} {projectPath}
-      su={activeSU} {suPath}
-      onclosed={() => { environmentSUOpen = false; onClearError(); void loadPlot(originalPlotNumber); }} />
+    <ExternalSUEnvironmentTransfer
+      bind:this={ctrl.environmentSUEditor}
+      {contextId}
+      project={activeProject}
+      {projectPath}
+      su={activeSU}
+      {suPath}
+      onclosed={() => {
+        ctrl.environmentSUOpen = false;
+        ctrl.error = null;
+        void ctrl.load(originalPlotNumber);
+      }}
+    />
   {:catch loadError}
-    <p role="alert" class="p-3 text-xs text-red-700">External SU transfer review could not load: {String(loadError)}</p>
+    <p role="alert" class="p-3 text-xs text-red-700">
+      External SU transfer review could not load: {formatError(loadError)}
+    </p>
   {/await}
 {/if}
-{#if profileReviewOpen}
-  {#await loadSubEditor(loaders.profileReview, 'Project plot profile review', () => { profileReviewOpen = false; profileReviewBusy = false; profileReviewBlocked = false; })}
+
+{#if ctrl.profileReviewOpen}
+  {#await loadSubEditor(loaders.profileReview, 'Project plot profile review', () => {
+    ctrl.profileReviewOpen = false;
+    ctrl.profileReviewBusy = false;
+    ctrl.profileReviewBlocked = false;
+  })}
     <p role="status" class="p-3 text-xs">Loading project plot profile review...</p>
   {:then { default: ProjectPlotProfileReview }}
-    {#if profileReviewOpen}
-      <ProjectPlotProfileReview bind:this={profileEditor} client={PlotService} allowRun={profileRunEnabled}
-        allowPresence={profileSpeciesPresenceEnabled && Boolean(activeProject)} {contextId} {activeSU}
-        authorityBlocked={siviSourceBarrier}
-        allowEditing={profileEditingEnabled && plotProfileWritable} allowCreation={profileCreationEnabled} allowDeletion={profileDeletionEnabled}
-        allowSaveSU={profileSaveSUEnabled} onsureview={async proposal => {
+    {#if ctrl.profileReviewOpen}
+      <ProjectPlotProfileReview
+        bind:this={ctrl.profileEditor}
+        client={ctrl.PlotService}
+        allowRun={true}
+        allowPresence={Boolean(activeProject)}
+        {contextId}
+        {activeSU}
+        authorityBlocked={ctrl.sivi.sourceBarrier}
+        allowEditing={ctrl.pState?.plotProfile?.writable === true}
+        allowCreation={true}
+        allowDeletion={true}
+        allowSaveSU={true}
+        onsureview={async (proposal) => {
           if (!onProfileSUReview) throw new Error('Save as SU review is unavailable.');
           await onProfileSUReview(proposal, contextId);
-        }} allowFiltering={profileFilteringEnabled} onapply={async proposal => {
+        }}
+        allowFiltering={true}
+        onapply={async (proposal) => {
           if (!onProfileNavigation) throw new Error('Profile navigation publication is unavailable.');
           await onProfileNavigation(proposal, contextId);
         }}
-        onblocked={value => profileReviewBlocked = value} onbusy={value => profileReviewBusy = value}
-        onclosed={() => { profileReviewOpen = false; }} />
+        onblocked={(value) => {
+          ctrl.profileReviewBlocked = value;
+        }}
+        onbusy={(value) => {
+          ctrl.profileReviewBusy = value;
+        }}
+        onclosed={() => {
+          ctrl.profileReviewOpen = false;
+        }}
+      />
     {/if}
   {:catch loadError}
-    <p role="alert" class="p-3 text-xs text-red-700">Project plot profile review could not load: {String(loadError)}</p>
+    <p role="alert" class="p-3 text-xs text-red-700">
+      Project plot profile review could not load: {formatError(loadError)}
+    </p>
   {/await}
 {/if}
-{#snippet twoPageLinkedChild(child: TwoPageEntryChild, _control: PaperControl)}
-  {#if twoPageSoilReviewEnabled && twoPageScope === 'entry' && twoPageProject !== null &&
-    (child.form === 'SoilHumusXL' || child.form === 'SoilMineralXL')}
+
+{#snippet twoPageLinkedChild(child: TwoPageEntryChild, control: PaperControl)}
+  {#if ctrl.twoPageScope === 'entry' && ctrl.twoPageProject !== null && (child.form === 'SoilHumusXL' || child.form === 'SoilMineralXL')}
     {#await loaders.twoPageSoil()}
       <p role="status" class="p-2 text-xs">Loading linked soil panel...</p>
     {:then { default: TwoPageSoilPanel }}
-      <TwoPageSoilPanel {contextId} project={twoPageProject} plot={draft.plotNumber} form={child.form}
-        parentBlocked={twoPageSoilParentBlocked} />
+      <TwoPageSoilPanel
+        {contextId}
+        project={ctrl.twoPageProject}
+        plot={plotNumber}
+        form={child.form}
+        parentBlocked={ctrl.twoPageSoilParentBlocked}
+      />
     {:catch loadError}
-      <p role="alert" class="p-2 text-xs text-red-700">Linked soil panel could not load: {String(loadError)}</p>
+      <p role="alert" class="p-2 text-xs text-red-700">Linked soil panel could not load: {formatError(loadError)}</p>
     {/await}
-  {:else if twoPageVegetationReviewEnabled && twoPageScope === 'entry' && twoPageProject !== null &&
-    (child.form === 'SubVegAXL_BC' || child.form === 'SubVegAXL' || child.form === 'SubVegCXL' || child.form === 'SubVegDXL')}
+  {:else if ctrl.twoPageScope === 'entry' && ctrl.twoPageProject !== null && (child.form === 'SubVegAXL_BC' || child.form === 'SubVegAXL' || child.form === 'SubVegCXL' || child.form === 'SubVegDXL')}
     {#await loaders.twoPageVegetation()}
       <p role="status" class="p-2 text-xs">Loading linked vegetation panel...</p>
     {:then { default: TwoPageVegetationPanel }}
-      {#key JSON.stringify([contextId, twoPageProject, draft.plotNumber, child.form])}
-        <TwoPageVegetationPanel {contextId} project={twoPageProject} plot={draft.plotNumber} form={child.form}
-          parentBlocked={linkedVegetationParentBlocked(child.form)} />
+      {#key JSON.stringify([contextId, ctrl.twoPageProject, plotNumber, child.form])}
+        <TwoPageVegetationPanel
+          {contextId}
+          project={ctrl.twoPageProject}
+          plot={plotNumber}
+          form={child.form}
+          parentBlocked={ctrl.linkedVegetationParentBlocked(child.form)}
+        />
       {/key}
     {:catch loadError}
-      <p role="alert" class="p-2 text-xs text-red-700">Linked vegetation panel could not load: {String(loadError)}</p>
+      <p role="alert" class="p-2 text-xs text-red-700">
+        Linked vegetation panel could not load: {formatError(loadError)}
+      </p>
     {/await}
-  {:else if pictureReadingEnabled && twoPageScope === 'entry' && twoPageProject !== null && child.form === 'frmVPicsXL'}
-    <div data-two-page-picture-child={child.form} data-source-control={_control.controlId}
-      data-source-image-control="form:frmVPicsXL/imgCtl">
-      <PicturePanel {contextId} project={twoPageProject} plotNumber={draft.plotNumber} view="child"
+  {:else if ctrl.twoPageScope === 'entry' && ctrl.twoPageProject !== null && child.form === 'frmVPicsXL'}
+    <div
+      data-two-page-picture-child={child.form}
+      data-source-control={control.controlId}
+      data-source-image-control="form:frmVPicsXL/imgCtl"
+    >
+      <PicturePanel
+        {contextId}
+        project={ctrl.twoPageProject}
+        {plotNumber}
+        view="child"
         observeMutationReceipts={false}
-        disabled={twoPageLinkedParentBlocked || twoPageSoilBusy || twoPageSoilBlocked || twoPageVegetationBusy || twoPageVegetationBlocked}
-        onBusyChange={(pending) => pictureBusy = pending} />
+        disabled={ctrl.twoPageLinkedParentBlocked || linkedChildBlocked}
+        onBusyChange={(pending) => {
+          ctrl.pictureBusy = pending;
+        }}
+      />
     </div>
-  {:else if ordinaryVegetationUnavailable && child.form.startsWith('SubVeg')}
-    <p role="status" data-vegetation-ordinary-unavailable={child.form}>{ordinaryVegetationUnavailable}</p>
-  {:else if ordinarySoilUnavailable && (child.form === 'SoilHumusXL' || child.form === 'SoilMineralXL')}
-    <p role="status" data-soil-ordinary-unavailable={child.form}>{ordinarySoilUnavailable}</p>
+  {:else if ctrl.children.ordinaryVegetationUnavailable && child.form.startsWith('SubVeg')}
+    <p role="status" data-vegetation-ordinary-unavailable={child.form}>{ctrl.children.ordinaryVegetationUnavailable}</p>
+  {:else if ctrl.children.ordinarySoilUnavailable && (child.form === 'SoilHumusXL' || child.form === 'SoilMineralXL')}
+    <p role="status" data-soil-ordinary-unavailable={child.form}>{ctrl.children.ordinarySoilUnavailable}</p>
   {:else}
-    <SourceChild name={child.form} rows={sourceRows(child.form)} revision={childRevision} disabled={true} />
+    <SourceChild
+      name={child.form}
+      rows={ctrl.children.sourceRows(child.form)}
+      revision={ctrl.children.childRevision}
+      disabled={true}
+    />
   {/if}
 {/snippet}
-{#if twoPageOpen && twoPageProject !== null}
-  {#if twoPageScope === 'entry'}
-    {#await loadSubEditor(loaders.twoPageEntry, 'Two-page complete entry', () => { twoPageOpen = false; twoPageBusy = false; twoPageProject = null; })}
+
+{#if ctrl.twoPageOpen && ctrl.twoPageProject !== null}
+  {#if ctrl.twoPageScope === 'entry'}
+    {#await loadSubEditor(loaders.twoPageEntry, 'Two-page complete entry', () => {
+      ctrl.twoPageOpen = false;
+      ctrl.twoPageBusy = false;
+      ctrl.twoPageProject = null;
+    })}
       <p role="status" data-two-page-loading="entry" class="p-3 text-xs">Loading two-page complete entry...</p>
     {:then { default: TwoPageEntryEditor }}
-      <TwoPageEntryEditor bind:this={twoPageEditor} {contextId} project={twoPageProject} plot={plotNumber}
-        initialForm={twoPageEntryInitialForm}
-        standalone={standaloneTwoPage}
-        onExtendedShrubsChange={extendedShrubsEnabled ? setExtendedShrubs : undefined}
-        pictureReaderAvailable={pictureReadingEnabled}
+      <TwoPageEntryEditor
+        bind:this={ctrl.twoPageEditor}
+        {contextId}
+        project={ctrl.twoPageProject}
+        plot={plotNumber}
+        initialForm={ctrl.twoPageEntryInitialForm}
+        standalone={ctrl.standaloneTwoPage}
+        onExtendedShrubsChange={ctrl.setExtendedShrubs}
+        pictureReaderAvailable={true}
         auditReaderAvailable={true}
         googleEarthReaderAvailable={true}
         vegetationTableReaderAvailable={true}
         environmentTableReaderAvailable={true}
         projectMetadataReaderAvailable={true}
-        projectMetadataClient={PlotService} metadataRestorationAvailable={metadataRestorationEnabled}
+        projectMetadataClient={ctrl.PlotService}
+        metadataRestorationAvailable={true}
         profilingReaderAvailable={true}
-        profilingSource={plotProfileSource}
+        profilingSource={ctrl.pState?.plotProfile?.source ?? null}
         vegetationTableSU={activeSU}
         vegetationTableSUPath={suPath}
         sourceProjectPath={projectPath}
-        externalScope={externalSUEnvironmentEnabled && separateSUSelected && !siviStandalone && projectPath && suPath
-          ? { contextId, project: activeProject, projectPath, su: activeSU, suPath } : null}
-        sourceBlocked={twoPageLinkedParentBlocked || Object.keys(headerValidation).length > 0 || twoPageSoilBusy || twoPageSoilBlocked || twoPageVegetationBusy || twoPageVegetationBlocked}
-        cache={twoPageEntrySessions} revision={twoPageRevision} onchange={() => twoPageRevision++}
-        childBlocked={twoPageSoilBusy || twoPageSoilBlocked || twoPageVegetationBusy || twoPageVegetationBlocked || pictureBusy || pictureMetadataPending}
-        onbusy={value => twoPageBusy = value}
-        onclosed={() => { twoPageOpen = false; twoPageBusy = false; twoPageProject = null; onClearError(); if (standaloneTwoPage) onCloseStandalone?.(); }}
-        onOpenProfileSU={profileReviewEnabled && !siviStandalone ? openProfileSUFromTwoPage : undefined}
-        oncommitted={() => refreshTwoPagePeers('entry')} embedded={twoPageLinkedChild} />
+        externalScope={ctrl.separateSUSelected && !ctrl.siviStandalone && projectPath && suPath
+          ? { contextId, project: activeProject, projectPath, su: activeSU, suPath }
+          : null}
+        sourceBlocked={ctrl.twoPageLinkedParentBlocked ||
+          Object.keys(ctrl.headerValidation).length > 0 ||
+          linkedChildBlocked}
+        cache={ctrl.twoPageEntrySessions}
+        revision={ctrl.twoPageRevision}
+        onchange={() => {
+          ctrl.twoPageRevision += 1;
+        }}
+        childBlocked={linkedChildBlocked || ctrl.pictureBusy || ctrl.sivi.pictureMetadataPending}
+        onbusy={(value) => {
+          ctrl.twoPageBusy = value;
+        }}
+        onclosed={() => {
+          ctrl.twoPageOpen = false;
+          ctrl.twoPageBusy = false;
+          ctrl.twoPageProject = null;
+          ctrl.error = null;
+          if (ctrl.standaloneTwoPage) onCloseStandalone?.();
+        }}
+        onOpenProfileSU={!ctrl.siviStandalone ? ctrl.openProfileSUFromTwoPage : undefined}
+        oncommitted={() => ctrl.refreshTwoPagePeers('entry')}
+        embedded={twoPageLinkedChild}
+      />
     {:catch loadError}
-      <p role="alert" data-two-page-load-error="entry" class="p-3 text-xs text-red-700">Two-page complete entry could not load: {String(loadError)}</p>
+      <p role="alert" data-two-page-load-error="entry" class="p-3 text-xs text-red-700">
+        Two-page complete entry could not load: {formatError(loadError)}
+      </p>
     {/await}
-  {:else if twoPageScope === 'common'}
-    {#await loadSubEditor(loaders.twoPageCommon, 'Two-page common fields', () => { twoPageOpen = false; twoPageBusy = false; twoPageProject = null; })}
+  {:else if ctrl.twoPageScope === 'common'}
+    {#await loadSubEditor(loaders.twoPageCommon, 'Two-page common fields', () => {
+      ctrl.twoPageOpen = false;
+      ctrl.twoPageBusy = false;
+      ctrl.twoPageProject = null;
+    })}
       <p role="status" data-two-page-loading="common" class="p-3 text-xs">Loading two-page common fields...</p>
     {:then { default: TwoPageParentCommonEditor }}
-      <TwoPageParentCommonEditor bind:this={twoPageEditor} {contextId} project={twoPageProject} plot={plotNumber}
-        initialForm={twoPageEntryInitialForm}
-        onExtendedShrubsChange={extendedShrubsEnabled ? setExtendedShrubs : undefined}
-        cache={twoPageCommonSessions} revision={twoPageRevision} onchange={() => twoPageRevision++}
-        onbusy={value => twoPageBusy = value}
-        onclosed={() => { twoPageOpen = false; twoPageBusy = false; twoPageProject = null; onClearError(); }}
-        oncommitted={() => refreshTwoPagePeers('common')} embedded={twoPageLinkedChild} />
+      <TwoPageParentCommonEditor
+        bind:this={ctrl.twoPageEditor}
+        {contextId}
+        project={ctrl.twoPageProject}
+        plot={plotNumber}
+        initialForm={ctrl.twoPageEntryInitialForm}
+        onExtendedShrubsChange={ctrl.setExtendedShrubs}
+        cache={ctrl.twoPageCommonSessions}
+        revision={ctrl.twoPageRevision}
+        onchange={() => {
+          ctrl.twoPageRevision += 1;
+        }}
+        onbusy={(value) => {
+          ctrl.twoPageBusy = value;
+        }}
+        onclosed={() => {
+          ctrl.twoPageOpen = false;
+          ctrl.twoPageBusy = false;
+          ctrl.twoPageProject = null;
+          ctrl.error = null;
+        }}
+        oncommitted={() => ctrl.refreshTwoPagePeers('common')}
+        embedded={twoPageLinkedChild}
+      />
     {:catch loadError}
-      <p role="alert" data-two-page-load-error="common" class="p-3 text-xs text-red-700">Two-page common fields could not load: {String(loadError)}</p>
+      <p role="alert" data-two-page-load-error="common" class="p-3 text-xs text-red-700">
+        Two-page common fields could not load: {formatError(loadError)}
+      </p>
     {/await}
   {:else}
-    {#await loadSubEditor(loaders.twoPageExtra, 'Two-page additional fields', () => { twoPageOpen = false; twoPageBusy = false; twoPageProject = null; })}
+    {#await loadSubEditor(loaders.twoPageExtra, 'Two-page additional fields', () => {
+      ctrl.twoPageOpen = false;
+      ctrl.twoPageBusy = false;
+      ctrl.twoPageProject = null;
+    })}
       <p role="status" data-two-page-loading="extra" class="p-3 text-xs">Loading two-page additional fields...</p>
     {:then { default: TwoPageParentEditor }}
-      <TwoPageParentEditor bind:this={twoPageEditor} {contextId} project={twoPageProject} plot={plotNumber}
-        initialForm={twoPageEntryInitialForm}
-        onExtendedShrubsChange={extendedShrubsEnabled ? setExtendedShrubs : undefined}
-        cache={twoPageSessions} revision={twoPageRevision} onchange={() => twoPageRevision++}
-        onbusy={value => twoPageBusy = value}
-        onclosed={() => { twoPageOpen = false; twoPageBusy = false; twoPageProject = null; onClearError(); }}
-        oncommitted={() => refreshTwoPagePeers('extra')} embedded={twoPageLinkedChild} />
+      <TwoPageParentEditor
+        bind:this={ctrl.twoPageEditor}
+        {contextId}
+        project={ctrl.twoPageProject}
+        plot={plotNumber}
+        initialForm={ctrl.twoPageEntryInitialForm}
+        onExtendedShrubsChange={ctrl.setExtendedShrubs}
+        cache={ctrl.twoPageSessions}
+        revision={ctrl.twoPageRevision}
+        onchange={() => {
+          ctrl.twoPageRevision += 1;
+        }}
+        onbusy={(value) => {
+          ctrl.twoPageBusy = value;
+        }}
+        onclosed={() => {
+          ctrl.twoPageOpen = false;
+          ctrl.twoPageBusy = false;
+          ctrl.twoPageProject = null;
+          ctrl.error = null;
+        }}
+        oncommitted={() => ctrl.refreshTwoPagePeers('extra')}
+        embedded={twoPageLinkedChild}
+      />
     {:catch loadError}
-      <p role="alert" data-two-page-load-error="extra" class="p-3 text-xs text-red-700">Two-page additional fields could not load: {String(loadError)}</p>
+      <p role="alert" data-two-page-load-error="extra" class="p-3 text-xs text-red-700">
+        Two-page additional fields could not load: {formatError(loadError)}
+      </p>
     {/await}
   {/if}
 {/if}
-{#if metadataOpen}
-  {#await loadSubEditor(loaders.projectMetadata, 'Project metadata editor', () => { metadataOpen = false; metadataBusy = false; })}
+
+{#if ctrl.metadataOpen}
+  {#await loadSubEditor(loaders.projectMetadata, 'Project metadata editor', () => {
+    ctrl.metadataOpen = false;
+    ctrl.metadataBusy = false;
+  })}
     <p role="status" class="p-3 text-xs">Loading project metadata editor...</p>
   {:then { default: ProjectMetadataEditor }}
-    <ProjectMetadataEditor bind:this={metadataEditor} client={PlotService} {contextId} plot={plotNumber}
-      allowCreation={metadataCreationEnabled} allowTemplateCreation={metadataTemplateCreationEnabled}
-      allowRestoration={metadataRestorationEnabled}
-      onbusy={value => metadataBusy = value}
-      onclosed={() => { metadataOpen = false; onClearError(); }}
-      oncommitted={refreshProjectMetadata} />
+    <ProjectMetadataEditor
+      bind:this={ctrl.metadataEditor}
+      client={ctrl.PlotService}
+      {contextId}
+      plot={plotNumber}
+      allowCreation={true}
+      allowTemplateCreation={true}
+      allowRestoration={true}
+      onbusy={(value) => {
+        ctrl.metadataBusy = value;
+      }}
+      onclosed={() => {
+        ctrl.metadataOpen = false;
+        ctrl.error = null;
+      }}
+      oncommitted={() => ctrl.sivi.refreshProjectMetadata(plotNumber)}
+    />
   {:catch loadError}
-    <p role="alert" class="p-3 text-xs text-red-700">Project metadata editor could not load: {String(loadError)}</p>
+    <p role="alert" class="p-3 text-xs text-red-700">
+      Project metadata editor could not load: {formatError(loadError)}
+    </p>
   {/await}
 {/if}
-{#if codeCheckOpen}
-  {#await loadSubEditor(loaders.speciesCodeCheck, 'Species code check', () => { codeCheckOpen = false; codeCheckBusy = false; })}
+
+{#if ctrl.codeCheckOpen}
+  {#await loadSubEditor(loaders.speciesCodeCheck, 'Species code check', () => {
+    ctrl.codeCheckOpen = false;
+    ctrl.codeCheckBusy = false;
+  })}
     <p role="status" class="p-3 text-xs">Loading species code check...</p>
   {:then { default: SpeciesCodeCheck }}
-    <SpeciesCodeCheck bind:this={codeCheckEditor} client={PlotService}
-      onbusy={value => codeCheckBusy = value}
-      onclosed={() => { codeCheckOpen = false; onClearError(); }}
-      oncommitted={() => loadChildData(plotNumber)} />
+    <SpeciesCodeCheck
+      bind:this={ctrl.codeCheckEditor}
+      client={ctrl.PlotService}
+      onbusy={(value) => {
+        ctrl.codeCheckBusy = value;
+      }}
+      onclosed={() => {
+        ctrl.codeCheckOpen = false;
+        ctrl.error = null;
+      }}
+      oncommitted={() => ctrl.children.loadChildData(plotNumber)}
+    />
   {:catch loadError}
-    <p role="alert" class="p-3 text-xs text-red-700">Species code check could not load: {String(loadError)}</p>
+    <p role="alert" class="p-3 text-xs text-red-700">Species code check could not load: {formatError(loadError)}</p>
   {/await}
 {/if}

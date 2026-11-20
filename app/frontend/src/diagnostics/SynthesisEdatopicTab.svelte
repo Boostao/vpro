@@ -59,8 +59,8 @@
           class="syn-pill-btn"
           class:active={selectedEdatopicScope === ug.siteUnit}
           class:drop-active={dragOverUnit === ug.siteUnit}
-          ondragover={ev => onUnitDragOver(ev, ug.siteUnit)}
-          ondrop={ev => onUnitDrop(ev, ug.siteUnit)}
+          ondragover={(ev) => onUnitDragOver(ev, ug.siteUnit)}
+          ondrop={(ev) => onUnitDrop(ev, ug.siteUnit)}
           onclick={() => onSelectScope(ug.siteUnit)}
         >
           {ug.siteUnit} ({ug.plottedEdatopicCount}/{ug.totalPlots})
@@ -102,10 +102,8 @@
                     {@const heat = edatopicHeatLevel(cell.prominence, cell.plotCount)}
                     <td
                       class="eda-cell eda-heat-{heat}"
-                      class:eda-selected={
-                        inspectedEdatopicCell?.smr === cell.smr &&
-                        inspectedEdatopicCell?.snr === cell.snr
-                      }
+                      class:eda-selected={inspectedEdatopicCell?.smr === cell.smr &&
+                        inspectedEdatopicCell?.snr === cell.snr}
                       onclick={() => onSelectCell(cell)}
                       title={`rSMR ${cell.smr} / rSNR ${cell.snr}: ${cell.plotCount} plots (${cell.prominence.toFixed(1)}% prominence)`}
                     >
@@ -130,19 +128,15 @@
           {:else}
             <p class="eda-inspected-title">
               <strong>rSMR {inspectedEdatopicCell.smr}{inspectedEdatopicCell.snr}</strong>
-              ({SMR_DESCRIPTIONS[inspectedEdatopicCell.smr]} / {SNR_DESCRIPTIONS[inspectedEdatopicCell.snr]})
-              — {inspectedEdatopicCell.plotCount} plots ({inspectedEdatopicCell.prominence.toFixed(1)}% prominence)
+              ({SMR_DESCRIPTIONS[inspectedEdatopicCell.smr]} / {SNR_DESCRIPTIONS[inspectedEdatopicCell.snr]}) — {inspectedEdatopicCell.plotCount}
+              plots ({inspectedEdatopicCell.prominence.toFixed(1)}% prominence)
             </p>
             {#if inspectedEdatopicCell.plotNumbers.length === 0}
               <p class="syn-muted">No plots occupy this edatopic position.</p>
             {:else}
               <div class="eda-plot-chips">
                 {#each inspectedEdatopicCell.plotNumbers as pNum (pNum)}
-                  <button
-                    type="button"
-                    class="plot-jump-chip"
-                    onclick={() => onOpenPlot?.(pNum)}
-                  >
+                  <button type="button" class="plot-jump-chip" onclick={() => onOpenPlot?.(pNum)}>
                     {pNum}
                   </button>
                 {/each}

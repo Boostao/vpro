@@ -1,8 +1,5 @@
 <script lang="ts">
-  import type {
-    OptimizeVegPreview,
-    OptimizeVegResult,
-  } from './projectAdminWorkbench';
+  import type { OptimizeVegPreview, OptimizeVegResult } from './projectAdminWorkbench';
 
   let {
     busy,
@@ -32,20 +29,26 @@
 <div class="space-y-4">
   <div class="space-y-3 rounded border border-vpro-border bg-vpro-canvas p-3">
     <div class="text-xs text-vpro-ink">
-      Preview Before Saving: combines duplicate <span class="font-mono">(PlotNumber, Species)</span> rows in one step using <span class="font-semibold">MAX(Height*)</span> while capping summed cover under 100% (99% limit) and reserving retired child IDs so they are never reused.
+      Preview Before Saving: combines duplicate <span class="font-mono">(PlotNumber, Species)</span> rows in one step
+      using <span class="font-semibold">MAX(Height*)</span> while capping summed cover under 100% (99% limit) and reserving
+      retired child IDs so they are never reused.
     </div>
     <div class="flex flex-wrap items-end gap-3">
       <div class="min-w-0 flex-1 space-y-1">
-        <label class="block text-xs font-semibold text-vpro-ink" for="opt-plot-filter">Plot Subset Filter (comma-separated, blank = all plots)</label>
-        <input id="opt-plot-filter" type="text" class="w-full rounded border border-vpro-border-strong bg-white p-2 text-xs font-mono" bind:value={optPlotNumbersRaw} disabled={busy} placeholder="e.g. 00337, 108050" />
+        <label class="block text-xs font-semibold text-vpro-ink" for="opt-plot-filter"
+          >Plot Subset Filter (comma-separated, blank = all plots)</label
+        >
+        <input
+          id="opt-plot-filter"
+          type="text"
+          class="w-full rounded border border-vpro-border-strong bg-white p-2 text-xs font-mono"
+          bind:value={optPlotNumbersRaw}
+          disabled={busy}
+          placeholder="e.g. 00337, 108050"
+        />
       </div>
       <label class="flex items-center gap-2 text-xs text-vpro-ink">
-        <input
-          type="checkbox"
-          bind:checked={optCustodianAuditOverride}
-          disabled={busy}
-          onchange={onOverrideChange}
-        />
+        <input type="checkbox" bind:checked={optCustodianAuditOverride} disabled={busy} onchange={onOverrideChange} />
         Custodian Audit Override (allow retiring _Audit-referenced IDs)
       </label>
       <button
@@ -79,17 +82,25 @@
       </div>
       <div class="rounded border border-vpro-border p-3">
         <div class="text-xs text-vpro-ink-secondary">Unresolved Conflicts</div>
-        <div class={`text-lg font-bold ${optUnresolvedConflictCount > 0 ? 'text-vpro-error' : 'text-vpro-success'}`}>{optUnresolvedConflictCount}</div>
+        <div class={`text-lg font-bold ${optUnresolvedConflictCount > 0 ? 'text-vpro-error' : 'text-vpro-success'}`}>
+          {optUnresolvedConflictCount}
+        </div>
       </div>
     </div>
 
     {#if (optPreview.conflicts?.length ?? 0) > 0}
       <div class="space-y-2 rounded border border-vpro-error bg-vpro-error-bg p-3">
-        <h3 class="m-0 text-xs font-bold text-vpro-error">Blocking Conflicts ({optPreview.conflicts?.length}) — Commit Disabled Until Resolved</h3>
+        <h3 class="m-0 text-xs font-bold text-vpro-error">
+          Blocking Conflicts ({optPreview.conflicts?.length}) — Commit Disabled Until Resolved
+        </h3>
         <div class="overflow-x-auto rounded border border-vpro-border bg-white">
           <table class="w-full text-left text-xs">
             <thead class="bg-vpro-canvas text-vpro-ink">
-              <tr><th class="p-2">Plot</th><th class="p-2">Species</th><th class="p-2">Field</th><th class="p-2">Reason</th><th class="p-2">Conflicting Values</th><th class="p-2">Overrideable</th></tr>
+              <tr
+                ><th class="p-2">Plot</th><th class="p-2">Species</th><th class="p-2">Field</th><th class="p-2"
+                  >Reason</th
+                ><th class="p-2">Conflicting Values</th><th class="p-2">Overrideable</th></tr
+              >
             </thead>
             <tbody>
               {#each optPreview.conflicts ?? [] as c}
@@ -110,11 +121,17 @@
 
     {#if (optPreview.auditReferences?.length ?? 0) > 0}
       <div class="space-y-2 rounded border border-vpro-gold bg-vpro-warning-bg p-3">
-        <h3 class="m-0 text-xs font-bold text-vpro-ink">Retired IDs Referenced in _Audit ({optPreview.auditReferences?.length})</h3>
+        <h3 class="m-0 text-xs font-bold text-vpro-ink">
+          Retired IDs Referenced in _Audit ({optPreview.auditReferences?.length})
+        </h3>
         <div class="overflow-x-auto rounded border border-vpro-border bg-white">
           <table class="w-full text-left text-xs">
             <thead class="bg-vpro-canvas text-vpro-ink">
-              <tr><th class="p-2">Plot</th><th class="p-2">Species</th><th class="p-2">Retired ID</th><th class="p-2">Table.Field</th><th class="p-2">EditWhen</th></tr>
+              <tr
+                ><th class="p-2">Plot</th><th class="p-2">Species</th><th class="p-2">Retired ID</th><th class="p-2"
+                  >Table.Field</th
+                ><th class="p-2">EditWhen</th></tr
+              >
             </thead>
             <tbody>
               {#each optPreview.auditReferences ?? [] as ref}
@@ -133,7 +150,9 @@
     {/if}
 
     {#if optPreview.duplicateSpeciesCount > 0}
-      <div class="flex flex-wrap items-center justify-between gap-3 rounded border border-vpro-gold bg-vpro-warning-bg p-3">
+      <div
+        class="flex flex-wrap items-center justify-between gap-3 rounded border border-vpro-gold bg-vpro-warning-bg p-3"
+      >
         <label class="flex items-center gap-2 text-xs font-semibold text-vpro-ink">
           <input
             type="checkbox"
@@ -177,9 +196,19 @@
                 <td class="p-2">{grp.sourceRowCount}</td>
                 <td class="p-2 font-mono">{grp.survivorId}</td>
                 <td class="p-2 font-mono">{grp.retiredIds.join(', ')}</td>
-                <td class="p-2 font-mono">{Object.entries(grp.mergedCovers).map(([k, v]) => `${k}=${v}`).join(', ')}</td>
-                <td class="p-2 font-mono">{Object.entries(grp.mergedHeights).map(([k, v]) => `${k}=${v}`).join(', ')}</td>
-                <td class="p-2 font-semibold {grp.blocked ? 'text-vpro-error' : 'text-vpro-success'}">{grp.blocked ? (grp.blockedReasons?.join('; ') || 'Blocked') : 'Ready'}</td>
+                <td class="p-2 font-mono"
+                  >{Object.entries(grp.mergedCovers)
+                    .map(([k, v]) => `${k}=${v}`)
+                    .join(', ')}</td
+                >
+                <td class="p-2 font-mono"
+                  >{Object.entries(grp.mergedHeights)
+                    .map(([k, v]) => `${k}=${v}`)
+                    .join(', ')}</td
+                >
+                <td class="p-2 font-semibold {grp.blocked ? 'text-vpro-error' : 'text-vpro-success'}"
+                  >{grp.blocked ? grp.blockedReasons?.join('; ') || 'Blocked' : 'Ready'}</td
+                >
               </tr>
             {/each}
           </tbody>
@@ -189,6 +218,10 @@
   {/if}
 
   {#if optResult}
-    <p class="text-xs text-vpro-ink">Applied OptimizeVeg: {optResult.beforeRowCount} -&gt; {optResult.afterRowCount} rows; retired IDs reserved: {optResult.reservedDeletedIds.join(', ') || 'none'}.</p>
+    <p class="text-xs text-vpro-ink">
+      Applied OptimizeVeg: {optResult.beforeRowCount} -&gt; {optResult.afterRowCount} rows; retired IDs reserved: {optResult.reservedDeletedIds.join(
+        ', '
+      ) || 'none'}.
+    </p>
   {/if}
 </div>

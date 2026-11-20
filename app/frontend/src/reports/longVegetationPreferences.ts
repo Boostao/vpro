@@ -1,17 +1,28 @@
 import type { LongVegetationPreferencesReview } from '../../bindings/github.com/boostao/vpro/app';
-import type { GoogleEarthScope } from '../spatial/googleEarthReview';
+import type { ProjectSUScope as GoogleEarthScope } from '../shared/scope';
 import {
-  ReportTitlePreferencesSession, reportTitlePreferencesRegistry, validateReportTitlePreferences,
-  type ReportTitlePreferenceRequest, type ReportTitlePreferenceReceipt, type ReportTitlePreferencesView,
+  ReportTitlePreferencesSession,
+  reportTitlePreferencesRegistry,
+  validateReportTitlePreferences,
+  type ReportTitlePreferenceRequest,
+  type ReportTitlePreferenceReceipt,
+  type ReportTitlePreferencesView,
 } from './reportTitlePreferences';
 
 export type LongVegetationPreferenceRequest = ReportTitlePreferenceRequest;
 export type LongVegetationPreferenceReceipt = ReportTitlePreferenceReceipt;
 export type LongVegetationPreferencesView = ReportTitlePreferencesView;
-export function validateLongVegetationPreferences(value: LongVegetationPreferencesReview | null, scope: GoogleEarthScope): LongVegetationPreferencesReview {
+export function validateLongVegetationPreferences(
+  value: LongVegetationPreferencesReview | null,
+  scope: GoogleEarthScope
+): LongVegetationPreferencesReview {
   return validateReportTitlePreferences(value, scope, 'Long Vegetation');
 }
 export class LongVegetationPreferencesSession extends ReportTitlePreferencesSession {
-  constructor(scope: GoogleEarthScope) { super(scope, 'Long Vegetation'); }
+  constructor(scope: GoogleEarthScope) {
+    super(scope, 'Long Vegetation');
+  }
 }
-export const longVegetationPreferencesSession = reportTitlePreferencesRegistry(scope => new LongVegetationPreferencesSession(scope));
+export const longVegetationPreferencesSession = reportTitlePreferencesRegistry(
+  (scope) => new LongVegetationPreferencesSession(scope)
+);

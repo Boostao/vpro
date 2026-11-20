@@ -5,17 +5,10 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { compile } = require('svelte/compiler');
 const { render } = require('svelte/server');
-const { componentFunctions, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
+const { componentFunctions, loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
 
 const source = readFileSync(srcPath('StartupRecoveryPanel.svelte'), 'utf8');
-const moduleBlock = source.match(/<script lang="ts" module>([\s\S]*?)<\/script>/)[1];
-const moduleExports = {};
-vm.runInNewContext(
-  ts.transpileModule(moduleBlock, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  }).outputText,
-  { exports: moduleExports }
-);
+const moduleExports = loadTypeScript('startupRecovery.ts');
 
 const {
   detectSupportDatabaseFailure,

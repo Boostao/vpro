@@ -6,9 +6,15 @@ import { validSIVIRequestId } from './siviRequestId';
 import type { VegetationReferences } from './twoPageVegetationReferences';
 import { stageVegetationSpeciesList, requireVegetationSpeciesListCovers } from './twoPageVegetationSpeciesList';
 import {
-  equalVegetationCell, vegetationNullCell, vegetationSourceCell, twoPageVegetationSource,
-  twoPageVegetationOriginalFromWire, type TwoPageVegetationEdit, type TwoPageVegetationOriginal,
-  type TwoPageVegetationOwner, type TwoPageVegetationRequest,
+  equalVegetationCell,
+  vegetationNullCell,
+  vegetationSourceCell,
+  twoPageVegetationSource,
+  twoPageVegetationOriginalFromWire,
+  type TwoPageVegetationEdit,
+  type TwoPageVegetationOriginal,
+  type TwoPageVegetationOwner,
+  type TwoPageVegetationRequest,
 } from './twoPageVegetationWire';
 
 export interface TwoPageVegetationDraft extends TwoPageVegetationEdit {
@@ -26,22 +32,35 @@ export function twoPageVegetationFields(original: TwoPageVegetationOriginal): st
 export function twoPageVegetationEditableID(original: TwoPageVegetationOriginal, rowId: string): number {
   if (!original.sourceRowIds.includes(rowId)) throw new Error('Vegetation row is outside this original source query.');
   const identity = vegetationSourceCell(original, rowId, 'ID');
-  if (identity.storage !== 'integer' || identity.integer === null || !exactSigned64(identity.integer) ||
-    BigInt(identity.integer) < -2147483648n || BigInt(identity.integer) > 2147483647n) {
+  if (
+    identity.storage !== 'integer' ||
+    identity.integer === null ||
+    !exactSigned64(identity.integer) ||
+    BigInt(identity.integer) < -2147483648n ||
+    BigInt(identity.integer) > 2147483647n
+  ) {
     throw new Error('NULL/noninteger vegetation IDs remain read-only; a signed32 original ID is required.');
   }
   return Number(identity.integer);
 }
 
-export function stageTwoPageVegetation(original: TwoPageVegetationOriginal, rowId: string, column: string,
-  raw: string, nullValue: boolean, speciesList?: VegetationReferences): TwoPageVegetationDraft {
+export function stageTwoPageVegetation(
+  original: TwoPageVegetationOriginal,
+  rowId: string,
+  column: string,
+  raw: string,
+  nullValue: boolean,
+  speciesList?: VegetationReferences
+): TwoPageVegetationDraft {
   twoPageVegetationEditableID(original, rowId);
-  if (column === 'Species' && speciesList) return stageVegetationSpeciesList(original, rowId, raw, nullValue, speciesList);
+  if (column === 'Species' && speciesList)
+    return stageVegetationSpeciesList(original, rowId, raw, nullValue, speciesList);
   if (!twoPageVegetationFields(original).includes(column)) {
     throw new Error('Vegetation field is outside its source bindings; Species callbacks remain unavailable.');
   }
   const expected = vegetationSourceCell(original, rowId, column);
-  let value = vegetationNullCell(), error: string | null = null;
+  let value = vegetationNullCell(),
+    error: string | null = null;
   if (!nullValue) {
     if (!wellFormedUTF16(raw)) error = `${column} contains incomplete Unicode; raw input was not repaired.`;
     else if (expected.storage !== 'null' && raw === metadataCellText(expected)) value = { ...expected };
@@ -61,30 +80,61 @@ export function stageTwoPageVegetation(original: TwoPageVegetationOriginal, rowI
       } else value = { ...value, storage: 'real', real: Math.fround(parsed.value) };
     }
   }
-  return { contextId: original.contextId, form: original.form, rowId, column,
-    expected: { ...expected }, value, raw, nullValue, error };
+  return {
+    contextId: original.contextId,
+    form: original.form,
+    rowId,
+    column,
+    expected: { ...expected },
+    value,
+    raw,
+    nullValue,
+    error,
+  };
 }
 
-export function twoPageVegetationRequest(original: TwoPageVegetationOriginal, owner: TwoPageVegetationOwner,
-  drafts: TwoPageVegetationDrafts, requestId: string, speciesList?: VegetationReferences): TwoPageVegetationRequest {
+export function twoPageVegetationRequest(
+  original: TwoPageVegetationOriginal,
+  owner: TwoPageVegetationOwner,
+  drafts: TwoPageVegetationDrafts,
+  requestId: string,
+  speciesList?: VegetationReferences
+): TwoPageVegetationRequest {
   const reviewed = twoPageVegetationOriginalFromWire(original, owner);
   if (!validSIVIRequestId(requestId)) throw new Error('Vegetation Save requires a retained lowercase UUIDv4.');
-  const edits: TwoPageVegetationEdit[] = [], seen = new Set<string>();
+  const edits: TwoPageVegetationEdit[] = [],
+    seen = new Set<string>();
   for (const draft of Object.values(drafts)) {
     const staged = stageTwoPageVegetation(reviewed, draft.rowId, draft.column, draft.raw, draft.nullValue, speciesList);
     const key = JSON.stringify([draft.rowId, draft.column]);
-    if (draft.contextId !== owner.contextId || draft.form !== owner.form || seen.has(key) ||
-      !equalVegetationCell(draft.expected, staged.expected) || draft.error || staged.error ||
-      !equalVegetationCell(draft.value, staged.value)) {
-      throw new Error(draft.error ?? staged.error ?? 'Vegetation draft belongs to another original or has inconsistent raw/value state.');
+    if (
+      draft.contextId !== owner.contextId ||
+      draft.form !== owner.form ||
+      seen.has(key) ||
+      !equalVegetationCell(draft.expected, staged.expected) ||
+      draft.error ||
+      staged.error ||
+      !equalVegetationCell(draft.value, staged.value)
+    ) {
+      throw new Error(
+        draft.error ??
+          staged.error ??
+          'Vegetation draft belongs to another original or has inconsistent raw/value state.'
+      );
     }
     seen.add(key);
     if (equalVegetationCell(staged.expected, staged.value)) continue;
-    edits.push({ contextId: owner.contextId, form: owner.form, rowId: staged.rowId, column: staged.column,
-      expected: { ...staged.expected }, value: { ...staged.value } });
+    edits.push({
+      contextId: owner.contextId,
+      form: owner.form,
+      rowId: staged.rowId,
+      column: staged.column,
+      expected: { ...staged.expected },
+      value: { ...staged.value },
+    });
   }
   if (!edits.length) throw new Error('Vegetation Save requires at least one explicit changed data cell.');
-  if (edits.some(edit => edit.column === 'Species')) {
+  if (edits.some((edit) => edit.column === 'Species')) {
     if (!speciesList) throw new Error('Species selection requires retained physical references.');
     requireVegetationSpeciesListCovers(reviewed, edits);
     return { requestId, original: reviewed, edits, speciesList };

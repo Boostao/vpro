@@ -10,4 +10,3 @@ declare module '*.mjs?worker&url' {
   const src: string;
   export default src;
 }
-

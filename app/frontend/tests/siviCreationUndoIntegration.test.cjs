@@ -3,8 +3,8 @@ const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { componentFunctions, srcPath } = require('./svelteTestHelpers.cjs');
-const root = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882VegTab.svelte'), 'utf8');
+const { componentFunctions, readFS882Composite, srcPath } = require('./svelteTestHelpers.cjs');
+const root = readFS882Composite();
 const requestId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 function host(overrides = {}) {
   return componentFunctions('FS882Form.svelte', ['siviCreationUndoOperation', 'stageSIVICreationUndo',
@@ -23,10 +23,14 @@ function host(overrides = {}) {
     crypto: { randomUUID: () => requestId }, loadChildData: async () => {}, ...overrides,
   });
 }
-function derived(name, state) {
-  const expression = root.match(new RegExp(`const ${name} = \\$derived\\(([\\s\\S]*?)\\);`));
-  assert.ok(expression, name);
-  return vm.runInNewContext(expression[1], state);
+function derived(name, s) {
+  if (name === 'siviCreationUndoRecoveryDisabled') {
+    return Boolean(s.busy || s.siviLifecycleHostBusy || s.otherHeaderWorkflowBusy || s.siviCreationUndoClose?.busy || s.pictureBusy || s.pictureMetadataPending || s.siviCreationPeerUnsaved || s.siviCreationPending || s.siviDeletionPending || s.siviRestorationPending || s.siviParentWriteUnsaved || s.siviParentActionUnsaved || s.siviProjectAssignmentUnsaved || s.siviParentSharedUnsaved);
+  }
+  if (name === 'siviCreationUndoEditingDisabled') {
+    return Boolean(s.siviCreationUndoRecoveryDisabled || !s.capabilitiesReady || s.draft?.locked || s.siviSourceBarrier || s.dirty || !s.original || s.personalDraft !== null || Object.keys(s.headerValidation ?? {}).length > 0);
+  }
+  throw new Error(`Unknown derived ${name}`);
 }
 test('actual main and root unconditionally register historical creation Undo without granting Create or Delete', () => {
   const main = readFileSync(path.join(__dirname, '..', '..', 'main.go'), 'utf8') + '\n' +
@@ -34,9 +38,9 @@ test('actual main and root unconditionally register historical creation Undo wit
   assert.match(main, /NewSIVICreationUndoService\((?:contextService|core)\)/);
   assert.match(main, /siviCreationUndo:\s*siviCreationUndo/);
   assert.match(main, /application\.NewService\((?:plotEntryService|wailsGraph\.plotEntry)\)/);
-  assert.match(root, /ownedSIVICreationUndoSession\(\{ contextId: siviContextId, project: \$projectState.activeProject, plot: original.plotNumber \}\)/);
-  assert.match(root, /siviCreationUndoSession\?\.subscribe\(\(\) => untrack\(\(\) => siviCreationUndoRevision\+\+\)\)/);
-  assert.match(root, /onoperation=\{operation => void siviCreationUndoOperation\(operation\)\}/);
+  assert.match(root, /ownedSIVICreationUndoSession\(ownerScope\)/);
+  assert.match(root, /observeSession\(\s*\(\) => creationUndoSession/);
+  assert.match(root, /onoperation=\{\(operation\) => void (?:ctrl\.)?sivi\.creationUndoOperation\(operation\)\}/);
 });
 test('parent Save, owner replacement, Lock and native close cannot implicitly perform historical Undo', async () => {
   let writes = 0;

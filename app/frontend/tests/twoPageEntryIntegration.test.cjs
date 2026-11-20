@@ -87,10 +87,14 @@ test('source-held callbacks cannot stage, save, switch or close a retained sourc
 
 test('actual mapped picture activity holds parent callbacks and source action until owner-local Cancel completes', async () => {
   const source = readFileSync(srcPath('FS882Modals.svelte'), 'utf8');
+  const linkedExpr = source.match(/const linkedChildBlocked = \$derived\(\s*([\s\S]*?)\s*\);/)?.[1];
   const expression = source.match(/childBlocked=\{([^}]+)\}/)?.[1];
-  assert.ok(expression);
+  assert.ok(linkedExpr && expression);
   const keys = ['twoPageSoilBusy', 'twoPageSoilBlocked', 'twoPageVegetationBusy', 'twoPageVegetationBlocked', 'pictureBusy', 'pictureMetadataPending'];
-  const blocked = new Function(...keys, `return ${expression};`);
+  const blocked = new Function(
+    ...keys,
+    `const ctrl = { twoPageSoilBusy, twoPageSoilBlocked, twoPageVegetationBusy, twoPageVegetationBlocked, pictureBusy, sivi: { pictureMetadataPending } }; const linkedChildBlocked = (${linkedExpr}); return (${expression});`
+  );
   const clean = { unsaved: false, busy: false, blocked: false, error: null };
   const calls = [];
   const host = componentFunctions('TwoPageEntryEditor.svelte',
@@ -125,7 +129,7 @@ test('actual mapped picture activity holds parent callbacks and source action un
 });
 
 test('actual reference option keys preserve Zone DISTINCT tuples and duplicate physical code identities', () => {
-  const source = readFileSync(srcPath('TwoPageEntryEditor.svelte'), 'utf8');
+  const source = readFileSync(srcPath('TwoPageEntryFieldInput.svelte'), 'utf8');
   const expression = source.match(/as choice \((.*)\)\}/)?.[1];
   assert.ok(expression);
   const key = new Function('choice', `return ${expression};`);
@@ -153,11 +157,11 @@ test('actual root visibility expression hides the ordinary host for entry indepe
     let { twoPageOpen, twoPageScope, twoPageSourceLayoutEnabled } = $props();
     </script><div hidden={${expression}} data-two-page-ordinary-host><input aria-label="Retained ordinary field" /></div>`,
   'TwoPageEntryHostVisibility.svelte', {});
-  for (const twoPageOpen of [false, true]) for (const twoPageSourceLayoutEnabled of [false, true]) {
+  for (const twoPageOpen of [false, true]) {
     for (const twoPageScope of ['entry', 'common', 'extra']) {
-      const html = render(Component, { props: { twoPageOpen, twoPageSourceLayoutEnabled, twoPageScope } }).body;
+      const html = render(Component, { props: { twoPageOpen, twoPageScope } }).body;
       assert.match(html, /Retained ordinary field/);
-      assert.equal(/<div hidden(?:[ =>])/.test(html), twoPageOpen && (twoPageScope === 'entry' || twoPageSourceLayoutEnabled), html);
+      assert.equal(/<div hidden(?:[ =>])/.test(html), twoPageOpen, html);
     }
   }
 });

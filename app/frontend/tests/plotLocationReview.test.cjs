@@ -80,16 +80,18 @@ test('location validation detaches before yielding large snapshots to keep cance
   assert.equal(yields,1);assert.equal(JSON.stringify(result),JSON.stringify(expected));
 });
 
-test('location UI remains independently gated, cancellable and uses shared draft/context/native-close barriers',()=>{
+test('location UI remains independently gated, cancellable and uses shared draft/context/native-close barriers', async () => {
+  const { renderShellDeferredViews, componentFunctions } = require('./svelteTestHelpers.cjs');
   const component=readFileSync(srcPath('PlotLocationReview.svelte'),'utf8');
-  const app=readFileSync(srcPath('App.svelte'),'utf8');
   const navigation=readFileSync(srcPath('Navigation.svelte'),'utf8');
   assert.equal(compile(component,{filename:'PlotLocationReview.svelte',generate:'client'}).warnings.length,0);
   assert.match(navigation,/name: 'Plot Locations', icon: FileText, view: 'plot-locations'/);
-  assert.match(app,/view === 'plot-locations' && \$projectState/);
-  assert.match(app,/function navigate[\s\S]*?requestTransition/);
-  assert.match(app,/busy \|\| editorBusy \|\| transitionWorking/);
-  assert.match(component,/reads\.track\(SpatialService\.GetPlotLocationReview\(contextId\)\)/);
+  assert.equal(renderShellDeferredViews('plot-locations', null), '');
+  assert.match(renderShellDeferredViews('plot-locations', { contextId: 'c1', activeProject: 'Sample' }), /Loading Plot Location Review/);
+  const appCtx = componentFunctions('App.svelte', ['navigate', 'requestTransition'], { editorBusy: true });
+  await appCtx.actions.navigate('plot-locations');
+  assert.match(appCtx.error, /Wait for the current operation/);
+  assert.match(component,/reads\.track\(\s*SpatialService\.GetPlotLocationReview\(contextId\)\s*\)/);
   assert.match(component,/const validated = await validatePlotLocationReview[\s\S]*?if \(request !== generation\) return;[\s\S]*?review = validated/);
   assert.match(component,/onDestroy\(cancel\)/);assert.match(component,/reads\.cancelAll\(\)/);
   assert.match(component,/scope="col"/);assert.match(component,/aria-label=.*Env row/);

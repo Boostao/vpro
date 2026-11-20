@@ -62,15 +62,29 @@ test('SU transfer remains independently gated and shared lifecycle guards preven
   for(const file of ['EnvironmentSUTransfer.svelte','FS882Form.svelte']) {
     assert.equal(compile(read(file),{filename:file,generate:'client'}).warnings.length,0);
   }
-  const panel=read('EnvironmentSUTransfer.svelte'), root=read('FS882Form.svelte');
-  assert.match(root,/independentHeaderWorkflowBusy = \$derived\([^;]+environmentSUOpen/);
-  assert.match(root,/otherHeaderWorkflowBusy = \$derived\(independentHeaderWorkflowBusy \|\| twoPageOpen \|\| twoPageBusy\)/);
-  assert.match(root,/headerWorkflowBusy = \$derived\(otherHeaderWorkflowBusy \|\| pictureBusy \|\| pictureMetadataPending \|\| twoPageSoilBusy \|\| twoPageSoilBlocked \|\| twoPageVegetationBusy \|\| twoPageVegetationBlocked\)/);
-  assert.match(root,/if \(environmentSUOpen\) return environmentSUEditor\?\.getCloseState/);
-  assert.match(root,/if \(environmentSUOpen\) \{ environmentSUEditor\?\.undo/);
-  assert.match(root,/data-source-control="btnEnvIntoSu"/);
+  const { createFS882TestController, readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const panel=read('EnvironmentSUTransfer.svelte'), composite=readFS882Composite();
+  const h = createFS882TestController();
+  try {
+    let closedState = { unsaved: true, canSave: false, busy: true, blocked: false, reason: 'SU review active' };
+    let undone = 0;
+    h.ctrl.environmentSUEditor = {
+      getCloseState: () => closedState,
+      undo: () => { undone++; },
+    };
+    h.ctrl.environmentSUOpen = true;
+    h.flush();
+    assert.equal(h.ctrl.otherHeaderWorkflowBusy, true);
+    assert.equal(h.ctrl.headerWorkflowBusy, true);
+    assert.equal(h.ctrl.getCloseState().reason, 'SU review active');
+    h.ctrl.undo();
+    assert.equal(undone, 1);
+  } finally {
+    h.dispose();
+  }
+  assert.match(composite,/data-source-control="btnEnvIntoSu"/);
   assert.match(panel,/\$state\.snapshot\(review\)/);
-  assert.match(panel,/committed = true; review = null;[\s\S]*validateEnvironmentSUResult/);
+  assert.match(panel,/committed = true;\s*review = null;[\s\S]*validateEnvironmentSUResult/);
   assert.match(panel,/review kept for retry/);
   assert.match(panel,/not only the displayed plot or profile-navigation subset/);
   assert.doesNotMatch(panel,/window\.confirm/);

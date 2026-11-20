@@ -1,46 +1,92 @@
-import { ImportExportService, type TableCSVArchiveReview, type TableCSVArchiveOutcome } from '../../bindings/github.com/boostao/vpro/app';
-import { coreTableSuffixes, validateProjectTableCSVReview, type ValidatedProjectTableCSVReview } from './projectTableCSV';
+import { registerContextDisposer } from '../shared/contextSessionRegistry';
+import {
+  ImportExportService,
+  type TableCSVArchiveReview,
+  type TableCSVArchiveOutcome,
+} from '../../bindings/github.com/boostao/vpro/app';
+import {
+  coreTableSuffixes,
+  validateProjectTableCSVReview,
+  type ValidatedProjectTableCSVReview,
+} from './projectTableCSV';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 
 export function chooseTableCSVArchiveFile(): Promise<string> {
   return ImportExportService.ChooseTableCSVArchiveFile();
 }
 
-export interface TableCSVArchiveOwner { contextId: string; project: string; projectPath: string }
-export type ValidatedTableCSVArchiveReview = Omit<TableCSVArchiveReview, 'review'> & { review: ValidatedProjectTableCSVReview };
+export interface TableCSVArchiveOwner {
+  contextId: string;
+  project: string;
+  projectPath: string;
+}
+export type ValidatedTableCSVArchiveReview = Omit<TableCSVArchiveReview, 'review'> & {
+  review: ValidatedProjectTableCSVReview;
+};
 const hash = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
-const text = (value: unknown): value is string => typeof value === 'string' && wellFormedUTF16(value) && !value.includes('\0');
+const text = (value: unknown): value is string =>
+  typeof value === 'string' && wellFormedUTF16(value) && !value.includes('\0');
 export const validTableCSVArchiveDestination = (value: unknown): value is string => text(value) && value.length > 0;
 const sameOwner = (left: TableCSVArchiveOwner, right: TableCSVArchiveOwner) =>
   left.contextId === right.contextId && left.project === right.project && left.projectPath === right.projectPath;
 const ownedTable = (owner: TableCSVArchiveOwner, table: string) =>
-  coreTableSuffixes.some(suffix => table === `${owner.project}_${suffix}`);
+  coreTableSuffixes.some((suffix) => table === `${owner.project}_${suffix}`);
 
-export async function validateTableCSVArchiveReview(value: TableCSVArchiveReview | null,
-  owner: TableCSVArchiveOwner, table: string, checksum?: (csv: string) => Promise<string>): Promise<ValidatedTableCSVArchiveReview> {
+export async function validateTableCSVArchiveReview(
+  value: TableCSVArchiveReview | null,
+  owner: TableCSVArchiveOwner,
+  table: string,
+  checksum?: (csv: string) => Promise<string>
+): Promise<ValidatedTableCSVArchiveReview> {
   const detached = value ? structuredClone(value) : null;
   const scope = structuredClone(owner);
-  if (!detached || !hash(detached.approvalHash) || !hash(detached.archiveSHA256) ||
-      detached.format !== 'vpro-owned-table-csv' || detached.version !== 1 ||
-      !Number.isSafeInteger(detached.byteCount) || detached.byteCount <= 0) {
-    throw new Error('Project table CSV archive review has an incomplete format, version, source approval, archive hash or byte count.');
+  if (
+    !detached ||
+    !hash(detached.approvalHash) ||
+    !hash(detached.archiveSHA256) ||
+    detached.format !== 'vpro-owned-table-csv' ||
+    detached.version !== 1 ||
+    !Number.isSafeInteger(detached.byteCount) ||
+    detached.byteCount <= 0
+  ) {
+    throw new Error(
+      'Project table CSV archive review has an incomplete format, version, source approval, archive hash or byte count.'
+    );
   }
-  const review = await validateProjectTableCSVReview(detached.review, scope.contextId, scope.project, scope.projectPath, table, checksum);
+  const review = await validateProjectTableCSVReview(
+    detached.review,
+    scope.contextId,
+    scope.project,
+    scope.projectPath,
+    table,
+    checksum
+  );
   // Only the CSV checksum is independently checked here; approval and ZIP hash are supplied by the backend.
   return { ...detached, review };
 }
 
-export function validateTableCSVArchiveOutcome(value: TableCSVArchiveOutcome | null,
-  destination: string, archiveSHA256: string): TableCSVArchiveOutcome {
+export function validateTableCSVArchiveOutcome(
+  value: TableCSVArchiveOutcome | null,
+  destination: string,
+  archiveSHA256: string
+): TableCSVArchiveOutcome {
   const detached = value ? structuredClone(value) : null;
-  if (!validTableCSVArchiveDestination(destination) || !hash(archiveSHA256) || !detached ||
-      detached.requestedDestination !== destination || !text(detached.path) || !text(detached.errorMessage) ||
-      !['published', 'published-with-errors', 'not-published'].includes(detached.status) ||
-      (detached.sha256 !== '' && !hash(detached.sha256)) ||
-      (detached.status !== 'not-published' && (!detached.path || detached.sha256 !== archiveSHA256)) ||
-      (detached.status === 'not-published' && (detached.path !== '' || detached.sha256 !== '')) ||
-      (detached.status === 'published' ? detached.errorMessage !== '' : detached.errorMessage === '')) {
-    throw new Error('Project table CSV archive receipt contradicts the literal destination, expected bytes or outcome.');
+  if (
+    !validTableCSVArchiveDestination(destination) ||
+    !hash(archiveSHA256) ||
+    !detached ||
+    detached.requestedDestination !== destination ||
+    !text(detached.path) ||
+    !text(detached.errorMessage) ||
+    !['published', 'published-with-errors', 'not-published'].includes(detached.status) ||
+    (detached.sha256 !== '' && !hash(detached.sha256)) ||
+    (detached.status !== 'not-published' && (!detached.path || detached.sha256 !== archiveSHA256)) ||
+    (detached.status === 'not-published' && (detached.path !== '' || detached.sha256 !== '')) ||
+    (detached.status === 'published' ? detached.errorMessage !== '' : detached.errorMessage === '')
+  ) {
+    throw new Error(
+      'Project table CSV archive receipt contradicts the literal destination, expected bytes or outcome.'
+    );
   }
   return detached;
 }
@@ -65,8 +111,11 @@ export interface ArchiveReceiptStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
 }
-type PublicationPort = (request: { table: string; approvalHash: string; destination: string }) =>
-  PromiseLike<TableCSVArchiveOutcome | null>;
+type PublicationPort = (request: {
+  table: string;
+  approvalHash: string;
+  destination: string;
+}) => PromiseLike<TableCSVArchiveOutcome | null>;
 
 const fallbackReceiptMemoryStorage = new Map<string, string>();
 
@@ -104,21 +153,34 @@ export class TableCSVArchivePublicationSession {
   private listeners = new Set<() => void>();
 
   constructor(owner: TableCSVArchiveOwner, storage: ArchiveReceiptStorage = defaultArchiveReceiptStorage()) {
-    this.owner = structuredClone(owner); this.storage = storage;
+    this.owner = structuredClone(owner);
+    this.storage = storage;
     this.key = `vpro-owned-table-csv-receipts-v1:${owner.contextId}`;
     try {
       const raw = storage.getItem(this.key);
       if (raw !== null) {
         const saved = JSON.parse(raw);
-        if (saved.version !== 1 || !saved.owner || !sameOwner(saved.owner, this.owner) || !Array.isArray(saved.receipts)) {
+        if (
+          saved.version !== 1 ||
+          !saved.owner ||
+          !sameOwner(saved.owner, this.owner) ||
+          !Array.isArray(saved.receipts)
+        ) {
           throw new Error('Stored archive receipt ownership or format differs.');
         }
         for (const receipt of saved.receipts) {
-          if (!ownedTable(this.owner, receipt.table) || !validTableCSVArchiveDestination(receipt.requestedDestination) ||
-              !hash(receipt.archiveSHA256) || !hash(receipt.approvalHash) || !text(receipt.error) ||
-              typeof receipt.acknowledged !== 'boolean' || !['pending', 'known', 'unknown'].includes(receipt.phase) ||
-              (receipt.phase !== 'known' && receipt.outcome !== null) ||
-              (receipt.phase === 'pending' && receipt.acknowledged)) throw new Error('Stored archive attempt is incomplete.');
+          if (
+            !ownedTable(this.owner, receipt.table) ||
+            !validTableCSVArchiveDestination(receipt.requestedDestination) ||
+            !hash(receipt.archiveSHA256) ||
+            !hash(receipt.approvalHash) ||
+            !text(receipt.error) ||
+            typeof receipt.acknowledged !== 'boolean' ||
+            !['pending', 'known', 'unknown'].includes(receipt.phase) ||
+            (receipt.phase !== 'known' && receipt.outcome !== null) ||
+            (receipt.phase === 'pending' && receipt.acknowledged)
+          )
+            throw new Error('Stored archive attempt is incomplete.');
           if (receipt.phase === 'known') {
             validateTableCSVArchiveOutcome(receipt.outcome, receipt.requestedDestination, receipt.archiveSHA256);
           }
@@ -127,10 +189,11 @@ export class TableCSVArchivePublicationSession {
         for (const receipt of this.state.receipts) {
           if (receipt.phase === 'pending') {
             receipt.phase = 'unknown';
-            receipt.error = 'Archive outcome unknown after reload during publication. Do not replay; inspect the destination.';
+            receipt.error =
+              'Archive outcome unknown after reload during publication. Do not replay; inspect the destination.';
           }
         }
-        this.state.blocked = this.state.receipts.some(receipt => !receipt.acknowledged);
+        this.state.blocked = this.state.receipts.some((receipt) => !receipt.acknowledged);
         this.persist();
       }
     } catch (cause) {
@@ -138,62 +201,105 @@ export class TableCSVArchivePublicationSession {
       this.state.blocked = true;
     }
   }
-  view(): TableCSVArchivePublicationView { return structuredClone(this.state); }
+  view(): TableCSVArchivePublicationView {
+    return structuredClone(this.state);
+  }
   subscribe(listener: () => void): () => void {
-    this.listeners.add(listener); listener();
+    this.listeners.add(listener);
+    listener();
     return () => this.listeners.delete(listener);
   }
-  private notify() { for (const listener of this.listeners) listener(); }
+  private notify() {
+    for (const listener of this.listeners) listener();
+  }
   private persist() {
     this.storage.setItem(this.key, JSON.stringify({ version: 1, owner: this.owner, receipts: this.state.receipts }));
   }
   private available() {
-    if (this.state.busy || this.state.blocked) throw new Error('Wait for and acknowledge the prior archive attempt before proceeding.');
+    if (this.state.busy || this.state.blocked)
+      throw new Error('Wait for and acknowledge the prior archive attempt before proceeding.');
   }
   async chooseDestination(current: string, chooser: () => PromiseLike<string>): Promise<string> {
-    this.available(); this.state.busy = true; this.notify();
+    this.available();
+    this.state.busy = true;
+    this.notify();
     try {
       const selected = await chooser();
       if (selected === '') return current;
-      if (!validTableCSVArchiveDestination(selected)) throw new Error('Picker returned a malformed literal destination.');
+      if (!validTableCSVArchiveDestination(selected))
+        throw new Error('Picker returned a malformed literal destination.');
       return selected;
-    } finally { this.state.busy = false; this.notify(); }
+    } finally {
+      this.state.busy = false;
+      this.notify();
+    }
   }
-  async publish(value: TableCSVArchiveReview, table: string, destination: string, port: PublicationPort): Promise<void> {
+  async publish(
+    value: TableCSVArchiveReview,
+    table: string,
+    destination: string,
+    port: PublicationPort
+  ): Promise<void> {
     this.available();
-    if (!validTableCSVArchiveDestination(destination)) throw new Error('An explicit nonempty literal destination is required.');
+    if (!validTableCSVArchiveDestination(destination))
+      throw new Error('An explicit nonempty literal destination is required.');
     const detached = structuredClone(value);
-    this.state.busy = true; this.notify();
+    this.state.busy = true;
+    this.notify();
     let review: ValidatedTableCSVArchiveReview;
     try {
       review = await validateTableCSVArchiveReview(detached, this.owner, table);
-      const receipt: TableCSVArchiveReceipt = { table, requestedDestination: destination, archiveSHA256: review.archiveSHA256,
-        approvalHash: review.approvalHash, phase: 'pending', outcome: null, error: '', acknowledged: false };
+      const receipt: TableCSVArchiveReceipt = {
+        table,
+        requestedDestination: destination,
+        archiveSHA256: review.archiveSHA256,
+        approvalHash: review.approvalHash,
+        phase: 'pending',
+        outcome: null,
+        error: '',
+        acknowledged: false,
+      };
       this.state.receipts.push(receipt);
-      try { this.persist(); } catch (cause) {
+      try {
+        this.persist();
+      } catch (cause) {
         this.state.receipts.pop();
         this.state.storageError = `Cannot retain archive attempt history; no publication invoked: ${String(cause)}`;
         this.state.blocked = true;
         throw cause;
       }
-      this.state.blocked = true; this.notify();
+      this.state.blocked = true;
+      this.notify();
       try {
-        receipt.outcome = validateTableCSVArchiveOutcome(await port({ table, approvalHash: review.approvalHash, destination }),
-          destination, review.archiveSHA256);
-        receipt.phase = 'known'; receipt.error = receipt.outcome.errorMessage;
+        receipt.outcome = validateTableCSVArchiveOutcome(
+          await port({ table, approvalHash: review.approvalHash, destination }),
+          destination,
+          review.archiveSHA256
+        );
+        receipt.phase = 'known';
+        receipt.error = receipt.outcome.errorMessage;
       } catch (cause) {
         receipt.phase = 'unknown';
         receipt.error = `Archive outcome unknown. Do not replay this destination; inspect it before proceeding: ${String(cause)}`;
       }
-      try { this.persist(); } catch (cause) {
+      try {
+        this.persist();
+      } catch (cause) {
         this.state.storageError = `Archive receipt persistence failed; retain this visible evidence, do not replay: ${String(cause)}`;
       }
-    } finally { this.state.busy = false; this.notify(); }
+    } finally {
+      this.state.busy = false;
+      this.notify();
+    }
   }
   acknowledge() {
-    if (this.state.busy || this.state.storageError) throw new Error('Wait for publication/picker and resolve receipt storage; never cancel or replay publication.');
+    if (this.state.busy || this.state.storageError)
+      throw new Error('Wait for publication/picker and resolve receipt storage; never cancel or replay publication.');
     for (const receipt of this.state.receipts) receipt.acknowledged = true;
-    try { this.persist(); this.state.blocked = false; } catch (cause) {
+    try {
+      this.persist();
+      this.state.blocked = false;
+    } catch (cause) {
       this.state.storageError = `Cannot persist archive acknowledgement: ${String(cause)}`;
     }
     this.notify();
@@ -211,3 +317,6 @@ export function tableCSVArchivePublicationSession(owner: TableCSVArchiveOwner): 
   sessions.set(owner.contextId, { owner: structuredClone(owner), session });
   return session;
 }
+registerContextDisposer((id) => {
+  sessions.delete(id);
+});

@@ -81,7 +81,7 @@ export function disposePlotSiviSessions(sessions: SiviSessionStateBundle, reads:
 
 /** Dispose all open Two-Page caches on component teardown. */
 export function disposeTwoPageSessionCaches(
-  caches: Array<TwoPageParentSessionCache | TwoPageParentCommonSessionCache | TwoPageEntrySessionCache>,
+  caches: Array<TwoPageParentSessionCache | TwoPageParentCommonSessionCache | TwoPageEntrySessionCache>
 ): void {
   for (const cache of caches) {
     for (const variants of cache.values()) {
@@ -125,7 +125,13 @@ export async function refreshSiviParentImpl(params: {
   plot: string;
   siviContextId: string;
   activeContextId: string | undefined;
-  peers: Array<SIVIParentWriteSession | SIVIParentActionWriteSession | SIVIProjectAssignmentSession | SIVIParentSharedSession | null>;
+  peers: Array<
+    | SIVIParentWriteSession
+    | SIVIParentActionWriteSession
+    | SIVIProjectAssignmentSession
+    | SIVIParentSharedSession
+    | null
+  >;
   siviParentSession: SIVIParentReadSession | null;
   getPlot: (contextId: string, plot: string) => Promise<FS882Header | null>;
   applyRefreshedHeader: (header: FS882Header) => void;
@@ -170,12 +176,16 @@ export async function refreshTwoPagePeersImpl(params: {
     { scope: 'entry' as const, cache: params.twoPageEntrySessions },
   ]) {
     if (cohort.scope === params.scope) continue;
-    const variants = cohort.cache.get(JSON.stringify({ contextId: params.contextId, project: params.twoPageProject, plot: params.plotNumber }));
+    const variants = cohort.cache.get(
+      JSON.stringify({ contextId: params.contextId, project: params.twoPageProject, plot: params.plotNumber })
+    );
     if (!variants) continue;
     for (const peer of variants.values()) {
       if (!peer.view().original && !peer.view().error) continue;
       if (peer.closeState().unsaved || peer.closeState().busy || !(await peer.load())) {
-        throw new Error(peer.view().error ?? 'Another two-page field scope could not be refreshed; no write was replayed.');
+        throw new Error(
+          peer.view().error ?? 'Another two-page field scope could not be refreshed; no write was replayed.'
+        );
       }
     }
   }
@@ -185,7 +195,11 @@ export async function refreshTwoPagePeersImpl(params: {
 function extractProjectIdChoices(choices: SIVIProjectChoices | null | undefined): string[] {
   const rows = choices?.Choices?.rows;
   if (!rows?.length) return [];
-  return [...new Set(rows.map(r => (r.cells?.[0]?.storage === 'text' ? (r.cells[0].text ?? '').trim() : '')).filter(Boolean))];
+  return [
+    ...new Set(
+      rows.map((r) => (r.cells?.[0]?.storage === 'text' ? (r.cells[0].text ?? '').trim() : '')).filter(Boolean)
+    ),
+  ];
 }
 
 /** Observe ProjectID datalist choices directly or via owned context fetch. */
@@ -203,14 +217,17 @@ export function observeProjectIdDatalist(params: {
   }
   if (!params.contextId || !params.fetchChoices) return undefined;
   let active = true;
-  void params.fetchChoices(params.contextId)
-    .then(res => {
+  void params
+    .fetchChoices(params.contextId)
+    .then((res) => {
       if (!active) return;
       const choices = extractProjectIdChoices(res);
       if (choices.length) params.onChoices(choices);
     })
     .catch(() => {});
-  return () => { active = false; };
+  return () => {
+    active = false;
+  };
 }
 
 export type {

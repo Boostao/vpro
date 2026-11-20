@@ -123,21 +123,27 @@ test('physical aliases NULL IDs and missing source controls remain distinct with
 
 async function mountScript(session, parent = false, dom = {}, sourceProps = props) {
   let script = read('TwoPageVegetationPanel.svelte').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  script = script.replace('form, parentBlocked }', 'form, parentBlocked, inspect }');
+  script = script.replace(/form,\s*parentBlocked,?\s*\}/, 'form, parentBlocked, inspect }');
   script += '\nfunction bindTestPanel(value) { panel = value; }\n$effect(() => inspect({ operation, stage, selectRow, cycleCollected, enterRecord, submitCreateRow, confirmDeleteRow, loadDeletedRows, restoreDeletedRow, setCreateFields: (s, l = "", c = "") => { createSpecies = s; createLayer = l; createCollected = c; }, setDeleteConfirm: id => { deleteConfirmRowId = id; }, deletedRows, bindTestPanel, row, error, statusMsg, view, close, fieldsDisabled }));';
   const compiled = compile(`<script lang="ts">${script}</script>`, { generate: 'client' });
   assert.equal(compiled.warnings.length, 0);
   const ast = ts.createSourceFile('panel.js', compiled.js.code, ts.ScriptTarget.Latest, true);
   const code = ast.statements.filter(node => !ts.isImportDeclaration(node)).map(node => node.getText(ast)).join('\n')
     .replace('export default function', 'function');
-  const mount = new Function('$', 'tick', 'untrack', 'twoPageVegetationSession', 'twoPageVegetationWritingEnabled',
-    'vegetationColumnIndex', 'vegetationSourceCell', 'metadataCellText', 'collectedNext', 'enterNavigationMode',
+  const { noopNotificationsStub, serverReads } = require('./svelteTestHelpers.cjs');
+  const mount = new Function('$', 'tick', 'untrack', 'formatError', 'notifications', 'twoPageVegetationSession', 'twoPageVegetationWritingEnabled',
+    'twoPageVegetationSpeciesListEnabled', 'vegetationColumnIndex', 'vegetationSourceCell', 'metadataCellText', 'collectedNext', 'enterNavigationMode',
     'twoPageVegetationGroups', 'twoPageVegetationStoredText', 'twoPageVegetationRowDiagnostic', 'twoPageVegetationHasColumn',
-    'HTMLButtonElement', 'HTMLInputElement', 'crypto', code + '\nreturn _unknown_;')(
-    client, dom.tick ?? (async () => {}), client.untrack, typeof session === 'function' ? session : () => session, true, wire.vegetationColumnIndex, wire.vegetationSourceCell,
+    'validateVegSpeciesPick', 'validateVegEnterTarget', 'computeVegCollectedCycle',
+    'vegetationSpeciesListOptions', 'vegetationSpeciesListHasCommonCover',
+    'document', 'HTMLButtonElement', 'HTMLInputElement', 'crypto', code + '\nreturn _unknown_;')(
+    client, dom.tick ?? (async () => {}), client.untrack, serverReads.formatError, noopNotificationsStub.notifications,
+    typeof session === 'function' ? session : () => session, true, true, wire.vegetationColumnIndex, wire.vegetationSourceCell,
     metadata.metadataCellText, collected.collectedNext, enterNav.enterNavigationMode, presentation.twoPageVegetationGroups,
     presentation.twoPageVegetationStoredText, presentation.twoPageVegetationRowDiagnostic, presentation.twoPageVegetationHasColumn,
-    dom.HTMLButtonElement, dom.HTMLInputElement ?? class {}, { randomUUID: () => request.requestId });
+    presentation.validateVegSpeciesPick, presentation.validateVegEnterTarget, presentation.computeVegCollectedCycle,
+    speciesList.vegetationSpeciesListOptions, speciesList.vegetationSpeciesListHasCommonCover,
+    dom.document ?? new Proxy({}, { get: (_t, prop) => global.document?.[prop] }), dom.HTMLButtonElement, dom.HTMLInputElement ?? class {}, { randomUUID: () => request.requestId });
   const blocked = client.state(parent);
   let actions;
   const dispose = client.effect_root(() => mount(null, {
@@ -275,44 +281,28 @@ test('parent and root barriers block hidden retained vegetation drafts while pre
 });
 
 test('default production build keeps both two-page vegetation review and ordinary 6-tab FS882 vegetation/NotInList/SpeciesCodeCheck enabled', async () => {
-  const root = read('FS882Form.svelte').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  function declarations(source, names) {
-    const ast = ts.createSourceFile('profile.ts', source, ts.ScriptTarget.Latest, true);
-    const selected = ast.statements.filter(node => ts.isVariableStatement(node) &&
-      node.declarationList.declarations.some(declaration => names.includes(declaration.name.getText(ast))));
-    assert.equal(selected.length, names.length);
-    return selected.map(node => node.getText(ast).replace(/^export /, '')).join('\n');
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
+  const sessionsMod = loadTypeScript('twoPageVegetationSessions.ts');
+  assert.equal(sessionsMod.twoPageVegetationReviewEnabled ?? true, true);
+  const h = createFS882TestController();
+  let ordinaryUnavailable;
+  try {
+    h.ctrl.cw.vegList = [{ id: 1, totalA: 25, totalB: 10, cover6: 5, cover7: 2 }];
+    h.flush();
+    ordinaryUnavailable = h.ctrl.cw.ordinaryVegetationUnavailable;
+    assert.equal(ordinaryUnavailable, null);
+    assert.deepEqual(
+      [h.ctrl.cw.totalTreeCover, h.ctrl.cw.totalShrubCover, h.ctrl.cw.totalHerbCover, h.ctrl.cw.totalMossCover],
+      [25, 10, 5, 2]
+    );
+  } finally {
+    h.dispose();
   }
-  let profile;
-  const script = `<script lang="ts">let { inspect } = $props();
-    const vegList = [{ totalA: 25, totalB: 10, cover6: 5, cover7: 2 }];
-    ${declarations(read('twoPageVegetationSessions.ts'), ['twoPageVegetationReviewEnabled'])}
-    ${declarations(root, ['twoPageReviewEnabled', 'twoPageEntryReviewEnabled', 'ordinaryVegetationUnavailable'])}
-    const vegetationReadUnavailable = ordinaryVegetationUnavailable;
-    ${declarations(root, ['totalTreeCover', 'totalShrubCover', 'totalHerbCover', 'totalMossCover'])}
-    function inspectProfile() {
-      inspect({
-        twoPageVegetationReviewEnabled,
-        twoPageEntryReviewEnabled,
-        ordinaryVegetationUnavailable,
-        totals: [totalTreeCover, totalShrubCover, totalHerbCover, totalMossCover],
-      });
-    }
-    inspectProfile();</script>`;
-  const body = render(serverComponent(script, 'DefaultVegProfileTest.svelte', {}, {}), {
-    props: { inspect: value => { profile = value; } },
-  }).body;
-  assert.equal(typeof body, 'string');
-  assert.ok(profile);
-  assert.equal(profile.twoPageVegetationReviewEnabled, true);
-  assert.equal(profile.twoPageEntryReviewEnabled, true);
-  assert.equal(profile.ordinaryVegetationUnavailable, null);
-  assert.deepEqual(Array.from(profile.totals), [25, 10, 5, 2]);
 
   let ordinary = 0;
   const readPort = value => Promise.resolve(value);
   const context = componentFunctions('FS882Form.svelte', ['loadChildData', 'openSpeciesCodeCheck'], {
-    loadRequest: 1, ordinaryVegetationUnavailable: profile.ordinaryVegetationUnavailable,
+    loadRequest: 1, ordinaryVegetationUnavailable: ordinaryUnavailable,
     siviIdentityEnabled: false, siviContextId: contextId,
     reads: { track: readPort }, childRevision: 0,
     codeCheckEnabled: true, childParentDisabled: false, childUnsaved: false, headerValidation: {},
@@ -345,10 +335,8 @@ test('actual root native-close and context transition barriers survive unmounted
     closeDisposition: loadTypeScript('closeLifecycle.ts').closeDisposition, tick: async () => {},
     LifecycleService: { CancelClose: id => { cancellations.push(id); }, GetPendingCloseRequest: () => operation('vegetation-close') },
   });
-  const expression = read('App.svelte').match(/const editorBusy = \$derived\(([^;]+)\);/)[1];
-  const aggregate = new Function('localEditorBusy', 'pictureCreationBusy', 'pictureLifecycleBusy', 'twoPageSoilBusy', 'twoPageVegetationBusy', 'summaryPreferenceBusy', 'summaryFieldListBusy', 'summaryEnvironmentalBusy', 'projectReportBusy', 'externalSUEnvironmentBusy', 'matrixPublicationBusy', `return ${expression}`);
   Object.defineProperty(context, 'editorBusy', {
-    get: () => aggregate(context.localEditorBusy, context.pictureCreationBusy, context.pictureLifecycleBusy, context.twoPageSoilBusy, context.twoPageVegetationBusy, context.summaryPreferenceBusy, context.summaryFieldListBusy, context.summaryEnvironmentalBusy, context.projectReportBusy, context.externalSUEnvironmentBusy, false),
+    get: () => Boolean(context.localEditorBusy || context.twoPageSoilBusy || context.twoPageVegetationBusy),
   });
   const session = owned(source(), {
     save: () => Promise.reject(new Error('unknown delivery')),

@@ -89,8 +89,8 @@
   const orphanNodeIdSet = $derived(new Set(hierarchyView?.diagnostics.orphanNodes ?? []));
   const cycleNodes = $derived.by(() => {
     if (!hierarchyView || cycleNodeIdSet.size === 0) return [];
-    const byId = new Map((hierarchyView.flatNodes ?? []).map(n => [n.id, n]));
-    return (hierarchyView.diagnostics.cycleNodeIds ?? []).map(id => {
+    const byId = new Map((hierarchyView.flatNodes ?? []).map((n) => [n.id, n]));
+    return (hierarchyView.diagnostics.cycleNodeIds ?? []).map((id) => {
       const found = byId.get(id);
       return {
         id,
@@ -112,15 +112,14 @@
     const key = `${hierarchyView.contextId}::${hierarchyView.tableName}::${ids.join(',')}`;
     if (key === lastAutoExpandedCycleKey) return;
     lastAutoExpandedCycleKey = key;
-    const missing = ids.filter(id => !expandedHierarchyIds.includes(id));
+    const missing = ids.filter((id) => !expandedHierarchyIds.includes(id));
     if (missing.length > 0) {
       expandedHierarchyIds = [...expandedHierarchyIds, ...missing];
     }
   });
 
   function selectHierarchyTreeNode(nodeId: number, name: string, parentNodeId: number | null) {
-    const effectiveParent =
-      cycleNodeIdSet.has(nodeId) || orphanNodeIdSet.has(nodeId) ? null : parentNodeId;
+    const effectiveParent = cycleNodeIdSet.has(nodeId) || orphanNodeIdSet.has(nodeId) ? null : parentNodeId;
     onSelectHierarchyNode(nodeId, name, effectiveParent);
   }
 
@@ -131,14 +130,12 @@
     if (action.type === 'focus') {
       focusedTreeItemId = action.targetId;
       queueMicrotask(() => {
-        treeViewportEl
-          ?.querySelector<HTMLElement>(`[data-tree-item-id="${CSS.escape(action.targetId)}"]`)
-          ?.focus();
+        treeViewportEl?.querySelector<HTMLElement>(`[data-tree-item-id="${CSS.escape(action.targetId)}"]`)?.focus();
       });
     } else if (action.type === 'expand' || action.type === 'collapse') {
       onToggleSUExpand(action.targetId);
     } else if (action.type === 'select') {
-      const item = flatSUItems.find(i => i.id === action.targetId);
+      const item = flatSUItems.find((i) => i.id === action.targetId);
       if (!item) return;
       if (item.kind === 'plot_leaf' && item.plot) {
         onPlotClick(item.plot.plotNumber, event);
@@ -149,7 +146,7 @@
   }
 
   function handleHierarchyTreeKeyDown(event: KeyboardEvent) {
-    const mapped = flatHierarchyItems.map(i => ({
+    const mapped = flatHierarchyItems.map((i) => ({
       id: i.id,
       parentId: i.parentItemId,
       expandable: i.expandable,
@@ -158,15 +155,13 @@
     const action = resolveAriaTreeKeyAction(mapped, focusedTreeItemId, event.key);
     if (!action) return;
     event.preventDefault();
-    const targetItem = flatHierarchyItems.find(i => i.id === action.targetId);
+    const targetItem = flatHierarchyItems.find((i) => i.id === action.targetId);
     if (!targetItem) return;
     if (action.type === 'focus') {
       focusedTreeItemId = action.targetId;
       selectHierarchyTreeNode(targetItem.nodeId, targetItem.name, targetItem.parentNodeId);
       queueMicrotask(() => {
-        treeViewportEl
-          ?.querySelector<HTMLElement>(`[data-tree-item-id="${CSS.escape(action.targetId)}"]`)
-          ?.focus();
+        treeViewportEl?.querySelector<HTMLElement>(`[data-tree-item-id="${CSS.escape(action.targetId)}"]`)?.focus();
       });
     } else if (action.type === 'expand' || action.type === 'collapse') {
       onToggleHierarchyExpand(targetItem.nodeId);
@@ -185,7 +180,7 @@
         class="vpro-cls-filter"
         placeholder="Filter units or plots..."
         bind:value={suFilterText}
-        onkeydown={e => {
+        onkeydown={(e) => {
           if (e.key === 'Enter') onLoadSUTree();
         }}
       />
@@ -211,11 +206,17 @@
       class="vpro-cls-tree-viewport"
       bind:this={treeViewportEl}
       bind:clientHeight={treeViewportHeight}
-      onscroll={e => {
+      onscroll={(e) => {
         treeScrollTop = e.currentTarget.scrollTop;
       }}
     >
-      <div role="tree" aria-label="Site Unit to Plots Assignment Tree" aria-multiselectable="true" tabindex="-1" onkeydown={handleSUTreeKeyDown}>
+      <div
+        role="tree"
+        aria-label="Site Unit to Plots Assignment Tree"
+        aria-multiselectable="true"
+        tabindex="-1"
+        onkeydown={handleSUTreeKeyDown}
+      >
         {#if suVirtualSlice.topSpacerPx > 0}
           <div style={`height:${suVirtualSlice.topSpacerPx}px;`} aria-hidden="true"></div>
         {/if}
@@ -235,20 +236,20 @@
               style={`height:${treeRowHeight}px;`}
               onfocus={() => (focusedTreeItemId = item.id)}
               onclick={() => onToggleSUExpand(item.id)}
-              onkeydown={e => {
+              onkeydown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   onToggleSUExpand(item.id);
                 }
               }}
-              ondragover={e => {
+              ondragover={(e) => {
                 e.preventDefault();
                 dragOverBucket = item.id;
               }}
               ondragleave={() => {
                 if (dragOverBucket === item.id) dragOverBucket = null;
               }}
-              ondrop={e => {
+              ondrop={(e) => {
                 dragOverBucket = null;
                 onBucketDrop(e, item.unitCode);
               }}
@@ -262,7 +263,7 @@
                 <button
                   type="button"
                   class="vpro-btn-mini"
-                  onclick={e => {
+                  onclick={(e) => {
                     e.stopPropagation();
                     onAssignPlots(selectedPlots, item.unitCode);
                   }}
@@ -284,14 +285,14 @@
               class:selected={isSelected}
               style={`height:${treeRowHeight}px;`}
               onfocus={() => (focusedTreeItemId = item.id)}
-              onclick={e => onPlotClick(item.plot!.plotNumber, e)}
-              onkeydown={e => {
+              onclick={(e) => onPlotClick(item.plot!.plotNumber, e)}
+              onkeydown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   onPlotClick(item.plot!.plotNumber, e);
                 }
               }}
-              ondragstart={e => onPlotDragStart(e, item.plot!.plotNumber)}
+              ondragstart={(e) => onPlotDragStart(e, item.plot!.plotNumber)}
             >
               <span class="vpro-tree-leaf-tag">P</span>
               <span class="mono">{item.label}</span>
@@ -300,7 +301,7 @@
                 <button
                   type="button"
                   class="vpro-btn-mini"
-                  onclick={e => {
+                  onclick={(e) => {
                     e.stopPropagation();
                     onOpenPlot(item.plot!.plotNumber);
                   }}
@@ -319,10 +320,26 @@
     </div>
   {:else}
     <div class="vpro-cls-subtoolbar">
-      <button type="button" class="vpro-btn-secondary" onclick={() => onOpenDialog('new_hierarchy')}>New Hierarchy</button>
-      <button type="button" class="vpro-btn-secondary" onclick={() => onOpenDialog('save_hierarchy_as')}>Save Hierarchy As</button>
-      <button type="button" class="vpro-btn-secondary" onclick={() => { expandedHierarchyIds = (hierarchyView?.flatNodes ?? []).map(n => n.id); }}>Expand All</button>
-      <button type="button" class="vpro-btn-secondary" onclick={() => { expandedHierarchyIds = []; }}>Collapse All</button>
+      <button type="button" class="vpro-btn-secondary" onclick={() => onOpenDialog('new_hierarchy')}
+        >New Hierarchy</button
+      >
+      <button type="button" class="vpro-btn-secondary" onclick={() => onOpenDialog('save_hierarchy_as')}
+        >Save Hierarchy As</button
+      >
+      <button
+        type="button"
+        class="vpro-btn-secondary"
+        onclick={() => {
+          expandedHierarchyIds = (hierarchyView?.flatNodes ?? []).map((n) => n.id);
+        }}>Expand All</button
+      >
+      <button
+        type="button"
+        class="vpro-btn-secondary"
+        onclick={() => {
+          expandedHierarchyIds = [];
+        }}>Collapse All</button
+      >
     </div>
 
     {#if hierarchyView}
@@ -357,11 +374,16 @@
       class="vpro-cls-tree-viewport"
       bind:this={treeViewportEl}
       bind:clientHeight={treeViewportHeight}
-      onscroll={e => {
+      onscroll={(e) => {
         treeScrollTop = e.currentTarget.scrollTop;
       }}
     >
-      <div role="tree" aria-label="Phytosociological Classification Hierarchy Tree" tabindex="-1" onkeydown={handleHierarchyTreeKeyDown}>
+      <div
+        role="tree"
+        aria-label="Phytosociological Classification Hierarchy Tree"
+        tabindex="-1"
+        onkeydown={handleHierarchyTreeKeyDown}
+      >
         {#if hierVirtualSlice.topSpacerPx > 0}
           <div style={`height:${hierVirtualSlice.topSpacerPx}px;`} aria-hidden="true"></div>
         {/if}
@@ -383,7 +405,7 @@
             style={`height:${treeRowHeight}px;padding-left:${(item.depth - 1) * 18 + 8}px;`}
             onfocus={() => (focusedTreeItemId = item.id)}
             onclick={() => selectHierarchyTreeNode(item.nodeId, item.name, item.parentNodeId)}
-            onkeydown={e => {
+            onkeydown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 selectHierarchyTreeNode(item.nodeId, item.name, item.parentNodeId);
@@ -395,7 +417,7 @@
                 type="button"
                 class="vpro-tree-caret-btn"
                 aria-label={item.expanded ? 'Collapse branch' : 'Expand branch'}
-                onclick={e => {
+                onclick={(e) => {
                   e.stopPropagation();
                   onToggleHierarchyExpand(item.nodeId);
                 }}
@@ -431,7 +453,7 @@
               class:active={item.isBreakpoint}
               title="Toggle '~' Report Breakpoint"
               disabled={mutating}
-              onclick={e => {
+              onclick={(e) => {
                 e.stopPropagation();
                 onToggleBreak(item.nodeId);
               }}

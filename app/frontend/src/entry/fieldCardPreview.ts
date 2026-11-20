@@ -117,12 +117,18 @@ export interface SoilDraftsLike {
   [identity: string]: {
     kind: 'Humus' | 'Mineral';
     id: number;
-    cells: Record<string, { raw: string; expected: string | number | null; value: string | number | null; error: string | null }>;
+    cells: Record<
+      string,
+      { raw: string; expected: string | number | null; value: string | number | null; error: string | null }
+    >;
   };
 }
 
 export interface HeightDraftsLike {
-  [rowId: string]: Record<string, { raw: string; expected: number | null; value: number | null; error: string | null } | undefined>;
+  [rowId: string]: Record<
+    string,
+    { raw: string; expected: number | null; value: number | null; error: string | null } | undefined
+  >;
 }
 
 export interface SpeciesDraftsLike {
@@ -369,7 +375,10 @@ function extractParentOriginalMap(original: SIVIParentOriginalLike | null | unde
   return result;
 }
 
-function resolveStagedParentDraft(draft: StagedParentCellDraftLike | undefined): { hasOverride: boolean; value: unknown } {
+function resolveStagedParentDraft(draft: StagedParentCellDraftLike | undefined): {
+  hasOverride: boolean;
+  value: unknown;
+} {
   if (!draft) return { hasOverride: false, value: undefined };
   if (draft.nullValue === true) return { hasOverride: true, value: null };
   if (draft.input) {
@@ -467,7 +476,12 @@ export function buildFieldCardViewModel(input: BuildFieldCardInput): FieldCardVi
     }
   }
 
-  for (const draftBag of [input.siviDirectDrafts, input.siviActionDrafts, input.siviSharedDrafts, input.twoPageDrafts]) {
+  for (const draftBag of [
+    input.siviDirectDrafts,
+    input.siviActionDrafts,
+    input.siviSharedDrafts,
+    input.twoPageDrafts,
+  ]) {
     if (!draftBag) continue;
     for (const [col, cellDraft] of Object.entries(draftBag)) {
       const resolved = resolveStagedParentDraft(cellDraft);
@@ -517,7 +531,7 @@ export function buildFieldCardViewModel(input: BuildFieldCardInput): FieldCardVi
   function cell(
     column: string,
     label: string,
-    opts: { span?: number; mono?: boolean; checkbox?: boolean } = {},
+    opts: { span?: number; mono?: boolean; checkbox?: boolean } = {}
   ): FieldCardCell {
     const raw = rawCol(column);
     const cb = opts.checkbox ? parseOptionalBoolean(raw) : undefined;
@@ -578,7 +592,9 @@ export function buildFieldCardViewModel(input: BuildFieldCardInput): FieldCardVi
     coordParts.push(`${lat !== null ? lat.toFixed(6) + '°' : '?'}, ${lon !== null ? lon.toFixed(6) + '°' : '?'}`);
   }
   if (utmZ !== '—' || utmE !== '—' || utmN !== '—') {
-    coordParts.push(`NAD83 UTM ${utmZ !== '—' ? utmZ : '?'} ${utmE !== '—' ? utmE + 'E' : '?'} ${utmN !== '—' ? utmN + 'N' : '?'}`);
+    coordParts.push(
+      `NAD83 UTM ${utmZ !== '—' ? utmZ : '?'} ${utmE !== '—' ? utmE + 'E' : '?'} ${utmN !== '—' ? utmN + 'N' : '?'}`
+    );
   }
   const formattedCoordinates = coordParts.length > 0 ? coordParts.join(' · ') : '—';
 
@@ -601,8 +617,8 @@ export function buildFieldCardViewModel(input: BuildFieldCardInput): FieldCardVi
   const activeDepthVal = rawCol('ActiveLayerDepth');
   const extendedShrubs = Boolean(
     input.extendedShrubs ||
-      (snowVal !== null && snowVal !== undefined && snowVal !== '') ||
-      (activeDepthVal !== null && activeDepthVal !== undefined && activeDepthVal !== ''),
+    (snowVal !== null && snowVal !== undefined && snowVal !== '') ||
+    (activeDepthVal !== null && activeDepthVal !== undefined && activeDepthVal !== '')
   );
 
   // Organic Horizons (LMH25: upland L/F/H UpperDepth >= LowerDepth sorted UpperDepth DESC; wetland Of/Om/Oh UpperDepth < LowerDepth sorted UpperDepth ASC; NULL last)
@@ -613,7 +629,7 @@ export function buildFieldCardViewModel(input: BuildFieldCardInput): FieldCardVi
     const isDraft = Boolean(staged && Object.values(staged).some((c) => c.error !== null || c.value !== c.expected));
 
     const getH = (key: string, cols: readonly string[]) => {
-      if (staged && key in staged) return staged[key].raw === '' ? null : staged[key].value ?? staged[key].raw;
+      if (staged && key in staged) return staged[key].raw === '' ? null : (staged[key].value ?? staged[key].raw);
       return lookupRecordField(row, cols);
     };
     const upRawVal = getH('upperDepth', ['upperDepth', 'UpperDepth']);
@@ -634,7 +650,8 @@ export function buildFieldCardViewModel(input: BuildFieldCardInput): FieldCardVi
       lowerDepth: lowNum,
       depthRange: formatDepthRange(upNum, lowNum, formatScalar(upRawVal), formatScalar(lowRawVal)),
       fabricStructure: [deg !== '—' ? deg : '', kind !== '—' ? kind : ''].filter(Boolean).join(' ') || '—',
-      mycelFecal: [mycel !== '—' ? `M:${mycel}` : '', fecal !== '—' ? `F:${fecal}` : ''].filter(Boolean).join(' ') || '—',
+      mycelFecal:
+        [mycel !== '—' ? `M:${mycel}` : '', fecal !== '—' ? `F:${fecal}` : ''].filter(Boolean).join(' ') || '—',
       roots: [rAb !== '—' ? rAb : '', rSz !== '—' ? rSz : ''].filter(Boolean).join('/') || '—',
       vonPost: formatScalar(getH('vonPost', ['vonPost', 'VonPost'])),
       ph: formatScalar(getH('ph', ['ph', 'HumusFormpH', 'humusformph'])),
@@ -662,7 +679,7 @@ export function buildFieldCardViewModel(input: BuildFieldCardInput): FieldCardVi
     const isDraft = Boolean(staged && Object.values(staged).some((c) => c.error !== null || c.value !== c.expected));
 
     const getM = (key: string, cols: readonly string[]) => {
-      if (staged && key in staged) return staged[key].raw === '' ? null : staged[key].value ?? staged[key].raw;
+      if (staged && key in staged) return staged[key].raw === '' ? null : (staged[key].value ?? staged[key].raw);
       return lookupRecordField(row, cols);
     };
     const upRawVal = getM('upperDepth', ['upperDepth', 'UpperDepth']);
@@ -672,7 +689,9 @@ export function buildFieldCardViewModel(input: BuildFieldCardInput): FieldCardVi
     const limit = formatScalar(getM('pitDepthLimit', ['pitDepthLimit', 'PitDepthLimit']));
     const baseRange = formatDepthRange(upNum, lowNum, formatScalar(upRawVal), formatScalar(lowRawVal));
     const g = formatScalar(getM('percentCoarseFragsGravel', ['percentCoarseFragsGravel', 'PercentCoarseFragsGravel']));
-    const c = formatScalar(getM('percentCoarseFragsCobbles', ['percentCoarseFragsCobbles', 'PercentCoarseFragsCobbles']));
+    const c = formatScalar(
+      getM('percentCoarseFragsCobbles', ['percentCoarseFragsCobbles', 'PercentCoarseFragsCobbles'])
+    );
     const s = formatScalar(getM('percentCoarseFragsStones', ['percentCoarseFragsStones', 'PercentCoarseFragsStones']));
     const tot = formatScalar(getM('percentCoarseFragsTotal', ['percentCoarseFragsTotal', 'PercentCoarseFragsTotal']));
     const shp = formatScalar(getM('percentCoarseFragsShape', ['percentCoarseFragsShape', 'PercentCoarseFragsShape']));
@@ -726,17 +745,22 @@ export function buildFieldCardViewModel(input: BuildFieldCardInput): FieldCardVi
     const spDraft = input.speciesDrafts?.[rowKey];
     const colDraft = input.collectedDrafts?.[rowKey];
 
-    const hasHtDraft = Boolean(htRow && Object.values(htRow).some((c) => c && (c.error !== null || c.value !== c.expected)));
+    const hasHtDraft = Boolean(
+      htRow && Object.values(htRow).some((c) => c && (c.error !== null || c.value !== c.expected))
+    );
     const hasSpDraft = Boolean(spDraft && (spDraft.error != null || spDraft.raw !== spDraft.expected));
     const hasColDraft = Boolean(colDraft && colDraft.value !== colDraft.expected);
     const rowIsDraft = hasHtDraft || hasSpDraft || hasColDraft;
 
     const species = spDraft ? formatScalar(spDraft.raw) : formatScalar(lookupRecordField(row, ['species', 'Species']));
-    const collected = colDraft !== undefined ? formatScalar(colDraft.value) : formatScalar(lookupRecordField(row, ['collected', 'Collected']));
+    const collected =
+      colDraft !== undefined
+        ? formatScalar(colDraft.value)
+        : formatScalar(lookupRecordField(row, ['collected', 'Collected']));
 
     const getVNum = (field: string, cols: readonly string[]): unknown => {
       const staged = htRow?.[field];
-      if (staged !== undefined) return staged.raw === '' ? null : staged.value ?? staged.raw;
+      if (staged !== undefined) return staged.raw === '' ? null : (staged.value ?? staged.raw);
       return lookupRecordField(row, cols);
     };
 
@@ -764,7 +788,7 @@ export function buildFieldCardViewModel(input: BuildFieldCardInput): FieldCardVi
     if (c5a != null || c5b != null || c5c != null) anyExtendedShrubData = true;
 
     const inAB = [c1, h1, c2, h2, c3, h3, totA, c4, h4, c5, h5, c5a, c5b, c5c, totB].some((v) => v != null && v !== '');
-    const inC = c6 != null && c6 !== '' || h6 != null && h6 !== '';
+    const inC = (c6 != null && c6 !== '') || (h6 != null && h6 !== '');
     const inD = [c7, c8, c9].some((v) => v != null && v !== '');
 
     if (inAB) {
@@ -1033,15 +1057,13 @@ export function buildFieldCardViewModel(input: BuildFieldCardInput): FieldCardVi
     formKind === 'sivi'
       ? 'FS 1333 / SIVI'
       : formKind === 'two-page'
-      ? extendedShrubs
-        ? 'FS 882 (2-Page · CHARS)'
-        : 'FS 882 (2-Page)'
-      : 'FS 882 (6×4)';
+        ? extendedShrubs
+          ? 'FS 882 (2-Page · CHARS)'
+          : 'FS 882 (2-Page)'
+        : 'FS 882 (6×4)';
 
   const cardTitle =
-    formKind === 'sivi'
-      ? 'SITE VISIT FIELD CARD (SIVI / FS 1333)'
-      : 'ECOSYSTEM FIELD FORM (LMH 25 / FS 882)';
+    formKind === 'sivi' ? 'SITE VISIT FIELD CARD (SIVI / FS 1333)' : 'ECOSYSTEM FIELD FORM (LMH 25 / FS 882)';
 
   return {
     formKind,

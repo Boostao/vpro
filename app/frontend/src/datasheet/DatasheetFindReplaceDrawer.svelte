@@ -1,9 +1,5 @@
 <script lang="ts">
-  import type {
-    DatasheetColumnMeta,
-    DatasheetFindReplacePreview,
-    DatasheetPage,
-  } from './universalDatasheetGrid';
+  import type { DatasheetColumnMeta, DatasheetFindReplacePreview, DatasheetPage } from './universalDatasheetGrid';
 
   let {
     page,

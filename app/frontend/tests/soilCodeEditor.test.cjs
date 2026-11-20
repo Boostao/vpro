@@ -310,16 +310,29 @@ test('Actual SSR errors and capability gates are explicit without disabling inpu
   }
 });
 test('Parent integrates hidden validation, lifecycle/reset gates and default-on/no-double-fetch adaptation', () => {
-  const form = read('FS882Form.svelte'), soilSection = read('FS882SoilHorizonSection.svelte'), loadSave = read('fs882FormLoadSave.ts');
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
+  const form = read('FS882Form.svelte'), soilSection = read('FS882SoilHorizonSection.svelte'), loadSave = read('fs882FormLoadSave.ts'), ctrlSrc = read('fs882FormController.svelte.ts');
   assert.equal(compile(form, { filename: 'FS882Form.svelte', generate: 'client' }).warnings.length, 0);
   assert.equal(compile(soilSection, { filename: 'FS882SoilHorizonSection.svelte', generate: 'client' }).warnings.length, 0);
-  assert.match(form, /regionCodeBusy \|\| soilCodeBusy/);
-  assert.match(soilSection, /if !soilCodeEditingEnabled.*SoilCodeReference/);
-  assert.match(soilSection, /onvalidation=\{validateHeader\} onbusy=\{\(pending\) => soilCodeBusy = pending\}/);
-  assert.match(soilSection, /<SourcePage name="Soil\/Terrain" values=\{sourceHeaderValues\} \{editor\}/);
+  const h = createFS882TestController();
+  try {
+    h.ctrl.capabilitiesReady = true;
+    h.ctrl.draft = { ...h.ctrl.draft, locked: false };
+    h.flush();
+    assert.equal(h.ctrl.headerInputsDisabled, false);
+    h.ctrl.soilCodeBusy = true;
+    h.flush();
+    assert.equal(h.ctrl.headerWorkflowBusy, true);
+    assert.equal(h.ctrl.headerInputsDisabled, false);
+  } finally {
+    h.dispose();
+  }
+  assert.match(soilSection, /#if showSoilCodeReference[\s\S]*?<SoilCodeReference/);
+  assert.match(soilSection, /onvalidation=\{validateHeader\}\s+onbusy=\{\(pending\) => \{\s*soilCodeBusy = pending;\s*\}\}/);
+  assert.match(soilSection, /<SourcePage\s+name="Soil\/Terrain"\s+values=\{sourceHeaderValues\}\s+\{editor\}/);
   assert.match(loadSave, /invalid header input on Soils or Undo/);
-  assert.match(form, /Object\.keys\(headerValidation\)\.length > 0/);
-  assert.match(form, /draft = newDraft\(\);\s+original = null;\s+activeLayerDepthRaw = null;\s+dirty = false;\s+headerValidation = \{\}/);
+  assert.match(ctrlSrc, /Object\.keys\(headerValidation\)\.length > 0/);
+  assert.match(ctrlSrc, /draft = newEmptyFS882Draft\(\);\s*original = null;\s*activeLayerDepthRaw = null;\s*dirty = false;\s*headerValidation = \{\}/);
   assert.match(source, /onDestroy[\s\S]*hiddenViews[\s\S]*onvalidation\('soilCodes', soilCodeValidation/);
   assert.match(source, /raw === '' \? null : raw/);
   assert.match(source, /soilCodeAcknowledged\(draft, draft\)/);
@@ -327,7 +340,4 @@ test('Parent integrates hidden validation, lifecycle/reset gates and default-on/
   const disabled = soilSection.match(/<SoilCodeFields[\s\S]*?onchange=/)[0];
   assert.doesNotMatch(disabled, /headerWorkflowBusy|soilCodeBusy/);
   assert.match(disabled, /headerInputsDisabled/);
-  const header = form.match(/const headerInputsDisabled = \$derived\(([^;\n]+)\);/)[1];
-  assert.match(header, /draft.locked.*busy.*!capabilitiesReady/);
-  assert.doesNotMatch(header, /headerWorkflowBusy|soilCodeBusy/);
 });

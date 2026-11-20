@@ -1,12 +1,9 @@
 <script lang="ts">
   import { onDestroy, tick, untrack } from 'svelte';
   import { Columns2, Maximize2, Printer, X } from '@lucide/svelte';
-  import type {
-    FieldCardCell,
-    FieldCardSide,
-    FieldCardTheme,
-    FieldCardViewModel,
-  } from './fieldCardPreview';
+  import FieldCardVegSoilTables from './FieldCardVegSoilTables.svelte';
+  import './fieldCardPreviewModal.css';
+  import type { FieldCardCell, FieldCardSide, FieldCardTheme, FieldCardViewModel } from './fieldCardPreview';
 
   let {
     open = true,
@@ -82,8 +79,8 @@
     if (event.key === 'Tab' && dialogRef) {
       const focusables = Array.from(
         dialogRef.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
       );
       if (focusables.length === 0) {
         event.preventDefault();
@@ -125,6 +122,24 @@
       </div>
     {/each}
   </div>
+{/snippet}
+
+{#snippet sheetMasthead(suffix: string)}
+  <header class="fc-sheet-masthead">
+    <div>
+      <div class="fc-ministry-line">{viewModel.ministryHeader}</div>
+      <div class="fc-card-title">{viewModel.cardTitle} — {suffix}</div>
+    </div>
+    <div class="fc-masthead-right">
+      {#if viewModel.isDirty}
+        <span class="fc-sheet-stamp">UNSAVED DRAFT</span>
+      {/if}
+      <div class="fc-plot-box">
+        <span class="fc-cell-label">PLOT NO.</span>
+        <strong class="fc-mono fc-plot-id">{viewModel.plotNumber}</strong>
+      </div>
+    </div>
+  </header>
 {/snippet}
 
 {#snippet cardToolbar()}
@@ -174,28 +189,22 @@
           data-field-card-side="front"
           aria-pressed={side === 'front'}
           class:active={side === 'front'}
-          onclick={() => (side = 'front')}
+          onclick={() => (side = 'front')}>Front (Site &amp; Soil)</button
         >
-          Front (Site &amp; Soil)
-        </button>
         <button
           type="button"
           data-field-card-side="back"
           aria-pressed={side === 'back'}
           class:active={side === 'back'}
-          onclick={() => (side = 'back')}
+          onclick={() => (side = 'back')}>Back (Veg &amp; Notes)</button
         >
-          Back (Veg &amp; Notes)
-        </button>
         <button
           type="button"
           data-field-card-side="both"
           aria-pressed={side === 'both'}
           class:active={side === 'both'}
-          onclick={() => (side = 'both')}
+          onclick={() => (side = 'both')}>Both Sides</button
         >
-          Both Sides
-        </button>
       </div>
 
       <div class="fc-segmented" role="group" aria-label="Paper appearance">
@@ -204,19 +213,15 @@
           data-field-card-theme="bw"
           aria-pressed={theme === 'bw'}
           class:active={theme === 'bw'}
-          onclick={() => (theme = 'bw')}
+          onclick={() => (theme = 'bw')}>Crisp B&amp;W Print</button
         >
-          Crisp B&amp;W Print
-        </button>
         <button
           type="button"
           data-field-card-theme="classic"
           aria-pressed={theme === 'classic'}
           class:active={theme === 'classic'}
-          onclick={() => (theme = 'classic')}
+          onclick={() => (theme = 'classic')}>LMH25 Field Card Classic</button
         >
-          LMH25 Field Card Classic
-        </button>
       </div>
 
       {#if onmodechange}
@@ -227,20 +232,11 @@
           onclick={() => onmodechange(mode === 'modal' ? 'docked' : 'modal')}
           title={mode === 'modal' ? 'Dock as live split-pane preview' : 'Expand to fullscreen modal'}
         >
-          {#if mode === 'modal'}
-            <Columns2 size={14} /> Dock Split
-          {:else}
-            <Maximize2 size={14} /> Full Modal
-          {/if}
+          {#if mode === 'modal'}<Columns2 size={14} /> Dock Split{:else}<Maximize2 size={14} /> Full Modal{/if}
         </button>
       {/if}
 
-      <button
-        type="button"
-        class="fc-action-btn fc-print-btn"
-        data-field-card-print
-        onclick={printCard}
-      >
+      <button type="button" class="fc-action-btn fc-print-btn" data-field-card-print onclick={printCard}>
         <Printer size={14} /> Print / Save PDF
       </button>
 
@@ -267,21 +263,7 @@
         data-field-card-sheet="front"
         aria-label="Field Card Front — Site and Soil"
       >
-        <header class="fc-sheet-masthead">
-          <div>
-            <div class="fc-ministry-line">{viewModel.ministryHeader}</div>
-            <div class="fc-card-title">{viewModel.cardTitle} — FRONT (SITE &amp; SOIL)</div>
-          </div>
-          <div class="fc-masthead-right">
-            {#if viewModel.isDirty}
-              <span class="fc-sheet-stamp">UNSAVED DRAFT</span>
-            {/if}
-            <div class="fc-plot-box">
-              <span class="fc-cell-label">PLOT NO.</span>
-              <strong class="fc-mono fc-plot-id">{viewModel.plotNumber}</strong>
-            </div>
-          </div>
-        </header>
+        {@render sheetMasthead('FRONT (SITE & SOIL)')}
 
         <section class="fc-block">
           <div class="fc-block-header">1. PLOT IDENTITY &amp; SURVEY</div>
@@ -328,77 +310,7 @@
           {@render ruledCells(viewModel.front.soilSummaryCells)}
         </section>
 
-        <div class="fc-two-col">
-          <section class="fc-block">
-            <div class="fc-block-header">8. ORGANIC HORIZONS / LAYERS</div>
-            <table class="fc-ruled-table">
-              <thead>
-                <tr>
-                  <th>Horiz</th>
-                  <th>Depth</th>
-                  <th>Struct</th>
-                  <th>M/F</th>
-                  <th>Roots</th>
-                  <th>vP</th>
-                  <th>pH</th>
-                  <th>Comment</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each viewModel.front.organicHorizons as row (row.id)}
-                  <tr class:fc-row-draft={row.isDraft}>
-                    <td class="fc-mono fc-bold">{row.horizon}</td>
-                    <td class="fc-mono">{row.depthRange}</td>
-                    <td class="fc-mono">{row.fabricStructure}</td>
-                    <td class="fc-mono">{row.mycelFecal}</td>
-                    <td class="fc-mono">{row.roots}</td>
-                    <td class="fc-mono">{row.vonPost}</td>
-                    <td class="fc-mono">{row.ph}</td>
-                    <td>{row.comment}</td>
-                  </tr>
-                {:else}
-                  <tr><td colspan="8" class="fc-empty-cell">No organic horizons recorded</td></tr>
-                {/each}
-              </tbody>
-            </table>
-          </section>
-
-          <section class="fc-block">
-            <div class="fc-block-header">9. MINERAL HORIZONS / LAYERS</div>
-            <table class="fc-ruled-table">
-              <thead>
-                <tr>
-                  <th>Horiz</th>
-                  <th>Depth</th>
-                  <th>Tex</th>
-                  <th>Colour</th>
-                  <th>Coarse Frags</th>
-                  <th>Roots</th>
-                  <th>Struct</th>
-                  <th>pH</th>
-                  <th>Comments</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each viewModel.front.mineralHorizons as row (row.id)}
-                  <tr class:fc-row-draft={row.isDraft}>
-                    <td class="fc-mono fc-bold">{row.horizon}</td>
-                    <td class="fc-mono">{row.depthRange}</td>
-                    <td class="fc-mono">{row.texture}</td>
-                    <td class="fc-mono">{row.colour}</td>
-                    <td class="fc-mono">{row.coarseFrags}</td>
-                    <td class="fc-mono">{row.roots}</td>
-                    <td class="fc-mono">{row.structure}</td>
-                    <td class="fc-mono">{row.ph}</td>
-                    <td>{row.comments}</td>
-                  </tr>
-                {:else}
-                  <tr><td colspan="9" class="fc-empty-cell">No mineral horizons recorded</td></tr>
-                {/each}
-              </tbody>
-            </table>
-          </section>
-        </div>
+        <FieldCardVegSoilTables section="soil" {viewModel} />
 
         <section class="fc-block">
           <div class="fc-block-header">10. SITE, OFFICE &amp; SOIL NOTES</div>
@@ -421,26 +333,8 @@
     {/if}
 
     {#if side === 'back' || side === 'both'}
-      <article
-        class="fc-sheet"
-        data-field-card-sheet="back"
-        aria-label="Field Card Back — Vegetation and Notes"
-      >
-        <header class="fc-sheet-masthead">
-          <div>
-            <div class="fc-ministry-line">{viewModel.ministryHeader}</div>
-            <div class="fc-card-title">{viewModel.cardTitle} — BACK (VEGETATION)</div>
-          </div>
-          <div class="fc-masthead-right">
-            {#if viewModel.isDirty}
-              <span class="fc-sheet-stamp">UNSAVED DRAFT</span>
-            {/if}
-            <div class="fc-plot-box">
-              <span class="fc-cell-label">PLOT NO.</span>
-              <strong class="fc-mono fc-plot-id">{viewModel.plotNumber}</strong>
-            </div>
-          </div>
-        </header>
+      <article class="fc-sheet" data-field-card-sheet="back" aria-label="Field Card Back — Vegetation and Notes">
+        {@render sheetMasthead('BACK (VEGETATION)')}
 
         <div class="fc-two-col">
           <section class="fc-block">
@@ -454,130 +348,7 @@
           </section>
         </div>
 
-        <section class="fc-block">
-          <div class="fc-block-header">
-            <span>13. TREE &amp; SHRUB STRATA (LAYERS A &amp; B{viewModel.back.showExtendedShrubColumns ? ' + EXTENDED B3–B5' : ''})</span>
-            <span class="fc-mono">{viewModel.back.treeShrubRows.length} spp.</span>
-          </div>
-          <table class="fc-ruled-table">
-            <thead>
-              <tr>
-                <th>Species</th>
-                <th>Col</th>
-                <th>A1 %</th>
-                <th>A1 Ht</th>
-                <th>A2 %</th>
-                <th>A2 Ht</th>
-                <th>A3 %</th>
-                <th>A3 Ht</th>
-                <th>Tot A</th>
-                <th>B1 %</th>
-                <th>B1 Ht</th>
-                <th>B2 %</th>
-                <th>B2 Ht</th>
-                {#if viewModel.back.showExtendedShrubColumns}
-                  <th>B3 %</th>
-                  <th>B4 %</th>
-                  <th>B5 %</th>
-                {/if}
-                <th>Tot B</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each viewModel.back.treeShrubRows as row (`ab-${row.id}`)}
-                <tr class:fc-row-draft={row.isDraft}>
-                  <td class="fc-mono fc-bold">{row.species}</td>
-                  <td class="fc-mono">{row.collected}</td>
-                  <td class="fc-mono fc-num">{row.cover1}</td>
-                  <td class="fc-mono fc-num">{row.height1}</td>
-                  <td class="fc-mono fc-num">{row.cover2}</td>
-                  <td class="fc-mono fc-num">{row.height2}</td>
-                  <td class="fc-mono fc-num">{row.cover3}</td>
-                  <td class="fc-mono fc-num">{row.height3}</td>
-                  <td class="fc-mono fc-num fc-bold">{row.totalA}</td>
-                  <td class="fc-mono fc-num">{row.cover4}</td>
-                  <td class="fc-mono fc-num">{row.height4}</td>
-                  <td class="fc-mono fc-num">{row.cover5}</td>
-                  <td class="fc-mono fc-num">{row.height5}</td>
-                  {#if viewModel.back.showExtendedShrubColumns}
-                    <td class="fc-mono fc-num">{row.cover5a}</td>
-                    <td class="fc-mono fc-num">{row.cover5b}</td>
-                    <td class="fc-mono fc-num">{row.cover5c}</td>
-                  {/if}
-                  <td class="fc-mono fc-num fc-bold">{row.totalB}</td>
-                </tr>
-              {:else}
-                <tr>
-                  <td colspan={viewModel.back.showExtendedShrubColumns ? 17 : 14} class="fc-empty-cell">
-                    No tree or shrub strata rows recorded
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </section>
-
-        <div class="fc-two-col">
-          <section class="fc-block">
-            <div class="fc-block-header">
-              <span>14. HERB STRATUM (LAYER C)</span>
-              <span class="fc-mono">{viewModel.back.herbRows.length} spp.</span>
-            </div>
-            <table class="fc-ruled-table">
-              <thead>
-                <tr>
-                  <th>Species</th>
-                  <th>Col</th>
-                  <th>C %</th>
-                  <th>C Ht</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each viewModel.back.herbRows as row (`c-${row.id}`)}
-                  <tr class:fc-row-draft={row.isDraft}>
-                    <td class="fc-mono fc-bold">{row.species}</td>
-                    <td class="fc-mono">{row.collected}</td>
-                    <td class="fc-mono fc-num">{row.cover6}</td>
-                    <td class="fc-mono fc-num">{row.height6}</td>
-                  </tr>
-                {:else}
-                  <tr><td colspan="4" class="fc-empty-cell">No herb stratum rows recorded</td></tr>
-                {/each}
-              </tbody>
-            </table>
-          </section>
-
-          <section class="fc-block">
-            <div class="fc-block-header">
-              <span>15. MOSS, LIVERWORT &amp; LICHEN STRATUM (LAYER D)</span>
-              <span class="fc-mono">{viewModel.back.mossRows.length} spp.</span>
-            </div>
-            <table class="fc-ruled-table">
-              <thead>
-                <tr>
-                  <th>Species</th>
-                  <th>Col</th>
-                  <th>D (Soil/Humus) %</th>
-                  <th>Dw (Wood) %</th>
-                  <th>Dr (Rock) %</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each viewModel.back.mossRows as row (`d-${row.id}`)}
-                  <tr class:fc-row-draft={row.isDraft}>
-                    <td class="fc-mono fc-bold">{row.species}</td>
-                    <td class="fc-mono">{row.collected}</td>
-                    <td class="fc-mono fc-num">{row.cover7}</td>
-                    <td class="fc-mono fc-num">{row.cover8}</td>
-                    <td class="fc-mono fc-num">{row.cover9}</td>
-                  </tr>
-                {:else}
-                  <tr><td colspan="5" class="fc-empty-cell">No moss / lichen rows recorded</td></tr>
-                {/each}
-              </tbody>
-            </table>
-          </section>
-        </div>
+        <FieldCardVegSoilTables section="veg" {viewModel} />
 
         <section class="fc-block">
           <div class="fc-block-header">16. VEGETATION NOTES</div>
@@ -629,468 +400,3 @@
     </aside>
   {/if}
 {/if}
-
-<style>
-  .field-card-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 60;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1.25rem;
-    background: rgba(0, 22, 44, 0.62);
-    backdrop-filter: blur(2px);
-  }
-
-  .field-card-modal-panel {
-    display: flex;
-    flex-direction: column;
-    width: min(1240px, 96vw);
-    height: min(92vh, 1080px);
-    background: var(--vpro-canvas);
-    border: 1px solid var(--vpro-navy);
-    border-top: 4px solid var(--vpro-gold);
-    border-radius: 6px;
-    box-shadow: var(--vpro-shadow-lg, 0 14px 34px rgba(0, 34, 68, 0.28));
-    overflow: hidden;
-  }
-
-  .field-card-dock {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    width: 100%;
-    height: 100%;
-    max-height: 100%;
-    background: var(--vpro-canvas);
-    border-left: 2px solid var(--vpro-navy);
-    overflow: hidden;
-  }
-
-  .field-card-toolbar {
-    flex: none;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.6rem;
-    padding: 0.6rem 0.9rem;
-    background: var(--vpro-navy);
-    color: var(--vpro-surface);
-    border-bottom: 2px solid var(--vpro-gold);
-  }
-
-  .fc-toolbar-title {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    min-width: 0;
-  }
-
-  .fc-toolbar-heading {
-    margin: 0;
-    font-size: 0.92rem;
-    font-weight: 700;
-    color: var(--vpro-surface);
-    line-height: 1.25;
-  }
-
-  .fc-toolbar-sub {
-    display: block;
-    font-size: 0.72rem;
-    color: var(--vpro-navy-tint);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .fc-dirty-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.15rem 0.5rem;
-    border-radius: 3px;
-    background: var(--vpro-gold);
-    color: var(--vpro-ink);
-    font-family: var(--vpro-font-mono, monospace);
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
-  }
-
-  .fc-toolbar-controls {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.45rem;
-  }
-
-  .fc-segmented {
-    display: inline-flex;
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-
-  .fc-segmented button {
-    padding: 0.3rem 0.55rem;
-    border: 0;
-    border-right: 1px solid rgba(255, 255, 255, 0.22);
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--vpro-navy-tint);
-    font-size: 0.72rem;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
-  .fc-segmented button:last-child {
-    border-right: 0;
-  }
-
-  .fc-segmented button.active {
-    background: var(--vpro-surface);
-    color: var(--vpro-navy);
-  }
-
-  .fc-action-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    padding: 0.32rem 0.65rem;
-    border-radius: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.4);
-    background: rgba(255, 255, 255, 0.12);
-    color: var(--vpro-surface);
-    font-size: 0.73rem;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
-  .fc-print-btn {
-    background: var(--vpro-forest);
-    border-color: var(--vpro-forest-border);
-  }
-
-  .fc-action-btn:hover {
-    background: rgba(255, 255, 255, 0.24);
-  }
-
-  .fc-print-btn:hover {
-    background: var(--vpro-forest-dark);
-  }
-
-  .fc-close-btn {
-    display: inline-grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--vpro-surface);
-  }
-
-  .fc-close-btn:hover {
-    background: var(--vpro-error);
-    border-color: var(--vpro-surface);
-  }
-
-  .field-card-scroll {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 1rem;
-  }
-
-  .field-card-sheets {
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-    max-width: 1080px;
-    margin: 0 auto;
-    --fc-paper: #faf8f0;
-    --fc-ink: #1b2a22;
-    --fc-rule: #2c4235;
-    --fc-rule-hair: #7a9182;
-    --fc-band: #dce6de;
-    --fc-band-ink: #102a1d;
-    --fc-draft-bg: #fef3c7;
-  }
-
-  .field-card-sheets[data-paper-theme='bw'] {
-    --fc-paper: #ffffff;
-    --fc-ink: #000000;
-    --fc-rule: #000000;
-    --fc-rule-hair: #222222;
-    --fc-band: #eeeeee;
-    --fc-band-ink: #000000;
-    --fc-draft-bg: #f3f4f6;
-  }
-
-  .fc-sheet {
-    container-type: inline-size;
-    background: var(--fc-paper);
-    color: var(--fc-ink);
-    border: 2px solid var(--fc-rule);
-    padding: 0.75rem;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
-    font-size: 0.75rem;
-    line-height: 1.3;
-  }
-
-  .fc-sheet-masthead {
-    display: flex;
-    align-items: stretch;
-    justify-content: space-between;
-    gap: 0.75rem;
-    border-bottom: 2px solid var(--fc-rule);
-    padding-bottom: 0.45rem;
-    margin-bottom: 0.55rem;
-  }
-
-  .fc-ministry-line {
-    font-size: 0.65rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-
-  .fc-card-title {
-    font-size: 0.92rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    margin-top: 0.1rem;
-  }
-
-  .fc-masthead-right {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .fc-sheet-stamp {
-    padding: 0.15rem 0.45rem;
-    border: 1.5px solid var(--fc-rule);
-    font-family: var(--vpro-font-mono, monospace);
-    font-size: 0.65rem;
-    font-weight: 700;
-    background: var(--fc-draft-bg);
-  }
-
-  .fc-plot-box {
-    border: 1.5px solid var(--fc-rule);
-    padding: 0.2rem 0.55rem;
-    min-width: 7rem;
-    background: rgba(255, 255, 255, 0.55);
-  }
-
-  .fc-plot-id {
-    display: block;
-    font-size: 0.95rem;
-  }
-
-  .fc-two-col {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.5rem;
-  }
-
-  @media (max-width: 820px) {
-    .fc-two-col {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
-  @container (max-width: 720px) {
-    .fc-two-col {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
-  .fc-block {
-    border: 1px solid var(--fc-rule);
-    margin-bottom: 0.5rem;
-    min-width: 0;
-  }
-
-  .fc-block-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    padding: 0.2rem 0.45rem;
-    background: var(--fc-band);
-    color: var(--fc-band-ink);
-    border-bottom: 1px solid var(--fc-rule);
-    font-size: 0.64rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-  }
-
-  .fc-cell-grid {
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-  }
-
-  .fc-cell {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    min-width: 0;
-    padding: 0.22rem 0.38rem;
-    border-right: 1px solid var(--fc-rule-hair);
-    border-bottom: 1px solid var(--fc-rule-hair);
-  }
-
-  .fc-cell-draft,
-  .fc-row-draft {
-    background: var(--fc-draft-bg);
-  }
-
-  .fc-cell-label {
-    display: block;
-    font-size: 0.58rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    opacity: 0.85;
-    line-height: 1.15;
-  }
-
-  .fc-cell-value {
-    display: block;
-    margin-top: 0.12rem;
-    font-size: 0.76rem;
-    min-height: 1rem;
-    overflow-wrap: anywhere;
-  }
-
-  .fc-mono {
-    font-family: var(--vpro-font-mono, monospace);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .fc-bold {
-    font-weight: 700;
-  }
-
-  .fc-num {
-    text-align: right;
-  }
-
-  .fc-ruled-table {
-    width: 100%;
-    min-width: 0;
-    border-collapse: collapse;
-    font-size: 0.7rem;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .fc-ruled-table th {
-    background: var(--fc-band);
-    color: var(--fc-band-ink);
-    font-size: 0.58rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    padding: 0.2rem 0.3rem;
-    border-bottom: 1px solid var(--fc-rule);
-    border-right: 1px solid var(--fc-rule-hair);
-    white-space: nowrap;
-  }
-
-  .fc-ruled-table td {
-    padding: 0.2rem 0.3rem;
-    border-bottom: 1px solid var(--fc-rule-hair);
-    border-right: 1px solid var(--fc-rule-hair);
-    white-space: normal;
-    max-width: none;
-    color: var(--fc-ink);
-  }
-
-  .fc-empty-cell {
-    text-align: center;
-    font-style: italic;
-    opacity: 0.72;
-    padding: 0.35rem;
-  }
-
-  .fc-notes-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  @media (max-width: 720px) {
-    .fc-notes-grid {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
-  .fc-note-box {
-    padding: 0.3rem 0.45rem;
-    border-right: 1px solid var(--fc-rule-hair);
-    min-height: 3.2rem;
-  }
-
-  .fc-note-box:last-child {
-    border-right: 0;
-  }
-
-  .fc-note-box p {
-    margin: 0.2rem 0 0;
-    white-space: pre-wrap;
-    font-size: 0.73rem;
-  }
-
-  @media (max-width: 1759px) {
-    .fc-dock-switch {
-      display: none;
-    }
-  }
-
-  @page {
-    size: letter portrait;
-    margin: 10mm;
-  }
-
-  @media print {
-    :global(body:has([data-field-card-active]) .topbar),
-    :global(body:has([data-field-card-active]) .sidebar),
-    :global(body:has([data-field-card-active]) .detail),
-    :global(body:has([data-field-card-active]) .fs882-toolbar),
-    :global(body:has([data-field-card-active]) .fs882-tabs),
-    :global(body:has([data-field-card-active]) [data-field-card-form-pane]) {
-      display: none !important;
-    }
-
-    .field-card-toolbar {
-      display: none !important;
-    }
-
-    .field-card-backdrop,
-    .field-card-modal-panel,
-    .field-card-dock,
-    .field-card-scroll {
-      position: static !important;
-      width: 100% !important;
-      height: auto !important;
-      max-height: none !important;
-      padding: 0 !important;
-      border: 0 !important;
-      background: transparent !important;
-      box-shadow: none !important;
-      overflow: visible !important;
-    }
-
-    .fc-sheet {
-      box-shadow: none !important;
-      margin: 0 !important;
-      break-inside: avoid-page;
-    }
-
-    .fc-page-break-after {
-      break-after: page;
-      page-break-after: always;
-    }
-  }
-</style>

@@ -6,6 +6,7 @@ import type {
   OtherRecord,
   VegRecord,
 } from '../../bindings/github.com/boostao/vpro/app';
+import { formatError } from '../shared/readRequests';
 import type { SIVIHeightSession } from './siviHeightSession';
 import type { SIVICoverSession } from './siviCoverSession';
 import type { SIVICombinedSession } from './siviCombinedSession';
@@ -16,6 +17,10 @@ import type { SIVIIdentitySession } from './siviIdentitySession';
 export type FS882ChildKind = 'Veg' | 'Humus' | 'Mineral' | 'Other';
 
 export type FS882ChildCapabilities = Record<FS882ChildKind, Record<string, boolean | undefined>>;
+
+export function toRecord(value: object): Record<string, unknown> {
+  return { ...value };
+}
 
 export const newHumusFields = {
   humusStructureDegree: null,
@@ -178,13 +183,37 @@ export function newEmptyFS882Draft(): FS882Header {
   };
 }
 
-const treeColumns = ['cover1', 'cover2', 'cover3', 'totalA', 'cover4', 'cover5', 'cover5a', 'cover5b', 'cover5c', 'totalB'] as const;
-const heightTreeColumns = ['cover1', 'height1', 'cover2', 'height2', 'cover3', 'height3', 'totalA', 'cover4', 'height4', 'cover5', 'height5', 'totalB'] as const;
+const treeColumns = [
+  'cover1',
+  'cover2',
+  'cover3',
+  'totalA',
+  'cover4',
+  'cover5',
+  'cover5a',
+  'cover5b',
+  'cover5c',
+  'totalB',
+] as const;
+const heightTreeColumns = [
+  'cover1',
+  'height1',
+  'cover2',
+  'height2',
+  'cover3',
+  'height3',
+  'totalA',
+  'cover4',
+  'height4',
+  'cover5',
+  'height5',
+  'totalB',
+] as const;
 
 function projectChildValues(
   record: object,
   kind: FS882ChildKind,
-  childCapabilities: FS882ChildCapabilities,
+  childCapabilities: FS882ChildCapabilities
 ): Record<string, string | number | boolean | null | undefined> {
   const values: Record<string, string | number | boolean | null | undefined> = {};
   const stored = new Map(Object.entries(record));
@@ -207,32 +236,32 @@ export function projectSourceRows(
     mineralList: MineralRecord[];
     otherList: OtherRecord[];
     childCapabilities: FS882ChildCapabilities;
-  },
+  }
 ): Array<{ id: number; values: Record<string, string | number | boolean | null | undefined> }> {
   const { vegList, humusList, mineralList, otherList, childCapabilities } = lists;
   if (['SubVegAXL_BC', 'SubVegAXL', 'SubVegCXL', 'SubVegDXL', 'SubVegAhtXL', 'SubVegChtXL'].includes(name)) {
-    const records = vegList.filter(row =>
+    const records = vegList.filter((row) =>
       name === 'SubVegAXL_BC' || name === 'SubVegAXL'
-        ? treeColumns.some(key => row[key] != null)
+        ? treeColumns.some((key) => row[key] != null)
         : name === 'SubVegAhtXL'
-          ? heightTreeColumns.some(key => row[key] != null)
+          ? heightTreeColumns.some((key) => row[key] != null)
           : name === 'SubVegCXL' || name === 'SubVegChtXL'
             ? row.cover6 != null
-            : row.cover7 != null || row.cover8 != null || row.cover9 != null,
+            : row.cover7 != null || row.cover8 != null || row.cover9 != null
     );
-    return records.map(row => ({
+    return records.map((row) => ({
       id: row.id,
       values: projectChildValues(row, 'Veg', childCapabilities),
     }));
   }
   if (name === 'USysVegOtherXL') {
-    return vegList.map(row => ({
+    return vegList.map((row) => ({
       id: row.id,
       values: projectChildValues(row, 'Veg', childCapabilities),
     }));
   }
   if (name === 'SoilHumusXL') {
-    return humusList.map(row => ({
+    return humusList.map((row) => ({
       id: row.id,
       values: {
         ...projectChildValues(row, 'Humus', childCapabilities),
@@ -241,13 +270,13 @@ export function projectSourceRows(
     }));
   }
   if (name === 'SoilMineralXL') {
-    return mineralList.map(row => ({
+    return mineralList.map((row) => ({
       id: row.id,
       values: projectChildValues(row, 'Mineral', childCapabilities),
     }));
   }
   if (name === 'SubOtherXL') {
-    return otherList.map(row => ({
+    return otherList.map((row) => ({
       id: row.id,
       values: projectChildValues(row, 'Other', childCapabilities),
     }));
@@ -268,7 +297,7 @@ export function historicalSoilReadError(kind: 'Humus' | 'Mineral', cause: unknow
 
 export function validateOrdinarySoilRecordIds<T extends { id: number }>(
   kind: 'Humus' | 'Mineral',
-  rows: T[],
+  rows: T[]
 ): { records: T[]; reason: string | null } {
   const seen = new Set<number>();
   for (const row of rows) {
@@ -298,7 +327,7 @@ async function executeReviewedSIVISessionOperation(
   },
   operation: 'load' | 'save' | 'undo' | 'retain' | 'prune',
   retainAction: AuditRestoreAction,
-  pruneAction: AuditRestoreAction,
+  pruneAction: AuditRestoreAction
 ): Promise<boolean> {
   if (operation === 'load') return owner.load();
   if (operation === 'save') return owner.save();
@@ -350,35 +379,40 @@ interface ReviewedSiviDescriptor {
 
 const REVIEWED_SIVI_DESCRIPTORS: Record<ReviewedSiviKind, ReviewedSiviDescriptor> = {
   parentWrite: {
-    guardMsg: 'SIVI parent edits require a clean unlocked parent and no conflicting operation; resolve acknowledgements explicitly.',
+    guardMsg:
+      'SIVI parent edits require a clean unlocked parent and no conflicting operation; resolve acknowledgements explicitly.',
     saveMsg: 'SIVI directly bound parent fields saved and independently reloaded.',
     restoreMsg: 'SIVI typed parent restoration completed and reloaded.',
     reloadMsg: 'SIVI parent originals reloaded; no mutation was replayed.',
     failMsg: 'SIVI parent operation failed; owner state retained',
   },
   parentAction: {
-    guardMsg: 'SIVI source actions require a clean unlocked parent and no conflicting drafts or operation; resolve acknowledgements explicitly.',
+    guardMsg:
+      'SIVI source actions require a clean unlocked parent and no conflicting drafts or operation; resolve acknowledgements explicitly.',
     saveMsg: 'SIVI source actions saved; callback directive verified and owned parent reloaded.',
     restoreMsg: 'SIVI typed source-action restoration completed and reloaded.',
     reloadMsg: 'SIVI action originals reloaded; no mutation was replayed.',
     failMsg: 'SIVI source-action operation failed; owner state retained',
   },
   projectAssignment: {
-    guardMsg: 'ProjectID assignment requires a clean unlocked parent and no conflicting drafts or operation; resolve acknowledgements explicitly.',
+    guardMsg:
+      'ProjectID assignment requires a clean unlocked parent and no conflicting drafts or operation; resolve acknowledgements explicitly.',
     saveMsg: 'Existing physical ProjectID definition assigned; owned parent and choices reloaded.',
     restoreMsg: 'Typed ProjectID restoration completed and reloaded; metadata was not changed.',
     reloadMsg: 'Owned ProjectID parent and choices reloaded; no mutation was replayed.',
     failMsg: 'ProjectID assignment operation failed; owner state retained',
   },
   parentShared: {
-    guardMsg: 'Shared SIVI edits require a clean unlocked parent and no conflicting operation; recover uncertain writes explicitly.',
+    guardMsg:
+      'Shared SIVI edits require a clean unlocked parent and no conflicting operation; recover uncertain writes explicitly.',
     saveMsg: 'Shared SIVI operation completed and owned originals reloaded; no mutation was replayed.',
     restoreMsg: 'Shared SIVI operation completed and owned originals reloaded; no mutation was replayed.',
     reloadMsg: 'Shared SIVI operation completed and owned originals reloaded; no mutation was replayed.',
     failMsg: 'Shared SIVI operation failed; owner state retained',
   },
   height: {
-    guardMsg: 'SIVI requires an available clean, unlocked parent and no conflicting operation or unresolved acknowledgement.',
+    guardMsg:
+      'SIVI requires an available clean, unlocked parent and no conflicting operation or unresolved acknowledgement.',
     saveMsg: 'SIVI aggregate heights saved; current rows and audits reloaded.',
     restoreMsg: 'SIVI typed height restoration completed; current rows and audits reloaded.',
     reloadMsg: 'SIVI source rows reloaded. No height mutation was replayed.',
@@ -392,21 +426,24 @@ const REVIEWED_SIVI_DESCRIPTORS: Record<ReviewedSiviKind, ReviewedSiviDescriptor
     failMsg: 'SIVI cover operation failed; owner state retained',
   },
   combined: {
-    guardMsg: 'SIVI combined editing requires a clean, unlocked available parent and no conflicting drafts or operation.',
+    guardMsg:
+      'SIVI combined editing requires a clean, unlocked available parent and no conflicting drafts or operation.',
     saveMsg: 'SIVI covers and heights saved atomically; current rows and audits reloaded.',
     restoreMsg: 'SIVI typed combined restoration completed; current rows and audits reloaded.',
     reloadMsg: 'SIVI combined source rows reloaded. No mutation was replayed.',
     failMsg: 'SIVI combined operation failed; owner state retained',
   },
   collected: {
-    guardMsg: 'SIVI Collected editing requires a clean, unlocked available parent and no conflicting drafts or operation.',
+    guardMsg:
+      'SIVI Collected editing requires a clean, unlocked available parent and no conflicting drafts or operation.',
     saveMsg: 'SIVI Collected cycle intent saved; current rows and audits reloaded.',
     restoreMsg: 'SIVI typed Collected restoration completed; current rows and audits reloaded.',
     reloadMsg: 'SIVI Collected source rows reloaded. No mutation was replayed.',
     failMsg: 'SIVI Collected operation failed; owner state retained',
   },
   species: {
-    guardMsg: 'SIVI Species editing requires a clean, unlocked available parent and no conflicting drafts or operation.',
+    guardMsg:
+      'SIVI Species editing requires a clean, unlocked available parent and no conflicting drafts or operation.',
     saveMsg: 'SIVI Species source decisions saved; current rows, definitions and audits reloaded.',
     restoreMsg: 'SIVI typed Species restoration completed; current rows, definitions and audits reloaded.',
     reloadMsg: 'SIVI Species rows and definitions reloaded. No mutation was replayed.',
@@ -452,7 +489,12 @@ export async function runReviewedSiviOp(params: {
   params.setSuccess(null);
   params.onReading?.(params.operation === 'load');
   try {
-    const ok = await executeReviewedSIVISessionOperation(owner, params.operation, params.retainAction, params.pruneAction);
+    const ok = await executeReviewedSIVISessionOperation(
+      owner,
+      params.operation,
+      params.retainAction,
+      params.pruneAction
+    );
     if (params.trackOwner && owner !== params.getOwner()) return false;
     if (!ok) {
       params.setError(owner.view().error);
@@ -463,12 +505,12 @@ export async function runReviewedSiviOp(params: {
         ? desc.saveMsg
         : params.operation === 'retain' || params.operation === 'prune'
           ? desc.restoreMsg
-          : desc.reloadMsg,
+          : desc.reloadMsg
     );
     return true;
   } catch (cause) {
     if (params.trackOwner && owner !== params.getOwner()) return false;
-    params.setError(`${desc.failMsg}: ${String(cause)}`);
+    params.setError(`${desc.failMsg}: ${formatError(cause)}`);
     return false;
   } finally {
     if (!params.trackOwner || owner === params.getOwner()) {
@@ -498,7 +540,7 @@ export function runStageSivi(params: {
     else if (!params.errorPrefix) params.setError(null);
     params.setSuccess(null);
   } catch (cause) {
-    params.setError(`${params.failPrefix}: ${String(cause)}`);
+    params.setError(`${params.failPrefix}: ${formatError(cause)}`);
   }
 }
 
@@ -565,7 +607,7 @@ export function buildDirectSourceChildWrite(
     UpdateHumusRecord: (record: HumusRecord) => Promise<unknown>;
     UpdateMineralRecord: (record: MineralRecord) => Promise<unknown>;
     UpdateOtherRecord: (record: OtherRecord) => Promise<unknown>;
-  },
+  }
 ): () => Promise<void> {
   const key = column.toLowerCase();
   const numeric = () => {
@@ -575,41 +617,86 @@ export function buildDirectSourceChildWrite(
     return value;
   };
   if (name.startsWith('SubVeg')) {
-    const row = lists.vegList.find(record => record.id === id);
+    const row = lists.vegList.find((record) => record.id === id);
     if (!row) throw new Error('Vegetation row disappeared; reload before editing.');
-    const numbers: Record<string, 'cover1' | 'cover2' | 'cover3' | 'totalA' | 'cover4' | 'cover5' | 'totalB' | 'cover6' | 'cover7' | 'cover8' | 'cover9'> = {
-      cover1: 'cover1', cover2: 'cover2', cover3: 'cover3', totala: 'totalA', cover4: 'cover4',
-      cover5: 'cover5', totalb: 'totalB', cover6: 'cover6', cover7: 'cover7', cover8: 'cover8', cover9: 'cover9',
+    const numbers: Record<
+      string,
+      | 'cover1'
+      | 'cover2'
+      | 'cover3'
+      | 'totalA'
+      | 'cover4'
+      | 'cover5'
+      | 'totalB'
+      | 'cover6'
+      | 'cover7'
+      | 'cover8'
+      | 'cover9'
+    > = {
+      cover1: 'cover1',
+      cover2: 'cover2',
+      cover3: 'cover3',
+      totala: 'totalA',
+      cover4: 'cover4',
+      cover5: 'cover5',
+      totalb: 'totalB',
+      cover6: 'cover6',
+      cover7: 'cover7',
+      cover8: 'cover8',
+      cover9: 'cover9',
     };
     const numberKey = numbers[key];
-    if (numberKey) return async () => { await port.UpdateVegRecord({ ...row, [numberKey]: numeric() }); };
-    if (key === 'collected') return async () => { await port.UpdateVegRecord({ ...row, collected: raw || undefined }); };
+    if (numberKey)
+      return async () => {
+        await port.UpdateVegRecord({ ...row, [numberKey]: numeric() });
+      };
+    if (key === 'collected')
+      return async () => {
+        await port.UpdateVegRecord({ ...row, collected: raw || undefined });
+      };
     throw new Error(`Vegetation column ${column} is not migrated.`);
   }
   if (name === 'SoilHumusXL') {
-    const row = lists.humusList.find(record => record.id === id);
+    const row = lists.humusList.find((record) => record.id === id);
     if (!row) throw new Error('Humus row disappeared; reload before editing.');
-    const numbers: Record<string, 'upperDepth' | 'lowerDepth' | 'ph'> = { upperdepth: 'upperDepth', lowerdepth: 'lowerDepth', humusformph: 'ph' };
-    if (numbers[key]) return async () => { await port.UpdateHumusRecord({ ...row, [numbers[key]]: numeric() }); };
-    if (key === 'horizon' || key === 'comment') return async () => { await port.UpdateHumusRecord({ ...row, [key]: raw || undefined }); };
+    const numbers: Record<string, 'upperDepth' | 'lowerDepth' | 'ph'> = {
+      upperdepth: 'upperDepth',
+      lowerdepth: 'lowerDepth',
+      humusformph: 'ph',
+    };
+    if (numbers[key])
+      return async () => {
+        await port.UpdateHumusRecord({ ...row, [numbers[key]]: numeric() });
+      };
+    if (key === 'horizon' || key === 'comment')
+      return async () => {
+        await port.UpdateHumusRecord({ ...row, [key]: raw || undefined });
+      };
     throw new Error(`Humus column ${column} is not migrated.`);
   }
   if (name === 'SoilMineralXL') {
-    const row = lists.mineralList.find(record => record.id === id);
+    const row = lists.mineralList.find((record) => record.id === id);
     if (!row) throw new Error('Mineral row disappeared; reload before editing.');
     const numbers: Record<string, 'upperDepth' | 'lowerDepth'> = { upperdepth: 'upperDepth', lowerdepth: 'lowerDepth' };
-    if (numbers[key]) return async () => { await port.UpdateMineralRecord({ ...row, [numbers[key]]: numeric() }); };
+    if (numbers[key])
+      return async () => {
+        await port.UpdateMineralRecord({ ...row, [numbers[key]]: numeric() });
+      };
     if (key === 'horizon' || key === 'texture' || key === 'colour' || key === 'comments') {
-      return async () => { await port.UpdateMineralRecord({ ...row, [key]: raw || undefined }); };
+      return async () => {
+        await port.UpdateMineralRecord({ ...row, [key]: raw || undefined });
+      };
     }
     throw new Error(`Mineral column ${column} is not migrated.`);
   }
   if (name === 'SubOtherXL') {
-    const row = lists.otherList.find(record => record.id === id);
+    const row = lists.otherList.find((record) => record.id === id);
     if (!row) throw new Error('Other row disappeared; reload before editing.');
     const fields: Record<string, 'dataName' | 'dataItem'> = { dataname: 'dataName', dataitem: 'dataItem' };
     if (!fields[key]) throw new Error(`Other column ${column} is not migrated.`);
-    return async () => { await port.UpdateOtherRecord({ ...row, [fields[key]]: raw || undefined }); };
+    return async () => {
+      await port.UpdateOtherRecord({ ...row, [fields[key]]: raw || undefined });
+    };
   }
   throw new Error(`Child form ${name} is not migrated.`);
 }

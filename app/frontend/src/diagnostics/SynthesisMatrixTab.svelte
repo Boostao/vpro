@@ -74,9 +74,7 @@
 <div class="syn-table-container">
   {#if !snapshot || snapshot.units.length === 0}
     <div class="syn-empty">
-      {loading
-        ? 'Computing BEC synthesis snapshot...'
-        : 'No classified Site Units available in the current scope.'}
+      {loading ? 'Computing BEC synthesis snapshot...' : 'No classified Site Units available in the current scope.'}
     </div>
   {:else}
     <table class="syn-matrix-table">
@@ -90,9 +88,9 @@
             <th
               class="col-unit"
               class:drop-active={dragOverUnit === unit.siteUnit}
-              ondragover={ev => onUnitDragOver(ev, unit.siteUnit)}
+              ondragover={(ev) => onUnitDragOver(ev, unit.siteUnit)}
               ondragleave={() => onUnitDragLeave(unit.siteUnit)}
-              ondrop={ev => onUnitDrop(ev, unit.siteUnit)}
+              ondrop={(ev) => onUnitDrop(ev, unit.siteUnit)}
               title={unit.longName
                 ? `${unit.siteUnit} — ${unit.longName} (n=${unit.plotCount} plots, ${unit.diagnosticCount} diagnostic taxa)`
                 : `${unit.siteUnit} (n=${unit.plotCount} plots)`}
@@ -118,10 +116,7 @@
               <td class="sticky-col col-code mono-cell">
                 {sp.species}
                 {#if sp.sourceSpecies && sp.sourceSpecies.length > 0}
-                  <span
-                    class="lump-origin-tag"
-                    title={`Includes lumped: ${sp.sourceSpecies.join(', ')}`}
-                  >
+                  <span class="lump-origin-tag" title={`Includes lumped: ${sp.sourceSpecies.join(', ')}`}>
                     +{sp.sourceSpecies.length}
                   </span>
                 {/if}
@@ -154,11 +149,7 @@
                 >
                   {#if cell.presentPlots > 0}
                     <span>
-                      {formatSynthesisMatrixCell(
-                        cell,
-                        matrixDisplay,
-                        snapshot.significanceBasis
-                      )}
+                      {formatSynthesisMatrixCell(cell, matrixDisplay, snapshot.significanceBasis)}
                     </span>
                     {#if cell.isPrimaryDiagnosticUnit && cell.cellDiagnosticCodes.length > 0}
                       <sup class="cell-diag-sup">{cell.cellDiagnosticCodes.join(',')}</sup>

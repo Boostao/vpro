@@ -325,10 +325,7 @@ export interface ClassificationBackendPort {
   saveSUTableAs(contextId: string, req: SaveSUTableAsRequest): Promise<SUTableLifecycleResult>;
   getSUPlotTree(contextId: string, filterText: string): CancellableRead<SUPlotTree>;
   getPlotInspectorSummary(contextId: string, plotNumber: string): CancellableRead<PlotInspectorSummary>;
-  searchBECUnitPicker(
-    contextId: string,
-    req: BECUnitPickerRequest
-  ): CancellableRead<BECUnitPickerChoice[]>;
+  searchBECUnitPicker(contextId: string, req: BECUnitPickerRequest): CancellableRead<BECUnitPickerChoice[]>;
   searchBECSiteSeries?: (
     zone: string | null,
     subZone: string | null,
@@ -337,10 +334,7 @@ export interface ClassificationBackendPort {
   ) => CancellableRead<BECUnitPickerChoice[]>;
   listBECZones?: () => CancellableRead<BECZoneSummary[]>;
   listUserSiteUnitList?: (contextId: string) => CancellableRead<UserSiteUnitEntry[]>;
-  saveUserSiteUnitEntry?: (
-    contextId: string,
-    req: UpsertUserSiteUnitRequest
-  ) => Promise<UserSiteUnitEntry | null>;
+  saveUserSiteUnitEntry?: (contextId: string, req: UpsertUserSiteUnitRequest) => Promise<UserSiteUnitEntry | null>;
   deleteUserSiteUnitEntry?: (contextId: string, req: DeleteUserSiteUnitRequest) => Promise<void>;
   exportUserSiteUnitListCSV?: (contextId: string) => Promise<string>;
   importUserSiteUnitListCSV?: (
@@ -349,48 +343,21 @@ export interface ClassificationBackendPort {
     overwriteExisting: boolean
   ) => Promise<UserSiteUnitImportResult | null>;
   chooseNewSQLiteProjectFile?: (contextId: string, suggestedProject: string) => Promise<string>;
-  assignPlotsToSiteUnit(
-    contextId: string,
-    req: AssignPlotsToSiteUnitRequest
-  ): Promise<AssignPlotsToSiteUnitResult>;
+  assignPlotsToSiteUnit(contextId: string, req: AssignPlotsToSiteUnitRequest): Promise<AssignPlotsToSiteUnitResult>;
   undoSUAssignment(contextId: string, historyId: number): Promise<AssignPlotsToSiteUnitResult>;
-  createSUFromEnvFields(
-    contextId: string,
-    req: CreateSUFromEnvFieldsRequest
-  ): Promise<CreateSUFromEnvFieldsResult>;
+  createSUFromEnvFields(contextId: string, req: CreateSUFromEnvFieldsRequest): Promise<CreateSUFromEnvFieldsResult>;
   getHierarchyExplorer(contextId: string): CancellableRead<HierarchyExplorerView>;
-  createHierarchyTable(
-    contextId: string,
-    req: CreateHierarchyTableRequest
-  ): Promise<HierarchyTableLifecycleResult>;
+  createHierarchyTable(contextId: string, req: CreateHierarchyTableRequest): Promise<HierarchyTableLifecycleResult>;
   saveHierarchyTableAs?: (
     contextId: string,
     req: SaveHierarchyTableAsRequest
   ) => Promise<HierarchyTableLifecycleResult | null>;
-  addHierarchyNode(
-    contextId: string,
-    req: HierarchyAddNodeRequest
-  ): Promise<HierarchyMutationResult>;
-  renameHierarchyNode(
-    contextId: string,
-    req: HierarchyRenameNodeRequest
-  ): Promise<HierarchyMutationResult>;
-  reparentHierarchyNode(
-    contextId: string,
-    req: HierarchyReparentNodeRequest
-  ): Promise<HierarchyMutationResult>;
-  toggleHierarchyBreakpoint(
-    contextId: string,
-    nodeId: number
-  ): Promise<HierarchyMutationResult>;
-  deleteHierarchyNode(
-    contextId: string,
-    req: HierarchyDeleteNodeRequest
-  ): Promise<HierarchyMutationResult>;
-  saveFlatHierarchyRows(
-    contextId: string,
-    req: SaveFlatHierarchyRequest
-  ): Promise<HierarchyMutationResult>;
+  addHierarchyNode(contextId: string, req: HierarchyAddNodeRequest): Promise<HierarchyMutationResult>;
+  renameHierarchyNode(contextId: string, req: HierarchyRenameNodeRequest): Promise<HierarchyMutationResult>;
+  reparentHierarchyNode(contextId: string, req: HierarchyReparentNodeRequest): Promise<HierarchyMutationResult>;
+  toggleHierarchyBreakpoint(contextId: string, nodeId: number): Promise<HierarchyMutationResult>;
+  deleteHierarchyNode(contextId: string, req: HierarchyDeleteNodeRequest): Promise<HierarchyMutationResult>;
+  saveFlatHierarchyRows(contextId: string, req: SaveFlatHierarchyRequest): Promise<HierarchyMutationResult>;
 }
 
 function becSiteSeriesToPickerChoice(row: BECSiteSeries): BECUnitPickerChoice {
@@ -413,19 +380,15 @@ function becSiteSeriesToPickerChoice(row: BECSiteSeries): BECUnitPickerChoice {
 }
 
 export const defaultClassificationBackendPort: ClassificationBackendPort = {
-  createSUTable: (contextId, req) =>
-    (ClassificationService.CreateSUTable(contextId, req) as never),
-  saveSUTableAs: (contextId, req) =>
-    (ClassificationService.SaveSUTableAs(contextId, req) as never),
-  getSUPlotTree: (contextId, filterText) =>
-    (ClassificationService.GetSUPlotTree(contextId, filterText) as never),
+  createSUTable: (contextId, req) => ClassificationService.CreateSUTable(contextId, req) as never,
+  saveSUTableAs: (contextId, req) => ClassificationService.SaveSUTableAs(contextId, req) as never,
+  getSUPlotTree: (contextId, filterText) => ClassificationService.GetSUPlotTree(contextId, filterText) as never,
   getPlotInspectorSummary: (contextId, plotNumber) =>
-    (ClassificationService.GetPlotInspectorSummary(contextId, plotNumber) as never),
-  searchBECUnitPicker: (contextId, req) =>
-    (ClassificationService.SearchBECUnitPicker(contextId, req) as never),
+    ClassificationService.GetPlotInspectorSummary(contextId, plotNumber) as never,
+  searchBECUnitPicker: (contextId, req) => ClassificationService.SearchBECUnitPicker(contextId, req) as never,
   searchBECSiteSeries: (zone, subZone, query, limit) => {
     const raw = ClassificationService.SearchBECSiteSeries(zone, subZone, query, limit);
-    const mapped = raw.then(rows => (rows ?? []).map(becSiteSeriesToPickerChoice)) as CancellableRead<
+    const mapped = raw.then((rows) => (rows ?? []).map(becSiteSeriesToPickerChoice)) as CancellableRead<
       BECUnitPickerChoice[]
     >;
     mapped.cancel = () => raw.cancel();
@@ -433,57 +396,38 @@ export const defaultClassificationBackendPort: ClassificationBackendPort = {
   },
   listBECZones: () => {
     const raw = ClassificationService.ListBECZones();
-    const mapped = raw.then(rows =>
+    const mapped = raw.then((rows) =>
       (rows ?? [])
-        .map(row => ({
+        .map((row) => ({
           zone: (row.zone ?? '').trim(),
           description: (row.description ?? '').trim(),
         }))
-        .filter(row => row.zone !== '')
+        .filter((row) => row.zone !== '')
     ) as CancellableRead<BECZoneSummary[]>;
     mapped.cancel = () => raw.cancel();
     return mapped;
   },
-  listUserSiteUnitList: contextId =>
-    (ClassificationService.ListUserSiteUnitList(contextId) as never),
-  saveUserSiteUnitEntry: (contextId, req) =>
-    (ClassificationService.SaveUserSiteUnitEntry(contextId, req) as never),
-  deleteUserSiteUnitEntry: (contextId, req) =>
-    (ClassificationService.DeleteUserSiteUnitEntry(contextId, req) as never),
-  exportUserSiteUnitListCSV: contextId =>
-    (ClassificationService.ExportUserSiteUnitListCSV(contextId) as never),
+  listUserSiteUnitList: (contextId) => ClassificationService.ListUserSiteUnitList(contextId) as never,
+  saveUserSiteUnitEntry: (contextId, req) => ClassificationService.SaveUserSiteUnitEntry(contextId, req) as never,
+  deleteUserSiteUnitEntry: (contextId, req) => ClassificationService.DeleteUserSiteUnitEntry(contextId, req) as never,
+  exportUserSiteUnitListCSV: (contextId) => ClassificationService.ExportUserSiteUnitListCSV(contextId) as never,
   importUserSiteUnitListCSV: (contextId, csvText, overwriteExisting) =>
-    (ClassificationService.ImportUserSiteUnitListCSV(
-      contextId,
-      csvText,
-      overwriteExisting
-    ) as never),
+    ClassificationService.ImportUserSiteUnitListCSV(contextId, csvText, overwriteExisting) as never,
   chooseNewSQLiteProjectFile: (contextId, suggestedProject) =>
-    (ContextService.ChooseNewSQLiteProjectFile(contextId, suggestedProject) as never),
-  assignPlotsToSiteUnit: (contextId, req) =>
-    (ClassificationService.AssignPlotsToSiteUnit(contextId, req) as never),
-  undoSUAssignment: (contextId, historyId) =>
-    (ClassificationService.UndoSUAssignment(contextId, historyId) as never),
-  createSUFromEnvFields: (contextId, req) =>
-    (ClassificationService.CreateSUFromEnvFields(contextId, req) as never),
-  getHierarchyExplorer: contextId =>
-    (ClassificationService.GetHierarchyExplorer(contextId) as never),
-  createHierarchyTable: (contextId, req) =>
-    (ClassificationService.CreateHierarchyTable(contextId, req) as never),
-  saveHierarchyTableAs: (contextId, req) =>
-    (ClassificationService.SaveHierarchyTableAs(contextId, req) as never),
-  addHierarchyNode: (contextId, req) =>
-    (ClassificationService.AddHierarchyNode(contextId, req) as never),
-  renameHierarchyNode: (contextId, req) =>
-    (ClassificationService.RenameHierarchyNode(contextId, req) as never),
-  reparentHierarchyNode: (contextId, req) =>
-    (ClassificationService.ReparentHierarchyNode(contextId, req) as never),
+    ContextService.ChooseNewSQLiteProjectFile(contextId, suggestedProject) as never,
+  assignPlotsToSiteUnit: (contextId, req) => ClassificationService.AssignPlotsToSiteUnit(contextId, req) as never,
+  undoSUAssignment: (contextId, historyId) => ClassificationService.UndoSUAssignment(contextId, historyId) as never,
+  createSUFromEnvFields: (contextId, req) => ClassificationService.CreateSUFromEnvFields(contextId, req) as never,
+  getHierarchyExplorer: (contextId) => ClassificationService.GetHierarchyExplorer(contextId) as never,
+  createHierarchyTable: (contextId, req) => ClassificationService.CreateHierarchyTable(contextId, req) as never,
+  saveHierarchyTableAs: (contextId, req) => ClassificationService.SaveHierarchyTableAs(contextId, req) as never,
+  addHierarchyNode: (contextId, req) => ClassificationService.AddHierarchyNode(contextId, req) as never,
+  renameHierarchyNode: (contextId, req) => ClassificationService.RenameHierarchyNode(contextId, req) as never,
+  reparentHierarchyNode: (contextId, req) => ClassificationService.ReparentHierarchyNode(contextId, req) as never,
   toggleHierarchyBreakpoint: (contextId, nodeId) =>
-    (ClassificationService.ToggleHierarchyBreakpoint(contextId, nodeId) as never),
-  deleteHierarchyNode: (contextId, req) =>
-    (ClassificationService.DeleteHierarchyNode(contextId, req) as never),
-  saveFlatHierarchyRows: (contextId, req) =>
-    (ClassificationService.SaveFlatHierarchyRows(contextId, req) as never),
+    ClassificationService.ToggleHierarchyBreakpoint(contextId, nodeId) as never,
+  deleteHierarchyNode: (contextId, req) => ClassificationService.DeleteHierarchyNode(contextId, req) as never,
+  saveFlatHierarchyRows: (contextId, req) => ClassificationService.SaveFlatHierarchyRows(contextId, req) as never,
 };
 
 const BEC_UNIT_MASK_REGEX = /^[A-Z]{2,4}[a-z]{1,3}[0-9a-z]{0,3}\/[A-Za-z0-9.\-]{1,12}$/;
@@ -509,10 +453,7 @@ export interface FlattenedSUTreeItem {
 
 export const UNASSIGNED_BUCKET_ID = 'bucket::__unassigned__';
 
-export function flattenVisibleSUTree(
-  tree: SUPlotTree | null,
-  expandedIds: ReadonlySet<string>
-): FlattenedSUTreeItem[] {
+export function flattenVisibleSUTree(tree: SUPlotTree | null, expandedIds: ReadonlySet<string>): FlattenedSUTreeItem[] {
   if (!tree) return [];
   const items: FlattenedSUTreeItem[] = [];
 
@@ -538,7 +479,10 @@ export function flattenVisibleSUTree(
           id: `plot::${bucket.siteUnit}::${p.plotNumber}`,
           kind: 'plot_leaf',
           label: p.plotNumber,
-          subtitle: [p.zone + p.subZone + (p.siteSeries ? `/${p.siteSeries}` : ''), p.moistureRegime ? `SMR ${p.moistureRegime}` : '']
+          subtitle: [
+            p.zone + p.subZone + (p.siteSeries ? `/${p.siteSeries}` : ''),
+            p.moistureRegime ? `SMR ${p.moistureRegime}` : '',
+          ]
             .filter(Boolean)
             .join(' · '),
           level: 2,
@@ -657,7 +601,7 @@ export function resolveAriaTreeKeyAction(
   key: string
 ): AriaTreeAction | null {
   if (items.length === 0) return null;
-  const idx = items.findIndex(i => i.id === focusedId);
+  const idx = items.findIndex((i) => i.id === focusedId);
   const currentIdx = idx >= 0 ? idx : 0;
   const current = items[currentIdx];
 

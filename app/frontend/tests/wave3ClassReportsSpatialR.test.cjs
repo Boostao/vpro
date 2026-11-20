@@ -164,7 +164,8 @@ test('Wave 3 functional wiring spans Classification, Reports, Diagnostics, Spati
   assert.match(profileReviewSrc, /ListProjectPlotProfileLumpTables/);
 
   // 2. Reports contracts
-  const longVegSrc = readFileSync(srcPath('reports/LongVegetationReport.svelte'), 'utf8');
+  const { readReportComposite } = require('./svelteTestHelpers.cjs');
+  const longVegSrc = readReportComposite('long-vegetation');
   const sumVegSrc = readFileSync(srcPath('reports/SummaryVegetationReport.svelte'), 'utf8');
   const sumVegQualSrc = readFileSync(srcPath('reports/SummaryVegetationQualityPreferences.svelte'), 'utf8');
   const lifeformSrc = readFileSync(srcPath('reports/LifeformSummary.svelte'), 'utf8');

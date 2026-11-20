@@ -201,25 +201,25 @@ export interface HelpBackendPort {
 
 export const defaultHelpPort: HelpBackendPort = {
   getHelpBundle() {
-    return (HelpService.GetHelpBundle() as never);
+    return HelpService.GetHelpBundle() as never;
   },
   lookupHelpTopic(helpId: string) {
-    return (HelpService.LookupHelpTopic(helpId) as never);
+    return HelpService.LookupHelpTopic(helpId) as never;
   },
   searchHelp(query: string) {
-    return (HelpService.SearchHelp(query) as never);
+    return HelpService.SearchHelp(query) as never;
   },
   getWhatsNewStatus() {
-    return (HelpService.GetWhatsNewStatus() as never);
+    return HelpService.GetWhatsNewStatus() as never;
   },
   acknowledgeWhatsNew(version: string) {
-    return (HelpService.AcknowledgeWhatsNew(version) as never);
+    return HelpService.AcknowledgeWhatsNew(version) as never;
   },
   getAboutInfo() {
-    return (HelpService.GetAboutInfo() as never);
+    return HelpService.GetAboutInfo() as never;
   },
   resetWorkspaceToSample(contextId: string) {
-    return (HelpService.ResetWorkspaceToSample(contextId) as never);
+    return HelpService.ResetWorkspaceToSample(contextId) as never;
   },
 };
 
@@ -547,7 +547,8 @@ export function resolveContextualHelpTarget(
 }
 
 function isEditableTarget(
-  target: { tagName?: string; isContentEditable?: boolean; getAttribute?: (name: string) => string | null } | null | undefined
+  target:
+    { tagName?: string; isContentEditable?: boolean; getAttribute?: (name: string) => string | null } | null | undefined
 ): boolean {
   if (!target) return false;
   if (target.isContentEditable) return true;
@@ -566,7 +567,8 @@ export function classifyGlobalHelpShortcut(
     shiftKey?: boolean;
     defaultPrevented?: boolean;
   },
-  activeElement: { tagName?: string; isContentEditable?: boolean; getAttribute?: (name: string) => string | null } | null | undefined
+  activeElement:
+    { tagName?: string; isContentEditable?: boolean; getAttribute?: (name: string) => string | null } | null | undefined
 ): 'f1' | 'shortcuts' | null {
   if (event.defaultPrevented) return null;
   if (event.key === 'F1') {
@@ -787,3 +789,111 @@ export const COVER_COMPARISON_BLOCKS: readonly CoverComparisonBlock[] = [
     patches: generateDeterministicPatches(75),
   },
 ];
+
+const TOUR_VIEW_LABELS: Record<string, string> = {
+  home: 'Home',
+  plots: 'Plots',
+  fs882: 'FS882 Plot Entry',
+  'fs882-twopage': 'Two-Page Entry',
+  datasheet: 'Datasheet',
+  'classification-explorer': 'SU & Hierarchy Explorer',
+  'geospatial-map': '3D Map',
+  'diagnostic-synthesis': 'BEC Diagnostics',
+  'r-sidecar': 'R Companion',
+  'interchange-hub': 'Interchange Hub',
+  'project-admin': 'Project Admin',
+  'lump-editor': 'Combine Species',
+  'cloud-sync': 'Cloud Sync',
+  pictures: 'Plot Pictures',
+  'picture-manager': 'Plot Pictures',
+  'long-veg': 'Long Vegetation Report',
+  'long-vegetation': 'Long Vegetation Report',
+  'summary-veg': 'Summary Vegetation Report',
+  'summary-vegetation': 'Summary Vegetation Report',
+  'long-environment': 'Long Environment Report',
+  'summary-environment': 'Summary Environment Report',
+  'lifeform-summary': 'Lifeform Summary Report',
+  'subzone-matrix': 'Subzone Matrix Report',
+  hierarchy: 'Hierarchy Table',
+  'table-csv': 'Table CSV Archive',
+  'user-log': 'User Log',
+  'plot-locations': 'Plot Locations',
+  'google-earth-review': 'Google Earth (KML)',
+  'plot-label-preview': 'Plot Label PDF',
+};
+
+export function formatTourViewLabel(view: string | null | undefined): string {
+  const key = (view ?? '').trim();
+  if (!key) return 'Workspace';
+  if (key in TOUR_VIEW_LABELS) return TOUR_VIEW_LABELS[key];
+  return key
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+export interface TourBoxRect {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
+export function computeTourDialogLayout(
+  viewportWidth: number,
+  viewportHeight: number,
+  targetRect: TourBoxRect | null,
+  overlaps: (a: TourBoxRect, b: TourBoxRect, pad?: number) => boolean
+): { placement: string; style: string } {
+  const margin = viewportWidth < 640 ? 12 : 20;
+  const cardHeightEst = 270;
+  if (viewportWidth < 640) {
+    const targetBottom = targetRect ? targetRect.top + targetRect.height : 0;
+    const topFlip =
+      !!targetRect && targetRect.top > viewportHeight * 0.45 && targetBottom > viewportHeight - cardHeightEst;
+    return {
+      placement: topFlip ? 'mobile-top' : 'mobile-bottom',
+      style: topFlip
+        ? `top:${margin}px;bottom:auto;left:${margin}px;right:${margin}px;width:auto;max-width:calc(100vw - ${margin * 2}px);`
+        : `bottom:${margin}px;top:auto;left:${margin}px;right:${margin}px;width:auto;max-width:calc(100vw - ${margin * 2}px);`,
+    };
+  }
+
+  const cardW = Math.min(448, Math.max(280, viewportWidth - margin * 2));
+  const candidates: Array<{ name: string; box: TourBoxRect; style: string }> = [
+    {
+      name: 'bottom-right',
+      box: {
+        top: viewportHeight - margin - cardHeightEst,
+        left: viewportWidth - margin - cardW,
+        width: cardW,
+        height: cardHeightEst,
+      },
+      style: `right:${margin}px;bottom:${margin}px;left:auto;top:auto;width:${cardW}px;max-width:calc(100vw - ${margin * 2}px);`,
+    },
+    {
+      name: 'top-right',
+      box: { top: margin + 56, left: viewportWidth - margin - cardW, width: cardW, height: cardHeightEst },
+      style: `right:${margin}px;top:${margin + 56}px;left:auto;bottom:auto;width:${cardW}px;max-width:calc(100vw - ${margin * 2}px);`,
+    },
+    {
+      name: 'bottom-left',
+      box: { top: viewportHeight - margin - cardHeightEst, left: margin, width: cardW, height: cardHeightEst },
+      style: `left:${margin}px;bottom:${margin}px;right:auto;top:auto;width:${cardW}px;max-width:calc(100vw - ${margin * 2}px);`,
+    },
+    {
+      name: 'top-left',
+      box: { top: margin + 56, left: margin, width: cardW, height: cardHeightEst },
+      style: `left:${margin}px;top:${margin + 56}px;right:auto;bottom:auto;width:${cardW}px;max-width:calc(100vw - ${margin * 2}px);`,
+    },
+  ];
+
+  if (targetRect) {
+    const clear = candidates.find((c) => !overlaps(c.box, targetRect));
+    if (clear) {
+      return { placement: clear.name, style: clear.style };
+    }
+  }
+  return { placement: candidates[0].name, style: candidates[0].style };
+}

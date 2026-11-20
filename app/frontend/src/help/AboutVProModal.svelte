@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import { CheckCircle2, Copy, FileCheck2, ShieldCheck, X } from '@lucide/svelte';
   import ModalDialogTrap from '../shared/ModalDialogTrap.svelte';
+  import { formatError } from '../shared/readRequests';
   import {
     defaultHelpPort,
     formatShortCommit,
@@ -39,16 +40,13 @@
     loading = true;
     error = '';
     try {
-      const [aboutRes, bundleRes] = await Promise.all([
-        helpPort.getAboutInfo(),
-        helpPort.getHelpBundle(),
-      ]);
+      const [aboutRes, bundleRes] = await Promise.all([helpPort.getAboutInfo(), helpPort.getHelpBundle()]);
       if (gen !== loadGen) return;
       about = aboutRes;
       agreement = bundleRes.dataUseAgreement ?? null;
     } catch (cause) {
       if (gen === loadGen) {
-        error = `About & provenance metadata failed to load: ${String(cause)}`;
+        error = `About & provenance metadata failed to load: ${formatError(cause)}`;
       }
     } finally {
       if (gen === loadGen) {
@@ -67,7 +65,6 @@
       copiedDigest = '';
     }
   }
-
 </script>
 
 {#if open}
@@ -79,7 +76,9 @@
       class="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded border border-vpro-border bg-white text-vpro-ink shadow-2xl"
     >
       <ModalDialogTrap onEscape={onclose} initialFocusSelector="[data-about-vpro-close]" />
-      <header class="flex items-center justify-between gap-3 border-b-[3px] border-b-vpro-gold bg-vpro-navy px-5 py-3.5 text-white">
+      <header
+        class="flex items-center justify-between gap-3 border-b-[3px] border-b-vpro-gold bg-vpro-navy px-5 py-3.5 text-white"
+      >
         <div class="flex items-center gap-2.5">
           <ShieldCheck size={18} class="text-vpro-gold" />
           <div>
@@ -134,7 +133,9 @@
                   Schema {about.schemaVersion}
                 </span>
                 {#if about.buildMode === 'dev' || about.releaseChannel === 'experimental'}
-                  <span class="rounded border border-vpro-border bg-white px-2 py-0.5 uppercase text-vpro-ink-secondary">
+                  <span
+                    class="rounded border border-vpro-border bg-white px-2 py-0.5 uppercase text-vpro-ink-secondary"
+                  >
                     Channel: {about.releaseChannel}
                   </span>
                 {/if}
@@ -151,15 +152,15 @@
             >
               <div class="font-bold text-vpro-navy">Alpha Preview — Client Evaluation Build (v{about.appVersion})</div>
               <p class="leading-relaxed">
-                This preview build is provided for B.C. Ministry of Forests BEC Program evaluation and domain verification.
-                Keep backup copies of archival project files before running bulk imports or merges, and report classification or
-                workflow issues via
+                This preview build is provided for B.C. Ministry of Forests BEC Program evaluation and domain
+                verification. Keep backup copies of archival project files before running bulk imports or merges, and
+                report classification or workflow issues via
                 <a
                   href="https://github.com/Boostao/vpro/issues"
                   target="_blank"
                   rel="noreferrer"
-                  class="font-semibold text-vpro-info underline"
-                >github.com/Boostao/vpro/issues</a>.
+                  class="font-semibold text-vpro-info underline">github.com/Boostao/vpro/issues</a
+                >.
               </p>
             </section>
           {/if}
@@ -184,10 +185,14 @@
               <div class="font-sans text-xs font-bold uppercase tracking-wide text-vpro-navy">
                 Developer Diagnostics (Local Dev Build Only)
               </div>
-              <div>Build Mode: {about.buildMode} · Commit: {about.gitCommit || 'local'}{about.buildDate ? ` · Built: ${about.buildDate}` : ''}</div>
+              <div>
+                Build Mode: {about.buildMode} · Commit: {about.gitCommit || 'local'}{about.buildDate
+                  ? ` · Built: ${about.buildDate}`
+                  : ''}
+              </div>
               <div>Runtime Channel: {about.releaseChannel}</div>
               {#if about.configPath}<div class="break-all">Config YAML: {about.configPath}</div>{/if}
-              {#if about.dataDir}<div class="break-all">SQLite Data Dir: {about.dataDir}</div>{/if}
+              {#if about.dataDir}<div class="break-all">Workspace Data Folder: {about.dataDir}</div>{/if}
             </section>
           {/if}
 
@@ -200,7 +205,9 @@
               <div class="rounded border border-vpro-border bg-white p-3">
                 <div class="flex items-center justify-between gap-2">
                   <span class="font-semibold text-vpro-navy">BECdb Master Classification</span>
-                  <span class="rounded bg-vpro-success-bg px-2 py-0.5 font-mono text-[11px] font-semibold text-vpro-success">
+                  <span
+                    class="rounded bg-vpro-success-bg px-2 py-0.5 font-mono text-[11px] font-semibold text-vpro-success"
+                  >
                     {about.libraryStamps.becVersion}
                   </span>
                 </div>
@@ -212,8 +219,10 @@
 
               <div class="rounded border border-vpro-border bg-white p-3">
                 <div class="flex items-center justify-between gap-2">
-                  <span class="font-semibold text-vpro-navy">B.C. Master Plant Taxonomy (USysAllSpecs)</span>
-                  <span class="rounded bg-vpro-success-bg px-2 py-0.5 font-mono text-[11px] font-semibold text-vpro-success">
+                  <span class="font-semibold text-vpro-navy">B.C. Master Plant Taxonomy</span>
+                  <span
+                    class="rounded bg-vpro-success-bg px-2 py-0.5 font-mono text-[11px] font-semibold text-vpro-success"
+                  >
                     {about.libraryStamps.taxonomyVersion}
                   </span>
                 </div>
@@ -226,7 +235,9 @@
               <div class="rounded border border-vpro-border bg-white p-3">
                 <div class="flex items-center justify-between gap-2">
                   <span class="font-semibold text-vpro-navy">Field Manual Specification</span>
-                  <span class="rounded bg-vpro-success-bg px-2 py-0.5 font-mono text-[11px] font-semibold text-vpro-success">
+                  <span
+                    class="rounded bg-vpro-success-bg px-2 py-0.5 font-mono text-[11px] font-semibold text-vpro-success"
+                  >
                     {about.libraryStamps.lmh25Edition}
                   </span>
                 </div>
@@ -255,7 +266,9 @@
                     <tr class="border-b border-vpro-rail last:border-b-0">
                       <td class="whitespace-nowrap px-2 py-1.5 font-mono text-vpro-navy">{art.path}</td>
                       <td class="whitespace-normal px-2 py-1.5 font-mono text-vpro-ink-secondary">
-                        {Object.entries(art.counts).map(([k, v]) => `${k}: ${v}`).join(', ')}
+                        {Object.entries(art.counts)
+                          .map(([k, v]) => `${k}: ${v}`)
+                          .join(', ')}
                       </td>
                       <td class="whitespace-nowrap px-2 py-1.5 font-mono text-vpro-ink-secondary">
                         <button

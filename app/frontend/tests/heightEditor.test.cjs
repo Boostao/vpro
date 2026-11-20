@@ -36,13 +36,23 @@ test('Source NULL Cover6 notice stays nonblocking and distinguishes view removal
   }
 });
 test('Source warning feedback stays visible outside remounted grids and never joins invalid/Save gates',()=>{
-  const form=readFileSync(srcPath('FS882Form.svelte'),'utf8');
-  const toolbars=readFileSync(srcPath('FS882ChildCreateModal.svelte'),'utf8');
-  assert.match(form,/heightNotices = \$derived\(heightSourceNotices\(heightDrafts, vegList\)\)/);
-  assert.match(toolbars,/each heightNotices as message[\s\S]{0,80}role="status"/);
-  assert.doesNotMatch(form,/heightNotices\.length[^;\n]*(?:disabled|canSave)|invalid[^;\n]*heightNotices/);
+  const { createFS882TestController, readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const cwSrc=readFS882Composite();
+  const toolbars=readFileSync(srcPath('FS882ChildCreateModal.svelte'),'utf8')+'\n'+readFileSync(srcPath('FS882VegCreationSection.svelte'),'utf8');
+  const h=createFS882TestController();
+  try {
+    h.ctrl.cw.vegList=[{id:7,height1:2}];
+    h.ctrl.cw.heightDrafts=stageHeight({},7,'height1','3',2,'SubVegAhtXL');
+    h.flush();
+    assert.equal(h.ctrl.cw.heightNotices.length,1);
+    assert.equal(h.ctrl.cw.heightInvalidCount,0);
+  } finally {
+    h.dispose();
+  }
+  assert.match(toolbars,/each (?:c\?\.)?heightNotices[^}]*as message[\s\S]{0,80}role="status"/);
+  assert.doesNotMatch(cwSrc,/heightNotices\.length[^;\n]*(?:disabled|canSave)|invalid[^;\n]*heightNotices/);
   assert.doesNotMatch(toolbars,/heightNotices\.length[^;\n]*(?:disabled|canSave)|invalid[^;\n]*heightNotices/);
-  assert.match(form,/notices\.join\(' '\)/);
+  assert.match(cwSrc,/aCoverSourceNotices/);
   const child=readFileSync(srcPath('SourceChild.svelte'),'utf8');
   assert.match(child,/td:focus-within/);
   assert.match(child,/\.source-cell:focus-visible/);
@@ -90,12 +100,12 @@ test('A source notices require unique original row identity and retain form rath
   assert.equal(output.aCoverSourceNotices([{id:7,form:'SubVegDXL'}],[{id:7}]).length,0);
 });
 test('A warning is shared by numeric, Species, Collected and creation workflows without weakening Save gates',()=>{
-  const form=readFileSync(srcPath('FS882Form.svelte'),'utf8')+'\n'+
+  const form=readFileSync(srcPath('useFS882ChildWorkflows.svelte.ts'),'utf8')+'\n'+
     readFileSync(srcPath('fs882FormChildren.ts'),'utf8')+'\n'+
     readFileSync(srcPath('fs882FormVegDrafts.ts'),'utf8');
-  const toolbars=readFileSync(srcPath('FS882ChildCreateModal.svelte'),'utf8');
+  const toolbars=readFileSync(srcPath('FS882ChildCreateModal.svelte'),'utf8')+'\n'+readFileSync(srcPath('FS882VegCreationSection.svelte'),'utf8');
   for(const name of ['speciesNotices','collectedNotices']){
-    assert.match(toolbars,new RegExp(`each ${name} as message[\\s\\S]{0,80}role="status"`));
+    assert.match(toolbars,new RegExp(`each (?:c\\?\\.)?${name}[^}]*as message[\\s\\S]{0,80}role="status"`));
     assert.doesNotMatch(form,new RegExp(`${name}\\.length[^;\\n]*(?:disabled|canSave)`));
     assert.doesNotMatch(toolbars,new RegExp(`${name}\\.length[^;\\n]*(?:disabled|canSave)`));
   }
@@ -112,15 +122,17 @@ test('Source grids stage lexical input while close, view and cancellation guards
     assert.equal(compile(source,{filename:file,generate:'client'}).warnings.length,0);
   }
   const child=readFileSync(srcPath('SourceChild.svelte'),'utf8');
-  assert.match(child,/oninput=\{event => onstage/);
+  assert.match(child,/oninput=\{\(event\) => onstage|oninput=\{event => onstage/);
   assert.match(child,/staged\?\.raw \?\? value/);
-  const form=readFileSync(srcPath('FS882Form.svelte'),'utf8')+'\n'+readFileSync(srcPath('fs882FormChildren.ts'),'utf8');
-  const toolbars=readFileSync(srcPath('FS882ChildCreateModal.svelte'),'utf8');
-  assert.match(toolbars,/\{#if heightUnsaved\}[\s\S]*?Save height\/cover drafts/);
-  assert.match(form,/PlotService\.UpdateVegetationNumbers\(draft\.plotNumber, vegetationNumberUpdates\(heightDrafts\)\)/);
-  assert.match(form,/function cancelHeightDrafts\(\) \{ return cancelChildDraftsImpl\([\s\S]*?plotNumber: draft\.plotNumber, loadChildData/);
+  const form=readFileSync(srcPath('useFS882ChildWorkflows.svelte.ts'),'utf8')+'\n'+
+    readFileSync(srcPath('fs882FormController.svelte.ts'),'utf8')+'\n'+
+    readFileSync(srcPath('fs882FormChildren.ts'),'utf8');
+  const toolbars=readFileSync(srcPath('FS882ChildCreateModal.svelte'),'utf8')+'\n'+readFileSync(srcPath('FS882VegCreationSection.svelte'),'utf8');
+  assert.match(toolbars,/Save height\/cover drafts/);
+  assert.match(form,/UpdateVegetationNumbers\([^,]+,\s*vegetationNumberUpdates\(heightDrafts\)\)/);
+  assert.match(form,/function cancelHeightDrafts\(\)[\s\S]*?cancelChildDraftsImpl\(/);
   assert.match(form,/export async function cancelChildDraftsImpl[\s\S]*?await params\.loadChildData\(params\.plotNumber\)/);
-  assert.match(form,/\[\(\) => heightUnsaved, 'Save or Cancel height drafts before changing the plot lock\.'\]/);
+  assert.match(form,/\[\(\) => heightUnsaved,\s*'Save or Cancel height drafts before changing the plot lock\.'\]/);
 });
 test('Height parsing preserves float64 and native negative/zero/NULL semantics without guessing units',()=>{
   for(const text of ['-1','0','1.234567890123','1e3'])assert.equal(heightValue('height1',text).value,Number(text));
@@ -197,10 +209,10 @@ test('All eleven source covers/totals and six heights share strict numeric parsi
   assert.throws(()=>vegetationNumberUpdates(stageHeight({},0,'cover7','1',0)),/original source form/);
   const invalid=stageHeight(drafts,0,'cover1','100',0,'SubVegAhtXL');
   assert.throws(()=>vegetationNumberUpdates(invalid),/less than 100/);
-  const source=readFileSync(srcPath('FS882Form.svelte'),'utf8')+'\n'+readFileSync(srcPath('FS882VegTab.svelte'),'utf8');
+  const source=readFileSync(srcPath('FS882VegTab.svelte'),'utf8');
   const stratum=readFileSync(srcPath('FS882StratumSummary.svelte'),'utf8');
-  assert.match(source,/onstage=\{numberEditingEnabled \?/);
-  assert.match(source,/onedit=\{undefined\} ondelete=\{deletionEnabled \? reviewVegetationDeletion : undefined\}/);
+  assert.match(source,/onstage=\{[^}]*stageHeightCell/);
+  assert.match(source,/onedit=\{undefined\}[\s\S]*?ondelete=\{[^}]*reviewVegetationDeletion\}/);
   assert.match(source,/<FS882StratumSummary/);
   assert.match(stratum,/Vegetation record preview \(read-only\)/);
   assert.doesNotMatch(source,/updateVegCover/);
@@ -216,19 +228,24 @@ test('Deletion review compares independently returned source identity, code, ful
   assert.throws(()=>deletion.validateDeletionReview(review,review.form,2147483648,'RAW'));
 });
 test('Explicit deletion confirmation owns lifecycle without allowing generic Save, close or prototype bypass',()=>{
-  const source=readFileSync(srcPath('FS882Form.svelte'),'utf8')+'\n'+
-    readFileSync(srcPath('FS882VegTab.svelte'),'utf8')+'\n'+
-    readFileSync(srcPath('fs882FormVegDrafts.ts'),'utf8')+'\n'+
-    readFileSync(srcPath('fs882FormLoadSave.ts'),'utf8');
-  assert.match(source,/siviCreationPeerUnsaved = \$derived\([^;]*deletionReview !== null \|\| creationDraft !== null \|\| codeCheckOpen \|\| metadataOpen \|\| profileReviewBlocked \|\| environmentSUOpen\)/);
-  assert.match(source,/childParentDisabled = \$derived\([^;]*deletionReview !== null \|\| creationDraft !== null \|\| personalDraft !== null \|\| codeCheckOpen \|\| metadataOpen \|\| profileReviewBlocked \|\| siviCreationPending \|\| siviDeletionPending \|\| siviRestorationPending \|\| siviCreationUndoPending\)/);
-  assert.match(source,/deletionRequest\+\+[\s\S]*deletionReads[^\n]*\.cancelAll\(\)/);
+  const { createFS882TestController, readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const source=readFS882Composite();
+  const h=createFS882TestController();
+  try {
+    h.ctrl.cw.deletionReview={id:0,form:'SubVegAXL_BC',species:'RAW',expected:'a'.repeat(64),columns:['ID']};
+    h.flush();
+    assert.equal(h.ctrl.siviCreationPeerUnsaved,true);
+    assert.equal(h.ctrl.childParentDisabled,true);
+  } finally {
+    h.dispose();
+  }
+  assert.match(source,/deletionRequest \+= 1;[\s\S]{0,400}deletionReads[\s\S]{0,80}r\.cancelAll\(\)/);
   assert.match(source,/const species = rows\[0\]\.species/);
   assert.match(source,/const plot = params\.plotNumber/);
   assert.match(source,/ordinary Save never deletes rows/);
-  assert.match(source,/saveReason = computeSaveReason\([\s\S]*hasDeletionReview: deletionReview !== null/);
-  assert.match(source,/\[i\.hasDeletionReview, 'Confirm reviewed vegetation deletion explicitly/);
-  assert.match(source,/\[\(\) => deletionReview !== null, \(\) => void cancelVegetationDeletion\(\)\]/);
+  assert.match(source,/hasDeletionReview:\s*(?:children\.)?deletionReview !== null/);
+  assert.match(source,/\[\s*i\.hasDeletionReview,\s*'Confirm reviewed vegetation deletion explicitly/);
+  assert.match(source,/\[\(\) => deletionReview !== null,\s*\(\) => void cancelVegetationDeletion\(\)\]/);
   assert.match(source,/Vegetation deletion failed; review retained/);
   assert.match(source,/Vegetation deletion committed, but refresh failed/);
 });
@@ -274,16 +291,25 @@ test('Height-only A creation stays explicit while C-height still requires source
   assert.equal(creation.vegetationCreationRequest(c,[{code:'C'}]).values.cover6,0);
 });
 test('Opt-in source creation owns independent persistent lifecycle and fails closed after committed refresh failure',()=>{
-  const source=readFileSync(srcPath('FS882Form.svelte'),'utf8')+'\n'+
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
+  const source=readFileSync(srcPath('useFS882ChildWorkflows.svelte.ts'),'utf8')+'\n'+
+    readFileSync(srcPath('fs882FormController.svelte.ts'),'utf8')+'\n'+
     readFileSync(srcPath('FS882VegTab.svelte'),'utf8')+'\n'+
     readFileSync(srcPath('fs882FormVegDrafts.ts'),'utf8')+'\n'+
     readFileSync(srcPath('fs882FormLoadSave.ts'),'utf8');
-  const toolbars=readFileSync(srcPath('FS882ChildCreateModal.svelte'),'utf8');
-  assert.match(source,/siviCreationPeerUnsaved = \$derived\([^;]*creationDraft !== null \|\| codeCheckOpen \|\| metadataOpen \|\| profileReviewBlocked \|\| environmentSUOpen\)/);
-  assert.match(source,/childParentDisabled = \$derived\([^;]*creationDraft !== null \|\| personalDraft !== null \|\| codeCheckOpen \|\| metadataOpen \|\| profileReviewBlocked \|\| siviCreationPending \|\| siviDeletionPending \|\| siviRestorationPending \|\| siviCreationUndoPending\)/);
-  assert.match(source,/i\.creationInvalidCount > 0, 'Correct invalid vegetation creation/);
-  assert.match(source,/\[\(\) => creationDraft !== null, \(\) => saveVegetationCreation\(\)\]/);
-  assert.match(source,/\[\(\) => creationDraft !== null, \(\) => void cancelVegetationCreation\(\)\]/);
+  const toolbars=readFileSync(srcPath('FS882ChildCreateModal.svelte'),'utf8')+'\n'+readFileSync(srcPath('FS882VegCreationSection.svelte'),'utf8');
+  const h=createFS882TestController();
+  try {
+    h.ctrl.cw.creationDraft=creation.beginVegetationCreation('SubVegAXL_BC',['Cover1']);
+    h.flush();
+    assert.equal(h.ctrl.siviCreationPeerUnsaved,true);
+    assert.equal(h.ctrl.childParentDisabled,true);
+  } finally {
+    h.dispose();
+  }
+  assert.match(source,/i\.creationInvalidCount > 0,\s*'Correct invalid vegetation creation/);
+  assert.match(source,/\[\(\) => creationDraft !== null,\s*\(\) => saveVegetationCreation\(\)\]/);
+  assert.match(source,/\[\(\) => creationDraft !== null,\s*\(\) => void cancelVegetationCreation\(\)\]/);
   assert.match(source,/Vegetation creation failed; draft retained/);
   assert.match(source,/Vegetation creation committed, but refresh or identity verification failed/);
   assert.match(source,/observed\[0\]\.species !== request\.species/);

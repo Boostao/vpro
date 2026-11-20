@@ -37,11 +37,13 @@
       </header>
       <div class="space-y-3 p-4 text-xs leading-relaxed">
         <p>
-          Restore a fresh copy of the built-in <code class="font-mono text-vpro-navy">Sample</code> project and switch the active session cleanly to
+          Restore a fresh copy of the built-in <code class="font-mono text-vpro-navy">Sample</code> project and switch
+          the active session cleanly to
           <strong>Project = Sample</strong>, <strong>SU = Sample</strong>, and <strong>Hierarchy = Sample</strong>?
         </p>
         <p class="rounded border border-vpro-border bg-vpro-canvas p-2.5 text-vpro-ink-secondary">
-          Existing user project <code class="font-mono">.db</code> files in your projects directory are <strong>never deleted or modified</strong>.
+          Existing user project <code class="font-mono">.db</code> files in your projects directory are
+          <strong>never deleted or modified</strong>.
         </p>
         <div class="flex justify-end gap-2 pt-2">
           <button

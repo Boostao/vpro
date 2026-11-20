@@ -1,9 +1,7 @@
 <script lang="ts">
-  import {
-    AuditRestoreAction,
-    type OrdinaryAuditReadEntry,
-  } from '../../bindings/github.com/boostao/vpro/app';
+  import { AuditRestoreAction, type OrdinaryAuditReadEntry } from '../../bindings/github.com/boostao/vpro/app';
   import AuditRestore, { auditRestoreReason } from './AuditRestore.svelte';
+  import { formatError } from '../shared/readRequests';
   import type { FS882ChildCapabilities } from './fs882FormHelpers';
 
   let {
@@ -40,8 +38,13 @@
       RestoreSelectedAuditRecords: (
         plot: string,
         rowIds: string[] | null,
-        action: AuditRestoreAction,
-      ) => Promise<{ cancelled?: boolean; restoredRows?: number; prunedAuditRows?: number; cleanedVegRows?: number } | null>;
+        action: AuditRestoreAction
+      ) => Promise<{
+        cancelled?: boolean;
+        restoredRows?: number;
+        prunedAuditRows?: number;
+        cleanedVegRows?: number;
+      } | null>;
     };
     onBusyChange: (busy: boolean) => void;
     onFeedback: (error: string | null, successMsg: string | null) => void;
@@ -60,7 +63,7 @@
         return;
       }
       for (const rowId of rowIds) {
-        const entry = entries.find(row => row.rowId === rowId);
+        const entry = entries.find((row) => row.rowId === rowId);
         const reason = entry
           ? auditRestoreReason(entry, project, plot, { header: capabilities, children: childCapabilities })
           : 'Audit row disappeared; refresh before restoring.';
@@ -82,34 +85,37 @@
       }
       const result = await PlotService.RestoreSelectedAuditRecords(plot, rowIds, action);
       if (!result) throw new Error('Restoration result was not returned.');
-      if (result.cleanedVegRows !== 0) throw new Error('Unexpected vegetation deletion reported; stop using this application binary.');
+      if (result.cleanedVegRows !== 0)
+        throw new Error('Unexpected vegetation deletion reported; stop using this application binary.');
       if (request === getLoadRequest()) {
         onFeedback(
           null,
           result.cancelled
             ? 'Restoration cancelled. Data and history were unchanged.'
-            : `Restored ${result.restoredRows} fields; ${result.prunedAuditRows} selected audit rows pruned. No vegetation records deleted.`,
+            : `Restored ${result.restoredRows} fields; ${result.prunedAuditRows} selected audit rows pruned. No vegetation records deleted.`
         );
       }
     } catch (cause) {
       if (request === getLoadRequest()) {
-        currentError = `Restoration failed: ${String(cause)}`;
+        currentError = `Restoration failed: ${formatError(cause)}`;
         onFeedback(currentError, null);
       }
     } finally {
       if (marksWritten) {
-        try { await PlotService.SetAuditRestoreSelection(plot, []); }
-        catch (cause) {
+        try {
+          await PlotService.SetAuditRestoreSelection(plot, []);
+        } catch (cause) {
           if (request === getLoadRequest()) {
-            currentError = `${currentError ?? ''} Selection marks could not be cleared: ${String(cause)}`;
+            currentError = `${currentError ?? ''} Selection marks could not be cleared: ${formatError(cause)}`;
             onFeedback(currentError, null);
           }
         }
       }
-      try { await onRefreshAfterRestore(plot, request); }
-      catch (cause) {
+      try {
+        await onRefreshAfterRestore(plot, request);
+      } catch (cause) {
         if (request === getLoadRequest()) {
-          onRefreshFailure(`${currentError ?? ''} Restoration refresh failed: ${String(cause)}`);
+          onRefreshFailure(`${currentError ?? ''} Restoration refresh failed: ${formatError(cause)}`);
         }
       }
       if (request === getLoadRequest()) onBusyChange(false);

@@ -95,13 +95,19 @@ test('KML browser DOM shape inspector rejects foreign namespaces/resources/hiera
 });
 
 test('KML panel remains independently gated and renders XML only in a labelled read-only textarea', () => {
-  const source = readFileSync(srcPath('GoogleEarthReview.svelte'), 'utf8');
-  const compiled = compile(source, { filename: 'GoogleEarthReview.svelte', generate: 'client' });
+  const rootSource = readFileSync(srcPath('GoogleEarthReview.svelte'), 'utf8');
+  const source = [
+    rootSource,
+    readFileSync(srcPath('GoogleEarthPreferencesSection.svelte'), 'utf8'),
+    readFileSync(srcPath('GoogleEarthKmlSection.svelte'), 'utf8'),
+    readFileSync(srcPath('GoogleEarthLocationsTable.svelte'), 'utf8'),
+  ].join('\n');
+  const compiled = compile(rootSource, { filename: 'GoogleEarthReview.svelte', generate: 'client' });
   assert.ok(compiled.js.code);
-  assert.match(source, /GetGoogleEarthKMLReview/);
+  assert.match(source, /GetGoogleEarthKMLExportReview/);
   assert.match(source, /<label for="google-earth-place-name">Place Name:/);
   assert.match(source, /<textarea id="google-earth-kml-text" readonly/);
   assert.doesNotMatch(source, /\{@html/);
   assert.match(source, /onDestroy\(cancel\)/);
-  assert.match(source, /No file created, preference saved or viewer launched/);
+  assert.match(source, /Previewing KML does not write a file/);
 });

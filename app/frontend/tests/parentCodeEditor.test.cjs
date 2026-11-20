@@ -154,10 +154,18 @@ test('Parent component renders exactly its source slots and metadata distinction
     assert.match(html, /data-negative-zero="true"/);
     assert.doesNotMatch(html, /position:absolute/);
   }
-  const form = read('FS882Form.svelte') + '\n' + read('FS882SiteTab.svelte') + '\n' + read('FS882SoilTab.svelte') + '\n' + read('fs882FormLoadSave.ts'), soilSection = read('FS882SoilHorizonSection.svelte'), header = read('HeaderEditor.svelte');
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
+  const form = read('FS882SiteTab.svelte') + '\n' + read('FS882SoilTab.svelte') + '\n' + read('fs882FormLoadSave.ts'), soilSection = read('FS882SoilHorizonSection.svelte'), header = read('HeaderEditor.svelte');
   assert.match(form, /scope="site"/);
   assert.match(soilSection, /scope="soils"/);
-  assert.match(form, /geologyCodeBusy \|\| parentCodeBusy/);
+  const h = createFS882TestController();
+  try {
+    h.ctrl.parentCodeBusy = true;
+    h.flush();
+    assert.equal(h.ctrl.headerWorkflowBusy, true);
+  } finally {
+    h.dispose();
+  }
   assert.match(form, /headerValidation\['parentCodes-soils'\]/);
-  assert.match(header, /editor\.input\(control, position\(control\)\)/);
+  assert.match(header, /editor\.input\(\s*control,\s*position\(control\)\s*\)/);
 });

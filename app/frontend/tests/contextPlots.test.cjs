@@ -39,38 +39,40 @@ test('every editor read and mutation carries the original context identity and u
 });
 
 test('context transitions reuse native close validation and preserve drafts until publication succeeds', () => {
-  const root = read('App.svelte');
-  const form = read('FS882Form.svelte');
+  const { readShellComposite, readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const root = readShellComposite();
+  const form = readFS882Composite();
   for (const file of ['App.svelte', 'FS882Form.svelte', 'CloseConfirm.svelte']) {
     assert.equal(compile(read(file), { filename: file, generate: 'client' }).warnings.length, 0);
   }
   assert.doesNotMatch(root, /window\.confirm/);
   assert.match(root, /document\.activeElement\.blur\(\)/);
-  assert.match(root, /await tick\(\)/);
-  assert.match(root, /pendingTransition = \{ contextId, run \}/);
-  assert.match(root, /await editor\?\.saveForClose\(\)/);
-  assert.match(root, /const state = await ContextService\.SwitchContext[\s\S]*?projectState\.set\(state\)/);
+  assert.match(root, /await (?:rt\.)?tick\(\)/);
+  assert.match(root, /pendingTransition:\s*\{\s*contextId,\s*run\s*\}/);
+  assert.match(root, /await (?:rt\.)?editor\?\.saveForClose\(\)/);
+  assert.match(root, /SwitchContext[\s\S]*?projectState\.set\(state\)/);
   assert.match(root, /\{#key \$projectState\?\.contextId\}/);
-  assert.match(form, /bindContextPlots\(untrack\(\(\) => contextId\)\)/);
-  assert.match(form, /onDestroy\(\(\) => \{[\s\S]*?loadRequest\+\+;[\s\S]*?reads\.cancelAll\(\)/);
+  assert.match(form, /bindContextPlots\((?:deps\.contextId|siviContextId|untrack\(\(\) => contextId\))\)/);
+  assert.match(form, /loadRequest \+= 1[\s\S]*?reads\.cancelAll\(\)/);
 });
 
 test('verified external attachment defaults on and project choices visibly identify their files', () => {
-  const root = read('App.svelte');
-  const sidebar = read('WorkspaceSidebar.svelte');
+  const { readShellComposite, readSidebarComposite } = require('./svelteTestHelpers.cjs');
+  const root = readShellComposite();
+  const sidebar = readSidebarComposite();
   assert.match(root, /<WorkspaceSidebar/);
   assert.match(sidebar, /class="project-location"/);
   assert.match(sidebar, /item\.name === project\.name/);
-  assert.match(sidebar, /\? project\.file : project\.path/);
+  assert.match(sidebar, /\? project\.file\s*:\s*project\.path/);
   assert.match(sidebar, /id="browse-external-sqlite"/);
-  assert.match(sidebar, /ContextService\.ChooseExternalSQLiteFile/);
+  assert.match(sidebar, /(?:contextService|ContextService)\.ChooseExternalSQLiteFile/);
   assert.match(sidebar, /id="reveal-explorer-btn"/);
   assert.match(sidebar, /id="reveal-root-explorer-btn"/);
-  assert.match(sidebar, /ContextService\.RevealInFileExplorer/);
+  assert.match(sidebar, /(?:contextService|ContextService)\.RevealInFileExplorer/);
   assert.match(sidebar, /id="access-import-wizard"/);
-  assert.match(sidebar, /ImportExportService\.ChooseAccessDatabaseFile/);
-  assert.match(sidebar, /ImportExportService\.InspectAccessDatabase/);
-  assert.match(sidebar, /ImportExportService\.ImportAccessProject/);
+  assert.match(sidebar, /(?:importExportService|ImportExportService)\.ChooseAccessDatabaseFile/);
+  assert.match(sidebar, /(?:importExportService|ImportExportService)\.InspectAccessDatabase/);
+  assert.match(sidebar, /(?:importExportService|ImportExportService)\.ImportAccessProject/);
 });
 
 test('actual editor service merge scopes nullable Audit and rejects a delayed read after context switching', async () => {
@@ -91,7 +93,8 @@ test('actual editor service merge scopes nullable Audit and rejects a delayed re
   active = 'next-context'; release();
   await assert.rejects(pending, /stale context/);
   assert.deepEqual(calls, [['scoped', 'original-context', ' literal plot ']]);
-  const root = read('FS882Form.svelte');
-  assert.match(root, /const PlotService = \{ \.\.\.PlotEntryService, \.\.\.bindContextPlots\(untrack\(\(\) => contextId\)\) \}/);
-  assert.match(root, /reads\.track\(PlotService\.ListAuditReadEntries\(p\)\)/);
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const root = readFS882Composite();
+  assert.match(root, /\.\.\.PlotEntryService,\s*\.\.\.bindContextPlots\(/);
+  assert.match(root, /reads\.track\((?:deps\.)?plotService\.ListAuditReadEntries\(p\)\)/i);
 });

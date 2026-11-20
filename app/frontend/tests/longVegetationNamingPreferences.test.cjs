@@ -162,7 +162,7 @@ test('actual report remount retains naming draft errors and root close barriers'
   const registry = prefs.createLongVegetationNamingPreferencesRegistry({ code: true });
   const session = registry(owner); session.apply(review(1, 'old field', true, owner)); session.editMode('');
   const reportSource = source('LongVegetationReport.svelte');
-  const component = serverComponent(reportSource, 'LongVegetationReport.svelte', {
+  const component = serverComponent(reportSource, 'LongVegetationReport.svelte', { './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
     '../bindings/github.com/boostao/vpro/app': {}, './longVegetationPreferences': {},
     './longVegetationStatisticsPreferences': {}, './longVegetationSwitchPreferences': {},
     './LongVegetationSwitchPreferences.svelte': { default() {} }, './longVegetationThresholdPreferences': {},
@@ -181,7 +181,7 @@ test('actual report remount retains naming draft errors and root close barriers'
       vegetationWorkbookPublicationSession: () => ({ view: () => ({ busy: false, blocked: false }), subscribe: () => () => {} }),
       VegetationWorkbookPublicationSession: class { view() { return { busy: false, blocked: false }; } subscribe() { return () => {}; } },
     },
-  });
+  }) });
   for (let mount = 0; mount < 2; mount++) {
     const barriers = [];
     const { body } = render(component, { props: { ...owner, onBusyChange: value => barriers.push(value) } });
@@ -190,10 +190,10 @@ test('actual report remount retains naming draft errors and root close barriers'
     assert.match(body, /data-long-vegetation-naming-save[^>]*disabled/);
   }
   session.undo();
-  const report = source('LongVegetationReport.svelte');
-  assert.match(report, /namingView = naming.view\(\); invalidateReports\(\)/);
-  assert.match(report, /function invalidateReports\(\) \{\s*preview = null; workbookReview = null;\s*projectWorkspace\?\.invalidate\(\)/);
-  assert.match(report, /unsubscribeNaming\?\.\(\)/);
-  assert.match(report, /qualityMinimumBarrier \|\| namingBarrier/);
-  assert.match(report, /qualityMinimumMutationHeld \|\| namingMutationHeld/);
+  const report = require('./svelteTestHelpers.cjs').readReportComposite('long-vegetation');
+  assert.match(report, /namingView = sessions\.naming!\.view\(\);\s*onInvalidate/);
+  assert.match(report, /function invalidateReports\(\) \{\s*preview = null;\s*workbookReview = null;\s*projectWorkspace\?\.invalidate\(\)/);
+  assert.match(report, /for \(const u of unsubs\) u\?\.\(\)/);
+  assert.match(report, /qualityMinimumBarrier \|\|\s*namingBarrier/);
+  assert.match(report, /qualityMinimumMutationHeld \|\|\s*namingMutationHeld/);
 });

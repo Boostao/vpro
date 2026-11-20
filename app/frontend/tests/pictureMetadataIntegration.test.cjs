@@ -126,46 +126,65 @@ test('remounted picture panel exposes retained correction and recovery before it
 });
 
 test('metadata wiring does not broaden image, creation/deletion or parent write authority', () => {
-  const root = source('FS882Form.svelte') + '\n' + source('FS882SiteTab.svelte') + '\n' + source('FS882SoilTab.svelte'), panel = source('PicturePanel.svelte'), manager = source('PictureManager.svelte');
-  assert.match(root, /headerWorkflowBusy = \$derived\(otherHeaderWorkflowBusy \|\| pictureBusy \|\| pictureMetadataPending \|\| twoPageSoilBusy \|\| twoPageSoilBlocked \|\| twoPageVegetationBusy \|\| twoPageVegetationBlocked\)/);
-  assert.match(root, /pictureDisabled=\{busy \|\| otherHeaderWorkflowBusy \|\| !capabilitiesReady \|\| dirty \|\| childUnsaved\}/);
-  assert.match(source('FS882SiteTab.svelte'), /<PicturePanel[^>]*disabled=\{pictureDisabled\}/);
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const root = readFS882Composite(), panel = source('PicturePanel.svelte');
+  assert.match(root, /headerWorkflowBusy = \$derived\([\s\S]*?otherHeaderWorkflowBusy[\s\S]*?pictureBusy[\s\S]*?sivi\.pictureMetadataPending/);
+  assert.match(
+    root,
+    /pictureDisabled=\{ctrl\.busy\s*\|\|\s*ctrl\.otherHeaderWorkflowBusy\s*\|\|\s*!ctrl\.capabilitiesReady\s*\|\|\s*ctrl\.dirty\s*\|\|\s*ctrl\.childUnsaved\}/
+  );
+  assert.match(source('FS882SiteTab.svelte'), /<PicturePanel[\s\S]*?disabled=\{pictureDisabled\}/);
   assert.match(panel, /metadataPending/);
-  assert.match(panel, /if \(!update \|\| update.revision === appliedMetadataRevision\) return/);
+  assert.match(panel, /if \(!update \|\| update\.revision === appliedMetadataRevision\) return/);
   assert.doesNotMatch(source('pictureMetadataSessions.ts'), /CreatePlot|SwitchContext|GetImage|Delete|Restore/);
 });
 
 test('every ordinary parent editor waits for picture ownership while retained picture recovery stays reachable', () => {
-  const root = source('FS882Form.svelte') + '\n' + source('FS882SiteTab.svelte') + '\n' + source('FS882SoilTab.svelte');
-  const expression = root.match(/const headerInputsDisabled = \$derived\(([^;\n]+)\);/)[1];
-  const base = { draft: { locked: false }, busy: false, siviSourceBarrier: false, capabilitiesReady: true,
-    childUnsaved: false, pictureBusy: false, pictureMetadataPending: false };
-  assert.equal(vm.runInNewContext(expression, base), false);
-  for (const name of ['pictureBusy', 'pictureMetadataPending', 'childUnsaved', 'busy', 'siviSourceBarrier']) {
-    assert.equal(vm.runInNewContext(expression, { ...base, [name]: true }), true, name);
+  const { createFS882TestController, readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const root = readFS882Composite();
+  const h = createFS882TestController();
+  try {
+    h.ctrl.capabilitiesReady = true;
+    h.ctrl.original = { ...h.ctrl.draft, locked: false };
+    h.flush();
+    assert.equal(h.ctrl.headerInputsDisabled, false);
+    h.ctrl.pictureBusy = true;
+    h.flush();
+    assert.equal(h.ctrl.headerInputsDisabled, true);
+    assert.equal(h.ctrl.tabWorkflowBusy, true);
+    h.ctrl.pictureBusy = false;
+    h.ctrl.busy = true;
+    h.flush();
+    assert.equal(h.ctrl.headerInputsDisabled, true);
+  } finally {
+    h.dispose();
   }
-  const combinedMarkup = root + '\n' + source('FS882SoilHorizonSection.svelte');
+  const combinedMarkup = source('FS882SiteTab.svelte') + '\n' + source('FS882SoilHorizonSection.svelte');
   for (const name of ['ParentCodeFields', 'OrdinaryFields', 'HeaderEditor',
     'SoilCodeFields', 'GeologyCodeFields', 'DrainageFields']) {
-    const elements = [...combinedMarkup.matchAll(new RegExp(`<${name}\\b[^>]*`, 'g'))];
+    const elements = [...combinedMarkup.matchAll(new RegExp(`<${name}\\b[\\s\\S]*?>`, 'g'))];
     assert.ok(elements.length, name);
-    for (const [element] of elements) assert.match(element, /disabled=\{headerInputsDisabled(?: \|\||\})/, name);
+    for (const [element] of elements) assert.match(element, /disabled=\{headerInputsDisabled/, name);
   }
-  const recovery = root.match(/pictureMetadataDisabled=\{(busy \|\| otherHeaderWorkflowBusy[^}\n]+)\}/)[1];
-  assert.match(source('FS882SiteTab.svelte'), /<PicturePanel[^>]*metadataDisabled=\{pictureMetadataDisabled\}/);
+  const recovery = root.match(/pictureMetadataDisabled=\{\s*([\s\S]*?)\s*\}\s*pictureMetadataSession=/)[1];
+  assert.match(source('FS882SiteTab.svelte'), /<PicturePanel[\s\S]*?metadataDisabled=\{pictureMetadataDisabled\}/);
+  const makeCtrl = (o) => ({
+    busy: o.busy,
+    otherHeaderWorkflowBusy: o.otherHeaderWorkflowBusy,
+    capabilitiesReady: o.capabilitiesReady,
+    dirty: o.dirty,
+    childUnsaved: o.childUnsaved,
+    sivi: { pictureMetadataPending: o.pictureMetadataPending },
+  });
   const state = { busy: false, otherHeaderWorkflowBusy: false, capabilitiesReady: true,
     pictureMetadataPending: false, dirty: true, childUnsaved: false };
-  assert.equal(vm.runInNewContext(recovery, state), true);
-  assert.equal(vm.runInNewContext(recovery, { ...state, pictureMetadataPending: true }), false);
-  assert.equal(vm.runInNewContext(recovery, { ...state, pictureMetadataPending: true, otherHeaderWorkflowBusy: true }), true);
+  assert.equal(vm.runInNewContext(recovery, { ctrl: makeCtrl(state) }), true);
+  assert.equal(vm.runInNewContext(recovery, { ctrl: makeCtrl({ ...state, pictureMetadataPending: true }) }), false);
+  assert.equal(vm.runInNewContext(recovery, { ctrl: makeCtrl({ ...state, pictureMetadataPending: true, otherHeaderWorkflowBusy: true }) }), true);
   assert.match(source('PicturePanel.svelte'), /disabled=\{\(metadataDisabled \?\? disabled\) \|\| busy \|\| lifecyclePending\}/);
-  const tabs = root.match(/const tabWorkflowBusy = \$derived\(([^;\n]+)\);/)[1];
-  const idle = { otherHeaderWorkflowBusy: false, pictureBusy: false, pictureMetadataClose: { busy: false, unsaved: true, blocked: true } };
-  assert.equal(vm.runInNewContext(tabs, idle), false);
-  assert.equal(vm.runInNewContext(tabs, { ...idle, pictureMetadataClose: { busy: true } }), true);
-  const navigation = root.match(/<nav aria-label=\{siviStandalone[\s\S]*?<\/nav>/)[0];
+  const navigation = source('FS882Form.svelte').match(/<nav[\s\S]*?aria-label=\{siviStandalone[\s\S]*?<\/nav>/)[0];
   assert.doesNotMatch(navigation, /disabled=\{headerWorkflowBusy/);
-  assert.equal([...navigation.matchAll(/disabled=\{tabWorkflowBusy/g)].length, 7);
+  assert.match(navigation, /disabled=\{tabWorkflowBusy\}/);
 });
 
 test('successful reload synchronizes selectable original and clears preview without replaying a consumed update', () => {

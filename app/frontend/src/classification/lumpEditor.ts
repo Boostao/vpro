@@ -91,7 +91,12 @@ export interface LumpMaterializeResult {
 export interface LumpEditorPort {
   discoverLumpTables(contextID: string, externalPaths: string[]): Promise<LumpTableSummary[]>;
   createLumpTable(contextID: string, name: string): Promise<LumpTableSummary>;
-  saveAsLumpTable(contextID: string, sourceTable: string, sourceDBPath: string, targetName: string): Promise<LumpTableSummary>;
+  saveAsLumpTable(
+    contextID: string,
+    sourceTable: string,
+    sourceDBPath: string,
+    targetName: string
+  ): Promise<LumpTableSummary>;
   deleteLumpTable(contextID: string, name: string): Promise<void>;
   getLumpTableRows(contextID: string, tableName: string, dbPath: string): Promise<LumpRow[]>;
   upsertLumpRow(contextID: string, tableName: string, input: LumpRowInput): Promise<LumpRow>;
@@ -102,41 +107,41 @@ export interface LumpEditorPort {
   previewLumpImpact(contextID: string, tableName: string, dbPath: string): Promise<LumpImpactPreview>;
   listLumpPresets(): Promise<LumpPresetInfo[]>;
   previewLumpSpec(contextID: string, spec: LumpSpec): Promise<LumpSpecPreview>;
-  materializeLumpSpec(contextID: string, targetName: string, spec: LumpSpec, replaceExisting: boolean): Promise<LumpMaterializeResult>;
+  materializeLumpSpec(
+    contextID: string,
+    targetName: string,
+    spec: LumpSpec,
+    replaceExisting: boolean
+  ): Promise<LumpMaterializeResult>;
   searchSpecies?: (query: string, limit: number) => Promise<SpeciesItem[]>;
 }
 
 export const defaultLumpEditorPort: LumpEditorPort = {
   discoverLumpTables: (contextID, externalPaths) =>
-    (ImportExportService.DiscoverLumpTables(contextID, externalPaths) as never),
-  createLumpTable: (contextID, name) =>
-    (ImportExportService.CreateLumpTable(contextID, name) as never),
+    ImportExportService.DiscoverLumpTables(contextID, externalPaths) as never,
+  createLumpTable: (contextID, name) => ImportExportService.CreateLumpTable(contextID, name) as never,
   saveAsLumpTable: (contextID, sourceTable, sourceDBPath, targetName) =>
-    (ImportExportService.SaveAsLumpTable(contextID, sourceTable, sourceDBPath, targetName) as never),
-  deleteLumpTable: (contextID, name) =>
-    (ImportExportService.DeleteLumpTable(contextID, name) as never),
+    ImportExportService.SaveAsLumpTable(contextID, sourceTable, sourceDBPath, targetName) as never,
+  deleteLumpTable: (contextID, name) => ImportExportService.DeleteLumpTable(contextID, name) as never,
   getLumpTableRows: (contextID, tableName, dbPath) =>
-    (ImportExportService.GetLumpTableRows(contextID, tableName, dbPath) as never),
+    ImportExportService.GetLumpTableRows(contextID, tableName, dbPath) as never,
   upsertLumpRow: (contextID, tableName, input) =>
-    (ImportExportService.UpsertLumpRow(contextID, tableName, input) as never),
+    ImportExportService.UpsertLumpRow(contextID, tableName, input) as never,
   updateLumpRow: (contextID, tableName, existingSppCode, input) =>
-    (ImportExportService.UpdateLumpRow(contextID, tableName, existingSppCode, input) as never),
+    ImportExportService.UpdateLumpRow(contextID, tableName, existingSppCode, input) as never,
   deleteLumpRow: (contextID, tableName, sppCode) =>
-    (ImportExportService.DeleteLumpRow(contextID, tableName, sppCode) as never),
+    ImportExportService.DeleteLumpRow(contextID, tableName, sppCode) as never,
   toggleLumpRow: (contextID, tableName, sppCode, use) =>
-    (ImportExportService.ToggleLumpRow(contextID, tableName, sppCode, use) as never),
+    ImportExportService.ToggleLumpRow(contextID, tableName, sppCode, use) as never,
   setAllLumpRowsUse: (contextID, tableName, use) =>
-    (ImportExportService.SetAllLumpRowsUse(contextID, tableName, use) as never),
+    ImportExportService.SetAllLumpRowsUse(contextID, tableName, use) as never,
   previewLumpImpact: (contextID, tableName, dbPath) =>
-    (ImportExportService.PreviewLumpImpact(contextID, tableName, dbPath) as never),
-  listLumpPresets: () =>
-    (ImportExportService.ListLumpPresets() as never),
-  previewLumpSpec: (contextID, spec) =>
-    (ImportExportService.PreviewLumpSpec(contextID, spec) as never),
+    ImportExportService.PreviewLumpImpact(contextID, tableName, dbPath) as never,
+  listLumpPresets: () => ImportExportService.ListLumpPresets() as never,
+  previewLumpSpec: (contextID, spec) => ImportExportService.PreviewLumpSpec(contextID, spec) as never,
   materializeLumpSpec: (contextID, targetName, spec, replaceExisting) =>
-    (ImportExportService.MaterializeLumpSpec(contextID, targetName, spec, replaceExisting) as never),
-  searchSpecies: (query, limit) =>
-    (PlotEntryService.SearchSpecies(query, limit) as never),
+    ImportExportService.MaterializeLumpSpec(contextID, targetName, spec, replaceExisting) as never,
+  searchSpecies: (query, limit) => PlotEntryService.SearchSpecies(query, limit) as never,
 };
 
 const LUMP_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
@@ -173,7 +178,8 @@ export function validateLumpBaseName(raw: string): { valid: boolean; normalized:
     return {
       valid: false,
       normalized: trimmed,
-      error: 'Lump table name must start with a letter and contain only letters, digits, or underscores (max 31 chars).',
+      error:
+        'Lump table name must start with a letter and contain only letters, digits, or underscores (max 31 chars).',
     };
   }
   const lower = trimmed.toLowerCase();
@@ -183,13 +189,21 @@ export function validateLumpBaseName(raw: string): { valid: boolean; normalized:
   return { valid: true, normalized: trimmed, error: '' };
 }
 
-export function validateLumpRowDraft(lumpCode: string, sppCode: string): {
+export function validateLumpRowDraft(
+  lumpCode: string,
+  sppCode: string
+): {
   valid: boolean;
   lumpCode: string;
   sppCode: string;
   error: string;
 } {
-  if (typeof lumpCode !== 'string' || typeof sppCode !== 'string' || !hasWellFormedUnicode(lumpCode) || !hasWellFormedUnicode(sppCode)) {
+  if (
+    typeof lumpCode !== 'string' ||
+    typeof sppCode !== 'string' ||
+    !hasWellFormedUnicode(lumpCode) ||
+    !hasWellFormedUnicode(sppCode)
+  ) {
     return { valid: false, lumpCode: '', sppCode: '', error: 'Species and lump codes must contain valid Unicode.' };
   }
   const cleanLump = lumpCode.trim().toUpperCase();
@@ -208,7 +222,12 @@ export function validateLumpRowDraft(lumpCode: string, sppCode: string): {
     return { valid: false, lumpCode: cleanLump, sppCode: cleanSpp, error: 'SppCode must be at most 8 characters.' };
   }
   if (cleanLump === cleanSpp) {
-    return { valid: false, lumpCode: cleanLump, sppCode: cleanSpp, error: 'LumpCode and SppCode must not be identical.' };
+    return {
+      valid: false,
+      lumpCode: cleanLump,
+      sppCode: cleanSpp,
+      error: 'LumpCode and SppCode must not be identical.',
+    };
   }
   return { valid: true, lumpCode: cleanLump, sppCode: cleanSpp, error: '' };
 }
@@ -227,7 +246,9 @@ export function parseGenusRollupTokens(raw: string): string[] {
   return out;
 }
 
-export function groupLumpRowsByCode(rows: LumpRow[]): Array<{ lumpCode: string; activeCount: number; rows: LumpRow[] }> {
+export function groupLumpRowsByCode(
+  rows: LumpRow[]
+): Array<{ lumpCode: string; activeCount: number; rows: LumpRow[] }> {
   const map = new Map<string, LumpRow[]>();
   for (const row of rows) {
     const key = row.lumpCode || '(UNASSIGNED)';

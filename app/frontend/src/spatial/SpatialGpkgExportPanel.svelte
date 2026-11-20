@@ -74,7 +74,8 @@
   </div>
   {#if gpkgOutcome}
     <div class="wb-alert wb-alert-ok">
-      Exported {gpkgOutcome.featureCount} features ({gpkgOutcome.crs}) | Flipped West Lons: {gpkgOutcome.normalizedWestLongitudes} | {gpkgOutcome.path}
+      Exported {gpkgOutcome.featureCount} features ({gpkgOutcome.crs}) | Flipped West Lons: {gpkgOutcome.normalizedWestLongitudes}
+      | {gpkgOutcome.path}
     </div>
   {/if}
 </div>

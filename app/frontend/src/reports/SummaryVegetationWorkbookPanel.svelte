@@ -1,33 +1,49 @@
-<script module lang="ts">
-  import { notifications } from '../shell/notificationService.svelte';
-  import WorkbookPublicationSection from '../shared/WorkbookPublicationSection.svelte';
-</script>
-
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
-  import { summaryVegetationReferenceGroupingAvailable, summaryVegetationUnanimousCommonAvailable, type SummaryVegetationOwner } from './summaryVegetation';
+  import { ReadRequests, formatError, trackIfCancellable } from '../shared/readRequests';
+  import { notifications } from '../shell/notificationService.svelte';
+  import WorkbookPublicationSection from '../shared/WorkbookPublicationSection.svelte';
+  import SummaryVegetationWorkbookReviewPlan from './parts/SummaryVegetationWorkbookReviewPlan.svelte';
+  import {
+    summaryVegetationReferenceGroupingAvailable,
+    summaryVegetationUnanimousCommonAvailable,
+    type SummaryVegetationOwner,
+  } from './summaryVegetation';
   import { summaryEnvironmentalLifeformEnabled } from './summaryVegetationEnvironmentalDesktop';
-  import { summaryVegetationWorkbookSession, sameSummaryWorkbookOptions, summaryWorkbookScopeOptions,
-    type SummaryWorkbookCalculation } from './summaryVegetationWorkbook';
+  import {
+    summaryVegetationWorkbookSession,
+    sameSummaryWorkbookOptions,
+    summaryWorkbookScopeOptions,
+    type SummaryWorkbookCalculation,
+  } from './summaryVegetationWorkbook';
 
-  let { owner, calculation, disabled, savedPresentation = null, onPreferencesLoaded, onBusyChange }: {
-    owner: SummaryVegetationOwner; calculation: SummaryWorkbookCalculation;
+  let {
+    owner,
+    calculation,
+    disabled,
+    savedPresentation = null,
+    onPreferencesLoaded,
+    onBusyChange,
+  }: {
+    owner: SummaryVegetationOwner;
+    calculation: SummaryWorkbookCalculation;
     disabled: boolean;
     savedPresentation?: {
-      title: string; includeEnv: boolean; createSummary: boolean;
-      showCommon: boolean; showGuide: boolean; constancy?: boolean;
+      title: string;
+      includeEnv: boolean;
+      createSummary: boolean;
+      showCommon: boolean;
+      showGuide: boolean;
+      constancy?: boolean;
     } | null;
     onPreferencesLoaded?: (options: ReturnType<ReturnType<typeof summaryVegetationWorkbookSession>['options']>) => void;
     onBusyChange: (held: boolean) => void;
   } = $props();
+
   const owned = untrack(() => structuredClone(owner));
   const session = summaryVegetationWorkbookSession(owned);
-  const enabled = true;
-  const ancillaryEnabled = true;
-  const referencesEnabled = true;
-  const groupedEnabled = true;
-  const presentationEnabled = true;
+  const workbookReads = new ReadRequests();
   const environmentEnabled = summaryEnvironmentalLifeformEnabled;
   let viewState = $state.raw(session.view());
   let error = $state('');
@@ -41,82 +57,132 @@
   const effectiveReferences = $derived(constancy || viewState.includeReferences);
   const effectiveCommon = $derived(!constancy && viewState.showCommon);
   const effectiveGuide = $derived(!constancy && viewState.useGuideNames);
-  const unanimousCommon = $derived(effectiveReferences &&
-    summaryVegetationUnanimousCommonAvailable(calculation.groupAndOrder ?? 11, calculation.display,
-      effectiveCommon || effectiveGuide));
-  const groupingUnavailable = $derived(grouped && (!groupedEnabled ||
-    effectiveReferences && !unanimousCommon && !summaryVegetationReferenceGroupingAvailable(calculation.groupAndOrder ?? 11,
-      effectiveCommon || effectiveGuide)));
-  const modeUnavailable = $derived(groupingUnavailable || viewState.includeEnv && !environmentEnabled ||
-    viewState.includeAncillary && !ancillaryEnabled || effectiveReferences && !referencesEnabled ||
-    constancy && !presentationEnabled);
-  const groupLabel = $derived(!grouped ? 'Layer' : calculation.groupAndOrder === 12 ? 'Strata' :
-    calculation.groupAndOrder === 13 ? 'Lifeform' : calculation.groupAndOrder === 14 ? 'None' : 'Unsupported');
-  const currentReview = $derived(!!viewState.review && sameSummaryWorkbookOptions(viewState.review.options, {
-    average: calculation.average, display: calculation.display, showClass: calculation.showClass,
-    title: viewState.title, includeEnv: viewState.includeEnv,
-    ...(grouped ? { groupAndOrder: calculation.groupAndOrder } : {}),
-    ...(constancy ? { constancy: true } : {}),
-    ...(unanimousCommon ? { unanimousCommon: true } : {}),
-    ...summaryWorkbookScopeOptions(calculation),
-    ...(viewState.includeAncillary ? { ancillary: { createSummary: viewState.createSummary } } : {}),
-    ...(effectiveReferences ? { references: {
-      showCommon: effectiveCommon, useGuideNames: effectiveGuide } } : {}),
-  }));
+  const unanimousCommon = $derived(
+    effectiveReferences &&
+      summaryVegetationUnanimousCommonAvailable(
+        calculation.groupAndOrder ?? 11,
+        calculation.display,
+        effectiveCommon || effectiveGuide
+      )
+  );
+  const groupingUnavailable = $derived(
+    grouped &&
+      effectiveReferences &&
+      !unanimousCommon &&
+      !summaryVegetationReferenceGroupingAvailable(calculation.groupAndOrder ?? 11, effectiveCommon || effectiveGuide)
+  );
+  const modeUnavailable = $derived(groupingUnavailable || (viewState.includeEnv && !environmentEnabled));
+  const groupLabel = $derived(
+    !grouped
+      ? 'Layer'
+      : calculation.groupAndOrder === 12
+        ? 'Strata'
+        : calculation.groupAndOrder === 13
+          ? 'Lifeform'
+          : calculation.groupAndOrder === 14
+            ? 'None'
+            : 'Unsupported'
+  );
+  const currentReview = $derived(
+    !!viewState.review &&
+      sameSummaryWorkbookOptions(viewState.review.options, {
+        average: calculation.average,
+        display: calculation.display,
+        showClass: calculation.showClass,
+        title: viewState.title,
+        includeEnv: viewState.includeEnv,
+        ...(grouped ? { groupAndOrder: calculation.groupAndOrder } : {}),
+        ...(constancy ? { constancy: true } : {}),
+        ...(unanimousCommon ? { unanimousCommon: true } : {}),
+        ...summaryWorkbookScopeOptions(calculation),
+        ...(viewState.includeAncillary ? { ancillary: { createSummary: viewState.createSummary } } : {}),
+        ...(effectiveReferences ? { references: { showCommon: effectiveCommon, useGuideNames: effectiveGuide } } : {}),
+      })
+  );
   const unsubscribe = session.subscribe(() => {
     viewState = session.view();
     onBusyChange(session.held());
   });
+
   function edit(field: 'title' | 'destination', raw: string) {
     if (held) return;
     error = '';
-    try { session.edit(field, raw); } catch (cause) { error = String(cause); }
+    try {
+      session.edit(field, raw);
+    } catch (cause) {
+      error = formatError(cause);
+    }
   }
   function includeEnvironment(event: Event) {
     if (held || !environmentEnabled) return;
     error = '';
-    try { session.includeEnvironment((event.currentTarget as HTMLInputElement).checked); }
-    catch (cause) { error = String(cause); }
+    try {
+      session.includeEnvironment((event.currentTarget as HTMLInputElement).checked);
+    } catch (cause) {
+      error = formatError(cause);
+    }
   }
   function selectAncillary(field: 'sheets' | 'summary', event: Event) {
-    if (held || !ancillaryEnabled) return;
+    if (held) return;
     const checked = (event.currentTarget as HTMLInputElement).checked;
     error = '';
     try {
       if (field === 'sheets') session.includeAncillary(checked);
       else session.includeSummary(checked);
-    } catch (cause) { error = String(cause); }
+    } catch (cause) {
+      error = formatError(cause);
+    }
   }
   function undo() {
     if (held) return;
     error = '';
-    try { session.undoDraft(); } catch (cause) { error = String(cause); }
+    try {
+      session.undoDraft();
+    } catch (cause) {
+      error = formatError(cause);
+    }
   }
   function selectReferences(field: 'include' | 'common' | 'guide', event: Event) {
-    if (held || !referencesEnabled || constancy) return;
+    if (held || constancy) return;
     const checked = (event.currentTarget as HTMLInputElement).checked;
     error = '';
-    try { session.selectReferences(field, checked); } catch (cause) { error = String(cause); }
+    try {
+      session.selectReferences(field, checked);
+    } catch (cause) {
+      error = formatError(cause);
+    }
   }
   async function review() {
-    if (!enabled || held || modeUnavailable || viewState.draftError) return;
+    if (held || modeUnavailable || viewState.draftError) return;
     error = '';
     unitPage = 0;
     referencePage = 0;
     try {
       const ok = await session.review(calculation, {
-        review: (contextId, options) => VegetationReportService.GetSummaryVegetationWorkbookReview(contextId, JSON.stringify(options)),
-        validationYield: () => new Promise(resolve => setTimeout(resolve, 0)),
+        review: (contextId, options) =>
+          trackIfCancellable(
+            workbookReads,
+            VegetationReportService.GetSummaryVegetationWorkbookReview(contextId, JSON.stringify(options))
+          ),
+        validationYield: () => new Promise((resolve) => setTimeout(resolve, 0)),
       });
-      if (!ok && typeof notifications !== 'undefined') {
+      if (!ok) {
         const curErr = session.view().error;
-        if (curErr) notifications.error('Summary Vegetation workbook review failed', curErr, { category: 'reports', source: 'Summary Vegetation', contextTag: owned.project || undefined });
+        if (curErr) {
+          notifications.error('Summary Vegetation workbook review failed', curErr, {
+            category: 'reports',
+            source: 'Summary Vegetation',
+            contextTag: owned.project || undefined,
+          });
+        }
       }
     } catch (cause) {
-      error = String(cause);
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation workbook review failed', error, { category: 'reports', source: 'Summary Vegetation', contextTag: owned.project || undefined });
-      }
+      error = formatError(cause);
+      notifications.error('Summary Vegetation workbook review failed', error, {
+        category: 'reports',
+        source: 'Summary Vegetation',
+        contextTag: owned.project || undefined,
+      });
     }
   }
   function syncSavedPresentation() {
@@ -132,61 +198,109 @@
         showCommon: savedPresentation.showCommon,
         useGuideNames: savedPresentation.showGuide,
       });
-    } catch (cause) { error = String(cause); }
+    } catch (cause) {
+      error = formatError(cause);
+    }
   }
   async function reviewFromPreferences() {
-    if (!enabled || held || viewState.draftError) return;
+    if (held || viewState.draftError) return;
     error = '';
     unitPage = 0;
     referencePage = 0;
     try {
       const loaded = await session.reviewFromPreferences({
-        review: (contextId, options) => VegetationReportService.GetSummaryVegetationWorkbookReview(contextId, JSON.stringify(options)),
-        reviewFromPreferences: contextId => VegetationReportService.GetSummaryVegetationWorkbookReviewFromPreferences(contextId),
-        validationYield: () => new Promise(resolve => setTimeout(resolve, 0)),
+        review: (contextId, options) =>
+          trackIfCancellable(
+            workbookReads,
+            VegetationReportService.GetSummaryVegetationWorkbookReview(contextId, JSON.stringify(options))
+          ),
+        reviewFromPreferences: (contextId) =>
+          trackIfCancellable(
+            workbookReads,
+            VegetationReportService.GetSummaryVegetationWorkbookReviewFromPreferences(contextId)
+          ),
+        validationYield: () => new Promise((resolve) => setTimeout(resolve, 0)),
       });
-      if (loaded) onPreferencesLoaded?.(loaded.options);
-      else if (typeof notifications !== 'undefined') {
+      if (loaded) {
+        onPreferencesLoaded?.(loaded.options);
+      } else {
         const curErr = session.view().error;
-        if (curErr) notifications.error('Summary Vegetation workbook review failed', curErr, { category: 'reports', source: 'Summary Vegetation', contextTag: owned.project || undefined });
+        if (curErr) {
+          notifications.error('Summary Vegetation workbook review failed', curErr, {
+            category: 'reports',
+            source: 'Summary Vegetation',
+            contextTag: owned.project || undefined,
+          });
+        }
       }
     } catch (cause) {
-      error = String(cause);
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation workbook review failed', error, { category: 'reports', source: 'Summary Vegetation', contextTag: owned.project || undefined });
-      }
+      error = formatError(cause);
+      notifications.error('Summary Vegetation workbook review failed', error, {
+        category: 'reports',
+        source: 'Summary Vegetation',
+        contextTag: owned.project || undefined,
+      });
     }
   }
   async function publish() {
-    if (!enabled || held || modeUnavailable || viewState.draftError || !currentReview) return;
+    if (held || modeUnavailable || viewState.draftError || !currentReview) return;
     error = '';
     try {
-      await session.publish(calculation, request =>
-        VegetationReportService.ExportReviewedSummaryVegetationWorkbook(owned.contextId, JSON.stringify(request)));
-      if (typeof notifications !== 'undefined') {
-        const s = session.view().publication;
-        const opts = { category: 'reports' as const, source: 'Summary Vegetation', contextTag: owned.project || undefined };
-        if (s.outcome?.status === 'published' && !s.error) notifications.success('Summary Vegetation workbook exported', s.outcome.path || s.requestedDestination || viewState.destination, opts);
-        else if (s.error || s.outcome) notifications.error('Summary Vegetation workbook export failed', s.error || `Publication ${s.outcome?.status ?? 'failed'} for ${s.requestedDestination || viewState.destination}`, opts);
+      await session.publish(calculation, (request) =>
+        VegetationReportService.ExportReviewedSummaryVegetationWorkbook(owned.contextId, JSON.stringify(request))
+      );
+      const s = session.view().publication;
+      const opts = {
+        category: 'reports' as const,
+        source: 'Summary Vegetation',
+        contextTag: owned.project || undefined,
+      };
+      if (s.outcome?.status === 'published' && !s.error) {
+        notifications.success(
+          'Summary Vegetation workbook exported',
+          s.outcome.path || s.requestedDestination || viewState.destination,
+          opts
+        );
+      } else if (s.error || s.outcome) {
+        notifications.error(
+          'Summary Vegetation workbook export failed',
+          s.error ||
+            `Publication ${s.outcome?.status ?? 'failed'} for ${s.requestedDestination || viewState.destination}`,
+          opts
+        );
       }
     } catch (cause) {
-      error = String(cause);
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation workbook export failed', error, { category: 'reports', source: 'Summary Vegetation', contextTag: owned.project || undefined });
-      }
+      error = formatError(cause);
+      notifications.error('Summary Vegetation workbook export failed', error, {
+        category: 'reports',
+        source: 'Summary Vegetation',
+        contextTag: owned.project || undefined,
+      });
     }
   }
   function acknowledge() {
     if (viewState.publication.busy || !viewState.publication.blocked) return;
     error = '';
-    try { session.acknowledge(); } catch (cause) {
-      error = String(cause);
-      if (typeof notifications !== 'undefined') {
-        notifications.error('Summary Vegetation workbook acknowledgement failed', error, { category: 'reports', source: 'Summary Vegetation', contextTag: owned.project || undefined });
-      }
+    try {
+      session.acknowledge();
+    } catch (cause) {
+      error = formatError(cause);
+      notifications.error('Summary Vegetation workbook acknowledgement failed', error, {
+        category: 'reports',
+        source: 'Summary Vegetation',
+        contextTag: owned.project || undefined,
+      });
     }
   }
-  onDestroy(() => { session.cancel(); unsubscribe(); });
+  function cancelReview() {
+    workbookReads.cancelAll();
+    session.cancel();
+  }
+  onDestroy(() => {
+    session.cancel();
+    unsubscribe();
+    workbookReads.cancelAll();
+  });
 </script>
 
 <WorkbookPublicationSection
@@ -204,195 +318,218 @@
   acknowledgeAttr="data-summary-workbook-acknowledge"
   onAcknowledge={acknowledge}
 >
-  {#if !enabled}<p>Summary Vegetation workbook export is currently unavailable.</p>{/if}
-  <p data-summary-workbook-group>Workbook grouping: {groupLabel}.
-    {#if constancy}Uses the loaded presentation Constancy draft: Lifeform grouping, Display Values1 and effective references without common/guide names.
-    {:else if groupedEnabled}Uses the Summary Group by selection.
-    {:else}Layer grouping active.{/if}</p>
-  {#if constancy}
-    <p data-summary-workbook-constancy>Constancy inspection retains numeric lifeform and separate raw-species groups,
-      including visibly identical rows. Equal visible keys use an adapted raw-code tie order.
-      Independent workbook name/reference drafts are retained for deselection; no preferences were saved.</p>
-    {#if !presentationEnabled || !referencesEnabled || !groupedEnabled}
-      <p role="alert">Constancy inspection requires the independent presentation, effective-reference and grouped-workbook flags.
-        The selected intent is retained; no ordinary workbook is substituted.</p>
+  <p data-summary-workbook-group>
+    Workbook grouping: {groupLabel}.
+    {#if constancy}
+      Uses the loaded presentation Constancy draft: Lifeform grouping, Display Values1 and effective references without
+      common/guide names.
+    {:else}
+      Uses the Summary Group by selection.
     {/if}
+  </p>
+  {#if constancy}
+    <p data-summary-workbook-constancy>
+      Constancy inspection retains numeric lifeform and separate raw-species groups, including visibly identical rows.
+      Equal visible keys use an adapted raw-code tie order. Independent workbook name/reference drafts are retained for
+      deselection; no preferences were saved.
+    </p>
   {/if}
   {#if groupingUnavailable}
-    <p role="alert">Grouped publication requires its independent build flag and compatible reference options.
-      Common/guide names support Layer, Strata, or Lifeform/None Display Values6 with unanimous names.
-      Other Lifeform/None displays support attribute references with both names off.
-      Clear incompatible modes or choose a supported grouping.
-      No options were changed automatically.</p>
+    <p role="alert">
+      Grouped publication requires its independent build flag and compatible reference options. Common/guide names
+      support Layer, Strata, or Lifeform/None Display Values6 with unanimous names. Other Lifeform/None displays support
+      attribute references with both names off. Clear incompatible modes or choose a supported grouping. {'No options were changed automatically.'}
+    </p>
   {/if}
   <div class="fields">
-    <label>Workbook title
-      <input data-summary-workbook-title value={viewState.title} disabled={!enabled || held}
-        oninput={event => edit('title', event.currentTarget.value)} />
+    <label>
+      Workbook title
+      <input
+        data-summary-workbook-title
+        value={viewState.title}
+        disabled={held}
+        oninput={(event) => edit('title', event.currentTarget.value)}
+      />
     </label>
     <label class="checkbox">
-      <input type="checkbox" data-summary-workbook-environment checked={viewState.includeEnv}
-        disabled={!enabled || held || !environmentEnabled} onchange={includeEnvironment} />
+      <input
+        type="checkbox"
+        data-summary-workbook-environment
+        checked={viewState.includeEnv}
+        disabled={held || !environmentEnabled}
+        onchange={includeEnvironment}
+      />
       Include selected environmental rows
     </label>
     <label class="checkbox">
-      <input type="checkbox" data-summary-workbook-ancillary checked={viewState.includeAncillary}
-        disabled={!enabled || held || !ancillaryEnabled} onchange={event => selectAncillary('sheets', event)} />
+      <input
+        type="checkbox"
+        data-summary-workbook-ancillary
+        checked={viewState.includeAncillary}
+        disabled={held}
+        onchange={(event) => selectAncillary('sheets', event)}
+      />
       Include source worksheets (SU Table)
     </label>
     <label class="checkbox">
-      <input type="checkbox" data-summary-workbook-summary checked={viewState.createSummary}
-        disabled={!enabled || held || !ancillaryEnabled || !viewState.includeAncillary}
-        onchange={event => selectAncillary('summary', event)} />
+      <input
+        type="checkbox"
+        data-summary-workbook-summary
+        checked={viewState.createSummary}
+        disabled={held || !viewState.includeAncillary}
+        onchange={(event) => selectAncillary('summary', event)}
+      />
       Include ReportSummary counts, unit names and version
     </label>
     <label class="checkbox">
-      <input type="checkbox" data-summary-workbook-references checked={effectiveReferences}
-        disabled={!enabled || held || !referencesEnabled || constancy} onchange={event => selectReferences('include', event)} />
+      <input
+        type="checkbox"
+        data-summary-workbook-references
+        checked={effectiveReferences}
+        disabled={held || constancy}
+        onchange={(event) => selectReferences('include', event)}
+      />
       Project effective source references and attribute descriptions
     </label>
     <label class="checkbox">
-      <input type="checkbox" data-summary-workbook-common checked={effectiveCommon}
-        disabled={!enabled || held || !referencesEnabled || !viewState.includeReferences || viewState.useGuideNames || constancy}
-        onchange={event => selectReferences('common', event)} />
-      {#if unanimousCommon}Include unanimous common names in the workbook
-      {:else}Include common names in grouping and the workbook{/if}
+      <input
+        type="checkbox"
+        data-summary-workbook-common
+        checked={effectiveCommon}
+        disabled={held || !viewState.includeReferences || viewState.useGuideNames || constancy}
+        onchange={(event) => selectReferences('common', event)}
+      />
+      {#if unanimousCommon}
+        Include unanimous common names in the workbook
+      {:else}
+        Include common names in grouping and the workbook
+      {/if}
     </label>
     <label class="checkbox">
-      <input type="checkbox" data-summary-workbook-guide checked={effectiveGuide}
-        disabled={!enabled || held || !referencesEnabled || !viewState.includeReferences || constancy}
-        onchange={event => selectReferences('guide', event)} />
+      <input
+        type="checkbox"
+        data-summary-workbook-guide
+        checked={effectiveGuide}
+        disabled={held || !viewState.includeReferences || constancy}
+        onchange={(event) => selectReferences('guide', event)}
+      />
       Use master CombinedEnglishName (also includes common names)
     </label>
-    <label>New workbook destination (.xlsx)
-      <input data-summary-workbook-destination value={viewState.destination} disabled={!enabled || held}
-        oninput={event => edit('destination', event.currentTarget.value)} />
+    <label>
+      New workbook destination (.xlsx)
+      <input
+        data-summary-workbook-destination
+        value={viewState.destination}
+        disabled={held}
+        oninput={(event) => edit('destination', event.currentTarget.value)}
+      />
     </label>
   </div>
   {#if unanimousCommon}
-    <p data-summary-workbook-unanimous-common>Lifeform/None Display Values6 retains the original group and species key.
-      Every contributing source name across all units must agree exactly; differing names stop review rather than
-      split groups or choose an arbitrary name. Original First projects a unanimous empty name as NULL.
-      Guide-name selection is an effective reference projection, not the original saved callback.</p>
+    <p data-summary-workbook-unanimous-common>
+      Lifeform/None Display Values6 retains the original group and species key. Every contributing source name across
+      all units must agree exactly; differing names stop review rather than split groups or choose an arbitrary name.
+      Original First projects a unanimous empty name as NULL. Guide-name selection is an effective reference projection,
+      not the original saved callback.
+    </p>
   {/if}
   <div class="actions">
-    <button data-summary-workbook-review disabled={!enabled || held || modeUnavailable || !!viewState.draftError} onclick={review}>Review inspection workbook</button>
-    <button type="button" data-summary-workbook-review-preferences disabled={!enabled || held || !!viewState.draftError} onclick={reviewFromPreferences}>Review from Saved Preferences</button>
+    <button data-summary-workbook-review disabled={held || modeUnavailable || !!viewState.draftError} onclick={review}>
+      Review inspection workbook
+    </button>
+    <button
+      type="button"
+      data-summary-workbook-review-preferences
+      disabled={held || !!viewState.draftError}
+      onclick={reviewFromPreferences}
+    >
+      Review from Saved Preferences
+    </button>
     {#if savedPresentation}
-      <button type="button" data-summary-workbook-sync disabled={held} onclick={syncSavedPresentation}>Sync from Saved Presentation</button>
+      <button type="button" data-summary-workbook-sync disabled={held} onclick={syncSavedPresentation}>
+        Sync from Saved Presentation
+      </button>
     {/if}
-    <button data-summary-workbook-cancel disabled={!viewState.reviewing || barrier} onclick={() => session.cancel()}>Cancel review</button>
-    <button data-summary-workbook-undo disabled={!enabled || held} onclick={undo}>Undo export options</button>
-    <button data-summary-workbook-publish disabled={!enabled || held || modeUnavailable || !!viewState.draftError || !currentReview || !viewState.destination}
-      onclick={publish}>Publish reviewed workbook</button>
+    <button data-summary-workbook-cancel disabled={!viewState.reviewing || barrier} onclick={cancelReview}>
+      Cancel review
+    </button>
+    <button data-summary-workbook-undo disabled={held} onclick={undo}>Undo export options</button>
+    <button
+      data-summary-workbook-publish
+      disabled={held || modeUnavailable || !!viewState.draftError || !currentReview || !viewState.destination}
+      onclick={publish}
+    >
+      Publish reviewed workbook
+    </button>
   </div>
   {#if viewState.review}
-    <div data-summary-workbook-plan class="plan">
-      {#if !currentReview}<p role="alert">Calculation options changed; review the current options before publication.</p>{/if}
-      <p>Sheet: {viewState.review.sheet}. Group field: {viewState.review.preview.groupField?.name ?? 'Layer'}.
-        {viewState.review.preview.rows.length} vegetation rows;
-        {viewState.review.environment?.rows.length ?? 0} environmental rows; first vegetation row {viewState.review.firstVegetationRow}.
-        {viewState.review.bytes} bytes.</p>
-      <p>Approval: {viewState.review.approvalHash}<br />Workbook SHA256: {viewState.review.workbookSHA256}</p>
-      {#if viewState.review.preview.references}
-        {@const reference = viewState.review.preview.references}
-        <div data-summary-workbook-reference-plan class="plan">
-          <p>Effective references: {reference.masterRows} physical master rows;
-            {reference.removedMasterRows} old attribute rows excluded; {reference.personalRows} personal rows.
-            {reference.derivedRows} attribute rows projected from {reference.descriptionRows} description rows;
-            {reference.unionRows} distinct literal reference rows.
-            Common names: {reference.showCommon ? 'included' : 'not included'}.
-            Guide names: {reference.useGuideNames ? 'master CombinedEnglishName' : 'not selected'}.</p>
-          <p>Derived origins identify physical attribute-description rows, not invented master records.
-            Name groups are shown below; cover values are in the workbook.
-            {#if viewState.review.options.unanimousCommon}Source NULL and empty remain distinct for unanimity;
-              a unanimous empty name is projected as NULL by original First.
-            {:else}NULL and empty names remain distinct.{/if}</p>
-          <div class="unit-table">
-            <table aria-label="Reviewed effective reference groups">
-              <thead><tr><th scope="col">{viewState.review.preview.groupField?.name ?? 'Layer'}</th><th scope="col">Scientific name/code</th>
-                {#if reference.showCommon}<th scope="col">Common name</th>{/if}<th scope="col">Order</th></tr></thead>
-              <tbody>{#each viewState.review.preview.rows.slice(referencePage * unitPageSize, (referencePage + 1) * unitPageSize) as row}
-                <tr aria-label={row.rawSpecies ? `Raw species ${row.rawSpecies.text === null ? '(NULL)' : row.rawSpecies.text === '' ? '(empty)' : row.rawSpecies.text}` : undefined}>
-                  <td>{row.layer.storage === 'integer' ? row.layer.integer :
-                    row.layer.text === null ? '(NULL)' : row.layer.text === '' ? '(empty)' : row.layer.text}</td>
-                  <th scope="row">{row.species.text === null ? '(NULL)' : row.species.text === '' ? '(empty)' : row.species.text}</th>
-                  {#if reference.showCommon}
-                    {#if row.commonName}
-                      <td>{row.commonName.text === null ? '(NULL)' : row.commonName.text === '' ? '(empty)' : row.commonName.text}</td>
-                    {:else}
-                      <td><span role="alert">Reviewed common name is missing.</span></td>
-                    {/if}
-                  {/if}
-                  <td>{row.order.storage === 'real' ? row.order.real :
-                    row.order.text === null ? '(NULL)' : row.order.text === '' ? '(empty)' : row.order.text}</td></tr>
-              {/each}</tbody>
-            </table>
-          </div>
-          <div class="actions">
-            <button data-summary-reference-previous disabled={held || referencePage === 0}
-              onclick={() => referencePage--}>Previous name groups</button>
-            <span>{viewState.review.preview.rows.length} name groups; page {referencePage + 1} of
-              {Math.max(1, Math.ceil(viewState.review.preview.rows.length / unitPageSize))}.</span>
-            <button data-summary-reference-next disabled={held || (referencePage + 1) * unitPageSize >= viewState.review.preview.rows.length}
-              onclick={() => referencePage++}>Next name groups</button>
-          </div>
-        </div>
-      {/if}
-      {#if viewState.review.ancillary}
-        <div data-summary-workbook-ancillary-plan class="plan">
-          <p>Source sheets: {viewState.review.ancillary.sheets.join(', ')}.
-            Reviewed creation time: {viewState.review.ancillary.createdAt}.
-            {viewState.review.ancillary.membershipRows} physical SU membership rows.</p>
-          {#if viewState.review.ancillary.summary}
-            {@const summary = viewState.review.ancillary.summary}
-            <p>Plots in database: {summary.environmentCountAvailable ? summary.environmentRows : 'N/A'}.
-              Non-NULL selected plot rows: {summary.selectedPlotRows}.
-              AllSpecs version: {summary.version === '' ? '(empty)' : summary.version} ({summary.versionStatus}).</p>
-            <div class="unit-table">
-              <table aria-label="Reviewed ReportSummary units">
-                <thead><tr><th scope="col">Short name</th><th scope="col">Units</th><th scope="col">Long name</th></tr></thead>
-                <tbody>{#each summary.units.slice(unitPage * unitPageSize, (unitPage + 1) * unitPageSize) as unit (unit.code)}
-                  <tr><th scope="row">{unit.code === '' ? '(empty)' : unit.code}</th><td>{unit.numPlots}</td>
-                    <td>{unit.longName === null ? '(NULL)' : unit.longName === '' ? '(empty)' : unit.longName}</td></tr>
-                {/each}</tbody>
-              </table>
-            </div>
-            <div class="actions">
-              <button data-summary-units-previous disabled={held || unitPage === 0}
-                onclick={() => unitPage--}>Previous units</button>
-              <span>{summary.units.length} units; page {unitPage + 1} of {Math.max(1, Math.ceil(summary.units.length / unitPageSize))}.</span>
-              <button data-summary-units-next disabled={held || (unitPage + 1) * unitPageSize >= summary.units.length}
-                onclick={() => unitPage++}>Next units</button>
-            </div>
-          {/if}
-        </div>
-      {/if}
-      <p>{viewState.review.scope}</p>
-    </div>
+    <SummaryVegetationWorkbookReviewPlan
+      review={viewState.review}
+      {currentReview}
+      {held}
+      bind:unitPage
+      bind:referencePage
+      {unitPageSize}
+    />
   {/if}
-  <p>Explicit inspection export using the grouping, Calculate, Display Values and Show above, plus these title/environment options.
-    Saved presentation callbacks are not applied. Source data, preferences and audit history are not changed.
-    This is not the original Access Report action: quality/lumping callbacks, original formatting, Excel coercion,
-    printing and macros remain unavailable. Optional attribute/common/guide projection is read-only and uses literal
-    comparison, not Access collation or physical preflight mutations. Source worksheets are a separate inspection
-    option. Existing destinations are never replaced.</p>
-  {#if !ancillaryEnabled}<p>Source worksheet export is currently unavailable.</p>{/if}
-  {#if !referencesEnabled}<p>Effective reference projection is currently unavailable.</p>{/if}
+  <p>
+    Explicit inspection export using the grouping, Calculate, Display Values and Show above, plus these
+    title/environment options. Saved presentation callbacks are not applied. Source data, preferences and audit history
+    are not changed. This is not the original Access Report action: quality/lumping callbacks, original formatting,
+    Excel coercion, printing and macros remain unavailable. Optional attribute/common/guide projection is read-only and
+    uses literal comparison, not Access collation or physical preflight mutations. Source worksheets are a separate
+    inspection option. Existing destinations are never replaced.
+  </p>
 </WorkbookPublicationSection>
 
 <style>
-  .plan { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; }
-  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; }
-  label { display: flex; flex-direction: column; gap: .35rem; min-width: 0; color: var(--vpro-ink); font-weight: 500; }
-  input:not([type="checkbox"]) { width: 100%; box-sizing: border-box; min-width: 0; padding: .5rem; border: 1px solid var(--vpro-border); border-radius: .25rem; background: var(--vpro-surface); color: var(--vpro-ink); }
-  .checkbox { flex-direction: row; align-items: center; }
-  .actions { display: flex; flex-wrap: wrap; gap: .75rem; }
-  button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid var(--vpro-navy); border-radius: .25rem; background: var(--vpro-navy); color: var(--vpro-surface); cursor: pointer; font-weight: 600; }
-  button:disabled { opacity: .6; cursor: not-allowed; }
-  .unit-table { min-width: 0; overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; background: var(--vpro-surface); }
-  th, td { padding: .5rem; border: 1px solid var(--vpro-border); text-align: left; overflow-wrap: anywhere; }
-  thead th { background: var(--vpro-canvas); color: var(--vpro-navy); }
-  [role="alert"] { color: var(--vpro-error); }
+  .fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    gap: 1rem;
+  }
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+    color: var(--vpro-ink);
+    font-weight: 500;
+  }
+  input:not([type='checkbox']) {
+    width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 0.5rem;
+    border: 1px solid var(--vpro-border);
+    border-radius: 0.25rem;
+    background: var(--vpro-surface);
+    color: var(--vpro-ink);
+  }
+  .checkbox {
+    flex-direction: row;
+    align-items: center;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  button {
+    min-height: 2.5rem;
+    padding: 0.5rem 0.85rem;
+    border: 1px solid var(--vpro-navy);
+    border-radius: 0.25rem;
+    background: var(--vpro-navy);
+    color: var(--vpro-surface);
+    cursor: pointer;
+    font-weight: 600;
+  }
+  button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  [role='alert'] {
+    color: var(--vpro-error);
+  }
 </style>

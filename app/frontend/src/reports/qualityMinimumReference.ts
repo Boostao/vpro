@@ -4,24 +4,49 @@ import { exactSigned64 } from '../admin/projectMetadataRestore';
 import { completeMetadataCellFromWire } from '../entry/siviMetadataWire';
 
 const schema = [
-  ['ListName', 'TEXT'], ['ListFilter', 'TEXT'], ['ItemOrder', 'REAL'], ['Item', 'TEXT'],
-  ['ItemDescription', 'TEXT'], ['FieldUsedIn', 'TEXT'], ['ValidateLoops', 'TEXT'],
-  ['Validate', 'BOOLEAN'], ['Note', 'TEXT'], ['Flag', 'BOOLEAN'],
+  ['ListName', 'TEXT'],
+  ['ListFilter', 'TEXT'],
+  ['ItemOrder', 'REAL'],
+  ['Item', 'TEXT'],
+  ['ItemDescription', 'TEXT'],
+  ['FieldUsedIn', 'TEXT'],
+  ['ValidateLoops', 'TEXT'],
+  ['Validate', 'BOOLEAN'],
+  ['Note', 'TEXT'],
+  ['Flag', 'BOOLEAN'],
 ] as const;
 
-export function validateQualityMinimumReference(value: unknown, listName: 'PlotQualitySite' | 'BEC_Use'): ProjectMetadataTable {
-  if (!lifeformShape(value, ['columns', 'rows']) || !Array.isArray(value.columns) ||
-      value.columns.length !== schema.length || Array.from(value.columns).some((column, index) =>
-        !lifeformShape(column, ['name', 'declaredType']) || column.name !== schema[index][0] ||
-        column.declaredType !== schema[index][1]) || !Array.isArray(value.rows)) {
+export function validateQualityMinimumReference(
+  value: unknown,
+  listName: 'PlotQualitySite' | 'BEC_Use'
+): ProjectMetadataTable {
+  if (
+    !lifeformShape(value, ['columns', 'rows']) ||
+    !Array.isArray(value.columns) ||
+    value.columns.length !== schema.length ||
+    Array.from(value.columns).some(
+      (column, index) =>
+        !lifeformShape(column, ['name', 'declaredType']) ||
+        column.name !== schema[index][0] ||
+        column.declaredType !== schema[index][1]
+    ) ||
+    !Array.isArray(value.rows)
+  ) {
     throw new Error(`Owned ${listName} suggestion schema is incomplete; no copied catalogue applied.`);
   }
   const seen = new Set<string>();
-  const rows = Array.from(value.rows).map(row => {
-    if (!lifeformShape(row, ['rowId', 'cells']) || typeof row.rowId !== 'string' ||
-        !exactSigned64(row.rowId) || seen.has(row.rowId) ||
-        !Array.isArray(row.cells) || row.cells.length !== schema.length) {
-      throw new Error(`Owned ${listName} suggestions require distinct physical identities and complete typed metadata.`);
+  const rows = Array.from(value.rows).map((row) => {
+    if (
+      !lifeformShape(row, ['rowId', 'cells']) ||
+      typeof row.rowId !== 'string' ||
+      !exactSigned64(row.rowId) ||
+      seen.has(row.rowId) ||
+      !Array.isArray(row.cells) ||
+      row.cells.length !== schema.length
+    ) {
+      throw new Error(
+        `Owned ${listName} suggestions require distinct physical identities and complete typed metadata.`
+      );
     }
     seen.add(row.rowId);
     const cells = Array.from(row.cells, (cell: unknown) => {

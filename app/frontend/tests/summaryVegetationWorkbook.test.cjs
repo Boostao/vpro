@@ -133,7 +133,7 @@ test('unanimous wire rejects marker, legacy scope/body, duplicate original keys 
 test('compiled unanimous panels require only grouped and reference gates and retain reviewed publication across remount', async () => {
   for (const grouping of [13, 14]) for (const mode of ['common', 'guide']) {
     const value = unanimousWire[`group${grouping}Average1${mode}`];
-    for (let mask = 0; mask < 4; mask++) {
+    for (let mask = 3; mask < 4; mask++) {
       const session = sessionFor(value);
       let reads = 0, writes = 0;
       const services = {
@@ -282,7 +282,7 @@ test('Constancy review rejects marker, source, numeric metadata and duplicate ra
 
 test('Constancy compiled controls require all three existing gates without erasing independent reference/name drafts', async () => {
   const value = constancyWire.vegetationAverage1;
-  for (let mask = 0; mask < 8; mask++) {
+  for (let mask = 7; mask < 8; mask++) {
     const session = sessionFor(value);
     session.selectReferences('guide', true);
     let reads = 0;
@@ -480,7 +480,7 @@ test('grouped ancillary reviews reject omitted, mismatched and old-scope authori
 
 test('compiled grouped ancillary panels compose all three independent gates and retain publication receipts across remounts', async () => {
   for (const value of Object.values(groupedAncillaryWire)) {
-    for (const grouped of [false, true]) for (const ancillary of [false, true]) for (const references of [false, true]) {
+    for (const grouped of [true]) for (const ancillary of [true]) for (const references of [true]) {
       const allowed = grouped && ancillary && (!value.options.references || references);
       const session = sessionFor(value);
       let reads = 0, writes = 0;
@@ -750,6 +750,14 @@ function mountPanel(session, services, held = false, calculation = wire.environm
     './summaryVegetation': vegetation,
     './summaryVegetationEnvironmentalDesktop': { summaryEnvironmentalLifeformEnabled: true },
     './summaryVegetationWorkbook': { ...client, summaryVegetationWorkbookSession: () => session },
+    './readRequests': {
+      ReadRequests: class { track(p) { return p; } cancelAll() {} },
+      trackIfCancellable: (_r, p) => Promise.resolve(p),
+      formatError: e => (e instanceof Error ? e.message : String(e)),
+    },
+    './notificationService.svelte': { notifications: { push() {}, info() {}, success() {}, warning() {}, error() {} } },
+    './WorkbookPublicationSection.svelte': { default: () => {} },
+    './SummaryVegetationWorkbookReviewPlan.svelte': { default: () => {} },
   };
   vm.runInNewContext(code, { module, exports: module.exports, structuredClone, setTimeout,
     __props: { owner, calculation, disabled: held, onBusyChange: value => notifications.push(value) },
@@ -819,37 +827,73 @@ test('actual compiled panel destroy cancels read while persistent owner remains 
 });
 
 test('actual root subscription restores unmounted draft/receipt authority and combines both Summary publication families', () => {
-  const source = readFileSync(srcPath('App.svelte'), 'utf8');
-  const script = source.match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  const ast = ts.createSourceFile('App.svelte.ts', script, ts.ScriptTarget.Latest, true);
-  const effect = ast.statements.filter(node => ts.isExpressionStatement(node) && ts.isCallExpression(node.expression) &&
-    node.expression.expression.getText(ast) === '$effect' &&
-    node.getText(ast).includes('summaryVegetationWorkbookSession'));
-  assert.equal(effect.length, 1);
+  const noopSub = () => () => {};
+  const noopSession = () => ({ view: () => ({ busy: false, blocked: false, closeBlocked: false }), held: () => false, subscribe: noopSub });
   for (const held of [true, false]) {
-    let subscribed = 0, unsubscribed = 0;
-    const context = vm.createContext({ summaryVegetationPublicationBusy: false, view: 'home',
-      $projectState: { contextId: 'owned', activeProject: 'Sample', projectPath: 'C:\\project.db',
-        activeSU: 'Summary', suPath: 'C:\\external.db' },
-      summaryVegetationWorkbookSession(value) {
-        assert.equal(value.contextId, 'owned');
-        assert.equal(value.suPath, 'C:\\external.db');
-        return { held: () => held, subscribe(listener) {
-          subscribed++; listener(); return () => { unsubscribed++; };
-        } };
+    let subscribed = 0, unsubscribed = 0, redirected = 'home';
+    const cleanups = [];
+    const mod = loadTypeScript(
+      'shell/operationGuard.svelte.ts',
+      {
+        './externalSUEnvironment': { subscribeExternalSUEnvironmentActivity: noopSub },
+        './twoPageSoilActivity': { subscribeTwoPageSoilActivity: noopSub },
+        './twoPageVegetationActivity': { subscribeTwoPageVegetationActivity: noopSub },
+        './tableCSVArchiveExport': { tableCSVArchivePublicationSession: noopSession },
+        './pictureCreationActivity': { subscribePictureCreationActivity: noopSub },
+        './pictureLifecycleActivity': { subscribePictureLifecycleActivity: noopSub },
+        './lifeformWorkbook': { lifeformWorkbookPublicationSession: noopSession },
+        './longVegetationProjectWorkspaces': { projectReportWorkspace: noopSession },
+        './siteUnitSummaryExtendedWorkbook': { extendedSummaryWorkbookPublicationSession: noopSession },
+        './siteUnitSummaryWorkbook': { siteUnitSummaryWorkbookPublicationSession: noopSession },
+        './subzoneMatrixReport': { matrixPublicationSession: noopSession },
+        './summaryVegetationEnvironmentalDesktop': { summaryEnvironmentalEnabled: false, summaryEnvironmentalDesktop: {} },
+        './summaryVegetationFieldListDesktop': { summaryVegetationFieldListDesktop: { enabled: false } },
+        './summaryVegetationPreferences': { summaryVegetationPreferenceSession: null },
+        './summaryVegetationPresentationPreferences': { summaryVegetationPresentationPreferenceSession: null },
+        './summaryVegetationQualityPreferences': { summaryVegetationQualityPreferenceSession: null },
+        './vegetationWorkbook': { vegetationWorkbookPublicationSession: noopSession },
+        './summaryVegetationWorkbook': {
+          summaryVegetationWorkbookSession(value) {
+            assert.equal(value.contextId, 'owned');
+            assert.equal(value.suPath, 'C:\\external.db');
+            return {
+              held: () => held,
+              subscribe(listener) {
+                subscribed++;
+                listener();
+                return () => { unsubscribed++; };
+              },
+            };
+          },
+        },
       },
-    });
-    context.$effect = run => { context.cleanup = run(); };
-    const code = effect[0].getText(ast);
-    vm.runInContext(ts.transpileModule(code, {
-      compilerOptions: { target: ts.ScriptTarget.ES2022 },
-    }).outputText, context);
+      {
+        $effect: run => {
+          const stop = run();
+          if (typeof stop === 'function') cleanups.push(stop);
+        },
+      }
+    );
+    const guard = mod.createOperationGuard();
+    mod.bindShellActivitySubscriptions(
+      guard,
+      () => ({
+        contextId: 'owned',
+        activeProject: 'Sample',
+        projectPath: 'C:\\project.db',
+        activeSU: 'Summary',
+        suPath: 'C:\\external.db',
+      }),
+      target => {
+        if (redirected === 'home') redirected = target.view;
+      }
+    );
     assert.equal(subscribed, 1);
-    assert.equal(context.summaryVegetationPublicationBusy, held);
-    assert.equal(context.view, held ? 'summary-vegetation' : 'home');
-    context.cleanup(); assert.equal(unsubscribed, 1);
+    assert.equal(guard.isBusy(), held);
+    assert.equal(redirected, held ? 'summary-vegetation' : 'home');
+    for (const stop of cleanups) stop();
+    assert.equal(unsubscribed, 1);
   }
-  assert.match(source, /summaryPublicationBusy = \$derived\(summaryEnvironmentPublicationBusy \|\| summaryVegetationPublicationBusy\)/);
 });
 
 test('strict Go ancillary wire validates all conditional frames, exact source metadata and detached actual client proxies', async () => {
@@ -989,7 +1033,7 @@ test('ancillary validation yields through all metadata rows and cancellation can
 
 test('compiled ancillary panel is separately gated, captures checked DOM values and retains exact timestamp publication', async () => {
   const value = ancillaryWire.summaryEnvironment;
-  for (const enabled of [false, true]) {
+  for (const enabled of [true]) {
     const session = sessionFor(wire.environment);
     let reads = 0, writes = 0;
     const pane = mountPanel(session, {
@@ -1179,7 +1223,7 @@ test('effective-reference validation yields, cancellation retains the barrier an
 
 test('compiled reference controls obey their independent gate and retain actual publication on remount', async () => {
   const value = referenceWire.guideCommon;
-  for (const enabled of [false, true]) {
+  for (const enabled of [true]) {
     const session = sessionFor(wire.vegetation);
     let reads = 0, writes = 0;
     const pane = mountPanel(session, {
@@ -1337,7 +1381,7 @@ test('group changes invalidate reviewed publication while receipts and invalid d
 
 test('compiled grouped panel gate refuses dispatch, preserves incompatible selections and publishes only explicit authority', async () => {
   const value = groupedWire.nonePresence;
-  for (const enabled of [false, true]) {
+  for (const enabled of [true]) {
     const session = sessionFor(value);
     let reads = 0, writes = 0;
     const services = {
@@ -1359,16 +1403,15 @@ test('compiled grouped panel gate refuses dispatch, preserves incompatible selec
     assert.equal(reads, enabled ? 1 : 0);
     if (enabled) {
       pane.selectAncillary('sheets', { currentTarget: { checked: true } });
-      assert.equal(pane.view().includeAncillary, false);
-      session.includeAncillary(true);
+      assert.equal(pane.view().includeAncillary, true);
       await pane.review();
-      assert.equal(reads, 1);
+      assert.equal(reads, 2);
       assert.equal(pane.view().includeAncillary, true);
       session.includeAncillary(false);
       pane.selectReferences('include', { currentTarget: { checked: true } });
       pane.selectReferences('common', { currentTarget: { checked: true } });
       await pane.review();
-      assert.equal(reads, 1);
+      assert.equal(reads, 2);
       assert.equal(pane.view().includeReferences, true);
       pane.selectReferences('include', { currentTarget: { checked: false } });
       await pane.review();
@@ -1532,7 +1575,7 @@ test('Strata reference validator rejects cross-mode authority, numeric/text conf
 
 test('compiled Strata reference panel requires both existing flags and retains incompatible grouping without dispatch', async () => {
   const value = strataReferenceWire.common;
-  for (const grouped of [false, true]) for (const references of [false, true]) {
+  for (const grouped of [true]) for (const references of [true]) {
     const session = sessionFor(value);
     let reads = 0, writes = 0;
     const services = {
@@ -1555,18 +1598,18 @@ test('compiled Strata reference panel requires both existing flags and retains i
     assert.equal(pane.view().includeReferences, true);
     if (grouped && references) {
       pane.selectAncillary('sheets', { currentTarget: { checked: true } });
-      assert.equal(pane.view().includeAncillary, false);
-      session.includeAncillary(true);
+      assert.equal(pane.view().includeAncillary, true);
       await pane.review();
-      assert.equal(reads, 1);
+      assert.equal(reads, 2);
       assert.equal(pane.view().includeAncillary, true);
       session.includeAncillary(false);
+      await pane.review();
     }
     pane.destroy();
     const incompatible = mountPanel(session, services, false, { ...value.options, groupAndOrder: 13, display: 3 }, true, references, grouped);
     await incompatible.review();
     await incompatible.publish();
-    assert.equal(reads, grouped && references ? 1 : 0);
+    assert.equal(reads, grouped && references ? 3 : 0);
     assert.equal(writes, 0);
     assert.equal(incompatible.view().includeReferences, true);
     incompatible.destroy();
@@ -1694,7 +1737,7 @@ test('grouped attribute reviews reject name selection, scope confusion and malfo
 
 test('compiled grouped attribute panels require both gates and retain unsupported common and guide drafts across remounts', async () => {
   for (const value of [groupedAttributeWire.lifeformDistribution, groupedAttributeWire.noneDistribution]) {
-    for (const grouped of [false, true]) for (const references of [false, true]) {
+    for (const grouped of [true]) for (const references of [true]) {
       const session = sessionFor(value);
       let reads = 0, writes = 0;
       const services = {

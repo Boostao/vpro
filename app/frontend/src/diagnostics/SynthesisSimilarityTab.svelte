@@ -10,14 +10,8 @@
     onSelectPair: (pair: [string, string]) => void;
   }
 
-  let {
-    snapshot,
-    similarityMetric,
-    selectedPairUnits,
-    activePairComparison,
-    onMetricChange,
-    onSelectPair,
-  }: Props = $props();
+  let { snapshot, similarityMetric, selectedPairUnits, activePairComparison, onMetricChange, onSelectPair }: Props =
+    $props();
 </script>
 
 <div class="syn-similarity-pane">
@@ -59,19 +53,14 @@
             <tr>
               <th class="sim-row-hdr">{row.unit}</th>
               {#each row.cells as cell, cIdx (cell.unit)}
-                {@const pct =
-                  similarityMetric === 'sorensen' ? cell.similarityPct : cell.becSimMeanPct}
+                {@const pct = similarityMetric === 'sorensen' ? cell.similarityPct : cell.becSimMeanPct}
                 <td
                   class="sim-cell"
                   class:sim-diag={rIdx === cIdx}
                   class:sim-high={rIdx !== cIdx && pct >= 70}
                   class:sim-med={rIdx !== cIdx && pct >= 50 && pct < 70}
-                  class:sim-selected={
-                    (selectedPairUnits[0] === row.unit &&
-                      selectedPairUnits[1] === cell.unit) ||
-                    (selectedPairUnits[1] === row.unit &&
-                      selectedPairUnits[0] === cell.unit)
-                  }
+                  class:sim-selected={(selectedPairUnits[0] === row.unit && selectedPairUnits[1] === cell.unit) ||
+                    (selectedPairUnits[1] === row.unit && selectedPairUnits[0] === cell.unit)}
                   onclick={() => {
                     if (row.unit !== cell.unit) {
                       onSelectPair([row.unit, cell.unit]);
@@ -91,8 +80,8 @@
       <div class="syn-pair-detail">
         <div class="syn-pair-detail-hdr">
           <strong>
-            Pairwise Differential Breakdown: {activePairComparison.unit1} (n={activePairComparison.plotsUnit1})
-            vs {activePairComparison.unit2} (n={activePairComparison.plotsUnit2})
+            Pairwise Differential Breakdown: {activePairComparison.unit1} (n={activePairComparison.plotsUnit1}) vs {activePairComparison.unit2}
+            (n={activePairComparison.plotsUnit2})
           </strong>
           <span>
             Sorensen: {activePairComparison.sorensenPct.toFixed(1)}% · BEC.sim.mean:{' '}

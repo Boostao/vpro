@@ -290,7 +290,8 @@ test('ENG-XCUT-008 + UX-SHELL-004: Shift+Enter reverse navigation, Ctrl+F filter
 });
 
 test('UX-ENV-006 + UX-SHELL-007: Two-Page Entry without selected plot renders plot picker prompt and exposes plot copy/remove actions', async () => {
-  const fs882Src = readSrc('FS882Form.svelte');
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const fs882Src = readFS882Composite();
   assert.match(fs882Src, /data-twopage-select-plot-prompt/);
   assert.match(fs882Src, /Two-Page Entry \(FS882-8x6XL\) — Select a Plot/);
   assert.match(fs882Src, /data-manage-plot-btn/);
@@ -535,22 +536,29 @@ test('UX-SHELL-003 + UX-SHELL-005: responsive topbar wrap, narrow-viewport Esc d
 });
 
 test('UX-VEG-005: FS882Form and FS882StratumSummary fall back to sublayer covers when TotalA/TotalB are null and cap stratum totals at 99%', () => {
-  const fs882Src = readSrc('FS882Form.svelte');
+  const { createFS882TestController } = require('./svelteTestHelpers.cjs');
   const StratumSummary = serverComponent(readSrc('FS882StratumSummary.svelte'), 'FS882StratumSummary.svelte', {
     '@lucide/svelte': iconsProxy,
   });
 
-  const extractDerived = (name) => {
-    const match = fs882Src.match(new RegExp(`const ${name} = \\$derived\\(([^;]+)\\);`));
-    assert.ok(match, `${name} derived expression must exist in FS882Form.svelte`);
-    return match[1];
+  const evalTotals = (vegList, vegetationReadUnavailable = null) => {
+    const h = createFS882TestController();
+    try {
+      h.ctrl.cw.vegList = vegList;
+      if (vegetationReadUnavailable !== null) {
+        h.ctrl.children.vegetationReadUnavailable = vegetationReadUnavailable;
+      }
+      h.flush();
+      return {
+        totalTreeCover: vegetationReadUnavailable ? null : h.ctrl.cw.totalTreeCover,
+        totalShrubCover: vegetationReadUnavailable ? null : h.ctrl.cw.totalShrubCover,
+        totalHerbCover: vegetationReadUnavailable ? null : h.ctrl.cw.totalHerbCover,
+        totalMossCover: vegetationReadUnavailable ? null : h.ctrl.cw.totalMossCover,
+      };
+    } finally {
+      h.dispose();
+    }
   };
-  const evalTotals = (vegList, vegetationReadUnavailable = null) => ({
-    totalTreeCover: runInNewContext(extractDerived('totalTreeCover'), { vegList, vegetationReadUnavailable }),
-    totalShrubCover: runInNewContext(extractDerived('totalShrubCover'), { vegList, vegetationReadUnavailable }),
-    totalHerbCover: runInNewContext(extractDerived('totalHerbCover'), { vegList, vegetationReadUnavailable }),
-    totalMossCover: runInNewContext(extractDerived('totalMossCover'), { vegList, vegetationReadUnavailable }),
-  });
 
   // 1. Sample plot 00337 exact reproduction: TotalA/TotalB are null, sublayers hold 10+4, 2, and 20
   const plot00337Rows = [

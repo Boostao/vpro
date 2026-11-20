@@ -1,21 +1,18 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { notifications } from '../shell/notificationService.svelte';
+  import { formatError } from '../shared/readRequests';
+  import LumpEditorCreatePanel from './LumpEditorCreatePanel.svelte';
+  import LumpEditorHeader from './LumpEditorHeader.svelte';
+  import LumpEditorPresetsTab from './LumpEditorPresetsTab.svelte';
+  import LumpEditorRowForm from './LumpEditorRowForm.svelte';
   import {
     defaultLumpEditorPort,
     groupLumpRowsByCode,
-    parseGenusRollupTokens,
-    validateLumpBaseName,
-    validateLumpRowDraft,
     type LumpEditorPort,
     type LumpImpactPreview,
-    type LumpMaterializeResult,
     type LumpPresetInfo,
     type LumpRow,
-    type LumpSpec,
-    type LumpSpecPreview,
     type LumpTableSummary,
-    type SpeciesItem,
   } from './lumpEditor';
 
   let {
@@ -37,45 +34,20 @@
   let error = $state('');
   let notice = $state('');
 
-  // Discovered tables & active selection
   let externalDbInput = $state('');
   let tables = $state.raw<LumpTableSummary[]>([]);
+  let presets = $state.raw<LumpPresetInfo[]>([]);
   let selectedTable = $state('');
   let selectedDbPath = $state('');
   let rows = $state.raw<LumpRow[]>([]);
   let impact = $state.raw<LumpImpactPreview | null>(null);
   let filterQuery = $state('');
 
-  // Create / SaveAs / Delete inputs
-  let newTableName = $state('');
-  let saveAsTargetName = $state('');
-  let pendingDeleteTable = $state('');
-
-  // Row editor & Species Catalogue browser inputs
   let draftLumpCode = $state('');
   let draftSppCode = $state('');
   let draftUse = $state(true);
   let draftAllowUnlisted = $state(false);
   let editingSppCode = $state('');
-  let speciesSearchQuery = $state('');
-  let speciesSearchResults = $state.raw<SpeciesItem[]>([]);
-  let speciesSearching = $state(false);
-
-  // Lumping Presets & Rules state
-  let presets = $state.raw<LumpPresetInfo[]>([]);
-  let specPreset = $state('BEC_Provincial_Correlation_2026');
-  let collapseInfraspecific = $state(true);
-  let collapseSeedlingAndDead = $state(true);
-  let genusRollupsText = $state('CARE*, SALI*, SPHA*, CLAD*');
-  let rollupMosses = $state(false);
-  let rollupLiverworts = $state(false);
-  let rollupLichens = $state(false);
-  let scopeToProject = $state(true);
-  let materializeName = $state('BEC2026');
-  let replaceExisting = $state(true);
-  let specPreview = $state.raw<LumpSpecPreview | null>(null);
-  let lastMaterialized = $state.raw<LumpMaterializeResult | null>(null);
-
   let generation = 0;
 
   function setBusyState(next: boolean) {
@@ -101,28 +73,12 @@
   });
 
   const groupedRows = $derived.by(() => groupLumpRowsByCode(filteredRows));
-
-  const selectedSummary = $derived.by(() =>
-    tables.find((t) => t.tableName === selectedTable && t.databasePath === selectedDbPath) ?? null
+  const selectedSummary = $derived.by(
+    () => tables.find((t) => t.tableName === selectedTable && t.databasePath === selectedDbPath) ?? null
   );
-
-  function buildCurrentSpec(): LumpSpec {
-    const lifeforms: number[] = [];
-    if (rollupMosses) lifeforms.push(9);
-    if (rollupLiverworts) lifeforms.push(10);
-    if (rollupLichens) lifeforms.push(11);
-    return {
-      preset: specPreset,
-      collapseInfraspecific,
-      collapseSeedlingAndDeadSuffixes: collapseSeedlingAndDead,
-      genusRollups: parseGenusRollupTokens(genusRollupsText),
-      nonVascularLifeforms: lifeforms,
-      baseLumpTable: selectedSummary?.tableName ?? '',
-      baseLumpDbPath:
-        selectedSummary && !selectedSummary.isActiveProject ? selectedSummary.databasePath : '',
-      scopeToProjectSpecies: scopeToProject,
-    };
-  }
+  const baseLumpDbPath = $derived(
+    selectedSummary && !selectedSummary.isActiveProject ? selectedSummary.databasePath : ''
+  );
 
   async function refreshTables() {
     if (busy || operationHeld || !contextId) return;
@@ -135,15 +91,17 @@
         .split(/[,;\n]+/)
         .map((s) => s.trim())
         .filter(Boolean);
-      const extSnapshot = $state.snapshot(extPaths);
       const [discovered, loadedPresets] = await Promise.all([
-        port.discoverLumpTables(owner, extSnapshot),
+        port.discoverLumpTables(owner, $state.snapshot(extPaths)),
         port.listLumpPresets(),
       ]);
       if (reqGen !== generation || owner !== contextId) return;
       tables = discovered ?? [];
       presets = loadedPresets ?? [];
-      if (tables.length > 0 && !tables.some((t) => t.tableName === selectedTable && t.databasePath === selectedDbPath)) {
+      if (
+        tables.length > 0 &&
+        !tables.some((t) => t.tableName === selectedTable && t.databasePath === selectedDbPath)
+      ) {
         selectedTable = tables[0].tableName;
         selectedDbPath = tables[0].databasePath;
       }
@@ -160,7 +118,7 @@
         impact = null;
       }
     } catch (cause) {
-      if (reqGen === generation) error = String(cause);
+      if (reqGen === generation) error = formatLumpError(cause);
     } finally {
       if (reqGen === generation) setBusyState(false);
     }
@@ -184,245 +142,29 @@
       rows = loadedRows ?? [];
       impact = loadedImpact;
     } catch (cause) {
-      if (reqGen === generation) error = String(cause);
+      if (reqGen === generation) error = formatLumpError(cause);
     } finally {
       if (reqGen === generation) setBusyState(false);
     }
   }
 
-  async function createNewLump() {
-    const check = validateLumpBaseName(newTableName);
-    if (!check.valid) {
-      error = check.error;
-      return;
-    }
-    if (busy || operationHeld || !contextId) return;
-    const reqGen = ++generation;
-    const owner = contextId;
-    error = '';
-    notice = '';
-    setBusyState(true);
-    try {
-      const created = await port.createLumpTable(owner, check.normalized);
-      if (reqGen !== generation || owner !== contextId) return;
-      selectedTable = created.tableName;
-      selectedDbPath = created.databasePath;
-      newTableName = '';
-      notice = `Created ${created.tableName}.`;
-      if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
-        notifications.push({
-          severity: 'success',
-          category: 'general',
-          source: 'Combine Species',
-          title: `Created ${created.tableName}`,
-          message: created.databasePath,
-        });
-      }
-      onChanged(created.tableName);
-    } catch (cause) {
-      if (reqGen === generation) error = String(cause);
-      setBusyState(false);
-      return;
-    }
-    setBusyState(false);
-    await refreshTables();
-  }
-
-  async function saveAsLump() {
-    if (!selectedTable) {
-      error = 'Select a source lump table first.';
-      return;
-    }
-    const check = validateLumpBaseName(saveAsTargetName);
-    if (!check.valid) {
-      error = check.error;
-      return;
-    }
-    if (busy || operationHeld || !contextId) return;
-    const reqGen = ++generation;
-    const owner = contextId;
-    error = '';
-    notice = '';
-    setBusyState(true);
-    try {
-      const copied = await port.saveAsLumpTable(owner, selectedTable, selectedDbPath, check.normalized);
-      if (reqGen !== generation || owner !== contextId) return;
-      selectedTable = copied.tableName;
-      selectedDbPath = copied.databasePath;
-      saveAsTargetName = '';
-      notice = `Copied to ${copied.tableName} (${copied.rowCount} rows).`;
-      onChanged(copied.tableName);
-    } catch (cause) {
-      if (reqGen === generation) error = String(cause);
-      setBusyState(false);
-      return;
-    }
-    setBusyState(false);
-    await refreshTables();
-  }
-
-  async function submitRow() {
-    if (!selectedSummary || !selectedSummary.isActiveProject) {
-      error = 'Select a local active-project *_Lump table (or Save As into the active project) before editing rows.';
-      return;
-    }
-    const check = validateLumpRowDraft(draftLumpCode, draftSppCode);
-    if (!check.valid) {
-      error = check.error;
-      return;
-    }
-    if (busy || operationHeld || !contextId) return;
-    const reqGen = ++generation;
-    const owner = contextId;
-    const payload = $state.snapshot({
-      lumpCode: check.lumpCode,
-      sppCode: check.sppCode,
-      use: draftUse,
-      allowUnlisted: draftAllowUnlisted,
-    });
-    error = '';
-    setBusyState(true);
-    try {
-      if (editingSppCode) {
-        await port.updateLumpRow(owner, selectedTable, editingSppCode, payload);
-      } else {
-        await port.upsertLumpRow(owner, selectedTable, payload);
-      }
-      if (reqGen !== generation || owner !== contextId) return;
-      draftSppCode = '';
-      editingSppCode = '';
-      onChanged(selectedTable);
-    } catch (cause) {
-      if (reqGen === generation) error = String(cause);
-      setBusyState(false);
-      return;
-    }
-    setBusyState(false);
-    await selectLumpTable(selectedTable, selectedDbPath);
-  }
-
-  async function toggleRowUse(row: LumpRow) {
+  async function mutateActiveRows(run: (owner: string) => Promise<void>) {
     if (!selectedSummary?.isActiveProject || busy || operationHeld || !contextId) return;
     const reqGen = ++generation;
     const owner = contextId;
     error = '';
     setBusyState(true);
     try {
-      await port.toggleLumpRow(owner, selectedTable, row.sppCode, !row.use);
+      await run(owner);
       if (reqGen !== generation || owner !== contextId) return;
       onChanged(selectedTable);
     } catch (cause) {
-      if (reqGen === generation) error = String(cause);
+      if (reqGen === generation) error = formatLumpError(cause);
       setBusyState(false);
       return;
     }
     setBusyState(false);
     await selectLumpTable(selectedTable, selectedDbPath);
-  }
-
-  async function deleteRow(sppCode: string) {
-    if (!selectedSummary?.isActiveProject || busy || operationHeld || !contextId) return;
-    const reqGen = ++generation;
-    const owner = contextId;
-    error = '';
-    setBusyState(true);
-    try {
-      await port.deleteLumpRow(owner, selectedTable, sppCode);
-      if (reqGen !== generation || owner !== contextId) return;
-      onChanged(selectedTable);
-    } catch (cause) {
-      if (reqGen === generation) error = String(cause);
-      setBusyState(false);
-      return;
-    }
-    setBusyState(false);
-    await selectLumpTable(selectedTable, selectedDbPath);
-  }
-
-  async function setAllUse(nextUse: boolean) {
-    if (!selectedSummary?.isActiveProject || busy || operationHeld || !contextId) return;
-    const reqGen = ++generation;
-    const owner = contextId;
-    error = '';
-    setBusyState(true);
-    try {
-      await port.setAllLumpRowsUse(owner, selectedTable, nextUse);
-      if (reqGen !== generation || owner !== contextId) return;
-      onChanged(selectedTable);
-    } catch (cause) {
-      if (reqGen === generation) error = String(cause);
-      setBusyState(false);
-      return;
-    }
-    setBusyState(false);
-    await selectLumpTable(selectedTable, selectedDbPath);
-  }
-
-  function applyPresetSelection(presetID: string) {
-    specPreset = presetID;
-    const found = presets.find((p) => p.id === presetID);
-    if (found) {
-      collapseInfraspecific = found.spec.collapseInfraspecific;
-      collapseSeedlingAndDead = found.spec.collapseSeedlingAndDeadSuffixes;
-      genusRollupsText = (found.spec.genusRollups ?? []).join(', ');
-    }
-  }
-
-  async function runSpecPreview() {
-    if (busy || operationHeld || !contextId) return;
-    const reqGen = ++generation;
-    const owner = contextId;
-    const specSnapshot = $state.snapshot(buildCurrentSpec());
-    error = '';
-    setBusyState(true);
-    try {
-      const result = await port.previewLumpSpec(owner, specSnapshot);
-      if (reqGen !== generation || owner !== contextId) return;
-      specPreview = result;
-    } catch (cause) {
-      if (reqGen === generation) error = String(cause);
-    } finally {
-      if (reqGen === generation) setBusyState(false);
-    }
-  }
-
-  async function runMaterializeSpec() {
-    const check = validateLumpBaseName(materializeName);
-    if (!check.valid) {
-      error = check.error;
-      return;
-    }
-    if (busy || operationHeld || !contextId) return;
-    const reqGen = ++generation;
-    const owner = contextId;
-    const specSnapshot = $state.snapshot(buildCurrentSpec());
-    error = '';
-    notice = '';
-    setBusyState(true);
-    try {
-      const res = await port.materializeLumpSpec(owner, check.normalized, specSnapshot, replaceExisting);
-      if (reqGen !== generation || owner !== contextId) return;
-      lastMaterialized = res;
-      selectedTable = res.table.tableName;
-      selectedDbPath = res.table.databasePath;
-      notice = `Saved ${res.rowsWritten} folding rules into ${res.table.tableName}.`;
-      if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
-        notifications.push({
-          severity: 'success',
-          category: 'background',
-          source: 'Lumping Presets',
-          title: `Saved ${res.rowsWritten} rules into ${res.table.tableName}`,
-          message: res.table.databasePath,
-        });
-      }
-      onChanged(res.table.tableName);
-    } catch (cause) {
-      if (reqGen === generation) error = String(cause);
-      setBusyState(false);
-      return;
-    }
-    setBusyState(false);
-    await refreshTables();
   }
 
   function startEditRow(row: LumpRow) {
@@ -433,76 +175,10 @@
     draftAllowUnlisted = row.sourceCatalog === 'Unlisted';
   }
 
-  async function confirmDeleteSelectedTable() {
-    if (!pendingDeleteTable || !selectedSummary?.isActiveProject || busy || operationHeld || !contextId) {
-      return;
-    }
-    const targetName = pendingDeleteTable;
-    const reqGen = ++generation;
-    const owner = contextId;
-    error = '';
-    notice = '';
-    setBusyState(true);
-    try {
-      await port.deleteLumpTable(owner, targetName);
-      if (reqGen !== generation || owner !== contextId) return;
-      pendingDeleteTable = '';
-      if (selectedTable === targetName) {
-        selectedTable = '';
-        selectedDbPath = '';
-        rows = [];
-        impact = null;
-      }
-      notice = `Deleted lump table ${targetName}.`;
-      onChanged('');
-    } catch (cause) {
-      if (reqGen === generation) error = String(cause);
-      setBusyState(false);
-      return;
-    }
-    setBusyState(false);
-    await refreshTables();
-  }
-
-  async function toggleGroupUse(groupRows: LumpRow[], nextUse: boolean) {
-    if (!selectedSummary?.isActiveProject || busy || operationHeld || !contextId || groupRows.length === 0) {
-      return;
-    }
-    const reqGen = ++generation;
-    const owner = contextId;
-    error = '';
-    setBusyState(true);
-    try {
-      for (const row of groupRows) {
-        await port.toggleLumpRow(owner, selectedTable, row.sppCode, nextUse);
-        if (reqGen !== generation || owner !== contextId) return;
-      }
-      onChanged(selectedTable);
-    } catch (cause) {
-      if (reqGen === generation) error = String(cause);
-      setBusyState(false);
-      return;
-    }
-    setBusyState(false);
-    await selectLumpTable(selectedTable, selectedDbPath);
-  }
-
   function formatLumpError(cause: unknown): string {
-    return String(cause ?? '').replace(/(?:RuntimeError|Error):\s*/gi, '').trim();
-  }
-
-  async function lookupSpeciesCatalogue() {
-    if (!port.searchSpecies || !speciesSearchQuery.trim() || speciesSearching) return;
-    speciesSearching = true;
-    error = '';
-    try {
-      const found = await port.searchSpecies(speciesSearchQuery.trim(), 25);
-      speciesSearchResults = found ?? [];
-    } catch (cause) {
-      error = `Species search failed: ${formatLumpError(cause)}`;
-    } finally {
-      speciesSearching = false;
-    }
+    return formatError(cause)
+      .replace(/(?:RuntimeError|Error):\s*/gi, '')
+      .trim();
   }
 
   let lastLoadedContextId = '';
@@ -532,128 +208,50 @@
   data-tour="lump-editor-root"
   aria-label="Combine Species and Lumping Rules"
 >
-  <header class="bcgov-header">
-    <div>
-      <p class="bcgov-eyebrow">BEC TAXONOMIC CORRELATION</p>
-      <h2>Combine Species (*_Lump) &amp; Lumping Presets</h2>
-    </div>
-    <div class="bcgov-tab-strip" role="tablist">
-      <button
-        type="button"
-        role="tab"
-        aria-selected={activeTab === 'tables'}
-        class:active={activeTab === 'tables'}
-        onclick={() => (activeTab = 'tables')}
-      >
-        Lump Tables (*_Lump)
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={activeTab === 'recipes'}
-        class:active={activeTab === 'recipes'}
-        onclick={() => (activeTab = 'recipes')}
-      >
-        Lumping Presets &amp; Rules
-      </button>
-      <button type="button" class="bcgov-btn-secondary" disabled={busy || operationHeld || !contextId} onclick={refreshTables}>
-        Refresh Catalog
-      </button>
-    </div>
-  </header>
+  <LumpEditorHeader
+    bind:activeTab
+    {busy}
+    {operationHeld}
+    {contextId}
+    {notice}
+    onRefreshTables={() => void refreshTables()}
+  />
 
-  {#if error}
-    <p class="error" role="alert">{formatLumpError(error)}</p>
-  {/if}
-  {#if notice}
-    <p class="bcgov-notice" role="status">{notice}</p>
-  {/if}
+  {#if error}<p class="error" role="alert">{formatLumpError(error)}</p>{/if}
 
   {#if activeTab === 'tables'}
     <div class="lump-grid">
-      <aside class="bcgov-card">
-        <h3>Discovered *_Lump Tables</h3>
-        <label class="field-block">
-          <span>External .db paths (optional, comma-separated)</span>
-          <input type="text" bind:value={externalDbInput} placeholder="/path/to/ExternalProject.db" disabled={busy || operationHeld} />
-        </label>
-
-        <ul class="lump-table-list">
-          {#if tables.length === 0}
-            <li class="empty-note">No *_Lump tables loaded. Click Refresh Catalog or create a new table below.</li>
-          {/if}
-          {#each tables as item (item.databasePath + '::' + item.tableName)}
-            <li>
-              <button
-                type="button"
-                class:selected={item.tableName === selectedTable && item.databasePath === selectedDbPath}
-                onclick={() => selectLumpTable(item.tableName, item.databasePath)}
-              >
-                <strong>{item.tableName}</strong>
-                <span>{item.activeCount}/{item.rowCount} active | {item.isActiveProject ? 'Project' : 'External'}</span>
-              </button>
-            </li>
-          {/each}
-        </ul>
-
-        <div class="stack-actions">
-          <label class="field-block">
-            <span>Create New Lump Table</span>
-            <div class="inline-row">
-              <input type="text" bind:value={newTableName} placeholder="e.g. Regional2026" disabled={busy || operationHeld} />
-              <button type="button" class="bcgov-btn-primary" disabled={busy || operationHeld || !contextId} onclick={createNewLump}>
-                Create
-              </button>
-            </div>
-          </label>
-
-          <label class="field-block">
-            <span>Save Selected As</span>
-            <div class="inline-row">
-              <input type="text" bind:value={saveAsTargetName} placeholder="CopyName" disabled={busy || operationHeld || !selectedTable} />
-              <button type="button" class="bcgov-btn-secondary" disabled={busy || operationHeld || !selectedTable} onclick={saveAsLump}>
-                Save As
-              </button>
-            </div>
-          </label>
-
-          {#if selectedSummary?.isActiveProject}
-            <div class="delete-table-box">
-              {#if pendingDeleteTable === selectedSummary.tableName}
-                <p class="delete-confirm-note">
-                  Confirm permanent deletion of <strong>{selectedSummary.tableName}</strong>?
-                </p>
-                <div class="inline-row">
-                  <button
-                    type="button"
-                    class="bcgov-btn-danger"
-                    disabled={busy || operationHeld}
-                    onclick={confirmDeleteSelectedTable}
-                  >
-                    Confirm Delete Table
-                  </button>
-                  <button
-                    type="button"
-                    class="bcgov-btn-secondary"
-                    onclick={() => (pendingDeleteTable = '')}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              {:else}
-                <button
-                  type="button"
-                  class="bcgov-btn-danger"
-                  disabled={busy || operationHeld || !selectedTable}
-                  onclick={() => (pendingDeleteTable = selectedSummary.tableName)}
-                >
-                  Delete {selectedSummary.tableName}
-                </button>
-              {/if}
-            </div>
-          {/if}
-        </div>
-      </aside>
+      <LumpEditorCreatePanel
+        {contextId}
+        {busy}
+        {operationHeld}
+        {port}
+        bind:externalDbInput
+        {tables}
+        {selectedTable}
+        {selectedDbPath}
+        {selectedSummary}
+        bumpGeneration={() => ++generation}
+        isCurrent={(reqGen, owner) => reqGen === generation && owner === contextId}
+        onSetBusy={setBusyState}
+        onError={(msg) => (error = msg)}
+        onNotice={(msg) => (notice = msg)}
+        onSelectTable={(t, db) => void selectLumpTable(t, db)}
+        onTableActivated={(t, db) => {
+          selectedTable = t;
+          selectedDbPath = db;
+        }}
+        onTableDeleted={(targetName) => {
+          if (selectedTable === targetName) {
+            selectedTable = '';
+            selectedDbPath = '';
+            rows = [];
+            impact = null;
+          }
+        }}
+        {onChanged}
+        onRefreshTables={refreshTables}
+      />
 
       <div class="bcgov-card">
         <h3>
@@ -664,95 +262,40 @@
         </h3>
 
         {#if selectedSummary?.isActiveProject}
-          <div class="row-editor" aria-label="Add or update species lump mapping">
-            <label>
-              <span>Target LumpCode (&lt;=50)</span>
-              <input type="text" bind:value={draftLumpCode} placeholder="CAREX" disabled={busy || operationHeld} />
-            </label>
-            <label>
-              <span>Source SppCode (&lt;=8)</span>
-              <input type="text" bind:value={draftSppCode} placeholder="CARESIT" disabled={busy || operationHeld} />
-            </label>
-            <label class="checkbox-label">
-              <input type="checkbox" bind:checked={draftUse} disabled={busy || operationHeld} />
-              <span>Active</span>
-            </label>
-            <label class="checkbox-label">
-              <input type="checkbox" bind:checked={draftAllowUnlisted} disabled={busy || operationHeld} />
-              <span>Allow unlisted code</span>
-            </label>
-            <button type="button" class="bcgov-btn-primary" disabled={busy || operationHeld} onclick={submitRow}>
-              {editingSppCode ? `Update ${editingSppCode}` : 'Add / Upsert'}
-            </button>
-            {#if editingSppCode}
-              <button type="button" class="bcgov-btn-secondary" onclick={() => { editingSppCode = ''; draftSppCode = ''; }}>
-                Cancel Edit
-              </button>
-            {/if}
-          </div>
-
-          {#if port.searchSpecies}
-            <div class="species-picker-panel" aria-label="Species Catalogue Picker">
-              <div class="inline-row">
-                <input
-                  type="search"
-                  aria-label="Search species catalogue by code or scientific name"
-                  bind:value={speciesSearchQuery}
-                  placeholder="Search Species Catalogue code or scientific name..."
-                  disabled={busy || operationHeld}
-                  onkeydown={e => { if (e.key === 'Enter') void lookupSpeciesCatalogue(); }}
-                />
-                <button
-                  type="button"
-                  class="bcgov-btn-secondary"
-                  disabled={busy || operationHeld || speciesSearching || !speciesSearchQuery.trim()}
-                  onclick={lookupSpeciesCatalogue}
-                >
-                  {speciesSearching ? 'Searching...' : 'Browse Species Catalogue'}
-                </button>
-              </div>
-              {#if speciesSearchResults.length > 0}
-                <div class="species-chip-list">
-                  {#each speciesSearchResults as item (item.code)}
-                    <button
-                      type="button"
-                      class="species-pick-btn"
-                      onclick={() => {
-                        draftSppCode = item.code;
-                        if (!draftLumpCode.trim()) draftLumpCode = item.code.slice(0, 7);
-                      }}
-                    >
-                      <strong class="mono">{item.code}</strong>
-                      <span>{item.scientificName || item.englishName}</span>
-                    </button>
-                  {/each}
-                </div>
-              {/if}
-            </div>
-          {/if}
-
-          <div class="toolbar-row">
-            <input type="search" aria-label="Filter species lump mappings by code or scientific name" bind:value={filterQuery} placeholder="Filter by code or scientific name..." />
-            <button type="button" class="bcgov-btn-secondary" disabled={busy || operationHeld || rows.length === 0} onclick={() => setAllUse(true)}>
-              Enable All
-            </button>
-            <button type="button" class="bcgov-btn-secondary" disabled={busy || operationHeld || rows.length === 0} onclick={() => setAllUse(false)}>
-              Disable All
-            </button>
-          </div>
+          <LumpEditorRowForm
+            {contextId}
+            {busy}
+            {operationHeld}
+            {port}
+            {selectedTable}
+            {selectedDbPath}
+            isActiveProject={selectedSummary.isActiveProject}
+            bind:filterQuery
+            bind:draftLumpCode
+            bind:draftSppCode
+            bind:draftUse
+            bind:draftAllowUnlisted
+            bind:editingSppCode
+            rowCount={rows.length}
+            bumpGeneration={() => ++generation}
+            isCurrent={(reqGen, owner) => reqGen === generation && owner === contextId}
+            onSetBusy={setBusyState}
+            onError={(msg) => (error = msg)}
+            {onChanged}
+            onSelectTable={selectLumpTable}
+            onSetAllUse={(nextUse) =>
+              void mutateActiveRows((o) => port.setAllLumpRowsUse(o, selectedTable, nextUse).then(() => {}))}
+          />
         {/if}
 
         <div class="table-scroll">
           <table>
             <thead>
-              <tr>
-                <th>LumpCode</th>
-                <th>SppCode</th>
-                <th>Scientific Name</th>
-                <th>Catalog</th>
-                <th>Active</th>
-                <th>Actions</th>
-              </tr>
+              <tr
+                ><th>LumpCode</th><th>SppCode</th><th>Scientific Name</th><th>Species Catalogue</th><th>Active</th><th
+                  >Actions</th
+                ></tr
+              >
             </thead>
             <tbody>
               {#if groupedRows.length === 0}
@@ -771,7 +314,11 @@
                         type="button"
                         class="link-btn"
                         disabled={busy || operationHeld}
-                        onclick={() => toggleGroupUse(grp.rows, !allGroupActive)}
+                        onclick={() =>
+                          void mutateActiveRows(async (o) => {
+                            for (const r of grp.rows)
+                              await port.toggleLumpRow(o, selectedTable, r.sppCode, !allGroupActive);
+                          })}
                       >
                         {allGroupActive ? 'Disable Group' : 'Enable Group'}
                       </button>
@@ -789,14 +336,24 @@
                         type="checkbox"
                         checked={row.use}
                         disabled={!selectedSummary?.isActiveProject || busy || operationHeld}
-                        onchange={() => toggleRowUse(row)}
+                        onchange={() =>
+                          void mutateActiveRows((o) =>
+                            port.toggleLumpRow(o, selectedTable, row.sppCode, !row.use).then(() => {})
+                          )}
                         aria-label={`Toggle ${row.sppCode}`}
                       />
                     </td>
                     <td>
                       {#if selectedSummary?.isActiveProject}
                         <button type="button" class="link-btn" onclick={() => startEditRow(row)}>Edit</button>
-                        <button type="button" class="link-btn danger" onclick={() => deleteRow(row.sppCode)}>Delete</button>
+                        <button
+                          type="button"
+                          class="link-btn danger"
+                          onclick={() =>
+                            void mutateActiveRows((o) =>
+                              port.deleteLumpRow(o, selectedTable, row.sppCode).then(() => {})
+                            )}>Delete</button
+                        >
                       {:else}
                         <span>Read-only external</span>
                       {/if}
@@ -823,156 +380,125 @@
       </section>
     {/if}
   {:else}
-    <div class="bcgov-card">
-      <h3>Species Lumping Presets &amp; Rollup Rules</h3>
-      <div class="recipe-grid">
-        <label class="field-block">
-          <span>Provincial Preset</span>
-          <select value={specPreset} onchange={(e) => applyPresetSelection(e.currentTarget.value)} disabled={busy || operationHeld}>
-            <option value="BEC_Provincial_Correlation_2026">BEC_Provincial_Correlation_2026</option>
-            <option value="">Custom Recipe Only</option>
-          </select>
-        </label>
-
-        <label class="field-block">
-          <span>Wildcard Genus Rollups</span>
-          <input type="text" bind:value={genusRollupsText} placeholder="CARE*, SALI*, SPHA*, CLAD*" disabled={busy || operationHeld} />
-        </label>
-
-        <div class="checkbox-group">
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={collapseInfraspecific} disabled={busy || operationHeld} />
-            <span>Collapse 8-char infraspecifics (1..8 -&gt; 7-char parent)</span>
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={collapseSeedlingAndDead} disabled={busy || operationHeld} />
-            <span>Collapse seedling &amp; dead codes (_D / _X)</span>
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={rollupMosses} disabled={busy || operationHeld} />
-            <span>Rollup Lifeform 9 (Mosses) to genus</span>
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={rollupLiverworts} disabled={busy || operationHeld} />
-            <span>Rollup Lifeform 10 (Liverworts) to genus</span>
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={rollupLichens} disabled={busy || operationHeld} />
-            <span>Rollup Lifeform 11 (Lichens) to genus</span>
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={scopeToProject} disabled={busy || operationHeld} />
-            <span>Scope rules to species present in active project</span>
-          </label>
-        </div>
-
-        <div class="inline-row">
-          <button type="button" class="bcgov-btn-secondary" disabled={busy || operationHeld || !contextId} onclick={runSpecPreview}>
-            Preview Lumping Impact
-          </button>
-          <input type="text" aria-label="Target lump table name" bind:value={materializeName} placeholder="Target name (e.g. BEC2026)" disabled={busy || operationHeld} />
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={replaceExisting} disabled={busy || operationHeld} />
-            <span>Overwrite if exists</span>
-          </label>
-          <button type="button" class="bcgov-btn-primary" disabled={busy || operationHeld || !contextId} onclick={runMaterializeSpec}>
-            Build *_Lump Table
-          </button>
-        </div>
-      </div>
-
-      {#if specPreview}
-        <div class="spec-results">
-          <p>
-            <strong>Compiled Rules:</strong> {specPreview.rows.length} mappings |
-            <strong>Raw -&gt; Folded Species:</strong> {specPreview.impact.distinctRawSpecies} -&gt; {specPreview.impact.distinctFoldedSpecies} |
-            <strong>Merged Cells:</strong> {specPreview.impact.mergedCells} |
-            <strong>99%-Capped Cells:</strong> {specPreview.impact.cappedCells}
-          </p>
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>LumpCode</th>
-                  <th>SppCode</th>
-                  <th>Scientific Name</th>
-                  <th>Rule Provenance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each specPreview.rows.slice(0, 100) as row (row.sppCode)}
-                  <tr>
-                    <td class="mono">{row.lumpCode}</td>
-                    <td class="mono">{row.sppCode}</td>
-                    <td>{row.scientificName}</td>
-                    <td>{row.ruleOrigin || 'recipe'}</td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      {/if}
-      {#if lastMaterialized}
-        <p class="bcgov-notice">
-          Saved {lastMaterialized.rowsWritten} rows into {lastMaterialized.table.tableName}.
-        </p>
-      {/if}
-    </div>
+    <LumpEditorPresetsTab
+      {contextId}
+      {busy}
+      {operationHeld}
+      {port}
+      {presets}
+      baseLumpTable={selectedSummary?.tableName ?? ''}
+      {baseLumpDbPath}
+      bumpGeneration={() => ++generation}
+      isCurrent={(reqGen, owner) => reqGen === generation && owner === contextId}
+      onSetBusy={setBusyState}
+      onError={(msg) => (error = msg)}
+      onNotice={(msg) => (notice = msg)}
+      onTableActivated={(t, db) => {
+        selectedTable = t;
+        selectedDbPath = db;
+      }}
+      {onChanged}
+      onRefreshTables={refreshTables}
+    />
   {/if}
 </section>
 
 <style>
-  .bcgov-lump-editor { display: grid; gap: 1rem; min-width: 0; color: var(--vpro-ink); }
-  .bcgov-header { background: var(--vpro-navy); color: var(--vpro-surface); border-bottom: 4px solid var(--vpro-gold); padding: 1rem 1.25rem; border-radius: 4px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; }
-  .bcgov-header h2 { margin: 0.2rem 0 0; font-size: 1.2rem; color: var(--vpro-surface); }
-  .bcgov-eyebrow { margin: 0; font-size: 0.72rem; letter-spacing: 0.08em; color: var(--vpro-gold); font-weight: 700; }
-  .bcgov-tab-strip { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-  .bcgov-tab-strip button[role="tab"] { background: rgba(255, 255, 255, 0.12); color: var(--vpro-surface); border: 1px solid rgba(255, 255, 255, 0.28); padding: 0.45rem 0.85rem; border-radius: 4px; font-size: 0.85rem; }
-  .bcgov-tab-strip button[role="tab"].active { background: var(--vpro-gold); color: var(--vpro-navy); border-color: var(--vpro-gold); font-weight: 700; }
-  .bcgov-card { background: var(--vpro-surface); border: 1px solid var(--vpro-border); border-top: 3px solid var(--vpro-navy); border-radius: 4px; padding: 1rem; min-width: 0; }
-  .bcgov-card h3 { margin: 0 0 0.75rem; font-size: 1rem; color: var(--vpro-navy); display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-  .badge { background: var(--vpro-gold); color: var(--vpro-navy); padding: 0.1rem 0.45rem; border-radius: 3px; font-size: 0.75rem; font-weight: 700; }
-  .lump-grid { display: grid; grid-template-columns: minmax(min(100%, 260px), 320px) minmax(0, 1fr); gap: 1rem; }
-  .lump-table-list { list-style: none; padding: 0; margin: 0.75rem 0; display: grid; gap: 0.35rem; max-height: 240px; overflow-y: auto; }
-  .lump-table-list button { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.65rem; border: 1px solid var(--vpro-border); border-radius: 4px; background: var(--vpro-canvas); text-align: left; font-size: 0.82rem; color: var(--vpro-ink); }
-  .lump-table-list button.selected { background: rgba(26, 90, 150, 0.14); border-color: var(--vpro-navy); color: var(--vpro-navy); }
-  .field-block { display: grid; gap: 0.3rem; font-size: 0.82rem; margin-bottom: 0.65rem; }
-  .inline-row, .toolbar-row, .row-editor { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: end; margin-bottom: 0.75rem; }
-  .inline-row input, .toolbar-row input { flex: 1 1 160px; min-width: 0; }
-  .row-editor label { display: grid; gap: 0.25rem; font-size: 0.8rem; }
-  .species-picker-panel { border: 1px solid var(--vpro-border); background: var(--vpro-canvas); border-radius: 4px; padding: 0.55rem 0.7rem; margin-bottom: 0.75rem; }
-  .species-chip-list { display: flex; flex-wrap: wrap; gap: 0.35rem; max-height: 140px; overflow-y: auto; }
-  .species-pick-btn { display: inline-flex; gap: 0.35rem; align-items: center; padding: 0.25rem 0.5rem; border: 1px solid var(--vpro-border); background: var(--vpro-surface); border-radius: 3px; font-size: 0.76rem; color: var(--vpro-navy); }
-  .delete-table-box { border-top: 1px solid var(--vpro-border); padding-top: 0.6rem; display: grid; gap: 0.4rem; }
-  .delete-confirm-note { margin: 0; font-size: 0.8rem; color: var(--vpro-error); }
-  .group-header-row { background: var(--vpro-canvas); }
-  .group-count { font-size: 0.75rem; color: var(--vpro-ink-secondary); margin-left: 0.35rem; }
-  .checkbox-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 0.45rem; margin: 0.65rem 0; }
-  .checkbox-label { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.83rem; }
-  input:not([type="checkbox"]), select { padding: 0.45rem 0.6rem; border: 1px solid var(--vpro-border); border-radius: 4px; font-size: 0.85rem; max-width: 100%; background: var(--vpro-surface); color: var(--vpro-ink); }
-  .bcgov-btn-primary { background: var(--vpro-navy); color: var(--vpro-surface); border: 1px solid var(--vpro-navy); border-bottom: 2px solid var(--vpro-gold); padding: 0.48rem 0.85rem; border-radius: 4px; font-weight: 600; font-size: 0.84rem; }
-  .bcgov-btn-secondary { background: var(--vpro-surface); color: var(--vpro-navy); border: 1px solid var(--vpro-navy); padding: 0.48rem 0.85rem; border-radius: 4px; font-weight: 600; font-size: 0.84rem; }
-  .bcgov-btn-danger { background: var(--vpro-surface); color: var(--vpro-error); border: 1px solid var(--vpro-error); padding: 0.48rem 0.85rem; border-radius: 4px; font-weight: 600; font-size: 0.84rem; }
-  .bcgov-notice { padding: 0.65rem 0.9rem; background: var(--vpro-canvas); border-left: 4px solid var(--vpro-gold); color: var(--vpro-navy); margin: 0; font-size: 0.85rem; }
-  .error { padding: 0.65rem 0.9rem; background: rgba(216, 41, 47, 0.08); border-left: 4px solid var(--vpro-error); color: var(--vpro-error); margin: 0; font-size: 0.85rem; }
-  .stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 0.75rem; }
-  .stat-strip div { padding: 0.55rem 0.75rem; background: var(--vpro-canvas); border-left: 3px solid var(--vpro-gold); display: grid; }
-  .stat-strip span { font-size: 0.75rem; color: var(--vpro-ink-secondary); }
-  .stat-strip strong { font-size: 1.1rem; color: var(--vpro-navy); font-variant-numeric: tabular-nums; }
-  .mono { font-family: var(--vpro-font-mono, var(--font-mono, monospace)); font-variant-numeric: tabular-nums; }
-  .link-btn { background: transparent; border: 0; color: var(--vpro-navy); text-decoration: underline; padding: 0.15rem 0.35rem; font-size: 0.8rem; }
-  .link-btn.danger { color: var(--vpro-error); }
-  .empty-row, .empty-note { font-size: 0.82rem; color: var(--vpro-ink-secondary); padding: 0.5rem 0; }
-  @media (max-width: 960px) { .lump-grid { grid-template-columns: minmax(0, 1fr); } }
-  @media (pointer: coarse) {
-    .bcgov-tab-strip button,
-    .bcgov-btn-primary,
-    .bcgov-btn-secondary,
-    .bcgov-btn-danger,
-    input:not([type="checkbox"]),
-    select {
-      min-height: 44px;
+  .bcgov-lump-editor {
+    display: grid;
+    gap: 1rem;
+    min-width: 0;
+    color: var(--vpro-ink);
+  }
+  .bcgov-card {
+    background: var(--vpro-surface);
+    border: 1px solid var(--vpro-border);
+    border-top: 3px solid var(--vpro-navy);
+    border-radius: 4px;
+    padding: 1rem;
+    min-width: 0;
+  }
+  .bcgov-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 1rem;
+    color: var(--vpro-navy);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .badge {
+    background: var(--vpro-gold);
+    color: var(--vpro-navy);
+    padding: 0.1rem 0.45rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .lump-grid {
+    display: grid;
+    grid-template-columns: minmax(min(100%, 260px), 320px) minmax(0, 1fr);
+    gap: 1rem;
+  }
+  .group-header-row {
+    background: var(--vpro-canvas);
+  }
+  .group-count {
+    font-size: 0.75rem;
+    color: var(--vpro-ink-secondary);
+    margin-left: 0.35rem;
+  }
+  .error {
+    padding: 0.65rem 0.9rem;
+    background: rgba(216, 41, 47, 0.08);
+    border-left: 4px solid var(--vpro-error);
+    color: var(--vpro-error);
+    margin: 0;
+    font-size: 0.85rem;
+  }
+  .stat-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+    gap: 0.75rem;
+  }
+  .stat-strip div {
+    padding: 0.55rem 0.75rem;
+    background: var(--vpro-canvas);
+    border-left: 3px solid var(--vpro-gold);
+    display: grid;
+  }
+  .stat-strip span {
+    font-size: 0.75rem;
+    color: var(--vpro-ink-secondary);
+  }
+  .stat-strip strong {
+    font-size: 1.1rem;
+    color: var(--vpro-navy);
+    font-variant-numeric: tabular-nums;
+  }
+  .mono {
+    font-family: var(--vpro-font-mono, var(--font-mono, monospace));
+    font-variant-numeric: tabular-nums;
+  }
+  .link-btn {
+    background: transparent;
+    border: 0;
+    color: var(--vpro-navy);
+    text-decoration: underline;
+    padding: 0.15rem 0.35rem;
+    font-size: 0.8rem;
+  }
+  .link-btn.danger {
+    color: var(--vpro-error);
+  }
+  .empty-row {
+    font-size: 0.82rem;
+    color: var(--vpro-ink-secondary);
+    padding: 0.5rem 0;
+  }
+  @media (max-width: 960px) {
+    .lump-grid {
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 </style>

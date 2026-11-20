@@ -89,7 +89,8 @@ test('S1.1 / S1.4 / S1.6 / S1.7 / S1.10 / S4.3 FS882Form & HeaderEditor parity',
 });
 
 test('S1.2 / S1.8 / S1.12 / S4.4 TwoPage CRUD, Enter navigation, Coordinate helper, and SpeciesCodeCheck suggestions', () => {
-  const twoPage = readFileSync(srcPath('TwoPageEntryEditor.svelte'), 'utf8');
+  const { readTwoPageComposite } = require('./svelteTestHelpers.cjs');
+  const twoPage = readTwoPageComposite();
   const vegPanel = readFileSync(srcPath('TwoPageVegetationPanel.svelte'), 'utf8');
   const auditPanel = readFileSync(srcPath('TwoPageAuditPanel.svelte'), 'utf8');
   const metaPanel = readFileSync(srcPath('TwoPageProjectMetadataPanel.svelte'), 'utf8');
@@ -126,9 +127,10 @@ test('S2.1 / S2.7 / S2.8 / S2.9 UniversalDatasheetGrid parity', () => {
 });
 
 test('S2.2 / S2.6 / S2.11 / S2.14 / S2.15 / S2.17 / S2.18 / S4.1 / S6.7 ProjectAdmin & CloudSync parity', () => {
-  const admin = readFileSync(srcPath('ProjectAdminWorkbench.svelte'), 'utf8');
+  const { readProjectAdminComposite } = require('./svelteTestHelpers.cjs');
+  const admin = readProjectAdminComposite();
   const cloudTs = readFileSync(srcPath('cloudSyncWorkbench.ts'), 'utf8');
-  const cloudSvelte = readFileSync(srcPath('CloudSyncWorkbench.svelte'), 'utf8');
+  const cloudSvelte = readFileSync(srcPath('CloudSyncWorkbench.svelte'), 'utf8') + '\n' + readFileSync(srcPath('CloudSyncCustodianStandardsPanel.svelte'), 'utf8');
   assert.match(admin, /mergePlotResolutions/);
   assert.match(admin, /optPreview\.conflicts/);
   assert.match(admin, /complianceReport\.envAdminFindings/);
@@ -139,7 +141,14 @@ test('S2.2 / S2.6 / S2.11 / S2.14 / S2.15 / S2.17 / S2.18 / S4.1 / S6.7 ProjectA
 });
 
 test('S4.8 / S4.9 / S4.10 InterchangeHub & PlotLabelPreview parity', () => {
-  const hub = readFileSync(srcPath('InterchangeHub.svelte'), 'utf8');
+  const hub = [
+    'InterchangeHub.svelte',
+    'InterchangeTurboVegTab.svelte',
+    'InterchangeGeoPackageTab.svelte',
+    'interchangeHub.ts',
+  ]
+    .map((f) => readFileSync(srcPath(f), 'utf8'))
+    .join('\n');
   const labelPreview = readFileSync(srcPath('plotLabelPreview.ts'), 'utf8');
   assert.match(hub, /resolveVProCodeSynonyms:\s*tvResolveSynonyms/);
   assert.match(hub, /\[45\.\.85 N,\s*-170\.\.-100 W\]/);

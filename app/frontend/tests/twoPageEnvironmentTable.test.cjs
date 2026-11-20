@@ -116,22 +116,23 @@ test('environment panel compiles and labels readonly target adaptation without i
   assert.equal(compile(source, { generate: 'client' }).warnings.length, 0);
   assert.match(source, /saved Current.DataFormName selects the target/);
   assert.match(source, /not independently verified datasheet headers/);
-  assert.match(source, /Each page reads a fresh snapshot and saved target/);
+  assert.match(source.replace(/\s+/g, ' '), /Each page reads a fresh snapshot and saved target/);
 });
 async function mountPanel(service) {
   const runtime = await import('svelte/internal/client');
   const { onDestroy } = await import(pathToFileURL(path.join(path.dirname(require.resolve('svelte')), 'index-client.js')).href);
   let script = readFileSync(srcPath('TwoPageEnvironmentTablePanel.svelte'), 'utf8').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  script = script.replace('form, onBusyChange }:', 'form, onBusyChange, inspect }:');
+  script = script.replace(/form,\s*onBusyChange,?\s*\}:/, 'form, onBusyChange, inspect }:');
   script += '\n$effect(() => inspect({ load, cancel, busy, error, review, current: () => review }));';
   const compiled = compile(`<script lang="ts">${script}</script>`, { generate: 'client' });
   const ast = ts.createSourceFile('environment-table.js', compiled.js.code, ts.ScriptTarget.Latest, true);
   const code = ast.statements.filter(node => !ts.isImportDeclaration(node)).map(node => node.getText(ast)).join('\n').replace('export default function', 'function');
+  const { noopNotificationsStub } = require('./svelteTestHelpers.cjs');
   const reads = loadTypeScript('readRequests.ts', {
     '@wailsio/runtime': { Call: { RuntimeError: class extends Error {} }, CancelledRejectionError: class extends Error {} },
   });
-  const mount = new Function('$', 'onDestroy', 'untrack', 'ReadRequests', 'DatasheetService', 'twoPageEnvironmentTableFromWire',
-    code + '\nreturn _unknown_;')(runtime, onDestroy, runtime.untrack, reads.ReadRequests, {
+  const mount = new Function('$', 'onDestroy', 'untrack', 'ReadRequests', 'formatError', 'notifications', 'DatasheetService', 'twoPageEnvironmentTableFromWire',
+    code + '\nreturn _unknown_;')(runtime, onDestroy, runtime.untrack, reads.ReadRequests, reads.formatError, noopNotificationsStub.notifications, {
       GetEnvironmentTableReview: service.GetEnvironmentTableReview ?? service.GetReview,
     }, table.twoPageEnvironmentTableFromWire);
   let actions; const activity = [];

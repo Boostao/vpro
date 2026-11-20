@@ -523,7 +523,7 @@ test('ProjectMetadataEditor and ProjectMetadataRestore route save/create/restore
         if (name === 'svelte') return { onMount: fn => fn(), onDestroy: () => {} };
         if (name === 'svelte/internal/client') return client;
         if (name.startsWith('svelte/')) return require(name);
-        if (name === '../shared/readRequests') return { ReadRequests: class { track(p) { return p; } cancelAll() {} } };
+        if (name === '../shared/readRequests') return { ReadRequests: class { track(p) { return p; } cancelAll() {} }, formatError: e => (e instanceof Error ? e.message : String(e)) };
         if (name === './projectMetadataEditor') return metaMod;
         if (name === './projectMetadataPresentation') return metaPresMod;
         if (name === '../shell/notificationService.svelte') return { notifications: notifCtrl };
@@ -573,7 +573,7 @@ test('ProjectMetadataEditor and ProjectMetadataRestore route save/create/restore
 
   // 2. ProjectMetadataRestore success notification
   let restoreScript = read('admin/ProjectMetadataRestore.svelte').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  restoreScript = restoreScript.replace('oncommitted }:', 'oncommitted, inspect }:');
+  restoreScript = restoreScript.replace(/oncommitted,?\s*\}:/, 'oncommitted, inspect }:');
   restoreScript = restoreScript.replace('oncommitted: (rowId: string) => Promise<void>;', 'oncommitted: (rowId: string) => Promise<void>; inspect?: (v: any) => void;');
   restoreScript += `\n$effect(() => inspect?.({ review, restore }));`;
   const compiledRestore = compile(`<script lang="ts">${restoreScript}</script>`, { generate: 'client' });
@@ -593,7 +593,7 @@ test('ProjectMetadataEditor and ProjectMetadataRestore route save/create/restore
         if (name === 'svelte/internal/client') return client;
         if (name.startsWith('svelte/')) return require(name);
         if (name === '../../bindings/github.com/boostao/vpro/app') return { AuditRestoreAction: { AuditRestoreRetain: 'retain', AuditRestorePrune: 'prune' } };
-        if (name === '../shared/readRequests') return { ReadRequests: class { track(p) { return p; } cancelAll() {} } };
+        if (name === '../shared/readRequests') return { ReadRequests: class { track(p) { return p; } cancelAll() {} }, formatError: e => (e instanceof Error ? e.message : String(e)) };
         if (name === './projectMetadataEditor') return metaMod;
         if (name === './projectMetadataPresentation') return metaPresMod;
         if (name === './projectMetadataRestore') return restoreMod;
@@ -705,7 +705,8 @@ test('UniversalDatasheetGrid routes save, find/replace, delete, and Ctrl+S actio
         if (name === 'svelte') return { onMount: fn => fn(), onDestroy: () => {}, untrack: client.untrack };
         if (name === 'svelte/internal/client') return client;
         if (name.startsWith('svelte/')) return require(name);
-        if (name.endsWith('/readRequests')) return { ReadRequests: class { track(p) { return p; } cancelAll() {} } };
+        if (name.endsWith('/readRequests')) return { ReadRequests: class { track(p) { return p; } cancelAll() {} }, formatError: e => (e instanceof Error ? e.message : String(e)) };
+        if (name.endsWith('/notificationService.svelte')) return { notifications: notifCtrl };
         if (name.endsWith('/universalDatasheetGrid')) return gridMod;
         throw new Error(`Unexpected module ${name}`);
       },

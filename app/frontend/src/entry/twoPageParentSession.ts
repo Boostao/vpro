@@ -24,14 +24,22 @@ const policies = {
 export type TwoPageParentColumn = keyof typeof policies;
 export type TwoPageParentInput = { kind: 'original' | 'clear' } | { kind: 'text'; raw: string };
 export interface TwoPageParentEdit {
-  contextId: string; table: string; rowId: string; column: TwoPageParentColumn;
-  expected: ProjectMetadataCell; value: ProjectMetadataCell;
+  contextId: string;
+  table: string;
+  rowId: string;
+  column: TwoPageParentColumn;
+  expected: ProjectMetadataCell;
+  value: ProjectMetadataCell;
 }
 export interface TwoPageParentDraft extends TwoPageParentEdit {
-  input: TwoPageParentInput; error: string | null;
+  input: TwoPageParentInput;
+  error: string | null;
 }
 export type TwoPageParentDrafts = Partial<Record<TwoPageParentColumn, TwoPageParentDraft>>;
-export interface TwoPageParentWrite { original: SIVIParentOriginal; edits: TwoPageParentEdit[] }
+export interface TwoPageParentWrite {
+  original: SIVIParentOriginal;
+  edits: TwoPageParentEdit[];
+}
 export type TwoPageParentSessionCache = Map<string, Map<TwoPageParentForm, TwoPageParentSession>>;
 
 export function twoPageParentSource(form: TwoPageParentForm) {
@@ -44,32 +52,54 @@ export function twoPageParentSource(form: TwoPageParentForm) {
 }
 
 export function twoPageParentFields(form: TwoPageParentForm) {
-  return twoPageParentSource(form).fields.flatMap(field => {
+  return twoPageParentSource(form).fields.flatMap((field) => {
     if (!field.binding || !Object.hasOwn(policies, field.binding)) return [];
-    if (!('caption' in field) || !field.caption) throw new Error(`Two-page field ${field.binding} has no source label.`);
+    if (!('caption' in field) || !field.caption)
+      throw new Error(`Two-page field ${field.binding} has no source label.`);
     const column = field.binding as TwoPageParentColumn;
-    return [{ column, label: field.caption, controlId: field.controlId,
-      page: 'pageId' in field ? field.pageId : null, policy: policies[column] }];
+    return [
+      {
+        column,
+        label: field.caption,
+        controlId: field.controlId,
+        page: 'pageId' in field ? field.pageId : null,
+        policy: policies[column],
+      },
+    ];
   });
 }
 
-export function validateTwoPageParentOriginal(original: SIVIParentOriginal, form: TwoPageParentForm): SIVIParentOriginal {
-  const controls = twoPageParentSource(form).fields.filter(field => field.binding);
+export function validateTwoPageParentOriginal(
+  original: SIVIParentOriginal,
+  form: TwoPageParentForm
+): SIVIParentOriginal {
+  const controls = twoPageParentSource(form).fields.filter((field) => field.binding);
   const expected = form === 'FS882-8x6XL' ? 121 : 122;
-  if (!original || original.Form !== form || controls.length !== expected ||
-      new Set(controls.map(field => field.binding)).size !== (form === 'FS882-8x6XL' ? 118 : 120)) {
+  if (
+    !original ||
+    original.Form !== form ||
+    controls.length !== expected ||
+    new Set(controls.map((field) => field.binding)).size !== (form === 'FS882-8x6XL' ? 118 : 120)
+  ) {
     throw new Error('Two-page parent requires its exact source variant and every control instance.');
   }
-  validateSourceParentPhysical(original, controls.map(field => ({
-    Binding: field.binding!, ControlID: field.controlId, Implicit: false,
-  })));
+  validateSourceParentPhysical(
+    original,
+    controls.map((field) => ({
+      Binding: field.binding!,
+      ControlID: field.controlId,
+      Implicit: false,
+    }))
+  );
   const fields = twoPageParentFields(form);
-  if (fields.length !== (form === 'FS882-8x6XL' ? 9 : 8) ||
-      new Set(fields.map(field => field.column)).size !== fields.length) {
+  if (
+    fields.length !== (form === 'FS882-8x6XL' ? 9 : 8) ||
+    new Set(fields.map((field) => field.column)).size !== fields.length
+  ) {
     throw new Error('Two-page additional-field source scope changed.');
   }
   for (const field of fields) {
-    const binding = original.Bindings.find(binding => binding.ControlID === field.controlId);
+    const binding = original.Bindings.find((binding) => binding.ControlID === field.controlId);
     if (!binding || binding.Table !== `${original.Project}_${field.policy.owner}`) {
       throw new Error('Two-page additional-field physical ownership changed.');
     }
@@ -77,16 +107,24 @@ export function validateTwoPageParentOriginal(original: SIVIParentOriginal, form
   return structuredClone(original);
 }
 
-export function twoPageParentOriginalFromWire(wire: unknown, owner: SIVIParentOwner,
-  form: TwoPageParentForm): SIVIParentOriginal {
-  return sourceParentOriginalFromWire(wire, owner, original => validateTwoPageParentOriginal(original, form));
+export function twoPageParentOriginalFromWire(
+  wire: unknown,
+  owner: SIVIParentOwner,
+  form: TwoPageParentForm
+): SIVIParentOriginal {
+  return sourceParentOriginalFromWire(wire, owner, (original) => validateTwoPageParentOriginal(original, form));
 }
 
 function target(original: SIVIParentOriginal, column: TwoPageParentColumn) {
-  const field = twoPageParentFields(original.Form as TwoPageParentForm).find(field => field.column === column);
-  const binding = original.Bindings.find(binding => binding.ControlID === field?.controlId);
-  if (!field || !binding || binding.Implicit || binding.Binding !== column ||
-      binding.Table !== `${original.Project}_${field.policy.owner}`) {
+  const field = twoPageParentFields(original.Form as TwoPageParentForm).find((field) => field.column === column);
+  const binding = original.Bindings.find((binding) => binding.ControlID === field?.controlId);
+  if (
+    !field ||
+    !binding ||
+    binding.Implicit ||
+    binding.Binding !== column ||
+    binding.Table !== `${original.Project}_${field.policy.owner}`
+  ) {
     throw new Error('Two-page additional-field source/physical ownership changed.');
   }
   const row = original.Rows[0][field.policy.owner];
@@ -96,17 +134,24 @@ export function twoPageParentCell(original: SIVIParentOriginal, column: TwoPageP
   return target(original, column).expected;
 }
 function twoPageParentErrors(drafts: TwoPageParentDrafts): string[] {
-  return Object.values(drafts).flatMap(draft => draft?.error ? [draft.error] : []);
+  return Object.values(drafts).flatMap((draft) => (draft?.error ? [draft.error] : []));
 }
 export function twoPageParentDirty(drafts: TwoPageParentDrafts): boolean {
-  return Object.values(drafts).some(draft => draft && (draft.error !== null || !equalCell(draft.expected, draft.value)));
+  return Object.values(drafts).some(
+    (draft) => draft && (draft.error !== null || !equalCell(draft.expected, draft.value))
+  );
 }
 const nullCell = (): ProjectMetadataCell => ({ storage: 'null', text: null, integer: null, real: null, blobHex: null });
 
-function stage(original: SIVIParentOriginal, drafts: TwoPageParentDrafts, column: TwoPageParentColumn,
-  input: TwoPageParentInput): TwoPageParentDrafts {
+function stage(
+  original: SIVIParentOriginal,
+  drafts: TwoPageParentDrafts,
+  column: TwoPageParentColumn,
+  input: TwoPageParentInput
+): TwoPageParentDrafts {
   const { field, binding, row, expected } = target(original, column);
-  let value = structuredClone(expected), error: string | null = null;
+  let value = structuredClone(expected),
+    error: string | null = null;
   if (input.kind === 'clear') value = nullCell();
   else if (input.kind === 'text') {
     if (typeof input.raw !== 'string') throw new Error('Two-page input requires literal text.');
@@ -116,33 +161,62 @@ function stage(original: SIVIParentOriginal, drafts: TwoPageParentDrafts, column
         error = ordinaryTextError(policy, input.raw, expected.storage === 'text' ? expected.text : null);
         value = { ...nullCell(), storage: 'text', text: input.raw };
       } else {
-        const previous = expected.storage === 'real' ? expected.real :
-          expected.storage === 'integer' && Number.isSafeInteger(Number(expected.integer)) ? Number(expected.integer) : null;
+        const previous =
+          expected.storage === 'real'
+            ? expected.real
+            : expected.storage === 'integer' && Number.isSafeInteger(Number(expected.integer))
+              ? Number(expected.integer)
+              : null;
         const parsed = ordinaryNumberValue(policy, input.raw, previous);
         error = parsed.error;
-        value = parsed.value !== null && parsed.value === previous && !error ? structuredClone(expected)
-          : parsed.value === null ? nullCell() : policy.kind === 'integer'
-          ? { ...nullCell(), storage: 'integer', integer: String(parsed.value) }
-          : { ...nullCell(), storage: 'real', real: parsed.value };
+        value =
+          parsed.value !== null && parsed.value === previous && !error
+            ? structuredClone(expected)
+            : parsed.value === null
+              ? nullCell()
+              : policy.kind === 'integer'
+                ? { ...nullCell(), storage: 'integer', integer: String(parsed.value) }
+                : { ...nullCell(), storage: 'real', real: parsed.value };
       }
     }
   } else if (input.kind !== 'original') throw new Error('Two-page input intent is unavailable.');
   if (!error && expected.storage === 'blob' && !equalCell(expected, value)) {
     error = `${column} historical BLOB replacement has no lossless source audit representation; retain original storage.`;
   }
-  return { ...drafts, [column]: { contextId: original.ContextID, table: binding.Table, rowId: row.rowId,
-    column, expected, value, input: structuredClone(input), error } };
+  return {
+    ...drafts,
+    [column]: {
+      contextId: original.ContextID,
+      table: binding.Table,
+      rowId: row.rowId,
+      column,
+      expected,
+      value,
+      input: structuredClone(input),
+      error,
+    },
+  };
 }
 
-export function twoPageParentRequest(original: SIVIParentOriginal, drafts: TwoPageParentDrafts,
-  form: TwoPageParentForm): TwoPageParentWrite {
-  const reviewed = validateTwoPageParentOriginal(original, form), edits: TwoPageParentEdit[] = [];
+export function twoPageParentRequest(
+  original: SIVIParentOriginal,
+  drafts: TwoPageParentDrafts,
+  form: TwoPageParentForm
+): TwoPageParentWrite {
+  const reviewed = validateTwoPageParentOriginal(original, form),
+    edits: TwoPageParentEdit[] = [];
   for (const [name, draft] of Object.entries(drafts)) {
-    const field = twoPageParentFields(form).find(field => field.column === name);
-    if (!field || !draft || draft.column !== field.column) throw new Error('Two-page writes exclude other fields and callbacks.');
+    const field = twoPageParentFields(form).find((field) => field.column === name);
+    if (!field || !draft || draft.column !== field.column)
+      throw new Error('Two-page writes exclude other fields and callbacks.');
     const verified = stage(reviewed, {}, field.column, draft.input)[field.column]!;
-    if (!equalCell(verified.expected, draft.expected) || !equalCell(verified.value, draft.value) ||
-        verified.contextId !== draft.contextId || verified.table !== draft.table || verified.rowId !== draft.rowId) {
+    if (
+      !equalCell(verified.expected, draft.expected) ||
+      !equalCell(verified.value, draft.value) ||
+      verified.contextId !== draft.contextId ||
+      verified.table !== draft.table ||
+      verified.rowId !== draft.rowId
+    ) {
       throw new Error('Two-page draft belongs to another original/physical owner.');
     }
     if (verified.error) throw new Error(verified.error);
@@ -154,18 +228,26 @@ export function twoPageParentRequest(original: SIVIParentOriginal, drafts: TwoPa
   return { original: reviewed, edits };
 }
 
-export class TwoPageParentSession extends SIVIParentScopedWriteSession<TwoPageParentColumn,
-  TwoPageParentWrite, TwoPageParentDrafts, TwoPageParentInput> {
-  constructor(owner: SIVIParentOwner, form: TwoPageParentForm, port: SIVIParentWritePort<TwoPageParentWrite>,
-    notify: () => void) {
+export class TwoPageParentSession extends SIVIParentScopedWriteSession<
+  TwoPageParentColumn,
+  TwoPageParentWrite,
+  TwoPageParentDrafts,
+  TwoPageParentInput
+> {
+  constructor(
+    owner: SIVIParentOwner,
+    form: TwoPageParentForm,
+    port: SIVIParentWritePort<TwoPageParentWrite>,
+    notify: () => void
+  ) {
     const fields = twoPageParentFields(form);
     super(owner, conservativePort(port, 'Two-page parent'), notify, {
       label: 'Two-page parent',
-      accepts: (value): value is TwoPageParentColumn => fields.some(field => field.column === value),
+      accepts: (value): value is TwoPageParentColumn => fields.some((field) => field.column === value),
       unavailable: 'Two-page additional-field drafts require owned exact-variant originals.',
       drafts: { empty: () => ({}), stage, errors: twoPageParentErrors, dirty: twoPageParentDirty },
       request: (original, drafts) => twoPageParentRequest(original, drafts, form),
-      count: request => request.edits.length,
+      count: (request) => request.edits.length,
       decodeOriginal: (wire, active) => twoPageParentOriginalFromWire(wire, active, form),
     });
   }

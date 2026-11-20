@@ -26,7 +26,7 @@ test('Source-positioned BEC component compiles without warnings and retains prio
   const result = compile(source, { filename: 'BECFields.svelte', generate: 'client' });
   assert.equal(result.warnings.length, 0);
   assert.match(source, /style=\{position\(control\)\}/);
-  assert.match(source, /!editingEnabled && key !== 'siteSeries'/);
+  assert.match(source, /capabilities\[key\] !== true/);
   assert.match(source, /value === '' \? null : value/);
   assert.match(source, /definition\.rowId/);
   assert.match(source, /rememberBECAcknowledgement\(draft, draft, accepted\)/);

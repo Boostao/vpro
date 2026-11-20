@@ -30,20 +30,10 @@
 
   function rowShrubCover(row: VegRecord): number | null {
     if (row.totalB != null) return row.totalB;
-    if (
-      row.cover4 != null ||
-      row.cover5 != null ||
-      row.cover5a != null ||
-      row.cover5b != null ||
-      row.cover5c != null
-    ) {
+    if (row.cover4 != null || row.cover5 != null || row.cover5a != null || row.cover5b != null || row.cover5c != null) {
       return Math.min(
         99,
-        (row.cover4 ?? 0) +
-          (row.cover5 ?? 0) +
-          (row.cover5a ?? 0) +
-          (row.cover5b ?? 0) +
-          (row.cover5c ?? 0)
+        (row.cover4 ?? 0) + (row.cover5 ?? 0) + (row.cover5a ?? 0) + (row.cover5b ?? 0) + (row.cover5c ?? 0)
       );
     }
     return null;
@@ -53,28 +43,40 @@
     totalTreeCover === null
       ? null
       : vegList.length > 0
-        ? Math.min(99, vegList.reduce((sum, r) => sum + Math.min(99, rowTreeCover(r) ?? 0), 0))
+        ? Math.min(
+            99,
+            vegList.reduce((sum, r) => sum + Math.min(99, rowTreeCover(r) ?? 0), 0)
+          )
         : Math.min(99, totalTreeCover)
   );
   const effectiveShrubCover = $derived(
     totalShrubCover === null
       ? null
       : vegList.length > 0
-        ? Math.min(99, vegList.reduce((sum, r) => sum + Math.min(99, rowShrubCover(r) ?? 0), 0))
+        ? Math.min(
+            99,
+            vegList.reduce((sum, r) => sum + Math.min(99, rowShrubCover(r) ?? 0), 0)
+          )
         : Math.min(99, totalShrubCover)
   );
   const effectiveHerbCover = $derived(
     totalHerbCover === null
       ? null
       : vegList.length > 0
-        ? Math.min(99, vegList.reduce((sum, r) => sum + Math.min(99, r.cover6 ?? 0), 0))
+        ? Math.min(
+            99,
+            vegList.reduce((sum, r) => sum + Math.min(99, r.cover6 ?? 0), 0)
+          )
         : Math.min(99, totalHerbCover)
   );
   const effectiveMossCover = $derived(
     totalMossCover === null
       ? null
       : vegList.length > 0
-        ? Math.min(99, vegList.reduce((sum, r) => sum + Math.min(99, r.cover7 ?? 0), 0))
+        ? Math.min(
+            99,
+            vegList.reduce((sum, r) => sum + Math.min(99, r.cover7 ?? 0), 0)
+          )
         : Math.min(99, totalMossCover)
   );
 </script>
@@ -83,22 +85,33 @@
   <summary class="text-xs font-semibold cursor-pointer">Vegetation record preview (read-only)</summary>
   <div class="space-y-4">
     <!-- Live Stratum Cover Summaries -->
-    <div class="grid grid-cols-4 gap-3 bg-vpro-surface-subtle border border-vpro-border rounded p-3 text-xs" data-stratum-cover-summaries>
+    <div
+      class="grid grid-cols-4 gap-3 bg-vpro-surface-subtle border border-vpro-border rounded p-3 text-xs"
+      data-stratum-cover-summaries
+    >
       <div class="flex flex-col">
         <span class="text-vpro-ink-muted font-medium">Tree Layer (A)</span>
-        <span class="font-bold text-vpro-ink text-sm" data-stratum-total="A">{effectiveTreeCover === null ? 'unavailable' : `${effectiveTreeCover.toFixed(1)}%`}</span>
+        <span class="font-bold text-vpro-ink text-sm" data-stratum-total="A"
+          >{effectiveTreeCover === null ? 'unavailable' : `${effectiveTreeCover.toFixed(1)}%`}</span
+        >
       </div>
       <div class="flex flex-col">
         <span class="text-vpro-ink-muted font-medium">Shrub Layer (B)</span>
-        <span class="font-bold text-vpro-ink text-sm" data-stratum-total="B">{effectiveShrubCover === null ? 'unavailable' : `${effectiveShrubCover.toFixed(1)}%`}</span>
+        <span class="font-bold text-vpro-ink text-sm" data-stratum-total="B"
+          >{effectiveShrubCover === null ? 'unavailable' : `${effectiveShrubCover.toFixed(1)}%`}</span
+        >
       </div>
       <div class="flex flex-col">
         <span class="text-vpro-ink-muted font-medium">Herb Layer (C)</span>
-        <span class="font-bold text-vpro-ink text-sm" data-stratum-total="C">{effectiveHerbCover === null ? 'unavailable' : `${effectiveHerbCover.toFixed(1)}%`}</span>
+        <span class="font-bold text-vpro-ink text-sm" data-stratum-total="C"
+          >{effectiveHerbCover === null ? 'unavailable' : `${effectiveHerbCover.toFixed(1)}%`}</span
+        >
       </div>
       <div class="flex flex-col">
         <span class="text-vpro-ink-muted font-medium">Moss/Lichen (D)</span>
-        <span class="font-bold text-vpro-ink text-sm" data-stratum-total="D">{effectiveMossCover === null ? 'unavailable' : `${effectiveMossCover.toFixed(1)}%`}</span>
+        <span class="font-bold text-vpro-ink text-sm" data-stratum-total="D"
+          >{effectiveMossCover === null ? 'unavailable' : `${effectiveMossCover.toFixed(1)}%`}</span
+        >
       </div>
     </div>
 
@@ -137,17 +150,87 @@
             {@const dispTotalB = rowShrubCover(row)}
             <tr class="hover:bg-vpro-canvas">
               <td class="p-2 font-mono font-bold text-vpro-navy">{row.species}</td>
-              <td class="p-2"><input type="text" aria-label={`Layer for ${row.species}`} value={row.layer ?? ''} disabled class="w-10 border border-vpro-border rounded px-1 py-0.5 text-xs text-center" /></td>
-              <td class="p-2"><input type="number" step="0.1" aria-label={`Cover 1 for ${row.species}`} value={row.cover1 ?? ''} disabled class="w-14 border border-vpro-border rounded px-1 py-0.5 text-xs text-right" /></td>
-              <td class="p-2"><input type="number" step="0.1" aria-label={`Cover 2 for ${row.species}`} value={row.cover2 ?? ''} disabled class="w-14 border border-vpro-border rounded px-1 py-0.5 text-xs text-right" /></td>
-              <td class="p-2 font-bold text-vpro-ink text-right">{dispTotalA !== null ? dispTotalA.toFixed(1) : '—'}</td>
-              <td class="p-2"><input type="number" step="0.1" aria-label={`Cover 4 for ${row.species}`} value={row.cover4 ?? ''} disabled class="w-14 border border-vpro-border rounded px-1 py-0.5 text-xs text-right" /></td>
-              <td class="p-2"><input type="number" step="0.1" aria-label={`Cover 5 for ${row.species}`} value={row.cover5 ?? ''} disabled class="w-14 border border-vpro-border rounded px-1 py-0.5 text-xs text-right" /></td>
-              <td class="p-2 font-bold text-vpro-ink text-right">{dispTotalB !== null ? dispTotalB.toFixed(1) : '—'}</td>
-              <td class="p-2"><input type="number" step="0.1" aria-label={`Cover 6 for ${row.species}`} value={row.cover6 ?? ''} disabled class="w-14 border border-vpro-border rounded px-1 py-0.5 text-xs text-right" /></td>
-              <td class="p-2"><input type="number" step="0.1" aria-label={`Cover 7 for ${row.species}`} value={row.cover7 ?? ''} disabled class="w-14 border border-vpro-border rounded px-1 py-0.5 text-xs text-right" /></td>
+              <td class="p-2"
+                ><input
+                  type="text"
+                  aria-label={`Layer for ${row.species}`}
+                  value={row.layer ?? ''}
+                  disabled
+                  class="w-10 border border-vpro-border rounded px-1 py-0.5 text-xs text-center"
+                /></td
+              >
+              <td class="p-2"
+                ><input
+                  type="number"
+                  step="0.1"
+                  aria-label={`Cover 1 for ${row.species}`}
+                  value={row.cover1 ?? ''}
+                  disabled
+                  class="w-14 border border-vpro-border rounded px-1 py-0.5 text-xs text-right"
+                /></td
+              >
+              <td class="p-2"
+                ><input
+                  type="number"
+                  step="0.1"
+                  aria-label={`Cover 2 for ${row.species}`}
+                  value={row.cover2 ?? ''}
+                  disabled
+                  class="w-14 border border-vpro-border rounded px-1 py-0.5 text-xs text-right"
+                /></td
+              >
+              <td class="p-2 font-bold text-vpro-ink text-right">{dispTotalA !== null ? dispTotalA.toFixed(1) : '—'}</td
+              >
+              <td class="p-2"
+                ><input
+                  type="number"
+                  step="0.1"
+                  aria-label={`Cover 4 for ${row.species}`}
+                  value={row.cover4 ?? ''}
+                  disabled
+                  class="w-14 border border-vpro-border rounded px-1 py-0.5 text-xs text-right"
+                /></td
+              >
+              <td class="p-2"
+                ><input
+                  type="number"
+                  step="0.1"
+                  aria-label={`Cover 5 for ${row.species}`}
+                  value={row.cover5 ?? ''}
+                  disabled
+                  class="w-14 border border-vpro-border rounded px-1 py-0.5 text-xs text-right"
+                /></td
+              >
+              <td class="p-2 font-bold text-vpro-ink text-right">{dispTotalB !== null ? dispTotalB.toFixed(1) : '—'}</td
+              >
+              <td class="p-2"
+                ><input
+                  type="number"
+                  step="0.1"
+                  aria-label={`Cover 6 for ${row.species}`}
+                  value={row.cover6 ?? ''}
+                  disabled
+                  class="w-14 border border-vpro-border rounded px-1 py-0.5 text-xs text-right"
+                /></td
+              >
+              <td class="p-2"
+                ><input
+                  type="number"
+                  step="0.1"
+                  aria-label={`Cover 7 for ${row.species}`}
+                  value={row.cover7 ?? ''}
+                  disabled
+                  class="w-14 border border-vpro-border rounded px-1 py-0.5 text-xs text-right"
+                /></td
+              >
               <td class="p-2">
-                <button type="button" onclick={() => void ondeleteveg(row.id)} disabled class="text-red-600 hover:text-red-800 p-1" title="Delete entry">
+                <button
+                  type="button"
+                  onclick={() => void ondeleteveg(row.id)}
+                  disabled
+                  class="text-red-600 hover:text-red-800 p-1"
+                  title="Delete entry"
+                >
                   <Trash2 size={14} />
                 </button>
               </td>

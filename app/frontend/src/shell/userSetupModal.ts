@@ -43,21 +43,17 @@ export const defaultUserSetupPort: UserSetupPort = {
     return PlotEntryService.UserAccreditationStatus();
   },
   async getPictureOptions(): Promise<PictureOptionsState> {
-    const bound = PictureService as unknown as {
-      GetPictureOptions?: () => Promise<PictureOptionsState>;
-    } | undefined;
-    if (bound && typeof bound.GetPictureOptions === 'function') {
-      return bound.GetPictureOptions();
+    const bound: Record<string, unknown> = PictureService ?? {};
+    if (typeof bound.GetPictureOptions === 'function') {
+      return (bound.GetPictureOptions as () => Promise<PictureOptionsState>)();
     }
     const { Call } = await import('@wailsio/runtime');
     return Call.ByName('main.PictureService.GetPictureOptions') as Promise<PictureOptionsState>;
   },
   async savePictureOptions(update: PictureOptionsUpdate): Promise<PictureOptionsState> {
-    const bound = PictureService as unknown as {
-      SavePictureOptions?: (req: PictureOptionsUpdate) => Promise<PictureOptionsState>;
-    } | undefined;
-    if (bound && typeof bound.SavePictureOptions === 'function') {
-      return bound.SavePictureOptions(update);
+    const bound: Record<string, unknown> = PictureService ?? {};
+    if (typeof bound.SavePictureOptions === 'function') {
+      return (bound.SavePictureOptions as (req: PictureOptionsUpdate) => Promise<PictureOptionsState>)(update);
     }
     const { Call } = await import('@wailsio/runtime');
     return Call.ByName('main.PictureService.SavePictureOptions', update) as Promise<PictureOptionsState>;

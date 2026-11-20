@@ -142,7 +142,7 @@ test('title presentation has one visible labelled control and retained safety', 
   const session = prefs.longVegetationPreferencesSession(owner);
   session.apply(review('First\r\nSecond', owner)); session.edit('invalid\0draft');
   const component = serverComponent(source,
-    'LongVegetationReport.svelte', {
+    'LongVegetationReport.svelte', { './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
       '../bindings/github.com/boostao/vpro/app': {},
       './longVegetationPreferences': prefs,
       './longVegetationStatisticsPreferences': {},
@@ -163,14 +163,15 @@ test('title presentation has one visible labelled control and retained safety', 
         vegetationWorkbookPublicationSession: () => ({ view: () => ({ busy: false, blocked: false }), subscribe: () => () => {} }),
         VegetationWorkbookPublicationSession: class { view() { return { busy: false, blocked: false }; } subscribe() { return () => {}; } },
       },
-    });
+    }) });
   const barriers = [];
   const { body } = render(component, { props: { ...owner, onBusyChange: value => barriers.push(value) } });
   assert.equal((body.match(/id="long-vegetation-title"/g) ?? []).length, 1);
   assert.match(body, /for="long-vegetation-title">Report Title/);
   assert.match(body, /aria-invalid="true"/);
   assert.match(body, /correct it or Undo/); assert.equal(barriers.at(-1), true);
-  assert.match(source, /const value = event.currentTarget.value; editTitle\(value\)/);
-  assert.doesNotMatch(source, /reads\.track\(VegetationReportService\.Save/);
-  assert.match(source, /workbookBarrier \|\| preferenceBarrier \|\| !workbookReview/);
+  const composite = require('./svelteTestHelpers.cjs').readReportComposite('long-vegetation');
+  assert.match(composite, /editTitle\(event\.currentTarget\.value\)/);
+  assert.doesNotMatch(composite, /reads\.track\(\s*VegetationReportService\.Save/);
+  assert.match(composite, /bridge\.workbookBarrier \|\| bridge\.preferenceBarrier \|\| !workbookReview/);
 });

@@ -1,18 +1,93 @@
 <script lang="ts">
-  import { BookOpen, ChartColumn, ChevronDown, ClipboardList, Compass, FileText, Globe, HelpCircle, History, House, Info, Keyboard, Leaf, Link, List, Network, Newspaper, Palette, RotateCcw, Table, TableProperties, Tag, Tent, UserCog } from '@lucide/svelte';
+  import {
+    BookOpen,
+    ChartColumn,
+    ChevronDown,
+    ClipboardList,
+    Compass,
+    FileText,
+    Globe,
+    HelpCircle,
+    History,
+    House,
+    Info,
+    Keyboard,
+    Leaf,
+    Link,
+    List,
+    Network,
+    Newspaper,
+    Palette,
+    RotateCcw,
+    Table,
+    TableProperties,
+    Tag,
+    Tent,
+    UserCog,
+  } from '@lucide/svelte';
 
-  type View = 'home' | 'plots' | 'geospatial-map' | 'diagnostic-synthesis' | 'r-sidecar' | 'hierarchy' | 'fs882' | 'fs882-twopage' | 'datasheet' | 'classification-explorer' | 'project-admin' | 'lump-editor' | 'interchange-hub' | 'long-environment' | 'summary-environment' | 'long-vegetation' | 'summary-vegetation' | 'lifeform-summary' | 'subzone-matrix' | 'table-csv' | 'user-log' | 'plot-locations' | 'google-earth-review' | 'picture-manager' | 'plot-label-preview';
+  type View =
+    | 'home'
+    | 'plots'
+    | 'geospatial-map'
+    | 'diagnostic-synthesis'
+    | 'r-sidecar'
+    | 'hierarchy'
+    | 'fs882'
+    | 'fs882-twopage'
+    | 'datasheet'
+    | 'classification-explorer'
+    | 'project-admin'
+    | 'lump-editor'
+    | 'interchange-hub'
+    | 'long-environment'
+    | 'summary-environment'
+    | 'long-vegetation'
+    | 'summary-vegetation'
+    | 'lifeform-summary'
+    | 'subzone-matrix'
+    | 'table-csv'
+    | 'user-log'
+    | 'plot-locations'
+    | 'google-earth-review'
+    | 'picture-manager'
+    | 'plot-label-preview';
   type HelpMenuAction = 'guide' | 'tours' | 'shortcuts' | 'whats-new' | 'reset-sample' | 'about';
-  type Item = { name: string; icon: typeof House; view?: View; action?: 'sivi' | 'new-sivi' | 'metadata' | 'cloud-sync' | 'user-setup'; helpAction?: HelpMenuAction; deferredPhase2?: boolean };
+  type Item = {
+    name: string;
+    icon: typeof House;
+    view?: View;
+    action?: 'sivi' | 'new-sivi' | 'metadata' | 'cloud-sync' | 'user-setup';
+    helpAction?: HelpMenuAction;
+    deferredPhase2?: boolean;
+  };
   type Menu = { label: string; icon: typeof House; groups: { label: string; items: Item[] }[] };
-  let { view, onnavigate, activeEntryForm = 'fs882', siviAvailable = false, onopensivi, newSiviAvailable = false, onopennewsivi,
-    metadataAvailable = false, onopenmetadata, onopencloudsync, onopenusersetup, onhelpaction, whatsNewUnreadCount = 0, resetSampleAvailable = true,
-    releaseChannel = 'stable' }: {
-    view: View; onnavigate: (view: View) => void;
+  let {
+    view,
+    onnavigate,
+    activeEntryForm = 'fs882',
+    siviAvailable = false,
+    onopensivi,
+    newSiviAvailable = false,
+    onopennewsivi,
+    metadataAvailable = false,
+    onopenmetadata,
+    onopencloudsync,
+    onopenusersetup,
+    onhelpaction,
+    whatsNewUnreadCount = 0,
+    resetSampleAvailable = true,
+    releaseChannel = 'stable',
+  }: {
+    view: View;
+    onnavigate: (view: View) => void;
     activeEntryForm?: 'fs882' | 'sivi' | 'fs882-twopage';
-    siviAvailable?: boolean; onopensivi?: () => void;
-    newSiviAvailable?: boolean; onopennewsivi?: () => void;
-    metadataAvailable?: boolean; onopenmetadata?: () => void;
+    siviAvailable?: boolean;
+    onopensivi?: () => void;
+    newSiviAvailable?: boolean;
+    onopennewsivi?: () => void;
+    metadataAvailable?: boolean;
+    onopenmetadata?: () => void;
     onopencloudsync?: () => void;
     onopenusersetup?: () => void;
     onhelpaction?: (action: HelpMenuAction) => void;
@@ -26,76 +101,124 @@
   const showDeferredPhase2 = $derived(releaseChannel === 'experimental');
 
   const menus: Menu[] = $derived([
-    { label: 'Forms', icon: ClipboardList, groups: [
-      { label: 'Data Entry', items: [
-        { name: 'FS882 Data Forms (6x4)', icon: ClipboardList, view: 'fs882' },
-        { name: 'Two-Page Entry (FS882-8x6XL)', icon: ClipboardList, view: 'fs882-twopage' },
-        { name: 'Enter/Edit SIVI Data', icon: Tent, action: 'sivi' },
-        { name: 'New SIVI / FS1333 Plot', icon: Tent, action: 'new-sivi' },
-        { name: 'Universal Datasheet Grid', icon: TableProperties, view: 'datasheet' }
-      ] },
-      { label: 'Project & Classification', items: [
-        { name: 'Project Admin, QA & Merge', icon: ClipboardList, view: 'project-admin' },
-        { name: 'Cloud BECMaster Sync', icon: Globe, action: 'cloud-sync' },
-        { name: 'SU & Hierarchy Explorer', icon: Network, view: 'classification-explorer' }
-      ] },
-      { label: 'Others', items: [
-        { name: 'Metadata', icon: Table, action: 'metadata' },
-        { name: 'Combine Species', icon: Link, view: 'lump-editor' },
-        { name: 'Plot Pictures', icon: FileText, view: 'picture-manager' },
-        { name: 'User log', icon: History, view: 'user-log' },
-        { name: 'User setup', icon: UserCog, action: 'user-setup' },
-        ...(showDeferredPhase2 ? [
-          { name: 'Herbarium (Planned)', icon: Leaf, deferredPhase2: true },
-          { name: 'Colour-theme (Planned)', icon: Palette, deferredPhase2: true },
-        ] : []),
-      ] }
-    ] },
-    { label: 'Reports', icon: ChartColumn, groups: [
-      { label: 'Vegetation', items: [
-        { name: 'Long Vegetation', icon: TableProperties, view: 'long-vegetation' },
-        { name: 'Lifeform & Species Attribute Summaries', icon: Leaf, view: 'lifeform-summary' },
-        { name: 'Summary Vegetation', icon: ChartColumn, view: 'summary-vegetation' }
-      ] },
-      { label: 'Environment', items: [
-        { name: 'Long Environment', icon: TableProperties, view: 'long-environment' },
-        { name: 'Summary Environment', icon: ChartColumn, view: 'summary-environment' }
-      ] },
-      { label: 'Spatial & Synthesis', items: [
-        { name: '3D Map (BGC, Coordinate Check & Site Units)', icon: Globe, view: 'geospatial-map' },
-        { name: 'BEC Diagnostic & Pairwise Synthesis', icon: ChartColumn, view: 'diagnostic-synthesis' },
-        { name: 'R Analytics, climr aSMR & Quarto Guides', icon: Network, view: 'r-sidecar' }
-      ] },
-      { label: 'Others', items: [
-        { name: 'Subzone Matrix of Units', icon: Table, view: 'subzone-matrix' },
-        { name: 'Hierarchy table', icon: Network, view: 'hierarchy' },
-        { name: 'Plot Label PDF', icon: Tag, view: 'plot-label-preview' },
-        { name: 'Plot Locations', icon: FileText, view: 'plot-locations' },
-        { name: 'Google Earth (KML)', icon: Globe, view: 'google-earth-review' },
-        ...(showDeferredPhase2 ? [
-          { name: 'Hierarchy Diagram (Planned)', icon: Network, deferredPhase2: true },
-        ] : []),
-      ] }
-    ] },
-    { label: 'Interchange', icon: Table, groups: [
-      { label: 'Import & Export', items: [
-        { name: 'Interchange Hub (VENUS 5, TurboVeg, RDS, GeoPackage)', icon: Globe, view: 'interchange-hub' },
-        { name: 'Cloud BECMaster Sync', icon: Globe, action: 'cloud-sync' },
-        { name: 'Project Table CSV Archive', icon: Table, view: 'table-csv' }
-      ] }
-    ] },
-    { label: 'Help', icon: HelpCircle, groups: [
-      { label: 'Documentation & Onboarding', items: [
-        { name: 'VPro User Guide & LMH25 Reference (F1)', icon: BookOpen, helpAction: 'guide' },
-        { name: 'Interactive Walkthroughs (4 Tours)', icon: Compass, helpAction: 'tours' },
-        { name: 'Keyboard Shortcuts (?)', icon: Keyboard, helpAction: 'shortcuts' }
-      ] },
-      { label: 'Release & Workspace', items: [
-        { name: "What's New / Release Notes", icon: Newspaper, helpAction: 'whats-new' },
-        { name: 'Reset Workspace to Sample', icon: RotateCcw, helpAction: 'reset-sample' },
-        { name: 'About VPro & Standards Libraries', icon: Info, helpAction: 'about' }
-      ] }
-    ] }
+    {
+      label: 'Forms',
+      icon: ClipboardList,
+      groups: [
+        {
+          label: 'Data Entry',
+          items: [
+            { name: 'FS882 Data Forms (6x4)', icon: ClipboardList, view: 'fs882' },
+            { name: 'Two-Page Entry (FS882-8x6XL)', icon: ClipboardList, view: 'fs882-twopage' },
+            { name: 'Enter/Edit SIVI Data', icon: Tent, action: 'sivi' },
+            { name: 'New SIVI / FS1333 Plot', icon: Tent, action: 'new-sivi' },
+            { name: 'Universal Datasheet Grid', icon: TableProperties, view: 'datasheet' },
+          ],
+        },
+        {
+          label: 'Project & Classification',
+          items: [
+            { name: 'Project Admin, QA & Merge', icon: ClipboardList, view: 'project-admin' },
+            { name: 'Cloud BECMaster Sync', icon: Globe, action: 'cloud-sync' },
+            { name: 'SU & Hierarchy Explorer', icon: Network, view: 'classification-explorer' },
+          ],
+        },
+        {
+          label: 'Others',
+          items: [
+            { name: 'Metadata', icon: Table, action: 'metadata' },
+            { name: 'Combine Species', icon: Link, view: 'lump-editor' },
+            { name: 'Plot Pictures', icon: FileText, view: 'picture-manager' },
+            { name: 'User log', icon: History, view: 'user-log' },
+            { name: 'User setup', icon: UserCog, action: 'user-setup' },
+            ...(showDeferredPhase2
+              ? [
+                  { name: 'Herbarium (Planned)', icon: Leaf, deferredPhase2: true },
+                  { name: 'Colour-theme (Planned)', icon: Palette, deferredPhase2: true },
+                ]
+              : []),
+          ],
+        },
+      ],
+    },
+    {
+      label: 'Reports',
+      icon: ChartColumn,
+      groups: [
+        {
+          label: 'Vegetation',
+          items: [
+            { name: 'Long Vegetation', icon: TableProperties, view: 'long-vegetation' },
+            { name: 'Lifeform & Species Attribute Summaries', icon: Leaf, view: 'lifeform-summary' },
+            { name: 'Summary Vegetation', icon: ChartColumn, view: 'summary-vegetation' },
+          ],
+        },
+        {
+          label: 'Environment',
+          items: [
+            { name: 'Long Environment', icon: TableProperties, view: 'long-environment' },
+            { name: 'Summary Environment', icon: ChartColumn, view: 'summary-environment' },
+          ],
+        },
+        {
+          label: 'Spatial & Synthesis',
+          items: [
+            { name: '3D Map (BGC, Coordinate Check & Site Units)', icon: Globe, view: 'geospatial-map' },
+            { name: 'BEC Diagnostic & Pairwise Synthesis', icon: ChartColumn, view: 'diagnostic-synthesis' },
+            { name: 'R Analytics, climr aSMR & Quarto Guides', icon: Network, view: 'r-sidecar' },
+          ],
+        },
+        {
+          label: 'Others',
+          items: [
+            { name: 'Subzone Matrix of Units', icon: Table, view: 'subzone-matrix' },
+            { name: 'Hierarchy table', icon: Network, view: 'hierarchy' },
+            { name: 'Plot Label PDF', icon: Tag, view: 'plot-label-preview' },
+            { name: 'Plot Locations', icon: FileText, view: 'plot-locations' },
+            { name: 'Google Earth (KML)', icon: Globe, view: 'google-earth-review' },
+            ...(showDeferredPhase2
+              ? [{ name: 'Hierarchy Diagram (Planned)', icon: Network, deferredPhase2: true }]
+              : []),
+          ],
+        },
+      ],
+    },
+    {
+      label: 'Interchange',
+      icon: Table,
+      groups: [
+        {
+          label: 'Import & Export',
+          items: [
+            { name: 'Interchange Hub (VENUS 5, TurboVeg, RDS, GeoPackage)', icon: Globe, view: 'interchange-hub' },
+            { name: 'Cloud BECMaster Sync', icon: Globe, action: 'cloud-sync' },
+            { name: 'Project Table CSV Archive', icon: Table, view: 'table-csv' },
+          ],
+        },
+      ],
+    },
+    {
+      label: 'Help',
+      icon: HelpCircle,
+      groups: [
+        {
+          label: 'Documentation & Onboarding',
+          items: [
+            { name: 'VPro User Guide & LMH25 Reference (F1)', icon: BookOpen, helpAction: 'guide' },
+            { name: 'Interactive Walkthroughs (4 Tours)', icon: Compass, helpAction: 'tours' },
+            { name: 'Keyboard Shortcuts (?)', icon: Keyboard, helpAction: 'shortcuts' },
+          ],
+        },
+        {
+          label: 'Release & Workspace',
+          items: [
+            { name: "What's New / Release Notes", icon: Newspaper, helpAction: 'whats-new' },
+            { name: 'Reset Workspace to Sample', icon: RotateCcw, helpAction: 'reset-sample' },
+            { name: 'About VPro & Standards Libraries', icon: Info, helpAction: 'about' },
+          ],
+        },
+      ],
+    },
   ]);
 
   function closeMenu(restoreFocus = false) {
@@ -172,19 +295,33 @@
 <svelte:window onpointerdown={dismissOutside} onfocusin={dismissOnFocus} onkeydowncapture={escape} />
 
 <nav bind:this={navigation} class="main-nav" aria-label="Main navigation">
-  <button class:current={view === 'home'} aria-current={view === 'home' ? 'page' : undefined} onclick={() => navigate('home')}>
+  <button
+    class:current={view === 'home'}
+    aria-current={view === 'home' ? 'page' : undefined}
+    onclick={() => navigate('home')}
+  >
     <House size={16} aria-hidden="true" />Home
   </button>
-  <button class:current={view === 'plots'} aria-current={view === 'plots' ? 'page' : undefined} onclick={() => navigate('plots')}>
+  <button
+    class:current={view === 'plots'}
+    aria-current={view === 'plots' ? 'page' : undefined}
+    onclick={() => navigate('plots')}
+  >
     <List size={16} aria-hidden="true" />Plots
   </button>
-  <button class:current={view === 'geospatial-map'} aria-current={view === 'geospatial-map' ? 'page' : undefined} onclick={() => navigate('geospatial-map')}>
+  <button
+    class:current={view === 'geospatial-map'}
+    aria-current={view === 'geospatial-map' ? 'page' : undefined}
+    onclick={() => navigate('geospatial-map')}
+  >
     <Globe size={16} aria-hidden="true" />3D Map
   </button>
   {#each menus as menu (menu.label)}
     <details class="nav-menu" data-nav-group={menu.label} open={openMenu === menu.label}>
       <summary
-        class:current={menu.groups.some(group => group.items.some(item => item.view === view || (item.view === 'fs882-twopage' && view === 'fs882')))}
+        class:current={menu.groups.some((group) =>
+          group.items.some((item) => item.view === view || (item.view === 'fs882-twopage' && view === 'fs882'))
+        )}
         onclick={(event) => {
           event.preventDefault();
           openMenu = openMenu === menu.label ? null : menu.label;
@@ -193,42 +330,59 @@
         <menu.icon size={16} aria-hidden="true" />
         {menu.label}
         {#if menu.label === 'Help' && whatsNewUnreadCount > 0}
-          <span class="rounded bg-vpro-gold px-1.5 py-0.5 font-mono text-[10px] font-bold text-vpro-navy" data-nav-whats-new-badge>{whatsNewUnreadCount}</span>
+          <span
+            class="rounded bg-vpro-gold px-1.5 py-0.5 font-mono text-[10px] font-bold text-vpro-navy"
+            data-nav-whats-new-badge>{whatsNewUnreadCount}</span
+          >
         {/if}
         <ChevronDown size={14} aria-hidden="true" />
       </summary>
       <div class="nav-menu-content">
         {#each menu.groups as group (group.label)}
-          <section data-nav-group={group.label === 'Project & Classification' ? 'Project' : group.label} aria-labelledby={`nav-${menu.label}-${group.label.replaceAll(' ', '-')}`}>
+          <section
+            data-nav-group={group.label === 'Project & Classification' ? 'Project' : group.label}
+            aria-labelledby={`nav-${menu.label}-${group.label.replaceAll(' ', '-')}`}
+          >
             <h2 class="nav-group-label" id={`nav-${menu.label}-${group.label.replaceAll(' ', '-')}`}>{group.label}</h2>
             {#each group.items as item (item.name)}
               <button
                 disabled={!itemEnabled(item)}
                 class:current={item.view === 'fs882-twopage'
-                  ? (view === 'fs882' && activeEntryForm === 'fs882-twopage')
+                  ? view === 'fs882' && activeEntryForm === 'fs882-twopage'
                   : item.view === 'fs882'
-                    ? (view === 'fs882' && activeEntryForm !== 'fs882-twopage')
+                    ? view === 'fs882' && activeEntryForm !== 'fs882-twopage'
                     : item.view === view}
                 data-help-menu-item={item.helpAction}
-                aria-current={(item.view === 'fs882-twopage'
-                  ? (view === 'fs882' && activeEntryForm === 'fs882-twopage')
-                  : item.view === 'fs882'
-                    ? (view === 'fs882' && activeEntryForm !== 'fs882-twopage')
-                    : item.view === view) ? 'page' : undefined}
+                aria-current={(
+                  item.view === 'fs882-twopage'
+                    ? view === 'fs882' && activeEntryForm === 'fs882-twopage'
+                    : item.view === 'fs882'
+                      ? view === 'fs882' && activeEntryForm !== 'fs882-twopage'
+                      : item.view === view
+                )
+                  ? 'page'
+                  : undefined}
                 title={item.action === 'sivi'
-                  ? itemEnabled(item) ? 'SIVI / FS1333 editor for the selected plot. Existing draft and close guards apply.'
+                  ? itemEnabled(item)
+                    ? 'SIVI / FS1333 editor for the selected plot. Existing draft and close guards apply.'
                     : 'Select a plot to open SIVI / FS1333 data entry.'
                   : item.action === 'metadata'
                     ? itemEnabled(item)
                       ? 'Project metadata for the active project (requires a clean, unlocked editor when a plot is open).'
                       : 'Finish or Undo drafts in a clean, unlocked editor before opening Project Metadata.'
-                  : item.action === 'cloud-sync'
-                    ? item.name
-                  : item.helpAction === 'reset-sample'
-                    ? 'Safe recovery: restores a fresh copy of the Sample project and switches your session without deleting your own projects.'
-                  : item.helpAction ? item.name
-                  : item.deferredPhase2 ? 'Planned for a future release'
-                  : item.view === 'fs882' ? 'FS882 6x4 & 2-Page plot data entry' : item.view ? item.name : item.name}
+                    : item.action === 'cloud-sync'
+                      ? item.name
+                      : item.helpAction === 'reset-sample'
+                        ? 'Safe recovery: restores a fresh copy of the Sample project and switches your session without deleting your own projects.'
+                        : item.helpAction
+                          ? item.name
+                          : item.deferredPhase2
+                            ? 'Planned for a future release'
+                            : item.view === 'fs882'
+                              ? 'FS882 6x4 & 2-Page plot data entry'
+                              : item.view
+                                ? item.name
+                                : item.name}
                 onclick={() => activate(item)}
               >
                 <item.icon size={16} aria-hidden="true" />
@@ -237,7 +391,11 @@
                 {:else if item.action === 'metadata' && !itemEnabled(item)}
                   <span class="nav-item-hint">Open clean plot</span>
                 {/if}
-                <span>{item.name}{item.helpAction === 'whats-new' && whatsNewUnreadCount > 0 ? ` (${whatsNewUnreadCount} new)` : ''}</span>
+                <span
+                  >{item.name}{item.helpAction === 'whats-new' && whatsNewUnreadCount > 0
+                    ? ` (${whatsNewUnreadCount} new)`
+                    : ''}</span
+                >
               </button>
             {/each}
           </section>

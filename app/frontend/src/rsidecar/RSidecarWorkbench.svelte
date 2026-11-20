@@ -1,36 +1,39 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import {
+    computeDendrogramSVGLayout,
     defaultRSidecarPort,
+    formatError,
     isVegclustMethod,
+    notifications,
+    resolveActiveEdatopicView,
+    usesBetaParameter,
     usesDissimilarity,
     usesHierarchicalLinkage,
-    usesBetaParameter,
     validateClusteringDraft,
     validatePromoteCandidateDraft,
     validateQuartoGuideDraft,
-    computeDendrogramSVGLayout,
-    notifications,
-    type RSidecarBackendPort,
-    type RRuntimeStatus,
-    type ClimateRefPeriod,
-    type ClimateGroupBy,
-    type ClimateEdatopicResult,
-    type PlotClimateRow,
-    type EdatopicGridCell,
-    type ClusteringMethod,
-    type EcologicalDistance,
-    type HierarchicalLinkage,
     type AbundanceTransform,
+    type ClimateEdatopicResult,
+    type ClimateGroupBy,
+    type ClimateRefPeriod,
+    type ClusteringMethod,
     type ClusteringResult,
+    type EcologicalDistance,
+    type EdatopicGridCell,
+    type HierarchicalLinkage,
+    type PlotClimateRow,
     type PromoteCandidateSUResult,
-    type QuartoGuideType,
     type QuartoGuideResult,
+    type QuartoGuideType,
+    type RRuntimeStatus,
+    type RSidecarBackendPort,
   } from './rSidecarWorkbench';
   import RSidecarClusteringTab from './RSidecarClusteringTab.svelte';
   import RSidecarEdatopicTab from './RSidecarEdatopicTab.svelte';
   import RSidecarQuartoTab from './RSidecarQuartoTab.svelte';
   import RSidecarRuntimeTab from './RSidecarRuntimeTab.svelte';
+  import RSidecarWorkbenchHeader from './RSidecarWorkbenchHeader.svelte';
 
   let {
     contextId,
@@ -136,54 +139,18 @@
           ? 'Local climr Rasters'
           : 'Offline Ministry BGC Lapse Model'
   );
-
-  const activeEdatopicView = $derived.by(() => {
-    if (!climateResult) return null;
-    if (selectedUnitGroup === '__overall__') {
-      return {
-        label: `All Scoped Plots (${climateResult.project})`,
-        plotCount: climateResult.coordinatizedPlots,
-        meanShift: null as number | null,
-        meanCmd: null as number | null,
-        relativeGrid: climateResult.overallRelative,
-        actualGrid: climateResult.overallActual,
-      };
-    }
-    const found = climateResult.unitSummaries.find(u => u.groupKey === selectedUnitGroup);
-    if (!found) {
-      return {
-        label: `All Scoped Plots (${climateResult.project})`,
-        plotCount: climateResult.coordinatizedPlots,
-        meanShift: null as number | null,
-        meanCmd: null as number | null,
-        relativeGrid: climateResult.overallRelative,
-        actualGrid: climateResult.overallActual,
-      };
-    }
-    return {
-      label: found.groupKey,
-      plotCount: found.plotCount,
-      meanShift: found.meanShift ?? null,
-      meanCmd: found.meanCmd,
-      relativeGrid: found.relativeGrid,
-      actualGrid: found.actualGrid,
-    };
-  });
-
+  const activeEdatopicView = $derived(resolveActiveEdatopicView(climateResult, selectedUnitGroup));
   const vegclustMode = $derived(isVegclustMethod(clusterMethod));
   const dissimilarityActive = $derived(usesDissimilarity(clusterMethod));
   const linkageActive = $derived(usesHierarchicalLinkage(clusterMethod));
   const betaActive = $derived(usesBetaParameter(clusterMethod));
-
   const dendrogramLayout = $derived(
-    computeDendrogramSVGLayout(
-      clusterResult?.dendrogram,
-      clusterCutHeight > 0 ? clusterCutHeight : undefined
-    )
+    computeDendrogramSVGLayout(clusterResult?.dendrogram, clusterCutHeight > 0 ? clusterCutHeight : undefined)
   );
 
-  const clusteringValidationError = $derived(
-    validateClusteringDraft({
+  function buildClusteringDraft(trimText: boolean) {
+    const clean = (v: string) => (trimText ? v.trim() : v) || undefined;
+    return {
       method: clusterMethod,
       distance: clusterDistance,
       linkage: clusterLinkage,
@@ -194,15 +161,33 @@
       beta: betaActive ? Number(clusterBeta) : undefined,
       cutHeight: clusterCutHeight > 0 ? Number(clusterCutHeight) : undefined,
       applyLump: clusterApplyLump,
-      lumpName: clusterLumpName || undefined,
+      lumpName: clean(clusterLumpName),
       useActiveSu: clusterUseSu,
-      bgcFilter: clusterBgcFilter || undefined,
-      unitPrefix: clusterUnitPrefix || undefined,
-      candidatePrefix: clusterCandidatePrefix || undefined,
+      bgcFilter: clean(clusterBgcFilter),
+      unitPrefix: clean(clusterUnitPrefix),
+      candidatePrefix: clean(clusterCandidatePrefix),
       materializeCandidate: clusterMaterializeCandidate,
-    })
-  );
+    };
+  }
 
+  function buildQuartoDraft(trimText: boolean) {
+    const clean = (v: string) => (trimText ? v.trim() : v) || undefined;
+    return {
+      guideType: quartoGuideType,
+      title: clean(quartoTitle),
+      targetUnit: clean(quartoTargetUnit),
+      bgcFilter: clean(quartoBgcFilter),
+      conceptNotes: quartoConceptNotes || undefined,
+      refPeriod,
+      minConstancyPct: Number(quartoMinConstancy),
+      useActiveSu: quartoUseSu,
+      applyLump: quartoApplyLump,
+      includePdf: quartoIncludePdf,
+      destinationPath: clean(quartoDestinationPath),
+    };
+  }
+
+  const clusteringValidationError = $derived(validateClusteringDraft(buildClusteringDraft(false)));
   const promoteValidationError = $derived(
     promoteTargetSuName === ''
       ? null
@@ -217,30 +202,14 @@
           activeSu
         )
   );
-
-  const quartoValidationError = $derived(
-    validateQuartoGuideDraft({
-      guideType: quartoGuideType,
-      title: quartoTitle || undefined,
-      targetUnit: quartoTargetUnit || undefined,
-      bgcFilter: quartoBgcFilter || undefined,
-      conceptNotes: quartoConceptNotes || undefined,
-      refPeriod,
-      minConstancyPct: Number(quartoMinConstancy),
-      useActiveSu: quartoUseSu,
-      applyLump: quartoApplyLump,
-      includePdf: quartoIncludePdf,
-      destinationPath: quartoDestinationPath || undefined,
-    })
-  );
+  const quartoValidationError = $derived(validateQuartoGuideDraft(buildQuartoDraft(false)));
 
   function notifySidecar(
     severity: 'success' | 'info' | 'warning' | 'error',
     title: string,
     message: string,
-    toast = true,
+    toast = true
   ) {
-    if (typeof notifications === 'undefined') return;
     const opts = {
       category: 'background' as const,
       source: 'R Companion',
@@ -269,11 +238,11 @@
       notifySidecar(
         status.available ? 'success' : 'warning',
         status.available ? `R ${status.rVersion} detected` : 'R runtime not detected',
-        statusMessage,
+        statusMessage
       );
     } catch (cause) {
       if (gen === generation) {
-        error = `Runtime probe failed: ${String(cause)}`;
+        error = `Runtime probe failed: ${formatError(cause)}`;
         notifySidecar('error', 'R runtime check failed', error);
       }
     } finally {
@@ -296,7 +265,7 @@
       notifySidecar('info', 'Loaded cached plot climate', statusMessage);
     } catch (cause) {
       if (gen === generation) {
-        error = `Load cached plot climate failed: ${String(cause)}`;
+        error = `Load cached plot climate failed: ${formatError(cause)}`;
         notifySidecar('error', 'Load cached plot climate failed', error);
       }
     } finally {
@@ -332,7 +301,7 @@
       notifySidecar('success', 'Climate & aSMR computation complete', statusMessage);
     } catch (cause) {
       if (gen === generation) {
-        error = `Climate & aSMR computation failed: ${String(cause)}`;
+        error = `Climate & aSMR computation failed: ${formatError(cause)}`;
         notifySidecar('error', 'Climate & aSMR computation failed', error);
       }
     } finally {
@@ -346,24 +315,7 @@
       notifySidecar('error', 'R clustering held', error);
       return;
     }
-    const req = $state.snapshot({
-      method: clusterMethod,
-      distance: clusterDistance,
-      linkage: clusterLinkage,
-      transform: clusterTransform,
-      k: Number(clusterK),
-      fuzziness: Number(clusterFuzziness),
-      dnoise: Number(clusterDnoise),
-      beta: betaActive ? Number(clusterBeta) : undefined,
-      cutHeight: clusterCutHeight > 0 ? Number(clusterCutHeight) : undefined,
-      applyLump: clusterApplyLump,
-      lumpName: clusterLumpName.trim() || undefined,
-      useActiveSu: clusterUseSu,
-      bgcFilter: clusterBgcFilter.trim() || undefined,
-      unitPrefix: clusterUnitPrefix.trim() || undefined,
-      candidatePrefix: clusterCandidatePrefix.trim() || undefined,
-      materializeCandidate: clusterMaterializeCandidate,
-    });
+    const req = $state.snapshot(buildClusteringDraft(true));
     const vErr = validateClusteringDraft(req);
     if (vErr) {
       error = vErr;
@@ -386,7 +338,7 @@
       notifySidecar('success', `Clustered ${res.plotCount} plots`, statusMessage);
     } catch (cause) {
       if (gen === generation) {
-        error = `R clustering failed: ${String(cause)}`;
+        error = `R clustering failed: ${formatError(cause)}`;
         notifySidecar('error', 'R clustering failed', error);
       }
     } finally {
@@ -424,12 +376,10 @@
       promoteResult = res;
       statusMessage = `Promoted ${res.promotedRows} plots from ${res.candidateTableName} into ${res.targetTableName}.`;
       notifySidecar('success', `Promoted candidate to ${res.targetTableName}`, statusMessage);
-      if (res.activated && res.newState && oncontextswitched) {
-        oncontextswitched(res.newState);
-      }
+      if (res.activated && res.newState && oncontextswitched) oncontextswitched(res.newState);
     } catch (cause) {
       if (gen === generation) {
-        error = `Promote candidate SU failed: ${String(cause)}`;
+        error = `Promote candidate SU failed: ${formatError(cause)}`;
         notifySidecar('error', 'Promote candidate SU failed', error);
       }
     } finally {
@@ -443,19 +393,7 @@
       notifySidecar('error', 'Quarto guide render held', error);
       return;
     }
-    const req = $state.snapshot({
-      guideType: quartoGuideType,
-      title: quartoTitle.trim() || undefined,
-      targetUnit: quartoTargetUnit.trim() || undefined,
-      bgcFilter: quartoBgcFilter.trim() || undefined,
-      conceptNotes: quartoConceptNotes || undefined,
-      refPeriod,
-      minConstancyPct: Number(quartoMinConstancy),
-      useActiveSu: quartoUseSu,
-      applyLump: quartoApplyLump,
-      includePdf: quartoIncludePdf,
-      destinationPath: quartoDestinationPath.trim() || undefined,
-    });
+    const req = $state.snapshot(buildQuartoDraft(true));
     const vErr = validateQuartoGuideDraft(req);
     if (vErr) {
       error = vErr;
@@ -474,7 +412,7 @@
       notifySidecar('success', 'Quarto guide published', statusMessage);
     } catch (cause) {
       if (gen === generation) {
-        error = `Quarto guide publication failed: ${String(cause)}`;
+        error = `Quarto guide publication failed: ${formatError(cause)}`;
         notifySidecar('error', 'Quarto guide publication failed', error);
       }
     } finally {
@@ -484,80 +422,87 @@
 </script>
 
 <section class="rsidecar-workbench" data-tour="r-sidecar-root" aria-label="R Companion Climate Clustering and Guides">
-  <header class="bcgov-header" style="background:#003366;border-bottom:4px solid #FCBA19;color:#FFFFFF">
-    <div>
-      <h2>R Companion: Climate, Clustering &amp; Ecosystem Guides</h2>
-      <p class="subtitle">
-        Active Project: <strong>{activeProject}</strong> | Active SU: <strong>{activeSu}</strong> | R / climr / vegclust / Quarto
-      </p>
-    </div>
-    <div class="header-actions">
-      <button type="button" class="btn-gold" disabled={busy} onclick={refreshRRuntime}>
-        Check R &amp; Quarto Setup
-      </button>
-    </div>
-  </header>
-
-  <div data-workbench-sticky-bar class="tab-bar sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border" role="tablist" aria-label="R Companion Sections">
-    <button
-      type="button" role="tab" aria-selected={activeTab === 'runtime'}
-      class:active={activeTab === 'runtime'} onclick={() => (activeTab = 'runtime')}
-    >
-      1. Runtime &amp; climr Climate Normals
-    </button>
-    <button
-      type="button" role="tab" aria-selected={activeTab === 'edatopic'}
-      class:active={activeTab === 'edatopic'} onclick={() => (activeTab = 'edatopic')}
-    >
-      2. Dual rSMR vs aSMR Edatopic Grids
-    </button>
-    <button
-      type="button" role="tab" aria-selected={activeTab === 'clustering'}
-      class:active={activeTab === 'clustering'} onclick={() => (activeTab = 'clustering')}
-    >
-      3. R Clustering &amp; Dendrogram
-    </button>
-    <button
-      type="button" role="tab" aria-selected={activeTab === 'quarto'}
-      class:active={activeTab === 'quarto'} onclick={() => (activeTab = 'quarto')}
-    >
-      4. Quarto Unit &amp; BGC Guide Publisher
-    </button>
-  </div>
-
-  {#if error}<div class="banner-error" role="alert">{error}</div>{/if}
+  <RSidecarWorkbenchHeader
+    {activeProject}
+    {activeSu}
+    {busy}
+    bind:activeTab
+    {error}
+    onRefreshRuntime={() => void refreshRRuntime()}
+  />
 
   {#if activeTab === 'runtime'}
     <RSidecarRuntimeTab
-      {activeSu} {busy} {runtimeStatus} {climateEngineLabel}
-      bind:refPeriod bind:climateGroupBy bind:climateBgcFilter bind:climateUseSu bind:climateForceRefresh
-      {climateResult} {displayedClimateRows}
-      onRunClimate={runClimateAndDualEdatopic} onLoadCached={loadCachedPlotClimate}
+      {activeSu}
+      {busy}
+      {runtimeStatus}
+      {climateEngineLabel}
+      bind:refPeriod
+      bind:climateGroupBy
+      bind:climateBgcFilter
+      bind:climateUseSu
+      bind:climateForceRefresh
+      {climateResult}
+      {displayedClimateRows}
+      onRunClimate={runClimateAndDualEdatopic}
+      onLoadCached={loadCachedPlotClimate}
     />
   {:else if activeTab === 'edatopic'}
-    <RSidecarEdatopicTab
-      {climateResult} {activeEdatopicView} bind:selectedUnitGroup bind:selectedCellDetail
-    />
+    <RSidecarEdatopicTab {climateResult} {activeEdatopicView} bind:selectedUnitGroup bind:selectedCellDetail />
   {:else if activeTab === 'clustering'}
     <RSidecarClusteringTab
-      {activeProject} {activeSu} {busy}
-      bind:clusterMethod bind:clusterDistance bind:clusterLinkage bind:clusterTransform
-      bind:clusterK bind:clusterFuzziness bind:clusterDnoise bind:clusterBeta bind:clusterCutHeight
-      bind:clusterApplyLump bind:clusterLumpName bind:clusterUseSu bind:clusterBgcFilter
-      bind:clusterUnitPrefix bind:clusterCandidatePrefix bind:clusterMaterializeCandidate
-      {vegclustMode} {dissimilarityActive} {linkageActive} {betaActive}
-      {clusteringValidationError} {clusterResult} {dendrogramLayout} bind:selectedDendroPlot
-      bind:promoteTargetSuName bind:promoteExcludeNoise bind:promoteConfirmOverwrite bind:promoteActivate
-      {promoteValidationError} {promoteResult}
-      onSubmitClustering={submitClustering} onSubmitPromote={submitPromoteCandidate}
+      {activeProject}
+      {activeSu}
+      {busy}
+      bind:clusterMethod
+      bind:clusterDistance
+      bind:clusterLinkage
+      bind:clusterTransform
+      bind:clusterK
+      bind:clusterFuzziness
+      bind:clusterDnoise
+      bind:clusterBeta
+      bind:clusterCutHeight
+      bind:clusterApplyLump
+      bind:clusterLumpName
+      bind:clusterUseSu
+      bind:clusterBgcFilter
+      bind:clusterUnitPrefix
+      bind:clusterCandidatePrefix
+      bind:clusterMaterializeCandidate
+      {vegclustMode}
+      {dissimilarityActive}
+      {linkageActive}
+      {betaActive}
+      {clusteringValidationError}
+      {clusterResult}
+      {dendrogramLayout}
+      bind:selectedDendroPlot
+      bind:promoteTargetSuName
+      bind:promoteExcludeNoise
+      bind:promoteConfirmOverwrite
+      bind:promoteActivate
+      {promoteValidationError}
+      {promoteResult}
+      onSubmitClustering={submitClustering}
+      onSubmitPromote={submitPromoteCandidate}
     />
   {:else if activeTab === 'quarto'}
     <RSidecarQuartoTab
-      {activeSu} {busy}
-      bind:quartoGuideType bind:quartoTitle bind:quartoTargetUnit bind:quartoBgcFilter
-      bind:quartoConceptNotes bind:quartoMinConstancy bind:quartoUseSu bind:quartoApplyLump
-      bind:quartoIncludePdf bind:quartoDestinationPath
-      {quartoValidationError} {quartoResult}
+      {activeSu}
+      {busy}
+      bind:quartoGuideType
+      bind:quartoTitle
+      bind:quartoTargetUnit
+      bind:quartoBgcFilter
+      bind:quartoConceptNotes
+      bind:quartoMinConstancy
+      bind:quartoUseSu
+      bind:quartoApplyLump
+      bind:quartoIncludePdf
+      bind:quartoDestinationPath
+      {quartoValidationError}
+      {quartoResult}
       onRenderQuarto={submitRenderQuartoGuide}
     />
   {/if}
@@ -566,15 +511,6 @@
 <style>
   .rsidecar-workbench {
     overflow: clip;
-  }
-  .rsidecar-workbench .tab-bar[data-workbench-sticky-bar] {
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(4px);
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
   }
   .rsidecar-workbench :global(.table-scroll) {
     overflow-x: auto;

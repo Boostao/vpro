@@ -58,9 +58,9 @@ export interface LMH25DiagnosticsPort {
 
 export const defaultLMH25DiagnosticsPort: LMH25DiagnosticsPort = {
   evaluatePlotDiagnostics: (header, humus, mineral) =>
-    (PlotEntryService.EvaluatePlotDiagnostics(header as never, humus as never, mineral as never) as never),
+    PlotEntryService.EvaluatePlotDiagnostics(header as never, humus as never, mineral as never) as never,
   evaluateStoredPlotDiagnostics: (contextID, plotNumber) =>
-    (PlotEntryService.EvaluateStoredPlotDiagnostics(contextID, plotNumber) as never),
+    PlotEntryService.EvaluateStoredPlotDiagnostics(contextID, plotNumber) as never,
 };
 
 export function substrateProgressPercent(sum: number | null): number {

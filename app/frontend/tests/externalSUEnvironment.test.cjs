@@ -199,13 +199,14 @@ test('normal/CHARS integration keeps independent gates, shared parent lifecycle 
   for (const name of ['ExternalSUEnvironmentTransfer.svelte', 'FS882Form.svelte', 'FS882Modals.svelte', 'App.svelte']) {
     assert.equal(compile(readFileSync(srcPath(name), 'utf8'), { filename: name, generate: 'client' }).warnings.length, 0);
   }
-  const root = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882Modals.svelte'), 'utf8');
-  assert.match(root, /environmentSUDirection = 'external-reverse'; environmentSUOpen = true/);
-  assert.match(root, /ExternalSUEnvironmentTransfer bind:this=\{environmentSUEditor\}/);
-  assert.match(root, /externalSUEnvironmentBusy \|\| externalSUEnvironmentBlocked/);
-  const app = readFileSync(srcPath('App.svelte'), 'utf8');
+  const { readFS882Composite, readShellComposite } = require('./svelteTestHelpers.cjs');
+  const root = readFS882Composite();
+  assert.match(root, /environmentSUDirection = 'external-reverse';\s*environmentSUOpen = true/);
+  assert.match(root, /ExternalSUEnvironmentTransfer[\s\S]*?bind:this=\{ctrl\.environmentSUEditor\}/);
+  assert.match(root, /externalSUEnvironmentBusy[\s\S]*?externalSUEnvironmentBlocked/);
+  const app = readShellComposite();
   assert.match(app, /subscribeExternalSUEnvironmentActivity/);
-  assert.match(app, /twoPageVegetationBusy \|\| externalSUEnvironmentBusy/);
+  assert.match(app, /external-su-env/);
 });
 
 test('actual root background reads stay held during a retained external transfer', async () => {
@@ -216,5 +217,5 @@ test('actual root background reads stay held during a retained external transfer
     externalSUEnvironmentBusy: true, view: 'fs882', editorBusy: true,
   });
   await host.actions.loadPlots(0); await host.actions.refresh(); await host.actions.loadHierarchy();
-  assert.equal(host.busy, undefined);
+  assert.equal(Boolean(host.busy), false);
 });

@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import { CheckCircle2, Newspaper, X } from '@lucide/svelte';
   import ModalDialogTrap from '../shared/ModalDialogTrap.svelte';
+  import { formatError } from '../shared/readRequests';
   import { defaultHelpPort, type HelpBackendPort, type WhatsNewStatus } from './helpSystem';
 
   let {
@@ -49,7 +50,7 @@
       onstatuschange?.(fresh);
     } catch (cause) {
       if (gen === loadGen) {
-        error = `Release notes status could not be loaded: ${String(cause)}`;
+        error = `Release notes status could not be loaded: ${formatError(cause)}`;
       }
     } finally {
       if (gen === loadGen) {
@@ -67,7 +68,7 @@
       status = updated;
       onstatuschange?.(updated);
     } catch (cause) {
-      error = `Could not persist What's New acknowledgement: ${String(cause)}`;
+      error = `Could not persist What's New acknowledgement: ${formatError(cause)}`;
     } finally {
       acknowledging = false;
     }
@@ -77,7 +78,6 @@
     if (!status) return false;
     return index < status.unreadCount;
   }
-
 </script>
 
 {#if open}
@@ -88,17 +88,21 @@
       aria-labelledby="whats-new-modal-title"
       class="flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded border border-vpro-border bg-white text-vpro-ink shadow-2xl"
     >
-      <ModalDialogTrap onEscape={onclose} escapeDisabled={acknowledging} initialFocusSelector="[data-whats-new-close]" />
-      <header class="flex items-center justify-between gap-3 border-b-[3px] border-b-vpro-gold bg-vpro-navy px-5 py-3.5 text-white">
+      <ModalDialogTrap
+        onEscape={onclose}
+        escapeDisabled={acknowledging}
+        initialFocusSelector="[data-whats-new-close]"
+      />
+      <header
+        class="flex items-center justify-between gap-3 border-b-[3px] border-b-vpro-gold bg-vpro-navy px-5 py-3.5 text-white"
+      >
         <div class="flex items-center gap-2.5">
           <Newspaper size={18} class="text-vpro-gold" />
           <div>
             <div class="font-mono text-[11px] uppercase tracking-wider text-vpro-gold">
               Release &amp; Standards Changelog
             </div>
-            <h2 id="whats-new-modal-title" class="text-base font-semibold text-white">
-              What's New in VPro
-            </h2>
+            <h2 id="whats-new-modal-title" class="text-base font-semibold text-white">What's New in VPro</h2>
           </div>
         </div>
         <button
@@ -118,12 +122,13 @@
         {/if}
 
         {#if status}
-          <div class="flex flex-wrap items-center justify-between gap-2 rounded border border-vpro-border bg-vpro-canvas p-3">
+          <div
+            class="flex flex-wrap items-center justify-between gap-2 rounded border border-vpro-border bg-vpro-canvas p-3"
+          >
             <div>
               {#if status.hasUnread}
                 <span class="font-semibold text-vpro-navy" data-whats-new-unread-banner>
-                  {status.unreadCount} unread release update{status.unreadCount === 1 ? '' : 's'}
-                  {status.lastSeenVersion ? ` since v${status.lastSeenVersion}` : ''}.
+                  {`${status.unreadCount} unread release update${status.unreadCount === 1 ? '' : 's'}${status.lastSeenVersion ? ` since v${status.lastSeenVersion}` : ''}.`}
                 </span>
               {:else}
                 <span class="inline-flex items-center gap-1.5 font-medium text-vpro-success" data-whats-new-all-read>
@@ -149,16 +154,22 @@
             {#each status.entries as entry, index (entry.version)}
               <article
                 data-whats-new-version={entry.version}
-                class="space-y-2 rounded border p-3.5 {isEntryUnread(index) ? 'border-vpro-navy border-l-[4px] border-l-vpro-gold bg-vpro-warning-bg' : 'border-vpro-border bg-white'}"
+                class="space-y-2 rounded border p-3.5 {isEntryUnread(index)
+                  ? 'border-vpro-navy border-l-[4px] border-l-vpro-gold bg-vpro-warning-bg'
+                  : 'border-vpro-border bg-white'}"
               >
                 <div class="flex flex-wrap items-center justify-between gap-2">
                   <div class="flex items-center gap-2">
                     <h3 class="font-mono text-sm font-bold text-vpro-navy">Version {entry.version}</h3>
-                    <span class="rounded border border-vpro-border bg-vpro-canvas px-2 py-0.5 font-mono text-[10px] uppercase text-vpro-ink-secondary">
+                    <span
+                      class="rounded border border-vpro-border bg-vpro-canvas px-2 py-0.5 font-mono text-[10px] uppercase text-vpro-ink-secondary"
+                    >
                       {entry.channel}
                     </span>
                     {#if isEntryUnread(index)}
-                      <span class="rounded bg-vpro-gold px-2 py-0.5 font-mono text-[10px] font-bold uppercase text-vpro-navy">
+                      <span
+                        class="rounded bg-vpro-gold px-2 py-0.5 font-mono text-[10px] font-bold uppercase text-vpro-navy"
+                      >
                         Unread
                       </span>
                     {/if}

@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import { Keyboard, X } from '@lucide/svelte';
   import ModalDialogTrap from '../shared/ModalDialogTrap.svelte';
+  import { formatError } from '../shared/readRequests';
   import { defaultHelpPort, type HelpBackendPort, type HelpShortcut } from './helpSystem';
 
   let {
@@ -37,7 +38,7 @@
       shortcuts = bundle.shortcuts ?? [];
     } catch (cause) {
       if (gen === loadGen) {
-        error = `Keyboard shortcuts failed to load: ${String(cause)}`;
+        error = `Keyboard shortcuts failed to load: ${formatError(cause)}`;
       }
     } finally {
       if (gen === loadGen) {
@@ -45,7 +46,6 @@
       }
     }
   }
-
 </script>
 
 {#if open}
@@ -57,7 +57,9 @@
       class="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded border border-vpro-border bg-white text-vpro-ink shadow-2xl"
     >
       <ModalDialogTrap onEscape={onclose} initialFocusSelector="[data-shortcuts-close]" />
-      <header class="flex items-center justify-between gap-3 border-b-[3px] border-b-vpro-gold bg-vpro-navy px-5 py-3.5 text-white">
+      <header
+        class="flex items-center justify-between gap-3 border-b-[3px] border-b-vpro-gold bg-vpro-navy px-5 py-3.5 text-white"
+      >
         <div class="flex items-center gap-2.5">
           <Keyboard size={18} class="text-vpro-gold" />
           <div>
@@ -100,7 +102,9 @@
                 {#each shortcuts as item (item.keys)}
                   <tr class="border-b border-vpro-rail last:border-b-0">
                     <td class="whitespace-nowrap px-3 py-2">
-                      <kbd class="rounded border border-vpro-border bg-vpro-canvas px-2 py-0.5 font-mono text-[11px] font-bold text-vpro-navy">
+                      <kbd
+                        class="rounded border border-vpro-border bg-vpro-canvas px-2 py-0.5 font-mono text-[11px] font-bold text-vpro-navy"
+                      >
                         {item.keys}
                       </kbd>
                     </td>
@@ -113,8 +117,13 @@
           </div>
         {/if}
 
-        <div class="flex flex-wrap items-center justify-between gap-2 border-t border-vpro-border pt-3 text-[11px] text-vpro-ink-secondary">
-          <span>Tip: Press <kbd class="rounded border border-vpro-border bg-vpro-canvas px-1.5 py-0.5 font-mono">F1</kbd> inside any FS882, Two-Page, Soil, or SIVI field to inspect its LMH25 rule.</span>
+        <div
+          class="flex flex-wrap items-center justify-between gap-2 border-t border-vpro-border pt-3 text-[11px] text-vpro-ink-secondary"
+        >
+          <span
+            >Tip: Press <kbd class="rounded border border-vpro-border bg-vpro-canvas px-1.5 py-0.5 font-mono">F1</kbd> inside
+            any FS882, Two-Page, Soil, or SIVI field to inspect its LMH25 rule.</span
+          >
           <button
             type="button"
             class="rounded bg-vpro-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-vpro-navy-dark"

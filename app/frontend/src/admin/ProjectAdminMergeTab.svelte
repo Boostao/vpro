@@ -72,21 +72,47 @@
     <legend class="px-1 text-sm font-semibold text-vpro-navy">Compare Two Projects</legend>
     <div class="space-y-1">
       <label class="block text-xs font-semibold text-vpro-ink" for="cmp-target-path">Target .db Path (required)</label>
-      <input id="cmp-target-path" type="text" class="w-full rounded border border-vpro-border-strong p-2 text-sm font-mono" bind:value={cmpTargetPath} disabled={busy} />
+      <input
+        id="cmp-target-path"
+        type="text"
+        class="w-full rounded border border-vpro-border-strong p-2 text-sm font-mono"
+        bind:value={cmpTargetPath}
+        disabled={busy}
+      />
     </div>
     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
       <div class="space-y-1">
         <label class="block text-xs font-semibold text-vpro-ink" for="cmp-target-proj">Target Project (optional)</label>
-        <input id="cmp-target-proj" type="text" class="w-full rounded border border-vpro-border-strong p-2 text-sm" bind:value={cmpTargetProject} disabled={busy} />
+        <input
+          id="cmp-target-proj"
+          type="text"
+          class="w-full rounded border border-vpro-border-strong p-2 text-sm"
+          bind:value={cmpTargetProject}
+          disabled={busy}
+        />
       </div>
       <div class="space-y-1">
         <label class="block text-xs font-semibold text-vpro-ink" for="cmp-source-proj">Source Project (optional)</label>
-        <input id="cmp-source-proj" type="text" class="w-full rounded border border-vpro-border-strong p-2 text-sm" bind:value={cmpSourceProject} disabled={busy} />
+        <input
+          id="cmp-source-proj"
+          type="text"
+          class="w-full rounded border border-vpro-border-strong p-2 text-sm"
+          bind:value={cmpSourceProject}
+          disabled={busy}
+        />
       </div>
     </div>
     <div class="space-y-1">
-      <label class="block text-xs font-semibold text-vpro-ink" for="cmp-source-path">Source .db Path (blank = active)</label>
-      <input id="cmp-source-path" type="text" class="w-full rounded border border-vpro-border-strong p-2 text-sm font-mono" bind:value={cmpSourcePath} disabled={busy} />
+      <label class="block text-xs font-semibold text-vpro-ink" for="cmp-source-path"
+        >Source .db Path (blank = active)</label
+      >
+      <input
+        id="cmp-source-path"
+        type="text"
+        class="w-full rounded border border-vpro-border-strong p-2 text-sm font-mono"
+        bind:value={cmpSourcePath}
+        disabled={busy}
+      />
     </div>
     <label class="flex items-center gap-2 text-xs text-vpro-ink">
       <input id="cmp-case-insensitive" type="checkbox" bind:checked={cmpCaseInsensitive} disabled={busy} />
@@ -123,7 +149,8 @@
 
     {#if cmpResult}
       <p class="text-xs text-vpro-ink">
-        Total Plots: {cmpResult.totalPlots} | Added: {cmpResult.addedCount} | Removed: {cmpResult.removedCount} | Modified: {cmpResult.modifiedCount} | Identical: {cmpResult.identicalCount}
+        Total Plots: {cmpResult.totalPlots} | Added: {cmpResult.addedCount} | Removed: {cmpResult.removedCount} | Modified:
+        {cmpResult.modifiedCount} | Identical: {cmpResult.identicalCount}
         {#if (cmpResult.metadataDiffCount ?? cmpResult.metadataDiffs?.length ?? 0) > 0}
           | Metadata Diffs: {cmpResult.metadataDiffCount ?? cmpResult.metadataDiffs?.length ?? 0}
         {/if}
@@ -132,7 +159,11 @@
         <div class="max-h-60 overflow-auto rounded border border-vpro-border">
           <table class="w-full text-left text-xs">
             <thead class="bg-vpro-canvas text-vpro-ink">
-              <tr><th class="p-2">Plot</th><th class="p-2">Table</th><th class="p-2">Key / Field</th><th class="p-2">Source</th><th class="p-2">Target</th></tr>
+              <tr
+                ><th class="p-2">Plot</th><th class="p-2">Table</th><th class="p-2">Key / Field</th><th class="p-2"
+                  >Source</th
+                ><th class="p-2">Target</th></tr
+              >
             </thead>
             <tbody>
               {#each cmpAllDiffs as d}
@@ -149,7 +180,9 @@
         </div>
       {/if}
       {#if cmpExportPreview}
-        <p class="text-[11px] text-vpro-success">Exported {cmpExportPreview.format} ({cmpExportPreview.text.split('\n').length - 1} diff rows).</p>
+        <p class="text-[11px] text-vpro-success">
+          Exported {cmpExportPreview.format} ({cmpExportPreview.text.split('\n').length - 1} diff rows).
+        </p>
       {/if}
     {/if}
   </fieldset>
@@ -159,28 +192,74 @@
     <legend class="px-1 text-sm font-semibold text-vpro-navy">Controlled 3-Way Project Merge</legend>
     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-vpro-ink" for="merge-source-path">Staging Source .db Path (required)</label>
-        <input id="merge-source-path" type="text" class="w-full rounded border border-vpro-border-strong p-2 text-sm font-mono" bind:value={mergeSourcePath} disabled={busy} />
+        <label class="block text-xs font-semibold text-vpro-ink" for="merge-source-path"
+          >Staging Source .db Path (required)</label
+        >
+        <input
+          id="merge-source-path"
+          type="text"
+          class="w-full rounded border border-vpro-border-strong p-2 text-sm font-mono"
+          bind:value={mergeSourcePath}
+          disabled={busy}
+        />
       </div>
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-vpro-ink" for="merge-source-proj">Source Project (optional)</label>
-        <input id="merge-source-proj" type="text" class="w-full rounded border border-vpro-border-strong p-2 text-sm" bind:value={mergeSourceProject} disabled={busy} />
+        <label class="block text-xs font-semibold text-vpro-ink" for="merge-source-proj"
+          >Source Project (optional)</label
+        >
+        <input
+          id="merge-source-proj"
+          type="text"
+          class="w-full rounded border border-vpro-border-strong p-2 text-sm"
+          bind:value={mergeSourceProject}
+          disabled={busy}
+        />
       </div>
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-vpro-ink" for="merge-base-path">Base Ancestor .db Path (optional)</label>
-        <input id="merge-base-path" type="text" class="w-full rounded border border-vpro-border-strong p-2 text-sm font-mono" bind:value={mergeBasePath} disabled={busy} />
+        <label class="block text-xs font-semibold text-vpro-ink" for="merge-base-path"
+          >Base Ancestor .db Path (optional)</label
+        >
+        <input
+          id="merge-base-path"
+          type="text"
+          class="w-full rounded border border-vpro-border-strong p-2 text-sm font-mono"
+          bind:value={mergeBasePath}
+          disabled={busy}
+        />
       </div>
       <div class="space-y-1">
         <label class="block text-xs font-semibold text-vpro-ink" for="merge-base-proj">Base Project (optional)</label>
-        <input id="merge-base-proj" type="text" class="w-full rounded border border-vpro-border-strong p-2 text-sm" bind:value={mergeBaseProject} disabled={busy} />
+        <input
+          id="merge-base-proj"
+          type="text"
+          class="w-full rounded border border-vpro-border-strong p-2 text-sm"
+          bind:value={mergeBaseProject}
+          disabled={busy}
+        />
       </div>
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-vpro-ink" for="merge-target-path">Target .db Path (blank = active)</label>
-        <input id="merge-target-path" type="text" class="w-full rounded border border-vpro-border-strong p-2 text-sm font-mono" bind:value={mergeTargetPath} disabled={busy} />
+        <label class="block text-xs font-semibold text-vpro-ink" for="merge-target-path"
+          >Target .db Path (blank = active)</label
+        >
+        <input
+          id="merge-target-path"
+          type="text"
+          class="w-full rounded border border-vpro-border-strong p-2 text-sm font-mono"
+          bind:value={mergeTargetPath}
+          disabled={busy}
+        />
       </div>
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-vpro-ink" for="merge-target-proj">Target Project (optional)</label>
-        <input id="merge-target-proj" type="text" class="w-full rounded border border-vpro-border-strong p-2 text-sm" bind:value={mergeTargetProject} disabled={busy} />
+        <label class="block text-xs font-semibold text-vpro-ink" for="merge-target-proj"
+          >Target Project (optional)</label
+        >
+        <input
+          id="merge-target-proj"
+          type="text"
+          class="w-full rounded border border-vpro-border-strong p-2 text-sm"
+          bind:value={mergeTargetProject}
+          disabled={busy}
+        />
       </div>
     </div>
     <label class="flex items-center gap-2 text-xs text-vpro-ink">
@@ -197,7 +276,12 @@
         Preview 3-Way Merge
       </button>
       {#if mergePreview}
-        <select class="rounded border border-vpro-border-strong p-2 text-xs" bind:value={mergeDefaultResolution} disabled={busy} aria-label="Default conflict resolution">
+        <select
+          class="rounded border border-vpro-border-strong p-2 text-xs"
+          bind:value={mergeDefaultResolution}
+          disabled={busy}
+          aria-label="Default conflict resolution"
+        >
           <option value="keep_target">Default: Keep Target</option>
           <option value="accept_source">Default: Accept Source</option>
         </select>
@@ -214,16 +298,23 @@
 
     {#if mergePreview}
       <p class="text-xs text-vpro-ink">
-        Added: {mergePreview.addedCount} | Fast-Forward: {mergePreview.fastForwardCount} | Source Deletes: {mergePreview.sourceDeleteCount ?? 0} | Conflicts: {mergePreview.conflictCount} | Target-Only: {mergePreview.targetOnlyCount} | Identical: {mergePreview.identicalCount}
+        Added: {mergePreview.addedCount} | Fast-Forward: {mergePreview.fastForwardCount} | Source Deletes: {mergePreview.sourceDeleteCount ??
+          0} | Conflicts: {mergePreview.conflictCount} | Target-Only: {mergePreview.targetOnlyCount} | Identical: {mergePreview.identicalCount}
       </p>
 
       {#if (mergePreview.plots?.length ?? 0) > 0}
         <div class="space-y-1">
-          <h4 class="m-0 text-xs font-semibold text-vpro-navy">Per-Plot Merge Resolutions ({mergePreview.plots.length} plots)</h4>
+          <h4 class="m-0 text-xs font-semibold text-vpro-navy">
+            Per-Plot Merge Resolutions ({mergePreview.plots.length} plots)
+          </h4>
           <div class="max-h-56 overflow-auto rounded border border-vpro-border">
             <table class="w-full text-left text-xs">
               <thead class="bg-vpro-canvas text-vpro-ink">
-                <tr><th class="p-2">Plot</th><th class="p-2">Category</th><th class="p-2">Items</th><th class="p-2">Plot Resolution</th></tr>
+                <tr
+                  ><th class="p-2">Plot</th><th class="p-2">Category</th><th class="p-2">Items</th><th class="p-2"
+                    >Plot Resolution</th
+                  ></tr
+                >
               </thead>
               <tbody>
                 {#each mergePreview.plots as plot (plot.plotNumber)}
@@ -237,11 +328,19 @@
                         data-merge-plot-resolution={plot.plotNumber}
                         class="rounded border border-vpro-border-strong p-1 text-xs"
                         disabled={busy || plot.category === 'Identical' || plot.category === 'TargetOnly'}
-                        value={mergePlotResolutions[plot.plotNumber] ?? (plot.category === 'Added' || plot.category === 'FastForward' || plot.category === 'SourceDelete' ? 'accept_source' : 'keep_target')}
-                        onchange={e => onSetPlotResolution(plot.plotNumber, e.currentTarget.value as MergeResolutionChoice)}
+                        value={mergePlotResolutions[plot.plotNumber] ??
+                          (plot.category === 'Added' ||
+                          plot.category === 'FastForward' ||
+                          plot.category === 'SourceDelete'
+                            ? 'accept_source'
+                            : 'keep_target')}
+                        onchange={(e) =>
+                          onSetPlotResolution(plot.plotNumber, e.currentTarget.value as MergeResolutionChoice)}
                       >
                         <option value="keep_target">Keep Target</option>
-                        <option value="accept_source">{plot.category === 'SourceDelete' ? 'Delete Plot (Accept Source)' : 'Accept Source'}</option>
+                        <option value="accept_source"
+                          >{plot.category === 'SourceDelete' ? 'Delete Plot (Accept Source)' : 'Accept Source'}</option
+                        >
                       </select>
                     </td>
                   </tr>
@@ -275,7 +374,8 @@
                       data-merge-field-resolution={c.conflictId}
                       class="rounded border border-vpro-border-strong p-1 text-xs"
                       value={mergeFieldResolutions[c.conflictId] ?? mergeDefaultResolution}
-                      onchange={e => onSetFieldResolution(c.conflictId, e.currentTarget.value as MergeResolutionChoice)}
+                      onchange={(e) =>
+                        onSetFieldResolution(c.conflictId, e.currentTarget.value as MergeResolutionChoice)}
                     >
                       <option value="keep_target">Keep Target</option>
                       <option value="accept_source">Accept Source</option>
@@ -291,7 +391,8 @@
 
     {#if mergeResult}
       <p class="text-xs text-vpro-ink">
-        Merged {mergeResult.sourceProject} -&gt; {mergeResult.targetProject}: +{mergeResult.addedPlots} added, {mergeResult.updatedPlots} updated, {mergeResult.auditRowsWritten} audit entries.
+        Merged {mergeResult.sourceProject} -&gt; {mergeResult.targetProject}: +{mergeResult.addedPlots} added, {mergeResult.updatedPlots}
+        updated, {mergeResult.auditRowsWritten} audit entries.
       </p>
     {/if}
   </fieldset>

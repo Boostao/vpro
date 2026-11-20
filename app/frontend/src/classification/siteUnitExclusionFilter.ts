@@ -1,11 +1,7 @@
 import type { CancellableRead } from '../shared/readRequests';
 import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
 
-export const DEFAULT_SITE_UNIT_EXCLUSIONS: readonly string[] = [
-  '.support',
-  '.poor',
-  '.nudum',
-];
+export const DEFAULT_SITE_UNIT_EXCLUSIONS: readonly string[] = ['.support', '.poor', '.nudum'];
 
 export type ExclusionMatchMode = 'auto' | 'suffix' | 'contains' | 'wildcard';
 
@@ -144,20 +140,17 @@ export interface SiteUnitExclusionBackendPort {
 
 export const defaultSiteUnitExclusionPort: SiteUnitExclusionBackendPort = {
   previewExclusions: (contextId, request) =>
-    (VegetationReportService.PreviewSiteUnitExclusions(contextId, request) as never),
+    VegetationReportService.PreviewSiteUnitExclusions(contextId, request) as never,
   resolveHierarchyBreakpoints: (contextId, request) =>
-    (VegetationReportService.ResolveHierarchyBreakpointUnits(contextId,
-      request) as never),
+    VegetationReportService.ResolveHierarchyBreakpointUnits(contextId, request) as never,
   previewSummaryWithExclusions: (contextId, request) =>
-    (VegetationReportService.PreviewSummaryVegetationWithExclusions(contextId,
-      request) as never),
+    VegetationReportService.PreviewSummaryVegetationWithExclusions(contextId, request) as never,
   previewLongWithExclusions: (contextId, request) =>
-    (VegetationReportService.PreviewLongVegetationWithExclusions(contextId,
-      request) as never),
+    VegetationReportService.PreviewLongVegetationWithExclusions(contextId, request) as never,
 };
 
 export function createDefaultSiteUnitExclusionRules(): SiteUnitExclusionRule[] {
-  return DEFAULT_SITE_UNIT_EXCLUSIONS.map(pattern => ({
+  return DEFAULT_SITE_UNIT_EXCLUSIONS.map((pattern) => ({
     pattern,
     matchMode: 'auto',
     enabled: true,

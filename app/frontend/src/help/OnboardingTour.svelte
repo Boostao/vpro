@@ -1,8 +1,18 @@
 <script lang="ts">
   import { onDestroy, tick, untrack } from 'svelte';
-  import { CheckCircle2, ChevronLeft, ChevronRight, Compass, RotateCcw, ShieldCheck, X } from '@lucide/svelte';
+  import { Compass, X } from '@lucide/svelte';
   import ModalDialogTrap from '../shared/ModalDialogTrap.svelte';
-  import { defaultHelpPort, type HelpBackendPort, type HelpTour } from './helpSystem';
+  import { formatError } from '../shared/readRequests';
+  import OnboardingTourCatalogBody from './OnboardingTourCatalogBody.svelte';
+  import OnboardingTourStepBody from './OnboardingTourStepBody.svelte';
+  import {
+    computeTourDialogLayout,
+    defaultHelpPort,
+    formatTourViewLabel,
+    type HelpBackendPort,
+    type HelpTour,
+    type TourBoxRect,
+  } from './helpSystem';
 
   let {
     open = false,
@@ -31,7 +41,7 @@
   let tours = $state.raw<HelpTour[]>(untrack(() => initialTours));
   let activeTourId = $state<string | null>(untrack(() => initialTourId));
   let stepIndex = $state(0);
-  let targetRect = $state<{ top: number; left: number; width: number; height: number } | null>(null);
+  let targetRect = $state<TourBoxRect | null>(null);
   let targetWaiting = $state(false);
   let viewportWidth = $state(typeof window !== 'undefined' ? window.innerWidth : 1280);
   let viewportHeight = $state(typeof window !== 'undefined' ? window.innerHeight : 800);
@@ -106,9 +116,10 @@
     const step = activeTour?.steps[stepIndex];
     if (!open || !step) return;
     if (rafId && typeof cancelAnimationFrame === 'function') return;
-    const schedule = typeof requestAnimationFrame === 'function'
-      ? requestAnimationFrame
-      : (cb: () => void) => setTimeout(cb, 16) as unknown as number;
+    const schedule =
+      typeof requestAnimationFrame === 'function'
+        ? requestAnimationFrame
+        : (cb: () => void) => window.setTimeout(cb, 16);
     rafId = schedule(() => {
       rafId = 0;
       const current = activeTour?.steps[stepIndex];
@@ -130,10 +141,7 @@
     return changed;
   }
 
-  function rectsAlmostEqual(
-    a: { top: number; left: number; width: number; height: number } | null,
-    b: { top: number; left: number; width: number; height: number }
-  ): boolean {
+  function rectsAlmostEqual(a: TourBoxRect | null, b: TourBoxRect): boolean {
     if (!a) return false;
     return (
       Math.abs(a.top - b.top) < 0.5 &&
@@ -148,7 +156,9 @@
     return records.every((rec) => {
       const target = rec.target as Element | null;
       const el = target && target.nodeType === 1 ? target : target?.parentElement;
-      return !!el?.closest?.('[data-tour-overlay], [data-tour-spotlight-ring], [data-onboarding-tour-active], [data-onboarding-tour-catalog]');
+      return !!el?.closest?.(
+        '[data-tour-overlay], [data-tour-spotlight-ring], [data-onboarding-tour-active], [data-onboarding-tour-catalog]'
+      );
     });
   }
 
@@ -183,11 +193,9 @@
         }
       }
       const rect = el.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0 || openedDetails) {
-        if (rect.width <= 0 || rect.height <= 0) {
-          if (targetRect !== null) targetRect = null;
-          return false;
-        }
+      if ((rect.width <= 0 || rect.height <= 0 || openedDetails) && (rect.width <= 0 || rect.height <= 0)) {
+        if (targetRect !== null) targetRect = null;
+        return false;
       }
       const vw = typeof window !== 'undefined' ? window.innerWidth : viewportWidth;
       const vh = typeof window !== 'undefined' ? window.innerHeight : viewportHeight;
@@ -228,7 +236,7 @@
     trackingActive = true;
     let scrolledOnce = false;
     let attempts = 0;
-    const maxAttempts = 50; // ~4s bounded retry loop for lazy {@await import} views
+    const maxAttempts = 50;
 
     if (typeof window !== 'undefined') {
       window.addEventListener('scroll', handleViewportMutation, { capture: true, passive: true });
@@ -242,7 +250,6 @@
         scrolledOnce = true;
         targetWaiting = false;
         disconnectMutationObserver();
-        // Re-sample once on the next animation frame after smooth scroll / details open settles
         if (attempts < 2 && typeof requestAnimationFrame === 'function') {
           attempts++;
           requestAnimationFrame(() => {
@@ -270,7 +277,6 @@
       }, 80);
     };
 
-    // Watch DOM only until lazy view/target resolves; resize/scroll listeners maintain position afterward.
     if (typeof MutationObserver === 'function' && document.body && !measureResolvedElement(selector, false)) {
       mutationObserver = new MutationObserver((records) => {
         if (!trackingActive || expectedGen !== trackGen || !open) return;
@@ -309,7 +315,7 @@
       }
     } catch (cause) {
       if (gen === loadGen) {
-        error = `Guided tours could not load: ${String(cause)}`;
+        error = `Guided tours could not load: ${formatError(cause)}`;
       }
     } finally {
       if (gen === loadGen) {
@@ -319,13 +325,9 @@
   }
 
   const activeTour = $derived(tours.find((t) => t.id === activeTourId) ?? null);
-  const activeStep = $derived(activeTour ? activeTour.steps[stepIndex] ?? null : null);
+  const activeStep = $derived(activeTour ? (activeTour.steps[stepIndex] ?? null) : null);
 
-  function boxesOverlap(
-    a: { top: number; left: number; width: number; height: number },
-    b: { top: number; left: number; width: number; height: number },
-    pad = 8
-  ): boolean {
+  function boxesOverlap(a: TourBoxRect, b: TourBoxRect, pad = 8): boolean {
     return !(
       a.left + a.width + pad <= b.left ||
       b.left + b.width + pad <= a.left ||
@@ -334,56 +336,7 @@
     );
   }
 
-  const dialogLayout = $derived.by(() => {
-    const margin = viewportWidth < 640 ? 12 : 20;
-    const cardHeightEst = 270;
-    if (viewportWidth < 640) {
-      const targetBottom = targetRect ? targetRect.top + targetRect.height : 0;
-      const topFlip = !!targetRect && targetRect.top > viewportHeight * 0.45 && targetBottom > viewportHeight - cardHeightEst;
-      return {
-        placement: topFlip ? 'mobile-top' : 'mobile-bottom',
-        style: topFlip
-          ? `top:${margin}px;bottom:auto;left:${margin}px;right:${margin}px;width:auto;max-width:calc(100vw - ${margin * 2}px);`
-          : `bottom:${margin}px;top:auto;left:${margin}px;right:${margin}px;width:auto;max-width:calc(100vw - ${margin * 2}px);`,
-      };
-    }
-
-    const cardW = Math.min(448, Math.max(280, viewportWidth - margin * 2));
-    const candidates: Array<{
-      name: string;
-      box: { top: number; left: number; width: number; height: number };
-      style: string;
-    }> = [
-      {
-        name: 'bottom-right',
-        box: { top: viewportHeight - margin - cardHeightEst, left: viewportWidth - margin - cardW, width: cardW, height: cardHeightEst },
-        style: `right:${margin}px;bottom:${margin}px;left:auto;top:auto;width:${cardW}px;max-width:calc(100vw - ${margin * 2}px);`,
-      },
-      {
-        name: 'top-right',
-        box: { top: margin + 56, left: viewportWidth - margin - cardW, width: cardW, height: cardHeightEst },
-        style: `right:${margin}px;top:${margin + 56}px;left:auto;bottom:auto;width:${cardW}px;max-width:calc(100vw - ${margin * 2}px);`,
-      },
-      {
-        name: 'bottom-left',
-        box: { top: viewportHeight - margin - cardHeightEst, left: margin, width: cardW, height: cardHeightEst },
-        style: `left:${margin}px;bottom:${margin}px;right:auto;top:auto;width:${cardW}px;max-width:calc(100vw - ${margin * 2}px);`,
-      },
-      {
-        name: 'top-left',
-        box: { top: margin + 56, left: margin, width: cardW, height: cardHeightEst },
-        style: `left:${margin}px;top:${margin + 56}px;right:auto;bottom:auto;width:${cardW}px;max-width:calc(100vw - ${margin * 2}px);`,
-      },
-    ];
-
-    if (targetRect) {
-      const clear = candidates.find((c) => !boxesOverlap(c.box, targetRect!));
-      if (clear) {
-        return { placement: clear.name, style: clear.style };
-      }
-    }
-    return { placement: candidates[0].name, style: candidates[0].style };
-  });
+  const dialogLayout = $derived(computeTourDialogLayout(viewportWidth, viewportHeight, targetRect, boxesOverlap));
 
   async function syncActiveStepSideEffects() {
     const stepGen = ++trackGen;
@@ -476,93 +429,48 @@
 
       <div
         role="dialog"
-      aria-modal="false"
-      aria-labelledby="onboarding-tour-step-title"
-      data-onboarding-tour-active={activeTour.id}
-      data-tour-placement={dialogLayout.placement}
-      class="fixed z-50 max-sm:inset-x-3 max-sm:bottom-3 rounded border border-vpro-border border-t-[4px] border-t-vpro-gold bg-white text-vpro-ink shadow-2xl"
-      style={dialogLayout.style}
-    >
-      <ModalDialogTrap onEscape={dismissTour} trapFocus={true} initialFocusSelector="[data-tour-next]" />
-      <header class="flex items-center justify-between gap-2 bg-vpro-navy px-4 py-2.5 text-white">
-        <div class="min-w-0">
-          <div class="truncate font-mono text-[11px] text-vpro-gold">
-            {activeTour.title} · Step {stepIndex + 1} of {activeTour.steps.length}
+        aria-modal="false"
+        aria-labelledby="onboarding-tour-step-title"
+        data-onboarding-tour-active={activeTour.id}
+        data-tour-placement={dialogLayout.placement}
+        class="fixed z-50 rounded border border-vpro-border border-t-[4px] border-t-vpro-gold bg-white text-vpro-ink shadow-2xl max-sm:inset-x-3 max-sm:bottom-3"
+        style={dialogLayout.style}
+      >
+        <ModalDialogTrap onEscape={dismissTour} trapFocus={true} initialFocusSelector="[data-tour-next]" />
+        <header class="flex items-center justify-between gap-2 bg-vpro-navy px-4 py-2.5 text-white">
+          <div class="min-w-0">
+            <div class="truncate font-mono text-[11px] text-vpro-gold">
+              {activeTour.title} · Step {stepIndex + 1} of {activeTour.steps.length}
+            </div>
           </div>
-        </div>
-        <button
-          type="button"
-          aria-label="Dismiss Guided Tour"
-          data-tour-dismiss
-          class="rounded p-1 text-white/90 hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-vpro-gold"
-          onclick={dismissTour}
-        >
-          <X size={15} />
-        </button>
-      </header>
-
-      <div class="h-1.5 w-full bg-vpro-canvas">
-        <div
-          class="h-full bg-vpro-gold transition-all"
-          style={`width:${Math.round(((stepIndex + 1) / activeTour.steps.length) * 100)}%`}
-        ></div>
-      </div>
-
-      <div class="space-y-3 p-4 text-xs">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <h3 id="onboarding-tour-step-title" class="text-sm font-bold text-vpro-navy">{activeStep.title}</h3>
-          <span class="rounded bg-vpro-canvas px-2 py-0.5 font-mono text-[10px] text-vpro-ink-secondary">
-            View: {activeStep.view}
-          </span>
-        </div>
-
-        <p class="leading-relaxed text-vpro-ink">{activeStep.body}</p>
-
-        {#if targetWaiting && !targetRect}
-          <p role="status" data-tour-target-waiting class="font-mono text-[11px] text-vpro-info">
-            Scrolling to highlighted panel…
-          </p>
-        {/if}
-
-        <div class="flex flex-wrap items-center justify-between gap-2 border-t border-vpro-border pt-3">
           <button
             type="button"
-            class="rounded border border-vpro-border bg-white px-2.5 py-1.5 text-xs font-medium text-vpro-navy hover:bg-vpro-canvas"
-            onclick={returnToCatalog}
+            aria-label="Dismiss Guided Tour"
+            data-tour-dismiss
+            class="rounded p-1 text-white/90 hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-vpro-gold"
+            onclick={dismissTour}
           >
-            All 4 Tours
+            <X size={15} />
           </button>
+        </header>
 
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              data-tour-back
-              disabled={stepIndex === 0}
-              class="inline-flex items-center gap-1 rounded border border-vpro-border bg-white px-2.5 py-1.5 text-xs font-semibold text-vpro-ink hover:bg-vpro-canvas disabled:opacity-45"
-              onclick={() => void previousStep()}
-            >
-              <ChevronLeft size={14} /> Back
-            </button>
-            <button
-              type="button"
-              data-tour-next
-              class="inline-flex items-center gap-1 rounded bg-vpro-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-vpro-navy-dark"
-              onclick={() => void nextStep()}
-            >
-              {#if stepIndex + 1 < activeTour.steps.length}
-                Next <ChevronRight size={14} />
-              {:else}
-                Finish Tour <CheckCircle2 size={14} />
-              {/if}
-            </button>
-          </div>
-        </div>
+        <OnboardingTourStepBody
+          {activeTour}
+          {activeStep}
+          {stepIndex}
+          viewLabel={formatTourViewLabel(activeStep.view)}
+          showWaiting={targetWaiting && !targetRect}
+          onreturntocatalog={returnToCatalog}
+          onpreviousstep={() => void previousStep()}
+          onnextstep={() => void nextStep()}
+        />
       </div>
     </div>
-    </div>
-
   {:else}
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-vpro-ink/50 p-3 sm:p-4" data-onboarding-tour-catalog>
+    <div
+      class="fixed inset-0 z-50 flex items-center justify-center bg-vpro-ink/50 p-3 sm:p-4"
+      data-onboarding-tour-catalog
+    >
       <div
         role="dialog"
         aria-modal="true"
@@ -570,7 +478,9 @@
         class="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded border border-vpro-border bg-white text-vpro-ink shadow-2xl"
       >
         <ModalDialogTrap onEscape={dismissTour} trapFocus={true} />
-        <header class="flex items-center justify-between gap-3 border-b-[3px] border-b-vpro-gold bg-vpro-navy px-5 py-3.5 text-white">
+        <header
+          class="flex items-center justify-between gap-3 border-b-[3px] border-b-vpro-gold bg-vpro-navy px-5 py-3.5 text-white"
+        >
           <div class="flex items-center gap-2.5">
             <Compass size={18} class="shrink-0 text-vpro-gold" />
             <div>
@@ -592,70 +502,15 @@
           </button>
         </header>
 
-        <div class="space-y-4 overflow-y-auto p-5 text-xs">
-          {#if error}
-            <p role="alert" class="rounded border border-vpro-error bg-vpro-error-bg p-2.5 text-vpro-error">{error}</p>
-          {/if}
-          {#if completedTourTitle}
-            <div role="status" class="flex items-center gap-2 rounded border border-vpro-success bg-vpro-success-bg p-3 text-vpro-forest">
-              <CheckCircle2 size={16} />
-              <span>Completed <strong>{completedTourTitle}</strong>. Choose another walkthrough below or close to continue working.</span>
-            </div>
-          {/if}
-
-          <div class="flex flex-wrap items-center justify-between gap-2 rounded border border-vpro-border bg-vpro-canvas p-3">
-            <div class="flex items-center gap-2">
-              <ShieldCheck size={16} class="shrink-0 text-vpro-success" />
-              <span>
-                Active project: <strong class="font-mono text-vpro-navy">{activeProject}</strong>.
-                Walkthroughs navigate read-only views safely without changing user databases.
-              </span>
-            </div>
-            {#if activeProject !== 'Sample' && onresetsample}
-              <button
-                type="button"
-                data-tour-switch-sample
-                class="inline-flex items-center gap-1 rounded border border-vpro-navy bg-white px-2.5 py-1.5 text-xs font-semibold text-vpro-navy hover:bg-vpro-navy-tint"
-                onclick={() => void onresetsample()}
-              >
-                <RotateCcw size={12} /> Switch to Sample
-              </button>
-            {/if}
-          </div>
-
-          {#if loading}
-            <p role="status" class="text-vpro-ink-secondary">Loading guided tour definitions...</p>
-          {:else}
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {#each tours as tour (tour.id)}
-                <article
-                  data-tour-card={tour.id}
-                  class="flex flex-col justify-between rounded border border-vpro-border border-t-[3px] border-t-vpro-navy bg-white p-3.5"
-                >
-                  <div class="space-y-1.5">
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="rounded bg-vpro-canvas px-2 py-0.5 font-mono text-[11px] font-semibold text-vpro-navy">
-                        {tour.duration}
-                      </span>
-                      <span class="font-mono text-[11px] text-vpro-ink-secondary">{tour.steps.length} steps</span>
-                    </div>
-                    <h3 class="text-sm font-bold text-vpro-navy">{tour.title}</h3>
-                    <p class="text-xs leading-relaxed text-vpro-ink-secondary">{tour.description}</p>
-                  </div>
-
-                  <button
-                    type="button"
-                    data-start-tour={tour.id}
-                    class="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded bg-vpro-navy px-3 py-2 text-xs font-semibold text-white hover:bg-vpro-navy-dark"
-                    onclick={() => void startTour(tour.id)}
-                  >
-                    Start Walkthrough <ChevronRight size={14} />
-                  </button>
-                </article>
-              {/each}
-            </div>
-          {/if}
-        </div>
+        <OnboardingTourCatalogBody
+          {tours}
+          {activeProject}
+          {loading}
+          {error}
+          {completedTourTitle}
+          {onresetsample}
+          onstarttour={(id) => void startTour(id)}
+        />
       </div>
     </div>
   {/if}

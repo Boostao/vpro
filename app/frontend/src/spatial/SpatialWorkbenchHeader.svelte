@@ -56,14 +56,21 @@
     <h1>3D BGC v13 Map, Coordinate Check &amp; Site Units</h1>
   </div>
   <div class="wb-badges">
-    <span class="wb-badge wb-badge-gold" data-compute-backend={computeInfo.backend} title={computeInfo.fallbackReason ?? computeInfo.adapterLabel}>
+    <span
+      class="wb-badge wb-badge-gold"
+      data-compute-backend={computeInfo.backend}
+      title={computeInfo.fallbackReason ?? computeInfo.adapterLabel}
+    >
       {computeInfo.backend === 'webgpu' ? 'Hardware Accelerated' : 'Standard Graphics'}
     </span>
     <span class="wb-badge">{summarizeArchiveResolution(payload)}</span>
     <span class="wb-badge">
       Plots: {payload?.plottableCount ?? 0} / {payload?.totalPlots ?? 0}
     </span>
-    <span class="wb-badge" class:wb-badge-alert={(payload?.bgcMismatchCount ?? 0) > 0 || (payload?.utmDivergenceCount ?? 0) > 0}>
+    <span
+      class="wb-badge"
+      class:wb-badge-alert={(payload?.bgcMismatchCount ?? 0) > 0 || (payload?.utmDivergenceCount ?? 0) > 0}
+    >
       BGC Mismatch: {payload?.bgcMismatchCount ?? 0} | UTM Div: {payload?.utmDivergenceCount ?? 0}
     </span>
   </div>
@@ -107,14 +114,18 @@
     </select>
 
     <label for="wb-plot-search" class="sr-only">Filter plots by PlotNumber or SiteUnit</label>
-    <input id="wb-plot-search" type="search" placeholder="Find plot or unit..." bind:value={plotSearch} class="wb-input" />
+    <input
+      id="wb-plot-search"
+      type="search"
+      placeholder="Find plot or unit..."
+      bind:value={plotSearch}
+      class="wb-input"
+    />
 
     <button type="button" class="wb-btn" onclick={onFitBounds} disabled={loading || plotCount === 0}>
       Fit Project Extent
     </button>
-    <button type="button" class="wb-btn" onclick={onRefreshStream} disabled={loading || mutating}>
-      Refresh Map
-    </button>
+    <button type="button" class="wb-btn" onclick={onRefreshStream} disabled={loading || mutating}> Refresh Map </button>
     <button
       type="button"
       class="wb-btn wb-btn-gold"

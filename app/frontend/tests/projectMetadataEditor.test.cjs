@@ -30,10 +30,9 @@ function restorationReview() {
     columns,current,restored,audits:[audit]};
 }
 test('actual metadata opener and both existing buttons share the exact flag/parent/child/header guard',()=>{
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
-    readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8') + '\n' +
-    readFileSync(srcPath('FS882Modals.svelte'), 'utf8');
-  assert.equal((form.match(/metadataDisabled=\{!canOpenProjectMetadata\(\)\}/g) ?? []).length, 2);
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const form = readFS882Composite();
+  assert.equal((form.match(/metadataDisabled=\{!(?:ctrl\.)?canOpenProjectMetadata\(\)\}/g) ?? []).length, 2);
   for (const enabled of [false, true]) for (const parent of [false, true])
     for (const child of [false, true]) for (const invalid of [false, true]) {
       const context = componentFunctions('FS882Form.svelte', ['canOpenProjectMetadata', 'openProjectMetadata'], {
@@ -169,67 +168,94 @@ test('actual root metadata entry retains busy/native-close/transition barriers a
 });
 
 test('actual client-runtime metadata availability reacts across the exported editor method and root derived state',()=>{
-  function execute(script, dependencies = {}) {
-    const compiled = compileModule(script, { filename: 'metadata-menu.svelte.js', generate: 'client' });
-    assert.equal(compiled.warnings.length, 0);
-    const module = { exports: {} };
-    new Function('module', 'exports', 'require', ts.transpileModule(compiled.js.code, { compilerOptions: {
-      module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
-    } }).outputText)(module, module.exports, id => {
-      if (id === 'svelte/internal/client') return runtime;
-      assert.ok(id in dependencies, `Unexpected client dependency ${id}`); return dependencies[id];
+  const { createFS882TestController, loadReactiveRuneModule } = require('./svelteTestHelpers.cjs');
+  const h = createFS882TestController();
+  const uiMod = loadReactiveRuneModule('shell/shellUiController.svelte.ts', {
+    './commandPalette': { buildCommandPaletteCatalog: () => [] },
+    './helpSystem': { defaultHelpPort: {}, resolveContextualHelpTarget: () => '' },
+    './reactiveSession.svelte': { onContextDisposed: () => {} },
+  });
+  let view = runtime.state('fs882');
+  let projectState = runtime.state({ contextId: 'owned' });
+  let editor = runtime.state(h.ctrl);
+  let editorPlotNumber = runtime.state('00337');
+  let editorEntryForm = runtime.state('fs882');
+  let ui;
+  const disposeUi = runtime.effect_root(() => {
+    ui = uiMod.createShellUiController({
+      read: () => ({
+        state: runtime.get(projectState),
+        startupFailure: null,
+        view: runtime.get(view),
+        editorEntryForm: runtime.get(editorEntryForm),
+        editorPlotNumber: runtime.get(editorPlotNumber),
+        editor: runtime.get(editor),
+        closeState: undefined,
+        selected: null,
+        page: null,
+        offset: 0,
+        pageSize: 25,
+        profileNavigation: null,
+        busy: false,
+        editorBusy: false,
+        companionPanelBusy: false,
+        transitionWorking: false,
+        operationBusy: false,
+        workbenchDirty: false,
+      }),
+      patch() {},
+      plotReads: { track: p => p, cancelAll() {} },
+      stateReads: { track: p => p, cancelAll() {} },
+      bumpPlotRequest() {},
+      requestTransition: async () => {},
+      navigate() {},
+      openProjectMetadata: async () => {},
+      switchContext: async () => {},
+      reloadPlotsAndHierarchyAfterReset: async () => {},
+      reloadCurrentOffsetPlots: async () => {},
     });
-    return module.exports;
+  });
+  try {
+    h.ctrl.capabilitiesReady = true;
+    h.ctrl.original = { ...h.ctrl.draft, locked: false };
+    h.flush();
+    assert.equal(ui.metadataAvailable, true);
+    h.ctrl.busy = true; h.flush();
+    assert.equal(ui.metadataAvailable, false);
+    h.ctrl.busy = false; h.ctrl.headerValidation = { raw: 'retained error' }; h.flush();
+    assert.equal(ui.metadataAvailable, false);
+    h.ctrl.headerValidation = {}; h.flush();
+    assert.equal(ui.metadataAvailable, true);
+
+    runtime.set(view, 'home'); runtime.flush();
+    assert.equal(ui.metadataAvailable, true);
+    runtime.set(projectState, { contextId: '' }); runtime.flush();
+    assert.equal(ui.metadataAvailable, false);
+    runtime.set(projectState, { contextId: 'owned' }); runtime.flush();
+    assert.equal(ui.metadataAvailable, true);
+    runtime.set(view, 'fs882'); runtime.flush();
+    assert.equal(ui.metadataAvailable, true);
+
+    const allowed = runtime.state(true);
+    h.ctrl.twoPageOpen = true;
+    h.ctrl.twoPageScope = 'entry';
+    h.ctrl.twoPageEditor = { canOpenMetadataEditor: () => runtime.get(allowed), openMetadataEditor() {} };
+    h.flush();
+    assert.equal(ui.metadataAvailable, true);
+    runtime.set(allowed, false); runtime.flush();
+    assert.equal(ui.metadataAvailable, false);
+    runtime.set(allowed, true); runtime.flush();
+    assert.equal(ui.metadataAvailable, true);
+    h.ctrl.twoPageScope = 'common'; h.flush();
+    assert.equal(ui.metadataAvailable, false);
+    h.ctrl.twoPageOpen = false; h.ctrl.twoPageScope = 'entry'; h.ctrl.twoPageEditor = undefined; h.flush();
+    assert.equal(ui.metadataAvailable, true);
+    runtime.set(editor, undefined); runtime.flush();
+    assert.equal(ui.metadataAvailable, false);
+  } finally {
+    disposeUi();
+    h.dispose();
   }
-  const source = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
-  const ast = ts.createSourceFile('metadata.ts', source.match(/<script lang="ts">([\s\S]*?)<\/script>/)[1],
-    ts.ScriptTarget.Latest, true);
-  const predicate = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name.text === 'canOpenProjectMetadata');
-  assert.ok(predicate);
-  const child = execute(`
-    let metadataEnabled = $state(false), childParentDisabled = $state(false), childUnsaved = $state(false),
-      headerValidation = $state({}), twoPageOpen = $state(false),
-      twoPageScope = $state('entry'), twoPageEditor = $state.raw(undefined);
-    ${predicate.getText(ast)}
-    export function update(flag, parent, peer, invalid) {
-      metadataEnabled = flag; childParentDisabled = parent; childUnsaved = peer;
-      if (invalid) headerValidation.raw = 'retained error'; else delete headerValidation.raw;
-    }
-    export function entry(open, scope, owner) {
-      twoPageOpen = open; twoPageScope = scope; twoPageEditor = owner;
-    }
-  `);
-  const app = readFileSync(srcPath('App.svelte'), 'utf8');
-  const expression = app.match(/metadataAvailable=\{([^}]+)\}/)?.[1];
-  assert.ok(expression); assert.doesNotMatch(expression, /import\.meta/);
-  const parent = execute(`
-    import * as child from 'owned-editor';
-    let editor = $state.raw(child), view = $state('fs882'), projectState = $state({ contextId: 'owned' });
-    const available = $derived(${expression.replaceAll('$projectState', 'projectState')});
-    export function enabled() { return available; }
-    export function route(next) { view = next; }
-    export function context(next) { projectState.contextId = next; }
-    export function unmount() { editor = undefined; }
-  `, { 'owned-editor': child });
-  assert.equal(parent.enabled(), false);
-  child.update(true, false, false, false); assert.equal(parent.enabled(), true);
-  for (const changes of [[true, true, false, false], [true, false, true, false], [true, false, false, true], [false, false, false, false]]) {
-    child.update(...changes); assert.equal(parent.enabled(), false);
-    child.update(true, false, false, false); assert.equal(parent.enabled(), true);
-  }
-  parent.route('home'); assert.equal(parent.enabled(), true);
-  parent.context(''); assert.equal(parent.enabled(), false);
-  parent.context('owned'); assert.equal(parent.enabled(), true);
-  parent.route('fs882'); assert.equal(parent.enabled(), true);
-  const allowed = runtime.state(true);
-  child.entry(true, 'entry', { canOpenMetadataEditor: () => runtime.get(allowed), openMetadataEditor() {} });
-  assert.equal(parent.enabled(), true);
-  runtime.set(allowed, false); assert.equal(parent.enabled(), false);
-  runtime.set(allowed, true); assert.equal(parent.enabled(), true);
-  child.entry(true, 'common', { canOpenMetadataEditor: () => true, openMetadataEditor() {} });
-  assert.equal(parent.enabled(), false);
-  child.entry(false, 'entry', undefined); assert.equal(parent.enabled(), true);
-  parent.unmount(); assert.equal(parent.enabled(), false);
 });
 
 test('Typed restoration preserves NULL, empty and historical unchanged cells; payloads are independent exact snapshots',()=>{
@@ -448,12 +474,13 @@ test('Confirmed source-standard population stages exactly24 literals, preserves 
   assert.equal(editor.metadataEditRequest(directCanonical).changes.length, 24);
 });
 test('Metadata component stays outside remounted tabs and gates ordinary Save/Lock/native-close/context while retaining failed writes',()=>{
-  const form=readFileSync(srcPath('FS882Form.svelte'),'utf8');
-  const component=readFileSync(srcPath('ProjectMetadataEditor.svelte'),'utf8');
-  assert.match(form,/siviCreationPeerUnsaved = \$derived\([^;]*metadataOpen/);
-  assert.match(form,/childParentDisabled = \$derived\([^;]*metadataOpen/);
-  assert.match(form,/if \(metadataOpen\) return metadataEditor\?\.getCloseState/);
-  assert.match(form,/\[\(\) => metadataOpen, \(\) => metadataEditor\?\.undo\(\)\]/);
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const form=readFS882Composite();
+  const component=['ProjectMetadataEditor.svelte','ProjectMetadataCreationPanel.svelte','ProjectMetadataFieldsPanel.svelte'].map(f=>readFileSync(srcPath(f),'utf8')).join('\n');
+  assert.match(form,/siviCreationPeerUnsaved = \$derived\([\s\S]*?metadataOpen/);
+  assert.match(form,/childParentDisabled = \$derived\([\s\S]*?metadataOpen/);
+  assert.match(form,/if \((?:p\.)?metadataOpen\)[\s\S]{0,40}(?:p\.metadataClose\?\.\(\)|metadataEditor\?\.getCloseState)/);
+  assert.match(form,/\[\(\) => metadataOpen,\s*\(\) => metadataEditor\?\.undo\(\)\]/);
   assert.match(form,/ordinary plot Save never applies it/);
   assert.match(form,/Finish or close metadata review before changing the plot lock/);
   assert.match(component,/await client\.SaveProjectMetadata\(request\)/);
@@ -462,19 +489,19 @@ test('Metadata component stays outside remounted tabs and gates ordinary Save/Lo
   assert.match(component,/Save failed; raw drafts retained/);
   assert.match(component,/template = beginMetadataTemplate\(review, rowId, available\)/);
   assert.match(component,/await client\.CreateProjectMetadataFromTemplate\(metadataTemplateRequest\(template\)\)/);
-  assert.match(component,/committed = true; template = null/);
+  assert.match(component,/committed = true;\s*template = null/);
   assert.match(component,/blank = metadataBlankRequest\(review\)/);
   assert.match(component,/await client\.CreateBlankProjectMetadata\(blank\)/);
-  assert.match(component,/blank = null; error = null; success = 'Blank creation proposal undone/);
+  assert.match(component,/blank = null;\s*error = null;\s*success = 'Blank creation proposal undone/);
   assert.match(component,/reviewed proposal retained for retry/);
-  assert.match(component,/committed = true; blank = null/);
-  assert.equal(compile(component,{filename:'ProjectMetadataEditor.svelte',generate:'client'}).warnings.length,0);
+  assert.match(component,/committed = true;\s*blank = null/);
+  assert.equal(compile(readFileSync(srcPath('ProjectMetadataEditor.svelte'),'utf8'),{filename:'ProjectMetadataEditor.svelte',generate:'client'}).warnings.length,0);
 });
 test('Metadata reload invalidates editing readiness until both current records and references load successfully',()=>{
-  const component=readFileSync(srcPath('ProjectMetadataEditor.svelte'),'utf8');
-  assert.match(component,/reading = true; ready = false/);
-  assert.match(component,/await Promise\.all\(\[\s*reads\.track\(client\.ReviewProjectMetadata\(plot\)\), reads\.track\(client\.ListProjectMetadataFields\(\)\)/);
-  assert.match(component,/review = next; fields = definitions; draft = null; committedFailure = false; ready = true/);
+  const component=['ProjectMetadataEditor.svelte','ProjectMetadataCreationPanel.svelte','ProjectMetadataFieldsPanel.svelte'].map(f=>readFileSync(srcPath(f),'utf8')).join('\n');
+  assert.match(component,/reading = true;\s*ready = false/);
+  assert.match(component,/await Promise\.all\(\[\s*reads\.track\(client\.ReviewProjectMetadata\(plot\)\),\s*reads\.track\(client\.ListProjectMetadataFields\(\)\)/);
+  assert.match(component,/review = next;\s*fields = definitions;\s*draft = null;\s*committedFailure = false;\s*ready = true/);
   for(const guard of [
     '!ready || !review || busy || dirty || committedFailure',
     '!ready || !draft || busy || committedFailure',

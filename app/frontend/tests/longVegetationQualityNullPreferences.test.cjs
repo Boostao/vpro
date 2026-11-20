@@ -148,7 +148,7 @@ test('actual report retains errors across remount and propagates barriers', () =
   const owner = { ...scope, contextId: 'quality-null-composition-true' };
   const session = prefs.longVegetationQualityNullPreferencesSession(owner); session.apply(review(undefined, owner));
   session.editNullFlag('vegIncludeNulls', null);
-  const component = serverComponent(reportSource, 'LongVegetationReport.svelte', {
+  const component = serverComponent(reportSource, 'LongVegetationReport.svelte', { './longVegetationProjectWorkspaces': { projectReportWorkspace: null }, ...({
     '../bindings/github.com/boostao/vpro/app': {}, './longVegetationPreferences': {},
     './longVegetationStatisticsPreferences': {}, './longVegetationSwitchPreferences': {},
     './longVegetationThresholdPreferences': {}, './LongVegetationThresholdPreferences.svelte': { default() {} },
@@ -166,16 +166,17 @@ test('actual report retains errors across remount and propagates barriers', () =
       vegetationWorkbookPublicationSession: () => ({ view: () => ({ busy: false, blocked: false }), subscribe: () => () => {} }),
       VegetationWorkbookPublicationSession: class { view() { return { busy: false, blocked: false }; } subscribe() { return () => {}; } },
     },
-  });
+  }) });
   for (let mount = 0; mount < 2; mount++) {
     const barriers = []; const { body } = render(component, { props: { ...owner, onBusyChange: value => barriers.push(value) } });
     assert.equal(barriers.at(-1), true);
     assert.match(body, /data-long-vegetation-quality-nulls/);
   }
-  assert.match(reportSource, /qualityNullView = qualityNulls.view\(\); invalidateReports\(\)/);
-  assert.match(reportSource, /function invalidateReports\(\) \{\s*preview = null; workbookReview = null;\s*projectWorkspace\?\.invalidate\(\)/);
-  assert.match(reportSource, /groupBarrier \|\| qualityNullBarrier/);
-  assert.match(reportSource, /unsubscribeQualityNulls\?\.\(\)/);
-  assert.match(source('LongVegetationQualityNullPreferences.svelte'), /const checked = event.currentTarget.checked; edit\(field.key, checked\)/);
-  assert.doesNotMatch(source('LongVegetationQualityNullPreferences.svelte'), /reads\.track\(VegetationReportService\.Save/);
+  const composite = require('./svelteTestHelpers.cjs').readReportComposite('long-vegetation');
+  assert.match(composite, /qualityNullView = sessions\.qualityNulls!\.view\(\);\s*onInvalidate/);
+  assert.match(composite, /function invalidateReports\(\) \{\s*preview = null;\s*workbookReview = null;\s*projectWorkspace\?\.invalidate\(\)/);
+  assert.match(composite, /groupBarrier \|\|\s*qualityNullBarrier/);
+  assert.match(composite, /for \(const u of unsubs\) u\?\.\(\)/);
+  assert.match(source('LongVegetationQualityNullPreferences.svelte'), /const checked = event\.currentTarget\.checked;\s*edit\(field\.key, checked\)/);
+  assert.doesNotMatch(source('LongVegetationQualityNullPreferences.svelte'), /reads\.track\(\s*VegetationReportService\.Save/);
 });

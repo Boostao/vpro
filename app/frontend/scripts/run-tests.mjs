@@ -73,10 +73,6 @@ const filters = process.argv.slice(2).filter(arg => Boolean(arg) && arg !== '--v
 const allDiscovered = discoverTestFiles(testsRoot);
 
 const runnable = allDiscovered.filter(rel => {
-  const base = path.posix.basename(rel);
-  if (base === 'siviParentWire.test.cjs' && !process.env.VPRO_SIVI_PARENT_WIRE_RECEIPT && filters.length === 0) {
-    return false;
-  }
   if (filters.length === 0) return true;
   const lower = rel.toLowerCase();
   return filters.some(pattern => lower.includes(pattern.toLowerCase()));

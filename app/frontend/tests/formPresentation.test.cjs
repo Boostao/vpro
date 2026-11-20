@@ -173,7 +173,7 @@ test('Responsive CSS defines readable controls and container-aware wide-to-singl
   assert.match(css, /min-height: 40px/);
   assert.match(css, /BC Sans|IBM Plex Sans/);
   assert.match(css, /border-top:\s*3px solid (?:#bd9b48|#003366|#FCBA19|var\(--bcgov-gold\)|var\(--vpro-)/i);
-  assert.match(read('App.svelte'), /aria-expanded=\{contextExpanded\} aria-controls="project-context"/);
+  assert.match(read('ShellChromeHeader.svelte'), /aria-expanded=\{ui\.contextExpanded\}\s+aria-controls="project-context"/);
   for (const file of ['HeaderEditor', 'SourcePage', 'SourceChild', 'BECFields', 'CoordinateFields', 'WorkingUnitFields',
     'QualityFields', 'SubstrateFields', 'RegionCodeFields', 'SiteCodeFields', 'SoilCodeFields', 'GeologyCodeFields']) {
     const source = read(`${file}.svelte`);

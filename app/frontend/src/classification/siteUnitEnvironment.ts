@@ -1,11 +1,15 @@
-import type { SiteUnitEnvironmentReview, SiteUnitEnvironmentTransfer, SiteUnitEnvironmentResult } from '../../bindings/github.com/boostao/vpro/app';
+import type {
+  SiteUnitEnvironmentReview,
+  SiteUnitEnvironmentTransfer,
+  SiteUnitEnvironmentResult,
+} from '../../bindings/github.com/boostao/vpro/app';
 import { transferColumns } from './environmentSUTransfer';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 import { equalCell } from '../admin/projectMetadataEditor';
 
 function collapseSiteUnitDefinitions(
   rows: NonNullable<SiteUnitEnvironmentReview['master']['rows']>,
-  columns: Map<string, number>,
+  columns: Map<string, number>
 ) {
   const shortIdx = columns.get('SiteSeries')!;
   const longIdx = columns.get('SiteSeriesLongName')!;
@@ -27,11 +31,26 @@ function collapseSiteUnitDefinitions(
   return [first];
 }
 
-export function validateSiteUnitEnvironmentReview(review: SiteUnitEnvironmentReview, contextId: string,
-  project: string, su: string, path: string): SiteUnitEnvironmentReview {
-  if (!review || !contextId || review.contextId !== contextId || review.project !== project || review.su !== su ||
-      !su || su === 'None' || review.path !== path || !Array.isArray(review.changes) ||
-      typeof review.historyHash !== 'string' || review.historyHash !== '' && !/^[0-9a-f]{64}$/.test(review.historyHash)) {
+export function validateSiteUnitEnvironmentReview(
+  review: SiteUnitEnvironmentReview,
+  contextId: string,
+  project: string,
+  su: string,
+  path: string
+): SiteUnitEnvironmentReview {
+  if (
+    !review ||
+    !contextId ||
+    review.contextId !== contextId ||
+    review.project !== project ||
+    review.su !== su ||
+    !su ||
+    su === 'None' ||
+    review.path !== path ||
+    !Array.isArray(review.changes) ||
+    typeof review.historyHash !== 'string' ||
+    (review.historyHash !== '' && !/^[0-9a-f]{64}$/.test(review.historyHash))
+  ) {
     throw new Error('Reverse transfer requires the explicitly selected owned project and SU.');
   }
   const env = transferColumns(review.env, ['PlotNumber', 'Flag']);
@@ -41,16 +60,29 @@ export function validateSiteUnitEnvironmentReview(review: SiteUnitEnvironmentRev
   const personal = transferColumns(review.personal, ['SiteSeries', 'SiteSeriesLongName']);
   const seen = new Set<string>();
   for (const change of review.changes) {
-    const environments = review.env.rows!.filter(row => row.cells![env.get('PlotNumber')!].text === change.plotNumber);
-    const parents = review.admin.rows!.filter(row => row.cells![admin.get('Plot')!].text === change.plotNumber);
-    const units = review.source.rows!.filter(row => row.cells![source.get('PlotNumber')!].text === change.plotNumber);
+    const environments = review.env.rows!.filter(
+      (row) => row.cells![env.get('PlotNumber')!].text === change.plotNumber
+    );
+    const parents = review.admin.rows!.filter((row) => row.cells![admin.get('Plot')!].text === change.plotNumber);
+    const units = review.source.rows!.filter((row) => row.cells![source.get('PlotNumber')!].text === change.plotNumber);
     const key = `${change.adminRowId}/${change.field}`;
-    if (typeof change.plotNumber !== 'string' || environments.length !== 1 || parents.length !== 1 || units.length !== 1 ||
-        environments[0].rowId !== change.envRowId || parents[0].rowId !== change.adminRowId || units[0].rowId !== change.suRowId ||
-        !['UserSiteUnit', 'SiteUnitShortName', 'SiteUnitLongName'].includes(change.field) || seen.has(key) ||
-        !completeCell(change.before) || !completeCell(change.after) ||
-        !['text', 'null'].includes(change.before.storage) || !['text', 'null'].includes(change.after.storage) ||
-        !equalCell(change.before, parents[0].cells![admin.get(change.field)!]) || equalCell(change.before, change.after)) {
+    if (
+      typeof change.plotNumber !== 'string' ||
+      environments.length !== 1 ||
+      parents.length !== 1 ||
+      units.length !== 1 ||
+      environments[0].rowId !== change.envRowId ||
+      parents[0].rowId !== change.adminRowId ||
+      units[0].rowId !== change.suRowId ||
+      !['UserSiteUnit', 'SiteUnitShortName', 'SiteUnitLongName'].includes(change.field) ||
+      seen.has(key) ||
+      !completeCell(change.before) ||
+      !completeCell(change.after) ||
+      !['text', 'null'].includes(change.before.storage) ||
+      !['text', 'null'].includes(change.after.storage) ||
+      !equalCell(change.before, parents[0].cells![admin.get(change.field)!]) ||
+      equalCell(change.before, change.after)
+    ) {
       throw new Error('Reverse transfer requires exact unique typed physical links and changed Admin cells.');
     }
     const flag = environments[0].cells![env.get('Flag')!];
@@ -63,26 +95,32 @@ export function validateSiteUnitEnvironmentReview(review: SiteUnitEnvironmentRev
     }
     const unit = units[0].cells![source.get('SiteUnit')!];
     if (change.field === 'UserSiteUnit') {
-      if (change.origin !== 'selected SU' || !equalCell(change.after, unit)) throw new Error('Reverse unit value changed after review.');
+      if (change.origin !== 'selected SU' || !equalCell(change.after, unit))
+        throw new Error('Reverse unit value changed after review.');
     } else {
       if (unit.storage !== 'text') throw new Error('NULL SU values cannot choose name definitions.');
       const users = collapseSiteUnitDefinitions(
         review.personal.rows!.filter(
-          row => row.cells![personal.get('SiteSeries')!].storage === 'text' && row.cells![personal.get('SiteSeries')!].text === unit.text,
+          (row) =>
+            row.cells![personal.get('SiteSeries')!].storage === 'text' &&
+            row.cells![personal.get('SiteSeries')!].text === unit.text
         ),
-        personal,
+        personal
       );
       if (users.length > 1) {
         throw new Error(`Conflicting personal definitions found for SiteUnit "${unit.text}" in UserSiteUnitList.`);
       }
-      const masters = users.length === 0
-        ? collapseSiteUnitDefinitions(
-            review.master.rows!.filter(
-              row => row.cells![master.get('SiteSeries')!].storage === 'text' && row.cells![master.get('SiteSeries')!].text === unit.text,
-            ),
-            master,
-          )
-        : [];
+      const masters =
+        users.length === 0
+          ? collapseSiteUnitDefinitions(
+              review.master.rows!.filter(
+                (row) =>
+                  row.cells![master.get('SiteSeries')!].storage === 'text' &&
+                  row.cells![master.get('SiteSeries')!].text === unit.text
+              ),
+              master
+            )
+          : [];
       if (users.length === 0 && masters.length > 1) {
         throw new Error(`Conflicting master definitions found for SiteUnit "${unit.text}" in MasterSiteUnitList.`);
       }
@@ -102,18 +140,29 @@ export function validateSiteUnitEnvironmentReview(review: SiteUnitEnvironmentRev
   return review;
 }
 
-export function siteUnitEnvironmentRequest(review: SiteUnitEnvironmentReview, contextId: string,
-  project: string, su: string, path: string): SiteUnitEnvironmentTransfer {
+export function siteUnitEnvironmentRequest(
+  review: SiteUnitEnvironmentReview,
+  contextId: string,
+  project: string,
+  su: string,
+  path: string
+): SiteUnitEnvironmentTransfer {
   const checked = validateSiteUnitEnvironmentReview(review, contextId, project, su, path);
   if (!checked.changes?.length) throw new Error('Review a nonempty reverse transfer before confirmation.');
   return { review: structuredClone(checked), confirmed: true };
 }
 
-export function validateSiteUnitEnvironmentResult(result: SiteUnitEnvironmentResult | null,
-  request: SiteUnitEnvironmentTransfer): asserts result is SiteUnitEnvironmentResult {
-  if (!result || result.changedCells !== request.review.changes!.length ||
-      result.changedRows !== new Set(request.review.changes!.map(change => change.adminRowId)).size ||
-      !exactSigned64(result.historyId) || BigInt(result.historyId) < 1n) {
+export function validateSiteUnitEnvironmentResult(
+  result: SiteUnitEnvironmentResult | null,
+  request: SiteUnitEnvironmentTransfer
+): asserts result is SiteUnitEnvironmentResult {
+  if (
+    !result ||
+    result.changedCells !== request.review.changes!.length ||
+    result.changedRows !== new Set(request.review.changes!.map((change) => change.adminRowId)).size ||
+    !exactSigned64(result.historyId) ||
+    BigInt(result.historyId) < 1n
+  ) {
     throw new Error('Reverse transfer committed with an unexpected result; reload without replaying it.');
   }
 }

@@ -1,10 +1,9 @@
-import type {
-  PMTilesManifest,
-  SpatialWorkbenchPayload,
-} from '../../bindings/github.com/boostao/vpro/app';
+import type { ExpressionSpecification, LayerSpecification, SourceSpecification, StyleSpecification } from 'maplibre-gl';
+import type { PMTilesManifest, SpatialWorkbenchPayload } from '../../bindings/github.com/boostao/vpro/app';
+import type { SpatialComputeBackendInfo } from './spatialCompute';
+import { pointInPolygonRing } from './spatialFlatGeobuf';
 
 type SpatialGeoArrowColumns = SpatialWorkbenchPayload['geoArrow'];
-
 
 export {
   buildWGSLSpatialFilterShader,
@@ -12,16 +11,8 @@ export {
   executeCPUSpatialFilterKernel,
   executeSpatialFilterKernel,
 } from './spatialCompute';
-export type {
-  SpatialComputeBackendKind,
-  SpatialComputeBackendInfo,
-  SpatialFilterKernelResult,
-} from './spatialCompute';
-export {
-  FLATGEOBUF_MAGIC_V3,
-  decodeFlatGeobufPoints,
-  pointInPolygonRing,
-} from './spatialFlatGeobuf';
+export type { SpatialComputeBackendKind, SpatialComputeBackendInfo, SpatialFilterKernelResult } from './spatialCompute';
+export { FLATGEOBUF_MAGIC_V3, decodeFlatGeobufPoints, pointInPolygonRing } from './spatialFlatGeobuf';
 export type { DecodedFlatGeobufPlot } from './spatialFlatGeobuf';
 
 export interface WorkbenchPlotPoint {
@@ -86,12 +77,30 @@ export const BEC_ZONE_PALETTE: Record<string, string> = {
   SWB: '#6d8fa6',
 };
 
-export const DEFAULT_BC_VIEW_STATE = {
+const DEFAULT_BC_VIEW_STATE = {
   longitude: -124.8,
   latitude: 54.2,
   zoom: 4.8,
   pitch: 0,
   bearing: 0,
+};
+
+export const INITIAL_COMPUTE_INFO: SpatialComputeBackendInfo = {
+  backend: 'webgl2-cpu',
+  available: false,
+  adapterLabel: 'Probing GPU compute...',
+  maxComputeWorkgroupSizeX: 0,
+  fallbackReason: null,
+};
+
+export const INITIAL_LAYER_VISIBILITY: MapLayerVisibility = {
+  bgcFill: true,
+  bgcLabels: true,
+  ecosections: false,
+  nrDistricts: false,
+  hillshade3D: false,
+  bcOpenMapsWMS: false,
+  discrepancyVectors: true,
 };
 
 export function materializeWorkbenchPlots(cols: SpatialGeoArrowColumns | null | undefined): {
@@ -158,13 +167,12 @@ export function materializeWorkbenchPlots(cols: SpatialGeoArrowColumns | null | 
   return { points, coordsFloat32, discrepancyVectors };
 }
 
-function buildBECZoneMatchExpression(): any[] {
-  const expr: any[] = ['match', ['get', 'ZONE']];
+function buildBECZoneMatchExpression(): ExpressionSpecification {
+  const stops: string[] = [];
   for (const [zone, hex] of Object.entries(BEC_ZONE_PALETTE)) {
-    expr.push(zone, hex);
+    stops.push(zone, hex);
   }
-  expr.push('#474543');
-  return expr;
+  return ['match', ['get', 'ZONE'], ...stops, '#474543'] as unknown as ExpressionSpecification;
 }
 
 type PMTilesArchiveStatusExt = NonNullable<PMTilesManifest['archives']>[string] & {
@@ -221,17 +229,16 @@ export function buildMapLibreGeospatialStyle(
   manifest: PMTilesManifest | null | undefined,
   visibility: MapLayerVisibility,
   options?: { forceGraticuleFallback?: boolean }
-): Record<string, any> {
+): StyleSpecification {
   const bgcArchive = manifest?.archives?.['bc-bgc-v13.pmtiles'] as PMTilesArchiveStatusExt | undefined;
   const adminArchive = manifest?.archives?.['bc-admin-ecosections-districts.pmtiles'] as
-    | PMTilesArchiveStatusExt
-    | undefined;
+    PMTilesArchiveStatusExt | undefined;
   const bgcAvailable = !options?.forceGraticuleFallback && bgcArchive?.available !== false;
   const adminAvailable = !options?.forceGraticuleFallback && adminArchive?.available !== false;
   const bgcMaxZoom = bgcArchive?.maxZoom && bgcArchive.maxZoom > 0 ? bgcArchive.maxZoom : 6;
   const adminMaxZoom = adminArchive?.maxZoom && adminArchive.maxZoom > 0 ? adminArchive.maxZoom : 6;
 
-  const sources: Record<string, any> = {
+  const sources: Record<string, SourceSpecification> = {
     vpro_offline_graticule: {
       type: 'geojson',
       data: buildOfflineGraticuleGeoJSON(),
@@ -268,7 +275,7 @@ export function buildMapLibreGeospatialStyle(
     };
   }
 
-  const layers: Record<string, any>[] = [
+  const layers: LayerSpecification[] = [
     {
       id: 'vpro-ocean-background',
       type: 'background',
@@ -372,9 +379,7 @@ export function buildMapLibreGeospatialStyle(
   };
 }
 
-export function summarizePMTilesManifestWarnings(
-  manifest: PMTilesManifest | null | undefined
-): string | null {
+export function summarizePMTilesManifestWarnings(manifest: PMTilesManifest | null | undefined): string | null {
   if (!manifest?.archives) return null;
   const warnings: string[] = [];
   for (const raw of Object.values(manifest.archives)) {
@@ -415,12 +420,7 @@ export function classifyPMTilesMapError(event: unknown): string | null {
         : typeof rec.message === 'string'
           ? rec.message
           : '';
-  const errUrl =
-    typeof errObj?.url === 'string'
-      ? errObj.url
-      : typeof rec.url === 'string'
-        ? rec.url
-        : '';
+  const errUrl = typeof errObj?.url === 'string' ? errObj.url : typeof rec.url === 'string' ? rec.url : '';
   const lowerMsg = errMsg.toLowerCase();
   const lowerUrl = errUrl.toLowerCase();
   const isPMTilesSource =
@@ -447,11 +447,7 @@ export function classifyPMTilesMapError(event: unknown): string | null {
   return null;
 }
 
-export function classifyWMSMapError(
-  event: unknown,
-  wmsEnabled: boolean,
-  online?: boolean
-): string | null {
+export function classifyWMSMapError(event: unknown, wmsEnabled: boolean, online?: boolean): string | null {
   if (!wmsEnabled) return null;
   if (online === false) {
     return 'BC OpenMaps WMS imagery is unreachable while offline. Offline BGC v13, Ecosections, NR Districts, and plot layers remain active.';
@@ -540,8 +536,17 @@ export function extractDistinctZones(plotPoints: WorkbenchPlotPoint[]): string[]
   return [...set].sort();
 }
 
+type AOIGeoJSONFeature = {
+  type: 'Feature';
+  properties: Record<string, never>;
+  geometry:
+    | { type: 'Polygon'; coordinates: Array<Array<[number, number]>> }
+    | { type: 'LineString'; coordinates: Array<[number, number]> }
+    | { type: 'Point'; coordinates: [number, number] };
+};
+
 function buildAOIGeoJSONFeatureCollection(aoiVertices: Array<[number, number]>) {
-  const features: any[] = [];
+  const features: AOIGeoJSONFeature[] = [];
   if (aoiVertices.length >= 3) {
     const closed = [...aoiVertices, aoiVertices[0]];
     features.push({
@@ -595,11 +600,7 @@ export function computeViewportAOIRectangle(
 export function isAbsoluteFilesystemPath(rawPath: string): boolean {
   const trimmed = rawPath.trim();
   if (!trimmed) return false;
-  return (
-    trimmed.startsWith('/') ||
-    /^[A-Za-z]:[\\/]/.test(trimmed) ||
-    trimmed.startsWith('\\\\')
-  );
+  return trimmed.startsWith('/') || /^[A-Za-z]:[\\/]/.test(trimmed) || trimmed.startsWith('\\\\');
 }
 
 function resolveProjectExportsDir(projectPath?: string | null): { dir: string; sep: '/' | '\\' } | null {
@@ -622,10 +623,7 @@ function resolveProjectExportsDir(projectPath?: string | null): { dir: string; s
   return { dir: `${parentDir}${sep}exports`, sep };
 }
 
-export function buildDefaultGeoPackageExportPath(
-  project: string,
-  projectPath?: string | null
-): string {
+export function buildDefaultGeoPackageExportPath(project: string, projectPath?: string | null): string {
   const safeProj = (project || 'vpro').replace(/[^A-Za-z0-9_-]+/g, '_') || 'vpro';
   const fileName = `${safeProj}_plots.gpkg`;
   const exportsDir = resolveProjectExportsDir(projectPath);
@@ -655,7 +653,7 @@ export function resolveGeoPackageDestinationPath(
   return `${exportsDir.dir}${exportsDir.sep}${segments.join(exportsDir.sep)}`;
 }
 
-export function hasInvalidOrDiagnosticQACoordinates(row: {
+function hasInvalidOrDiagnosticQACoordinates(row: {
   diagnostics?: string[] | null;
   latitude?: number | null;
   longitude?: number | null;
@@ -695,12 +693,7 @@ export function initQASelectedPlots(
 ): Record<string, boolean> {
   const nextSelected: Record<string, boolean> = {};
   for (const r of rows) {
-    if (
-      r.bgcMismatch ||
-      r.divergenceFlagged ||
-      r.longitudeSignFlipped ||
-      (!r.storedGisBgc && !!r.suggestedGisBgc)
-    ) {
+    if (r.bgcMismatch || r.divergenceFlagged || r.longitudeSignFlipped || (!r.storedGisBgc && !!r.suggestedGisBgc)) {
       nextSelected[r.plotNumber] = true;
     }
   }
@@ -732,15 +725,22 @@ export function filterSpatialQARows<
   );
 }
 
+export interface MapAOIHost {
+  getSource(id: string): object | undefined;
+  isStyleLoaded(): boolean | void;
+  addSource(id: string, source: SourceSpecification): unknown;
+  addLayer(layer: LayerSpecification): unknown;
+}
+
 export function syncMapAOIOverlay(
-  mapInstance: any,
+  mapInstance: MapAOIHost | null | undefined,
   aoiVertices: Array<[number, number]>
 ): void {
   if (!mapInstance) return;
   const fc = buildAOIGeoJSONFeatureCollection(aoiVertices);
-  const src = mapInstance.getSource('vpro-aoi-overlay');
+  const src = mapInstance.getSource('vpro-aoi-overlay') as { setData?: (data: unknown) => void } | undefined;
   if (src) {
-    src.setData(fc);
+    src.setData?.(fc);
     return;
   }
   if (!mapInstance.isStyleLoaded()) return;
@@ -891,8 +891,16 @@ export function computeMapFitBounds(
   };
 }
 
+export interface MapViewportHost {
+  jumpTo(options: { center: [number, number]; zoom: number }): unknown;
+  fitBounds(
+    bounds: [[number, number], [number, number]],
+    options?: { padding?: number; maxZoom?: number; duration?: number }
+  ): unknown;
+}
+
 export function fitMapToPayloadBounds(
-  mapInstance: any,
+  mapInstance: MapViewportHost | null | undefined,
   payload: SpatialWorkbenchPayload | null
 ): void {
   if (!mapInstance) return;
@@ -905,9 +913,9 @@ export function fitMapToPayloadBounds(
   mapInstance.fitBounds(target.bounds, { padding: 48, maxZoom: 10, duration: 500 });
 }
 
-export function buildSpatialDeckLayers(params: {
-  LineLayerCtor: any;
-  ScatterplotLayerCtor: any;
+function buildSpatialDeckLayers<TLineLayer, TScatterLayer>(params: {
+  LineLayerCtor: new (props: Record<string, unknown>) => TLineLayer;
+  ScatterplotLayerCtor: new (props: Record<string, unknown>) => TScatterLayer;
   pts: WorkbenchPlotPoint[];
   matched: Set<string>;
   selPlotNum: string;
@@ -915,7 +923,7 @@ export function buildSpatialDeckLayers(params: {
   discrepancySegments: DiscrepancyVectorSegment[];
   aoiPreviewTrigger: unknown;
   onPinClick: (pt: WorkbenchPlotPoint) => void;
-}): any[] {
+}): Array<TLineLayer | TScatterLayer> {
   const {
     LineLayerCtor,
     ScatterplotLayerCtor,
@@ -927,7 +935,7 @@ export function buildSpatialDeckLayers(params: {
     aoiPreviewTrigger,
     onPinClick,
   } = params;
-  const layers: any[] = [];
+  const layers: Array<TLineLayer | TScatterLayer> = [];
   if (showVectors && discrepancySegments.length > 0) {
     layers.push(
       new LineLayerCtor({
@@ -935,8 +943,7 @@ export function buildSpatialDeckLayers(params: {
         data: discrepancySegments,
         getSourcePosition: (d: DiscrepancyVectorSegment) => d.sourcePosition,
         getTargetPosition: (d: DiscrepancyVectorSegment) => d.targetPosition,
-        getColor: (d: DiscrepancyVectorSegment) =>
-          d.flagged ? [216, 41, 47, 220] : [252, 186, 25, 200],
+        getColor: (d: DiscrepancyVectorSegment) => (d.flagged ? [216, 41, 47, 220] : [252, 186, 25, 200]),
         getWidth: 2.5,
         widthUnits: 'pixels',
       }),
@@ -959,8 +966,7 @@ export function buildSpatialDeckLayers(params: {
       data: pts,
       pickable: true,
       getPosition: (d: WorkbenchPlotPoint) => [d.lon, d.lat],
-      getRadius: (d: WorkbenchPlotPoint) =>
-        d.plotNumber === selPlotNum ? 9 : matched.has(d.plotNumber) ? 7.5 : 5.5,
+      getRadius: (d: WorkbenchPlotPoint) => (d.plotNumber === selPlotNum ? 9 : matched.has(d.plotNumber) ? 7.5 : 5.5),
       radiusUnits: 'pixels',
       stroked: true,
       lineWidthMinPixels: 1.5,
@@ -982,4 +988,252 @@ export function buildSpatialDeckLayers(params: {
     })
   );
   return layers;
+}
+
+export function filterCoordinateDiagnosticRows<
+  TRow extends {
+    plotNumber: string;
+    bgcMismatch?: boolean;
+    diagnostics?: string[] | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    divergenceFlagged?: boolean;
+    longitudeSignFlipped?: boolean;
+  },
+>(rows: readonly TRow[] | null | undefined): TRow[] {
+  return (rows ?? []).filter(
+    (r) =>
+      hasInvalidOrDiagnosticQACoordinates(r) &&
+      !(r.bgcMismatch && (r.diagnostics?.length ?? 0) === 1 && (r.diagnostics?.[0] ?? '').startsWith('Field BGC'))
+  );
+}
+
+export function computeViewportFilterBounds(
+  mapInstance: {
+    getBounds(): { getWest(): number; getSouth(): number; getEast(): number; getNorth(): number };
+  } | null,
+  boundingBox: readonly number[] | null | undefined
+): [number, number, number, number] {
+  if (mapInstance) {
+    const b = mapInstance.getBounds();
+    return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+  }
+  if (boundingBox && boundingBox.length >= 4) {
+    return [boundingBox[0], boundingBox[1], boundingBox[2], boundingBox[3]];
+  }
+  return [-140, 47, -113, 61];
+}
+
+function bindGeospatialMapListeners(opts: {
+  map: {
+    on(event: string, listener: (evt?: unknown) => void): unknown;
+    setStyle(style: StyleSpecification): unknown;
+  };
+  isAlive: () => boolean;
+  onMapLoad: () => void;
+  onMoveEnd: () => void;
+  onMapError: (evt: unknown) => void;
+  onMapClick: (lngLat: { lng: number; lat: number }) => void;
+}): void {
+  opts.map.on('load', () => {
+    if (opts.isAlive()) opts.onMapLoad();
+  });
+  opts.map.on('moveend', () => {
+    if (opts.isAlive()) opts.onMoveEnd();
+  });
+  opts.map.on('error', (evt) => {
+    if (opts.isAlive()) opts.onMapError(evt);
+  });
+  opts.map.on('click', (evt) => {
+    if (!opts.isAlive()) return;
+    const rec = evt as { lngLat?: { lng: number; lat: number } } | undefined;
+    if (rec?.lngLat) opts.onMapClick(rec.lngLat);
+  });
+}
+
+let maplibreWorkerInitialized = false;
+let pmtilesProtocolInitialized = false;
+
+export function ensureMapLibrePMTilesProtocol<THandler>(
+  setWorkerUrlFn: ((url: string) => void) | undefined,
+  workerUrl: string,
+  addProtocolFn: (scheme: string, handler: THandler) => void,
+  ProtocolCtor: new () => { tile: THandler }
+): void {
+  if (!maplibreWorkerInitialized) {
+    if (typeof setWorkerUrlFn === 'function' && workerUrl) setWorkerUrlFn(workerUrl);
+    maplibreWorkerInitialized = true;
+  }
+  if (pmtilesProtocolInitialized) return;
+  try {
+    const protocol = new ProtocolCtor();
+    addProtocolFn('pmtiles', protocol.tile);
+  } catch {
+    // Ignore duplicate protocol registration
+  }
+  pmtilesProtocolInitialized = true;
+}
+
+function handleGeospatialMapError(opts: {
+  evt: unknown;
+  bcOpenMapsWMS: boolean;
+  wmsOfflineWarning: string;
+  pmtilesArchiveWarning: string;
+  pmtilesGraticuleFallback: boolean;
+  project: string;
+  manifest: PMTilesManifest | null | undefined;
+  visibility: MapLayerVisibility;
+  setWmsWarn: (warn: string) => void;
+  setPmWarn: (warn: string) => void;
+  enableGraticuleFallback: (style: StyleSpecification) => void;
+  warnToast: (title: string, msg: string) => void;
+}): void {
+  const online = typeof navigator !== 'undefined' ? navigator.onLine : undefined;
+  const wmsWarn = classifyWMSMapError(opts.evt, opts.bcOpenMapsWMS, online);
+  if (wmsWarn) {
+    if (wmsWarn !== opts.wmsOfflineWarning) opts.warnToast('BC OpenMaps WMS unavailable', wmsWarn);
+    opts.setWmsWarn(wmsWarn);
+    return;
+  }
+  const pmWarn = classifyPMTilesMapError(opts.evt);
+  if (!pmWarn) return;
+  if (pmWarn !== opts.pmtilesArchiveWarning) opts.warnToast('Local map archive unreadable', pmWarn);
+  opts.setPmWarn(pmWarn);
+  if (!opts.pmtilesGraticuleFallback) {
+    opts.enableGraticuleFallback(
+      buildMapLibreGeospatialStyle(opts.manifest, opts.visibility, { forceGraticuleFallback: true })
+    );
+  }
+}
+
+export function createGeospatialMapInstance<TMap, TOverlay>(
+  ctors: [
+    new (opts: Record<string, unknown>) => TMap & {
+      addControl(ctrl: unknown, pos?: string): unknown;
+      on(event: string, cb: (evt?: unknown) => void): unknown;
+      setStyle(style: StyleSpecification): unknown;
+    },
+    new (opts: { visualizePitch: boolean }) => unknown,
+    new (opts: { maxWidth: number; unit: 'metric' }) => unknown,
+    new (opts: { interleaved: boolean; layers: never[] }) => TOverlay,
+  ],
+  target: [HTMLElement, StyleSpecification],
+  hooks: {
+    isAlive: () => boolean;
+    onLoad: () => void;
+    onMoveEnd: () => void;
+    onError: (map: { setStyle(s: StyleSpecification): unknown }, evt: unknown) => void;
+    onClick: (pt: [number, number]) => void;
+  }
+): { map: TMap; overlay: TOverlay } {
+  const [MapCtor, NavCtrlCtor, ScaleCtrlCtor, OverlayCtor] = ctors;
+  const [container, style] = target;
+  const { longitude, latitude, zoom } = DEFAULT_BC_VIEW_STATE;
+  const map = new MapCtor({ container, style, center: [longitude, latitude], zoom, pitch: 0, bearing: 0 });
+  map.addControl(new NavCtrlCtor({ visualizePitch: true }), 'top-right');
+  map.addControl(new ScaleCtrlCtor({ maxWidth: 140, unit: 'metric' }), 'bottom-left');
+  const overlay = new OverlayCtor({ interleaved: false, layers: [] });
+  map.addControl(overlay);
+  bindGeospatialMapListeners({
+    map,
+    isAlive: hooks.isAlive,
+    onMapLoad: hooks.onLoad,
+    onMoveEnd: hooks.onMoveEnd,
+    onMapError: (evt) => hooks.onError(map, evt),
+    onMapClick: (ll) => hooks.onClick([Math.round(ll.lng * 1e6) / 1e6, Math.round(ll.lat * 1e6) / 1e6]),
+  });
+  return { map, overlay };
+}
+
+export function routeGeospatialMapError(
+  evt: unknown,
+  state: [boolean, string, string, boolean],
+  manifest: PMTilesManifest | null | undefined,
+  visibility: MapLayerVisibility,
+  apply: (wmsWarn: string | null, pmWarn: string | null, fallbackStyle: StyleSpecification | null) => void,
+  warnToast: (title: string, msg: string) => void
+): void {
+  const [bcOpenMapsWMS, wmsOfflineWarning, pmtilesArchiveWarning, pmtilesGraticuleFallback] = state;
+  handleGeospatialMapError({
+    evt,
+    bcOpenMapsWMS,
+    wmsOfflineWarning,
+    pmtilesArchiveWarning,
+    pmtilesGraticuleFallback,
+    project: '',
+    manifest,
+    visibility,
+    setWmsWarn: (w) => apply(w, null, null),
+    setPmWarn: (w) => apply(null, w, null),
+    enableGraticuleFallback: (s) => apply(null, null, s),
+    warnToast,
+  });
+}
+
+export function makeWorkbenchDeckLayers<TLineLayer, TScatterLayer>(
+  LineLayerCtor: new (props: Record<string, unknown>) => TLineLayer,
+  ScatterplotLayerCtor: new (props: Record<string, unknown>) => TScatterLayer,
+  pts: WorkbenchPlotPoint[],
+  matched: Set<string>,
+  selPlotNum: string,
+  showVectors: boolean,
+  discrepancySegments: DiscrepancyVectorSegment[],
+  aoiPreviewTrigger: unknown,
+  onPinClick: (pt: WorkbenchPlotPoint) => void
+): Array<TLineLayer | TScatterLayer> {
+  return buildSpatialDeckLayers({
+    LineLayerCtor,
+    ScatterplotLayerCtor,
+    pts,
+    matched,
+    selPlotNum,
+    showVectors,
+    discrepancySegments,
+    aoiPreviewTrigger,
+    onPinClick,
+  });
+}
+
+export async function fetchAOIPolygonPreview<TResult>(
+  contextId: string,
+  ringSnapshot: Array<[number, number]>,
+  plotPoints: readonly WorkbenchPlotPoint[],
+  zoneFilter: string,
+  selectRpc: (
+    ctxId: string,
+    req: { polygon: Array<[number, number]>; rings: number[][][]; zone: string }
+  ) => Promise<TResult>
+): Promise<{ res?: TResult; suggested: string; cause: unknown }> {
+  const localMatches = plotPoints.filter((p) => pointInPolygonRing(p.lon, p.lat, ringSnapshot));
+  const suggested = localMatches[0]?.gisBgc ? `${localMatches[0].gisBgc}/01` : '';
+  try {
+    const res = await selectRpc(contextId, { polygon: ringSnapshot, rings: [], zone: zoneFilter.trim() });
+    return { res, suggested, cause: null };
+  } catch (cause) {
+    return { suggested: '', cause };
+  }
+}
+
+export function disposeGeospatialMap(
+  mapInstance: { removeControl(ctrl: never): void; remove(): void } | null,
+  deckOverlay: unknown
+): void {
+  if (deckOverlay && mapInstance) {
+    try {
+      mapInstance.removeControl(deckOverlay as never);
+    } catch {
+      // Ignore already-detached control
+    }
+  }
+  if (mapInstance) mapInstance.remove();
+}
+
+export function bindWindowConnectivityListeners(onOffline: () => void, onOnline: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener('offline', onOffline);
+  window.addEventListener('online', onOnline);
+  return () => {
+    window.removeEventListener('offline', onOffline);
+    window.removeEventListener('online', onOnline);
+  };
 }

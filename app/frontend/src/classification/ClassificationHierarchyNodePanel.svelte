@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatError } from '../shared/readRequests';
   import {
     wouldIntroduceHierarchyCycle,
     type ClassificationBackendPort,
@@ -64,7 +65,7 @@
       onStatus(`Added hierarchy node "${res.nodeName}".`);
       await onReloadHierarchy();
     } catch (err) {
-      onError(`Add node failed: ${String(err)}`);
+      onError(`Add node failed: ${formatError(err)}`);
     } finally {
       onMutatingChange(false);
     }
@@ -82,7 +83,7 @@
       onStatus(`Renamed node to "${res.nodeName}".`);
       await onReloadHierarchy();
     } catch (err) {
-      onError(`Rename failed: ${String(err)}`);
+      onError(`Rename failed: ${formatError(err)}`);
     } finally {
       onMutatingChange(false);
     }
@@ -105,7 +106,7 @@
       onStatus('Reparented hierarchy node.');
       await onReloadHierarchy();
     } catch (err) {
-      onError(`Reparent failed: ${String(err)}`);
+      onError(`Reparent failed: ${formatError(err)}`);
     } finally {
       onMutatingChange(false);
     }
@@ -124,7 +125,7 @@
       onStatus(`Deleted ${res.affectedRows} hierarchy node(s).`);
       await onReloadHierarchy();
     } catch (err) {
-      onError(`Delete node failed: ${String(err)}`);
+      onError(`Delete node failed: ${formatError(err)}`);
     } finally {
       onMutatingChange(false);
     }
@@ -134,7 +135,13 @@
 <section class="vpro-cls-card">
   <h3>Add Classification Node</h3>
   <div class="vpro-cls-stack">
-    <label><span>Node Name</span><input type="text" bind:value={addNodeName} placeholder="e.g. Tsugion or CWHvm1/01" /></label>
+    <label
+      ><span>Node Name</span><input
+        type="text"
+        bind:value={addNodeName}
+        placeholder="e.g. Tsugion or CWHvm1/01"
+      /></label
+    >
     <label>
       <span>Phytosociological Level (1..11)</span>
       <select bind:value={addNodeLevel}>
@@ -151,9 +158,19 @@
         <option value={11}>11 — SiteSeries</option>
       </select>
     </label>
-    <label class="vpro-cls-check"><input type="checkbox" bind:checked={addNodeBreak} /><span>Mark as '~' Report Breakpoint</span></label>
-    <label class="vpro-cls-check"><input type="checkbox" bind:checked={addAsRoot} /><span>Insert at Root (otherwise child of selected node)</span></label>
-    <button type="button" class="vpro-btn-primary" disabled={!addNodeName.trim() || mutating} onclick={submitAddHierarchyNode}>Add Node</button>
+    <label class="vpro-cls-check"
+      ><input type="checkbox" bind:checked={addNodeBreak} /><span>Mark as '~' Report Breakpoint</span></label
+    >
+    <label class="vpro-cls-check"
+      ><input type="checkbox" bind:checked={addAsRoot} /><span>Insert at Root (otherwise child of selected node)</span
+      ></label
+    >
+    <button
+      type="button"
+      class="vpro-btn-primary"
+      disabled={!addNodeName.trim() || mutating}
+      onclick={submitAddHierarchyNode}>Add Node</button
+    >
   </div>
 </section>
 
@@ -162,24 +179,33 @@
     <h3>Selected Node #{selectedHierarchyNode.id} ({selectedHierarchyNode.rankName})</h3>
     <div class="vpro-cls-stack">
       <label><span>Rename Node</span><input type="text" bind:value={renameDraft} /></label>
-      <button type="button" class="vpro-btn-secondary" disabled={mutating || !renameDraft.trim()} onclick={submitRenameNode}>Apply Rename</button>
+      <button
+        type="button"
+        class="vpro-btn-secondary"
+        disabled={mutating || !renameDraft.trim()}
+        onclick={submitRenameNode}>Apply Rename</button
+      >
 
       <label>
         <span>Reparent Under (Cycle-Checked)</span>
         <select bind:value={reparentTargetId}>
           <option value="">(Root — No Parent)</option>
-          {#each (hierarchyView?.flatNodes ?? []).filter(
-            n => !wouldIntroduceHierarchyCycle(hierarchyView!.flatNodes, selectedHierarchyNode!.id, n.id)
-          ) as candidate (candidate.id)}
+          {#each (hierarchyView?.flatNodes ?? []).filter((n) => !wouldIntroduceHierarchyCycle(hierarchyView!.flatNodes, selectedHierarchyNode!.id, n.id)) as candidate (candidate.id)}
             <option value={String(candidate.id)}>{candidate.name} ({candidate.rankName})</option>
           {/each}
         </select>
       </label>
-      <button type="button" class="vpro-btn-secondary" disabled={mutating} onclick={submitReparentNode}>Move Branch</button>
+      <button type="button" class="vpro-btn-secondary" disabled={mutating} onclick={submitReparentNode}
+        >Move Branch</button
+      >
 
       <div class="vpro-cls-dialog-row">
-        <button type="button" class="vpro-btn-secondary" disabled={mutating} onclick={() => submitDeleteNode(false)}>Delete &amp; Promote Kids</button>
-        <button type="button" class="vpro-btn-danger" disabled={mutating} onclick={() => submitDeleteNode(true)}>Delete Subtree</button>
+        <button type="button" class="vpro-btn-secondary" disabled={mutating} onclick={() => submitDeleteNode(false)}
+          >Delete &amp; Promote Kids</button
+        >
+        <button type="button" class="vpro-btn-danger" disabled={mutating} onclick={() => submitDeleteNode(true)}
+          >Delete Subtree</button
+        >
       </div>
     </div>
   </section>

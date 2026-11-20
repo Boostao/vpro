@@ -189,6 +189,6 @@ test('Unit ports stay scope-owned and unmount cancellation never cancels or repl
   assert.doesNotMatch(source(scopeFile),/reads\.track|(?:Vegetation|Environment)ReportService\.|JSON\.stringify/);
   for(const name of [scopeFile,unitFile]) {
     assert.match(source(name),/\$state\.raw\(untrack/);
-    assert.match(source(name),/onDestroy\(\(\) => \{ unsubscribe\(\); cancel\(\); \}\)/);
+    assert.match(source(name),/onDestroy\(\(\) => \{\s*unsubscribe\(\);\s*cancel\(\);\s*\}\)/);
   }
 });

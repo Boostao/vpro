@@ -1,3 +1,4 @@
+import { evictMapEntriesByContext, registerContextDisposer } from '../shared/contextSessionRegistry';
 import type { TwoPageVegetationSession } from './twoPageVegetationSession';
 import type { TwoPageVegetationOwner } from './twoPageVegetationWire';
 import { wellFormedUTF16 } from './qualityEditor';
@@ -8,13 +9,19 @@ export interface TwoPageVegetationActivity {
   owner: TwoPageVegetationOwner | null;
 }
 
-export const twoPageVegetationEntries = new Map<string, { owner: TwoPageVegetationOwner; session: TwoPageVegetationSession; unsubscribe: () => void }>();
+export const twoPageVegetationEntries = new Map<
+  string,
+  { owner: TwoPageVegetationOwner; session: TwoPageVegetationSession; unsubscribe: () => void }
+>();
 const observers = new Set<(activity: TwoPageVegetationActivity) => void>();
 
 export function twoPageVegetationOwnerKey(owner: TwoPageVegetationOwner): string {
-  if (![owner.contextId, owner.project, owner.plot].every(value =>
-    typeof value === 'string' && value !== '' && wellFormedUTF16(value) && !value.includes('\0')) ||
-    !['SubVegAXL_BC', 'SubVegAXL', 'SubVegCXL', 'SubVegDXL'].includes(owner.form)) {
+  if (
+    ![owner.contextId, owner.project, owner.plot].every(
+      (value) => typeof value === 'string' && value !== '' && wellFormedUTF16(value) && !value.includes('\0')
+    ) ||
+    !['SubVegAXL_BC', 'SubVegAXL', 'SubVegCXL', 'SubVegDXL'].includes(owner.form)
+  ) {
     throw new Error('Vegetation session requires an exact literal context/project/parent/source-form owner.');
   }
   return JSON.stringify([owner.contextId, owner.project, owner.plot, owner.form]);
@@ -22,7 +29,9 @@ export function twoPageVegetationOwnerKey(owner: TwoPageVegetationOwner): string
 
 export function twoPageVegetationActivity(excludingOwner?: TwoPageVegetationOwner): TwoPageVegetationActivity {
   const excludingKey = excludingOwner ? twoPageVegetationOwnerKey(excludingOwner) : null;
-  let busy = false, blocked = false, owner: TwoPageVegetationOwner | null = null;
+  let busy = false,
+    blocked = false,
+    owner: TwoPageVegetationOwner | null = null;
   for (const [key, entry] of twoPageVegetationEntries) {
     if (key === excludingKey) continue;
     const state = entry.session.closeState();
@@ -38,6 +47,24 @@ export function notifyTwoPageVegetationActivity() {
 }
 
 export function subscribeTwoPageVegetationActivity(observer: (activity: TwoPageVegetationActivity) => void) {
-  observers.add(observer); observer(twoPageVegetationActivity());
-  return () => { observers.delete(observer); };
+  observers.add(observer);
+  observer(twoPageVegetationActivity());
+  return () => {
+    observers.delete(observer);
+  };
 }
+registerContextDisposer((id) => {
+  if (
+    evictMapEntriesByContext(
+      twoPageVegetationEntries,
+      id,
+      (_k, v) => v.owner.contextId === id,
+      (v) => {
+        v.session.dispose();
+        v.unsubscribe();
+      }
+    ) > 0
+  ) {
+    notifyTwoPageVegetationActivity();
+  }
+});

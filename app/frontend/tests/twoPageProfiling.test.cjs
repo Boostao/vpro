@@ -122,7 +122,7 @@ async function mountPanel(service, validator = api.twoPageProfilingFromWire) {
   const runtime = await import('svelte/internal/client');
   const { onDestroy } = await import(pathToFileURL(path.join(path.dirname(require.resolve('svelte')), 'index-client.js')).href);
   let script = readFileSync(srcPath('TwoPageProfilingPanel.svelte'), 'utf8').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  script = script.replace('form, onBusyChange }:', 'form, onBusyChange, inspect }:');
+  script = script.replace(/form,\s*onBusyChange,?\s*\}:/, 'form, onBusyChange, inspect }:');
   script += '\n$effect(() => inspect({ load, cancel, busy, error, review, current: () => review }));';
   const compiled = compile(`<script lang="ts">${script}</script>`, { generate: 'client' });
   const ast = ts.createSourceFile('profiling-panel.js', compiled.js.code, ts.ScriptTarget.Latest, true);
@@ -130,8 +130,8 @@ async function mountPanel(service, validator = api.twoPageProfilingFromWire) {
   const reads = loadTypeScript('readRequests.ts', {
     '@wailsio/runtime': { Call: { RuntimeError: class extends Error {} }, CancelledRejectionError: class extends Error {} },
   });
-  const mount = new Function('$', 'onDestroy', 'untrack', 'ReadRequests', 'ClassificationService', 'twoPageProfilingFromWire',
-    code + '\nreturn _unknown_;')(runtime, onDestroy, runtime.untrack, reads.ReadRequests, {
+  const mount = new Function('$', 'onDestroy', 'untrack', 'ReadRequests', 'formatError', 'ClassificationService', 'twoPageProfilingFromWire',
+    code + '\nreturn _unknown_;')(runtime, onDestroy, runtime.untrack, reads.ReadRequests, reads.formatError, {
       GetTwoPageProfilingReview: service.GetTwoPageProfilingReview ?? service.GetReview,
     }, validator);
   let actions; const activity = [];
@@ -254,7 +254,7 @@ test('complete original disclosure renders only its local50-Description page whi
   }));
   const view = await validate(value);
   const source = readFileSync(srcPath('TwoPageProfilingPanel.svelte'), 'utf8')
-    .replace('form, onBusyChange }:', 'form, onBusyChange, initialReview, initialOpen, initialOffset }:')
+    .replace(/form,\s*onBusyChange,?\s*\}:/, 'form, onBusyChange, initialReview, initialOpen, initialOffset }:')
     .replace('$state.raw<TwoPageProfilingView | null>(null)', '$state.raw<TwoPageProfilingView | null>(untrack(() => initialReview))')
     .replace('let originalsOpen = $state(false)', 'let originalsOpen = $state(untrack(() => initialOpen))')
     .replace('let descriptionOffset = $state(0)', 'let descriptionOffset = $state(untrack(() => initialOffset))');

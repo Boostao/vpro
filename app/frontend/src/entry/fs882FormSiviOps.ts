@@ -1,3 +1,4 @@
+import { formatError } from '../shared/readRequests';
 import type { SIVICreationForm } from './siviCreationEditor';
 import type { SIVICreationSession } from './siviCreationSession';
 import type { SIVICreationUndoSession } from './siviCreationUndoSession';
@@ -29,7 +30,7 @@ async function runSiviSessionBody<TSession extends SiviVersionedSession>(
   blockedMsg: string,
   verifiedFailurePrefix: string,
   unverifiedFailurePrefix: string,
-  body: (active: TSession) => Promise<boolean>,
+  body: (active: TSession) => Promise<boolean>
 ): Promise<boolean> {
   if (!session || !callbacks.enabled) {
     callbacks.setError(unavailableMsg);
@@ -51,9 +52,9 @@ async function runSiviSessionBody<TSession extends SiviVersionedSession>(
   } catch (cause) {
     if (session.view().revision > revision) {
       callbacks.invalidateCapabilities();
-      callbacks.setError(`${verifiedFailurePrefix}: ${String(cause)}`);
+      callbacks.setError(`${verifiedFailurePrefix}: ${formatError(cause)}`);
     } else {
-      callbacks.setError(`${unverifiedFailurePrefix}: ${String(cause)}`);
+      callbacks.setError(`${unverifiedFailurePrefix}: ${formatError(cause)}`);
     }
     return false;
   } finally {
@@ -62,13 +63,15 @@ async function runSiviSessionBody<TSession extends SiviVersionedSession>(
 }
 
 /** Execute SIVI creation session commands (`load`, `start`, `save`, `undo`, `resolve`, `cancel`). */
-export async function executeSiviCreationOpImpl(params: SiviOpCallbacks & {
-  session: SIVICreationSession | undefined;
-  operation: 'load' | 'start' | 'save' | 'undo' | 'resolve' | 'cancel';
-  form?: SIVICreationForm;
-  getCurrentSession: () => SIVICreationSession | undefined;
-  refreshPeers: (plot: string) => Promise<void>;
-}): Promise<boolean> {
+export async function executeSiviCreationOpImpl(
+  params: SiviOpCallbacks & {
+    session: SIVICreationSession | undefined;
+    operation: 'load' | 'start' | 'save' | 'undo' | 'resolve' | 'cancel';
+    form?: SIVICreationForm;
+    getCurrentSession: () => SIVICreationSession | undefined;
+    refreshPeers: (plot: string) => Promise<void>;
+  }
+): Promise<boolean> {
   const needsEdit = params.operation === 'load' || params.operation === 'start' || params.operation === 'save';
   return runSiviSessionBody(
     params.session,
@@ -107,23 +110,27 @@ export async function executeSiviCreationOpImpl(params: SiviOpCallbacks & {
       }
       params.setHostBusy(true);
       await params.refreshPeers(receipt.plot);
-      params.setSuccess(`SIVI creation ${receipt.id} verified; ${receipt.replayed ? 'read-only resolution, no mutation repeated' : 'one row committed'}.`);
+      params.setSuccess(
+        `SIVI creation ${receipt.id} verified; ${receipt.replayed ? 'read-only resolution, no mutation repeated' : 'one row committed'}.`
+      );
       return true;
-    },
+    }
   );
 }
 
 /** Execute SIVI deletion or restoration lifecycle operations. */
-export async function executeSiviLifecycleOpImpl(params: SiviOpCallbacks & {
-  kind: 'deletion' | 'restoration';
-  operation: 'load' | 'history' | 'review' | 'save' | 'undo' | 'resolve' | 'cancel';
-  identity?: string;
-  form?: SIVICreationForm;
-  deletionSession: SIVIDeletionSession | undefined;
-  restorationSession: SIVIDeletionRestorationSession | undefined;
-  getCurrentSession: () => SIVIDeletionSession | SIVIDeletionRestorationSession | undefined;
-  refreshPeers: (plot: string, kind: 'deletion' | 'restoration') => Promise<void>;
-}): Promise<boolean> {
+export async function executeSiviLifecycleOpImpl(
+  params: SiviOpCallbacks & {
+    kind: 'deletion' | 'restoration';
+    operation: 'load' | 'history' | 'review' | 'save' | 'undo' | 'resolve' | 'cancel';
+    identity?: string;
+    form?: SIVICreationForm;
+    deletionSession: SIVIDeletionSession | undefined;
+    restorationSession: SIVIDeletionRestorationSession | undefined;
+    getCurrentSession: () => SIVIDeletionSession | SIVIDeletionRestorationSession | undefined;
+    refreshPeers: (plot: string, kind: 'deletion' | 'restoration') => Promise<void>;
+  }
+): Promise<boolean> {
   const target = params.kind === 'deletion' ? params.deletionSession : params.restorationSession;
   const needsEdit = params.operation !== 'undo' && params.operation !== 'resolve';
   return runSiviSessionBody(
@@ -156,9 +163,12 @@ export async function executeSiviLifecycleOpImpl(params: SiviOpCallbacks & {
       }
       if (params.operation === 'review') {
         if (!params.identity) throw new Error('Select one explicit loaded source row or owned historical event.');
-        const ok = params.kind === 'deletion'
-          ? params.form && params.deletionSession && (await params.deletionSession.review(params.form, params.identity))
-          : params.restorationSession && (await params.restorationSession.review(params.identity));
+        const ok =
+          params.kind === 'deletion'
+            ? params.form &&
+              params.deletionSession &&
+              (await params.deletionSession.review(params.form, params.identity))
+            : params.restorationSession && (await params.restorationSession.review(params.identity));
         if (!ok) {
           params.setError(session.view().error ?? 'Choose an exact source form before reviewing deletion.');
           return false;
@@ -178,20 +188,24 @@ export async function executeSiviLifecycleOpImpl(params: SiviOpCallbacks & {
       }
       params.setHostBusy(true);
       await params.refreshPeers(receipt.plot, params.kind);
-      params.setSuccess(`SIVI ${params.kind} ${receipt.id} verified; ${receipt.replayed ? 'read-only resolution, no mutation repeated' : 'one exact physical row committed'}.`);
+      params.setSuccess(
+        `SIVI ${params.kind} ${receipt.id} verified; ${receipt.replayed ? 'read-only resolution, no mutation repeated' : 'one exact physical row committed'}.`
+      );
       return true;
-    },
+    }
   );
 }
 
 /** Execute SIVI creation-undo session operations (`history`, `review`, `undo`, `discard`, `resolve`, `cancel`). */
-export async function executeSiviCreationUndoOpImpl(params: SiviOpCallbacks & {
-  session: SIVICreationUndoSession | undefined;
-  operation: 'history' | 'review' | 'undo' | 'discard' | 'resolve' | 'cancel';
-  historyId?: string;
-  getCurrentSession: () => SIVICreationUndoSession | undefined;
-  refreshPeers: (plot: string) => Promise<void>;
-}): Promise<boolean> {
+export async function executeSiviCreationUndoOpImpl(
+  params: SiviOpCallbacks & {
+    session: SIVICreationUndoSession | undefined;
+    operation: 'history' | 'review' | 'undo' | 'discard' | 'resolve' | 'cancel';
+    historyId?: string;
+    getCurrentSession: () => SIVICreationUndoSession | undefined;
+    refreshPeers: (plot: string) => Promise<void>;
+  }
+): Promise<boolean> {
   const needsEdit = params.operation !== 'discard' && params.operation !== 'resolve';
   return runSiviSessionBody(
     params.session,
@@ -232,8 +246,10 @@ export async function executeSiviCreationUndoOpImpl(params: SiviOpCallbacks & {
       }
       params.setHostBusy(true);
       await params.refreshPeers(receipt.plot);
-      params.setSuccess(`SIVI creation Undo ${receipt.id} verified; ${receipt.replayed ? 'read-only resolution, no mutation repeated' : 'one exact created row removed'}.`);
+      params.setSuccess(
+        `SIVI creation Undo ${receipt.id} verified; ${receipt.replayed ? 'read-only resolution, no mutation repeated' : 'one exact created row removed'}.`
+      );
       return true;
-    },
+    }
   );
 }

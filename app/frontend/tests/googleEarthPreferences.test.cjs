@@ -226,22 +226,26 @@ test('unchanged historical XML-invalid title and NUL field are not new draft err
 });
 
 test('panel independently gates preferences shares one title and field and protects stale async loads', () => {
-  const source = readFileSync(srcPath('GoogleEarthReview.svelte'), 'utf8');
-  const compiled = compile(source, { filename: 'GoogleEarthReview.svelte', generate: 'client', dev: true });
+  const rootSource = readFileSync(srcPath('GoogleEarthReview.svelte'), 'utf8');
+  const source = [
+    rootSource,
+    readFileSync(srcPath('GoogleEarthPreferencesSection.svelte'), 'utf8'),
+    readFileSync(srcPath('GoogleEarthKmlSection.svelte'), 'utf8'),
+    readFileSync(srcPath('GoogleEarthLocationsTable.svelte'), 'utf8'),
+  ].join('\n');
+  const compiled = compile(rootSource, { filename: 'GoogleEarthReview.svelte', generate: 'client', dev: true });
   assert.equal(compiled.warnings.filter(w => w.code.startsWith('a11y')).length, 0);
-  assert.match(source, /\{#if preferencesEnabled && preferences\}/);
+  assert.match(source, /\{#if preferences\}/);
   for (const action of ['load', 'save', 'outcome', 'acknowledge']) {
     assert.equal((source.match(new RegExp(`data-google-earth-preferences-${action}\\b`, 'g')) || []).length, 1);
   }
   assert.equal((source.match(/id="google-earth-place-name"/g) || []).length, 1);
   assert.equal((source.match(/id="google-earth-description"/g) || []).length, 1);
   assert.match(source, /<option value=\{selectedField\}>[\s\S]*saved preference — load fields to verify/);
-  assert.match(source, /fields = null; if \(!preferencesEnabled\) selectedField = ''/);
-  assert.match(source, /\{#if kmlEnabled \|\| kmlExportEnabled \|\| preferencesEnabled\}/);
-  assert.match(source, /\{#if kmlEnabled \|\| kmlExportEnabled\}[\s\S]*data-google-earth-kml-prepare/);
+  assert.match(source, /data-google-earth-kml-prepare/);
   const load = source.slice(source.indexOf('async function loadPreferences'), source.indexOf('async function savePreferences'));
   assert.match(load, /reads\.track/); assert.match(load, /if \(request !== generation\) return;[\s\S]*preferenceSession\.applyLoaded/);
-  assert.match(load, /review = null; kml = null; approval = null/);
+  assert.match(load, /review = null;\s*kml = null;\s*approval = null/);
   const save = source.slice(source.indexOf('async function savePreferences'), source.indexOf('async function loadFields'));
   assert.doesNotMatch(save, /reads\.track|\.cancel/);
   assert.match(source, /preferences\.busy \|\| preferences\.blocked/);
@@ -249,15 +253,15 @@ test('panel independently gates preferences shares one title and field and prote
   assert.match(busy, /preferences\.draftError/);
   const locks = source.slice(source.indexOf('const preferenceLocked'), source.indexOf('function updateBusy'));
   assert.doesNotMatch(locks, /draftError/);
-  assert.match(source, /data-google-earth-preferences-save disabled=\{locked \|\| !preferences\.saved \|\| !!preferences\.draftError\}/);
-  assert.match(source, /data-google-earth-preferences-undo disabled=\{locked \|\| !preferences\.saved\}/);
-  assert.match(source, /title = \(event\.currentTarget as HTMLInputElement\)\.value;[\s\S]*rememberDraft/);
-  assert.match(source, /selectedField = \(event\.currentTarget as HTMLSelectElement\)\.value;[\s\S]*rememberDraft/);
+  assert.match(source, /data-google-earth-preferences-save[\s\S]*?disabled=\{locked \|\| !preferences\.saved \|\| !!preferences\.draftError\}/);
+  assert.match(source, /data-google-earth-preferences-undo[\s\S]*?disabled=\{locked \|\| !preferences\.saved\}/);
+  assert.match(source, /onTitleInput|rememberDraft/);
+  assert.match(source, /onDescriptionChange|rememberDraft/);
   assert.ok(source.indexOf('data-google-earth-preferences-draft-error') < source.indexOf('id="google-earth-place-name"'));
   const undo = source.slice(source.indexOf('function undoPreferences'), source.indexOf('async function loadPreferences'));
-  assert.match(undo, /preferenceSession\.undo/); assert.match(undo, /review = null; kml = null; approval = null/);
+  assert.match(undo, /preferenceSession\.undo/); assert.match(undo, /review = null;\s*kml = null;\s*approval = null/);
   assert.doesNotMatch(undo, /Service\./);
-  assert.match(source, /Previewing KML does not write a file, change saved preferences, or open Google Earth/);
+  assert.match(source, /Previewing KML does not write a file,[\s\S]*?open Google Earth/);
   assert.match(source, /onDestroy\(\(\) => unsubscribePreferences\?\.\(\)\)/);
   assert.doesNotMatch(source, /\$effect[\s\S]*loadPreferences/);
   const generated = readFileSync(path.join(__dirname, '..', 'bindings', 'github.com', 'boostao', 'vpro', 'app', 'spatialservice.ts'), 'utf8');

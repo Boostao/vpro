@@ -213,28 +213,30 @@ test('actual extended panel handlers reject late canceled and changed-criteria r
   assert.equal(session.view().outcome.status, 'published');
 });
 test('actual top-level effect aggregates independent old/extended authority even with both panels unmounted', () => {
-  const source = readFileSync(srcPath('App.svelte'), 'utf8').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
-  const ast = ts.createSourceFile('App.svelte.ts', source, ts.ScriptTarget.Latest, true);
-  const effect = ast.statements.find(node => ts.isExpressionStatement(node) &&
-    node.getText(ast).startsWith('$effect(') && node.getText(ast).includes('extendedSummaryWorkbookPublicationSession'));
-  assert.ok(effect);
+  // Behavioural verification of operationGuard aggregation across both workbook sessions.
+  const { createTestReportOperationGuard } = require('./svelteTestHelpers.cjs');
   for (const oldHeld of [false, true]) for (const newHeld of [false, true]) {
-    let cleanup, listeners = [], stopped = 0;
-    const context = vm.createContext({
-      summaryEnvironmentPublicationBusy: false, view: 'home',
-      $projectState: { contextId: 'owned', activeProject: 'Sample', projectPath: 'C:\\project.db', activeSU: 'Selected', suPath: 'C:\\external.db' },
-      $effect(run) { cleanup = run(); },
-      siteUnitSummaryWorkbookPublicationSession: () => ({ view: () => ({ busy: oldHeld, blocked: false }),
-        subscribe(run) { listeners.push(run); run(); return () => stopped++; } }),
-      extendedSummaryWorkbookPublicationSession: () => ({ view: () => ({ busy: false, blocked: newHeld }),
-        subscribe(run) { listeners.push(run); run(); return () => stopped++; } }),
+    let listeners = [], stopped = 0;
+    const h = createTestReportOperationGuard({
+      dependencies: {
+        './siteUnitSummaryWorkbook': {
+          siteUnitSummaryWorkbookPublicationSession: () => ({
+            view: () => ({ busy: oldHeld, blocked: false }),
+            subscribe(run) { listeners.push(run); run(); return () => stopped++; },
+          }),
+        },
+        './siteUnitSummaryExtendedWorkbook': {
+          extendedSummaryWorkbookPublicationSession: () => ({
+            view: () => ({ busy: false, blocked: newHeld }),
+            subscribe(run) { listeners.push(run); run(); return () => stopped++; },
+          }),
+        },
+      },
     });
-    const code = effect.getText(ast);
-    vm.runInContext(ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
-    assert.equal(context.summaryEnvironmentPublicationBusy, oldHeld || newHeld);
-    assert.equal(context.view, newHeld ? 'summary-environment' : 'home');
+    assert.equal(h.guard.publicationBusy, oldHeld || newHeld);
+    assert.equal(h.view, newHeld ? 'summary-environment' : 'home');
     assert.equal(listeners.length, 2);
-    if (cleanup) cleanup();
+    h.dispose();
     assert.equal(stopped, listeners.length);
   }
 });
@@ -247,9 +249,9 @@ test('extended UI keeps visible labels and held authority while restoring the or
   assert.match(parent, /retainedOptions\?\.orderBy === 2 \? 'lifeform'/);
   assert.match(parent, /extendedAuthority\?\.view\(\)\.blocked/);
   assert.match(parent, /\{extendedOptions\}/);
-  assert.match(panel, /sameExtendedSummaryWorkbookOptions\(requestedOptions, extendedOptions/);
-  assert.match(panel, /extendedSession\.publish\(review, destination/);
-  assert.doesNotMatch(panel, /reads\.track\(EnvironmentReportService\.ExportReviewed/);
+  assert.match(panel, /sameExtendedSummaryWorkbookOptions\(\s*requestedOptions,\s*extendedOptions/);
+  assert.match(panel, /extendedSession\.publish\(\s*review,\s*destination/);
+  assert.doesNotMatch(panel, /reads\.track\(\s*EnvironmentReportService\.ExportReviewed/);
   for (const heading of ['Scientific Name', 'Common Name', '%Cover', '%Presence']) assert.ok(panel.includes(heading));
   assert.match(panel, /scope="row" aria-label=/);
 });

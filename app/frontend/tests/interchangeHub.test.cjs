@@ -451,7 +451,14 @@ test('InterchangeHub plain-language error formatting strips RuntimeError, lstat 
 });
 
 test('InterchangeHub replaces free-text lump inputs with discovered *_Lump selectors and passes cross-DB lumpDbPath (UX-IMPORT-004)', async () => {
-  const source = readFileSync(srcPath('InterchangeHub.svelte'), 'utf8');
+  const source = [
+    'InterchangeHub.svelte',
+    'InterchangeTurboVegTab.svelte',
+    'InterchangeDataExportsTab.svelte',
+    'InterchangeGeoPackageTab.svelte',
+  ]
+    .map(f => readFileSync(srcPath(f), 'utf8'))
+    .join('\n');
   assert.doesNotMatch(source, /<input[^>]*bind:value=\{(?:tvExportLump|csvLumpTable|gpkgLumpTable)\}/);
   assert.match(source, /data-lump-select="turboveg"/);
   assert.match(source, /data-lump-select="analytics"/);

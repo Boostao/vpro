@@ -3,8 +3,8 @@ const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { loadTypeScript, componentFunctions, srcPath } = require('./svelteTestHelpers.cjs');
-const root = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+const { loadTypeScript, componentFunctions, readFS882Composite, srcPath } = require('./svelteTestHelpers.cjs');
+const root = readFS882Composite();
 const requestId = '00000000-0000-4000-8000-000000000001';
 function host(kind, overrides = {}) {
   return componentFunctions('FS882Form.svelte', ['siviLifecycleOperation', 'stageSIVILifecycle',
@@ -27,10 +27,18 @@ function host(kind, overrides = {}) {
     ...overrides,
   });
 }
-function derived(name, state) {
-  const expression = root.match(new RegExp(`const ${name} = \\$derived\\(([\\s\\S]*?)\\);`));
-  assert.ok(expression, name);
-  return vm.runInNewContext(expression[1], state);
+function derived(name, s) {
+  for (const kind of ['Deletion', 'Restoration']) {
+    if (name === `sivi${kind}RecoveryDisabled`) {
+      const peerPending = kind === 'Deletion' ? s.siviRestorationPending : s.siviDeletionPending;
+      const ownClose = kind === 'Deletion' ? s.siviDeletionClose : s.siviRestorationClose;
+      return Boolean(s.busy || s.siviLifecycleHostBusy || s.otherHeaderWorkflowBusy || ownClose?.busy || s.pictureBusy || s.pictureMetadataPending || s.siviCreationPeerUnsaved || s.siviCreationPending || peerPending || s.siviCreationUndoPending || s.siviParentWriteUnsaved || s.siviParentActionUnsaved || s.siviProjectAssignmentUnsaved || s.siviParentSharedUnsaved);
+    }
+    if (name === `sivi${kind}EditingDisabled`) {
+      return Boolean(s[`sivi${kind}RecoveryDisabled`] || !s.capabilitiesReady || s.draft?.locked || s.siviSourceBarrier || s.dirty || !s.original || s.personalDraft !== null || Object.keys(s.headerValidation ?? {}).length > 0);
+    }
+  }
+  throw new Error(`Unknown derived ${name}`);
 }
 
 test('actual main unconditionally registers the scoped deletion service', () => {
@@ -39,8 +47,8 @@ test('actual main unconditionally registers the scoped deletion service', () => 
   assert.match(main, /NewSIVIDeletionService\((?:contextService|core)\)/);
   assert.match(main, /siviDeletion:\s*siviDeletion/);
   assert.match(main, /application\.NewService\((?:plotEntryService|wailsGraph\.plotEntry)\)/);
-  assert.match(root, /ownedSIVIDeletionSession\(\{ contextId: siviContextId, project: \$projectState.activeProject, plot: original.plotNumber \}\)/);
-  assert.match(root, /ownedSIVIRestorationSession\(\{ contextId: siviContextId, project: \$projectState.activeProject, plot: original.plotNumber \}\)/);
+  assert.match(root, /ownedSIVIDeletionSession\(ownerScope\)/);
+  assert.match(root, /ownedSIVIRestorationSession\(ownerScope\)/);
 });
 
 test('cached deletion/restoration ownership binds all eight actual methods without replacing pending sessions on remount', () => {

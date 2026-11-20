@@ -64,17 +64,47 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 `;
 }
 
+interface MinimalGPUBuffer {
+  mapAsync(mode: number): Promise<void>;
+  getMappedRange(): ArrayBuffer;
+  unmap(): void;
+  destroy?(): void;
+}
+
+interface MinimalGPUComputePipeline {
+  getBindGroupLayout(index: number): unknown;
+}
+
+interface MinimalGPUComputePassEncoder {
+  setPipeline(pipeline: MinimalGPUComputePipeline): void;
+  setBindGroup(index: number, bindGroup: unknown): void;
+  dispatchWorkgroups(x: number): void;
+  end(): void;
+}
+
+interface MinimalGPUCommandEncoder {
+  beginComputePass(): MinimalGPUComputePassEncoder;
+  copyBufferToBuffer(
+    source: MinimalGPUBuffer,
+    sourceOffset: number,
+    destination: MinimalGPUBuffer,
+    destinationOffset: number,
+    size: number
+  ): void;
+  finish(): unknown;
+}
+
 interface MinimalGPUDevice {
   limits?: { maxComputeWorkgroupSizeX?: number };
   createShaderModule(descriptor: { code: string }): unknown;
-  createBuffer?(descriptor: { size: number; usage: number }): any;
+  createBuffer?(descriptor: { size: number; usage: number }): MinimalGPUBuffer;
   createBindGroupLayout?(descriptor: unknown): unknown;
   createPipelineLayout?(descriptor: unknown): unknown;
-  createComputePipeline?(descriptor: unknown): any;
+  createComputePipeline?(descriptor: unknown): MinimalGPUComputePipeline;
   createBindGroup?(descriptor: unknown): unknown;
-  createCommandEncoder?(): any;
+  createCommandEncoder?(): MinimalGPUCommandEncoder;
   queue?: {
-    writeBuffer(buffer: any, offset: number, data: BufferSource): void;
+    writeBuffer(buffer: MinimalGPUBuffer, offset: number, data: ArrayBuffer | ArrayBufferView): void;
     submit(commands: unknown[]): void;
   };
   destroy?(): void;
@@ -96,14 +126,9 @@ interface MinimalNavigatorWithGPU {
  * Probes navigator.gpu (requestAdapter + requestDevice + WGSL shader module compilation)
  * and falls back cleanly to WebGL2 + TypedArray CPU execution when WebGPU is unavailable.
  */
-export async function detectSpatialComputeBackend(
-  nav?: unknown
-): Promise<SpatialComputeBackendInfo> {
-  const targetNav = (nav !== undefined
-    ? nav
-    : typeof navigator !== 'undefined'
-      ? navigator
-      : undefined) as MinimalNavigatorWithGPU | undefined;
+export async function detectSpatialComputeBackend(nav?: unknown): Promise<SpatialComputeBackendInfo> {
+  const targetNav = (nav !== undefined ? nav : typeof navigator !== 'undefined' ? navigator : undefined) as
+    MinimalNavigatorWithGPU | undefined;
 
   if (!targetNav || !targetNav.gpu || typeof targetNav.gpu.requestAdapter !== 'function') {
     return {
@@ -137,14 +162,8 @@ export async function detectSpatialComputeBackend(
       };
     }
     device.createShaderModule({ code: buildWGSLSpatialFilterShader(64) });
-    const labelParts = [
-      adapter.info?.vendor,
-      adapter.info?.description || adapter.info?.architecture,
-    ].filter(Boolean);
-    const maxWg =
-      device.limits?.maxComputeWorkgroupSizeX ??
-      adapter.limits?.maxComputeWorkgroupSizeX ??
-      256;
+    const labelParts = [adapter.info?.vendor, adapter.info?.description || adapter.info?.architecture].filter(Boolean);
+    const maxWg = device.limits?.maxComputeWorkgroupSizeX ?? adapter.limits?.maxComputeWorkgroupSizeX ?? 256;
     device.destroy?.();
     return {
       backend: 'webgpu',
@@ -220,14 +239,23 @@ export async function executeSpatialFilterKernel(
     };
   }
 
-  const targetNav = (options?.nav !== undefined
-    ? options.nav
-    : typeof navigator !== 'undefined'
-      ? navigator
-      : undefined) as MinimalNavigatorWithGPU | undefined;
+  const targetNav = (
+    options?.nav !== undefined ? options.nav : typeof navigator !== 'undefined' ? navigator : undefined
+  ) as MinimalNavigatorWithGPU | undefined;
 
-  const gpuBufUsage = (globalThis as any).GPUBufferUsage;
-  const gpuMapMode = (globalThis as any).GPUMapMode;
+  type GlobalWebGPUConstants = typeof globalThis & {
+    GPUBufferUsage?: {
+      STORAGE: number;
+      COPY_DST: number;
+      COPY_SRC: number;
+      UNIFORM: number;
+      MAP_READ: number;
+    };
+    GPUMapMode?: { READ: number };
+  };
+  const gpuGlobals = globalThis as GlobalWebGPUConstants;
+  const gpuBufUsage = gpuGlobals.GPUBufferUsage;
+  const gpuMapMode = gpuGlobals.GPUMapMode;
 
   if (targetNav?.gpu && gpuBufUsage && gpuMapMode) {
     let device: MinimalGPUDevice | null = null;
@@ -290,7 +318,7 @@ export async function executeSpatialFilterKernel(
         uv.setUint32(24, 0, true);
         uv.setUint32(28, 0, true);
 
-        device.queue.writeBuffer(coordsBuffer, 0, coordsLonLat as unknown as BufferSource);
+        device.queue.writeBuffer(coordsBuffer, 0, coordsLonLat);
         device.queue.writeBuffer(uniformBuffer, 0, uniformData);
         device.queue.writeBuffer(binsBuffer, 0, new Uint32Array(safeGrid * safeGrid));
 
@@ -315,10 +343,7 @@ export async function executeSpatialFilterKernel(
         encoder.copyBufferToBuffer(binsBuffer, 0, binsReadBuffer, 0, binsBytes);
         device.queue.submit([encoder.finish()]);
 
-        await Promise.all([
-          flagsReadBuffer.mapAsync(gpuMapMode.READ),
-          binsReadBuffer.mapAsync(gpuMapMode.READ),
-        ]);
+        await Promise.all([flagsReadBuffer.mapAsync(gpuMapMode.READ), binsReadBuffer.mapAsync(gpuMapMode.READ)]);
 
         const flagsArr = new Uint32Array(flagsReadBuffer.getMappedRange().slice(0));
         const densityGrid = new Uint32Array(binsReadBuffer.getMappedRange().slice(0));

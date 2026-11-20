@@ -36,7 +36,9 @@
   <div class="card">
     <h3>Ministry CMD to aSMR Dual Edatopic Grids</h3>
     {#if !climateResult || !activeEdatopicView}
-      <p class="muted">Run "Compute Climate &amp; CMD to aSMR" on Tab 1 first to populate Dual Relative and Actual Edatopic Grids.</p>
+      <p class="muted">
+        Run "Compute Climate &amp; CMD to aSMR" on Tab 1 first to populate Dual Relative and Actual Edatopic Grids.
+      </p>
     {:else}
       <div class="form-row">
         <label>
@@ -45,7 +47,9 @@
             <option value="__overall__">Overall Project Scope ({climateResult.coordinatizedPlots} plots)</option>
             {#each climateResult.unitSummaries as unit}
               <option value={unit.groupKey}>
-                {unit.groupKey} ({unit.plotCount} plots{unit.meanAsmr !== undefined ? `, mean aSMR ${unit.meanAsmr}` : ''})
+                {unit.groupKey} ({unit.plotCount} plots{unit.meanAsmr !== undefined
+                  ? `, mean aSMR ${unit.meanAsmr}`
+                  : ''})
               </option>
             {/each}
           </select>
@@ -53,7 +57,11 @@
         {#if activeEdatopicView.meanShift !== null}
           <div class="kpi">
             <span>Mean Moisture Shift (aSMR - rSMR)</span>
-            <strong>{activeEdatopicView.meanShift > 0 ? `+${activeEdatopicView.meanShift}` : activeEdatopicView.meanShift}</strong>
+            <strong
+              >{activeEdatopicView.meanShift > 0
+                ? `+${activeEdatopicView.meanShift}`
+                : activeEdatopicView.meanShift}</strong
+            >
           </div>
         {/if}
       </div>

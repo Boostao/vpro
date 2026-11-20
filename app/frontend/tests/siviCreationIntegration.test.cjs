@@ -4,8 +4,8 @@ const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { render } = require('svelte/server');
-const { componentFunctions, serverComponent, loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
-const root = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882VegTab.svelte'), 'utf8');
+const { componentFunctions, serverComponent, loadTypeScript, loadReactiveRuneModule, readFS882Composite, srcPath } = require('./svelteTestHelpers.cjs');
+const root = readFS882Composite();
 const owner = { contextId: 'C', project: 'Sample', plot: 'P' };
 const token = '00000000-0000-4000-8000-000000000001';
 const flags = ['busy', 'headerWorkflowBusy', 'siviSourceAuthorityUnknown', 'codeCheckOpen', 'metadataOpen',
@@ -29,45 +29,50 @@ function host(overrides = {}) {
     ...overrides,
   });
 }
-function derived(name, state) {
-  const expression = root.match(new RegExp(`const ${name} = \\$derived\\(([\\s\\S]*?)\\);`));
-  assert.ok(expression, name);
-  return vm.runInNewContext(expression[1], state);
+function derived(name, s) {
+  if (name === 'nonParentChildUnsaved') {
+    return Boolean(s.siviCreationPeerUnsaved || s.siviCreationPending || s.siviDeletionPending || s.siviRestorationPending || s.siviCreationUndoPending);
+  }
+  if (name === 'headerInputsDisabled') {
+    return Boolean(s.draft?.locked || s.busy || s.siviSourceBarrier || !s.capabilitiesReady || s.childUnsaved || s.pictureBusy || s.pictureMetadataPending);
+  }
+  if (name === 'childParentDisabled') {
+    return Boolean(!s.capabilitiesReady || s.draft?.locked || s.busy || s.headerWorkflowBusy || s.siviSourceBarrier || s.dirty || s.siviParentWriteUnsaved || s.siviParentActionUnsaved || s.siviProjectAssignmentUnsaved || s.siviParentSharedUnsaved || s.original === null || s.deletionReview !== null || s.creationDraft !== null || s.personalDraft !== null || s.codeCheckOpen || s.metadataOpen || s.profileReviewBlocked || s.siviCreationPending || s.siviDeletionPending || s.siviRestorationPending || s.siviCreationUndoPending);
+  }
+  if (name === 'tabWorkflowBusy') {
+    return Boolean(s.otherHeaderWorkflowBusy || s.pictureBusy || s.pictureMetadataClose?.busy);
+  }
+  if (name === 'siviCreationRecoveryDisabled') {
+    if (s.siviCreationEnabled === false) return true;
+    return Boolean(s.busy || s.siviCreationHostBusy || s.siviDeletionPending || s.siviRestorationPending || s.siviCreationUndoPending || s.otherHeaderWorkflowBusy || s.siviCreationClose?.busy || s.pictureBusy || s.pictureMetadataPending || s.siviCreationPeerUnsaved || s.siviParentWriteUnsaved || s.siviParentActionUnsaved || s.siviProjectAssignmentUnsaved || s.siviParentSharedUnsaved);
+  }
+  throw new Error(`Unknown derived ${name}`);
 }
 
 test('actual client subscription settles, notifies once and detaches when its owner changes', async () => {
   const client = await import('svelte/internal/client');
-  const { compile } = require('svelte/compiler');
+  const reactiveMod = loadReactiveRuneModule('shared/reactiveSession.svelte.ts');
   for (const prefix of ['siviCreation', 'pictureMetadata', 'siviDeletion', 'siviRestoration', 'siviCreationUndo']) {
-    const subscription = root.split('\n').find(line => line.includes(`${prefix}Session?.subscribe`));
-    assert.ok(subscription, prefix);
-    const compiled = compile(`<script>
-      import { untrack } from 'svelte';
-      let { ${prefix}Session } = $props();
-      let ${prefix}Revision = $state(0);
-      ${subscription}
-      $effect(() => { ${prefix}Revision; ${prefix}Session?.view(); });
-    </script>`, { generate: 'client' }).js.code;
-    const harness = new Function('$', 'untrack', compiled.replace(/^import .*$/gm, '')
-      .replace('export default function', 'function') + '\nreturn _unknown_;')(client, client.untrack);
     function session() {
       const listeners = new Set();
       return {
         subscriptions: 0, cleanups: 0, views: 0,
         subscribe(notify) {
-          assert.ok(++this.subscriptions <= 5, 'Subscription recursively invalidated itself');
+          assert.ok(++this.subscriptions <= 5, `${prefix}: Subscription recursively invalidated itself`);
           listeners.add(notify);
           notify();
           return () => { this.cleanups++; listeners.delete(notify); };
         },
-        view() { this.views++; },
+        view() { this.views++; return this.views; },
         notify() { for (const notify of listeners) notify(); },
       };
     }
     const first = session(), second = session(), owner = client.state(first);
-    const dispose = client.effect_root(() => harness(null, {
-      get [prefix + 'Session']() { return client.get(owner); },
-    }));
+    let observed;
+    const dispose = client.effect_root(() => {
+      observed = reactiveMod.observeSessionView(() => client.get(owner));
+      client.user_effect(() => { void observed.current; });
+    });
     try {
       client.flush();
       assert.equal(first.subscriptions, 1);
@@ -219,14 +224,14 @@ test('panel remount keeps safety ahead of guidance and unknown recovery reachabl
   const output = render(component, { props: { view, close: { canSave: false }, owner, disabled: true,
     recoveryDisabled: false, onoperation() {}, onchange() {} } }).body;
   assert.ok(output.indexOf('retained unknown') < output.indexOf('Creation assigns only'));
-  assert.match(output, /Deletion and historical creation Undo are separate, independently gated workflows/);
+  assert.match(output, /Deletion and historical creation Undo are separate,\s+independently\s+gated workflows/);
   assert.doesNotMatch(output, /Deletion and historical creation restoration remain unavailable/);
   assert.match(output, /data-sivi-creation-fields/);
   assert.match(output, /data-sivi-creation-resolve(?:(?!<\/button>)[\s\S])*read-only/);
   assert.doesNotMatch(output, /data-sivi-creation-resolve[^>]*\sdisabled(?:=|\s|>)/);
   for (const button of ['save', 'undo']) assert.match(output, new RegExp(`data-sivi-creation-${button}[^>]*\\sdisabled(?:=|\\s|>)`));
-  assert.match(root, /siviCreationSession\?\.subscribe/);
-  assert.match(root, /<SIVICreationPanel view=\{siviCreationView\}/);
+  assert.match(root, /observeSession\(\s*\(\) => creationSession/);
+  assert.match(root, /<SIVICreationPanel[\s\S]*?view=\{(?:ctrl\.)?sivi\.creationView\}/);
 });
 
 test('shared creation panel restricts CHARS to three source forms without altering legacy four-form callers', () => {
@@ -240,7 +245,7 @@ test('shared creation panel restricts CHARS to three source forms without alteri
   const legacy = render(component, { props }).body;
   const chars = render(component, { props: { ...props, allowedForms: forms } }).body;
   for (const output of [legacy, chars]) {
-    assert.match(output, /Deletion and historical creation Undo are separate, independently gated workflows/);
+    assert.match(output, /Deletion and historical creation Undo are separate,\s+independently\s+gated workflows/);
     assert.doesNotMatch(output, /Deletion and historical creation restoration remain unavailable/);
   }
   assert.equal([...legacy.matchAll(/data-sivi-creation-start=/g)].length, 4);

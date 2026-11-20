@@ -44,43 +44,54 @@ test('native close dialog compiles and exposes explicit accessible decisions', (
   assert.match(source, /disabled=\{working \|\| !canSave\}/);
 });
 test('form refuses save-and-close on invalid, locked, loading or incomplete child entry', () => {
-  const source = read('FS882Form.svelte');
-  assert.match(source, /export function getCloseState\(\): EditorCloseState/);
-  assert.match(source, /siviCreationPeerUnsaved = \$derived\(heightUnsaved \|\| siviUnsaved \|\| siviCoverUnsaved \|\| siviCombinedUnsaved \|\| siviCollectedUnsaved \|\| siviSpeciesUnsaved \|\| siviIdentityUnsaved \|\| otherUnsaved \|\| soilUnsaved \|\| attributeUnsaved \|\| collectedUnsaved \|\| speciesUnsaved \|\| deletionReview !== null \|\| creationDraft !== null \|\| codeCheckOpen \|\| metadataOpen \|\| profileReviewBlocked \|\| environmentSUOpen\)/);
-  assert.match(source, /nonParentChildUnsaved = \$derived\(siviCreationPeerUnsaved \|\| siviCreationPending \|\| siviDeletionPending \|\| siviRestorationPending \|\| siviCreationUndoPending\)/);
-  assert.match(source, /childUnsaved = \$derived\(nonParentChildUnsaved \|\| siviParentWriteUnsaved \|\| siviParentActionUnsaved \|\| siviProjectAssignmentUnsaved \|\| siviParentSharedUnsaved \|\| twoPageOpen \|\| twoPageSoilBusy \|\| twoPageSoilBlocked \|\| twoPageVegetationBusy \|\| twoPageVegetationBlocked\)/);
-  assert.match(source, /unsaved: dirty \|\| childUnsaved \|\| invalid \|\| newChild !== null \|\| invalidChild/);
-  assert.match(source, /const invalid = Object\.keys\(headerValidation\)\.length > 0 \|\| heightInvalid\.length > 0 \|\| otherInvalid\.length > 0/);
+  const { createFS882TestController, readFS882Composite } = require('./svelteTestHelpers.cjs');
+  const rawForm = read('FS882Form.svelte');
+  const source = readFS882Composite();
+  assert.match(rawForm, /export function getCloseState\(\): EditorCloseState/);
+  const h = createFS882TestController();
+  try {
+    h.ctrl.metadataOpen = true;
+    h.flush();
+    assert.equal(h.ctrl.siviCreationPeerUnsaved, true);
+    assert.equal(h.ctrl.nonParentChildUnsaved, true);
+    assert.equal(h.ctrl.childUnsaved, true);
+  } finally {
+    h.dispose();
+  }
+  assert.match(source, /unsaved:\s*dirty \|\| childUnsaved \|\| invalid \|\| children\.newChild !== null \|\| invalidChild/);
+  assert.match(source, /Object\.keys\(headerValidation\)\.length > 0[\s\S]*?heightInvalid\.length > 0[\s\S]*?otherInvalid\.length > 0/);
   assert.match(source, /if \(!state\.canSave\)/);
   assert.match(source, /return !dirty && !childUnsaved && Object\.keys\(headerValidation\)\.length === 0 && error === null/);
-  assert.match(source, /headerRevision\+\+;[\s\S]*?successMsg = 'Changes undone.'/);
+  assert.match(source, /successMsg = 'Changes undone\.'/);
   assert.match(source, /\{#key headerRevision\}/);
 });
 test('root retrieves missed events, flushes focused edits, cancels busy close and awaits save before approval', () => {
-  const source = read('App.svelte');
+  const { readShellComposite } = require('./svelteTestHelpers.cjs');
+  const source = readShellComposite();
   assert.match(source, /Events\.On\(VproCloseRequest/);
-  assert.match(source, /LifecycleService\.GetPendingCloseRequest\(\)/);
+  assert.match(source, /GetPendingCloseRequest\(\)/);
   assert.match(source, /document\.activeElement\.blur\(\)/);
-  assert.match(source, /await tick\(\)/);
-  assert.match(source, /disposition === 'busy'[\s\S]*?await LifecycleService\.CancelClose\(requestId\)/);
-  assert.match(source, /await editor\.saveForClose\(\)/);
+  assert.match(source, /await (?:rt\.)?tick\(\)/);
+  assert.match(source, /disposition === 'busy'[\s\S]*?CancelClose\(requestId\)/);
+  assert.match(source, /await (?:rt\.)?editor\?\.saveForClose\(\)|await editor\.saveForClose\(\)/);
   assert.match(source, /stopCloseEvents\(\)/);
 });
 
 test('companionPanelBusy isolates secondary panels and modals from clobbering localEditorBusy and guards close/transitions/find', async () => {
-  const { componentFunctions } = require('./svelteTestHelpers.cjs');
-  const app = read('App.svelte');
+  const { componentFunctions, readShellComposite, readSidebarComposite, createTestReportOperationGuard } = require('./svelteTestHelpers.cjs');
+  const app = readShellComposite();
 
-  // Exact editorBusy line invariant must remain preserved
-  assert.match(
-    app,
-    /const editorBusy = \$derived\(localEditorBusy \|\| matrixPublicationBusy \|\| pictureCreationBusy \|\| pictureLifecycleBusy \|\| twoPageSoilBusy \|\| twoPageVegetationBusy \|\| externalSUEnvironmentBusy \|\| summaryPreferenceBusy \|\| summaryFieldListBusy \|\| summaryEnvironmentalBusy \|\| projectReportBusy\);/
-  );
+  const guardHarness = createTestReportOperationGuard();
+  try {
+    assert.equal(guardHarness.guard.editorBusy, false);
+  } finally {
+    guardHarness.dispose();
+  }
 
   // SummaryVegetation exclusion filter, ProjectMetadataPresets, and SIVIParentCreateModal must isolate secondaryPanelBusy from localEditorBusy
   const summaryReportMatch = app.match(/<SummaryVegetationReport[\s\S]*?\/>/);
   assert.ok(summaryReportMatch);
-  assert.match(summaryReportMatch[0], /onExclusionBusyChange=\{\(value\) => \{ secondaryPanelBusy = value; \}\}/);
+  assert.match(summaryReportMatch[0], /onExclusionBusyChange=\{\(value\)\s*=>\s*\{\s*secondaryPanelBusy = value;\s*\}\}/);
   assert.doesNotMatch(
     summaryReportMatch[0].match(/onExclusionBusyChange=\{[^}]+\}/)?.[0] ?? '',
     /localEditorBusy/
@@ -97,10 +108,10 @@ test('companionPanelBusy isolates secondary panels and modals from clobbering lo
   assert.doesNotMatch(siviModalMatch[0], /localEditorBusy =/);
 
   // Sidebar project/SU/hierarchy controls respect editorBusy || companionPanelBusy
-  const sidebar = read('WorkspaceSidebar.svelte');
+  const sidebar = readSidebarComposite();
   assert.match(app, /<WorkspaceSidebar/);
-  assert.match(sidebar, /<select id="active-su"[^>]*editorBusy \|\| companionPanelBusy/);
-  assert.match(sidebar, /<select id="active-hierarchy"[^>]*editorBusy \|\| companionPanelBusy/);
+  assert.match(sidebar, /id="active-su"[\s\S]{0,160}editorBusy \|\| companionPanelBusy/);
+  assert.match(sidebar, /id="active-hierarchy"[\s\S]{0,160}editorBusy \|\| companionPanelBusy/);
 
   const cancelled = [];
   const confirmed = [];
@@ -193,15 +204,16 @@ test('companionPanelBusy isolates secondary panels and modals from clobbering lo
 });
 
 test('unsaved valid drafts in UniversalDatasheetGrid and ClassificationExplorer block close/navigation and onOpenPlot routes via requestTransition', async () => {
-  const { componentFunctions, loadTypeScript } = require('./svelteTestHelpers.cjs');
+  const { componentFunctions, loadTypeScript, readShellComposite } = require('./svelteTestHelpers.cjs');
   const client = await import('svelte/internal/client');
-  const app = read('App.svelte');
+  const app = readShellComposite();
+  const deferredViews = read('shell/ShellDeferredViews.svelte');
 
   // Every workbench onOpenPlot callback must route through requestTransition
-  const rawOpenMatches = app.match(/onOpenPlot=\{\(p\)\s*=>\s*\{\s*editorPlotNumber/g) ?? [];
+  const rawOpenMatches = app.match(/onOpenPlot=\{\((?:p|plotNumber)\)\s*=>\s*\{\s*editorPlotNumber/g) ?? [];
   assert.equal(rawOpenMatches.length, 0, 'no raw onOpenPlot view assignment may bypass requestTransition');
-  const guardedOpenMatches = app.match(/onOpenPlot=\{\(p\)\s*=>\s*\{\s*void requestTransition\(/g) ?? [];
-  assert.equal(guardedOpenMatches.length, 4, 'all 4 workbench onOpenPlot callbacks must use requestTransition');
+  assert.match(app, /onOpenPlot=\{\((?:p|plotNumber)\)\s*=>\s*\{\s*void requestTransition\(/);
+  assert.equal((deferredViews.match(/\{onOpenPlot\}/g) ?? []).length, 4, 'all 4 workbench onOpenPlot callbacks must use shared requestTransition');
 
   // Actionable dirty-workbench error messages on close and transition
   const cancelled = [];

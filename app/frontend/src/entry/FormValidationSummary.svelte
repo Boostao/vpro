@@ -14,11 +14,7 @@
 </script>
 
 {#if items.length > 0}
-  <section
-    class="vpro-validation-bar"
-    aria-label="Draft validation issues"
-    data-validation-summary
-  >
+  <section class="vpro-validation-bar" aria-label="Draft validation issues" data-validation-summary>
     <div class="vpro-validation-header">
       <div class="vpro-validation-lead">
         <AlertCircle size={15} class="shrink-0 text-vpro-error" />

@@ -17,7 +17,11 @@ export function validateProfileTableReview(review: PlotProfileTableReview): Revi
   return { template, profile };
 }
 
-export function validateProfileTableCreated(response: PlotProfileFileCreated, expectedName: string, expectedPath: string): PlotProfileFileCreated {
+export function validateProfileTableCreated(
+  response: PlotProfileFileCreated,
+  expectedName: string,
+  expectedPath: string
+): PlotProfileFileCreated {
   if (response?.source?.path !== expectedPath) {
     throw new Error('Profile table committed, but response belongs to another file; do not replay creation.');
   }

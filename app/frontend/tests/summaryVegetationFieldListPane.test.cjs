@@ -1,5 +1,5 @@
 const { readJsonFixture } = require('./fixtureLoader.cjs');
-const { srcPath } = require('./svelteTestHelpers.cjs');
+const { srcPath, noopNotificationsStub, serverReads } = require('./svelteTestHelpers.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const fs = require('node:fs');
@@ -49,6 +49,8 @@ function mount(session, options = {}) {
     'svelte/internal/client': runtime,
     svelte: { untrack: runtime.untrack, onDestroy: callback => { destroy = callback; } },
     './summaryVegetationFieldList': client,
+    '../shared/readRequests': serverReads,
+    '../shell/notificationService.svelte': noopNotificationsStub,
   }, { __props: props });
   return { ...exports.handlers, destroy: () => destroy(), notifications };
 }
@@ -282,13 +284,13 @@ test('read failure retry, undo preserves receipts, busy cancellation and notifie
 });
 
 test('source headers, one checkbox binding, locked Label, safety order and explicit responsive no-clipping contract', () => {
-  assert.match(source, /<th scope="col">Report<\/th><th scope="col">Field<\/th>/);
+  assert.match(source, /<th scope="col">Report<\/th>\s*<th scope="col">Field<\/th>/);
   assert.equal((source.match(/type="checkbox"/g) || []).length, 1);
-  assert.match(source, /currentTarget\.checked; edit\(row\.rowId, raw\)/);
+  assert.match(source, /currentTarget\.checked;\s*edit\(row\.rowId, raw\)/);
   assert.match(source, /aria-label=\{'Report — ' \+ rowName\(row\)\}/);
-  assert.match(source, /data-source-binding="Label"><span class="literal">/);
+  assert.match(source, /data-source-binding="Label"\s*><span class="literal">/);
   assert.match(source, /source SQL selection includes hidden rows/);
-  assert.match(source, /including hidden rows and NULL\/incompatible historical Report/);
+  assert.match(source, /including hidden rows and NULL\/incompatible\s+historical Report/);
   assert.match(source, /JSON\.stringify\(view\.proposed, null, 2\)/);
   assert.ok(source.indexOf('class="safety"') < source.indexOf('<table>'));
   assert.ok(source.indexOf('class="guidance"') > source.indexOf('data-field-list-acknowledge'));

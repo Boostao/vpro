@@ -1,11 +1,29 @@
-import type { SiteUnitSpeciesListPreview, SiteUnitSpeciesListRequest } from '../../bindings/github.com/boostao/vpro/app';
-import type { SiteUnitSpeciesListUnit, SiteUnitSpeciesListGroup, SiteUnitSpeciesListRow } from '../../bindings/github.com/boostao/vpro/app/internal/envreport/models';
+import { registerContextDisposer } from '../shared/contextSessionRegistry';
+import type {
+  SiteUnitSpeciesListPreview,
+  SiteUnitSpeciesListRequest,
+} from '../../bindings/github.com/boostao/vpro/app';
+import type {
+  SiteUnitSpeciesListUnit,
+  SiteUnitSpeciesListGroup,
+  SiteUnitSpeciesListRow,
+} from '../../bindings/github.com/boostao/vpro/app/internal/envreport/models';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
-import { ownedScope, type GoogleEarthScope } from '../spatial/googleEarthReview';
-import { validateSiteUnitSummary, summaryLifeformCaptions, type SiteUnitSummaryMode, type ValidatedSiteUnitSummary } from './siteUnitSummary';
+import { ownedScope, type ProjectSUScope as GoogleEarthScope } from '../shared/scope';
+import {
+  validateSiteUnitSummary,
+  summaryLifeformCaptions,
+  type SiteUnitSummaryMode,
+  type ValidatedSiteUnitSummary,
+} from './siteUnitSummary';
 
 export function summarySpeciesCriterion(value: string, label: string): number {
-  if (!/^[+-]?\d+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) < -32768 || Number(value) > 32767) {
+  if (
+    !/^[+-]?\d+$/.test(value) ||
+    !Number.isSafeInteger(Number(value)) ||
+    Number(value) < -32768 ||
+    Number(value) > 32767
+  ) {
     throw new Error(`${label} requires a complete source INTEGER (-32768 through 32767); no trimming or repair.`);
   }
   return Number(value);
@@ -19,34 +37,75 @@ interface CriteriaView {
   coverGreaterThan: string;
   error: string;
 }
-const initial = (): CriteriaView => ({ enabled: false, coverCalculation: 1, andOr: 1,
-  presenceGreaterThan: '0', coverGreaterThan: '0', error: '' });
+const initial = (): CriteriaView => ({
+  enabled: false,
+  coverCalculation: 1,
+  andOr: 1,
+  presenceGreaterThan: '0',
+  coverGreaterThan: '0',
+  error: '',
+});
 
 export class SummarySpeciesCriteria {
   private state = initial();
   private listeners = new Set<() => void>();
-  view(): CriteriaView { return structuredClone(this.state); }
-  subscribe(listener: () => void) { this.listeners.add(listener); listener(); return () => { this.listeners.delete(listener); }; }
-  private notify() { for (const listener of this.listeners) listener(); }
+  view(): CriteriaView {
+    return structuredClone(this.state);
+  }
+  subscribe(listener: () => void) {
+    this.listeners.add(listener);
+    listener();
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+  private notify() {
+    for (const listener of this.listeners) listener();
+  }
   private validate() {
     try {
-      this.request(1, 'layer'); this.state.error = '';
-    } catch (cause) { this.state.error = String(cause); }
+      this.request(1, 'layer');
+      this.state.error = '';
+    } catch (cause) {
+      this.state.error = String(cause);
+    }
     this.notify();
   }
   setEnabled(enabled: boolean) {
     if (this.state.error) throw new Error('Correct or reset the species criteria before changing its visibility.');
-    this.state.enabled = enabled; this.notify();
+    this.state.enabled = enabled;
+    this.notify();
   }
-  editText(field: 'presenceGreaterThan' | 'coverGreaterThan', value: string) { this.state[field] = value; this.validate(); }
-  editChoice(field: 'coverCalculation' | 'andOr', value: number) { this.state[field] = value; this.validate(); }
-  reset() { const enabled = this.state.enabled; this.state = initial(); this.state.enabled = enabled; this.notify(); }
+  editText(field: 'presenceGreaterThan' | 'coverGreaterThan', value: string) {
+    this.state[field] = value;
+    this.validate();
+  }
+  editChoice(field: 'coverCalculation' | 'andOr', value: number) {
+    this.state[field] = value;
+    this.validate();
+  }
+  reset() {
+    const enabled = this.state.enabled;
+    this.state = initial();
+    this.state.enabled = enabled;
+    this.notify();
+  }
   request(method: number, mode: SiteUnitSummaryMode): SiteUnitSpeciesListRequest {
-    if (![1, 2].includes(method) || ![1, 2].includes(this.state.coverCalculation) || ![1, 2].includes(this.state.andOr) ||
-        !['layer', 'lifeform', 'strata'].includes(mode)) throw new Error('Choose an available species calculation, comparison and grouping.');
-    return { method, orderBy: mode === 'layer' ? 1 : mode === 'lifeform' ? 2 : 3, coverCalculation: this.state.coverCalculation, andOr: this.state.andOr,
+    if (
+      ![1, 2].includes(method) ||
+      ![1, 2].includes(this.state.coverCalculation) ||
+      ![1, 2].includes(this.state.andOr) ||
+      !['layer', 'lifeform', 'strata'].includes(mode)
+    )
+      throw new Error('Choose an available species calculation, comparison and grouping.');
+    return {
+      method,
+      orderBy: mode === 'layer' ? 1 : mode === 'lifeform' ? 2 : 3,
+      coverCalculation: this.state.coverCalculation,
+      andOr: this.state.andOr,
       presenceGreaterThan: summarySpeciesCriterion(this.state.presenceGreaterThan, 'Presence threshold'),
-      coverGreaterThan: summarySpeciesCriterion(this.state.coverGreaterThan, 'Cover threshold') };
+      coverGreaterThan: summarySpeciesCriterion(this.state.coverGreaterThan, 'Cover threshold'),
+    };
   }
 }
 const sessions = new Map<string, { scope: GoogleEarthScope; session: SummarySpeciesCriteria }>();
@@ -57,7 +116,8 @@ export function summarySpeciesCriteria(scope: GoogleEarthScope): SummarySpeciesC
     return previous.session;
   }
   const session = new SummarySpeciesCriteria();
-  sessions.set(scope.contextId, { scope: structuredClone(scope), session }); return session;
+  sessions.set(scope.contextId, { scope: structuredClone(scope), session });
+  return session;
 }
 
 type ValidatedSpeciesRow = Omit<SiteUnitSpeciesListRow, 'referenceRowIds'> & {
@@ -66,76 +126,134 @@ type ValidatedSpeciesRow = Omit<SiteUnitSpeciesListRow, 'referenceRowIds'> & {
 type ValidatedSpeciesGroup = Omit<SiteUnitSpeciesListGroup, 'rows'> & { rows: ValidatedSpeciesRow[] };
 type ValidatedSpeciesUnit = Omit<SiteUnitSpeciesListUnit, 'groups'> & { groups: ValidatedSpeciesGroup[] };
 export type ValidatedSummarySpecies = Omit<SiteUnitSpeciesListPreview, 'environment' | 'units'> & {
-  environment: ValidatedSiteUnitSummary; units: ValidatedSpeciesUnit[];
+  environment: ValidatedSiteUnitSummary;
+  units: ValidatedSpeciesUnit[];
 };
 function hasSpeciesArrays(value: SiteUnitSpeciesListPreview): value is Omit<ValidatedSummarySpecies, 'environment'> & {
   environment: SiteUnitSpeciesListPreview['environment'];
 } {
-  return !!value && Array.isArray(value.units) && value.units.every(unit => !!unit && Array.isArray(unit.groups) &&
-    unit.groups.every(group => !!group && Array.isArray(group.rows) &&
-      group.rows.every(row => !!row && Array.isArray(row.referenceRowIds))));
+  return (
+    !!value &&
+    Array.isArray(value.units) &&
+    value.units.every(
+      (unit) =>
+        !!unit &&
+        Array.isArray(unit.groups) &&
+        unit.groups.every(
+          (group) =>
+            !!group &&
+            Array.isArray(group.rows) &&
+            group.rows.every((row) => !!row && Array.isArray(row.referenceRowIds))
+        )
+    )
+  );
 }
-const text = (value: unknown): value is string => typeof value === 'string' &&
-  completeCell({ storage: 'text', text: value, integer: null, real: null, blobHex: null });
+const text = (value: unknown): value is string =>
+  typeof value === 'string' && completeCell({ storage: 'text', text: value, integer: null, real: null, blobHex: null });
 const nullableText = (value: SiteUnitSpeciesListRow['scientificName']) =>
   completeCell(value) && ['text', 'null'].includes(value.storage);
 function formatted(value: unknown, decimals: number): value is string {
-  return text(value) && new RegExp(`^-?(?:0|[1-9]\\d*)\\.\\d{${decimals}}$`).test(value) &&
-    Number.isFinite(Number(value)) && value !== `-0.${'0'.repeat(decimals)}`;
+  return (
+    text(value) &&
+    new RegExp(`^-?(?:0|[1-9]\\d*)\\.\\d{${decimals}}$`).test(value) &&
+    Number.isFinite(Number(value)) &&
+    value !== `-0.${'0'.repeat(decimals)}`
+  );
 }
 function sourcePresence(count: number, plots: number): string {
-  const [mantissa, exponent = '0'] = (count / plots * 100).toPrecision(15).split('e');
+  const [mantissa, exponent = '0'] = ((count / plots) * 100).toPrecision(15).split('e');
   const [integer, fraction = ''] = mantissa.split('.');
-  const digits = BigInt(integer + fraction), power = Number(exponent) - fraction.length + 1;
+  const digits = BigInt(integer + fraction),
+    power = Number(exponent) - fraction.length + 1;
   const denominator = power < 0 ? 10n ** BigInt(-power) : 1n;
   const numerator = power > 0 ? digits * 10n ** BigInt(power) : digits;
   const rounded = (numerator * 2n + denominator) / (denominator * 2n);
   return `${rounded / 10n}.${rounded % 10n}`;
 }
-export function validateSummarySpecies(value: SiteUnitSpeciesListPreview, owner: GoogleEarthScope,
-  request: SiteUnitSpeciesListRequest, allowConfiguredScope = false): ValidatedSummarySpecies {
+export function validateSummarySpecies(
+  value: SiteUnitSpeciesListPreview,
+  owner: GoogleEarthScope,
+  request: SiteUnitSpeciesListRequest,
+  allowConfiguredScope = false
+): ValidatedSummarySpecies {
   const validOrders = allowConfiguredScope ? [1, 2, 3] : [1, 2];
-  if (!hasSpeciesArrays(value) || !value.options ||
-      !validOrders.includes(request.orderBy) || ![1, 2].includes(request.coverCalculation) || ![1, 2].includes(request.andOr) ||
-      (['method', 'orderBy', 'coverCalculation', 'andOr', 'presenceGreaterThan', 'coverGreaterThan'] as const)
-        .some(key => value.options[key] !== request[key]) ||
-      !Number.isSafeInteger(request.presenceGreaterThan) || request.presenceGreaterThan < -32768 || request.presenceGreaterThan > 32767 ||
-      !Number.isSafeInteger(request.coverGreaterThan) || request.coverGreaterThan < -32768 || request.coverGreaterThan > 32767) {
+  if (
+    !hasSpeciesArrays(value) ||
+    !value.options ||
+    !validOrders.includes(request.orderBy) ||
+    ![1, 2].includes(request.coverCalculation) ||
+    ![1, 2].includes(request.andOr) ||
+    (['method', 'orderBy', 'coverCalculation', 'andOr', 'presenceGreaterThan', 'coverGreaterThan'] as const).some(
+      (key) => value.options[key] !== request[key]
+    ) ||
+    !Number.isSafeInteger(request.presenceGreaterThan) ||
+    request.presenceGreaterThan < -32768 ||
+    request.presenceGreaterThan > 32767 ||
+    !Number.isSafeInteger(request.coverGreaterThan) ||
+    request.coverGreaterThan < -32768 ||
+    request.coverGreaterThan > 32767
+  ) {
     throw new Error('Species preview arrays or explicit criteria are incomplete or different.');
   }
   const mode: SiteUnitSummaryMode = request.orderBy === 1 ? 'layer' : request.orderBy === 2 ? 'lifeform' : 'strata';
-  const environment = validateSiteUnitSummary(value.environment, owner.contextId, owner.project, owner.projectPath,
-    owner.su, owner.suPath, request.method, mode, allowConfiguredScope);
+  const environment = validateSiteUnitSummary(
+    value.environment,
+    owner.contextId,
+    owner.project,
+    owner.projectPath,
+    owner.su,
+    owner.suPath,
+    request.method,
+    mode,
+    allowConfiguredScope
+  );
   if (value.units.length !== environment.report.units.length) throw new Error('Species and Environment units differ.');
   for (let i = 0; i < value.units.length; i++) {
-    const unit = value.units[i], source = environment.report.units[i];
-    if (unit.code !== source.code || unit.nPlots !== source.plots.length) throw new Error('Species physical plot denominator differs.');
+    const unit = value.units[i],
+      source = environment.report.units[i];
+    if (unit.code !== source.code || unit.nPlots !== source.plots.length)
+      throw new Error('Species physical plot denominator differs.');
     let previous = request.orderBy === 2 ? -1 : 0;
     for (const group of unit.groups) {
-      const validGroup = request.orderBy === 1
-        ? (group.index <= 7 && group.caption === `Layer ${group.index}`)
-        : request.orderBy === 2
-          ? (group.index <= 13 && group.caption === summaryLifeformCaptions[group.index])
-          : (group.index >= 1 && group.caption.startsWith('Strata '));
+      const validGroup =
+        request.orderBy === 1
+          ? group.index <= 7 && group.caption === `Layer ${group.index}`
+          : request.orderBy === 2
+            ? group.index <= 13 && group.caption === summaryLifeformCaptions[group.index]
+            : group.index >= 1 && group.caption.startsWith('Strata ');
       if (!Number.isInteger(group.index) || group.index <= previous || !validGroup || group.rows.length === 0) {
         throw new Error('Species grouping/header differs from the source loop.');
       }
       previous = group.index;
       const rows = new Set<string>();
       for (const row of group.rows) {
-        if (!text(row.species) || row.species.length > 8 || !nullableText(row.scientificName) || !nullableText(row.englishName) ||
-            !formatted(row.cover, 2) || !formatted(row.presence, 1) || Number(row.presence) < 0 ||
-            !Number.isSafeInteger(row.physicalValues) || row.physicalValues < 1 ||
-            row.presence !== sourcePresence(row.physicalValues, unit.nPlots) || typeof row.included !== 'boolean' ||
-            !row.referenceRowIds.length || row.referenceRowIds.some(id => !exactSigned64(id)) ||
-            new Set(row.referenceRowIds).size !== row.referenceRowIds.length ||
-            (request.orderBy === 2
-              ? (!row.codeType || !completeCell(row.codeType) || row.codeType.storage !== 'text' || row.codeType.text?.toLowerCase() === 's')
-              : row.codeType !== null)) {
+        if (
+          !text(row.species) ||
+          row.species.length > 8 ||
+          !nullableText(row.scientificName) ||
+          !nullableText(row.englishName) ||
+          !formatted(row.cover, 2) ||
+          !formatted(row.presence, 1) ||
+          Number(row.presence) < 0 ||
+          !Number.isSafeInteger(row.physicalValues) ||
+          row.physicalValues < 1 ||
+          row.presence !== sourcePresence(row.physicalValues, unit.nPlots) ||
+          typeof row.included !== 'boolean' ||
+          !row.referenceRowIds.length ||
+          row.referenceRowIds.some((id) => !exactSigned64(id)) ||
+          new Set(row.referenceRowIds).size !== row.referenceRowIds.length ||
+          (request.orderBy === 2
+            ? !row.codeType ||
+              !completeCell(row.codeType) ||
+              row.codeType.storage !== 'text' ||
+              row.codeType.text?.toLowerCase() === 's'
+            : row.codeType !== null)
+        ) {
           throw new Error('Species values, definitions or physical/reference provenance are incomplete.');
         }
         const identity = JSON.stringify([row.species, row.scientificName, row.englishName, row.codeType]);
-        const cover = Number(row.cover) > request.coverGreaterThan, presence = Number(row.presence) > request.presenceGreaterThan;
+        const cover = Number(row.cover) > request.coverGreaterThan,
+          presence = Number(row.presence) > request.presenceGreaterThan;
         if (rows.has(identity) || row.included !== (request.andOr === 1 ? cover && presence : cover || presence)) {
           throw new Error('Species duplicate identity or formatted strict threshold decision differs.');
         }
@@ -145,3 +263,6 @@ export function validateSummarySpecies(value: SiteUnitSpeciesListPreview, owner:
   }
   return { ...value, environment };
 }
+registerContextDisposer((id) => {
+  sessions.delete(id);
+});

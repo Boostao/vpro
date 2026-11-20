@@ -14,28 +14,41 @@ export const ordinaryFields = [
   { key: 'soilSurveyor', column: 'SoilSurveyor', label: 'Soil surveyor', scope: 'soils', kind: 'text', maximum: 30 },
   { key: 'humusThickness', column: 'HumusThickness', label: 'Humus thickness', scope: 'soils', kind: 'single' },
   { key: 'rootingDepth', column: 'RootingDepth', label: 'Rooting depth', scope: 'soils', kind: 'integer' },
-  { key: 'rootRestrictingDepth', column: 'RootRestrictingDepth', label: 'Root-restricting depth', scope: 'soils', kind: 'integer' },
+  {
+    key: 'rootRestrictingDepth',
+    column: 'RootRestrictingDepth',
+    label: 'Root-restricting depth',
+    scope: 'soils',
+    kind: 'integer',
+  },
   { key: 'seepageDepth', column: 'SeepageDepth', label: 'Seepage depth', scope: 'soils', kind: 'integer' },
-  { key: 'soilNotes', column: 'SoilNotes', label: 'Soil notes', scope: 'soils', kind: 'memo' }
+  { key: 'soilNotes', column: 'SoilNotes', label: 'Soil notes', scope: 'soils', kind: 'memo' },
 ] as const;
 export const additionalParentFields = [
   { key: 'xCoord', column: 'XCoord', label: 'X Co-ord.', scope: 'site', kind: 'single' },
   { key: 'yCoord', column: 'YCoord', label: 'Y Co-ord', scope: 'site', kind: 'single' },
-  { key: 'photo', column: 'Photo', label: 'Photo', scope: 'site', kind: 'text', maximum: 50 }
+  { key: 'photo', column: 'Photo', label: 'Photo', scope: 'site', kind: 'text', maximum: 50 },
 ] as const;
 const allOrdinaryFields = [...ordinaryFields, ...additionalParentFields];
 export const nullableParentFlags = [
-  { key: 'speciesListComplete', column: 'SpeciesListComplete', label: 'Species list complete', scope: 'veg', kind: 'flag' },
-  { key: 'updatedFromCards', column: 'UpdatedFromCards', label: 'Updated from cards', scope: 'site', kind: 'flag' }
+  {
+    key: 'speciesListComplete',
+    column: 'SpeciesListComplete',
+    label: 'Species list complete',
+    scope: 'veg',
+    kind: 'flag',
+  },
+  { key: 'updatedFromCards', column: 'UpdatedFromCards', label: 'Updated from cards', scope: 'site', kind: 'flag' },
 ] as const;
 export function sourceParentBooleanNullError(column: string, originalNull: boolean, nextNull: boolean): string | null {
   return !originalNull && nextNull && (column === 'SV_FloodPlain' || column === 'SpeciesListComplete')
-    ? `${column} source Yes/No converts NULL to No; select No explicitly instead of writing SQLite NULL.` : null;
+    ? `${column} source Yes/No converts NULL to No; select No explicitly instead of writing SQLite NULL.`
+    : null;
 }
 export function nullableParentField(column: string | undefined) {
-  return ordinaryField(column) ?? nullableParentFlags.find(field => field.column === column);
+  return ordinaryField(column) ?? nullableParentFlags.find((field) => field.column === column);
 }
-export type OrdinaryField = typeof allOrdinaryFields[number];
+export type OrdinaryField = (typeof allOrdinaryFields)[number];
 export type OrdinaryScope = OrdinaryField['scope'];
 export type OrdinaryKey = OrdinaryField['key'];
 export type OrdinaryTextField = Extract<OrdinaryField, { kind: 'text' | 'memo' }>;
@@ -43,23 +56,38 @@ export type OrdinaryTextPolicy = { label: string; kind: 'text'; maximum: number 
 export type OrdinaryNumberField = Extract<OrdinaryField, { kind: 'integer' | 'single' }>;
 export type OrdinaryNumberPolicy = { label: string; kind: 'integer' | 'single'; column?: string };
 export type OrdinaryValues = Pick<FS882Header, OrdinaryKey> &
-  Partial<Pick<FS882Header, typeof nullableParentFlags[number]['key']>>;
-export interface OrdinaryCell { raw: string; value: number | null; error: string | null }
+  Partial<Pick<FS882Header, (typeof nullableParentFlags)[number]['key']>>;
+export interface OrdinaryCell {
+  raw: string;
+  value: number | null;
+  error: string | null;
+}
 export type OrdinaryDrafts = Partial<Record<OrdinaryNumberField['key'], OrdinaryCell>>;
 
 const nonNegativeOrdinaryColumns = new Set([
-  'HumusThickness', 'RootingDepth', 'RootRestrictingDepth', 'SeepageDepth',
-  'ActiveLayerDepth', 'SV_WaterTableCM',
+  'HumusThickness',
+  'RootingDepth',
+  'RootRestrictingDepth',
+  'SeepageDepth',
+  'ActiveLayerDepth',
+  'SV_WaterTableCM',
 ]);
 const nonNegativeOrdinaryLabels = new Set([
-  'Humus thickness', 'Rooting depth', 'Root-restricting depth', 'Seepage depth',
+  'Humus thickness',
+  'Rooting depth',
+  'Root-restricting depth',
+  'Seepage depth',
   'Active layer depth',
 ]);
 
 export function ordinaryField(column: string | undefined): OrdinaryField | undefined {
-  return allOrdinaryFields.find(field => field.column === column);
+  return allOrdinaryFields.find((field) => field.column === column);
 }
-export function ordinaryTextError(field: OrdinaryTextPolicy, value: string | null, original: string | null): string | null {
+export function ordinaryTextError(
+  field: OrdinaryTextPolicy,
+  value: string | null,
+  original: string | null
+): string | null {
   if (value === null || value === original) return null;
   if (value === '') return `Clear ${field.label} to NULL instead of an empty string.`;
   if (!wellFormedUTF16(value)) return `${field.label} contains an incomplete Unicode character.`;
@@ -70,30 +98,50 @@ export function ordinaryTextError(field: OrdinaryTextPolicy, value: string | nul
 }
 export function ordinaryNumberValue(field: OrdinaryNumberPolicy, raw: string, original: number | null): OrdinaryCell {
   const parsed = finiteSingleValue(field.label, raw, original);
-  if (field.kind === 'integer' && parsed.error === null && parsed.value !== null &&
-    (!Number.isInteger(parsed.value) || (parsed.value !== original && (parsed.value < -32768 || parsed.value > 32767)))) {
+  if (
+    field.kind === 'integer' &&
+    parsed.error === null &&
+    parsed.value !== null &&
+    (!Number.isInteger(parsed.value) || (parsed.value !== original && (parsed.value < -32768 || parsed.value > 32767)))
+  ) {
     return { raw, value: null, error: `${field.label} requires an integer from -32768 to 32767 or NULL.` };
   }
   const targetName = field.column ?? field.label;
-  if (parsed.error === null && parsed.value !== null && parsed.value !== original &&
+  if (
+    parsed.error === null &&
+    parsed.value !== null &&
+    parsed.value !== original &&
     (nonNegativeOrdinaryColumns.has(targetName) || nonNegativeOrdinaryLabels.has(field.label)) &&
-    parsed.value < 0) {
+    parsed.value < 0
+  ) {
     return { raw, value: null, error: `${field.label} must be >= 0 cm or NULL.` };
   }
   return { raw, ...parsed };
 }
-export function ordinaryValidation(scope: OrdinaryScope, values: OrdinaryValues,
-  original: OrdinaryValues | null, drafts: OrdinaryDrafts,
-  fields: readonly (OrdinaryField | typeof nullableParentFlags[number])[] = [...allOrdinaryFields, ...nullableParentFlags]): string | null {
-  for (const field of fields.filter(field => field.scope === scope)) {
+export function ordinaryValidation(
+  scope: OrdinaryScope,
+  values: OrdinaryValues,
+  original: OrdinaryValues | null,
+  drafts: OrdinaryDrafts,
+  fields: readonly (OrdinaryField | (typeof nullableParentFlags)[number])[] = [
+    ...allOrdinaryFields,
+    ...nullableParentFlags,
+  ]
+): string | null {
+  for (const field of fields.filter((field) => field.scope === scope)) {
     if (field.kind === 'flag') {
-      const error = sourceParentBooleanNullError(field.column, original?.[field.key] == null, values[field.key] === null);
+      const error = sourceParentBooleanNullError(
+        field.column,
+        original?.[field.key] == null,
+        values[field.key] === null
+      );
       if (error) return error;
     } else if (field.kind === 'text' || field.kind === 'memo') {
       const error = ordinaryTextError(field, values[field.key], original?.[field.key] ?? null);
       if (error) return error;
     } else {
-      const error = drafts[field.key]?.error ??
+      const error =
+        drafts[field.key]?.error ??
         ordinaryNumberValue(field, String(values[field.key] ?? ''), original?.[field.key] ?? null).error;
       if (error) return error;
     }

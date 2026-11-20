@@ -1,26 +1,78 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import type { bindContextPlots } from '../shared/contextPlots';
-  import { ReadRequests, type CancellableRead } from '../shared/readRequests';
+  import { ReadRequests, formatError, trackIfCancellable } from '../shared/readRequests';
   import type { EditorCloseState } from '../shell/closeLifecycle';
-  import ProfileRuleInputs from './ProfileRuleInputs.svelte';
+  import ProjectPlotProfileHeader from './ProjectPlotProfileHeader.svelte';
+  import ProjectPlotProfilePreviewSection from './ProjectPlotProfilePreviewSection.svelte';
+  import ProjectPlotProfileRulesSection from './ProjectPlotProfileRulesSection.svelte';
   import { validateSpeciesPresencePreview, type SpeciesPresencePreview } from './projectProfileSpeciesPresence';
-  import { ClassificationService, type ProjectMetadataTable, type ProjectPlotProfileRunRequest, type ProjectPlotProfileFilterRequest, type ProfileLumpChoice } from '../../bindings/github.com/boostao/vpro/app';
-  import { profileEditableFields, profileRuleValue, profileRuleOptions, stageProfileRule, profileRulesDirty,
-    profileRuleErrors, profileRuleEditRequest, validateProfileChoices, beginProfileRuleCreation, stageProfileRuleCreation,
-    profileCreationValue, profileCreationOptions, profileCreationErrors, profileRuleCreationRequest, profileRuleDeletionRequest,
-    validateCreatedProfileRule, validateProfileLifecycleReview, type ProfileRuleCreationDraft, type ProfileRulesDraft, type ProfileRuleChoices, type ProfileField } from './projectProfileRuleEditor';
-  import { profileCellLabel, validateProjectPlotProfileReview, validateProjectProfileLump, validateProfileRunResult,
-    profileFilterUnavailable, type ValidatedProjectPlotProfileReview, type ProfileReviewTable, type ProfileRunResult } from './projectPlotProfileReview';
+  import {
+    ClassificationService,
+    type ProfileLumpChoice,
+    type ProjectMetadataTable,
+    type ProjectPlotProfileFilterRequest,
+    type ProjectPlotProfileRunRequest,
+  } from '../../bindings/github.com/boostao/vpro/app';
+  import {
+    profileCreationErrors,
+    profileRuleErrors,
+    profileRulesDirty,
+    validateProfileChoices,
+    type ProfileRuleChoices,
+    type ProfileRuleCreationDraft,
+    type ProfileRulesDraft,
+  } from './projectProfileRuleEditor';
+  import {
+    validateProfileRunResult,
+    validateProjectPlotProfileReview,
+    validateProjectProfileLump,
+    type ProfileReviewTable,
+    type ProfileRunResult,
+    type ValidatedProjectPlotProfileReview,
+  } from './projectPlotProfileReview';
 
-  let { client, onclosed, onbusy, onblocked, onapply, onsureview, contextId = '', activeSU = '', allowPresence = false, authorityBlocked = false, allowSaveSU = false, allowFiltering = false, allowRun = false, allowEditing = false, allowCreation = false, allowDeletion = false }: {
-    client: ReturnType<typeof bindContextPlots>; onclosed: () => void; onbusy: (busy: boolean) => void;
-    onblocked: (blocked: boolean) => void; allowRun?: boolean; allowEditing?: boolean;
-    allowCreation?: boolean; allowDeletion?: boolean; authorityBlocked?: boolean;
-    allowFiltering?: boolean; onapply?: (proposal: ProjectPlotProfileFilterRequest) => Promise<void>;
-    allowSaveSU?: boolean; onsureview?: (proposal: ProjectPlotProfileFilterRequest) => Promise<void>;
-    contextId?: string; activeSU?: string; allowPresence?: boolean;
+  type ProfileClient = ReturnType<typeof bindContextPlots> & {
+    ListProjectPlotProfileLumpTables?: () => Promise<ProfileLumpChoice[] | null>;
+    ReviewProjectPlotProfileLumpTable?: (location: string) => Promise<ProjectMetadataTable>;
+  };
+
+  let {
+    client,
+    onclosed,
+    onbusy,
+    onblocked,
+    onapply,
+    onsureview,
+    contextId = '',
+    activeSU = '',
+    allowPresence = false,
+    authorityBlocked = false,
+    allowSaveSU = false,
+    allowFiltering = false,
+    allowRun = false,
+    allowEditing = false,
+    allowCreation = false,
+    allowDeletion = false,
+  }: {
+    client: ProfileClient;
+    onclosed: () => void;
+    onbusy: (busy: boolean) => void;
+    onblocked: (blocked: boolean) => void;
+    allowRun?: boolean;
+    allowEditing?: boolean;
+    allowCreation?: boolean;
+    allowDeletion?: boolean;
+    authorityBlocked?: boolean;
+    allowFiltering?: boolean;
+    onapply?: (proposal: ProjectPlotProfileFilterRequest) => Promise<void>;
+    allowSaveSU?: boolean;
+    onsureview?: (proposal: ProjectPlotProfileFilterRequest) => Promise<void>;
+    contextId?: string;
+    activeSU?: string;
+    allowPresence?: boolean;
   } = $props();
+
   let review = $state<ValidatedProjectPlotProfileReview | null>(null);
   let reading = $state(false);
   let running = $state(false);
@@ -40,223 +92,175 @@
   let choices = $state<ProfileRuleChoices | null>(null);
   let creation = $state<ProfileRuleCreationDraft | null>(null);
   let deletion = $state<string | null>(null);
+
   const dirty = $derived(draft ? profileRulesDirty(draft) : false);
   const errors = $derived(creation ? profileCreationErrors(creation) : draft ? profileRuleErrors(draft) : []);
   const blocked = $derived(dirty || creation !== null || deletion !== null || committedFailure);
   const busy = $derived(reading || saving);
   let generation = 0;
   const reads = new ReadRequests();
-  onMount(() => { void reload(); });
+
+  onMount(() => {
+    void reload();
+  });
   $effect(() => onblocked(blocked));
-  onDestroy(() => { generation++; reads.cancelAll(); onbusy(false); onblocked(false); });
+  onDestroy(() => {
+    generation++;
+    reads.cancelAll();
+    onbusy(false);
+    onblocked(false);
+  });
 
   export function getCloseState(): EditorCloseState {
-    return { unsaved: blocked, busy, canSave: false, error,
-      saveReason: 'Save or Undo profile rules explicitly before closing or changing context; ordinary plot Save never writes profile rules.' };
+    return {
+      unsaved: blocked,
+      busy,
+      canSave: false,
+      error,
+      saveReason:
+        'Save or Undo profile rules explicitly before closing or changing context; ordinary plot Save never writes profile rules.',
+    };
   }
+
   export function undo() {
-    if (busy || committedFailure) { error = 'Wait for the operation or Reload committed rules before Undo.'; return; }
-    creation = null; deletion = null;
+    if (busy || committedFailure) {
+      error = 'Wait for the operation or Reload committed rules before Undo.';
+      return;
+    }
+    creation = null;
+    deletion = null;
     presenceResult = null;
     if (draft) draft = { review: draft.review, cells: {} };
-    error = null; success = 'Profile drafts undone; no rules, counts or history changed.';
+    error = null;
+    success = 'Profile drafts undone; no rules, counts or history changed.';
   }
-  function mutationAuthorized(): boolean {
-    if (!authorityBlocked) return true;
-    error = 'Observe the ProjectID source preference outcome before changing profile rules; existing drafts are retained.';
-    return false;
-  }
-  function stage(rowId: string, name: ProfileField, raw: string, nullValue: boolean) {
-    if (!mutationAuthorized()) return;
-    if (!allowEditing || !draft || busy || committedFailure || creation || deletion !== null) { error = 'Finish the current profile proposal before editing existing rules.'; return; }
-    try { draft = stageProfileRule(draft, rowId, name, raw, nullValue); error = null; success = null; result = null; presenceResult = null; }
-    catch (cause) { error = `Profile draft failed; existing drafts retained: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`; }
-  }
-  async function saveRules() {
-    if (!mutationAuthorized()) return;
-    if (!allowEditing || !draft || busy || committedFailure || creation || deletion !== null || !dirty || errors.length) {
-      error = 'Correct or Undo profile errors before saving reviewed changes.'; return;
-    }
-    let committed = false;
-    saving = true; onbusy(true); error = null; success = null; presenceResult = null;
-    try {
-      await client.SaveProjectPlotProfile(profileRuleEditRequest(draft));
-      committed = true; draft = null; result = null; lump = null; subvarieties = false;
-      const next = validateProjectPlotProfileReview(await client.ReviewProjectPlotProfile());
-      review = next; draft = { review: next, cells: {} };
-      success = 'Profile assignments and typed technical history committed atomically. Historical PlotCount and plot drafts were not changed.';
-    } catch (cause) {
-      const cleaned = String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '');
-      if (committed || String(cause).includes('Profile rule changes committed, but')) {
-        committedFailure = true; draft = null; result = null; lump = null; subvarieties = false;
-        error = `Profile rules committed, but refresh/cleanup failed. Reload before editing; completed writes must not be replayed: ${cleaned}`;
-      } else error = `Profile save failed; raw drafts retained for correction or retry: ${cleaned}`;
-    } finally { saving = false; onbusy(false); }
-  }
+
   function close() {
-    if (busy || blocked) { error = 'Save or Undo profile drafts, or Reload committed rules, before closing this review.'; return; }
+    if (busy || blocked) {
+      error = 'Save or Undo profile drafts, or Reload committed rules, before closing this review.';
+      return;
+    }
     onclosed();
   }
 
-  function proposeCreation() {
-    if (!mutationAuthorized()) return;
-    if (!allowEditing || !allowCreation || busy || blocked || !review) { error = 'Finish existing drafts before proposing one new rule.'; return; }
-    try { creation = beginProfileRuleCreation(review); error = null; success = null; result = null; presenceResult = null; }
-    catch (cause) { error = `New rule proposal unavailable; no identity allocated: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`; }
-  }
-  function stageCreation(name: ProfileField, raw: string, nullValue: boolean) {
-    if (!mutationAuthorized()) return;
-    if (!creation || busy || committedFailure) { error = 'Review an available new-rule proposal before editing.'; return; }
-    try { creation = stageProfileRuleCreation(creation, name, raw, nullValue); error = null; success = null; }
-    catch (cause) { error = `New rule draft failed; proposal retained: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`; }
-  }
-  async function createRule() {
-    if (!mutationAuthorized()) return;
-    if (!allowEditing || !allowCreation || !creation || busy || committedFailure || errors.length) {
-      error = 'Correct or Undo the explicit new-rule proposal before allocating identity.'; return;
-    }
-    const source = creation;
-    let committed = false;
-    saving = true; onbusy(true); error = null; success = null; presenceResult = null;
-    try {
-      const created = await client.CreateProjectPlotProfileRule(profileRuleCreationRequest(source));
-      committed = true; creation = null; result = null; lump = null; subvarieties = false;
-      validateCreatedProfileRule(created, source);
-      const next = validateProjectPlotProfileReview(await client.ReviewProjectPlotProfile());
-      validateProfileLifecycleReview(source.review, next, { created });
-      const observed = next.rules.rows.find(row => row.rowId === created.rowId);
-      if (!observed) throw new Error('Created physical rule is missing from independent review.');
-      validateCreatedProfileRule(observed, source);
-      review = next; draft = { review: next, cells: {} };
-      success = `Physical rule ${created.rowId} and typed creation history committed atomically. No Order, criteria, layer or PlotCount was inferred.`;
-    } catch (cause) {
-      const cleaned = String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '');
-      if (committed || String(cause).includes('Profile rule changes committed, but')) {
-        committedFailure = true; creation = null; draft = null; result = null; lump = null; subvarieties = false;
-        error = `Profile creation committed, but refresh/cleanup failed. Reload before another proposal; completed writes must not be replayed: ${cleaned}`;
-      } else error = `Profile creation failed; nullable/raw proposal retained for retry: ${cleaned}`;
-    } finally { saving = false; onbusy(false); }
-  }
-  function reviewDeletion(rowId: string) {
-    if (!mutationAuthorized()) return;
-    if (!allowEditing || !allowDeletion || busy || blocked || !review ||
-        review.rules.rows.filter(row => row.rowId === rowId).length !== 1) {
-      error = 'Finish drafts before reviewing one original physical rule for deletion.'; return;
-    }
-    deletion = rowId; error = null; success = null; result = null; presenceResult = null;
-  }
-  async function deleteRule() {
-    if (!mutationAuthorized()) return;
-    if (!allowEditing || !allowDeletion || deletion === null || !review || busy || committedFailure) {
-      error = 'Explicitly review one physical rule before confirming deletion.'; return;
-    }
-    const rowId = deletion;
-    const source = review;
-    let committed = false;
-    saving = true; onbusy(true); error = null; success = null; presenceResult = null;
-    try {
-      await client.DeleteProjectPlotProfileRule(profileRuleDeletionRequest(source, rowId, true));
-      committed = true; deletion = null; result = null; lump = null; subvarieties = false;
-      const next = validateProjectPlotProfileReview(await client.ReviewProjectPlotProfile());
-      validateProfileLifecycleReview(source, next, { deleted: rowId });
-      if (next.rules.rows.some(row => row.rowId === rowId)) throw new Error('Deleted physical rule remains in independent review.');
-      review = next; draft = { review: next, cells: {} };
-      success = `Physical rule ${rowId} deleted with full typed history; its identity remains reserved. Surviving rules/counts and plot drafts were not changed.`;
-    } catch (cause) {
-      const cleaned = String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '');
-      if (committed || String(cause).includes('Profile rule changes committed, but')) {
-        committedFailure = true; deletion = null; draft = null; result = null; lump = null; subvarieties = false;
-        error = `Profile deletion committed, but refresh/cleanup failed. Reload before another review; completed writes must not be replayed: ${cleaned}`;
-      } else error = `Profile deletion failed; original confirmation retained for retry: ${cleaned}`;
-    } finally { saving = false; onbusy(false); }
-  }
-
   async function reload() {
-    if (busy || dirty || creation || deletion !== null) { error = 'Save or Undo profile drafts before reloading; raw errors were retained.'; return; }
-    const request = ++generation;
-    draft = null; choices = null;
-    presenceResult = null;
-    review = null; error = null; lump = null; result = null; reading = true; onbusy(true);
-    try {
-      const toCancellable = <T>(p: Promise<T>): CancellableRead<T> =>
-        typeof (p as { cancel?: unknown }).cancel === 'function'
-          ? (p as unknown as CancellableRead<T>)
-          : Object.assign(p, { cancel() {} });
-      const listLumpFn = (client as unknown as { ListProjectPlotProfileLumpTables?: () => Promise<ProfileLumpChoice[] | null> }).ListProjectPlotProfileLumpTables;
-      const [source, suggestions, availableLumps] = await Promise.all([
-        reads.track(client.ReviewProjectPlotProfile()),
-        allowEditing ? reads.track(client.ListProjectPlotProfileChoices()) : Promise.resolve(null),
-        (allowRun || allowEditing || allowPresence)
-          ? reads.track(
-              toCancellable(
-                listLumpFn
-                  ? listLumpFn()
-                  : contextId
-                    ? ClassificationService.ListProjectPlotProfileLumpTables(contextId)
-                    : Promise.resolve(null)
-              )
-            ).catch(() => null)
-          : Promise.resolve(null),
-      ]);
-      const result = validateProjectPlotProfileReview(source);
-      const validatedChoices = suggestions ? validateProfileChoices(suggestions) : null;
-      if (request === generation) {
-        review = result; choices = validatedChoices; draft = allowEditing ? { review: result, cells: {} } : null;
-        if (Array.isArray(availableLumps) && availableLumps.length > 0) {
-          lumpChoices = availableLumps;
-          if (!selectedLumpLocation || !availableLumps.some(c => c.location === selectedLumpLocation)) {
-            const firstTable = availableLumps.find(c => c.location !== 'None');
-            selectedLumpLocation = firstTable ? firstTable.location : 'None';
-          }
-        }
-        committedFailure = false; success = null;
-      }
-    } catch (cause) {
-      if (request === generation) error = `Project-local profile review failed; no rules, counts or filters changed: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`;
-    } finally {
-      if (request === generation) { reading = false; onbusy(false); }
-    }
-  }
-  async function reviewLump() {
-    if ((!allowRun && !allowEditing && !allowPresence) || busy || !review) return;
-    if (selectedLumpLocation === 'None') {
-      lump = null; result = null; presenceResult = null; error = null;
+    if (busy || dirty || creation || deletion !== null) {
+      error = 'Save or Undo profile drafts before reloading; raw errors were retained.';
       return;
     }
     const request = ++generation;
-    error = null; lump = null; result = null; presenceResult = null; reading = true; onbusy(true);
+    draft = null;
+    choices = null;
+    presenceResult = null;
+    review = null;
+    error = null;
+    lump = null;
+    result = null;
+    reading = true;
+    onbusy(true);
     try {
-      const reviewLumpFn = (client as unknown as { ReviewProjectPlotProfileLumpTable?: (location: string) => Promise<ProjectMetadataTable> }).ReviewProjectPlotProfileLumpTable;
-      const rawLoader: Promise<ProjectMetadataTable> = selectedLumpLocation && (reviewLumpFn || contextId)
-        ? (reviewLumpFn
-            ? reviewLumpFn(selectedLumpLocation)
-            : ClassificationService.ReviewProjectPlotProfileLumpTable(contextId, selectedLumpLocation))
-        : client.ReviewProjectPlotProfileLump();
-      const cancellableLoader: CancellableRead<ProjectMetadataTable> =
-        typeof (rawLoader as { cancel?: unknown }).cancel === 'function'
-          ? (rawLoader as unknown as CancellableRead<ProjectMetadataTable>)
-          : Object.assign(rawLoader, { cancel() {} });
-      const source = validateProjectProfileLump(await reads.track(cancellableLoader));
-      if (request === generation) lump = source;
+      const listLumpFn = client.ListProjectPlotProfileLumpTables;
+      const [source, suggestions, availableLumps] = await Promise.all([
+        reads.track(client.ReviewProjectPlotProfile()),
+        allowEditing ? reads.track(client.ListProjectPlotProfileChoices()) : Promise.resolve(null),
+        allowRun || allowEditing || allowPresence
+          ? trackIfCancellable(
+              reads,
+              listLumpFn
+                ? listLumpFn()
+                : contextId
+                  ? ClassificationService.ListProjectPlotProfileLumpTables(contextId)
+                  : Promise.resolve(null)
+            ).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      const validated = validateProjectPlotProfileReview(source);
+      const validatedChoices = suggestions ? validateProfileChoices(suggestions) : null;
+      if (request === generation) {
+        review = validated;
+        choices = validatedChoices;
+        draft = allowEditing ? { review: validated, cells: {} } : null;
+        if (Array.isArray(availableLumps) && availableLumps.length > 0) {
+          lumpChoices = availableLumps;
+          if (!selectedLumpLocation || !availableLumps.some((c) => c.location === selectedLumpLocation)) {
+            const firstTable = availableLumps.find((c) => c.location !== 'None');
+            selectedLumpLocation = firstTable ? firstTable.location : 'None';
+          }
+        }
+        committedFailure = false;
+        success = null;
+      }
     } catch (cause) {
-      if (request === generation) error = `Project-local lump review failed; no definitions changed: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`;
+      if (request === generation) {
+        error = `Project-local profile review failed; no rules, counts or filters changed: ${formatError(cause)}`;
+      }
     } finally {
-      if (request === generation) { reading = false; onbusy(false); }
+      if (request === generation) {
+        reading = false;
+        onbusy(false);
+      }
     }
   }
+
+  async function reviewLump() {
+    if ((!allowRun && !allowEditing && !allowPresence) || busy || !review) return;
+    if (selectedLumpLocation === 'None') {
+      lump = null;
+      result = null;
+      presenceResult = null;
+      error = null;
+      return;
+    }
+    const request = ++generation;
+    error = null;
+    lump = null;
+    result = null;
+    presenceResult = null;
+    reading = true;
+    onbusy(true);
+    try {
+      const reviewLumpFn = client.ReviewProjectPlotProfileLumpTable;
+      const rawLoader: PromiseLike<ProjectMetadataTable> =
+        selectedLumpLocation && (reviewLumpFn || contextId)
+          ? reviewLumpFn
+            ? reviewLumpFn(selectedLumpLocation)
+            : ClassificationService.ReviewProjectPlotProfileLumpTable(contextId, selectedLumpLocation)
+          : client.ReviewProjectPlotProfileLump();
+      const source = validateProjectProfileLump(await trackIfCancellable(reads, rawLoader));
+      if (request === generation) lump = source;
+    } catch (cause) {
+      if (request === generation) {
+        error = `Project-local lump review failed; no definitions changed: ${formatError(cause)}`;
+      }
+    } finally {
+      if (request === generation) {
+        reading = false;
+        onbusy(false);
+      }
+    }
+  }
+
   async function run() {
     if (!allowRun || busy || blocked || !review) return;
-    const source = review, request = ++generation;
+    const source = review;
+    const request = ++generation;
     const activeLumpChoice = selectedLumpLocation.trim();
     const effectiveLump = activeLumpChoice === 'None' ? null : lump;
     if (activeLumpChoice === 'None' && lump !== null) lump = null;
     const input: ProjectPlotProfileRunRequest = {
-      originalRules: source.rules, projectLump: lump, subvarieties,
+      originalRules: source.rules,
+      projectLump: lump,
+      subvarieties,
       ...(startWithAllPlots ? { startWithAllPlots: true } : {}),
       ...(activeLumpChoice ? { lumpTable: activeLumpChoice } : {}),
     };
     if (effectiveLump !== lump) input.projectLump = effectiveLump;
-    result = null; presenceResult = null; error = null; reading = true; running = true; onbusy(true);
+    result = null;
+    presenceResult = null;
+    error = null;
+    reading = true;
+    running = true;
+    onbusy(true);
     try {
       const preview = await reads.track(client.RunProjectPlotProfile(input));
       if (request === generation) {
@@ -264,23 +268,41 @@
         runInput = $state.snapshot(input);
       }
     } catch (cause) {
-      if (request === generation) error = `Profile preview failed; no stored rules, counts or filters changed: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`;
+      if (request === generation) {
+        error = `Profile preview failed; no stored rules, counts or filters changed: ${formatError(cause)}`;
+      }
     } finally {
-      if (request === generation) { reading = false; running = false; onbusy(false); }
+      if (request === generation) {
+        reading = false;
+        running = false;
+        onbusy(false);
+      }
     }
   }
+
   function cancelRun() {
-    generation++; reads.cancelAll();
-    running = false; reading = false; result = null; onbusy(false);
+    generation++;
+    reads.cancelAll();
+    running = false;
+    reading = false;
+    result = null;
+    onbusy(false);
     presenceResult = null;
     error = 'Profile preview cancelled; reviewed inputs retained. No stored rules, counts or filters changed.';
   }
+
   async function runPresence() {
     if (!allowPresence || busy || blocked || !review || subvarieties) return;
     const request = ++generation;
     const expected = { contextId, project: review.project, table: review.table, su: activeSU };
-    result = null; runInput = null; presenceResult = null; error = null; success = null;
-    reading = true; running = true; onbusy(true);
+    result = null;
+    runInput = null;
+    presenceResult = null;
+    error = null;
+    success = null;
+    reading = true;
+    running = true;
+    onbusy(true);
     try {
       const input = $state.snapshot({ originalRules: review.rules, projectLump: lump, subvarieties: false });
       const wire = await reads.track(client.PreviewProjectProfileSpeciesPresence(input));
@@ -288,72 +310,42 @@
       const validated = await validateSpeciesPresencePreview(wire, expected);
       if (request === generation) presenceResult = validated;
     } catch (cause) {
-      if (request === generation) error = `Species-only preview failed; no rules, counts, navigation or SU changed: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`;
+      if (request === generation) {
+        error = `Species-only preview failed; no rules, counts, navigation or SU changed: ${formatError(cause)}`;
+      }
     } finally {
-      if (request === generation) { reading = false; running = false; onbusy(false); }
+      if (request === generation) {
+        reading = false;
+        running = false;
+        onbusy(false);
+      }
     }
-  }
-  async function applyNavigation() {
-    if (!allowFiltering || !allowRun || busy || blocked || !result || !runInput || !onapply) {
-      error = 'Run available stored inputs and finish profile drafts before applying navigation.'; return;
-    }
-    const unavailable = profileFilterUnavailable(result);
-    if (unavailable) { error = unavailable; return; }
-    try { await onapply(structuredClone($state.snapshot({ input: runInput, preview: result }))); }
-    catch (cause) { error = `Profile navigation was not applied; preview and current filter retained: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`; }
-  }
-  async function reviewSaveSU() {
-    if (!allowSaveSU || !allowRun || busy || blocked || !result || !runInput || !onsureview) {
-      error = 'Run stored inputs and finish profile drafts before reviewing Save as SU.'; return;
-    }
-    try { await onsureview(structuredClone($state.snapshot({ input: runInput, preview: result }))); }
-    catch (cause) { error = `Save as SU review failed; preview and drafts retained: ${String(cause).replace(/(?:RuntimeError|Error):\s*/gi, '')}`; }
   }
 </script>
 
 <section class="vpro-prof-panel m-3 p-3 rounded-lg" aria-label="Project-local plot profile review">
-  <div class="flex flex-wrap gap-2 items-center justify-between">
-    <h2 class="vpro-prof-title font-semibold">Selected plot profile {allowEditing ? 'rules' : 'review (read-only)'}</h2>
-    <div class="flex flex-wrap gap-2">
-      <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50" disabled={busy || dirty || creation !== null || deletion !== null} onclick={() => void reload()}>Reload profile review</button>
-      {#if allowRun}
-        <button type="button" class="vpro-prof-btn-primary px-3 py-2 rounded disabled:opacity-50" disabled={busy || blocked || !review} onclick={() => void run()}>Run stored profile preview</button>
-        {#if running}<button type="button" class="vpro-prof-btn px-3 py-2 rounded" onclick={cancelRun}>Cancel profile preview</button>{/if}
-      {:else}
-        <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50" disabled title="Ordered profile execution is not implemented.">Run Profile (unavailable)</button>
-      {/if}
-      {#if allowPresence}
-        <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50"
-          disabled={busy || blocked || !review || subvarieties} onclick={() => void runPresence()}>Preview saved species-only matches</button>
-        {#if running && !allowRun}<button type="button" class="vpro-prof-btn px-3 py-2 rounded" onclick={cancelRun}>Cancel species-only preview</button>{/if}
-      {/if}
-      <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50" disabled={busy || blocked} onclick={close}>Close profile review</button>
-    </div>
-  </div>
+  <ProjectPlotProfileHeader
+    {allowEditing}
+    {allowRun}
+    {allowPresence}
+    {busy}
+    {blocked}
+    {dirty}
+    hasCreationOrDeletion={creation !== null || deletion !== null}
+    hasReview={review !== null}
+    {running}
+    {reading}
+    {subvarieties}
+    {success}
+    onreload={() => void reload()}
+    onrun={() => void run()}
+    oncancelrun={cancelRun}
+    onrunpresence={() => void runPresence()}
+    onclose={close}
+  />
+
   {#if error}<p role="alert" class="vpro-prof-alert mt-3">{error.replace(/(?:RuntimeError|Error):\s*/gi, '')}</p>{/if}
-  {#if allowPresence && subvarieties}<p role="alert" class="vpro-prof-warn mt-3">Species-only subvariety preparation is unavailable. Clear the ordered preview's subvariety selection to preview literal saved species.</p>{/if}
-  {#if presenceResult}
-    <section aria-label="Readonly species-only matches" class="mt-3 min-w-0">
-      <h3 class="font-semibold">Saved species-only matches: {presenceResult.plotNumbers.length} of {presenceResult.totalPlots} scope plots</h3>
-      <p class="text-sm">{presenceResult.project} / {presenceResult.table} / {presenceResult.su}</p>
-      <p class="mt-2 whitespace-pre-wrap">{presenceResult.plotNumbers.length ? presenceResult.plotNumbers.join(', ') : 'No matching plots.'}</p>
-      <p class="vpro-prof-muted mt-2 text-sm">Readonly Table/Species intersection using the nine source presence columns. Species equality ignores ASCII case and terminal ASCII spaces; * and ? remain literal. Order, field, numeric criteria, layer, operation and historical counts are ignored. No navigation, Save-as-SU, count or audit action is available for this result; the original Access callback remains unavailable.</p>
-    </section>
-  {/if}
-  {#if allowSaveSU && result}
-    <button type="button" class="vpro-prof-btn mt-3 px-3 py-2 rounded disabled:opacity-50"
-      disabled={busy || blocked} onclick={() => void reviewSaveSU()}>Review Save as SU</button>
-  {/if}
-  {#if allowFiltering && result}
-    <div class="mt-3">
-      <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50"
-        disabled={busy || blocked || profileFilterUnavailable(result) !== null} onclick={() => void applyNavigation()}>Apply reviewed profile navigation</button>
-      {#if profileFilterUnavailable(result)}<p role="alert" class="vpro-prof-alert mt-2">{profileFilterUnavailable(result)}</p>{/if}
-      <p class="mt-2 text-sm">Explicit navigation only; current stored inputs are independently rechecked after Save/Discard/Cancel. No count, SU or configuration write.</p>
-    </div>
-  {/if}
-  {#if success}<p role="status" class="vpro-prof-success mt-3">{success}</p>{/if}
-  {#if reading}<p role="status" class="mt-3">Reading original inputs or evaluating stored profile rules...</p>{/if}
+
   {#if (allowRun || allowEditing || allowPresence) && review}
     <div class="flex flex-wrap gap-3 items-center mt-3">
       {#if lumpChoices.length > 0}
@@ -378,118 +370,109 @@
           </select>
         </label>
       {/if}
-      <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50" disabled={busy || selectedLumpLocation === 'None'} onclick={() => void reviewLump()}>Review and select project lump table</button>
+      <button
+        type="button"
+        class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50"
+        disabled={busy || selectedLumpLocation === 'None'}
+        onclick={() => void reviewLump()}
+      >
+        Review and select project lump table
+      </button>
       {#if lump}
-        <span>{selectedLumpLocation && selectedLumpLocation !== 'None' ? selectedLumpLocation : `${review.project}_Lump`} explicitly selected: {lump.rows.length} physical definitions.</span>
-        <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50" disabled={busy || blocked} onclick={() => { lump = null; subvarieties = false; result = null; error = null; presenceResult = null; }}>Clear lump selection</button>
+        <span>
+          {selectedLumpLocation && selectedLumpLocation !== 'None' ? selectedLumpLocation : `${review.project}_Lump`}
+          explicitly selected: {lump.rows.length} physical definitions.
+        </span>
+        <button
+          type="button"
+          class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50"
+          disabled={busy || blocked}
+          onclick={() => {
+            lump = null;
+            subvarieties = false;
+            result = null;
+            error = null;
+            presenceResult = null;
+          }}
+        >
+          Clear lump selection
+        </button>
       {/if}
       {#if allowRun}
-        <label class="flex gap-2 items-center"><input type="checkbox" disabled={busy || blocked || (!lump && selectedLumpLocation !== 'None')} checked={subvarieties}
-          onchange={event => { subvarieties = event.currentTarget.checked; result = null; presenceResult = null; error = null; }} />Combine source subvarieties</label>
-        <label class="flex gap-2 items-center"><input type="checkbox" disabled={busy || blocked} bind:checked={startWithAllPlots}
-          onchange={() => { result = null; error = null; }} />Start with all plots</label>
+        <label class="flex gap-2 items-center">
+          <input
+            type="checkbox"
+            disabled={busy || blocked || (!lump && selectedLumpLocation !== 'None')}
+            checked={subvarieties}
+            onchange={(event) => {
+              subvarieties = event.currentTarget.checked;
+              result = null;
+              presenceResult = null;
+              error = null;
+            }}
+          />
+          Combine source subvarieties
+        </label>
+        <label class="flex gap-2 items-center">
+          <input
+            type="checkbox"
+            disabled={busy || blocked}
+            bind:checked={startWithAllPlots}
+            onchange={() => {
+              result = null;
+              error = null;
+            }}
+          />
+          Start with all plots
+        </label>
       {/if}
     </div>
   {/if}
-  {#if allowEditing && draft}
-    <section class="mt-3" aria-label="Stored profile rule editor">
-      <div class="flex flex-wrap gap-2">
-        <button type="button" class="vpro-prof-btn-primary px-3 py-2 rounded disabled:opacity-50"
-          disabled={authorityBlocked || busy || committedFailure || creation !== null || deletion !== null || !dirty || errors.length > 0} onclick={() => void saveRules()}>Save profile rules</button>
-        <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50"
-          disabled={busy || committedFailure || !blocked} onclick={undo}>Undo profile drafts</button>
-        {#if allowCreation}
-          <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50"
-            disabled={authorityBlocked || busy || blocked} onclick={proposeCreation}>Review new profile rule</button>
-        {/if}
-      </div>
-      {#if creation}
-        {@const proposal = creation}
-        <fieldset class="vpro-prof-card mt-3 p-3 rounded" disabled={authorityBlocked || busy || committedFailure}>
-          <legend class="font-semibold">New rule proposal (no physical identity allocated)</legend>
-          <ProfileRuleInputs prefix="new-profile-rule" identityLabel="new proposal"
-            fields={profileEditableFields.map(name => ({ name, cell: profileCreationValue(proposal, name), options: profileCreationOptions(proposal, name, choices, lump) }))}
-            onstage={stageCreation} />
-          <p class="mt-3 text-sm">Eight explicit nullable assignments; PlotCount remains NULL. Create allocates one unused physical identity and complete typed history. Rule completeness for preview is a separate decision.</p>
-          <button type="button" class="vpro-prof-btn-primary mt-3 px-3 py-2 rounded disabled:opacity-50"
-            disabled={authorityBlocked || errors.length > 0} onclick={() => void createRule()}>Create reviewed profile rule</button>
-        </fieldset>
-      {/if}
-      {#if deletion !== null}
-        {@const row = review?.rules.rows.find(row => row.rowId === deletion)}
-        <section class="vpro-prof-danger-card mt-3 p-3 rounded" aria-label="Profile rule deletion confirmation">
-          <h3 class="font-semibold">Delete reviewed physical rule {deletion}?</h3>
-          {#if row && review}
-            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">{#each row.cells as cell, index}
-              <div><dt class="font-medium">{review.rules.columns[index].name}</dt><dd class="whitespace-pre-wrap break-words">{profileCellLabel(cell)}</dd></div>
-            {/each}</dl>
-          {/if}
-          <p class="mt-3">One rule only. Surviving rules and historical counts remain unchanged. Full typed deletion history and the reserved physical identity commit together; restoration is unavailable.</p>
-          <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50" disabled={authorityBlocked || busy || committedFailure}
-            onclick={() => void deleteRule()}>Confirm profile rule deletion</button>
-          <button type="button" class="vpro-prof-btn mt-3 ml-2 px-3 py-2 rounded disabled:opacity-50" disabled={busy || committedFailure}
-            onclick={undo}>Cancel profile deletion</button>
-        </section>
-      {/if}
-      {#each draft.review.rules.rows as row (row.rowId)}
-        {@const sourceDraft = draft}
-        <fieldset class="vpro-prof-card mt-3 p-3 rounded" disabled={authorityBlocked || busy || committedFailure || creation !== null || deletion !== null}>
-          <legend class="font-semibold">Physical rule {row.rowId}</legend>
-          <ProfileRuleInputs prefix={`profile-${row.rowId}`} identityLabel={`rule ${row.rowId}`}
-            fields={profileEditableFields.map(name => ({ name, cell: profileRuleValue(sourceDraft, row.rowId, name), options: profileRuleOptions(sourceDraft, row.rowId, name, choices, lump) }))}
-            onstage={(name, raw, nullValue) => stage(row.rowId, name, raw, nullValue)} />
-          {#if allowDeletion}
-            <button type="button" class="vpro-prof-btn mt-3 px-3 py-2 rounded disabled:opacity-50"
-              disabled={authorityBlocked || dirty} onclick={() => reviewDeletion(row.rowId)}>Review deletion of rule {row.rowId}</button>
-          {/if}
-        </fieldset>
-      {/each}
-      <p class="vpro-prof-muted mt-3 text-sm">Existing rules only. Table changes to Veg/Lump visibly propose Field=Species/LumpCode; no Layer, Species or Criteria is cleared. NULL differs from empty text. Only changed assignments are saved; stored PlotCount is read-only. Env field suggestions come from this project; Veg species suggestions use grouped VLists codes, and Lump species suggestions require explicit lump review. Suggestions do not restrict those literal fields.</p>
-      {#if choices}
-        <p class="vpro-prof-muted mt-1 text-xs">Source species definitions: {choices.species.length} distinct typed codes, including {choices.species.filter(cell => cell.storage === 'null').length} NULL and {choices.species.filter(cell => cell.storage === 'text' && cell.text === '').length} empty. NULL is set explicitly, not by an empty suggestion.</p>
-      {/if}
-    </section>
-  {/if}
-  {#if result}
-    <section class="vpro-prof-result-card mt-3 p-3 rounded" aria-label="Stored profile preview results">
-      <h3 class="font-semibold">Preview only: {result.plotNumbers.length} matching plots / {result.totalPlots} stored scope plots</h3>
-      <p>Scope: {result.project}; Working Unit list: {result.su}. No form filter or SU table has been changed.</p>
-      <div class="overflow-x-auto">
-        <table class="w-full text-xs border-collapse"><caption class="text-left py-2">Run-only counts, not stored PlotCount</caption>
-          <thead><tr>{#each ['Physical rule', 'Order', 'Operation', 'Step count', 'Remaining'] as label}<th scope="col" class="border p-2 text-left">{label}</th>{/each}</tr></thead>
-          <tbody>{#each result.steps as step (step.rowId)}<tr>
-            <th scope="row" class="border p-2">{step.rowId}</th><td class="border p-2">{step.order}</td><td class="border p-2">{step.operation}</td>
-            <td class="border p-2" aria-label={`Step count, rule ${step.rowId}`}>{step.plotCount}</td>
-            <td class="border p-2" aria-label={`Remaining, rule ${step.rowId}`}>{step.remaining}</td>
-          </tr>{/each}</tbody>
-        </table>
-      </div>
-      <p class="mt-2 whitespace-pre-wrap break-words" data-profile-plots>{result.plotNumbers.join(', ') || 'No matching plots.'}</p>
-    </section>
-  {/if}
-  {#if review}
-    <p class="my-3">Source: {review.project} / {review.table}. Rules follow stored Order; duplicate Orders retain distinct physical records. PlotCount is historical storage, not a recalculated result.</p>
-    {#if review.descriptions.columns.length === 0}<p class="my-3">Original description metadata table is absent; no descriptions are inferred or created.</p>{/if}
-    {#each [{ title: 'Original profile rules', table: review.rules },
-      ...(review.descriptions.columns.length > 0 ? [{ title: 'Original table-object descriptions', table: review.descriptions }] : []),
-      ...((allowRun || allowEditing || allowPresence) && lump ? [{ title: 'Explicitly selected project-local lump definitions', table: lump }] : [])] as item}
-      <div class="overflow-x-auto mt-3">
-        <table class="w-full border-collapse text-xs">
-          <caption class="text-left font-semibold py-2">{item.title}</caption>
-          <thead><tr><th scope="col" class="border p-2 text-left">Physical row</th>
-            {#each item.table.columns as column}<th scope="col" class="border p-2 text-left">{column.name}<span class="vpro-prof-muted block font-normal">{column.declaredType}</span></th>{/each}
-          </tr></thead>
-          <tbody>{#each item.table.rows as row (row.rowId)}
-            <tr><th scope="row" class="border p-2 text-left">{row.rowId}</th>
-              {#each row.cells as cell, index}<td class="border p-2 whitespace-pre-wrap min-w-24" aria-label={`${item.table.columns[index].name}, record ${row.rowId}`}>{profileCellLabel(cell)}</td>{/each}
-            </tr>
-          {/each}</tbody>
-        </table>
-        {#if item.table.rows.length === 0}<p class="py-2">No physical records in this source table.</p>{/if}
-      </div>
-    {/each}
-  {/if}
-  <p class="vpro-prof-muted mt-3 text-sm">This uses only explicitly selected stored rules and project data, never unsaved plot drafts. Ordered preview runs use isolated temporary workspace results and source-scoped Env/Veg/Lump operations (including Lump/Any/=/Add fixed equality semantics and Start with all plots); their text matching supports ASCII literals and simple * / ? patterns only. Unsupported rules fail explicitly. Other-table/external writes require separate current-session authorization; restoration remains unavailable. Save as SU creates only a new VPro project file (.db) after its separate opt-in and explicit review. Profile selection, rule creation/deletion and navigation filtering require their separate opt-ins. No stored PlotCount or shipped scratch table is changed.</p>
+
+  <ProjectPlotProfileRulesSection
+    {client}
+    {allowEditing}
+    {allowCreation}
+    {allowDeletion}
+    {authorityBlocked}
+    {busy}
+    {blocked}
+    {dirty}
+    {errors}
+    {choices}
+    bind:review
+    bind:draft
+    bind:creation
+    bind:deletion
+    bind:lump
+    bind:subvarieties
+    bind:result
+    bind:presenceResult
+    bind:saving
+    bind:committedFailure
+    bind:error
+    bind:success
+    {onbusy}
+    onundo={undo}
+  />
+
+  <ProjectPlotProfilePreviewSection
+    {allowRun}
+    {allowEditing}
+    {allowPresence}
+    {allowSaveSU}
+    {allowFiltering}
+    {busy}
+    {blocked}
+    {review}
+    {lump}
+    {result}
+    {runInput}
+    {presenceResult}
+    bind:error
+    {onapply}
+    {onsureview}
+  />
 </section>
 
 <style>
@@ -499,45 +482,18 @@
     border-top: 4px solid var(--vpro-navy);
     color: var(--vpro-ink);
   }
-  .vpro-prof-title { color: var(--vpro-navy); }
   .vpro-prof-btn {
     background: var(--vpro-surface);
     color: var(--vpro-navy);
     border: 1px solid var(--vpro-navy);
-  }
-  .vpro-prof-btn-primary {
-    background: var(--vpro-navy);
-    color: var(--vpro-surface);
-    border: 1px solid var(--vpro-navy);
-    border-bottom: 2px solid var(--vpro-gold);
-    font-weight: 600;
   }
   .vpro-prof-select {
     background: var(--vpro-surface);
     color: var(--vpro-ink);
     border: 1px solid var(--vpro-border);
   }
-  .vpro-prof-card {
-    background: var(--vpro-surface);
-    border: 1px solid var(--vpro-border);
+  .vpro-prof-alert {
+    color: var(--vpro-error);
+    font-weight: 600;
   }
-  .vpro-prof-danger-card {
-    background: var(--vpro-surface);
-    border: 1px solid var(--vpro-error);
-    border-left: 4px solid var(--vpro-error);
-  }
-  .vpro-prof-result-card {
-    background: var(--vpro-surface);
-    border: 1px solid var(--vpro-success);
-    border-left: 4px solid var(--vpro-success);
-  }
-  .vpro-prof-alert { color: var(--vpro-error); font-weight: 600; }
-  .vpro-prof-warn {
-    color: var(--vpro-navy-dark);
-    background: rgba(252, 186, 25, 0.22);
-    border-left: 3px solid var(--vpro-gold);
-    padding: 0.35rem 0.6rem;
-  }
-  .vpro-prof-success { color: var(--vpro-forest); font-weight: 600; }
-  .vpro-prof-muted { color: var(--vpro-ink-secondary); }
 </style>
