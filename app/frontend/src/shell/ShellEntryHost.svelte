@@ -6,6 +6,7 @@
   import { projectState } from '../shared/state';
   import CloseConfirm from './CloseConfirm.svelte';
   import type { CloseDecision, EditorCloseState } from './closeLifecycle';
+  import type { PlotProfileSelectionController } from './plotProfileOps';
   import type { DiagnosticsDraftContext, FS882EditorHandle, ShellViewId } from './shellPlotOps';
 
   let {
@@ -48,6 +49,9 @@
     findScopedPlot,
     openFoundPlot,
     applyProfileNavigation,
+    profileSelection,
+    initialProfileReviewOpen = false,
+    onConsumedInitialProfileReview,
     reviewProfileSU,
     copyPlotToNewNumber,
     removePlotFromProject,
@@ -91,6 +95,9 @@
     findScopedPlot: () => Promise<void>;
     openFoundPlot: () => Promise<void>;
     applyProfileNavigation: (proposal: ProjectPlotProfileFilterRequest, origin: string) => Promise<void>;
+    profileSelection?: PlotProfileSelectionController;
+    initialProfileReviewOpen?: boolean;
+    onConsumedInitialProfileReview?: () => void;
     reviewProfileSU: (proposal: ProjectPlotProfileFilterRequest, origin: string) => Promise<void>;
     copyPlotToNewNumber: (sourcePlot: string, targetPlot: string) => Promise<void>;
     removePlotFromProject: (sourcePlot: string, cleanProjectName: string) => Promise<void>;
@@ -281,6 +288,9 @@
                 }}
                 onProfileNavigation={applyProfileNavigation}
                 onProfileSUReview={reviewProfileSU}
+                {profileSelection}
+                {initialProfileReviewOpen}
+                {onConsumedInitialProfileReview}
                 onFindPlot={() => {
                   plotFindOpen = true;
                 }}

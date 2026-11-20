@@ -3,6 +3,7 @@
     allowEditing,
     allowRun,
     allowPresence,
+    noProfileSelected = false,
     busy,
     blocked,
     dirty,
@@ -21,6 +22,7 @@
     allowEditing: boolean;
     allowRun: boolean;
     allowPresence: boolean;
+    noProfileSelected?: boolean;
     busy: boolean;
     blocked: boolean;
     dirty: boolean;
@@ -40,13 +42,17 @@
 
 <div class="flex flex-wrap gap-2 items-center justify-between">
   <h2 class="vpro-prof-title font-semibold">
-    Selected plot profile {allowEditing ? 'rules' : 'review (read-only)'}
+    {#if noProfileSelected}
+      Plot profiling — no profile selected
+    {:else}
+      Selected plot profile {allowEditing ? 'rules' : 'review (read-only)'}
+    {/if}
   </h2>
   <div class="flex flex-wrap gap-2">
     <button
       type="button"
       class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50"
-      disabled={busy || dirty || hasCreationOrDeletion}
+      disabled={busy || dirty || hasCreationOrDeletion || noProfileSelected}
       onclick={onreload}
     >
       Reload profile review

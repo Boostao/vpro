@@ -27,8 +27,8 @@
     publishProfileWriteOwnershipOp,
     saveProfileSUOp,
     saveProfileSUProjectOp,
+    type PlotProfileSelectionController,
   } from './plotProfileOps';
-  import PlotProfileSelectionSection from './PlotProfileSelectionSection.svelte';
   import PlotProfileSUSection from './PlotProfileSUSection.svelte';
 
   let {
@@ -39,6 +39,8 @@
     profileNavigation = $bindable(null),
     selected = $bindable(null),
     page = $bindable(null),
+    selectionController = $bindable<PlotProfileSelectionController | undefined>(undefined),
+    reopenProfileReview = $bindable(false),
     operationHeld = false,
     editorBusy = false,
     vegetationPublicationBusy = false,
@@ -62,6 +64,8 @@
     profileNavigation: ProfileNavigation | null;
     selected: PlotSummary | null;
     page: PlotPage | null;
+    selectionController?: PlotProfileSelectionController | undefined;
+    reopenProfileReview?: boolean;
     operationHeld?: boolean;
     editorBusy?: boolean;
     vegetationPublicationBusy?: boolean;
@@ -125,16 +129,30 @@
       view = 'plots';
       editorPlotNumber = undefined;
     },
+    afterBlankProfileCreated: () => {
+      if (view !== 'fs882') {
+        view = 'plots';
+        editorPlotNumber = undefined;
+      }
+    },
     resetContextAfterProfileSwitch: (state: Awaited<ReturnType<typeof ContextService.GetState>>) => {
+      const keepProfilingOpen = view === 'fs882';
       projectState.set(state);
       profileNavigation = null;
       profileSources = [];
       profileSourceContext = '';
+      profileWriteReview = null;
+      profileWriteContext = '';
+      profileWriteError = '';
       selected = null;
       page = null;
-      editorPlotNumber = undefined;
-      view = 'plots';
       error = '';
+      if (keepProfilingOpen) {
+        reopenProfileReview = true;
+      } else {
+        editorPlotNumber = undefined;
+        view = 'plots';
+      }
     },
     loadPlotsZero: () => loadPlots(0),
     cancelAllReads: () => cancelAllReads(),
@@ -383,6 +401,167 @@
   function choosePlotProfile(source: PlotProfileSource, origin: string) {
     return choosePlotProfileOp(mutationHost, source, origin);
   }
+
+  const controller: PlotProfileSelectionController = {
+    get profilePath() {
+      return profilePath;
+    },
+    setProfilePath(value: string) {
+      profilePath = value;
+    },
+    get profileSources() {
+      return profileSources;
+    },
+    get profileSourceContext() {
+      return profileSourceContext;
+    },
+    get profileSourceError() {
+      return profileSourceError;
+    },
+    get profileWriteReview() {
+      return profileWriteReview;
+    },
+    get profileWriteContext() {
+      return profileWriteContext;
+    },
+    get profileWriteError() {
+      return profileWriteError;
+    },
+    get profileFileReview() {
+      return profileFileReview;
+    },
+    get profileFileContext() {
+      return profileFileContext;
+    },
+    get profileFileName() {
+      return profileFileName;
+    },
+    setProfileFileName(value: string) {
+      profileFileName = value;
+    },
+    get profileFilePath() {
+      return profileFilePath;
+    },
+    setProfileFilePath(value: string) {
+      profileFilePath = value;
+    },
+    get profileFileError() {
+      return profileFileError;
+    },
+    get profileFileSuccess() {
+      return profileFileSuccess;
+    },
+    get profileFileCommitted() {
+      return profileFileCommitted;
+    },
+    get profileTableReview() {
+      return profileTableReview;
+    },
+    get profileTableContext() {
+      return profileTableContext;
+    },
+    get profileTableName() {
+      return profileTableName;
+    },
+    setProfileTableName(value: string) {
+      profileTableName = value;
+    },
+    get profileTableError() {
+      return profileTableError;
+    },
+    get profileTableSuccess() {
+      return profileTableSuccess;
+    },
+    get profileTableCommitted() {
+      return profileTableCommitted;
+    },
+    get busy() {
+      return busy;
+    },
+    get editorBusy() {
+      return editorBusy;
+    },
+    get transitionWorking() {
+      return transitionWorking;
+    },
+    get pendingTransition() {
+      return pendingTransition;
+    },
+    inspectSources: () => void inspectProfileSources(),
+    chooseProfile: (source, origin) => void choosePlotProfile(source, origin),
+    reviewWriteOwnership: () => void reviewProfileWriteOwnership(),
+    publishWriteOwnership: () =>
+      void publishProfileWriteOwnershipOp(mutationHost, {
+        profileWriteReview: $state.snapshot(profileWriteReview),
+        profileWriteContext,
+        clearWriteReview: () => {
+          profileWriteReview = null;
+          profileWriteContext = '';
+        },
+        setProfileWriteError: (m) => {
+          profileWriteError = m;
+        },
+      }),
+    dismissWriteOwnership: () => {
+      profileWriteReview = null;
+      profileWriteError = '';
+    },
+    reviewBlankFile: () => void reviewBlankProfileFile(),
+    createBlankFile: () =>
+      void createBlankProfileFileOp(mutationHost, {
+        profileFileReview: $state.snapshot(profileFileReview),
+        profileFileCommitted,
+        profileFileContext,
+        profileFileName,
+        profileFilePath,
+        setProfileFileCommitted: (v) => {
+          profileFileCommitted = v;
+        },
+        setProfileFileError: (m) => {
+          profileFileError = m;
+        },
+        setProfileFileSuccess: (m) => {
+          profileFileSuccess = m;
+        },
+        setProfilePath: (p) => {
+          profilePath = p;
+        },
+      }),
+    dismissBlankFile: () => {
+      profileFileReview = null;
+      profileFileError = '';
+      profileFileSuccess = '';
+    },
+    reviewBlankTable: () => void reviewBlankProfileTable(),
+    createBlankTable: () =>
+      void createBlankProfileTableOp(mutationHost, {
+        profileTableReview: $state.snapshot(profileTableReview),
+        profileTableCommitted,
+        profileTableContext,
+        profileTableName,
+        setProfileTableCommitted: (v) => {
+          profileTableCommitted = v;
+        },
+        setProfileTableError: (m) => {
+          profileTableError = m;
+        },
+        setProfileTableSuccess: (m) => {
+          profileTableSuccess = m;
+        },
+        setProfilePath: (p) => {
+          profilePath = p;
+        },
+      }),
+    dismissBlankTable: () => {
+      profileTableReview = null;
+      profileTableError = '';
+      profileTableSuccess = '';
+    },
+  };
+
+  $effect(() => {
+    selectionController = controller;
+  });
 </script>
 
 {#if suReview}
@@ -450,103 +629,6 @@
     }}
   />
 {/if}
-
-<PlotProfileSelectionSection
-  bind:profilePath
-  {profileSources}
-  {profileSourceContext}
-  {profileSourceError}
-  {profileWriteReview}
-  {profileWriteContext}
-  {profileWriteError}
-  {profileFileReview}
-  {profileFileContext}
-  bind:profileFileName
-  bind:profileFilePath
-  {profileFileError}
-  {profileFileSuccess}
-  {profileFileCommitted}
-  {profileTableReview}
-  {profileTableContext}
-  bind:profileTableName
-  {profileTableError}
-  {profileTableSuccess}
-  {profileTableCommitted}
-  {busy}
-  {editorBusy}
-  {transitionWorking}
-  {pendingTransition}
-  onInspectSources={() => void inspectProfileSources()}
-  onChooseProfile={(source, origin) => void choosePlotProfile(source, origin)}
-  onReviewWriteOwnership={() => void reviewProfileWriteOwnership()}
-  onPublishWriteOwnership={() =>
-    void publishProfileWriteOwnershipOp(mutationHost, {
-      profileWriteReview: $state.snapshot(profileWriteReview),
-      profileWriteContext,
-      clearWriteReview: () => {
-        profileWriteReview = null;
-        profileWriteContext = '';
-      },
-      setProfileWriteError: (m) => {
-        profileWriteError = m;
-      },
-    })}
-  onDismissWriteOwnership={() => {
-    profileWriteReview = null;
-    profileWriteError = '';
-  }}
-  onReviewBlankFile={() => void reviewBlankProfileFile()}
-  onCreateBlankFile={() =>
-    void createBlankProfileFileOp(mutationHost, {
-      profileFileReview: $state.snapshot(profileFileReview),
-      profileFileCommitted,
-      profileFileContext,
-      profileFileName,
-      profileFilePath,
-      setProfileFileCommitted: (v) => {
-        profileFileCommitted = v;
-      },
-      setProfileFileError: (m) => {
-        profileFileError = m;
-      },
-      setProfileFileSuccess: (m) => {
-        profileFileSuccess = m;
-      },
-      setProfilePath: (p) => {
-        profilePath = p;
-      },
-    })}
-  onDismissBlankFile={() => {
-    profileFileReview = null;
-    profileFileError = '';
-    profileFileSuccess = '';
-  }}
-  onReviewBlankTable={() => void reviewBlankProfileTable()}
-  onCreateBlankTable={() =>
-    void createBlankProfileTableOp(mutationHost, {
-      profileTableReview: $state.snapshot(profileTableReview),
-      profileTableCommitted,
-      profileTableContext,
-      profileTableName,
-      setProfileTableCommitted: (v) => {
-        profileTableCommitted = v;
-      },
-      setProfileTableError: (m) => {
-        profileTableError = m;
-      },
-      setProfileTableSuccess: (m) => {
-        profileTableSuccess = m;
-      },
-      setProfilePath: (p) => {
-        profilePath = p;
-      },
-    })}
-  onDismissBlankTable={() => {
-    profileTableReview = null;
-    profileTableError = '';
-    profileTableSuccess = '';
-  }}
-/>
 
 {#if profileNavigation}
   <section class="m-2 p-2 border rounded flex flex-wrap items-center gap-3" aria-label="Active profile navigation">

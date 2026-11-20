@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { ProjectPlotProfileFilterRequest } from '../../bindings/github.com/boostao/vpro/app';
+  import type { PlotProfileSelectionController } from '../shell/plotProfileOps';
   import FS882ChildCreateModal from './FS882ChildCreateModal.svelte';
   import FS882Modals, { type FS882SubEditorLoaders } from './FS882Modals.svelte';
   import FS882SiteTab from './FS882SiteTab.svelte';
@@ -19,6 +20,7 @@
     onOpenPictureManager,
     onProfileSUReview,
     onProfileNavigation,
+    profileSelection,
     onClearSuccess,
     onAuditSuccess,
     ordinaryHost,
@@ -33,6 +35,7 @@
     onOpenPictureManager?: (plotNumber: string) => void;
     onProfileSUReview?: (proposal: ProjectPlotProfileFilterRequest, contextId: string) => Promise<void>;
     onProfileNavigation?: (proposal: ProjectPlotProfileFilterRequest, contextId: string) => Promise<void>;
+    profileSelection?: PlotProfileSelectionController;
     onClearSuccess: () => void;
     onAuditSuccess: (msg: string | null) => void;
     ordinaryHost: Snippet<[Snippet]>;
@@ -206,6 +209,7 @@
       onCloseStandalone={onClosed}
       {onProfileSUReview}
       {onProfileNavigation}
+      {profileSelection}
     />
     <FS882ChildCreateModal
       region="toolbars"

@@ -3,6 +3,7 @@
   import { untrack, type Snippet } from 'svelte';
   import { projectState } from '../shared/state';
   import { notifications } from '../shell/notificationService.svelte';
+  import type { PlotProfileSelectionController } from '../shell/plotProfileOps';
   import FormValidationSummary from './FormValidationSummary.svelte';
   import FS882ManagePlotBar from './FS882ManagePlotBar.svelte';
   import type { FS882SubEditorLoaders } from './FS882Modals.svelte';
@@ -25,6 +26,9 @@
     onBusyChange,
     onProfileNavigation,
     onProfileSUReview,
+    profileSelection,
+    initialProfileReviewOpen = false,
+    onConsumedInitialProfileReview,
     onFindPlot,
     onOpenPictureManager,
     onDiagnosticsContextChange,
@@ -37,6 +41,9 @@
     onRemovePlotAction,
   }: FS882FormBaseProps & {
     entryForm?: 'fs882' | 'sivi' | 'fs882-twopage';
+    profileSelection?: PlotProfileSelectionController;
+    initialProfileReviewOpen?: boolean;
+    onConsumedInitialProfileReview?: () => void;
     onOpenPictureManager?: (plotNumber: string) => void;
     onDiagnosticsContextChange?: (state: FS882DiagnosticsState) => void;
   } = $props();
@@ -100,6 +107,8 @@
       siviStandalone ||
       ctrl.childParentDisabled ||
       twoPageOpen ||
+      ctrl.profileReviewOpen ||
+      initialProfileReviewOpen ||
       childUnsaved ||
       ctrl.dirty ||
       Object.keys(ctrl.headerValidation).length > 0
@@ -111,6 +120,17 @@
     if (autoOpenedTwoPageKey === key) return;
     autoOpenedTwoPageKey = key;
     ctrl.openTwoPageReview('entry');
+  });
+
+  $effect(() => {
+    if (!initialProfileReviewOpen) return;
+    if (ctrl.profileReviewOpen) {
+      onConsumedInitialProfileReview?.();
+      return;
+    }
+    if (ctrl.busy || ctrl.headerWorkflowBusy || ctrl.sivi.sourceBarrier || !ctrl.capabilitiesReady) return;
+    ctrl.openProfileReviewFromToolbar();
+    onConsumedInitialProfileReview?.();
   });
 
   let lastNotifiedSuccessMsg: string | null = null;
@@ -300,6 +320,7 @@
       {onOpenPictureManager}
       {onProfileSUReview}
       {onProfileNavigation}
+      {profileSelection}
       onClearSuccess={() => {
         successMsg = null;
       }}

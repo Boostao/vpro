@@ -40,6 +40,7 @@
       onclosereview: () => void;
       oncancel: () => void;
       onopenmetadataeditor: () => void;
+      onopenprofilesu?: () => void;
     };
   } = $props();
 
@@ -171,6 +172,19 @@
               readerBlocked}
             onclick={readers.openProfiling}>{s.projection.profilingAction.caption}</button
           >
+        {/if}
+        {#if h.onopenprofilesu}
+          <button
+            type="button"
+            class="rounded border border-vpro-border bg-white px-2.5 py-1 text-xs font-medium text-vpro-ink hover:bg-vpro-surface-subtle disabled:opacity-50"
+            data-two-page-profile-manage-open
+            disabled={readerBlocked}
+            onclick={h.onopenprofilesu}
+          >
+            {!readers.profileSource?.name || readers.profileSource.name === 'None' || !readers.profileSource.path
+              ? 'Select Plot Profile'
+              : 'Manage Plot Profile'}
+          </button>
         {/if}
         {#if s.availabilities.projectMetadata}
           <button

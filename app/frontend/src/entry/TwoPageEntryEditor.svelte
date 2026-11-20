@@ -413,6 +413,7 @@
       onclosereview: closeReview,
       oncancel: cancel,
       onopenmetadataeditor: openMetadataEditor,
+      onopenprofilesu: onOpenProfileSU,
     }}
   />
   <TwoPageEntryReadersHost

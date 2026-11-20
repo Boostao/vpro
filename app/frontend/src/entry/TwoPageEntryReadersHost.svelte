@@ -103,7 +103,7 @@
         data-two-page-create-su-link
         class="rounded bg-vpro-navy px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
         disabled={readers.profilingBusy || childBlocked || close.unsaved || close.busy || close.blocked}
-        onclick={onOpenProfileSU}>Open Plot Profiling / Create SU from Filter</button
+        onclick={onOpenProfileSU}>Manage Plot Profile / Save as Site Unit</button
       >
     {/if}
   </div>

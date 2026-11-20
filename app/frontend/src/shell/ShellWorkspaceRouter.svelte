@@ -13,6 +13,7 @@
   import type { CloseDecision, EditorCloseState } from './closeLifecycle';
   import HomeWorkspaceHub from './HomeWorkspaceHub.svelte';
   import { notifications } from './notificationService.svelte';
+  import type { PlotProfileSelectionController } from './plotProfileOps';
   import PlotProfilePanel from './PlotProfilePanel.svelte';
   import ShellDeferredViews from './ShellDeferredViews.svelte';
   import ShellEntryHost from './ShellEntryHost.svelte';
@@ -158,6 +159,8 @@
   } = $props();
 
   const panelHold = $derived(busy || transitionWorking || pendingTransition !== null || !!closeRequest);
+  let profileSelection = $state<PlotProfileSelectionController | undefined>(undefined);
+  let reopenProfileReview = $state(false);
   let pictureManagerPlotProxy = $state('');
   let diagnosticsDraftProxy = $state<typeof ui.diagnosticsDraft>(null);
   $effect(() => {
@@ -166,6 +169,22 @@
   $effect(() => {
     diagnosticsDraftProxy = ui.diagnosticsDraft;
   });
+  $effect(() => {
+    if (view !== 'fs882' && reopenProfileReview) {
+      reopenProfileReview = false;
+    }
+  });
+
+  function openPlotProfiling() {
+    void requestTransition(async () => {
+      const targetPlot = selected?.plotNumber ?? ui.allAvailablePlots[0]?.plotNumber ?? editorPlotNumber;
+      editorPlotNumber = targetPlot;
+      editorEntryForm = 'fs882';
+      reopenProfileReview = true;
+      view = 'fs882';
+      error = '';
+    });
+  }
 </script>
 
 <main class="content">
@@ -191,6 +210,8 @@
     bind:profileNavigation
     bind:selected
     bind:page
+    bind:selectionController={profileSelection}
+    bind:reopenProfileReview
     {operationHeld}
     {editorBusy}
     {transitionWorking}
@@ -278,6 +299,11 @@
           },
         })}
       applyProfileNavigation={ui.applyProfileNavigation}
+      {profileSelection}
+      initialProfileReviewOpen={reopenProfileReview}
+      onConsumedInitialProfileReview={() => {
+        reopenProfileReview = false;
+      }}
       reviewProfileSU={async (proposal, origin) => {
         if (!plotProfilePanel) throw new Error('Plot profile panel is not ready.');
         await plotProfilePanel.reviewProfileSU(proposal, origin);
@@ -345,6 +371,7 @@
         onrefresh={refresh}
         onloadpage={loadPlots}
         onopenexplorer={() => navigate('classification-explorer')}
+        onopenprofiling={openPlotProfiling}
         onselectplot={() => {
           ui.inspectorExpanded = true;
         }}
@@ -369,6 +396,7 @@
       onopenfs882={() => navigate('fs882')}
       onopentwopage={() => navigate('fs882-twopage')}
       onopensivi={() => void openSIVI()}
+      onopenprofiling={openPlotProfiling}
       oncopyplot={ui.copyPlotToNewNumber}
       onremoveplot={ui.removePlotFromProject}
       oncollapseinspector={() => {

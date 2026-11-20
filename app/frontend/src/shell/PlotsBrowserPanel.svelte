@@ -27,6 +27,7 @@
     onopentwopage = () => {},
     onopensivi = () => {},
     onopenexplorer = () => {},
+    onopenprofiling,
     oncollapseinspector = () => {},
     onselectplot = () => {},
     oncopyplot,
@@ -53,6 +54,7 @@
     onopentwopage?: () => void;
     onopensivi?: () => void;
     onopenexplorer?: () => void;
+    onopenprofiling?: () => void;
     oncollapseinspector?: () => void;
     onselectplot?: (plot: PlotSummary) => void;
     oncopyplot?: (sourcePlot: string, targetPlot: string) => Promise<void>;
@@ -306,6 +308,19 @@
         <dt>Plots in Scope</dt>
         <dd class="tabular-nums">{page?.total ?? 0}</dd>
       </dl>
+      {#if onopenprofiling && $projectState?.contextId}
+        <div class="mt-3 pt-3 border-t border-vpro-border">
+          <button
+            type="button"
+            data-inspector-open-profiling
+            class="w-full py-2 px-3 border border-vpro-navy bg-white hover:bg-vpro-navy-tint text-vpro-navy rounded text-xs font-semibold disabled:opacity-50"
+            disabled={busy || editorBusy || transitionWorking || pendingTransition !== null}
+            onclick={onopenprofiling}
+          >
+            Open Plot Profiling
+          </button>
+        </div>
+      {/if}
       <p class="mt-4 text-xs text-vpro-ink-secondary leading-relaxed">
         Select a plot row to inspect BEC attributes, or press <kbd
           class="px-1 py-0.5 rounded border border-vpro-border bg-vpro-surface-subtle font-mono text-[11px]">Ctrl+K</kbd
@@ -361,13 +376,26 @@
       <div class="eyebrow">{$projectState?.activeProject ?? 'PROJECT'}</div>
       <h1>Plots</h1>
     </div>
-    <button
-      class="icon-button"
-      title="Refresh projects and plots"
-      aria-label="Refresh projects and plots"
-      disabled={busy}
-      onclick={onrefresh}><RefreshCw size={18} strokeWidth={1.8} /></button
-    >
+    <div class="flex flex-wrap items-center gap-2">
+      {#if onopenprofiling && $projectState?.contextId}
+        <button
+          type="button"
+          data-plots-open-profiling
+          class="rounded border border-vpro-navy bg-white px-3 py-1.5 text-xs font-semibold text-vpro-navy hover:bg-vpro-navy-tint disabled:opacity-50"
+          disabled={busy || editorBusy || transitionWorking || pendingTransition !== null}
+          onclick={onopenprofiling}
+        >
+          Plot Profiling
+        </button>
+      {/if}
+      <button
+        class="icon-button"
+        title="Refresh projects and plots"
+        aria-label="Refresh projects and plots"
+        disabled={busy}
+        onclick={onrefresh}><RefreshCw size={18} strokeWidth={1.8} /></button
+      >
+    </div>
   </div>
   <div class="table-bar">
     <span

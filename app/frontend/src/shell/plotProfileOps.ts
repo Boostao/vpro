@@ -1,5 +1,9 @@
 import { tick } from 'svelte';
-import { ContextService, type PlotProfileSource } from '../../bindings/github.com/boostao/vpro/app';
+import {
+  ContextService,
+  type PlotProfileSource,
+  type PlotProfileSourceInfo,
+} from '../../bindings/github.com/boostao/vpro/app';
 import { validateProfileFileCreated, type ReviewedProfileFile } from '../classification/profileFile';
 import { validateProfileSUCreated, type ReviewedProfileSU } from '../classification/profileSU';
 import { validateProjectSUCreated, type ReviewedProjectSU } from '../classification/profileSUProject';
@@ -8,11 +12,54 @@ import type { ValidatedProjectPlotProfileReview } from '../classification/projec
 import { formatError, type ReadRequests } from '../shared/readRequests';
 import { projectState } from '../shared/state';
 
+export interface PlotProfileSelectionController {
+  readonly profilePath: string;
+  setProfilePath: (value: string) => void;
+  readonly profileSources: PlotProfileSourceInfo[];
+  readonly profileSourceContext: string;
+  readonly profileSourceError: string;
+  readonly profileWriteReview: ValidatedProjectPlotProfileReview | null;
+  readonly profileWriteContext: string;
+  readonly profileWriteError: string;
+  readonly profileFileReview: ReviewedProfileFile | null;
+  readonly profileFileContext: string;
+  readonly profileFileName: string;
+  setProfileFileName: (value: string) => void;
+  readonly profileFilePath: string;
+  setProfileFilePath: (value: string) => void;
+  readonly profileFileError: string;
+  readonly profileFileSuccess: string;
+  readonly profileFileCommitted: boolean;
+  readonly profileTableReview: ReviewedProfileTable | null;
+  readonly profileTableContext: string;
+  readonly profileTableName: string;
+  setProfileTableName: (value: string) => void;
+  readonly profileTableError: string;
+  readonly profileTableSuccess: string;
+  readonly profileTableCommitted: boolean;
+  readonly busy: boolean;
+  readonly editorBusy: boolean;
+  readonly transitionWorking: boolean;
+  readonly pendingTransition: unknown;
+  inspectSources: () => void;
+  chooseProfile: (source: PlotProfileSource, origin: string) => void;
+  reviewWriteOwnership: () => void;
+  publishWriteOwnership: () => void;
+  dismissWriteOwnership: () => void;
+  reviewBlankFile: () => void;
+  createBlankFile: () => void;
+  dismissBlankFile: () => void;
+  reviewBlankTable: () => void;
+  createBlankTable: () => void;
+  dismissBlankTable: () => void;
+}
+
 export interface PlotProfileMutationHost {
   setBusy: (b: boolean) => void;
   getError: () => string;
   setError: (msg: string) => void;
   resetToPlotsView: () => void;
+  afterBlankProfileCreated?: () => void;
   resetContextAfterProfileSwitch: (state: Awaited<ReturnType<typeof ContextService.GetState>>) => void;
   loadPlotsZero: () => Promise<void>;
   cancelAllReads: () => void;
@@ -254,7 +301,8 @@ export async function createBlankProfileFileOp(
         `Created ${created.table} with zero rules in ${created.source.path}. Inspect, select and authorize it explicitly to begin editing; current context selection is unchanged.`
       );
       setProfilePath(created.source.path);
-      host.resetToPlotsView();
+      if (host.afterBlankProfileCreated) host.afterBlankProfileCreated();
+      else host.resetToPlotsView();
       await host.loadPlotsZero();
       if (host.getError())
         host.setError(
@@ -320,7 +368,8 @@ export async function createBlankProfileTableOp(
         `Created ${created.table} with zero rules in ${created.source.path}. Existing data/descriptions and current selection are unchanged. Inspect and select it explicitly; selection clears external session grants.`
       );
       setProfilePath(created.source.path);
-      host.resetToPlotsView();
+      if (host.afterBlankProfileCreated) host.afterBlankProfileCreated();
+      else host.resetToPlotsView();
       await host.loadPlotsZero();
       if (host.getError())
         host.setError(

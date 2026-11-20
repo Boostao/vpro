@@ -2,7 +2,9 @@ const assert = require('node:assert/strict');
 const {test} = require('node:test');
 const {readFileSync} = require('node:fs');
 const path = require('node:path');
-const { loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
+const {compile} = require('svelte/compiler');
+const {render} = require('svelte/server');
+const { componentFunctions, loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
 const resource = name => JSON.parse(readFileSync(path.join(__dirname,'..','..','resources',name),'utf8'));
 const quality = loadTypeScript('qualityEditor.ts',{'./becEditor':loadTypeScript('becEditor.ts')});
 const metadata = loadTypeScript('projectMetadataEditor.ts',{'./qualityEditor':quality,
@@ -200,4 +202,550 @@ test('Existing-file creation is separately gated inside profile selection, share
   assert.match(action,/do not replay creation/);
   assert.match(app,/view = 'plots';\s*editorPlotNumber = undefined/);
   assert.doesNotMatch(action,/SetPlotProfileEditing|SelectPlotProfile|SwitchContext/);
+});
+
+function makeWritableStore(initial) {
+  let value = initial;
+  const subs = new Set();
+  return {
+    subscribe(fn) {
+      fn(value);
+      subs.add(fn);
+      return () => subs.delete(fn);
+    },
+    set(next) {
+      value = next;
+      for (const fn of subs) fn(value);
+    },
+  };
+}
+
+function makeSelectionController(overrides = {}) {
+  return {
+    profilePath: '',
+    setProfilePath() {},
+    profileSources: [],
+    profileSourceContext: '',
+    profileSourceError: '',
+    profileWriteReview: null,
+    profileWriteContext: '',
+    profileWriteError: '',
+    profileFileReview: null,
+    profileFileContext: '',
+    profileFileName: '',
+    setProfileFileName() {},
+    profileFilePath: '',
+    setProfileFilePath() {},
+    profileFileError: '',
+    profileFileSuccess: '',
+    profileFileCommitted: false,
+    profileTableReview: null,
+    profileTableContext: '',
+    profileTableName: '',
+    setProfileTableName() {},
+    profileTableError: '',
+    profileTableSuccess: '',
+    profileTableCommitted: false,
+    busy: false,
+    editorBusy: false,
+    transitionWorking: false,
+    pendingTransition: null,
+    inspectSources() {},
+    chooseProfile() {},
+    reviewWriteOwnership() {},
+    publishWriteOwnership() {},
+    dismissWriteOwnership() {},
+    reviewBlankFile() {},
+    createBlankFile() {},
+    dismissBlankFile() {},
+    reviewBlankTable() {},
+    createBlankTable() {},
+    dismissBlankTable() {},
+    ...overrides,
+  };
+}
+
+test('PlotProfilePanel omits global PlotProfileSelectionSection across non-profiling views while preserving slim navigation bar', () => {
+  const panelSrc = read('PlotProfilePanel.svelte');
+  assert.doesNotMatch(panelSrc, /PlotProfileSelectionSection/);
+  assert.doesNotMatch(panelSrc, /Stored plot profile selection/);
+
+  const stateStore = makeWritableStore({
+    contextId: 'owned',
+    activeProject: 'Sample',
+    projectPath: '/data/Sample.db',
+    activeSU: 'None',
+    plotProfile: {
+      source: { name: 'Sample', path: '/data/Sample.db' },
+      table: 'Sample_Profile',
+      available: true,
+      writable: true,
+      reason: '',
+    },
+  });
+  const PlotProfilePanel = serverComponent(panelSrc, 'PlotProfilePanel.svelte', {
+    '../../bindings/github.com/boostao/vpro/app': { ContextService: {} },
+    '../classification/profileFile': profileFile,
+    '../classification/profileSU': {},
+    '../classification/profileSUProject': {},
+    '../classification/profileTable': profileTable,
+    '../classification/projectPlotProfileReview': profile,
+    '../shared/readRequests': { formatError: (e) => String(e) },
+    '../shared/state': { projectState: stateStore },
+    './plotProfileOps': {},
+    './PlotProfileSUSection.svelte': { default: () => '' },
+  });
+
+  const baseProps = {
+    busy: false,
+    error: '',
+    editorPlotNumber: undefined,
+    profileNavigation: null,
+    selected: null,
+    page: null,
+    profileIndex: -1,
+    stateReads: { track: (p) => p },
+    requestTransition: async (fn) => fn('owned'),
+    loadPlots: async () => {},
+    navigateProfilePlot: async () => {},
+    clearProfileNavigation: async () => {},
+    cancelAllReads: () => {},
+  };
+
+  for (const view of ['home', 'geospatial-map', 'plots', 'classification-explorer', 'project-admin', 'summary-vegetation']) {
+    const html = render(PlotProfilePanel, { props: { ...baseProps, view } }).body;
+    assert.doesNotMatch(html, /Stored plot profile selection/, `Selector must not render globally on ${view}`);
+    assert.doesNotMatch(html, /Plot profile:/, `Global plot profile details must not render on ${view}`);
+    assert.doesNotMatch(html, /Active profile navigation/, `Nav bar must stay hidden when inactive on ${view}`);
+    assert.doesNotMatch(html, /<details\b/, `No global <details> box on ${view}`);
+  }
+
+  const activeNav = profile.validateProfileNavigation(navigation(), proposal, 'owned');
+  const fs882Html = render(PlotProfilePanel, {
+    props: { ...baseProps, view: 'fs882', profileNavigation: activeNav, profileIndex: 0 },
+  }).body;
+  assert.match(fs882Html, /aria-label="Active profile navigation"/);
+  assert.match(fs882Html, /2 of 4 stored plots in reviewed profile navigation\./);
+  assert.match(fs882Html, /Record 1 of 2/);
+  assert.match(fs882Html, /Previous profile plot/);
+  assert.match(fs882Html, /Next profile plot/);
+  assert.match(fs882Html, /Clear profile navigation/);
+  assert.doesNotMatch(fs882Html, /Stored plot profile selection/);
+
+  const plotsNavHtml = render(PlotProfilePanel, {
+    props: { ...baseProps, view: 'plots', profileNavigation: activeNav, profileIndex: -1 },
+  }).body;
+  assert.match(plotsNavHtml, /aria-label="Active profile navigation"/);
+  assert.match(plotsNavHtml, /Clear profile navigation/);
+  assert.doesNotMatch(plotsNavHtml, /Record 1 of 2/);
+  assert.doesNotMatch(plotsNavHtml, /Stored plot profile selection/);
+});
+
+test('PlotProfileSelectionSection renders inside ProjectPlotProfileReview including None, external write-ownership, and blank creation', () => {
+  const noneState = makeWritableStore({
+    contextId: 'ctx-none',
+    activeProject: 'Sample',
+    projectPath: '/data/Sample.db',
+    activeSU: 'None',
+    plotProfile: {
+      source: { name: 'None', path: '' },
+      table: '',
+      available: false,
+      writable: false,
+      reason: 'No profile selected',
+    },
+  });
+  const BlankReviews = serverComponent(read('PlotProfileBlankReviews.svelte'), 'PlotProfileBlankReviews.svelte', {
+    '../shared/state': { projectState: noneState },
+  });
+  const SelectionSection = serverComponent(read('PlotProfileSelectionSection.svelte'), 'PlotProfileSelectionSection.svelte', {
+    '../shared/state': { projectState: noneState },
+    './PlotProfileBlankReviews.svelte': { default: BlankReviews },
+  });
+  const Header = serverComponent(read('ProjectPlotProfileHeader.svelte'), 'ProjectPlotProfileHeader.svelte', {});
+  const Review = serverComponent(read('ProjectPlotProfileReview.svelte'), 'ProjectPlotProfileReview.svelte', {
+    '../shared/readRequests': { ReadRequests: class { cancelAll() {} track(p) { return p; } }, formatError: (e) => String(e), trackIfCancellable: (_r, p) => p },
+    '../shared/state': { projectState: noneState },
+    '../shell/PlotProfileSelectionSection.svelte': { default: SelectionSection },
+    './ProjectPlotProfileHeader.svelte': { default: Header },
+    './ProjectPlotProfilePreviewSection.svelte': { default: () => '' },
+    './ProjectPlotProfileRulesSection.svelte': { default: () => '' },
+    './projectProfileSpeciesPresence': { validateSpeciesPresencePreview: (x) => x },
+    './projectProfileRuleEditor': {
+      profileCreationErrors: () => [],
+      profileRuleErrors: () => [],
+      profileRulesDirty: () => false,
+      validateProfileChoices: (x) => x,
+    },
+    './projectPlotProfileReview': profile,
+    '../../bindings/github.com/boostao/vpro/app': { ClassificationService: {} },
+  });
+
+  const noneHtml = render(Review, {
+    props: {
+      client: {},
+      contextId: 'ctx-none',
+      profileSelection: makeSelectionController(),
+      onclosed() {},
+      onbusy() {},
+      onblocked() {},
+    },
+  }).body;
+  assert.match(noneHtml, /Plot profiling — no profile selected/);
+  assert.match(noneHtml, /data-plot-profile-selection[^>]*open/);
+  assert.match(noneHtml, /Plot profile: None/);
+  assert.match(noneHtml, /Inspect stored profiles/);
+  assert.match(noneHtml, /Select no profile/);
+  assert.match(noneHtml, /Review new blank profile file/);
+  assert.match(noneHtml, /data-profile-none-notice/);
+  assert.doesNotMatch(noneHtml, /Review profile write ownership/);
+  assert.doesNotMatch(noneHtml, /Review blank profile in selected file/);
+
+  // External read-only profile with write-ownership review + discovered sources
+  const extSource = {
+    source: { name: 'External', path: '/data/External.db' },
+    table: 'External_Profile',
+    available: true,
+    writable: false,
+    reason: '',
+  };
+  const extReview = {
+    project: 'Sample',
+    table: 'External_Profile',
+    rules: structuredClone(rules),
+    descriptions: { columns: [], rows: [] },
+    source: extSource,
+  };
+  noneState.set({
+    contextId: 'ctx-ext',
+    activeProject: 'Sample',
+    projectPath: '/data/Sample.db',
+    activeSU: 'None',
+    plotProfile: extSource,
+  });
+  const extHtml = render(SelectionSection, {
+    props: {
+      selection: makeSelectionController({
+        profileSources: [extSource],
+        profileSourceContext: 'ctx-ext',
+        profileWriteReview: extReview,
+        profileWriteContext: 'ctx-ext',
+      }),
+    },
+  }).body;
+  assert.match(extHtml, /Plot profile: External/);
+  assert.match(extHtml, /Select External_Profile/);
+  assert.match(extHtml, /Review profile write ownership/);
+  assert.match(extHtml, /aria-label="Reviewed profile write ownership"/);
+  assert.match(extHtml, /Authorize selected profile editing/);
+
+  // Writable profile shows blank profile table creation inside selected file
+  const writableSource = {
+    source: { name: 'Sample', path: '/data/Sample.db' },
+    table: 'Sample_Profile',
+    available: true,
+    writable: true,
+    reason: '',
+  };
+  noneState.set({
+    contextId: 'ctx-write',
+    activeProject: 'Sample',
+    projectPath: '/data/Sample.db',
+    activeSU: 'None',
+    plotProfile: writableSource,
+  });
+  const writableHtml = render(SelectionSection, {
+    props: {
+      selection: makeSelectionController({
+        profileFileReview: { metadataAbsent: true, template: { columns: [], rows: [] } },
+        profileFileContext: 'ctx-write',
+        profileFileName: 'NewBlank',
+        profileFilePath: '/data/NewBlank.db',
+        profileTableReview: {
+          template: { metadataAbsent: true, template: { columns: [], rows: [] } },
+          profile: { project: 'Sample', table: 'Sample_Profile', rules: structuredClone(rules), descriptions: { columns: [], rows: [] }, source: writableSource },
+        },
+        profileTableContext: 'ctx-write',
+        profileTableName: 'ExtraProf',
+      }),
+    },
+  }).body;
+  assert.match(writableHtml, /Create reviewed blank profile file/);
+  assert.match(writableHtml, /Review blank profile in selected file/);
+  assert.match(writableHtml, /Create reviewed profile in selected file/);
+});
+
+test('End-to-end profile selection, None, write-ownership, and blank creation keep Plot Profiling open inside FS882', async () => {
+  const stateStore = makeWritableStore({
+    contextId: 'ctx-1',
+    activeProject: 'Sample',
+    projectPath: '/data/Sample.db',
+    activeSU: 'None',
+    plotProfile: {
+      source: { name: 'Sample', path: '/data/Sample.db' },
+      table: 'Sample_Profile',
+      available: true,
+      writable: true,
+      reason: '',
+    },
+  });
+  let currentContextId = 'ctx-1';
+  let currentView = 'fs882';
+  let currentPlot = '001';
+  let reopenFlag = false;
+  let loadPlotsCalls = 0;
+  let cancelReadsCalls = 0;
+  const serviceCalls = [];
+
+  const ops = loadTypeScript('shell/plotProfileOps.ts', {
+    svelte: { tick: async () => {} },
+    '../../bindings/github.com/boostao/vpro/app': {
+      ContextService: {
+        SelectPlotProfile: async (ctx, req) => {
+          serviceCalls.push(['SelectPlotProfile', ctx, req]);
+          currentContextId = req.name === 'None' ? 'ctx-none' : 'ctx-ext';
+          return {
+            contextId: currentContextId,
+            activeProject: 'Sample',
+            projectPath: '/data/Sample.db',
+            activeSU: 'None',
+            plotProfile: {
+              source: req,
+              table: req.name === 'None' ? '' : `${req.name}_Profile`,
+              available: req.name !== 'None',
+              writable: false,
+              reason: req.name === 'None' ? 'No profile selected' : '',
+            },
+          };
+        },
+        SetPlotProfileEditing: async (ctx, req) => {
+          serviceCalls.push(['SetPlotProfileEditing', ctx, req]);
+          currentContextId = 'ctx-ext-write';
+          return {
+            contextId: currentContextId,
+            activeProject: 'Sample',
+            projectPath: '/data/Sample.db',
+            activeSU: 'None',
+            plotProfile: { ...req.review.source, writable: req.enabled },
+          };
+        },
+        CreatePlotProfileFile: async (ctx, req) => {
+          serviceCalls.push(['CreatePlotProfileFile', ctx, req]);
+          return { source: { name: req.name, path: req.path }, table: `${req.name}_Profile`, ruleCount: 0 };
+        },
+        CreatePlotProfileTable: async (ctx, req) => {
+          serviceCalls.push(['CreatePlotProfileTable', ctx, req]);
+          return {
+            source: { name: req.name, path: req.review.profile.source.source.path },
+            table: `${req.name}_Profile`,
+            ruleCount: 0,
+          };
+        },
+      },
+    },
+    '../classification/profileFile': profileFile,
+    '../classification/profileSU': {},
+    '../classification/profileSUProject': {},
+    '../classification/profileTable': profileTable,
+    '../shared/readRequests': { formatError: (e) => String(e) },
+    '../shared/state': { projectState: stateStore },
+  });
+
+  const host = {
+    setBusy() {},
+    getError: () => '',
+    setError() {},
+    resetToPlotsView: () => {
+      currentView = 'plots';
+      currentPlot = undefined;
+    },
+    afterBlankProfileCreated: () => {
+      if (currentView !== 'fs882') {
+        currentView = 'plots';
+        currentPlot = undefined;
+      }
+    },
+    resetContextAfterProfileSwitch: (state) => {
+      const keepProfilingOpen = currentView === 'fs882';
+      stateStore.set(state);
+      if (keepProfilingOpen) reopenFlag = true;
+      else {
+        currentPlot = undefined;
+        currentView = 'plots';
+      }
+    },
+    loadPlotsZero: async () => {
+      loadPlotsCalls++;
+    },
+    cancelAllReads: () => {
+      cancelReadsCalls++;
+    },
+    stateReads: { track: (p) => p },
+    getCurrentContextId: () => currentContextId,
+    requestTransition: async (run) => run(currentContextId),
+  };
+
+  // 1. Select external profile from inside FS882 profiling dialog
+  await ops.choosePlotProfileOp(host, { name: 'External', path: '/data/External.db' }, 'ctx-1');
+  assert.equal(currentView, 'fs882');
+  assert.equal(currentPlot, '001');
+  assert.equal(reopenFlag, true);
+  assert.equal(cancelReadsCalls, 1);
+  assert.equal(loadPlotsCalls, 1);
+
+  // 2. Authorize write ownership from inside FS882 profiling dialog
+  reopenFlag = false;
+  let writeCleared = false;
+  let writeErr = '';
+  const extReview = {
+    project: 'Sample',
+    table: 'External_Profile',
+    rules: structuredClone(rules),
+    descriptions: { columns: [], rows: [] },
+    source: {
+      source: { name: 'External', path: '/data/External.db' },
+      table: 'External_Profile',
+      available: true,
+      writable: false,
+      reason: '',
+    },
+  };
+  await ops.publishProfileWriteOwnershipOp(host, {
+    profileWriteReview: extReview,
+    profileWriteContext: 'ctx-ext',
+    clearWriteReview: () => {
+      writeCleared = true;
+    },
+    setProfileWriteError: (m) => {
+      writeErr = m;
+    },
+  });
+  assert.equal(writeCleared, true);
+  assert.equal(writeErr, '');
+  assert.equal(currentView, 'fs882');
+  assert.equal(currentPlot, '001');
+  assert.equal(reopenFlag, true);
+
+  // 3. Create blank profile file from inside FS882 profiling dialog -> stays in FS882 with confirmation
+  let fileCommitted = false;
+  let fileSuccess = '';
+  let nextPath = '';
+  await ops.createBlankProfileFileOp(host, {
+    profileFileReview: {
+      metadataAbsent: true,
+      template: {
+        columns: profile.plotProfileFields.map((name, index) => ({
+          name,
+          declaredType: index === 0 ? 'SMALLINT' : index === 8 ? 'INTEGER' : 'VARCHAR',
+        })),
+        rows: [],
+      },
+    },
+    profileFileCommitted: false,
+    profileFileContext: 'ctx-ext-write',
+    profileFileName: 'FieldBlank',
+    profileFilePath: '/data/FieldBlank.db',
+    setProfileFileCommitted: (v) => {
+      fileCommitted = v;
+    },
+    setProfileFileError: (m) => {
+      assert.equal(m, '');
+    },
+    setProfileFileSuccess: (m) => {
+      fileSuccess = m;
+    },
+    setProfilePath: (p) => {
+      nextPath = p;
+    },
+  });
+  assert.equal(fileCommitted, true);
+  assert.match(fileSuccess, /Created FieldBlank_Profile with zero rules/);
+  assert.equal(nextPath, '/data/FieldBlank.db');
+  assert.equal(currentView, 'fs882');
+  assert.equal(currentPlot, '001');
+
+  // 4. Create blank profile table in selected file -> stays in FS882 with confirmation
+  let tableCommitted = false;
+  let tableSuccess = '';
+  await ops.createBlankProfileTableOp(host, {
+    profileTableReview: {
+      template: {
+        metadataAbsent: true,
+        template: {
+          columns: profile.plotProfileFields.map((name, index) => ({
+            name,
+            declaredType: index === 0 ? 'SMALLINT' : index === 8 ? 'INTEGER' : 'VARCHAR',
+          })),
+          rows: [],
+        },
+      },
+      profile: {
+        ...extReview,
+        source: { ...extReview.source, writable: true },
+      },
+    },
+    profileTableCommitted: false,
+    profileTableContext: 'ctx-ext-write',
+    profileTableName: 'SecondProf',
+    setProfileTableCommitted: (v) => {
+      tableCommitted = v;
+    },
+    setProfileTableError: (m) => {
+      assert.equal(m, '');
+    },
+    setProfileTableSuccess: (m) => {
+      tableSuccess = m;
+    },
+    setProfilePath: () => {},
+  });
+  assert.equal(tableCommitted, true);
+  assert.match(tableSuccess, /Created SecondProf_Profile with zero rules/);
+  assert.equal(currentView, 'fs882');
+
+  // 5. Select no profile ('None') -> stays in FS882 and reopens profiling dialog
+  reopenFlag = false;
+  await ops.choosePlotProfileOp(host, { name: 'None', path: '' }, 'ctx-ext-write');
+  assert.equal(currentContextId, 'ctx-none');
+  assert.equal(currentView, 'fs882');
+  assert.equal(reopenFlag, true);
+  assert.equal(serviceCalls.length, 5);
+});
+
+test('Relocated Plot Profile selector wiring compiles warning-free and is reachable from FS882, Two-Page, and Plots', () => {
+  for (const file of [
+    'shell/PlotProfilePanel.svelte',
+    'shell/PlotProfileSelectionSection.svelte',
+    'shell/ShellWorkspaceRouter.svelte',
+    'shell/ShellEntryHost.svelte',
+    'shell/PlotsBrowserPanel.svelte',
+    'classification/ProjectPlotProfileReview.svelte',
+    'classification/ProjectPlotProfileHeader.svelte',
+    'entry/FS882Form.svelte',
+    'entry/FS882WorkspaceBody.svelte',
+    'entry/FS882Modals.svelte',
+    'entry/TwoPageEntryEditor.svelte',
+    'entry/TwoPageEntryToolbar.svelte',
+    'entry/TwoPageEntryReadersHost.svelte',
+  ]) {
+    const compiled = compile(read(file), { filename: srcPath(file), generate: 'client' });
+    assert.deepEqual(compiled.warnings, [], `${file} emitted Svelte compiler warnings`);
+  }
+
+  const routerSrc = read('shell/ShellWorkspaceRouter.svelte');
+  assert.match(routerSrc, /bind:selectionController=\{profileSelection\}/);
+  assert.match(routerSrc, /bind:reopenProfileReview/);
+  assert.match(routerSrc, /onopenprofiling=\{openPlotProfiling\}/);
+
+  const fs882Src = read('entry/FS882Form.svelte');
+  assert.match(fs882Src, /ctrl\.profileReviewOpen \|\|\s*initialProfileReviewOpen/);
+  assert.match(fs882Src, /ctrl\.openProfileReviewFromToolbar\(\);\s*onConsumedInitialProfileReview\?\.\(\)/);
+
+  const twoPageToolbarSrc = read('entry/TwoPageEntryToolbar.svelte');
+  assert.match(twoPageToolbarSrc, /data-two-page-profile-manage-open/);
+  assert.match(twoPageToolbarSrc, /Select Plot Profile/);
+  assert.match(twoPageToolbarSrc, /Manage Plot Profile/);
+
+  const plotsBrowserSrc = read('shell/PlotsBrowserPanel.svelte');
+  assert.match(plotsBrowserSrc, /data-plots-open-profiling/);
+  assert.match(plotsBrowserSrc, /data-inspector-open-profiling/);
 });

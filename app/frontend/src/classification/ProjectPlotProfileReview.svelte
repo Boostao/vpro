@@ -2,7 +2,10 @@
   import { onDestroy, onMount } from 'svelte';
   import type { bindContextPlots } from '../shared/contextPlots';
   import { ReadRequests, formatError, trackIfCancellable } from '../shared/readRequests';
+  import { projectState } from '../shared/state';
   import type { EditorCloseState } from '../shell/closeLifecycle';
+  import type { PlotProfileSelectionController } from '../shell/plotProfileOps';
+  import PlotProfileSelectionSection from '../shell/PlotProfileSelectionSection.svelte';
   import ProjectPlotProfileHeader from './ProjectPlotProfileHeader.svelte';
   import ProjectPlotProfilePreviewSection from './ProjectPlotProfilePreviewSection.svelte';
   import ProjectPlotProfileRulesSection from './ProjectPlotProfileRulesSection.svelte';
@@ -39,6 +42,7 @@
 
   let {
     client,
+    profileSelection,
     onclosed,
     onbusy,
     onblocked,
@@ -56,6 +60,7 @@
     allowDeletion = false,
   }: {
     client: ProfileClient;
+    profileSelection?: PlotProfileSelectionController;
     onclosed: () => void;
     onbusy: (busy: boolean) => void;
     onblocked: (blocked: boolean) => void;
@@ -93,6 +98,11 @@
   let creation = $state<ProfileRuleCreationDraft | null>(null);
   let deletion = $state<string | null>(null);
 
+  const activeProfileState = $derived(
+    $projectState && (!contextId || $projectState.contextId === contextId) ? $projectState.plotProfile : null
+  );
+  const noProfileSelected = $derived(Boolean(activeProfileState && activeProfileState.source.name === 'None'));
+  const profileUnavailable = $derived(Boolean(activeProfileState && !activeProfileState.available));
   const dirty = $derived(draft ? profileRulesDirty(draft) : false);
   const errors = $derived(creation ? profileCreationErrors(creation) : draft ? profileRuleErrors(draft) : []);
   const blocked = $derived(dirty || creation !== null || deletion !== null || committedFailure);
@@ -146,6 +156,21 @@
   async function reload() {
     if (busy || dirty || creation || deletion !== null) {
       error = 'Save or Undo profile drafts before reloading; raw errors were retained.';
+      return;
+    }
+    if (noProfileSelected) {
+      generation++;
+      draft = null;
+      choices = null;
+      presenceResult = null;
+      review = null;
+      error = null;
+      lump = null;
+      result = null;
+      committedFailure = false;
+      success = null;
+      reading = false;
+      onbusy(false);
       return;
     }
     const request = ++generation;
@@ -328,6 +353,7 @@
     {allowEditing}
     {allowRun}
     {allowPresence}
+    {noProfileSelected}
     {busy}
     {blocked}
     {dirty}
@@ -343,6 +369,20 @@
     onrunpresence={() => void runPresence()}
     onclose={close}
   />
+
+  {#if profileSelection}
+    <PlotProfileSelectionSection
+      selection={profileSelection}
+      openByDefault={noProfileSelected || profileUnavailable}
+    />
+  {/if}
+
+  {#if noProfileSelected && !review}
+    <p role="status" class="mt-3 text-sm text-vpro-ink-secondary" data-profile-none-notice>
+      No plot profile is currently selected. Inspect and select a saved plot profile or create a new blank profile
+      above to review rules and filter plots.
+    </p>
+  {/if}
 
   {#if error}<p role="alert" class="vpro-prof-alert mt-3">{error.replace(/(?:RuntimeError|Error):\s*/gi, '')}</p>{/if}
 

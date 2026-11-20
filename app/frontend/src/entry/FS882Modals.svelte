@@ -2,6 +2,7 @@
   import type { ProjectPlotProfileFilterRequest } from '../../bindings/github.com/boostao/vpro/app';
   import PicturePanel from '../pictures/PicturePanel.svelte';
   import { formatError } from '../shared/readRequests';
+  import type { PlotProfileSelectionController } from '../shell/plotProfileOps';
   import FS882SiviParentModalHost from './FS882SiviParentModalHost.svelte';
   import SourceChild from './SourceChild.svelte';
   import type { FS882Controller } from './fs882FormController.svelte';
@@ -32,6 +33,7 @@
     onCloseStandalone,
     onProfileSUReview,
     onProfileNavigation,
+    profileSelection,
   }: {
     ctrl: FS882Controller;
     loaders: FS882SubEditorLoaders;
@@ -39,6 +41,7 @@
     onCloseStandalone?: () => void;
     onProfileSUReview?: (proposal: ProjectPlotProfileFilterRequest, contextId: string) => Promise<void>;
     onProfileNavigation?: (proposal: ProjectPlotProfileFilterRequest, contextId: string) => Promise<void>;
+    profileSelection?: PlotProfileSelectionController;
   } = $props();
 
   const contextId = $derived(ctrl.contextId);
@@ -137,6 +140,7 @@
       <ProjectPlotProfileReview
         bind:this={ctrl.profileEditor}
         client={ctrl.PlotService}
+        {profileSelection}
         allowRun={true}
         allowPresence={Boolean(activeProject)}
         {contextId}
