@@ -57,6 +57,182 @@ export interface MapLayerVisibility {
   discrepancyVectors: boolean;
 }
 
+export type MapBasemapId = 'offline-neutral' | 'positron-light' | 'positron-dark' | 'bc-gov-topo' | 'satellite';
+
+export type BCOpenMapsWMSLayerId = 'bc-parks' | 'bc-painted-relief' | 'bc-ortho-10m' | 'bc-hillshade-bw';
+
+export interface MapBasemapOption {
+  id: MapBasemapId;
+  label: string;
+  online: boolean;
+  darkTheme: boolean;
+  attribution: string;
+  baseTiles?: string[];
+  referenceTiles?: string[];
+  maxZoom?: number;
+}
+
+export interface BCOpenMapsWMSOption {
+  id: BCOpenMapsWMSLayerId;
+  label: string;
+  tileUrl: string;
+  attribution: string;
+}
+
+export interface MapLayerOpacity {
+  bgc: number;
+  admin: number;
+  wms: number;
+}
+
+export const DEFAULT_MAP_BASEMAP: MapBasemapId = 'offline-neutral';
+
+export const MAP_BASEMAP_OPTIONS: readonly MapBasemapOption[] = [
+  {
+    id: 'offline-neutral',
+    label: 'Offline Neutral',
+    online: false,
+    darkTheme: false,
+    attribution: '',
+  },
+  {
+    id: 'positron-light',
+    label: 'Light Gray (Positron-style)',
+    online: true,
+    darkTheme: false,
+    attribution: 'Esri, HERE, Garmin, (c) OpenStreetMap contributors, GIS user community',
+    baseTiles: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    ],
+    referenceTiles: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    ],
+    maxZoom: 16,
+  },
+  {
+    id: 'positron-dark',
+    label: 'Dark Gray (Positron Dark-style)',
+    online: true,
+    darkTheme: true,
+    attribution: 'Esri, HERE, Garmin, (c) OpenStreetMap contributors, GIS user community',
+    baseTiles: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    ],
+    referenceTiles: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    ],
+    maxZoom: 16,
+  },
+  {
+    id: 'bc-gov-topo',
+    label: 'BC Gov Topographic',
+    online: true,
+    darkTheme: false,
+    attribution: 'Government of British Columbia, DataBC',
+    baseTiles: ['/maps/bc-proxy/basemap/{z}/{y}/{x}'],
+    maxZoom: 17,
+  },
+  {
+    id: 'satellite',
+    label: 'Satellite Imagery',
+    online: true,
+    darkTheme: true,
+    attribution: 'Esri, Maxar, Earthstar Geographics, GIS User Community',
+    baseTiles: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    ],
+    maxZoom: 18,
+  },
+];
+
+export const DEFAULT_BC_WMS_LAYER: BCOpenMapsWMSLayerId = 'bc-parks';
+
+export const BC_OPENMAPS_WMS_OPTIONS: readonly BCOpenMapsWMSOption[] = [
+  {
+    id: 'bc-parks',
+    label: 'BC Parks & Protected Areas',
+    tileUrl:
+      '/maps/bc-proxy/wms/ows?layers=pub%3AWHSE_TANTALIS.TA_PARK_ECORES_PA_SVW&bbox={bbox-epsg-3857}&width=256&height=256',
+    attribution: 'BC Data Catalogue OpenMaps WMS (DataBC)',
+  },
+  {
+    id: 'bc-painted-relief',
+    label: 'BC 50m Painted Relief',
+    tileUrl:
+      '/maps/bc-proxy/wms/imagex?layers=hillshade_bc_bc_xc50m_bcalb_painted_relief&bbox={bbox-epsg-3857}&width=256&height=256',
+    attribution: 'BC Data Catalogue OpenMaps WMS (GeoBC)',
+  },
+  {
+    id: 'bc-ortho-10m',
+    label: 'BC 10m Colour Mosaic',
+    tileUrl:
+      '/maps/bc-proxy/wms/imagex?layers=bc_bc_bc_xc10m_bcalb_20070115&bbox={bbox-epsg-3857}&width=256&height=256',
+    attribution: 'BC Data Catalogue OpenMaps WMS (GeoBC)',
+  },
+  {
+    id: 'bc-hillshade-bw',
+    label: 'BC Hillshade Relief',
+    tileUrl:
+      '/maps/bc-proxy/wms/imagex?layers=hillshade_bc_bcalb_hillshade_bw_315&bbox={bbox-epsg-3857}&width=256&height=256',
+    attribution: 'BC Data Catalogue OpenMaps WMS (GeoBC)',
+  },
+];
+
+export const INITIAL_LAYER_OPACITY: MapLayerOpacity = {
+  bgc: 0.5,
+  admin: 0.85,
+  wms: 0.72,
+};
+
+export function getMapBasemapOption(id?: MapBasemapId | null): MapBasemapOption {
+  return MAP_BASEMAP_OPTIONS.find((opt) => opt.id === id) ?? MAP_BASEMAP_OPTIONS[0];
+}
+
+export function getBCOpenMapsWMSOption(id?: BCOpenMapsWMSLayerId | null): BCOpenMapsWMSOption {
+  return BC_OPENMAPS_WMS_OPTIONS.find((opt) => opt.id === id) ?? BC_OPENMAPS_WMS_OPTIONS[0];
+}
+
+function clampLayerOpacity(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.max(0, Math.min(1, Math.round(value * 100) / 100));
+}
+
+function computeBgcOutlineOpacity(bgcOpacity: number): number {
+  if (bgcOpacity <= 0) return 0;
+  return Math.min(1, Math.round(Math.min(1, bgcOpacity * 1.15) * 100) / 100);
+}
+
+export interface MapPaintHost {
+  getLayer(id: string): unknown;
+  setPaintProperty(layerId: string, name: string, value: unknown): unknown;
+}
+
+export function applyMapLayerOpacity(
+  mapInstance: MapPaintHost | null | undefined,
+  opacity: Partial<MapLayerOpacity> | null | undefined
+): string[] {
+  if (!mapInstance) return [];
+  const bgc = clampLayerOpacity(opacity?.bgc, INITIAL_LAYER_OPACITY.bgc);
+  const bgcOutline = computeBgcOutlineOpacity(bgc);
+  const admin = clampLayerOpacity(opacity?.admin, INITIAL_LAYER_OPACITY.admin);
+  const wms = clampLayerOpacity(opacity?.wms, INITIAL_LAYER_OPACITY.wms);
+  const updates: Array<[string, string, number]> = [
+    ['bgc-zones-fill', 'fill-opacity', bgc],
+    ['bgc-subzone-outline', 'line-opacity', bgcOutline],
+    ['ecosections-outline', 'line-opacity', admin],
+    ['nr-districts-outline', 'line-opacity', admin],
+    ['bc-openmaps-wms-layer', 'raster-opacity', wms],
+  ];
+  const applied: string[] = [];
+  for (const [layerId, prop, val] of updates) {
+    if (mapInstance.getLayer(layerId)) {
+      mapInstance.setPaintProperty(layerId, prop, val);
+      applied.push(layerId);
+    }
+  }
+  return applied;
+}
+
 // Official BC Ministry of Forests BEC v13 Zone thematic palette
 export const BEC_ZONE_PALETTE: Record<string, string> = {
   CDF: '#a3cc51',
@@ -223,12 +399,17 @@ function buildOfflineGraticuleGeoJSON(): {
 
 /**
  * Builds the offline-first MapLibre GL JS v6 style specification backed by local PMTiles
- * byte-range sources and optional BC OpenMaps WMS orthoimagery.
+ * byte-range sources, selectable basemaps, and proxied BC OpenMaps WMS overlays.
  */
 export function buildMapLibreGeospatialStyle(
   manifest: PMTilesManifest | null | undefined,
   visibility: MapLayerVisibility,
-  options?: { forceGraticuleFallback?: boolean }
+  options?: {
+    forceGraticuleFallback?: boolean;
+    basemap?: MapBasemapId;
+    wmsLayer?: BCOpenMapsWMSLayerId;
+    opacity?: Partial<MapLayerOpacity>;
+  }
 ): StyleSpecification {
   const bgcArchive = manifest?.archives?.['bc-bgc-v13.pmtiles'] as PMTilesArchiveStatusExt | undefined;
   const adminArchive = manifest?.archives?.['bc-admin-ecosections-districts.pmtiles'] as
@@ -238,12 +419,39 @@ export function buildMapLibreGeospatialStyle(
   const bgcMaxZoom = bgcArchive?.maxZoom && bgcArchive.maxZoom > 0 ? bgcArchive.maxZoom : 6;
   const adminMaxZoom = adminArchive?.maxZoom && adminArchive.maxZoom > 0 ? adminArchive.maxZoom : 6;
 
+  const basemapOpt = getMapBasemapOption(options?.basemap);
+  const wmsOpt = getBCOpenMapsWMSOption(options?.wmsLayer);
+  const darkSurface = visibility.hillshade3D || basemapOpt.darkTheme;
+  const bgcOpacity = clampLayerOpacity(options?.opacity?.bgc, visibility.hillshade3D ? 0.62 : INITIAL_LAYER_OPACITY.bgc);
+  const bgcOutlineOpacity = computeBgcOutlineOpacity(bgcOpacity);
+  const adminOpacity = clampLayerOpacity(options?.opacity?.admin, INITIAL_LAYER_OPACITY.admin);
+  const wmsOpacity = clampLayerOpacity(options?.opacity?.wms, INITIAL_LAYER_OPACITY.wms);
+
   const sources: Record<string, SourceSpecification> = {
     vpro_offline_graticule: {
       type: 'geojson',
       data: buildOfflineGraticuleGeoJSON(),
     },
   };
+
+  if (basemapOpt.online && basemapOpt.baseTiles && basemapOpt.baseTiles.length > 0) {
+    sources.vpro_basemap_base = {
+      type: 'raster',
+      tiles: basemapOpt.baseTiles,
+      tileSize: 256,
+      ...(basemapOpt.maxZoom ? { maxzoom: basemapOpt.maxZoom } : {}),
+      attribution: basemapOpt.attribution,
+    };
+  }
+  if (basemapOpt.online && basemapOpt.referenceTiles && basemapOpt.referenceTiles.length > 0) {
+    sources.vpro_basemap_reference = {
+      type: 'raster',
+      tiles: basemapOpt.referenceTiles,
+      tileSize: 256,
+      ...(basemapOpt.maxZoom ? { maxzoom: basemapOpt.maxZoom } : {}),
+      attribution: basemapOpt.attribution,
+    };
+  }
 
   if (bgcAvailable) {
     sources.bc_bgc_pmtiles = {
@@ -267,11 +475,9 @@ export function buildMapLibreGeospatialStyle(
   if (visibility.bcOpenMapsWMS) {
     sources.bc_openmaps_wms = {
       type: 'raster',
-      tiles: [
-        'https://openmaps.gov.bc.ca/geo/pub/ows?service=WMS&version=1.3.0&request=GetMap&layers=pub:WHSE_BASEMAPPING.DRA_DGTL_ROAD_ATLAS_MPAR_SP&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256&format=image/png&transparent=true',
-      ],
+      tiles: [wmsOpt.tileUrl],
       tileSize: 256,
-      attribution: 'BC Data Catalogue OpenMaps WMS',
+      attribution: wmsOpt.attribution,
     };
   }
 
@@ -280,7 +486,7 @@ export function buildMapLibreGeospatialStyle(
       id: 'vpro-ocean-background',
       type: 'background',
       paint: {
-        'background-color': visibility.hillshade3D ? '#002244' : '#F2F2F2',
+        'background-color': darkSurface ? '#002244' : '#F2F2F2',
       },
     },
     {
@@ -288,13 +494,24 @@ export function buildMapLibreGeospatialStyle(
       type: 'line',
       source: 'vpro_offline_graticule',
       paint: {
-        'line-color': visibility.hillshade3D ? '#1A5A96' : '#D8D8D8',
+        'line-color': darkSurface ? '#1A5A96' : '#D8D8D8',
         'line-width': 0.8,
         'line-dasharray': [2, 3],
-        'line-opacity': 0.65,
+        'line-opacity': basemapOpt.online ? 0.45 : 0.65,
       },
     },
   ];
+
+  if (sources.vpro_basemap_base) {
+    layers.push({
+      id: 'vpro-basemap-base-layer',
+      type: 'raster',
+      source: 'vpro_basemap_base',
+      paint: {
+        'raster-opacity': 1,
+      },
+    });
+  }
 
   if (bgcAvailable) {
     layers.push(
@@ -308,7 +525,7 @@ export function buildMapLibreGeospatialStyle(
         },
         paint: {
           'fill-color': buildBECZoneMatchExpression(),
-          'fill-opacity': visibility.hillshade3D ? 0.62 : 0.48,
+          'fill-opacity': bgcOpacity,
         },
       },
       {
@@ -320,9 +537,9 @@ export function buildMapLibreGeospatialStyle(
           visibility: visibility.bgcFill ? 'visible' : 'none',
         },
         paint: {
-          'line-color': '#003366',
+          'line-color': darkSurface ? '#D8D8D8' : '#003366',
           'line-width': ['interpolate', ['linear'], ['zoom'], 4, 0.35, 9, 1.1],
-          'line-opacity': 0.55,
+          'line-opacity': bgcOutlineOpacity,
         },
       }
     );
@@ -339,10 +556,10 @@ export function buildMapLibreGeospatialStyle(
           visibility: visibility.ecosections ? 'visible' : 'none',
         },
         paint: {
-          'line-color': '#1A5A96',
+          'line-color': darkSurface ? '#FFFFFF' : '#1A5A96',
           'line-width': 1.4,
           'line-dasharray': [3, 2],
-          'line-opacity': 0.85,
+          'line-opacity': adminOpacity,
         },
       },
       {
@@ -356,7 +573,7 @@ export function buildMapLibreGeospatialStyle(
         paint: {
           'line-color': '#FCBA19',
           'line-width': 1.8,
-          'line-opacity': 0.9,
+          'line-opacity': adminOpacity,
         },
       }
     );
@@ -367,13 +584,24 @@ export function buildMapLibreGeospatialStyle(
       id: 'bc-openmaps-wms-layer',
       type: 'raster',
       source: 'bc_openmaps_wms',
-      paint: { 'raster-opacity': 0.72 },
+      paint: { 'raster-opacity': wmsOpacity },
+    });
+  }
+
+  if (sources.vpro_basemap_reference) {
+    layers.push({
+      id: 'vpro-basemap-reference-layer',
+      type: 'raster',
+      source: 'vpro_basemap_reference',
+      paint: {
+        'raster-opacity': 0.92,
+      },
     });
   }
 
   return {
     version: 8,
-    name: 'VPro Offline BGC v13 Geospatial Style',
+    name: `VPro BGC v13 Geospatial Style (${basemapOpt.label})`,
     sources,
     layers,
   };
@@ -447,10 +675,15 @@ export function classifyPMTilesMapError(event: unknown): string | null {
   return null;
 }
 
-export function classifyWMSMapError(event: unknown, wmsEnabled: boolean, online?: boolean): string | null {
-  if (!wmsEnabled) return null;
+export function classifyBasemapError(
+  event: unknown,
+  basemapId: MapBasemapId,
+  online?: boolean
+): string | null {
+  const basemapOpt = getMapBasemapOption(basemapId);
+  if (!basemapOpt.online) return null;
   if (online === false) {
-    return 'BC OpenMaps WMS imagery is unreachable while offline. Offline BGC v13, Ecosections, NR Districts, and plot layers remain active.';
+    return `${basemapOpt.label} basemap is unavailable while offline. Offline BGC v13, Ecosections, NR Districts, and plot layers remain active.`;
   }
   if (!event || typeof event !== 'object') return null;
   const rec = event as Record<string, any>;
@@ -467,16 +700,61 @@ export function classifyWMSMapError(event: unknown, wmsEnabled: boolean, online?
   const errUrl =
     typeof errObj?.url === 'string'
       ? errObj.url
+      : typeof rec.url === 'string'
+        ? rec.url
+        : '';
+  const lowerUrl = errUrl.toLowerCase();
+  const lowerMsg = errMsg.toLowerCase();
+  if (
+    sourceId === 'vpro_basemap_base' ||
+    sourceId === 'vpro_basemap_reference' ||
+    lowerUrl.includes('server.arcgisonline.com') ||
+    lowerUrl.includes('/maps/bc-proxy/basemap') ||
+    lowerMsg.includes('server.arcgisonline.com') ||
+    lowerMsg.includes('/maps/bc-proxy/basemap')
+  ) {
+    return `${basemapOpt.label} basemap tiles could not be loaded (offline or remote service unreachable). Offline map layers and plots remain active.`;
+  }
+  return null;
+}
+
+export function classifyWMSMapError(event: unknown, wmsEnabled: boolean, online?: boolean): string | null {
+  if (!wmsEnabled) return null;
+  if (online === false) {
+    return 'BC OpenMaps WMS imagery is unreachable while offline. Offline BGC v13, Ecosections, NR Districts, and plot layers remain active.';
+  }
+  if (!event || typeof event !== 'object') return null;
+  const rec = event as Record<string, any>;
+  const sourceId = typeof rec.sourceId === 'string' ? rec.sourceId : '';
+  if (sourceId === 'vpro_basemap_base' || sourceId === 'vpro_basemap_reference') {
+    return null;
+  }
+  const errObj = rec.error;
+  const errMsg =
+    errObj instanceof Error
+      ? errObj.message
+      : typeof errObj?.message === 'string'
+        ? errObj.message
+        : typeof rec.message === 'string'
+          ? rec.message
+          : '';
+  const errUrl =
+    typeof errObj?.url === 'string'
+      ? errObj.url
       : typeof rec.tile?.tileID === 'object' || typeof rec.url === 'string'
         ? String(rec.url ?? '')
         : '';
+  const lowerUrl = errUrl.toLowerCase();
+  const lowerMsg = errMsg.toLowerCase();
   if (
     sourceId === 'bc_openmaps_wms' ||
-    errUrl.includes('openmaps.gov.bc.ca') ||
-    errMsg.toLowerCase().includes('openmaps.gov.bc.ca') ||
-    errMsg.toLowerCase().includes('failed to fetch') ||
-    errMsg.toLowerCase().includes('networkerror') ||
-    errMsg.toLowerCase().includes('load tile')
+    lowerUrl.includes('/maps/bc-proxy/wms') ||
+    lowerUrl.includes('openmaps.gov.bc.ca') ||
+    lowerMsg.includes('/maps/bc-proxy/wms') ||
+    lowerMsg.includes('openmaps.gov.bc.ca') ||
+    lowerMsg.includes('failed to fetch') ||
+    lowerMsg.includes('networkerror') ||
+    lowerMsg.includes('load tile')
   ) {
     return 'BC OpenMaps WMS tile request failed (offline or remote service unreachable). Offline map vector layers remain active.';
   }
@@ -1080,15 +1358,26 @@ function handleGeospatialMapError(opts: {
   wmsOfflineWarning: string;
   pmtilesArchiveWarning: string;
   pmtilesGraticuleFallback: boolean;
+  basemap: MapBasemapId;
+  wmsLayer: BCOpenMapsWMSLayerId;
+  opacity: MapLayerOpacity;
+  basemapOfflineWarning: string;
   project: string;
   manifest: PMTilesManifest | null | undefined;
   visibility: MapLayerVisibility;
   setWmsWarn: (warn: string) => void;
+  setBasemapWarn: (warn: string) => void;
   setPmWarn: (warn: string) => void;
   enableGraticuleFallback: (style: StyleSpecification) => void;
   warnToast: (title: string, msg: string) => void;
 }): void {
   const online = typeof navigator !== 'undefined' ? navigator.onLine : undefined;
+  const basemapWarn = classifyBasemapError(opts.evt, opts.basemap, online);
+  if (basemapWarn) {
+    if (basemapWarn !== opts.basemapOfflineWarning) opts.warnToast('Online basemap unavailable', basemapWarn);
+    opts.setBasemapWarn(basemapWarn);
+    return;
+  }
   const wmsWarn = classifyWMSMapError(opts.evt, opts.bcOpenMapsWMS, online);
   if (wmsWarn) {
     if (wmsWarn !== opts.wmsOfflineWarning) opts.warnToast('BC OpenMaps WMS unavailable', wmsWarn);
@@ -1101,7 +1390,12 @@ function handleGeospatialMapError(opts: {
   opts.setPmWarn(pmWarn);
   if (!opts.pmtilesGraticuleFallback) {
     opts.enableGraticuleFallback(
-      buildMapLibreGeospatialStyle(opts.manifest, opts.visibility, { forceGraticuleFallback: true })
+      buildMapLibreGeospatialStyle(opts.manifest, opts.visibility, {
+        forceGraticuleFallback: true,
+        basemap: opts.basemap,
+        wmsLayer: opts.wmsLayer,
+        opacity: opts.opacity,
+      })
     );
   }
 }
@@ -1147,25 +1441,44 @@ export function createGeospatialMapInstance<TMap, TOverlay>(
 
 export function routeGeospatialMapError(
   evt: unknown,
-  state: [boolean, string, string, boolean],
+  state: [boolean, string, string, boolean, MapBasemapId?, BCOpenMapsWMSLayerId?, MapLayerOpacity?, string?],
   manifest: PMTilesManifest | null | undefined,
   visibility: MapLayerVisibility,
-  apply: (wmsWarn: string | null, pmWarn: string | null, fallbackStyle: StyleSpecification | null) => void,
+  apply: (
+    wmsWarn: string | null,
+    pmWarn: string | null,
+    fallbackStyle: StyleSpecification | null,
+    basemapWarn?: string | null
+  ) => void,
   warnToast: (title: string, msg: string) => void
 ): void {
-  const [bcOpenMapsWMS, wmsOfflineWarning, pmtilesArchiveWarning, pmtilesGraticuleFallback] = state;
+  const [
+    bcOpenMapsWMS,
+    wmsOfflineWarning,
+    pmtilesArchiveWarning,
+    pmtilesGraticuleFallback,
+    basemap = DEFAULT_MAP_BASEMAP,
+    wmsLayer = DEFAULT_BC_WMS_LAYER,
+    opacity = INITIAL_LAYER_OPACITY,
+    basemapOfflineWarning = '',
+  ] = state;
   handleGeospatialMapError({
     evt,
     bcOpenMapsWMS,
     wmsOfflineWarning,
     pmtilesArchiveWarning,
     pmtilesGraticuleFallback,
+    basemap,
+    wmsLayer,
+    opacity,
+    basemapOfflineWarning,
     project: '',
     manifest,
     visibility,
-    setWmsWarn: (w) => apply(w, null, null),
-    setPmWarn: (w) => apply(null, w, null),
-    enableGraticuleFallback: (s) => apply(null, null, s),
+    setWmsWarn: (w) => apply(w, null, null, null),
+    setBasemapWarn: (b) => apply(null, null, null, b),
+    setPmWarn: (w) => apply(null, w, null, null),
+    enableGraticuleFallback: (s) => apply(null, null, s, null),
     warnToast,
   });
 }

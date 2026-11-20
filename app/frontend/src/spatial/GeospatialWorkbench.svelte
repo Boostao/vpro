@@ -56,6 +56,7 @@
   let statusMsg = $state('');
   let mapRenderWarning = $state('');
   let wmsOfflineWarning = $state('');
+  let basemapOfflineWarning = $state('');
   let pmtilesArchiveWarning = $state('');
   let pmtilesGraticuleFallback = $state(false);
   let computeInfo = $state<geoOps.SpatialComputeBackendInfo>({ ...geoOps.INITIAL_COMPUTE_INFO });
@@ -67,6 +68,9 @@
   let flatGeobufCount = $state(0);
   let viewportMatchedCount = $state(0);
   let visibility = $state<geoOps.MapLayerVisibility>({ ...geoOps.INITIAL_LAYER_VISIBILITY });
+  let basemap = $state<geoOps.MapBasemapId>(geoOps.DEFAULT_MAP_BASEMAP);
+  let wmsLayer = $state<geoOps.BCOpenMapsWMSLayerId>(geoOps.DEFAULT_BC_WMS_LAYER);
+  let layerOpacity = $state<geoOps.MapLayerOpacity>({ ...geoOps.INITIAL_LAYER_OPACITY });
   let zoneFilter = $state('');
   let plotSearch = $state('');
   let activePanel = $state<'inspector' | 'aoi' | 'qa'>('inspector');
@@ -130,23 +134,46 @@
     refreshDeckOverlay();
   }
 
+  function applyLayerOpacity() {
+    if (!mapInstance) return;
+    geoOps.applyMapLayerOpacity(mapInstance, $state.snapshot(layerOpacity));
+  }
+
   function applyLayerVisibilities() {
     const bgOpt = { category: 'background' as const, source: '3D Map', contextTag: project || undefined, toast: true };
+    const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    const curBasemap = typeof basemap !== 'undefined' ? basemap : 'offline-neutral';
+    const curWmsLayer = typeof wmsLayer !== 'undefined' ? wmsLayer : 'bc-parks';
+    const curOpacity = typeof layerOpacity !== 'undefined' ? $state.snapshot(layerOpacity) : undefined;
     if (!visibility.bcOpenMapsWMS) wmsOfflineWarning = '';
-    else if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    else if (isOffline) {
       const nextWarn =
         classifyWMSMapError({}, true, false) ??
         'BC OpenMaps WMS imagery is unreachable while offline. Offline map layers remain active.';
       if (nextWarn !== wmsOfflineWarning) notifications.warning('BC OpenMaps WMS offline', nextWarn, bgOpt);
       wmsOfflineWarning = nextWarn;
     } else wmsOfflineWarning = '';
+    if (typeof geoOps !== 'undefined' && typeof basemapOfflineWarning !== 'undefined') {
+      const baseOpt = geoOps.getMapBasemapOption(curBasemap);
+      if (!baseOpt.online) basemapOfflineWarning = '';
+      else if (isOffline) {
+        const nextBaseWarn = geoOps.classifyBasemapError({}, curBasemap, false) ?? '';
+        if (nextBaseWarn && nextBaseWarn !== basemapOfflineWarning) {
+          notifications.warning('Online basemap offline', nextBaseWarn, bgOpt);
+        }
+        basemapOfflineWarning = nextBaseWarn;
+      } else basemapOfflineWarning = '';
+    }
     if (!mapInstance) return;
     const snap = $state.snapshot(visibility);
     const force = typeof pmtilesGraticuleFallback !== 'undefined' && pmtilesGraticuleFallback;
     mapInstance.setStyle(
-      force
-        ? buildMapLibreGeospatialStyle(payload?.manifest, snap, { forceGraticuleFallback: true })
-        : buildMapLibreGeospatialStyle(payload?.manifest, snap)
+      buildMapLibreGeospatialStyle(payload?.manifest, snap, {
+        ...(force ? { forceGraticuleFallback: true } : {}),
+        basemap: curBasemap,
+        wmsLayer: curWmsLayer,
+        opacity: curOpacity,
+      })
     );
     mapInstance.easeTo({
       pitch: visibility.hillshade3D ? 52 : 0,
@@ -168,19 +195,33 @@
 
   function onMapError(m: { setStyle(s: ReturnType<typeof buildMapLibreGeospatialStyle>): unknown }, evt: unknown) {
     const bgOpt = { category: 'background' as const, source: '3D Map', contextTag: project || undefined, toast: true };
-    const st: [boolean, string, string, boolean] = [
+    const st: [
+      boolean,
+      string,
+      string,
+      boolean,
+      geoOps.MapBasemapId,
+      geoOps.BCOpenMapsWMSLayerId,
+      geoOps.MapLayerOpacity,
+      string,
+    ] = [
       visibility.bcOpenMapsWMS,
       wmsOfflineWarning,
       pmtilesArchiveWarning,
       pmtilesGraticuleFallback,
+      basemap,
+      wmsLayer,
+      $state.snapshot(layerOpacity),
+      basemapOfflineWarning,
     ];
     geoOps.routeGeospatialMapError(
       evt,
       st,
       payload?.manifest,
       $state.snapshot(visibility),
-      (w, pm, s) => {
+      (w, pm, s, bw) => {
         if (w !== null) wmsOfflineWarning = w;
+        if (bw !== undefined && bw !== null) basemapOfflineWarning = bw;
         if (pm !== null) pmtilesArchiveWarning = pm;
         if (s !== null) {
           pmtilesGraticuleFallback = true;
@@ -203,7 +244,14 @@
     const bgOpt = { category: 'background' as const, source: '3D Map', contextTag: project || undefined, toast: true };
     try {
       setWorkerUrl(maplibreWorkerUrl);
-      const style = buildMapLibreGeospatialStyle(payload?.manifest, $state.snapshot(visibility));
+      const curBasemap = typeof basemap !== 'undefined' ? basemap : 'offline-neutral';
+      const curWmsLayer = typeof wmsLayer !== 'undefined' ? wmsLayer : 'bc-parks';
+      const curOpacity = typeof layerOpacity !== 'undefined' ? $state.snapshot(layerOpacity) : undefined;
+      const style = buildMapLibreGeospatialStyle(payload?.manifest, $state.snapshot(visibility), {
+        basemap: curBasemap,
+        wmsLayer: curWmsLayer,
+        opacity: curOpacity,
+      });
       const onLoad = () => {
         syncAOIOverlay();
         fitMapToPayloadBounds(mapInstance, payload);
@@ -445,15 +493,26 @@
   });
 
   const handleBrowserOffline = () => {
-    if (!alive || !visibility.bcOpenMapsWMS) return;
-    const msg = classifyWMSMapError({}, true, false);
-    if (!msg) return;
+    if (!alive) return;
     const bgOpt = { category: 'background' as const, source: '3D Map', contextTag: project || undefined, toast: true };
-    if (msg !== wmsOfflineWarning) notifications.warning('BC OpenMaps WMS offline', msg, bgOpt);
-    wmsOfflineWarning = msg;
+    if (visibility.bcOpenMapsWMS) {
+      const msg = classifyWMSMapError({}, true, false);
+      if (msg) {
+        if (msg !== wmsOfflineWarning) notifications.warning('BC OpenMaps WMS offline', msg, bgOpt);
+        wmsOfflineWarning = msg;
+      }
+    }
+    const baseMsg = geoOps.classifyBasemapError({}, basemap, false);
+    if (baseMsg) {
+      if (baseMsg !== basemapOfflineWarning) notifications.warning('Online basemap offline', baseMsg, bgOpt);
+      basemapOfflineWarning = baseMsg;
+    }
   };
   const handleBrowserOnline = () => {
-    if (alive) wmsOfflineWarning = '';
+    if (alive) {
+      wmsOfflineWarning = '';
+      basemapOfflineWarning = '';
+    }
   };
 
   onMount(() => {
@@ -495,7 +554,11 @@
     onFitBounds: fitBounds,
     onRefreshStream: refreshStream,
   });
-  const stgE = { onApplyLayers: applyLayerVisibilities, onRefreshDeck: refreshDeckOverlay };
+  const stgE = {
+    onApplyLayers: applyLayerVisibilities,
+    onApplyOpacity: applyLayerOpacity,
+    onRefreshDeck: refreshDeckOverlay,
+  };
   const stgAll = $derived({ ...stgA, ...stgB, ...stgC, ...stgD, ...stgE, onExportGpkg: exportGeoPackageShortcut });
   const drwA = $derived({ contextId, project, su, zoneFilter, boundingBox: payload?.boundingBox, plotPoints });
   const drwB = $derived({ selectedPlot, selectedSuggestion, suggestionBusy, filteredPoints, qaReport });
@@ -509,6 +572,9 @@
   <GeospatialMapStage
     {...stgAll}
     bind:visibility
+    bind:basemap
+    bind:wmsLayer
+    bind:layerOpacity
     bind:zoneFilter
     bind:plotSearch
     bind:gpkgPanelOpen

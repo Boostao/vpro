@@ -3,7 +3,13 @@
   import type { SpatialWorkbenchPayload } from '../../bindings/github.com/boostao/vpro/app';
   import type { GeoPackageExportOutcome } from '../../bindings/github.com/boostao/vpro/app/internal/interchange/models';
   import {
+    DEFAULT_BC_WMS_LAYER,
+    DEFAULT_MAP_BASEMAP,
+    INITIAL_LAYER_OPACITY,
     isAbsoluteFilesystemPath,
+    type BCOpenMapsWMSLayerId,
+    type MapBasemapId,
+    type MapLayerOpacity,
     type MapLayerVisibility,
     type SpatialComputeBackendInfo,
     type SpatialGpkgExportInput,
@@ -22,6 +28,9 @@
     plotCount = 0,
     distinctZones = [],
     visibility = $bindable<MapLayerVisibility>(),
+    basemap = $bindable<MapBasemapId>(DEFAULT_MAP_BASEMAP),
+    wmsLayer = $bindable<BCOpenMapsWMSLayerId>(DEFAULT_BC_WMS_LAYER),
+    layerOpacity = $bindable<MapLayerOpacity>({ ...INITIAL_LAYER_OPACITY }),
     zoneFilter = $bindable(''),
     plotSearch = $bindable(''),
     pmtilesArchiveWarning = '',
@@ -36,6 +45,7 @@
     viewportMatchedCount = 0,
     mapContainer = $bindable<HTMLDivElement | undefined>(),
     onApplyLayers,
+    onApplyOpacity,
     onRefreshDeck,
     onFitBounds,
     onRefreshStream,
@@ -51,6 +61,9 @@
     plotCount?: number;
     distinctZones?: string[];
     visibility: MapLayerVisibility;
+    basemap?: MapBasemapId;
+    wmsLayer?: BCOpenMapsWMSLayerId;
+    layerOpacity?: MapLayerOpacity;
     zoneFilter?: string;
     plotSearch?: string;
     pmtilesArchiveWarning?: string;
@@ -65,6 +78,7 @@
     viewportMatchedCount?: number;
     mapContainer?: HTMLDivElement | undefined;
     onApplyLayers: () => void;
+    onApplyOpacity: () => void;
     onRefreshDeck: () => void;
     onFitBounds: () => void;
     onRefreshStream: () => void;
@@ -83,12 +97,16 @@
   {plotCount}
   {distinctZones}
   bind:visibility
+  bind:basemap
+  bind:wmsLayer
+  bind:layerOpacity
   bind:zoneFilter
   bind:plotSearch
   {loading}
   {mutating}
   {gpkgExporting}
   {onApplyLayers}
+  {onApplyOpacity}
   {onRefreshDeck}
   {onFitBounds}
   {onRefreshStream}
@@ -128,7 +146,13 @@
       class:wb-crosshair={aoiDrawMode}
       data-testid="maplibre-geospatial-canvas"
     ></div>
-    <SpatialMapLegend {aoiMatchedCount} {viewportMatchedCount} />
+    <SpatialMapLegend
+      {aoiMatchedCount}
+      {viewportMatchedCount}
+      {basemap}
+      bcOpenMapsWMS={visibility.bcOpenMapsWMS}
+      {wmsLayer}
+    />
   </div>
   {@render children()}
 </div>

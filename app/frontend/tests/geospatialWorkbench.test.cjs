@@ -428,3 +428,257 @@ test('GeospatialWorkbench removes inline error/warning banners while routing wms
   assert.match(entries[1].message, /offline/i);
   assert.match(wbSource, /const handleBrowserOffline = \(\) => \{[\s\S]*?notifications\.warning\(/);
 });
+
+test('buildMapLibreGeospatialStyle generates verified basemaps, proxied BC Gov WMS overlays, and persisted opacities', () => {
+  const baseVis = {
+    bgcFill: true,
+    bgcLabels: true,
+    ecosections: true,
+    nrDistricts: true,
+    hillshade3D: false,
+    bcOpenMapsWMS: false,
+    discrepancyVectors: true,
+  };
+
+  // 1. Offline Neutral makes zero external tile requests
+  const offlineStyle = wb.buildMapLibreGeospatialStyle(null, baseVis, { basemap: 'offline-neutral' });
+  assert.equal(offlineStyle.sources.vpro_basemap_base, undefined);
+  assert.equal(offlineStyle.sources.vpro_basemap_reference, undefined);
+  assert.ok(offlineStyle.sources.vpro_offline_graticule);
+  const bgLayer = offlineStyle.layers.find((l) => l.id === 'vpro-ocean-background');
+  assert.equal(bgLayer.paint['background-color'], '#F2F2F2');
+
+  // 2. Positron Light uses Esri World Light Gray Base + Reference labels on top
+  const lightStyle = wb.buildMapLibreGeospatialStyle(null, baseVis, { basemap: 'positron-light' });
+  assert.deepEqual(plain(lightStyle.sources.vpro_basemap_base.tiles), [
+    'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+  ]);
+  assert.deepEqual(plain(lightStyle.sources.vpro_basemap_reference.tiles), [
+    'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+  ]);
+  assert.match(lightStyle.sources.vpro_basemap_base.attribution, /OpenStreetMap contributors/);
+  const baseLayerIdx = lightStyle.layers.findIndex((l) => l.id === 'vpro-basemap-base-layer');
+  const bgcFillIdx = lightStyle.layers.findIndex((l) => l.id === 'bgc-zones-fill');
+  const refLayerIdx = lightStyle.layers.findIndex((l) => l.id === 'vpro-basemap-reference-layer');
+  assert.ok(baseLayerIdx > 0 && baseLayerIdx < bgcFillIdx && bgcFillIdx < refLayerIdx);
+
+  // 3. Positron Dark uses Esri World Dark Gray Base + Reference labels with high-contrast dark outlines
+  const darkStyle = wb.buildMapLibreGeospatialStyle(null, baseVis, { basemap: 'positron-dark' });
+  assert.deepEqual(plain(darkStyle.sources.vpro_basemap_base.tiles), [
+    'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+  ]);
+  assert.equal(darkStyle.layers.find((l) => l.id === 'vpro-ocean-background').paint['background-color'], '#002244');
+  assert.equal(darkStyle.layers.find((l) => l.id === 'bgc-subzone-outline').paint['line-color'], '#D8D8D8');
+  assert.equal(darkStyle.layers.find((l) => l.id === 'ecosections-outline').paint['line-color'], '#FFFFFF');
+
+  // 4. BC Gov Topographic routes through same-origin Go proxy /maps/bc-proxy/basemap/{z}/{y}/{x}
+  const bcTopoStyle = wb.buildMapLibreGeospatialStyle(null, baseVis, { basemap: 'bc-gov-topo' });
+  assert.deepEqual(plain(bcTopoStyle.sources.vpro_basemap_base.tiles), ['/maps/bc-proxy/basemap/{z}/{y}/{x}']);
+  assert.match(bcTopoStyle.sources.vpro_basemap_base.attribution, /Government of British Columbia/);
+  assert.equal(bcTopoStyle.sources.vpro_basemap_reference, undefined);
+
+  // 5. Satellite Imagery uses Esri World Imagery
+  const satStyle = wb.buildMapLibreGeospatialStyle(null, baseVis, { basemap: 'satellite' });
+  assert.deepEqual(plain(satStyle.sources.vpro_basemap_base.tiles), [
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  ]);
+
+  // 6. Proxied BC OpenMaps WMS overlays replace broken DRA layer and respect custom opacity
+  const wmsParks = wb.buildMapLibreGeospatialStyle(
+    null,
+    { ...baseVis, bcOpenMapsWMS: true },
+    { wmsLayer: 'bc-parks', opacity: { bgc: 0.35, admin: 0.6, wms: 0.88 } }
+  );
+  assert.equal(
+    wmsParks.sources.bc_openmaps_wms.tiles[0],
+    '/maps/bc-proxy/wms/ows?layers=pub%3AWHSE_TANTALIS.TA_PARK_ECORES_PA_SVW&bbox={bbox-epsg-3857}&width=256&height=256'
+  );
+  assert.doesNotMatch(wmsParks.sources.bc_openmaps_wms.tiles[0], /DRA_DGTL_ROAD_ATLAS_MPAR_SP/);
+  assert.equal(wmsParks.layers.find((l) => l.id === 'bgc-zones-fill').paint['fill-opacity'], 0.35);
+  assert.equal(wmsParks.layers.find((l) => l.id === 'ecosections-outline').paint['line-opacity'], 0.6);
+  assert.equal(wmsParks.layers.find((l) => l.id === 'nr-districts-outline').paint['line-opacity'], 0.6);
+  assert.equal(wmsParks.layers.find((l) => l.id === 'bc-openmaps-wms-layer').paint['raster-opacity'], 0.88);
+
+  const wmsRelief = wb.buildMapLibreGeospatialStyle(
+    null,
+    { ...baseVis, bcOpenMapsWMS: true },
+    { wmsLayer: 'bc-painted-relief' }
+  );
+  assert.equal(
+    wmsRelief.sources.bc_openmaps_wms.tiles[0],
+    '/maps/bc-proxy/wms/imagex?layers=hillshade_bc_bc_xc50m_bcalb_painted_relief&bbox={bbox-epsg-3857}&width=256&height=256'
+  );
+});
+
+test('applyMapLayerOpacity updates existing layer paint properties smoothly without setStyle', () => {
+  const calls = [];
+  const presentLayers = new Set(['bgc-zones-fill', 'bgc-subzone-outline', 'ecosections-outline', 'bc-openmaps-wms-layer']);
+  let setStyleCalls = 0;
+  const mockMap = {
+    getLayer: (id) => (presentLayers.has(id) ? { id } : undefined),
+    setPaintProperty: (id, prop, val) => calls.push([id, prop, val]),
+    setStyle: () => {
+      setStyleCalls++;
+    },
+  };
+
+  const applied = wb.applyMapLayerOpacity(mockMap, { bgc: 0.25, admin: 1.4, wms: -0.2 });
+  assert.equal(setStyleCalls, 0);
+  assert.deepEqual(plain(applied), ['bgc-zones-fill', 'bgc-subzone-outline', 'ecosections-outline', 'bc-openmaps-wms-layer']);
+  assert.deepEqual(calls, [
+    ['bgc-zones-fill', 'fill-opacity', 0.25],
+    ['bgc-subzone-outline', 'line-opacity', 0.29],
+    ['ecosections-outline', 'line-opacity', 1],
+    ['bc-openmaps-wms-layer', 'raster-opacity', 0],
+  ]);
+
+  // Zero BGC opacity also fades subzone outline to 0
+  calls.length = 0;
+  wb.applyMapLayerOpacity(mockMap, { bgc: 0, admin: 0.5, wms: 0.5 });
+  assert.deepEqual(calls.slice(0, 2), [
+    ['bgc-zones-fill', 'fill-opacity', 0],
+    ['bgc-subzone-outline', 'line-opacity', 0],
+  ]);
+});
+
+test('GeospatialWorkbench applyLayerOpacity never calls setStyle and online basemaps warn gracefully when offline', () => {
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+
+  const paintCalls = [];
+  let setStyleCalls = 0;
+  const mockMap = {
+    getLayer: (id) => ({ id }),
+    setPaintProperty: (id, prop, val) => paintCalls.push([id, prop, val]),
+    setStyle: () => {
+      setStyleCalls++;
+    },
+    easeTo() {},
+    once() {},
+  };
+
+  const host = componentFunctions('GeospatialWorkbench.svelte', ['applyLayerOpacity', 'applyLayerVisibilities'], {
+    project: 'Sample',
+    alive: true,
+    visibility: { ...wb.INITIAL_LAYER_VISIBILITY, bcOpenMapsWMS: false },
+    basemap: 'positron-light',
+    wmsLayer: 'bc-parks',
+    layerOpacity: { bgc: 0.4, admin: 0.7, wms: 0.8 },
+    wmsOfflineWarning: '',
+    basemapOfflineWarning: '',
+    pmtilesGraticuleFallback: false,
+    mapInstance: mockMap,
+    payload: null,
+    navigator: { onLine: false },
+    classifyWMSMapError: wb.classifyWMSMapError,
+    buildMapLibreGeospatialStyle: wb.buildMapLibreGeospatialStyle,
+    syncAOIOverlay() {},
+    geoOps: wb,
+    $state: { snapshot: (v) => v },
+    notifications,
+  });
+
+  // Slider drag only calls setPaintProperty, never setStyle
+  host.actions.applyLayerOpacity();
+  assert.equal(setStyleCalls, 0);
+  assert.equal(paintCalls.length, 5);
+  assert.deepEqual(paintCalls[0], ['bgc-zones-fill', 'fill-opacity', 0.4]);
+
+  // Switching to online basemap while offline triggers a non-blocking warning and still rebuilds style cleanly
+  host.actions.applyLayerVisibilities();
+  assert.equal(setStyleCalls, 1);
+  assert.match(host.basemapOfflineWarning, /Light Gray \(Positron-style\).*offline/i);
+  assert.equal(notifications.getSnapshot().entries.length, 1);
+  assert.equal(notifications.getSnapshot().entries[0].title, 'Online basemap offline');
+});
+
+test('classifyBasemapError and classifyWMSMapError handle offline and proxied tile failures independently', () => {
+  assert.equal(wb.classifyBasemapError({ sourceId: 'vpro_basemap_base' }, 'offline-neutral', false), null);
+  assert.match(wb.classifyBasemapError({}, 'bc-gov-topo', false), /BC Gov Topographic.*unavailable while offline/i);
+  assert.match(
+    wb.classifyBasemapError({ sourceId: 'vpro_basemap_base', error: new Error('Failed to fetch') }, 'positron-light', true),
+    /Light Gray \(Positron-style\) basemap tiles could not be loaded/i
+  );
+  assert.match(
+    wb.classifyBasemapError({ error: { url: '/maps/bc-proxy/basemap/6/21/10' } }, 'bc-gov-topo', true),
+    /BC Gov Topographic basemap tiles could not be loaded/i
+  );
+  assert.equal(
+    wb.classifyWMSMapError({ sourceId: 'vpro_basemap_base', error: new Error('Failed to fetch') }, true, true),
+    null
+  );
+  assert.match(
+    wb.classifyWMSMapError({ error: { url: '/maps/bc-proxy/wms/ows?layers=pub:WHSE_TANTALIS.TA_PARK_ECORES_PA_SVW' } }, true, true),
+    /WMS tile request failed/i
+  );
+});
+
+test('SpatialWorkbenchHeader and SpatialMapLegend render accessible basemap, WMS overlay, opacity sliders, and attribution', () => {
+  const headerSrc = readFileSync(srcPath('spatial/SpatialWorkbenchHeader.svelte'), 'utf8');
+  const legendSrc = readFileSync(srcPath('spatial/SpatialMapLegend.svelte'), 'utf8');
+  const stageSrc = readFileSync(srcPath('spatial/GeospatialMapStage.svelte'), 'utf8');
+
+  for (const [name, src] of [
+    ['SpatialWorkbenchHeader.svelte', headerSrc],
+    ['SpatialMapLegend.svelte', legendSrc],
+    ['GeospatialMapStage.svelte', stageSrc],
+  ]) {
+    const compiled = compile(src, { filename: name, generate: 'client' });
+    assert.equal(compiled.warnings.length, 0, `${name} emitted compiler warnings`);
+    assert.equal(/[\p{Extended_Pictographic}]/u.test(src), false, `${name} must contain zero emojis`);
+  }
+
+  const HeaderSSR = serverComponent(headerSrc, 'SpatialWorkbenchHeader.svelte', {
+    './geospatialWorkbench': wb,
+  });
+  const headerHtml = render(HeaderSSR, {
+    props: {
+      contextId: 'ctx-map-ui',
+      project: 'Sample',
+      computeInfo: wb.INITIAL_COMPUTE_INFO,
+      visibility: { ...wb.INITIAL_LAYER_VISIBILITY, bcOpenMapsWMS: true },
+      basemap: 'positron-dark',
+      wmsLayer: 'bc-painted-relief',
+      layerOpacity: { bgc: 0.45, admin: 0.8, wms: 0.65 },
+      onApplyLayers() {},
+      onApplyOpacity() {},
+      onRefreshDeck() {},
+      onFitBounds() {},
+      onRefreshStream() {},
+      onToggleGpkgPanel() {},
+    },
+  }).body;
+
+  assert.match(headerHtml, /id="wb-basemap-select"/);
+  assert.match(headerHtml, /Offline Neutral/);
+  assert.match(headerHtml, /Light Gray \(Positron-style\)/);
+  assert.match(headerHtml, /Dark Gray \(Positron Dark-style\)/);
+  assert.match(headerHtml, /BC Gov Topographic/);
+  assert.match(headerHtml, /Satellite Imagery/);
+  assert.match(headerHtml, /id="wb-wms-layer-select"/);
+  assert.match(headerHtml, /BC Parks &amp; Protected Areas/);
+  assert.match(headerHtml, /BC 50m Painted Relief/);
+  assert.match(headerHtml, /id="wb-opacity-bgc"[^>]*type="range"[^>]*aria-valuetext="45%"/);
+  assert.match(headerHtml, /id="wb-opacity-admin"[^>]*type="range"[^>]*aria-valuetext="80%"/);
+  assert.match(headerHtml, /id="wb-opacity-wms"[^>]*type="range"[^>]*aria-valuetext="65%"/);
+  assert.match(headerHtml, /45%/);
+  assert.match(headerHtml, /80%/);
+  assert.match(headerHtml, /65%/);
+
+  const LegendSSR = serverComponent(legendSrc, 'SpatialMapLegend.svelte', {
+    './geospatialWorkbench': wb,
+  });
+  const legendHtml = render(LegendSSR, {
+    props: {
+      aoiMatchedCount: 3,
+      viewportMatchedCount: 12,
+      basemap: 'bc-gov-topo',
+      bcOpenMapsWMS: true,
+      wmsLayer: 'bc-parks',
+    },
+  }).body;
+  assert.match(legendHtml, /Government of British Columbia, DataBC/);
+  assert.match(legendHtml, /BC Parks &amp; Protected Areas/);
+});

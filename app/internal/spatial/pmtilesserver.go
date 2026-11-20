@@ -415,12 +415,16 @@ func NewDynamicPMTilesAssetHandler(fallback http.Handler, dataDir string, getExt
 				http.Error(w, "invalid map archive path", http.StatusBadRequest)
 				return
 			}
+			rel := strings.TrimPrefix(r.URL.Path, "/maps/")
+			if rel == "bc-proxy" || strings.HasPrefix(rel, "bc-proxy/") {
+				serveBCGovMapProxy(w, r, defaultBCGovProxyConfig())
+				return
+			}
 			if r.Method != http.MethodGet && r.Method != http.MethodHead {
 				w.Header().Set("Allow", "GET, HEAD")
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			rel := strings.TrimPrefix(r.URL.Path, "/maps/")
 			if rel == "manifest.json" {
 				manifest := BuildPMTilesManifest(dataDir, copiedExtra...)
 				payload, err := json.Marshal(manifest)

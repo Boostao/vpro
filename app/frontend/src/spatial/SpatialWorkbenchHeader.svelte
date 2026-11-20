@@ -1,8 +1,16 @@
 <script lang="ts">
   import type { SpatialWorkbenchPayload } from '../../bindings/github.com/boostao/vpro/app';
   import {
+    BC_OPENMAPS_WMS_OPTIONS,
+    DEFAULT_BC_WMS_LAYER,
+    DEFAULT_MAP_BASEMAP,
+    INITIAL_LAYER_OPACITY,
+    MAP_BASEMAP_OPTIONS,
     buildDefaultGeoPackageExportPath,
     summarizeArchiveResolution,
+    type BCOpenMapsWMSLayerId,
+    type MapBasemapId,
+    type MapLayerOpacity,
     type MapLayerVisibility,
     type SpatialComputeBackendInfo,
   } from './geospatialWorkbench';
@@ -17,12 +25,16 @@
     plotCount = 0,
     distinctZones = [],
     visibility = $bindable(),
+    basemap = $bindable<MapBasemapId>(DEFAULT_MAP_BASEMAP),
+    wmsLayer = $bindable<BCOpenMapsWMSLayerId>(DEFAULT_BC_WMS_LAYER),
+    layerOpacity = $bindable<MapLayerOpacity>({ ...INITIAL_LAYER_OPACITY }),
     zoneFilter = $bindable(''),
     plotSearch = $bindable(''),
     loading = false,
     mutating = false,
     gpkgExporting = false,
     onApplyLayers,
+    onApplyOpacity,
     onRefreshDeck,
     onFitBounds,
     onRefreshStream,
@@ -37,17 +49,32 @@
     plotCount?: number;
     distinctZones?: string[];
     visibility: MapLayerVisibility;
+    basemap?: MapBasemapId;
+    wmsLayer?: BCOpenMapsWMSLayerId;
+    layerOpacity?: MapLayerOpacity;
     zoneFilter?: string;
     plotSearch?: string;
     loading?: boolean;
     mutating?: boolean;
     gpkgExporting?: boolean;
     onApplyLayers: () => void;
+    onApplyOpacity: () => void;
     onRefreshDeck: () => void;
     onFitBounds: () => void;
     onRefreshStream: () => void;
     onToggleGpkgPanel: (defaultPath: string) => void;
   } = $props();
+
+  const bgcPct = $derived(Math.round((layerOpacity?.bgc ?? INITIAL_LAYER_OPACITY.bgc) * 100));
+  const adminPct = $derived(Math.round((layerOpacity?.admin ?? INITIAL_LAYER_OPACITY.admin) * 100));
+  const wmsPct = $derived(Math.round((layerOpacity?.wms ?? INITIAL_LAYER_OPACITY.wms) * 100));
+
+  function updateOpacity(key: keyof MapLayerOpacity, rawPct: string) {
+    const pct = Math.max(0, Math.min(100, Number(rawPct)));
+    if (!Number.isFinite(pct)) return;
+    layerOpacity = { ...layerOpacity, [key]: pct / 100 };
+    onApplyOpacity();
+  }
 </script>
 
 <header class="wb-banner">
@@ -78,6 +105,21 @@
 
 <div class="wb-toolbar" role="toolbar" aria-label="Map layers and spatial tools">
   <div class="wb-layer-toggles">
+    <div class="wb-basemap-control">
+      <label for="wb-basemap-select" class="wb-control-label">Basemap</label>
+      <select
+        id="wb-basemap-select"
+        class="wb-input"
+        aria-label="Map basemap"
+        bind:value={basemap}
+        onchange={onApplyLayers}
+      >
+        {#each MAP_BASEMAP_OPTIONS as opt (opt.id)}
+          <option value={opt.id}>{opt.label}</option>
+        {/each}
+      </select>
+    </div>
+
     <label class="wb-toggle">
       <input type="checkbox" bind:checked={visibility.bgcFill} onchange={onApplyLayers} />
       <span>BGC v13 Polygons</span>
@@ -102,6 +144,22 @@
       <input type="checkbox" bind:checked={visibility.bcOpenMapsWMS} onchange={onApplyLayers} />
       <span>Online BC OpenMaps WMS</span>
     </label>
+    {#if visibility.bcOpenMapsWMS}
+      <div class="wb-basemap-control">
+        <label for="wb-wms-layer-select" class="sr-only">BC OpenMaps WMS overlay</label>
+        <select
+          id="wb-wms-layer-select"
+          class="wb-input"
+          aria-label="BC OpenMaps WMS overlay"
+          bind:value={wmsLayer}
+          onchange={onApplyLayers}
+        >
+          {#each BC_OPENMAPS_WMS_OPTIONS as opt (opt.id)}
+            <option value={opt.id}>{opt.label}</option>
+          {/each}
+        </select>
+      </div>
+    {/if}
   </div>
 
   <div class="wb-filter-controls">
@@ -137,5 +195,60 @@
     >
       Export .gpkg...
     </button>
+  </div>
+</div>
+
+<div class="wb-opacity-bar" role="group" aria-label="Layer opacity controls">
+  <span class="wb-opacity-title">Layer Opacity</span>
+
+  <div class="wb-opacity-item" class:wb-opacity-muted={!visibility.bgcFill}>
+    <label for="wb-opacity-bgc">BGC v13 Polygons</label>
+    <input
+      id="wb-opacity-bgc"
+      class="wb-opacity-slider"
+      type="range"
+      min="0"
+      max="100"
+      step="1"
+      value={bgcPct}
+      aria-label="BGC v13 Polygons opacity"
+      aria-valuetext={`${bgcPct}%`}
+      oninput={(e) => updateOpacity('bgc', e.currentTarget.value)}
+    />
+    <span class="wb-opacity-value">{bgcPct}%</span>
+  </div>
+
+  <div class="wb-opacity-item" class:wb-opacity-muted={!visibility.ecosections && !visibility.nrDistricts}>
+    <label for="wb-opacity-admin" title="Opacity for Ecosections and NR Districts boundaries">Boundaries</label>
+    <input
+      id="wb-opacity-admin"
+      class="wb-opacity-slider"
+      type="range"
+      min="0"
+      max="100"
+      step="1"
+      value={adminPct}
+      aria-label="Administrative boundaries opacity"
+      aria-valuetext={`${adminPct}%`}
+      oninput={(e) => updateOpacity('admin', e.currentTarget.value)}
+    />
+    <span class="wb-opacity-value">{adminPct}%</span>
+  </div>
+
+  <div class="wb-opacity-item" class:wb-opacity-muted={!visibility.bcOpenMapsWMS}>
+    <label for="wb-opacity-wms">BC OpenMaps WMS</label>
+    <input
+      id="wb-opacity-wms"
+      class="wb-opacity-slider"
+      type="range"
+      min="0"
+      max="100"
+      step="1"
+      value={wmsPct}
+      aria-label="Online BC OpenMaps WMS opacity"
+      aria-valuetext={`${wmsPct}%`}
+      oninput={(e) => updateOpacity('wms', e.currentTarget.value)}
+    />
+    <span class="wb-opacity-value">{wmsPct}%</span>
   </div>
 </div>
