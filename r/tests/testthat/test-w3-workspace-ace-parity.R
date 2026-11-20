@@ -8,44 +8,86 @@ test_that("ENG-XCUT-007 + ENG-R-005: vpro_data_dir and vpro_config_dir preserve 
   cwd_dir <- file.path(td, "cwd")
   dir.create(real_dir, recursive = TRUE)
   dir.create(cwd_dir, recursive = TRUE)
-  on.exit(unlink(td, recursive = TRUE, force = TRUE), add = TRUE)
+  has_symlink <- FALSE
+  on.exit({
+    if (isTRUE(has_symlink)) {
+      try(unlink(link_dir, recursive = FALSE, force = TRUE), silent = TRUE)
+    }
+    unlink(td, recursive = TRUE, force = TRUE)
+  }, add = TRUE)
 
-  has_symlink <- isTRUE(tryCatch(file.symlink(real_dir, link_dir), warning = function(w) FALSE, error = function(e) FALSE))
+  has_symlink <- if (.Platform$OS.type == "windows") {
+    isTRUE(tryCatch(
+      getExportedValue("base", "Sys.junction")(real_dir, link_dir),
+      warning = function(w) FALSE,
+      error = function(e) FALSE
+    ))
+  } else {
+    isTRUE(tryCatch(file.symlink(real_dir, link_dir), warning = function(w) FALSE, error = function(e) FALSE))
+  }
 
   withr::with_options(list(vpro.data_dir = NULL, vpro.config_dir = NULL), {
     withr::with_dir(cwd_dir, {
       cwd_clean <- vpro:::vpro_lexical_clean_path(getwd(), convert_backslash = (.Platform$OS.type == "windows"))
+      test_home <- if (.Platform$OS.type == "windows") "C:/Users/x" else "/home/x"
 
-      # 1. Symlinked VPRO_DATA_DIR / VPRO_CONFIG_DIR and XDG_* preserve symlink path (no realpath dereference)
+      # 1. Symlinked / junctioned VPRO_DATA_DIR / VPRO_CONFIG_DIR and OS env vars preserve link path (no realpath dereference)
       if (has_symlink) {
         link_clean <- vpro:::vpro_lexical_clean_path(link_dir)
-        withr::with_envvar(c(HOME = "/home/x", VPRO_DATA_DIR = link_dir, VPRO_CONFIG_DIR = link_dir), {
-          expect_identical(vpro_data_dir(), link_clean)
-          expect_identical(vpro_config_dir(), link_clean)
-        })
-        expect_identical(
-          vpro:::vpro_resolve_data_dir(os = "Linux", opt = NULL, env_data = "", xdg_data = link_dir, home = "/home/x"),
-          paste0(link_clean, "/vpro")
+        withr::with_envvar(
+          c(HOME = test_home, USERPROFILE = test_home, VPRO_DATA_DIR = link_dir, VPRO_CONFIG_DIR = link_dir),
+          {
+            expect_identical(vpro_data_dir(), link_clean)
+            expect_identical(vpro_config_dir(), link_clean)
+          }
         )
-        expect_identical(
-          vpro:::vpro_resolve_config_dir(os = "Linux", opt = NULL, env_cfg = "", xdg_cfg = link_dir, home = "/home/x"),
-          paste0(link_clean, "/vpro")
-        )
+        if (startsWith(link_clean, "/")) {
+          expect_identical(
+            vpro:::vpro_resolve_data_dir(os = "Linux", opt = NULL, env_data = "", xdg_data = link_dir, home = "/home/x"),
+            paste0(link_clean, "/vpro")
+          )
+          expect_identical(
+            vpro:::vpro_resolve_config_dir(os = "Linux", opt = NULL, env_cfg = "", xdg_cfg = link_dir, home = "/home/x"),
+            paste0(link_clean, "/vpro")
+          )
+        } else {
+          expect_identical(
+            vpro:::vpro_resolve_data_dir(os = "Windows", opt = NULL, env_data = "", localappdata = link_dir, userprofile = "C:/Users/x", home = ""),
+            paste0(link_clean, "/vpro")
+          )
+          expect_identical(
+            vpro:::vpro_resolve_config_dir(os = "Windows", opt = NULL, env_cfg = "", appdata = link_dir, userprofile = "C:/Users/x", home = ""),
+            paste0(link_clean, "/vpro")
+          )
+        }
       }
 
-      # 2. Tilde overrides (~, ~/, ~/custom_vpro_test, ~/a/b/../c/) expand against HOME; ~literal stays relative
-      withr::with_envvar(c(HOME = "/home/x", VPRO_DATA_DIR = "~/custom_vpro_test", VPRO_CONFIG_DIR = "~/a/b/../cfg/"), {
-        expect_identical(vpro_data_dir(), "/home/x/custom_vpro_test")
-        expect_identical(vpro_config_dir(), "/home/x/a/cfg")
-      })
-      withr::with_envvar(c(HOME = "/home/x", VPRO_DATA_DIR = "~", VPRO_CONFIG_DIR = "~/"), {
-        expect_identical(vpro_data_dir(), "/home/x")
-        expect_identical(vpro_config_dir(), "/home/x")
-      })
-      withr::with_envvar(c(HOME = "/home/x", VPRO_DATA_DIR = "~literal", VPRO_CONFIG_DIR = "rel/c"), {
-        expect_identical(vpro_data_dir(), paste0(cwd_clean, "/~literal"))
-        expect_identical(vpro_config_dir(), paste0(cwd_clean, "/rel/c"))
-      })
+      # 2. Tilde overrides (~, ~/, ~/custom_vpro_test, ~/a/b/../c/) expand against host home (USERPROFILE on Windows, HOME on Unix); ~literal stays relative
+      withr::with_envvar(
+        c(HOME = test_home, USERPROFILE = test_home, VPRO_DATA_DIR = "~/custom_vpro_test", VPRO_CONFIG_DIR = "~/a/b/../cfg/"),
+        {
+          expect_identical(vpro_data_dir(), paste0(test_home, "/custom_vpro_test"))
+          expect_identical(vpro_config_dir(), paste0(test_home, "/a/cfg"))
+        }
+      )
+      withr::with_envvar(
+        c(HOME = test_home, USERPROFILE = test_home, VPRO_DATA_DIR = "~", VPRO_CONFIG_DIR = "~/"),
+        {
+          expect_identical(vpro_data_dir(), test_home)
+          expect_identical(vpro_config_dir(), test_home)
+        }
+      )
+      withr::with_envvar(
+        c(HOME = test_home, USERPROFILE = test_home, VPRO_DATA_DIR = "~literal", VPRO_CONFIG_DIR = "rel/c"),
+        {
+          expect_identical(vpro_data_dir(), paste0(cwd_clean, "/~literal"))
+          expect_identical(vpro_config_dir(), paste0(cwd_clean, "/rel/c"))
+        }
+      )
+      expect_identical(
+        vpro:::vpro_resolve_data_dir(os = "Windows", opt = NULL, env_data = "~\\custom_win", userprofile = "C:\\Users\\x", home = "/home/ignored"),
+        "C:/Users/x/custom_win"
+      )
 
       # 3. Non-existent .. and duplicate/trailing slashes clean lexically
       withr::with_envvar(c(HOME = "/home/x", VPRO_DATA_DIR = "/a/b/../c/", VPRO_CONFIG_DIR = "/a//c/"), {

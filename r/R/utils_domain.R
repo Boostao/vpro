@@ -140,7 +140,7 @@ vpro_narrow_float32 <- function(x) {
     cli::cli_abort("`x` must be a numeric vector.", class = c("vpro_error_domain", "vpro_error"))
   }
   out <- rep(NA_real_, length(x))
-  max_f32 <- 3.4028234663852886e+38
+  max_f32 <- (2 - 2^-23) * 2^127
   ok <- !is.na(x) & is.finite(x) & abs(x) <= max_f32
   if (any(ok)) {
     raw_buf <- writeBin(as.double(x[ok]), raw(), size = 4L)
@@ -178,7 +178,8 @@ vpro_narrow_float32 <- function(x) {
     return(0.0)
   }
   if (m >= 15.0) {
-    res <- as.numeric(paste0(if (neg) "-" else "", s))
+    s_g <- sprintf("%.15g", abs(v))
+    res <- as.numeric(paste0(if (neg) "-" else "", s_g))
     if (!is.finite(res)) {
       return(v)
     }
@@ -208,12 +209,18 @@ vpro_narrow_float32 <- function(x) {
   if (all(keep == 0L)) {
     return(0.0)
   }
-  mant_out <- if (length(keep) == 1L) {
-    as.character(keep[[1L]])
+  keep_trim <- keep[seq_len(max(which(keep != 0L)))]
+  mant_out <- if (length(keep_trim) == 1L) {
+    as.character(keep_trim[[1L]])
   } else {
-    paste0(keep[[1L]], ".", paste0(keep[-1L], collapse = ""))
+    paste0(keep_trim[[1L]], ".", paste0(keep_trim[-1L], collapse = ""))
   }
-  res <- as.numeric(paste0(if (neg) "-" else "", mant_out, "e", exp10))
+  num_str <- if (exp10 == 0L) {
+    paste0(if (neg) "-" else "", mant_out)
+  } else {
+    paste0(if (neg) "-" else "", mant_out, "e", exp10)
+  }
+  res <- as.numeric(num_str)
   if (!is.finite(res)) {
     return(v)
   }

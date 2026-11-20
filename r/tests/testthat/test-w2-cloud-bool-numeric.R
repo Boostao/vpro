@@ -28,7 +28,9 @@ test_that("ENG-R-003: vpro_narrow_float32 preserves NA_real_ and rejects > MaxFl
 
   expect_lt(vpro_narrow_float32(99.999996), 100.0)
   expect_identical(vpro_narrow_float32(99.999999), 100.0)
-  expect_identical(vpro_narrow_float32(3.4028234663852886e+38), 3.4028234663852886e+38)
+  max_f32 <- (2 - 2^-23) * 2^127
+  expect_identical(vpro_narrow_float32(max_f32), max_f32)
+  expect_identical(vpro_narrow_float32(max_f32 * (1 + 2^-24)), NA_real_)
   expect_identical(vpro_narrow_float32(1e-50), 0.0)
   expect_identical(sprintf("%.1f", vpro_narrow_float32(-0.0)), "0.0")
 })
