@@ -51,9 +51,10 @@
     (next) => {
       view = next;
     },
-    'Bedrock type'
+    'Bedrock type',
+    'geologyBedrock'
   );
-  let view = $state(lookup.snapshot());
+  let view = $state.raw(lookup.snapshot());
   let acknowledged = $state(false);
   const warnings = $derived(geologyCodeWarnings(draft, original, view));
   const validation = $derived(geologyCodeValidation(draft, original, view, acknowledged));
@@ -63,7 +64,8 @@
     const identity = draft;
     if (identity)
       untrack(() => {
-        void lookup.refresh();
+        const snap = lookup.snapshot();
+        if (!(snap.ready && !snap.error) && !snap.busy) void lookup.refresh();
       });
   });
   $effect(() => {

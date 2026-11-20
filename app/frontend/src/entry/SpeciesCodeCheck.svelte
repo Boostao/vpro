@@ -28,14 +28,17 @@
   } from './personalSpeciesEditor';
   import PersonalSpeciesFields from './PersonalSpeciesFields.svelte';
   import SpeciesCodeCheckRowItem from './SpeciesCodeCheckRowItem.svelte';
+  import { invalidateSpeciesLists } from './entryReferenceCache';
 
   let {
     client,
+    contextId = '',
     onclosed,
     onbusy,
     oncommitted,
   }: {
     client: ReturnType<typeof bindContextPlots>;
+    contextId?: string;
     onclosed: () => void;
     onbusy: (value: boolean) => void;
     oncommitted: () => Promise<void>;
@@ -295,6 +298,7 @@
       const request = personalSpeciesRequest(proposed);
       const result = await client.CreatePersonalSpeciesDefinition(request);
       committed = true;
+      invalidateSpeciesLists(contextId || undefined);
       metadata = null;
       if (!personalSpeciesMatches(result, request))
         throw new Error('Committed definition result does not match the original request.');

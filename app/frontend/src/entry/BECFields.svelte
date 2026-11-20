@@ -17,6 +17,15 @@
     type BECKey,
     type BECCodes,
   } from './becEditor';
+  import {
+    getCachedBECSiteSeries,
+    getCachedBECSubZones,
+    getCachedBECZones,
+    invalidateBECCache,
+    peekBECSiteSeries,
+    peekBECSubZones,
+    peekBECZones,
+  } from './entryReferenceCache';
 
   let {
     draft = $bindable(),
@@ -47,15 +56,24 @@
   const reads = new ReadRequests();
   const lookup = new BECLookup(
     {
-      zones: async () => catalogueRows(await reads.track(ClassificationService.ListBECZones())),
-      subZones: async (zone) => catalogueRows(await reads.track(ClassificationService.ListBECSubZones(zone))),
-      siteSeries: async (zone, subZone) =>
-        catalogueRows(await reads.track(ClassificationService.ListBECSiteSeries(zone, subZone))),
+      zones: () => getCachedBECZones(async () => catalogueRows(await ClassificationService.ListBECZones())),
+      subZones: (zone) =>
+        getCachedBECSubZones(zone, async () => catalogueRows(await ClassificationService.ListBECSubZones(zone))),
+      siteSeries: (zone, subZone) =>
+        getCachedBECSiteSeries(zone, subZone, async () =>
+          catalogueRows(await ClassificationService.ListBECSiteSeries(zone, subZone))
+        ),
     },
     (next) => (view = next),
-    () => reads.cancelAll()
+    () => reads.cancelAll(),
+    {
+      peekZones: () => peekBECZones(),
+      peekSubZones: (zone) => peekBECSubZones(zone),
+      peekSiteSeries: (zone, subZone) => peekBECSiteSeries(zone, subZone),
+      invalidate: () => invalidateBECCache(),
+    }
   );
-  let view = $state(lookup.snapshot());
+  let view = $state.raw(lookup.snapshot());
   let acknowledged = $state(false);
   const changed = $derived(becChanged(draft, original));
   const warnings = $derived(becWarnings(draft, view));
@@ -125,7 +143,7 @@
     <button
       type="button"
       disabled={disabled || view.busy}
-      onclick={() => void lookup.refresh(draft.zone, draft.subZone)}>Retry BEC choices</button
+      onclick={() => void lookup.refresh(draft.zone, draft.subZone, true)}>Retry BEC choices</button
     >
   {/if}
   {#if warnings.length > 0}

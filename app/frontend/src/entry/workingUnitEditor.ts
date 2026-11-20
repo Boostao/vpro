@@ -124,26 +124,64 @@ export function workingUnitCopy(codes: WorkingUnitCodes): WorkingUnitCopy {
   return { kind: 'stage', value, message: 'BEC Master copied into the Working Unit draft. Save or Undo explicitly.' };
 }
 
+export interface WorkingUnitLookupCache {
+  peekMode(): WorkingUnitModeState | undefined;
+  peekChoices(mode: WorkingUnitMode): WorkingUnitChoice[] | undefined;
+  peekMaster(): WorkingUnitChoice[] | undefined;
+  invalidateChoices?(mode: WorkingUnitMode): void;
+  invalidateMaster?(): void;
+}
+
 export class WorkingUnitLookup {
   private revision = 0;
   private disposed = false;
-  private view: WorkingUnitView = {
-    mode: null,
-    warning: null,
-    choices: [],
-    master: [],
-    ready: false,
-    masterReady: false,
-    busy: false,
-    error: null,
-    masterError: null,
-  };
+  private view: WorkingUnitView;
   constructor(
     private api: WorkingUnitAPI,
     private state: (view: WorkingUnitView) => void,
     private session: WorkingUnitSession = { mode: null },
-    private cancel?: () => void
-  ) {}
+    private cancel?: () => void,
+    private cache?: WorkingUnitLookupCache
+  ) {
+    const initial = this.tryCachedView();
+    this.view = initial ?? {
+      mode: null,
+      warning: null,
+      choices: [],
+      master: [],
+      ready: false,
+      masterReady: false,
+      busy: false,
+      error: null,
+      masterError: null,
+    };
+  }
+  private tryCachedView(): WorkingUnitView | null {
+    if (!this.cache) return null;
+    const pref = this.session.mode ?? this.cache.peekMode();
+    if (!pref) return null;
+    let selected: WorkingUnitMode;
+    try {
+      selected = workingUnitMode(pref.mode);
+    } catch {
+      return null;
+    }
+    const choices = this.cache.peekChoices(selected);
+    const master = this.cache.peekMaster();
+    if (choices === undefined || master === undefined) return null;
+    this.session.mode = { mode: selected, warning: pref.warning };
+    return {
+      mode: selected,
+      warning: pref.warning,
+      choices,
+      master,
+      ready: true,
+      masterReady: true,
+      busy: false,
+      error: null,
+      masterError: null,
+    };
+  }
   snapshot(): WorkingUnitView {
     return { ...this.view };
   }
@@ -151,10 +189,36 @@ export class WorkingUnitLookup {
     this.view = { ...this.view, ...update };
     this.state(this.snapshot());
   }
-  async refresh(mode?: WorkingUnitMode): Promise<void> {
+  async refresh(mode?: WorkingUnitMode, force = false): Promise<void> {
     if (this.disposed) return;
     if (mode !== undefined && this.view.busy)
       throw new Error('Wait for the current Working Unit preference operation.');
+    if (!force && mode === undefined) {
+      const cached = this.tryCachedView();
+      if (cached !== null) {
+        if (
+          !this.view.ready ||
+          !this.view.masterReady ||
+          this.view.busy ||
+          this.view.error !== null ||
+          this.view.masterError !== null ||
+          this.view.mode !== cached.mode ||
+          this.view.warning !== cached.warning ||
+          this.view.choices !== cached.choices ||
+          this.view.master !== cached.master
+        ) {
+          this.revision++;
+          this.cancel?.();
+          this.publish(cached);
+        }
+        return;
+      }
+    }
+    if (force && this.cache) {
+      const currentMode = mode ?? this.view.mode;
+      if (currentMode) this.cache.invalidateChoices?.(currentMode);
+      this.cache.invalidateMaster?.();
+    }
     const revision = ++this.revision;
     this.cancel?.();
     this.publish({

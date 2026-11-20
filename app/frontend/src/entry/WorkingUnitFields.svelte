@@ -26,6 +26,17 @@
     type WorkingUnitCopy,
     type WorkingUnitSession,
   } from './workingUnitEditor';
+  import {
+    getCachedMasterWorkingUnitChoices,
+    getCachedWorkingUnitChoices,
+    getCachedWorkingUnitMode,
+    invalidateGlobalCatalogue,
+    invalidateWorkingUnitChoices,
+    peekMasterWorkingUnitChoices,
+    peekWorkingUnitChoices,
+    peekWorkingUnitMode,
+    setCachedWorkingUnitMode,
+  } from './entryReferenceCache';
 
   let {
     draft = $bindable(),
@@ -40,6 +51,7 @@
     onbusy,
     session,
     masterAllowed = false,
+    contextId = '',
     children,
   }: {
     draft: FS882Header;
@@ -52,6 +64,7 @@
     onerror: (message: string) => void;
     onvalidation: (key: 'workingUnit' | 'masterBEC', message: string | null) => void;
     masterAllowed?: boolean;
+    contextId?: string;
     onbusy?: (busy: boolean) => void;
     session: WorkingUnitSession;
     children: Snippet<[Snippet<[PaperControl?]>]>;
@@ -65,19 +78,56 @@
   const reads = new ReadRequests();
   const lookup = new WorkingUnitLookup(
     {
-      getMode: () => reads.track(ClassificationService.GetWorkingUnitMode()),
-      setMode: (mode) => ClassificationService.SetWorkingUnitMode(mode),
-      choices: async (mode) => rows(await reads.track(ClassificationService.GetWorkingUnitChoices(mode))),
-      master: async () => rows(await reads.track(ClassificationService.GetMasterWorkingUnitChoices())),
+      getMode: () => getCachedWorkingUnitMode(() => ClassificationService.GetWorkingUnitMode()),
+      setMode: async (mode) => {
+        const next = await ClassificationService.SetWorkingUnitMode(mode);
+        setCachedWorkingUnitMode(next);
+        return next;
+      },
+      choices: async (mode) => {
+        if (mode === 'master') {
+          return getCachedMasterWorkingUnitChoices(async () =>
+            rows(await ClassificationService.GetWorkingUnitChoices(mode))
+          );
+        }
+        const currentContextId = untrack(() => contextId);
+        if (!currentContextId) {
+          return rows(await reads.track(ClassificationService.GetWorkingUnitChoices(mode)));
+        }
+        return getCachedWorkingUnitChoices(currentContextId, mode, async () =>
+          rows(await ClassificationService.GetWorkingUnitChoices(mode))
+        );
+      },
+      master: () =>
+        getCachedMasterWorkingUnitChoices(async () =>
+          rows(await ClassificationService.GetMasterWorkingUnitChoices())
+        ),
     },
     (next) => {
       view = next;
       onbusy?.(next.busy);
     },
     untrack(() => session),
-    () => reads.cancelAll()
+    () => reads.cancelAll(),
+    {
+      peekMode: () => peekWorkingUnitMode(),
+      peekChoices: (mode) => {
+        if (mode === 'master') return peekMasterWorkingUnitChoices();
+        const currentContextId = untrack(() => contextId);
+        return currentContextId ? peekWorkingUnitChoices(currentContextId, mode) : undefined;
+      },
+      peekMaster: () => peekMasterWorkingUnitChoices(),
+      invalidateChoices: (mode) => {
+        if (mode === 'master') invalidateGlobalCatalogue('masterWorkingUnit');
+        else {
+          const currentContextId = untrack(() => contextId);
+          if (currentContextId) invalidateWorkingUnitChoices(currentContextId, mode);
+        }
+      },
+      invalidateMaster: () => invalidateGlobalCatalogue('masterWorkingUnit'),
+    }
   );
-  let view = $state(lookup.snapshot());
+  let view = $state.raw(lookup.snapshot());
   let acknowledged = $state(false);
   let masterAcknowledged = $state(false);
   let notice = $state<string | null>(null);
@@ -98,7 +148,10 @@
     const identity = draft;
     if (identity)
       untrack(() => {
-        void lookup.refresh();
+        const snap = lookup.snapshot();
+        if (!(snap.ready && snap.masterReady && !snap.error && !snap.masterError) && !snap.busy) {
+          void lookup.refresh();
+        }
       });
   });
   $effect(() => {
@@ -259,7 +312,7 @@
   {#if view.error}<span role="alert">{view.error}</span>{/if}
   {#if view.masterError}<span role="alert">{view.masterError}</span>{/if}
   {#if view.error || view.masterError}
-    <button type="button" disabled={disabled || view.busy} onclick={() => void lookup.refresh()}
+    <button type="button" disabled={disabled || view.busy} onclick={() => void lookup.refresh(undefined, true)}
       >Retry Working Unit choices</button
     >
   {/if}

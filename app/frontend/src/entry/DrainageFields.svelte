@@ -35,9 +35,10 @@
     (next) => {
       view = next;
     },
-    'Soil drainage'
+    'Soil drainage',
+    'parentCode:SoilDrainage'
   );
-  let view = $state(lookup.snapshot());
+  let view = $state.raw(lookup.snapshot());
   const changed = $derived(draft.soilDrainage !== null && draft.soilDrainage !== (original?.soilDrainage ?? null));
   const validation = $derived(drainageError(draft.soilDrainage, original?.soilDrainage ?? null, view));
   const groups = $derived(drainageGroups(view.choices, 'SoilDrainage'));
@@ -45,7 +46,8 @@
     const identity = draft;
     if (identity)
       untrack(() => {
-        void lookup.refresh();
+        const snap = lookup.snapshot();
+        if (!(snap.ready && !snap.error) && !snap.busy) void lookup.refresh();
       });
   });
   $effect(() => {

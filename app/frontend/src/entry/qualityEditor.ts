@@ -112,16 +112,27 @@ export function rememberQualityAcknowledgement(draft: object, codes: QualityCode
 export function qualityAcknowledged(draft: object, codes: QualityCodes): boolean {
   return acknowledgements.get(draft) === fingerprint(codes);
 }
+export interface QualityLookupCache {
+  peek(): PlotQualityChoice[] | undefined;
+  invalidate(): void;
+}
 export class QualityLookup {
   private revision = 0;
   private disposed = false;
-  private view: QualityView = { choices: [], busy: false, ready: false, error: null };
+  private view: QualityView;
   constructor(
     private fetch: (force: boolean) => Promise<PlotQualityChoice[]>,
     private state: (view: QualityView) => void,
     private label = 'Quality',
-    private cancel?: () => void
-  ) {}
+    private cancel?: () => void,
+    private cache?: QualityLookupCache
+  ) {
+    const cached = cache?.peek();
+    this.view =
+      cached !== undefined
+        ? { choices: cached, busy: false, ready: true, error: null }
+        : { choices: [], busy: false, ready: false, error: null };
+  }
   snapshot(): QualityView {
     return { ...this.view };
   }
@@ -131,6 +142,20 @@ export class QualityLookup {
   }
   async refresh(force = false): Promise<void> {
     if (this.disposed) return;
+    if (!force && this.cache) {
+      const cached = this.cache.peek();
+      if (cached !== undefined) {
+        if (!this.view.ready || this.view.busy || this.view.error !== null || this.view.choices !== cached) {
+          this.revision++;
+          this.cancel?.();
+          this.publish({ choices: cached, ready: true, busy: false, error: null });
+        }
+        return;
+      }
+    }
+    if (force) {
+      this.cache?.invalidate();
+    }
     const revision = ++this.revision;
     this.cancel?.();
     this.publish({ choices: [], busy: true, ready: false, error: null });

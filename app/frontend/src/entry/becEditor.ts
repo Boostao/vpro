@@ -141,6 +141,13 @@ export function becAcknowledged(draft: object, codes: BECCodes): boolean {
   return acknowledgements.get(draft) === becFingerprint(codes);
 }
 
+export interface BECLookupCache {
+  peekZones(): BECZone[] | undefined;
+  peekSubZones(zone: string | null): BECSubZone[] | undefined;
+  peekSiteSeries(zone: string | null, subZone: string | null): BECSiteSeries[] | undefined;
+  invalidate?(): void;
+}
+
 export class BECLookup {
   private revision = 0;
   private disposed = false;
@@ -150,7 +157,8 @@ export class BECLookup {
   constructor(
     private api: BECAPI,
     private state: (view: BECView) => void,
-    private cancel?: () => void
+    private cancel?: () => void,
+    private cache?: BECLookupCache
   ) {}
   snapshot(): BECView {
     return { ...this.view };
@@ -159,8 +167,41 @@ export class BECLookup {
     this.view = { ...this.view, ...update };
     this.state(this.snapshot());
   }
-  async refresh(zone: string | null, subZone: string | null): Promise<void> {
+  async refresh(zone: string | null, subZone: string | null, force = false): Promise<void> {
     if (this.disposed) return;
+    const invalid = becLengthError({ zone, subZone, siteSeries: null });
+    if (!force && !invalid && this.cache) {
+      const cachedZones = this.cache.peekZones();
+      const cachedSubZones = this.cache.peekSubZones(zone);
+      const cachedSiteSeries = this.cache.peekSiteSeries(zone, subZone);
+      if (cachedZones !== undefined && cachedSubZones !== undefined && cachedSiteSeries !== undefined) {
+        this.revision++;
+        this.cancel?.();
+        if (
+          !this.view.ready ||
+          this.view.busy ||
+          this.view.error !== null ||
+          this.view.zones !== cachedZones ||
+          this.view.subZones !== cachedSubZones ||
+          this.view.siteSeries !== cachedSiteSeries
+        ) {
+          this.publish({
+            zones: cachedZones,
+            subZones: cachedSubZones,
+            siteSeries: cachedSiteSeries,
+            ready: true,
+            busy: false,
+            error: null,
+          });
+        }
+        return;
+      }
+    }
+    if (force) {
+      this.cache?.invalidate?.();
+      this.zones = null;
+      this.zonesReady = false;
+    }
     const revision = ++this.revision;
     if (this.cancel) {
       if (!this.zonesReady) this.zones = null;
@@ -168,7 +209,6 @@ export class BECLookup {
     }
     this.publish({ busy: true, ready: false, error: null, subZones: [], siteSeries: [] });
     try {
-      const invalid = becLengthError({ zone, subZone, siteSeries: null });
       if (invalid) throw new Error(invalid);
       if (!this.zones) {
         const pending = this.api.zones().then(

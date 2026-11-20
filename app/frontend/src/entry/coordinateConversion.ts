@@ -1,6 +1,7 @@
 import type { CoordinateParts } from '../../bindings/github.com/boostao/vpro/app';
 import { trackIfCancellable, type ReadRequests } from '../shared/readRequests';
 import type { CoordinateAPI, CoordinateAxis, CoordinateDisplayMode } from './coordinateEditor';
+import { getCachedCoordinateMode, peekCoordinateMode, setCachedCoordinateMode } from './entryReferenceCache';
 
 export type CoordinateHelperMode = 'dm' | 'dms' | 'utm';
 export type CoordinateHemisphere = 'N' | 'S' | 'E' | 'W';
@@ -23,8 +24,18 @@ export interface SpatialCoordinateModeMap {
   CoordinateModeDMS: string;
 }
 
+let lastCoordinateModeService: object | null = null;
+
 function runRead<T>(reads: ReadRequests | undefined, request: PromiseLike<T>): Promise<T> {
   return reads ? trackIfCancellable(reads, request) : Promise.resolve(request);
+}
+
+function fastDecomposeDD(value: number | null, valueMode: CoordinateDisplayMode): CoordinateParts | undefined {
+  if (valueMode !== 'dd') return undefined;
+  if (value === null || (typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 180)) {
+    return { degrees: value, minutes: null, seconds: null, negative: false };
+  }
+  return undefined;
 }
 
 export function createSpatialCoordinatePort(
@@ -41,9 +52,27 @@ export function createSpatialCoordinatePort(
     dms: modes.CoordinateModeDMS,
   };
   return {
-    getMode: () => runRead(reads, service.GetCoordinateMode()),
-    setMode: (value) => service.SetCoordinateMode(serviceModes[value]),
-    decompose: (value, valueMode) => runRead(reads, service.DecomposeCoordinate(value, serviceModes[valueMode])),
+    peekMode: () => {
+      if (lastCoordinateModeService !== null && lastCoordinateModeService !== service) return undefined;
+      return peekCoordinateMode();
+    },
+    getMode: () => {
+      const serviceChanged = lastCoordinateModeService !== null && lastCoordinateModeService !== service;
+      lastCoordinateModeService = service;
+      return getCachedCoordinateMode(() => runRead(reads, service.GetCoordinateMode()), serviceChanged);
+    },
+    setMode: async (value) => {
+      const wireMode = serviceModes[value];
+      await service.SetCoordinateMode(wireMode);
+      lastCoordinateModeService = service;
+      setCachedCoordinateMode(wireMode);
+    },
+    peekDecompose: (value, valueMode) => fastDecomposeDD(value, valueMode),
+    decompose: (value, valueMode) => {
+      const direct = fastDecomposeDD(value, valueMode);
+      if (direct !== undefined) return Promise.resolve(direct);
+      return runRead(reads, service.DecomposeCoordinate(value, serviceModes[valueMode]));
+    },
     convert: (axis, valueMode, parts) =>
       runRead(reads, service.ConvertCoordinate(axis, serviceModes[valueMode], parts)),
   };

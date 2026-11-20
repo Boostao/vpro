@@ -58,7 +58,8 @@
     (next) => {
       region = next;
     },
-    'Region'
+    'Region',
+    'region'
   );
   const ecosectionLookup = new CatalogueLookup(
     async (force, requests) => {
@@ -70,10 +71,11 @@
     (next) => {
       ecosection = next;
     },
-    'Ecosection'
+    'Ecosection',
+    'ecosection'
   );
-  let region = $state(regionLookup.snapshot());
-  let ecosection = $state(ecosectionLookup.snapshot());
+  let region = $state.raw(regionLookup.snapshot());
+  let ecosection = $state.raw(ecosectionLookup.snapshot());
   const views = $derived({ Region: region, Ecosection: ecosection });
   const lookupBusy = $derived(region.busy || ecosection.busy);
   let acknowledged = $state(false);
@@ -86,8 +88,10 @@
     const identity = draft;
     if (identity)
       untrack(() => {
-        void regionLookup.refresh();
-        void ecosectionLookup.refresh();
+        const rSnap = regionLookup.snapshot();
+        if (!(rSnap.ready && !rSnap.error) && !rSnap.busy) void regionLookup.refresh();
+        const eSnap = ecosectionLookup.snapshot();
+        if (!(eSnap.ready && !eSnap.error) && !eSnap.busy) void ecosectionLookup.refresh();
       });
   });
   $effect(() => {
