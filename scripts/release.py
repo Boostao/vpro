@@ -43,6 +43,24 @@ REQUIRED = DESKTOP_REQUIRED | {R_SDK_ASSET}
 SCOPES = ("full", "r-only")
 MANIFEST = "SHA256SUMS.txt"
 RELEASE_MANIFEST = "release-manifest.json"
+DEV_TAG_PREFIX = "dev-"
+DEV_MAX_BUILDS = 5
+DEV_BUILD_METADATA = "dev-build.json"
+DEV_MANIFEST = "dev-manifest.json"
+DEV_GROUPS = ("windows-amd64", "linux-amd64")
+DEV_ASSETS = {
+    "windows-amd64": ("vpro-windows-amd64-installer.exe",),
+    "linux-amd64": ("vpro-linux-amd64.deb", "vpro-linux-amd64.rpm"),
+}
+DEV_OPTIONAL_ASSETS = ("vpro-macos-universal.dmg",)
+DEV_REQUIRED = frozenset(name for names in DEV_ASSETS.values() for name in names)
+DEV_ALLOWED_ASSETS = DEV_REQUIRED | frozenset(DEV_OPTIONAL_ASSETS) | {MANIFEST}
+DEV_APP_TRIGGER_PREFIXES = ("app/", "docs-src/")
+DEV_APP_TRIGGER_FILES = frozenset({
+    "scripts/release.py",
+    "scripts/release-windows.ps1",
+    ".github/workflows/dev-builds.yml",
+})
 DEFAULT_STANDARDS = {
     "becVersion": "BECdb v13 (2026-05-28)",
     "taxonomyVersion": "BCPlantTaxonomy v19 (2026-02-09)",
@@ -1069,6 +1087,465 @@ def validate_whats_new(root, *, scope=None):
             "app/resources/help_bundle.json whatsNew is out of sync with docs-src/whats_new.json")
 
 
+def _release_sort_key(rel):
+    return str(rel.get("published_at") or rel.get("created_at") or "")
+
+
+def _is_dev_release(rel):
+    if not isinstance(rel, dict):
+        return False
+    tag = rel.get("tag_name")
+    return (
+        rel.get("draft") is False
+        and rel.get("prerelease") is True
+        and isinstance(tag, str)
+        and tag.startswith(DEV_TAG_PREFIX)
+        and len(tag) > len(DEV_TAG_PREFIX)
+    )
+
+
+def _sanitize_commit_subject(raw):
+    cleaned = " ".join(str(raw or "").split())
+    if len(cleaned) > 140:
+        cleaned = cleaned[:137].rstrip() + "..."
+    return cleaned or "Development snapshot"
+
+
+def next_dev_numeric(root):
+    whats_new_path = root / "docs-src/whats_new.json"
+    require(whats_new_path.is_file(), f"Missing {whats_new_path}")
+    whats_new = json.loads(whats_new_path.read_text(encoding="utf-8"))
+    require(isinstance(whats_new, list) and len(whats_new) >= 1 and isinstance(whats_new[0], dict),
+            "docs-src/whats_new.json must contain at least one release entry object")
+    _, base_numeric = version(str(whats_new[0].get("version", "")))
+    major, minor, patch = (int(part) for part in base_numeric.split("."))
+    if patch < 65535:
+        patch += 1
+    else:
+        minor += 1
+        patch = 0
+    require(minor <= 65535, "Next dev version exceeds NSIS 16-bit limit")
+    return f"{major}.{minor}.{patch}"
+
+
+def make_dev_identity(root, *, commit_sha, run_number, now=None):
+    require(re.fullmatch(r"[0-9a-f]{40}", commit_sha) is not None,
+            "Expected a 40-character lowercase Git commit SHA")
+    run_int = int(run_number)
+    require(run_int >= 1, "GITHUB_RUN_NUMBER must be a positive integer")
+    stamp = (now or datetime.now(timezone.utc)).strftime("%Y%m%d")
+    short_sha = commit_sha[:7]
+    numeric = next_dev_numeric(root)
+    full_ver = f"{numeric}-dev.{stamp}.{run_int}.g{short_sha}"
+    version(full_ver)
+    tag = f"{DEV_TAG_PREFIX}{stamp}-r{run_int}-g{short_sha}"
+    return {
+        "version": full_ver,
+        "numeric": numeric,
+        "tag": tag,
+        "build_mode": "alpha",
+        "commit": commit_sha,
+        "short_commit": short_sha,
+    }
+
+
+def _has_desktop_changes(paths):
+    for rel_path in paths:
+        norm = str(rel_path).strip().replace("\\", "/")
+        if not norm:
+            continue
+        if norm in DEV_APP_TRIGGER_FILES or any(norm.startswith(prefix) for prefix in DEV_APP_TRIGGER_PREFIXES):
+            return True
+    return False
+
+
+def dev_plan(root, *, commit_sha=None, commit_subject=None, run_number=None,
+             force=False, skip_ci_check=False, ci_runs_json=None,
+             releases_json=None, changed_files=None, now=None,
+             repository=REPOSITORY):
+    sha = commit_sha or os.environ["GITHUB_SHA"]
+    require(re.fullmatch(r"[0-9a-f]{40}", sha) is not None,
+            "Expected a 40-character lowercase Git commit SHA")
+    run_num = run_number if run_number is not None else os.environ.get("GITHUB_RUN_NUMBER", "1")
+
+    if not skip_ci_check:
+        if ci_runs_json is not None:
+            runs_payload = json.loads(ci_runs_json.read_text(encoding="utf-8"))
+        else:
+            res = subprocess.run(
+                ["gh", "api", f"repos/{repository}/actions/workflows/ci.yml/runs?head_sha={sha}&per_page=20"],
+                check=True, capture_output=True, text=True,
+            )
+            runs_payload = json.loads(res.stdout)
+        runs = runs_payload.get("workflow_runs") if isinstance(runs_payload, dict) else None
+        require(isinstance(runs, list), "Malformed workflow_runs response from GitHub API")
+        ci_passed = any(
+            isinstance(run_item, dict)
+            and run_item.get("status") == "completed"
+            and run_item.get("conclusion") == "success"
+            for run_item in runs
+        )
+        if not ci_passed:
+            return {
+                "should_build": False,
+                "reason": f"No passing CI workflow run found for commit {sha[:7]}",
+            }
+
+    if not force:
+        if releases_json is not None:
+            releases = json.loads(releases_json.read_text(encoding="utf-8"))
+        else:
+            res = subprocess.run(
+                ["gh", "api", f"repos/{repository}/releases?per_page=30"],
+                check=True, capture_output=True, text=True,
+            )
+            releases = json.loads(res.stdout)
+        require(isinstance(releases, list), "Expected GitHub releases JSON array")
+        dev_releases = sorted((r for r in releases if _is_dev_release(r)), key=_release_sort_key, reverse=True)
+        if dev_releases:
+            latest = dev_releases[0]
+            prev_sha = latest.get("target_commitish")
+            if not (isinstance(prev_sha, str) and re.fullmatch(r"[0-9a-f]{40}", prev_sha)):
+                prev_tag = latest["tag_name"]
+                lookup = subprocess.run(
+                    ["git", "rev-list", "-n", "1", f"refs/tags/{prev_tag}"],
+                    cwd=root, capture_output=True, text=True,
+                )
+                prev_sha = lookup.stdout.strip() if lookup.returncode == 0 else ""
+            if prev_sha == sha:
+                return {
+                    "should_build": False,
+                    "reason": f"Latest dev build ({latest['tag_name']}) already covers commit {sha[:7]}",
+                }
+            if isinstance(prev_sha, str) and re.fullmatch(r"[0-9a-f]{40}", prev_sha):
+                if changed_files is not None:
+                    diff_paths = list(changed_files)
+                else:
+                    exists = subprocess.run(
+                        ["git", "cat-file", "-e", f"{prev_sha}^{{commit}}"],
+                        cwd=root, capture_output=True, text=True,
+                    )
+                    if exists.returncode == 0:
+                        diff_res = subprocess.run(
+                            ["git", "diff", "--name-only", f"{prev_sha}..{sha}"],
+                            cwd=root, check=True, capture_output=True, text=True,
+                        )
+                        diff_paths = [line for line in diff_res.stdout.splitlines() if line.strip()]
+                    else:
+                        diff_paths = None
+                if diff_paths is not None and not _has_desktop_changes(diff_paths):
+                    return {
+                        "should_build": False,
+                        "reason": f"No desktop app changes since {latest['tag_name']} ({prev_sha[:7]}..{sha[:7]})",
+                    }
+
+    if commit_subject is None:
+        subj_res = subprocess.run(
+            ["git", "log", "-1", "--pretty=%s", sha],
+            cwd=root, check=True, capture_output=True, text=True,
+        )
+        raw_subject = subj_res.stdout
+    else:
+        raw_subject = commit_subject
+
+    identity = make_dev_identity(root, commit_sha=sha, run_number=run_num, now=now)
+    return {
+        "should_build": True,
+        "reason": f"Ready to build {identity['tag']} for commit {sha[:7]}",
+        "commit_subject": _sanitize_commit_subject(raw_subject),
+        **identity,
+    }
+
+
+def dev_package(root, platform):
+    full, _ = release_version("full")
+    arch = os.environ["RELEASE_ARCH"]
+    group = f"{platform}-{arch}"
+    require(group in DEV_ASSETS, f"Unsupported dev release target: {group}")
+    app_root = root / "app"
+    destination = app_root / "dist-artifacts"
+    destination.mkdir(parents=True)
+    binary = app_root / "bin/VPro"
+    if platform == "windows":
+        binary = binary.with_suffix(".exe")
+        check_cpu(binary, "pe", arch)
+        installer = app_root / f"bin/VPro-{arch}-installer.exe"
+        require(installer.is_file(), f"Missing exact NSIS output: {installer}")
+        with tempfile.TemporaryDirectory() as temporary:
+            run("7z", "x", "-y", str(installer), f"-o{temporary}")
+            payloads = list(Path(temporary).rglob("VPro.exe"))
+            require(len(payloads) == 1, "Missing/ambiguous NSIS application payload")
+            check_cpu(payloads[0], "pe", arch)
+            require(sha256(payloads[0]) == sha256(binary), "NSIS payload differs from built EXE")
+        shutil.copyfile(installer, destination / DEV_ASSETS[group][0])
+    elif platform == "linux":
+        check_cpu(binary, "elf", arch)
+        deb = unique_output(app_root, ".deb")
+        validate_deb(deb, arch, full)
+        rpm = unique_output(app_root, ".rpm")
+        validate_rpm(rpm, arch, full)
+        shutil.copyfile(deb, destination / DEV_ASSETS[group][0])
+        shutil.copyfile(rpm, destination / DEV_ASSETS[group][1])
+    else:
+        raise ValueError(f"Unsupported dev platform: {platform}")
+    exact_files(destination, DEV_ASSETS[group])
+    witness = {
+        "schema": 1,
+        "mode": "dev",
+        "group": group,
+        "version": full,
+        "commit": os.environ["GITHUB_SHA"],
+        "architectures": expected_architectures(group),
+        "sha256": {name: sha256(destination / name) for name in DEV_ASSETS[group]},
+    }
+    (destination / f"release-witness-{group}.json").write_text(
+        json.dumps(witness, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def validate_dev_build(entry, *, repository=REPOSITORY):
+    require(isinstance(entry, dict), "Dev build entry must be a JSON object")
+    expected_keys = {
+        "schemaVersion", "repository", "tag", "version", "publishedAt",
+        "commit", "shortCommit", "commitSubject", "unsignedNotice",
+        "sha256sumsUrl", "assets",
+    }
+    require(set(entry) == expected_keys, "Unexpected keys in dev-build.json")
+    require(type(entry.get("schemaVersion")) is int and entry["schemaVersion"] == 1,
+            "Unsupported dev-build.json schemaVersion")
+    require(entry.get("repository") == repository,
+            f"Unexpected dev-build.json repository: {entry.get('repository')!r}")
+    tag = entry.get("tag")
+    require(isinstance(tag, str) and tag.startswith(DEV_TAG_PREFIX) and
+            re.fullmatch(r"dev-[0-9A-Za-z._-]+", tag) is not None,
+            f"Invalid dev build tag: {tag!r}")
+    full_ver = entry.get("version")
+    require(isinstance(full_ver, str), "Dev build is missing version")
+    normalized, _ = version(full_ver)
+    require(normalized == full_ver and "-" in full_ver.split("+", 1)[0],
+            "Dev build version must be a prerelease SemVer without leading v")
+    published_at = entry.get("publishedAt")
+    require(isinstance(published_at, str) and re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)?", published_at) is not None,
+        "Dev build has invalid ISO-8601 publishedAt")
+    commit = entry.get("commit")
+    require(isinstance(commit, str) and re.fullmatch(r"[0-9a-f]{40}", commit) is not None,
+            "Dev build has invalid commit SHA")
+    short_commit = entry.get("shortCommit")
+    require(isinstance(short_commit, str) and short_commit == commit[:7],
+            "Dev build shortCommit does not match commit prefix")
+    subject = entry.get("commitSubject")
+    require(isinstance(subject, str) and len(subject.strip()) > 0 and "\n" not in subject and "\r" not in subject,
+            "Dev build commitSubject must be a non-empty single-line string")
+    require(type(entry.get("unsignedNotice")) is bool,
+            "Dev build unsignedNotice must be boolean")
+    validate_download_url(entry.get("sha256sumsUrl"), MANIFEST, tag, repository)
+    assets = entry.get("assets")
+    require(isinstance(assets, list) and len(assets) > 0, "Dev build assets must be non-empty")
+    seen = set()
+    for asset in assets:
+        require(isinstance(asset, dict), "Dev build contains malformed asset")
+        name = asset.get("name")
+        require(isinstance(name, str) and name in DEV_ALLOWED_ASSETS and name not in seen,
+                f"Dev build contains unexpected or duplicate asset: {name!r}")
+        seen.add(name)
+        validate_download_url(asset.get("url"), name, tag, repository)
+        digest = asset.get("sha256")
+        require(isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest) is not None,
+                f"Dev build asset {name} has invalid sha256")
+        size_bytes = asset.get("sizeBytes")
+        require(type(size_bytes) is int and size_bytes > 0,
+                f"Dev build asset {name} has invalid sizeBytes")
+    require(DEV_REQUIRED.issubset(seen), "Dev build is missing required x64 packages")
+    return entry
+
+
+def validate_dev_manifest(doc, *, repository=REPOSITORY):
+    require(isinstance(doc, dict), "Dev manifest must be a JSON object")
+    require(set(doc) == {"schemaVersion", "repository", "maxBuilds", "builds"},
+            "Unexpected top-level keys in dev-manifest.json")
+    require(type(doc.get("schemaVersion")) is int and doc["schemaVersion"] == 1,
+            "Unsupported dev-manifest.json schemaVersion")
+    require(doc.get("repository") == repository,
+            f"Unexpected dev-manifest.json repository: {doc.get('repository')!r}")
+    max_builds = doc.get("maxBuilds")
+    require(type(max_builds) is int and 1 <= max_builds <= 20,
+            "dev-manifest.json maxBuilds must be between 1 and 20")
+    builds = doc.get("builds")
+    require(isinstance(builds, list) and len(builds) <= max_builds,
+            "dev-manifest.json builds must be a list within maxBuilds")
+    seen_tags = set()
+    for entry in builds:
+        validate_dev_build(entry, repository=repository)
+        tag = entry["tag"]
+        require(tag not in seen_tags, f"Duplicate dev build tag in dev-manifest.json: {tag}")
+        seen_tags.add(tag)
+    return doc
+
+
+def dev_manifest(directory, *, tag=None, commit_subject=None, published_at=None,
+                 repository=REPOSITORY):
+    full, _ = release_version("full")
+    dev_tag = tag or os.environ["DEV_TAG"]
+    commit = os.environ["GITHUB_SHA"]
+    witnesses = {f"release-witness-{group}.json" for group in DEV_GROUPS}
+    exact_files(directory, DEV_REQUIRED | witnesses)
+    for group in DEV_GROUPS:
+        witness = json.loads((directory / f"release-witness-{group}.json").read_text(encoding="utf-8"))
+        expected = {
+            "schema": 1,
+            "mode": "dev",
+            "group": group,
+            "version": full,
+            "commit": commit,
+            "architectures": expected_architectures(group),
+            "sha256": {name: sha256(directory / name) for name in DEV_ASSETS[group]},
+        }
+        require(witness == expected, f"Invalid dev provenance/CPU witness: {group}")
+    validate_deb(directory / "vpro-linux-amd64.deb", "amd64", full)
+    validate_rpm(directory / "vpro-linux-amd64.rpm", "amd64", full)
+
+    checksum_lines = "".join(f"{sha256(directory / name)}  {name}\n" for name in sorted(DEV_REQUIRED))
+    (directory / MANIFEST).write_text(checksum_lines, encoding="ascii", newline="\n")
+
+    timestamp = published_at or os.environ.get("DEV_PUBLISHED_AT") or (
+        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    )
+    subject = _sanitize_commit_subject(commit_subject or os.environ.get("DEV_COMMIT_SUBJECT") or "")
+    asset_names = sorted(DEV_REQUIRED | {MANIFEST})
+    metadata = {
+        "schemaVersion": 1,
+        "repository": repository,
+        "tag": dev_tag,
+        "version": full,
+        "publishedAt": timestamp,
+        "commit": commit,
+        "shortCommit": commit[:7],
+        "commitSubject": subject,
+        "unsignedNotice": True,
+        "sha256sumsUrl": f"https://github.com/{repository}/releases/download/{dev_tag}/{MANIFEST}",
+        "assets": [
+            {
+                "name": name,
+                "url": f"https://github.com/{repository}/releases/download/{dev_tag}/{name}",
+                "sha256": sha256(directory / name),
+                "sizeBytes": (directory / name).stat().st_size,
+            }
+            for name in asset_names
+        ],
+    }
+    validate_dev_build(metadata, repository=repository)
+    (directory / DEV_BUILD_METADATA).write_text(
+        json.dumps(metadata, indent=2) + "\n", encoding="utf-8", newline="\n")
+    attach_names = sorted(DEV_REQUIRED | {MANIFEST, DEV_BUILD_METADATA})
+    Path("dev-assets.txt").write_text(
+        "".join(f"{directory / name}\n" for name in attach_names),
+        encoding="utf-8", newline="\n")
+    return metadata
+
+
+def dev_remote(path):
+    assets = json.loads(path.read_text(encoding="utf-8"))["assets"]
+    names = [asset["name"] for asset in assets]
+    require(len(names) == len(set(names)), "Remote dev release has duplicate asset names")
+    expected = DEV_REQUIRED | {MANIFEST, DEV_BUILD_METADATA}
+    require(set(names) == expected,
+            "Remote dev release has missing or unexpected assets")
+
+
+def dev_verify(directory, trusted_manifest, trusted_build_meta, *, repository=REPOSITORY):
+    content = trusted_manifest.read_text(encoding="ascii")
+    expected = parse_manifest(content, expected_names=DEV_REQUIRED)
+    expected_set = DEV_REQUIRED | {MANIFEST, DEV_BUILD_METADATA}
+    exact_files(directory, expected_set)
+    require((directory / MANIFEST).read_bytes() == trusted_manifest.read_bytes(),
+            "Downloaded dev checksum manifest differs from validated manifest")
+    for name, digest in expected.items():
+        require(sha256(directory / name) == digest, f"Dev SHA256 mismatch: {name}")
+    trusted_bytes = trusted_build_meta.read_bytes()
+    require((directory / DEV_BUILD_METADATA).read_bytes() == trusted_bytes,
+            "Downloaded dev-build.json differs from validated metadata")
+    validate_dev_build(json.loads(trusted_bytes.decode("utf-8")), repository=repository)
+
+
+def sync_dev_manifest(output, *, keep=DEV_MAX_BUILDS, releases_json=None,
+                      asset_loader=None, repository=REPOSITORY):
+    require(type(keep) is int and 1 <= keep <= 20, "keep must be between 1 and 20")
+    if releases_json is not None:
+        releases = json.loads(releases_json.read_text(encoding="utf-8"))
+    else:
+        result = subprocess.run(
+            ["gh", "api", f"repos/{repository}/releases?per_page=50"],
+            check=True, capture_output=True, text=True,
+        )
+        releases = json.loads(result.stdout)
+    require(isinstance(releases, list), "Expected GitHub releases JSON array")
+
+    candidates = []
+    for rel in releases:
+        if not _is_dev_release(rel):
+            continue
+        assets = rel.get("assets")
+        if not isinstance(assets, list):
+            continue
+        asset_names = {a.get("name") for a in assets if isinstance(a, dict)}
+        if not {MANIFEST, DEV_BUILD_METADATA}.issubset(asset_names):
+            continue
+        candidates.append(rel)
+    candidates.sort(key=_release_sort_key, reverse=True)
+
+    builds = []
+    for rel in candidates[:keep]:
+        tag = rel["tag_name"]
+        if asset_loader is not None:
+            raw = asset_loader(tag, DEV_BUILD_METADATA)
+        else:
+            with tempfile.TemporaryDirectory() as tmp:
+                run("gh", "release", "download", tag, "--repo", repository,
+                    "--pattern", DEV_BUILD_METADATA, "--dir", tmp)
+                raw = (Path(tmp) / DEV_BUILD_METADATA).read_text(encoding="utf-8")
+        entry = validate_dev_build(json.loads(raw), repository=repository)
+        require(entry["tag"] == tag, f"Downloaded {DEV_BUILD_METADATA} tag mismatch for {tag}")
+        builds.append(entry)
+
+    doc = {
+        "schemaVersion": 1,
+        "repository": repository,
+        "maxBuilds": keep,
+        "builds": builds,
+    }
+    validate_dev_manifest(doc, repository=repository)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8", newline="\n")
+    return doc
+
+
+def prune_dev_releases(*, keep=DEV_MAX_BUILDS, releases_json=None,
+                       dry_run=False, deleter=None, repository=REPOSITORY):
+    require(type(keep) is int and 1 <= keep <= 20, "keep must be between 1 and 20")
+    if releases_json is not None:
+        releases = json.loads(releases_json.read_text(encoding="utf-8"))
+    else:
+        result = subprocess.run(
+            ["gh", "api", f"repos/{repository}/releases?per_page=100"],
+            check=True, capture_output=True, text=True,
+        )
+        releases = json.loads(result.stdout)
+    require(isinstance(releases, list), "Expected GitHub releases JSON array")
+
+    dev_releases = sorted((r for r in releases if _is_dev_release(r)), key=_release_sort_key, reverse=True)
+    kept = [r["tag_name"] for r in dev_releases[:keep]]
+    to_delete = [r["tag_name"] for r in dev_releases[keep:]]
+    for tag in to_delete:
+        require(tag.startswith(DEV_TAG_PREFIX), f"Refusing to prune non-dev tag: {tag}")
+        if dry_run:
+            continue
+        if deleter is not None:
+            deleter(tag)
+        else:
+            run("gh", "release", "delete", tag, "--repo", repository, "--cleanup-tag", "--yes")
+    return {"kept": kept, "deleted": to_delete}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -1102,6 +1579,33 @@ def main():
     sync_manifest.add_argument("--output", type=Path, required=True)
     sync_manifest.add_argument("--base-manifest", type=Path)
     sync_manifest.add_argument("--releases-json", type=Path)
+    dev_plan_cmd = commands.add_parser("dev-plan")
+    dev_plan_cmd.add_argument("--root", type=Path)
+    dev_plan_cmd.add_argument("--force", action="store_true")
+    dev_plan_cmd.add_argument("--skip-ci-check", action="store_true")
+    dev_plan_cmd.add_argument("--ci-runs-json", type=Path)
+    dev_plan_cmd.add_argument("--releases-json", type=Path)
+    dev_pkg_cmd = commands.add_parser("dev-package")
+    dev_pkg_cmd.add_argument("platform", choices=("windows", "linux"))
+    dev_manifest_cmd = commands.add_parser("dev-manifest")
+    dev_manifest_cmd.add_argument("path", type=Path)
+    dev_manifest_cmd.add_argument("--tag")
+    dev_manifest_cmd.add_argument("--commit-subject")
+    dev_manifest_cmd.add_argument("--published-at")
+    dev_remote_cmd = commands.add_parser("dev-remote")
+    dev_remote_cmd.add_argument("path", type=Path)
+    dev_verify_cmd = commands.add_parser("dev-verify")
+    dev_verify_cmd.add_argument("path", type=Path)
+    dev_verify_cmd.add_argument("--manifest", type=Path, required=True)
+    dev_verify_cmd.add_argument("--dev-build", type=Path, required=True)
+    sync_dev_cmd = commands.add_parser("sync-dev-manifest")
+    sync_dev_cmd.add_argument("--output", type=Path, required=True)
+    sync_dev_cmd.add_argument("--keep", type=int, default=DEV_MAX_BUILDS)
+    sync_dev_cmd.add_argument("--releases-json", type=Path)
+    prune_dev_cmd = commands.add_parser("prune-dev")
+    prune_dev_cmd.add_argument("--keep", type=int, default=DEV_MAX_BUILDS)
+    prune_dev_cmd.add_argument("--releases-json", type=Path)
+    prune_dev_cmd.add_argument("--dry-run", action="store_true")
     for command in ("manifest", "remote", "verify"):
         subparser = commands.add_parser(command)
         subparser.add_argument("path", type=Path)
@@ -1151,6 +1655,48 @@ def main():
             base_manifest=args.base_manifest,
             releases_json=args.releases_json,
         )
+    elif args.command == "dev-plan":
+        plan = dev_plan(
+            args.root or Path.cwd(),
+            force=args.force,
+            skip_ci_check=args.skip_ci_check,
+            ci_runs_json=args.ci_runs_json,
+            releases_json=args.releases_json,
+        )
+        print(plan["reason"])
+        if "GITHUB_OUTPUT" in os.environ:
+            with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+                output.write(f"should_build={'true' if plan['should_build'] else 'false'}\n")
+                output.write(f"reason={_sanitize_commit_subject(plan['reason'])}\n")
+                if plan["should_build"]:
+                    for key in ("version", "numeric", "tag", "build_mode", "commit", "short_commit", "commit_subject"):
+                        output.write(f"{key}={plan[key]}\n")
+    elif args.command == "dev-package":
+        dev_package(Path.cwd(), args.platform)
+    elif args.command == "dev-manifest":
+        dev_manifest(
+            args.path,
+            tag=args.tag,
+            commit_subject=args.commit_subject,
+            published_at=args.published_at,
+        )
+    elif args.command == "dev-remote":
+        dev_remote(args.path)
+    elif args.command == "dev-verify":
+        dev_verify(args.path, args.manifest, args.dev_build)
+    elif args.command == "sync-dev-manifest":
+        sync_dev_manifest(
+            args.output,
+            keep=args.keep,
+            releases_json=args.releases_json,
+        )
+    elif args.command == "prune-dev":
+        summary = prune_dev_releases(
+            keep=args.keep,
+            releases_json=args.releases_json,
+            dry_run=args.dry_run,
+        )
+        print(f"Kept {len(summary['kept'])} dev release(s); deleted {len(summary['deleted'])}.")
     elif args.command == "remote":
         remote(args.path, require_release_manifest=args.require_release_manifest, scope=args.scope)
     else:

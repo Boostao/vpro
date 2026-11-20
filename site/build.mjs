@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { assetLinks, releasesURL, repository, reviewManifest } from './src/downloads.mjs';
+import { assetLinks, releasesURL, repository, reviewDevManifest, reviewManifest } from './src/downloads.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const defaultRepoRoot = path.resolve(__dirname, '..');
@@ -341,6 +341,7 @@ export function renderPortalHtml({
       </a>
       <nav class="bcgov-nav" aria-label="Primary navigation">
         <a href="#downloads">Downloads</a>
+        <a href="./dev/">Dev Builds</a>
         <a href="./r/">R Companion Package</a>
         <a href="#migration">Migrating from VPro 64</a>
         <a href="#installation">Checksum &amp; Setup</a>
@@ -771,6 +772,7 @@ sudo dnf install ./vpro-linux-amd64.rpm</pre>
       </div>
       <div class="footer-links">
         <a href="https://www.for.gov.bc.ca/hre/becweb/" target="_blank" rel="noopener noreferrer">BECWeb Home</a>
+        <a href="./dev/">Dev Builds</a>
         <a href="./r/">R Companion Package</a>
         <a href="#data-use-agreement">Data Use Agreement</a>
         <a href="#documentation">LMH25 (2023) Reference</a>
@@ -787,8 +789,218 @@ sudo dnf install ./vpro-linux-amd64.rpm</pre>
 `;
 }
 
-export function validateBuiltAssets({ html, css, downloadsJs, portalDocsJs }) {
-  const combined = [html, css, downloadsJs, portalDocsJs].join('\n');
+function formatDevTimestamp(iso) {
+  const match = String(iso || '').match(/^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}))?/);
+  if (!match) return String(iso || '');
+  return match[2] ? `${match[1]} ${match[2]} UTC` : match[1];
+}
+
+function renderDevDownloadPill(href, label, meta, muted = false) {
+  if (!href) return '';
+  const sizeText = meta?.formattedSize ? `<span class="dev-dl-pill-size">${escapeHtml(meta.formattedSize)}</span>` : '';
+  const titleParts = [meta?.name || label];
+  if (meta?.formattedSize) titleParts.push(meta.formattedSize);
+  if (meta?.sha256) titleParts.push(`SHA-256: ${meta.sha256}`);
+  const cls = muted ? 'dev-dl-pill dev-dl-pill-muted' : 'dev-dl-pill';
+  return `<a class="${cls}" href="${escapeHtml(href)}" title="${escapeHtml(titleParts.join(' · '))}">${escapeHtml(label)}${sizeText}</a>`;
+}
+
+export function renderDevPortalHtml({
+  devManifest,
+  assetVersions = {},
+}) {
+  const reviewed = reviewDevManifest(devManifest);
+  const cssHref = assetVersions.css ? `../styles.css?v=${encodeURIComponent(assetVersions.css)}` : '../styles.css';
+
+  const rowsHtml = reviewed.builds.map((build, idx) => {
+    const commitUrl = `${repoURL}/commit/${build.commit}`;
+    const latestBadge = idx === 0 ? '<span class="status-verified">Latest</span>' : '';
+    const pills = [
+      renderDevDownloadPill(build.links.win, 'Win (.exe)', build.metadata.win),
+      renderDevDownloadPill(build.links.rpm, 'RPM', build.metadata.rpm),
+      renderDevDownloadPill(build.links.deb, 'DEB', build.metadata.deb),
+      renderDevDownloadPill(build.links.mac, 'macOS (.dmg)', build.metadata.mac),
+      renderDevDownloadPill(build.links.checksums, 'SHA-256', build.metadata.checksums, true),
+    ].filter(Boolean).join('\n                  ');
+
+    return `
+              <tr data-dev-tag="${escapeHtml(build.tag)}">
+                <td>
+                  <div class="dev-build-tag-row">
+                    <strong class="mono">${escapeHtml(build.tag)}</strong>
+                    ${latestBadge}
+                  </div>
+                  <span class="dev-build-date mono">${escapeHtml(formatDevTimestamp(build.publishedAt))} · v${escapeHtml(build.version)}</span>
+                </td>
+                <td>
+                  <div class="dev-commit-line">
+                    <a class="dev-commit-sha mono" href="${escapeHtml(commitUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(build.shortCommit)}</a>
+                    <span class="dev-commit-subject">${escapeHtml(build.commitSubject)}</span>
+                  </div>
+                </td>
+                <td class="dev-dl-cell">
+                  <div class="dev-dl-links">
+                  ${pills}
+                  </div>
+                </td>
+              </tr>`;
+  }).join('');
+
+  const buildsContentHtml = reviewed.builds.length > 0
+    ? `
+        <div class="table-scroll">
+          <table class="bcgov-table" id="dev-builds-table">
+            <thead>
+              <tr>
+                <th>Build &amp; Date</th>
+                <th>Changes</th>
+                <th class="dev-dl-header">Downloads</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}
+            </tbody>
+          </table>
+        </div>`
+    : `
+        <div id="dev-builds-empty" class="dev-empty-card">
+          <h3>No nightly development build published yet</h3>
+          <p>Nightly test-drive installers appear here automatically once a verified build is published. Only the ${escapeHtml(reviewed.maxBuilds)} most recent builds are kept so older test files never accumulate.</p>
+          <div class="doc-meta-badges">
+            <a href="../#downloads">Go to Official Downloads</a>
+            <a href="${escapeHtml(releasesURL)}" target="_blank" rel="noopener noreferrer">View GitHub Releases</a>
+          </div>
+        </div>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VPro Development Builds | B.C. Ministry of Forests BEC Program</title>
+  <meta name="description" content="Latest nightly development builds for VPro (VENUS — Vegetation and Environment NexUS — Professional) for early evaluation and client testing.">
+  <link rel="icon" href="../favicon.ico" sizes="any">
+  <link rel="stylesheet" href="${cssHref}">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
+  <header class="bcgov-header">
+    <div class="container bcgov-header-inner">
+      <a class="bcgov-brand" href="../">
+        <span class="bcgov-crest">${ICONS.crest}</span>
+        <span>
+          <span class="bcgov-brand-title">
+            <span>VPro</span>
+            <span class="bec-badge">BEC Program</span>
+          </span>
+          <span class="bcgov-brand-subtitle">B.C. Ministry of Forests · Research Branch · Biogeoclimatic Ecosystem Classification</span>
+        </span>
+      </a>
+      <nav class="bcgov-nav" aria-label="Primary navigation">
+        <a href="../#downloads">Downloads</a>
+        <a href="./" class="is-current" aria-current="page">Dev Builds</a>
+        <a href="../r/">R Companion Package</a>
+        <a href="../#migration">Migrating from VPro 64</a>
+        <a href="../#installation">Checksum &amp; Setup</a>
+        <a href="../#documentation">User Guide &amp; LMH25</a>
+        <a href="../#changelog">Release History</a>
+        <a href="https://www.for.gov.bc.ca/hre/becweb/" target="_blank" rel="noopener noreferrer">BECWeb</a>
+        <a href="${escapeHtml(repoURL)}" target="_blank" rel="noopener noreferrer">${ICONS.github} GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <section class="hero-section dev-hero-compact" aria-labelledby="dev-hero-heading">
+      <div class="container">
+        <div class="hero-eyebrow">
+          ${ICONS.shield}
+          <span>Nightly Test-Drive Channel · Rolling Last ${escapeHtml(reviewed.maxBuilds)} Builds</span>
+        </div>
+        <h1 id="dev-hero-heading">VPro Development Builds</h1>
+        <p class="hero-lead">
+          Early-access desktop installers built from the latest verified changes on <code>main</code> so you can test new features and report feedback before the next official release. Older builds are automatically cleaned up once more than ${escapeHtml(reviewed.maxBuilds)} exist.
+        </p>
+      </div>
+    </section>
+
+    <section id="dev-builds" class="section" aria-labelledby="dev-builds-heading">
+      <div class="container">
+        <div class="section-header">
+          <h2 id="dev-builds-heading">Latest Development Releases (Up to ${escapeHtml(reviewed.maxBuilds)} Kept)</h2>
+          <p>Each line lists one verified nightly or on-demand build with direct 64-bit x64 download links and its <code>SHA256SUMS.txt</code> file at the end of the row.</p>
+        </div>
+
+        <div class="advisory-box">
+          <span class="alert-note">Development Build Notice:</span>
+          These installers are unsigned pre-release builds meant for test-driving upcoming features. Always test on a copy of your project file—use an <a href="../#downloads">official stable release</a> for production <code>BECMaster</code> work.
+        </div>
+
+        ${buildsContentHtml}
+      </div>
+    </section>
+
+    <section id="dev-install-notes" class="section section-white" aria-labelledby="dev-install-heading">
+      <div class="container">
+        <div class="section-header">
+          <h2 id="dev-install-heading">Quick Test-Drive Setup</h2>
+          <p>Verify each package against its row's <code>SHA-256</code> file before installing.</p>
+        </div>
+        <div class="two-col-grid">
+          <div class="card">
+            <div>
+              <h3>${ICONS.windows} Windows 10 / 11 (x64 Per-User Installer)</h3>
+              <ol class="rules-list">
+                <li>Download <strong>Win (.exe)</strong> from the row you want to test. The installer writes to your personal user folder—no local administrator rights are needed.</li>
+                <li>Check the SHA-256 hash in PowerShell against the row's <code>SHA-256</code> file:
+                  <pre class="code-block">Get-FileHash .\\vpro-windows-amd64-installer.exe -Algorithm SHA256</pre>
+                </li>
+                <li>If Windows Defender SmartScreen prompts on an unsigned dev build, confirm the hash matches before choosing <strong>More info</strong> &rarr; <strong>Run anyway</strong>.</li>
+              </ol>
+            </div>
+          </div>
+          <div class="card">
+            <div>
+              <h3>${ICONS.linux} Linux (x64 DEB &amp; RPM)</h3>
+              <ol class="rules-list">
+                <li>Download <strong>DEB</strong> (Debian / Ubuntu) or <strong>RPM</strong> (Fedora / RHEL / openSUSE) and its <code>SHA-256</code> file.</li>
+                <li>Verify the checksum and install with your package manager:
+                  <pre class="code-block">sha256sum -c --ignore-missing SHA256SUMS.txt
+sudo apt install ./vpro-linux-amd64.deb
+sudo dnf install ./vpro-linux-amd64.rpm</pre>
+                </li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bcgov-footer">
+    <div class="container footer-inner">
+      <div>
+        <strong>Province of British Columbia — Ministry of Forests, Research Branch</strong>
+        <div>Biogeoclimatic Ecosystem Classification (BEC) Program · VPro (VENUS — Vegetation and Environment NexUS — Professional)</div>
+        <div class="footer-legacy-note">Need a production build? Return to <a href="../#downloads">Official VPro Downloads</a>.</div>
+      </div>
+      <div class="footer-links">
+        <a href="../#downloads">Official Downloads</a>
+        <a href="./">Dev Builds</a>
+        <a href="../r/">R Companion Package</a>
+        <a href="../#documentation">LMH25 (2023) Reference</a>
+        <a href="${escapeHtml(repoURL)}" target="_blank" rel="noopener noreferrer">Source Repository</a>
+        <a href="${escapeHtml(repoURL)}/issues" target="_blank" rel="noopener noreferrer">Issue Tracker</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
+`;
+}
+
+export function validateBuiltAssets({ html, devHtml = '', css, downloadsJs, portalDocsJs }) {
+  const combined = [html, devHtml, css, downloadsJs, portalDocsJs].join('\n');
   const emojiMatch = combined.match(/\p{Extended_Pictographic}/u);
   if (emojiMatch) {
     throw new Error(`Forbidden emoji character detected in portal output: ${emojiMatch[0]}`);
@@ -817,6 +1029,16 @@ export function validateBuiltAssets({ html, css, downloadsJs, portalDocsJs }) {
   const scrollWrapCount = (html.match(/<div class="table-scroll(?:\s+[^"]*)?">\s*<table class="bcgov-table"/g) || []).length;
   if (tableCount === 0 || tableCount !== scrollWrapCount) {
     throw new Error(`Expected every .bcgov-table (${tableCount}) to be wrapped in .table-scroll (${scrollWrapCount}).`);
+  }
+  if (devHtml) {
+    if (!devHtml.includes('data-vpro-crest="topbar"')) {
+      throw new Error('Compiled dev/index.html is missing canonical Shield + Conifer Tree VPro crest SVG.');
+    }
+    const devTableCount = (devHtml.match(/<table class="bcgov-table"/g) || []).length;
+    const devWrapCount = (devHtml.match(/<div class="table-scroll(?:\s+[^"]*)?">\s*<table class="bcgov-table"/g) || []).length;
+    if (devTableCount !== devWrapCount) {
+      throw new Error(`Expected every .bcgov-table in dev/index.html (${devTableCount}) to be wrapped in .table-scroll (${devWrapCount}).`);
+    }
   }
   const uniqueIds = [
     ...Object.keys(assetLinks),
@@ -851,6 +1073,7 @@ export function buildSite({
   outDir = path.join(repoRoot, 'site', 'dist'),
   syncDocs = false,
   manifestOverride = null,
+  devManifestOverride = null,
 } = {}) {
   const docsSrcDir = path.join(repoRoot, 'docs-src');
   const siteDir = path.join(repoRoot, 'site');
@@ -863,11 +1086,20 @@ export function buildSite({
   const dataUseAgreement = JSON.parse(fs.readFileSync(path.join(docsSrcDir, 'data_use_agreement.json'), 'utf8'));
   const provenance = JSON.parse(fs.readFileSync(path.join(repoRoot, 'app', 'resources', 'standards-2026-provenance.json'), 'utf8'));
   const manifest = manifestOverride ?? JSON.parse(fs.readFileSync(path.join(siteDir, 'release-manifest.json'), 'utf8'));
+  const devManifestPath = path.join(siteDir, 'dev-manifest.json');
+  const devManifest = devManifestOverride ?? (fs.existsSync(devManifestPath)
+    ? JSON.parse(fs.readFileSync(devManifestPath, 'utf8'))
+    : { schemaVersion: 1, repository, maxBuilds: 5, builds: [] });
 
   const css = fs.readFileSync(path.join(siteDir, 'src', 'styles.css'), 'utf8');
   const downloadsJs = fs.readFileSync(path.join(siteDir, 'src', 'downloads.mjs'), 'utf8');
   const portalDocsJs = fs.readFileSync(path.join(siteDir, 'src', 'portal-docs.mjs'), 'utf8');
   const shortHash = content => crypto.createHash('sha256').update(content, 'utf8').digest('hex').slice(0, 8);
+  const assetVersions = {
+    css: shortHash(css),
+    downloads: shortHash(downloadsJs),
+    portalDocs: shortHash(portalDocsJs),
+  };
   const html = renderPortalHtml({
     guides,
     lmh25,
@@ -876,18 +1108,20 @@ export function buildSite({
     dataUseAgreement,
     provenance,
     manifest,
-    assetVersions: {
-      css: shortHash(css),
-      downloads: shortHash(downloadsJs),
-      portalDocs: shortHash(portalDocsJs),
-    },
+    assetVersions,
+  });
+  const devHtml = renderDevPortalHtml({
+    devManifest,
+    assetVersions,
   });
   const manifestJson = JSON.stringify(manifest, null, 2) + '\n';
+  const devManifestJson = JSON.stringify(devManifest, null, 2) + '\n';
 
-  validateBuiltAssets({ html, css, downloadsJs, portalDocsJs });
+  validateBuiltAssets({ html, devHtml, css, downloadsJs, portalDocsJs });
 
   fs.rmSync(outDir, { recursive: true, force: true });
   fs.mkdirSync(path.join(outDir, 'fonts'), { recursive: true });
+  fs.mkdirSync(path.join(outDir, 'dev'), { recursive: true });
 
   for (const fontFile of REQUIRED_FONTS) {
     const srcFont = path.join(fontsSrcDir, fontFile);
@@ -910,21 +1144,25 @@ export function buildSite({
   }
 
   fs.writeFileSync(path.join(outDir, 'index.html'), html, 'utf8');
+  fs.writeFileSync(path.join(outDir, 'dev', 'index.html'), devHtml, 'utf8');
   fs.writeFileSync(path.join(outDir, 'styles.css'), css, 'utf8');
   fs.writeFileSync(path.join(outDir, 'downloads.mjs'), downloadsJs, 'utf8');
   fs.writeFileSync(path.join(outDir, 'portal-docs.mjs'), portalDocsJs, 'utf8');
   fs.writeFileSync(path.join(outDir, 'release-manifest.json'), manifestJson, 'utf8');
+  fs.writeFileSync(path.join(outDir, 'dev-manifest.json'), devManifestJson, 'utf8');
   fs.writeFileSync(path.join(outDir, '.nojekyll'), '', 'utf8');
 
   if (syncDocs) {
     const docsDir = path.join(repoRoot, 'docs');
-    fs.mkdirSync(docsDir, { recursive: true });
+    fs.mkdirSync(path.join(docsDir, 'dev'), { recursive: true });
     fs.copyFileSync(faviconSrc, path.join(docsDir, 'favicon.ico'));
     fs.writeFileSync(path.join(docsDir, 'index.html'), html, 'utf8');
+    fs.writeFileSync(path.join(docsDir, 'dev', 'index.html'), devHtml, 'utf8');
     fs.writeFileSync(path.join(docsDir, 'styles.css'), css, 'utf8');
     fs.writeFileSync(path.join(docsDir, 'downloads.mjs'), downloadsJs, 'utf8');
     fs.writeFileSync(path.join(docsDir, 'portal-docs.mjs'), portalDocsJs, 'utf8');
     fs.writeFileSync(path.join(docsDir, 'release-manifest.json'), manifestJson, 'utf8');
+    fs.writeFileSync(path.join(docsDir, 'dev-manifest.json'), devManifestJson, 'utf8');
   }
 
   return { outDir, fonts: REQUIRED_FONTS.length };

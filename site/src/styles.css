@@ -315,9 +315,14 @@ a:hover {
   border-bottom: 2px solid transparent;
 }
 
-.bcgov-nav a:hover {
+.bcgov-nav a:hover,
+.bcgov-nav a.is-current {
   border-bottom-color: var(--bcgov-gold);
   color: var(--bcgov-surface);
+}
+
+.bcgov-nav a.is-current {
+  font-weight: 700;
 }
 
 /* Hero & Smart Download */
@@ -1158,6 +1163,140 @@ kbd {
   text-transform: uppercase;
 }
 
+/* Development Builds Tab (/dev/) */
+.dev-hero-compact {
+  padding: 1.6rem 0 1.75rem;
+}
+
+.dev-hero-compact h1 {
+  margin: 0.45rem 0 0.55rem;
+  font-size: clamp(1.55rem, 2.5vw, 2.15rem);
+  line-height: 1.2;
+}
+
+.dev-hero-compact .hero-lead {
+  max-width: 72ch;
+  margin-bottom: 0;
+}
+
+.dev-build-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.dev-build-date {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--vpro-ink-secondary);
+}
+
+.dev-commit-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.55rem;
+}
+
+.dev-commit-sha {
+  font-weight: 600;
+  text-decoration: none;
+  background: var(--vpro-navy-tint);
+  color: var(--vpro-navy);
+  padding: 0.08rem 0.42rem;
+  border-radius: var(--vpro-radius-xs);
+  border: 1px solid var(--vpro-info-border);
+  white-space: nowrap;
+}
+
+.dev-commit-sha:hover {
+  background: var(--vpro-navy);
+  color: var(--vpro-surface);
+}
+
+.dev-commit-subject {
+  color: var(--vpro-ink);
+  word-break: break-word;
+}
+
+.dev-dl-header {
+  text-align: right;
+}
+
+.dev-dl-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dev-dl-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.dev-dl-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.32rem 0.65rem;
+  border-radius: var(--vpro-radius-sm);
+  background: var(--vpro-navy);
+  color: var(--vpro-surface);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid var(--vpro-navy);
+  white-space: nowrap;
+}
+
+.dev-dl-pill:hover {
+  background: var(--vpro-navy-hover);
+  border-color: var(--vpro-navy-hover);
+  color: var(--vpro-surface);
+}
+
+.dev-dl-pill-size {
+  font-weight: 400;
+  font-size: 0.74rem;
+  opacity: 0.88;
+}
+
+.dev-dl-pill-muted {
+  background: var(--vpro-surface);
+  color: var(--vpro-navy);
+  border-color: var(--vpro-border-strong);
+  font-weight: 600;
+}
+
+.dev-dl-pill-muted:hover {
+  background: var(--vpro-navy-tint);
+  border-color: var(--vpro-navy);
+  color: var(--vpro-navy);
+}
+
+.dev-empty-card {
+  background: var(--vpro-surface);
+  border: 1px solid var(--vpro-border);
+  border-radius: var(--vpro-radius-md);
+  padding: 1.5rem;
+}
+
+.dev-empty-card h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  color: var(--vpro-navy);
+}
+
+.two-col-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
 /* BC Gov Footer */
 .bcgov-footer {
   background: var(--bcgov-navy);
@@ -1205,6 +1344,7 @@ kbd {
 
 @media (max-width: 1020px) {
   .three-col-grid,
+  .two-col-grid,
   .install-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1239,6 +1379,7 @@ kbd {
   .channel-btn,
   .copy-btn,
   .filter-pill,
+  .dev-dl-pill,
   .bcgov-nav a,
   .download-link {
     min-height: 44px;

@@ -605,3 +605,103 @@ test('BC Gov Design System build outputs self-hosted fonts, searchable LMH25 doc
   brokenDoc.elements.delete('dl-win-arm64-installer');
   await assert.rejects(loadPortal(brokenDoc, {}, async () => response(manifestFixture(assetLinks))), /element .* missing/);
 });
+
+test('Dev Builds manifest validation refuses malformed entries and renders per-line x64 links in /dev/', async () => {
+  const { reviewDevManifest } = await portal;
+  const { buildSite, renderDevPortalHtml } = await siteBuilder;
+
+  function makeDevBuild(index, { includeMac = false } = {}) {
+    const tag = `dev-202611${15 + index}-r${index}-g000000${index}`;
+    const commit = `${String(index).padStart(7, '0')}${'a'.repeat(33)}`;
+    const names = [
+      'vpro-windows-amd64-installer.exe',
+      'vpro-linux-amd64.deb',
+      'vpro-linux-amd64.rpm',
+      'SHA256SUMS.txt',
+    ];
+    if (includeMac) names.push('vpro-macos-universal.dmg');
+    return {
+      schemaVersion: 1,
+      repository: 'Boostao/vpro',
+      tag,
+      version: `2.0.2-dev.202611${15 + index}.${index}.g${commit.slice(0, 7)}`,
+      publishedAt: `2026-11-${15 + index}T09:05:00Z`,
+      commit,
+      shortCommit: commit.slice(0, 7),
+      commitSubject: `Nightly dev snapshot #${index}`,
+      unsignedNotice: true,
+      sha256sumsUrl: url('SHA256SUMS.txt', tag),
+      assets: names.map((name, idx) => ({
+        name,
+        url: url(name, tag),
+        sha256: shaFor(`${tag}:${name}`),
+        sizeBytes: name === 'SHA256SUMS.txt' ? 512 : (idx + 10) * 1024 * 1024,
+      })),
+    };
+  }
+
+  // Valid 5-build manifest (first 4 x64-only, 5th optionally carrying macOS DMG)
+  const validManifest = {
+    schemaVersion: 1,
+    repository: 'Boostao/vpro',
+    maxBuilds: 5,
+    builds: [
+      makeDevBuild(5),
+      makeDevBuild(4),
+      makeDevBuild(3),
+      makeDevBuild(2),
+      makeDevBuild(1, { includeMac: true }),
+    ],
+  };
+  const reviewed = reviewDevManifest(validManifest);
+  assert.equal(reviewed.builds.length, 5);
+  assert.equal(reviewed.builds[0].links.mac, null);
+  assert.ok(reviewed.builds[4].links.mac.endsWith('/vpro-macos-universal.dmg'));
+
+  // Refuse malformed / unsafe manifests closed
+  for (const bad of [
+    null,
+    {},
+    { schemaVersion: 2, repository: 'Boostao/vpro', maxBuilds: 5, builds: [] },
+    { schemaVersion: 1, repository: 'Other/repo', maxBuilds: 5, builds: [] },
+    { schemaVersion: 1, repository: 'Boostao/vpro', maxBuilds: 0, builds: [] },
+    { schemaVersion: 1, repository: 'Boostao/vpro', maxBuilds: 5, builds: [makeDevBuild(1), makeDevBuild(1)] },
+    { schemaVersion: 1, repository: 'Boostao/vpro', maxBuilds: 1, builds: [makeDevBuild(2), makeDevBuild(1)] },
+  ]) {
+    assert.throws(() => reviewDevManifest(bad));
+  }
+
+  const badTag = makeDevBuild(1);
+  badTag.tag = 'v2.0.2';
+  assert.throws(() => reviewDevManifest({ schemaVersion: 1, repository: 'Boostao/vpro', maxBuilds: 5, builds: [badTag] }));
+
+  const missingRpm = makeDevBuild(1);
+  missingRpm.assets = missingRpm.assets.filter(a => a.name !== 'vpro-linux-amd64.rpm');
+  assert.throws(() => reviewDevManifest({ schemaVersion: 1, repository: 'Boostao/vpro', maxBuilds: 5, builds: [missingRpm] }), /missing required asset/);
+
+  const badUrl = makeDevBuild(1);
+  badUrl.assets[0].url = 'https://evil.example/vpro-windows-amd64-installer.exe';
+  assert.throws(() => reviewDevManifest({ schemaVersion: 1, repository: 'Boostao/vpro', maxBuilds: 5, builds: [badUrl] }));
+
+  // Rendered /dev/ HTML includes one row per build with Win, RPM, DEB, SHA-256 links (and macOS only when present)
+  const devHtml = renderDevPortalHtml({ devManifest: validManifest });
+  assert.match(devHtml, /id="dev-builds-table"/);
+  assert.equal((devHtml.match(/<tr data-dev-tag="/g) || []).length, 5);
+  assert.equal((devHtml.match(/class="dev-dl-pill"[^>]*>Win \(\.exe\)/g) || []).length, 5);
+  assert.equal((devHtml.match(/class="dev-dl-pill"[^>]*>RPM/g) || []).length, 5);
+  assert.equal((devHtml.match(/class="dev-dl-pill"[^>]*>DEB/g) || []).length, 5);
+  assert.equal((devHtml.match(/class="dev-dl-pill dev-dl-pill-muted"[^>]*>SHA-256/g) || []).length, 5);
+  assert.equal((devHtml.match(/class="dev-dl-pill"[^>]*>macOS \(\.dmg\)/g) || []).length, 1);
+  assert.equal(/\p{Extended_Pictographic}/u.test(devHtml), false, 'Dev builds page must contain zero emojis');
+  assert.equal(/api\.github\.com/i.test(devHtml), false, 'Dev builds page must never call api.github.com');
+
+  // Empty manifest renders friendly empty state and buildSite writes site/dist/dev/index.html + nav link on index.html
+  buildSite({ repoRoot });
+  const distDir = path.join(repoRoot, 'site', 'dist');
+  const indexHtml = readFileSync(path.join(distDir, 'index.html'), 'utf8');
+  const builtDevHtml = readFileSync(path.join(distDir, 'dev', 'index.html'), 'utf8');
+  assert.ok(indexHtml.includes('href="./dev/"'), 'Main portal nav must link to ./dev/');
+  assert.ok(existsSync(path.join(distDir, 'dev-manifest.json')), 'Missing site/dist/dev-manifest.json');
+  assert.match(builtDevHtml, /id="dev-builds-empty"/);
+  assert.match(builtDevHtml, /data-vpro-crest="topbar"/);
+});

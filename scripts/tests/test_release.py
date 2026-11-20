@@ -1158,6 +1158,342 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("dorny/paths-filter@v4", ci)
         self.assertIn("postgres:16", ci)
         self.assertIn("rsidecar-integration:", ci)
+        self.assertIn("test -s site/dist/dev/index.html", ci)
+        self.assertIn("python scripts/release.py sync-dev-manifest --output site/dev-manifest.json --keep 5", pages)
+        self.assertIn("test -s site/dist/dev/index.html", pages)
+        self.assertIn("python scripts/release.py sync-dev-manifest --output site/dev-manifest.json --keep 5", deploy_pages_job)
+
+    def test_dev_plan_ci_gate_app_change_filter_and_force_override(self):
+        from datetime import datetime, timezone
+
+        # Leading-zero commit SHA proves the 'g' prefix prevents SemVer numeric leading-zero rejection.
+        head_sha = "0123456789abcdef0123456789abcdef01234567"
+        prev_sha = "fedcba9876543210fedcba9876543210fedcba98"
+        fixed_now = datetime(2026, 11, 20, 9, 0, 0, tzinfo=timezone.utc)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            failing_ci = tmp_path / "ci-fail.json"
+            failing_ci.write_text(json.dumps({
+                "workflow_runs": [{"status": "completed", "conclusion": "failure"}],
+            }), encoding="utf-8")
+            passing_ci = tmp_path / "ci-pass.json"
+            passing_ci.write_text(json.dumps({
+                "workflow_runs": [{"status": "completed", "conclusion": "success"}],
+            }), encoding="utf-8")
+            releases_same = tmp_path / "rel-same.json"
+            releases_same.write_text(json.dumps([{
+                "tag_name": "dev-20261119-r10-g0123456",
+                "draft": False,
+                "prerelease": True,
+                "published_at": "2026-11-19T09:05:00Z",
+                "target_commitish": head_sha,
+            }]), encoding="utf-8")
+            releases_prev = tmp_path / "rel-prev.json"
+            releases_prev.write_text(json.dumps([{
+                "tag_name": "dev-20261119-r10-gfedcba9",
+                "draft": False,
+                "prerelease": True,
+                "published_at": "2026-11-19T09:05:00Z",
+                "target_commitish": prev_sha,
+            }]), encoding="utf-8")
+
+            # 1. Failing CI blocks nightly build.
+            blocked = release.dev_plan(
+                ROOT, commit_sha=head_sha, commit_subject="feat: plot cache\nextra line",
+                run_number=11, force=False, ci_runs_json=failing_ci,
+                releases_json=releases_prev, changed_files=["app/main.go"], now=fixed_now,
+            )
+            self.assertFalse(blocked["should_build"])
+            self.assertIn("No passing CI", blocked["reason"])
+
+            # 2. Identical commit skips nightly build when force=False.
+            unchanged = release.dev_plan(
+                ROOT, commit_sha=head_sha, commit_subject="feat: plot cache",
+                run_number=11, force=False, ci_runs_json=passing_ci,
+                releases_json=releases_same, now=fixed_now,
+            )
+            self.assertFalse(unchanged["should_build"])
+            self.assertIn("already covers", unchanged["reason"])
+
+            # 3. Non-desktop changes only (okf/ or r/ or site/) skip nightly build.
+            non_app = release.dev_plan(
+                ROOT, commit_sha=head_sha, commit_subject="docs: update okf",
+                run_number=11, force=False, ci_runs_json=passing_ci,
+                releases_json=releases_prev, changed_files=["okf/00_index.md", "r/R/read.R", "README.md"],
+                now=fixed_now,
+            )
+            self.assertFalse(non_app["should_build"])
+            self.assertIn("No desktop app changes", non_app["reason"])
+
+            # 4. Desktop change with passing CI builds with SemVer-safe tag/version and sanitized subject.
+            ready = release.dev_plan(
+                ROOT, commit_sha=head_sha, commit_subject="feat(app): batch PlotBundle\nbody line",
+                run_number=11, force=False, ci_runs_json=passing_ci,
+                releases_json=releases_prev, changed_files=["app/internal/datasheet/service.go"],
+                now=fixed_now,
+            )
+            self.assertTrue(ready["should_build"])
+            self.assertEqual(ready["tag"], "dev-20261120-r11-g0123456")
+            self.assertEqual(ready["build_mode"], "alpha")
+            self.assertTrue(ready["version"].endswith("-dev.20261120.11.g0123456"))
+            self.assertEqual(ready["commit_subject"], "feat(app): batch PlotBundle body line")
+            self.assertEqual(release.version(ready["version"])[0], ready["version"])
+
+            # 5. Manual force=True rebuilds even when commit matches latest dev release.
+            forced = release.dev_plan(
+                ROOT, commit_sha=head_sha, commit_subject="manual test drive",
+                run_number=12, force=True, ci_runs_json=passing_ci,
+                releases_json=releases_same, now=fixed_now,
+            )
+            self.assertTrue(forced["should_build"])
+            self.assertEqual(forced["tag"], "dev-20261120-r12-g0123456")
+
+    def test_dev_package_manifest_remote_and_verify_x64(self):
+        commit = "0123456789abcdef0123456789abcdef01234567"
+        full_ver = "2.0.2-dev.20261120.42.g0123456"
+        dev_tag = "dev-20261120-r42-g0123456"
+        deb_ver = "2.0.2~dev.20261120.42.g0123456"
+        rpm_ver = release.rpm_version(full_ver)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            win_root = tmp_path / "win"
+            (win_root / "app/bin").mkdir(parents=True)
+            win_exe = pe("amd64")
+            (win_root / "app/bin/VPro.exe").write_bytes(win_exe)
+            (win_root / "app/bin/VPro-amd64-installer.exe").write_bytes(b"nsis-dev-installer")
+
+            def fake_7z(*args, **_kwargs):
+                out_arg = [a for a in args if str(a).startswith("-o")][0]
+                out_dir = Path(out_arg[2:])
+                (out_dir / "VPro.exe").write_bytes(win_exe)
+
+            with patch.dict(os.environ, {
+                "RELEASE_VERSION": full_ver,
+                "RELEASE_ARCH": "amd64",
+                "GITHUB_SHA": commit,
+            }):
+                with patch.object(release, "run", side_effect=fake_7z):
+                    release.dev_package(win_root, "windows")
+                win_out = sorted(p.name for p in (win_root / "app/dist-artifacts").iterdir())
+                self.assertEqual(win_out, [
+                    "release-witness-windows-amd64.json",
+                    "vpro-windows-amd64-installer.exe",
+                ])
+
+                lin_root = tmp_path / "lin"
+                (lin_root / "app/bin").mkdir(parents=True)
+                (lin_root / "app/bin/VPro").write_bytes(elf("amd64"))
+                (lin_root / "app/bin/vpro_amd64.deb").write_bytes(deb("amd64", deb_ver))
+                (lin_root / "app/bin/vpro_amd64.rpm").write_bytes(nfpm_rpm("amd64", rpm_ver))
+                release.dev_package(lin_root, "linux")
+                lin_out = sorted(p.name for p in (lin_root / "app/dist-artifacts").iterdir())
+                self.assertEqual(lin_out, [
+                    "release-witness-linux-amd64.json",
+                    "vpro-linux-amd64.deb",
+                    "vpro-linux-amd64.rpm",
+                ])
+
+                merged = tmp_path / "merged"
+                merged.mkdir()
+                for src_dir in (win_root / "app/dist-artifacts", lin_root / "app/dist-artifacts"):
+                    for item in src_dir.iterdir():
+                        shutil.copyfile(item, merged / item.name)
+
+                prev_cwd = Path.cwd()
+                try:
+                    os.chdir(tmp_path)
+                    meta = release.dev_manifest(
+                        merged,
+                        tag=dev_tag,
+                        commit_subject="feat(spatial): 3D map basemaps",
+                        published_at="2026-11-20T09:05:00Z",
+                    )
+                finally:
+                    os.chdir(prev_cwd)
+
+                self.assertEqual(meta["tag"], dev_tag)
+                self.assertEqual(meta["shortCommit"], "0123456")
+                attach_lines = (tmp_path / "dev-assets.txt").read_text(encoding="utf-8").splitlines()
+                self.assertEqual(len(attach_lines), 5)
+
+                remote_json = tmp_path / "remote.json"
+                remote_json.write_text(json.dumps({
+                    "assets": [{"name": Path(p).name} for p in attach_lines],
+                }), encoding="utf-8")
+                release.dev_remote(remote_json)
+
+                downloaded = tmp_path / "downloaded"
+                downloaded.mkdir()
+                for p in attach_lines:
+                    shutil.copyfile(p, downloaded / Path(p).name)
+                release.dev_verify(downloaded, merged / "SHA256SUMS.txt", merged / "dev-build.json")
+
+                # Tampering a downloaded binary must fail verification.
+                (downloaded / "vpro-linux-amd64.rpm").write_bytes(b"corrupted")
+                with self.assertRaises(ValueError):
+                    release.dev_verify(downloaded, merged / "SHA256SUMS.txt", merged / "dev-build.json")
+
+    def test_sync_dev_manifest_caps_at_5_and_isolated_from_official_channels(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            dev_payloads = {}
+            releases_list = []
+            for idx in range(1, 8):
+                tag = f"dev-202611{10 + idx:02d}-r{idx}-g{idx:07x}"
+                commit = f"{idx:040x}"
+                ver = f"2.0.2-dev.202611{10 + idx:02d}.{idx}.g{commit[:7]}"
+                published = f"2026-11-{10 + idx:02d}T09:05:00Z"
+                assets = []
+                for name in sorted(release.DEV_REQUIRED | {release.MANIFEST}):
+                    assets.append({
+                        "name": name,
+                        "url": f"https://github.com/{release.REPOSITORY}/releases/download/{tag}/{name}",
+                        "sha256": f"{idx:064x}",
+                        "sizeBytes": 1024 * idx,
+                    })
+                dev_payloads[tag] = json.dumps({
+                    "schemaVersion": 1,
+                    "repository": release.REPOSITORY,
+                    "tag": tag,
+                    "version": ver,
+                    "publishedAt": published,
+                    "commit": commit,
+                    "shortCommit": commit[:7],
+                    "commitSubject": f"Dev build #{idx}",
+                    "unsignedNotice": True,
+                    "sha256sumsUrl": f"https://github.com/{release.REPOSITORY}/releases/download/{tag}/SHA256SUMS.txt",
+                    "assets": assets,
+                })
+                releases_list.append({
+                    "tag_name": tag,
+                    "draft": False,
+                    "prerelease": True,
+                    "published_at": published,
+                    "assets": [{"name": a["name"]} for a in assets] + [{"name": release.DEV_BUILD_METADATA}],
+                })
+            # Draft dev release and official stable/preview releases must not interfere.
+            releases_list.append({
+                "tag_name": "dev-20261199-r99-gabcdef0",
+                "draft": True,
+                "prerelease": True,
+                "published_at": "2026-11-30T09:05:00Z",
+                "assets": [{"name": release.MANIFEST}, {"name": release.DEV_BUILD_METADATA}],
+            })
+            releases_list.append({
+                "tag_name": "v2.0.1",
+                "draft": False,
+                "prerelease": False,
+                "published_at": "2026-11-19T12:00:00Z",
+                "assets": [{"name": name} for name in sorted(release.REQUIRED | {release.MANIFEST, release.RELEASE_MANIFEST})],
+            })
+            releases_json = tmp_path / "releases.json"
+            releases_json.write_text(json.dumps(releases_list), encoding="utf-8")
+
+            dev_out = tmp_path / "dev-manifest.json"
+            dev_doc = release.sync_dev_manifest(
+                dev_out, keep=5, releases_json=releases_json,
+                asset_loader=lambda tag, _name: dev_payloads[tag],
+            )
+            self.assertEqual(dev_doc["maxBuilds"], 5)
+            self.assertEqual(len(dev_doc["builds"]), 5)
+            # Newest-first ordering: #7 down to #3.
+            self.assertEqual(
+                [b["tag"] for b in dev_doc["builds"]],
+                [f"dev-202611{10 + i:02d}-r{i}-g{i:07x}" for i in (7, 6, 5, 4, 3)],
+            )
+
+            # Official sync_release_manifest must completely ignore dev-* prereleases.
+            official_out = tmp_path / "release-manifest.json"
+            stable_manifest = {
+                "schemaVersion": 1,
+                "repository": release.REPOSITORY,
+                "defaultChannel": "stable",
+                "channels": {
+                    "stable": {
+                        "tag": "v2.0.1",
+                        "version": "2.0.1",
+                        "publishedAt": "2026-11-19T12:00:00Z",
+                        "prerelease": False,
+                        "unsignedNotice": True,
+                        "sha256sumsUrl": f"https://github.com/{release.REPOSITORY}/releases/download/v2.0.1/SHA256SUMS.txt",
+                        "standards": dict(release.DEFAULT_STANDARDS),
+                        "assets": [
+                            {
+                                "name": name,
+                                "url": f"https://github.com/{release.REPOSITORY}/releases/download/v2.0.1/{name}",
+                                "sha256": "a" * 64,
+                                "sizeBytes": 2048,
+                            }
+                            for name in sorted(release.REQUIRED | {release.MANIFEST})
+                        ],
+                    },
+                    "preview": None,
+                },
+            }
+            official_doc = release.sync_release_manifest(
+                official_out, releases_json=releases_json,
+                asset_loader=lambda tag, _name: json.dumps(stable_manifest) if tag == "v2.0.1" else (_ for _ in ()).throw(AssertionError(f"Unexpected tag {tag}")),
+            )
+            self.assertEqual(official_doc["channels"]["stable"]["tag"], "v2.0.1")
+            self.assertIsNone(official_doc["channels"]["preview"])
+
+    def test_prune_dev_releases_keeps_newest_5_and_never_touches_official_tags(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            releases_list = [
+                {"tag_name": "v2.0.0", "draft": False, "prerelease": False, "published_at": "2026-11-01T00:00:00Z"},
+                {"tag_name": "v2.0.1", "draft": False, "prerelease": False, "published_at": "2026-11-19T00:00:00Z"},
+                {"tag_name": "v2.1.0-alpha.1", "draft": False, "prerelease": True, "published_at": "2026-11-02T00:00:00Z"},
+                {"tag_name": "r-v2.0.1", "draft": False, "prerelease": False, "published_at": "2026-11-03T00:00:00Z"},
+            ]
+            for idx in range(1, 9):
+                releases_list.append({
+                    "tag_name": f"dev-202611{idx:02d}-r{idx}-gaaaaaaa",
+                    "draft": False,
+                    "prerelease": True,
+                    "published_at": f"2026-11-{idx:02d}T09:00:00Z",
+                })
+            releases_json = tmp_path / "releases.json"
+            releases_json.write_text(json.dumps(releases_list), encoding="utf-8")
+
+            deleted = []
+            summary = release.prune_dev_releases(
+                keep=5, releases_json=releases_json, deleter=deleted.append,
+            )
+            self.assertEqual(len(summary["kept"]), 5)
+            self.assertEqual(summary["kept"][0], "dev-20261108-r8-gaaaaaaa")
+            self.assertEqual(summary["kept"][-1], "dev-20261104-r4-gaaaaaaa")
+            self.assertEqual(deleted, [
+                "dev-20261103-r3-gaaaaaaa",
+                "dev-20261102-r2-gaaaaaaa",
+                "dev-20261101-r1-gaaaaaaa",
+            ])
+
+    def test_dev_builds_workflow_contract(self):
+        dev_wf = (ROOT / ".github/workflows/dev-builds.yml").read_text(encoding="utf-8")
+        self.assertNotIn("|| true", dev_wf)
+        self.assertNotIn("continue-on-error", dev_wf)
+        self.assertNotIn("macos-", dev_wf)
+        self.assertIn("schedule:", dev_wf)
+        self.assertIn("cron:", dev_wf)
+        self.assertIn("workflow_dispatch:", dev_wf)
+        self.assertIn("cancel-in-progress: true", dev_wf)
+        self.assertEqual(dev_wf.count("go-version: '1.27.4'"), 2)
+        self.assertEqual(dev_wf.count("wails3@v3.1.0"), 2)
+        self.assertEqual(dev_wf.count("retention-days: 1"), 2)
+        self.assertIn("INSTALL_SCOPE=user", dev_wf)
+        self.assertIn("python3 scripts/release.py dev-plan", dev_wf)
+        self.assertIn("python scripts/release.py dev-package windows", dev_wf)
+        self.assertIn("python scripts/release.py dev-package linux", dev_wf)
+        self.assertIn("python3 scripts/release.py dev-manifest dev-assets", dev_wf)
+        self.assertIn("python3 scripts/release.py dev-remote dev-remote.json", dev_wf)
+        self.assertIn("python3 scripts/release.py dev-verify dev-downloaded", dev_wf)
+        self.assertIn("python3 scripts/release.py prune-dev --keep 5", dev_wf)
+        self.assertIn("python3 scripts/release.py sync-dev-manifest --output site/dev-manifest.json --keep 5", dev_wf)
+        self.assertIn("--prerelease", dev_wf)
+        self.assertEqual(dev_wf.count("contents: write"), 1)
 
 
 if __name__ == "__main__":

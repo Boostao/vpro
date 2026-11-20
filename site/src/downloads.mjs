@@ -326,6 +326,168 @@ export function reviewManifest(manifest) {
   };
 }
 
+export const devAssetLinks = Object.freeze({
+  win: 'vpro-windows-amd64-installer.exe',
+  deb: 'vpro-linux-amd64.deb',
+  rpm: 'vpro-linux-amd64.rpm',
+  mac: 'vpro-macos-universal.dmg',
+  checksums: 'SHA256SUMS.txt',
+});
+
+const knownDevAssetNames = new Set(Object.values(devAssetLinks));
+const requiredDevAssetNames = Object.freeze([
+  'vpro-windows-amd64-installer.exe',
+  'vpro-linux-amd64.deb',
+  'vpro-linux-amd64.rpm',
+]);
+const devTagPattern = /^dev-[0-9A-Za-z._-]+$/;
+const commitShaPattern = /^[0-9a-f]{40}$/;
+
+export function reviewDevBuild(build) {
+  if (!build || typeof build !== 'object' || Array.isArray(build)) {
+    throw new Error('Development build metadata is malformed.');
+  }
+  const allowedKeys = new Set([
+    'schemaVersion', 'repository', 'tag', 'version', 'publishedAt',
+    'commit', 'shortCommit', 'commitSubject', 'unsignedNotice',
+    'sha256sumsUrl', 'assets',
+  ]);
+  for (const key of Object.keys(build)) {
+    if (!allowedKeys.has(key)) {
+      throw new Error(`Development build contains unexpected key ${key}.`);
+    }
+  }
+  if (build.schemaVersion !== 1) {
+    throw new Error(`Unsupported dev build schemaVersion: ${String(build.schemaVersion)}`);
+  }
+  if (build.repository !== repository) {
+    throw new Error(`Unexpected dev build repository: ${String(build.repository)}`);
+  }
+  if (typeof build.tag !== 'string' || !devTagPattern.test(build.tag)) {
+    throw new Error('Development build has an invalid tag.');
+  }
+  if (typeof build.version !== 'string' || !semverPattern.test(build.version) || !build.version.split('+')[0].includes('-')) {
+    throw new Error('Development build has an invalid prerelease SemVer version.');
+  }
+  if (typeof build.publishedAt !== 'string' || !isoDatePattern.test(build.publishedAt) || Number.isNaN(Date.parse(build.publishedAt))) {
+    throw new Error('Development build has an invalid publishedAt timestamp.');
+  }
+  if (typeof build.commit !== 'string' || !commitShaPattern.test(build.commit)) {
+    throw new Error('Development build has an invalid commit SHA.');
+  }
+  if (typeof build.shortCommit !== 'string' || build.shortCommit !== build.commit.slice(0, 7)) {
+    throw new Error('Development build shortCommit does not match commit prefix.');
+  }
+  if (typeof build.commitSubject !== 'string' || !build.commitSubject.trim() || /[\r\n]/.test(build.commitSubject)) {
+    throw new Error('Development build commitSubject must be a non-empty single-line string.');
+  }
+  if (typeof build.unsignedNotice !== 'boolean') {
+    throw new Error('Development build unsignedNotice must be boolean.');
+  }
+  const validatedSha256Url = downloadURL(build.sha256sumsUrl, 'SHA256SUMS.txt', build.tag);
+  if (!Array.isArray(build.assets) || build.assets.length === 0) {
+    throw new Error('Development build assets must be a non-empty array.');
+  }
+  const assetMap = new Map();
+  for (const asset of build.assets) {
+    if (!asset || typeof asset !== 'object' || Array.isArray(asset) || typeof asset.name !== 'string' || !asset.name) {
+      throw new Error('Development build contains malformed asset entry.');
+    }
+    if (!knownDevAssetNames.has(asset.name)) {
+      throw new Error(`Development build contains unexpected asset ${asset.name}.`);
+    }
+    if (assetMap.has(asset.name)) {
+      throw new Error(`Development build contains duplicate asset ${asset.name}.`);
+    }
+    const validatedUrl = downloadURL(asset.url, asset.name, build.tag);
+    if (typeof asset.sha256 !== 'string' || !sha256Pattern.test(asset.sha256)) {
+      throw new Error(`Development build asset ${asset.name} has an invalid SHA-256 digest.`);
+    }
+    const formattedSize = formatBytes(asset.sizeBytes);
+    assetMap.set(asset.name, {
+      name: asset.name,
+      url: validatedUrl,
+      sha256: asset.sha256,
+      sizeBytes: asset.sizeBytes,
+      formattedSize,
+    });
+  }
+  for (const requiredName of requiredDevAssetNames) {
+    if (!assetMap.has(requiredName)) {
+      throw new Error(`Development build ${build.tag} is missing required asset ${requiredName}.`);
+    }
+  }
+  if (assetMap.has('SHA256SUMS.txt') && assetMap.get('SHA256SUMS.txt').url !== validatedSha256Url) {
+    throw new Error('Development build SHA256SUMS.txt URL disagrees with sha256sumsUrl.');
+  }
+  const links = {};
+  const metadata = {};
+  for (const [slot, name] of Object.entries(devAssetLinks)) {
+    if (assetMap.has(name)) {
+      const item = assetMap.get(name);
+      links[slot] = item.url;
+      metadata[slot] = item;
+    } else if (slot === 'checksums') {
+      links[slot] = validatedSha256Url;
+      metadata[slot] = null;
+    } else {
+      links[slot] = null;
+      metadata[slot] = null;
+    }
+  }
+  return {
+    tag: build.tag,
+    version: build.version,
+    publishedAt: build.publishedAt,
+    commit: build.commit,
+    shortCommit: build.shortCommit,
+    commitSubject: build.commitSubject,
+    unsignedNotice: build.unsignedNotice,
+    sha256sumsUrl: validatedSha256Url,
+    links,
+    metadata,
+  };
+}
+
+export function reviewDevManifest(manifest) {
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
+    throw new Error('Development builds manifest is malformed or unavailable.');
+  }
+  const allowedTopKeys = new Set(['schemaVersion', 'repository', 'maxBuilds', 'builds']);
+  for (const key of Object.keys(manifest)) {
+    if (!allowedTopKeys.has(key)) {
+      throw new Error(`Development builds manifest contains unexpected key ${key}.`);
+    }
+  }
+  if (manifest.schemaVersion !== 1) {
+    throw new Error(`Unsupported dev-manifest.json schemaVersion: ${String(manifest.schemaVersion)}`);
+  }
+  if (manifest.repository !== repository) {
+    throw new Error(`Unexpected dev-manifest.json repository: ${String(manifest.repository)}`);
+  }
+  if (!Number.isSafeInteger(manifest.maxBuilds) || manifest.maxBuilds < 1 || manifest.maxBuilds > 20) {
+    throw new Error('dev-manifest.json maxBuilds must be an integer between 1 and 20.');
+  }
+  if (!Array.isArray(manifest.builds) || manifest.builds.length > manifest.maxBuilds) {
+    throw new Error('dev-manifest.json builds must be an array within maxBuilds.');
+  }
+  const seenTags = new Set();
+  const builds = manifest.builds.map(entry => {
+    const reviewed = reviewDevBuild(entry);
+    if (seenTags.has(reviewed.tag)) {
+      throw new Error(`Duplicate development build tag ${reviewed.tag}.`);
+    }
+    seenTags.add(reviewed.tag);
+    return reviewed;
+  });
+  return {
+    schemaVersion: 1,
+    repository,
+    maxBuilds: manifest.maxBuilds,
+    builds,
+  };
+}
+
 export function reviewRelease(release) {
   if (release && typeof release === 'object' && 'tag' in release && 'sha256sumsUrl' in release) {
     return reviewChannelRelease(release, release.prerelease === true ? 'preview' : 'stable');

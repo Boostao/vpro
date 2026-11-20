@@ -61,10 +61,13 @@ jobs:
           working-directory: r
           extra-packages: bcgov/climr, local::.
 
-      - name: Hydrate release-manifest.json from published GitHub Releases
+      - name: Hydrate release-manifest.json and dev-manifest.json from published GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python scripts/release.py sync-release-manifest --base-manifest site/release-manifest.json --output site/release-manifest.json
+        run: |
+          set -euo pipefail
+          python scripts/release.py sync-release-manifest --base-manifest site/release-manifest.json --output site/release-manifest.json
+          python scripts/release.py sync-dev-manifest --output site/dev-manifest.json --keep 5
 
       - name: Build single-source docs and BC Gov release portal
         run: node scripts/build-docs-src.mjs && node site/build.mjs
@@ -77,10 +80,13 @@ jobs:
         run: |
           set -euo pipefail
           test -s site/dist/index.html
+          test -s site/dist/dev/index.html
+          test -s site/dist/dev-manifest.json
           test -s site/dist/r-logo.svg
           test -s site/dist/r/index.html
           test -s site/dist/r/logo.svg
           test -s site/dist/r/favicon.ico
+          grep -q 'href="./dev/"' site/dist/index.html
           grep -q 'href="./r/"' site/dist/index.html
           grep -q 'VPro Desktop &amp; Downloads' site/dist/r/index.html
 

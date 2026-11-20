@@ -460,9 +460,12 @@ jobs:
         run: |
           set -euo pipefail
           test -s site/dist/index.html
+          test -s site/dist/dev/index.html
+          test -s site/dist/dev-manifest.json
           test -s site/dist/r-logo.svg
           test -s site/dist/r/index.html
           test -s site/dist/r/logo.svg
           test -s site/dist/r/favicon.ico
+          grep -q 'href="./dev/"' site/dist/index.html
           grep -q 'href="./r/"' site/dist/index.html
           grep -q 'VPro Desktop &amp; Downloads' site/dist/r/index.html

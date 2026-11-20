@@ -172,6 +172,7 @@ jobs:
         with:
           name: windows-${{ matrix.arch }}
           path: app/dist-artifacts/*
+          retention-days: 7
           if-no-files-found: error
 
   build-macos:
@@ -221,6 +222,7 @@ jobs:
         with:
           name: macos-universal
           path: app/dist-artifacts/*
+          retention-days: 7
           if-no-files-found: error
 
   build-linux:
@@ -289,6 +291,7 @@ jobs:
         with:
           name: linux-${{ matrix.arch }}
           path: app/dist-artifacts/*
+          retention-days: 7
           if-no-files-found: error
 
   build-r:
@@ -326,6 +329,7 @@ jobs:
         with:
           name: r-sdk
           path: r/dist-artifacts/*
+          retention-days: 7
           if-no-files-found: error
 
   release:
@@ -392,6 +396,7 @@ jobs:
         with:
           name: release-manifest
           path: release-assets/release-manifest.json
+          retention-days: 7
           if-no-files-found: error
 
   deploy-pages:
@@ -445,11 +450,14 @@ jobs:
             python scripts/release.py sync-release-manifest --base-manifest site/release-manifest.json --output site/release-manifest.json
             python scripts/release.py metadata --target r --scope r-only
           fi
+          python scripts/release.py sync-dev-manifest --output site/dev-manifest.json --keep 5
           R CMD INSTALL --no-multiarch --with-keep.source r
           node scripts/build-docs-src.mjs
           node site/build.mjs
           (cd r && Rscript -e "pkgdown::build_site()")
           test -s site/dist/index.html
+          test -s site/dist/dev/index.html
+          test -s site/dist/dev-manifest.json
           test -s site/dist/r/index.html
           test -s site/dist/r/logo.svg
       - name: Setup Pages

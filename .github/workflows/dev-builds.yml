@@ -1,0 +1,309 @@
+name: Nightly Dev Builds
+
+on:
+  schedule:
+    # 09:00 UTC = 01:00 PST / 02:00 PDT
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Build even if app/ has not changed since the latest dev build'
+        type: boolean
+        default: true
+      skip_ci_check:
+        description: 'Skip requiring a passing CI run on this commit (manual override only)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-builds-main
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Check CI & Plan Dev Build
+    runs-on: ubuntu-24.04
+    outputs:
+      should_build: ${{ steps.plan.outputs.should_build }}
+      reason: ${{ steps.plan.outputs.reason }}
+      version: ${{ steps.plan.outputs.version }}
+      numeric: ${{ steps.plan.outputs.numeric }}
+      tag: ${{ steps.plan.outputs.tag }}
+      build_mode: ${{ steps.plan.outputs.build_mode }}
+      commit: ${{ steps.plan.outputs.commit }}
+      short_commit: ${{ steps.plan.outputs.short_commit }}
+      commit_subject: ${{ steps.plan.outputs.commit_subject }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Determine whether to publish a nightly dev build
+        id: plan
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEV_FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
+          DEV_SKIP_CI_CHECK: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_ci_check || false }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "$DEV_FORCE" = "true" ]; then args+=(--force); fi
+          if [ "$DEV_SKIP_CI_CHECK" = "true" ]; then args+=(--skip-ci-check); fi
+          python3 scripts/release.py dev-plan "${args[@]}"
+      - name: Write job summary
+        env:
+          PLAN_SHOULD_BUILD: ${{ steps.plan.outputs.should_build }}
+          PLAN_REASON: ${{ steps.plan.outputs.reason }}
+          PLAN_TAG: ${{ steps.plan.outputs.tag }}
+          PLAN_VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          {
+            echo "### Nightly Dev Build Plan"
+            echo "- **Build scheduled:** \`$PLAN_SHOULD_BUILD\`"
+            echo "- **Reason:** $PLAN_REASON"
+            if [ "$PLAN_SHOULD_BUILD" = "true" ]; then
+              echo "- **Tag:** \`$PLAN_TAG\`"
+              echo "- **Version:** \`$PLAN_VERSION\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build-windows:
+    name: Dev Build Windows x64 Installer
+    needs: plan
+    if: needs.plan.outputs.should_build == 'true'
+    runs-on: windows-2022
+    env:
+      RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+      RELEASE_BUILD_MODE: ${{ needs.plan.outputs.build_mode }}
+      RELEASE_ARCH: amd64
+      GOARCH: amd64
+      CGO_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.4'
+          cache-dependency-path: app/go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: app/frontend/package-lock.json
+      - uses: arduino/setup-task@v3
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install packaging tools
+        shell: pwsh
+        run: |
+          choco install nsis 7zip -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "Packaging tools installation failed" }
+          "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
+          "C:\Program Files\7-Zip" >> $env:GITHUB_PATH
+      - name: Install Wails CLI
+        env:
+          CGO_ENABLED: '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Install pinned x64 cgo toolchain
+        shell: pwsh
+        run: ./scripts/release-windows.ps1
+      - name: Prepare CI-only version metadata
+        run: python scripts/release.py metadata
+      - name: Install frontend dependencies
+        working-directory: app/frontend
+        run: npm ci
+      - name: Build per-user NSIS installer with cgo
+        shell: pwsh
+        run: |
+          Push-Location app
+          task windows:create:nsis:installer "ARCH=$env:RELEASE_ARCH" CGO_ENABLED=1 INSTALL_SCOPE=user "VERSION=$env:RELEASE_VERSION" "BUILD_MODE=$env:RELEASE_BUILD_MODE"
+          $taskExit = $LASTEXITCODE
+          Pop-Location
+          if ($taskExit -ne 0) { throw "Windows dev build/NSIS packaging failed" }
+          python scripts/release.py dev-package windows
+          if ($LASTEXITCODE -ne 0) { throw "Windows dev artifact validation failed" }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dev-windows-amd64
+          path: app/dist-artifacts/*
+          retention-days: 1
+          if-no-files-found: error
+
+  build-linux:
+    name: Dev Build Linux x64 (DEB & RPM)
+    needs: plan
+    if: needs.plan.outputs.should_build == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+      RELEASE_BUILD_MODE: ${{ needs.plan.outputs.build_mode }}
+      RELEASE_ARCH: amd64
+      GOARCH: amd64
+      CGO_ENABLED: '1'
+      CC: gcc
+      CXX: g++
+      NO_STRIP: '1'
+      GIT_COMMITTER_NAME: VPro
+      GIT_COMMITTER_EMAIL: noreply@github.com
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.4'
+          cache-dependency-path: app/go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: app/frontend/package-lock.json
+      - uses: arduino/setup-task@v3
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Require native x64 runner and install packaging dependencies
+        run: |
+          set -euo pipefail
+          test "$(go env GOHOSTARCH)" = "$RELEASE_ARCH"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev libx11-dev pkg-config build-essential file patchelf desktop-file-utils squashfs-tools
+      - name: Install Wails CLI
+        run: |
+          set -euo pipefail
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Prepare CI-only version metadata
+        run: python scripts/release.py metadata
+      - name: Install frontend dependencies
+        working-directory: app/frontend
+        run: npm ci
+      - name: Build native x64 deb and rpm
+        run: |
+          set -euo pipefail
+          (cd app && task linux:create:deb linux:create:rpm "ARCH=$RELEASE_ARCH" "VERSION=$RELEASE_VERSION" "BUILD_MODE=$RELEASE_BUILD_MODE")
+          python scripts/release.py dev-package linux
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dev-linux-amd64
+          path: app/dist-artifacts/*
+          retention-days: 1
+          if-no-files-found: error
+
+  publish-dev:
+    name: Publish Dev Pre-Release & Prune Old Builds
+    needs: [plan, build-windows, build-linux]
+    if: ${{ !failure() && !cancelled() && needs.plan.outputs.should_build == 'true' && needs.build-windows.result == 'success' && needs.build-linux.result == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+      DEV_TAG: ${{ needs.plan.outputs.tag }}
+      DEV_COMMIT_SUBJECT: ${{ needs.plan.outputs.commit_subject }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v8
+        with:
+          path: dev-assets
+          merge-multiple: true
+      - name: Validate dev witnesses, generate SHA256SUMS and dev-build.json
+        run: python3 scripts/release.py dev-manifest dev-assets
+      - name: Publish dev pre-release (never latest)
+        run: |
+          set -euo pipefail
+          mapfile -t assets < dev-assets.txt
+          gh release create "$DEV_TAG" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "VPro Dev $DEV_TAG" \
+            --notes "Nightly x64 development build for commit $GITHUB_SHA ($DEV_COMMIT_SUBJECT). Includes Windows x64 per-user installer (.exe) and Linux x64 .deb / .rpm. Unsigned pre-release for test-driving only; verify against SHA256SUMS.txt." \
+            --prerelease
+      - name: Verify remotely attached dev assets and checksums
+        run: |
+          set -euo pipefail
+          gh release view "$DEV_TAG" --repo "$GITHUB_REPOSITORY" --json assets > dev-remote.json
+          python3 scripts/release.py dev-remote dev-remote.json
+          gh release download "$DEV_TAG" --repo "$GITHUB_REPOSITORY" --dir dev-downloaded
+          python3 scripts/release.py dev-verify dev-downloaded --manifest dev-assets/SHA256SUMS.txt --dev-build dev-assets/dev-build.json
+      - name: Prune older dev releases and tags (keep last 5)
+        run: python3 scripts/release.py prune-dev --keep 5
+
+  deploy-pages:
+    name: Refresh GitHub Pages Dev Builds Tab
+    needs: [plan, publish-dev]
+    if: ${{ !failure() && !cancelled() && needs.plan.outputs.should_build == 'true' && needs.publish-dev.result == 'success' }}
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: 'pages'
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: quarto-dev/quarto-actions/setup@v2
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: r
+          extra-packages: bcgov/climr, local::.
+      - name: Hydrate release and dev manifests from GitHub Releases
+        run: |
+          set -euo pipefail
+          python3 scripts/release.py sync-release-manifest --base-manifest site/release-manifest.json --output site/release-manifest.json
+          python3 scripts/release.py sync-dev-manifest --output site/dev-manifest.json --keep 5
+      - name: Build unified Pages portal, Dev Builds tab, and pkgdown /r/ site
+        run: |
+          set -euo pipefail
+          node scripts/build-docs-src.mjs
+          node site/build.mjs
+          (cd r && Rscript -e "pkgdown::build_site()")
+          test -s site/dist/index.html
+          test -s site/dist/dev/index.html
+          test -s site/dist/dev-manifest.json
+          test -s site/dist/r/index.html
+          test -s site/dist/r/logo.svg
+          grep -q 'href="./dev/"' site/dist/index.html
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: 'site/dist'
+      - name: Deploy updated portal to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
