@@ -1,4 +1,5 @@
 import { registerContextDisposer } from '../shared/contextSessionRegistry';
+import { formatError } from '../shared/readRequests';
 import type {
   SiteUnitSpeciesListPreview,
   SiteUnitSpeciesListRequest,
@@ -67,7 +68,7 @@ export class SummarySpeciesCriteria {
       this.request(1, 'layer');
       this.state.error = '';
     } catch (cause) {
-      this.state.error = String(cause);
+      this.state.error = formatError(cause);
     }
     this.notify();
   }

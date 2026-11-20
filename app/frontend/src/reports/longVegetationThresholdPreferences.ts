@@ -1,4 +1,5 @@
 import { ownedScope, type ProjectSUScope as GoogleEarthScope } from '../shared/scope';
+import { formatError } from '../shared/readRequests';
 import { ReportPreferencesSession, reportPreferencesRegistry } from './reportTitlePreferences';
 
 export interface LongVegetationThresholdPreferenceValues {
@@ -81,7 +82,7 @@ export class LongVegetationThresholdPreferencesSession extends ReportPreferences
           proposed(draft);
           return '';
         } catch (cause) {
-          return String(cause);
+          return formatError(cause);
         }
       },
       proposed,

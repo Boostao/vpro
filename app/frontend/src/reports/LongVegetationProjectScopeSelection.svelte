@@ -140,8 +140,8 @@
   {#if view.draftError}<p role="alert" class="error">{view.draftError}</p>{/if}
   {#if view.authorityUnknown}
     <p role="alert">
-      Report scope authority is unknown. Wait for the pending mutation to settle, then Load owned scope. No field Save,
-      Build or scope switch is replayed.
+      Report scope status is uncertain after an interrupted update. Wait for the pending mutation to settle, then reload
+      the report scope before saving or building.
     </p>
   {/if}
   <label for="project-report-source">

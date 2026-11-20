@@ -230,7 +230,7 @@
     {#if receipt.kind !== 'known'}
       <p data-summary-presentation-receipt role="alert">
         Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}
-        Constancy-on callback plan: {String(receipt.request.constancyApplied)}.
+        Constancy preset applied: {String(receipt.request.constancyApplied)}.
       </p>
     {/if}
   {/each}
@@ -303,7 +303,7 @@
           <dd>{view.draft.valueLimit}</dd>
         </div>
         <div>
-          <dt>Staged constancy-on callback</dt>
+          <dt>Constancy preset staged</dt>
           <dd>{String(view.draft.constancyApplied)}</dd>
         </div>
       </dl>
@@ -343,12 +343,11 @@
     {#if busy}<button data-summary-presentation-cancel onclick={cancel}>Cancel presentation read</button>{/if}
   </div>
   <p class="guidance">
-    Stored presentation drafts, not original report-output formatting parity. Load before editing; unloaded controls do
-    not represent saved values. Constancy-on stages Group by3, Display1 and english names off without clearing the
-    stored limit; switching it off does not restore old choices. Reload shared Summary options after a committed
-    callback plan. These drafts do not enable guide renames, environmental field-list editing, hierarchy reports,
-    original Report output or printing. The separately gated workbook inspection can consume the loaded Constancy draft
-    without Save; it does not apply the other presentation flags.
+    Load saved presentation settings before editing; unloaded controls do not show saved values. Enabling Use Constancy
+    Format sets Group by Lifeform, Display Presence Class and Mean Cover, and turns off common names while keeping your
+    value limit; turning Constancy off keeps those selections until you change them. Reload Summary options after saving
+    a Constancy preset change. Workbook export below can preview your loaded Constancy selection before saving, while
+    title and layout flags apply only where supported.
   </p>
 </section>
 

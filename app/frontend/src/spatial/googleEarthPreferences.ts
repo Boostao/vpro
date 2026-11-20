@@ -1,4 +1,5 @@
 import { registerContextDisposer } from '../shared/contextSessionRegistry';
+import { formatError } from '../shared/readRequests';
 import type {
   GoogleEarthPreferencesReview,
   GoogleEarthPreferencesOutcome,
@@ -167,7 +168,7 @@ export class GoogleEarthPreferencesSession {
       this.state.error = outcome.errorMessage;
       if (outcome.committed || !outcome.errorMessage) this.state.saved = structuredClone(request.proposed);
     } catch (cause) {
-      this.state.error = `Preference save outcome unknown. Do not replay; acknowledge and explicitly reload saved preferences before another save: ${String(cause)}`;
+      this.state.error = `Preference save outcome unknown. Do not replay; acknowledge and explicitly reload saved preferences before another save: ${formatError(cause)}`;
       this.state.saved = null;
     } finally {
       this.state.busy = false;

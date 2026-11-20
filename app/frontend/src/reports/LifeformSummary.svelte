@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
-  import { ReadRequests } from '../shared/readRequests';
+  import { ReadRequests, formatError } from '../shared/readRequests';
   import {
     validateLifeformSummary,
     lifeformCellText,
@@ -102,7 +102,7 @@
       }
     } catch (cause) {
       if (request === generation && key === ownerKey) {
-        error = `${kind === 'attributes' ? 'Species attribute summary' : 'Lifeform Summary'} unavailable: ${String(cause)}`;
+        error = `${kind === 'attributes' ? 'Species attribute summary' : 'Lifeform Summary'} unavailable: ${formatError(cause)}`;
         notifications.error(
           kind === 'attributes' ? 'Species attribute summary failed' : 'Lifeform Summary failed',
           error,

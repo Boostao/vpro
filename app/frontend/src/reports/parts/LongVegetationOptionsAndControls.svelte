@@ -195,7 +195,7 @@
 
 <div class="lump-and-variant-controls" aria-label="Lump table and species variant controls">
   <div class="control-field">
-    <label for="long-vegetation-lump-scope">Species Lump Table (<code>LVLumpTable</code> / workbook scope)</label>
+    <label for="long-vegetation-lump-scope">Species Lump Table (report and workbook scope)</label>
     <div class="lump-picker-row">
       <select
         id="long-vegetation-lump-scope"
@@ -232,9 +232,7 @@
       onchange={(e) => actions.onToggleUseSppCodesOnly(e.currentTarget.checked)}
     />
     <span>
-      Combine species variants / subspecies (<code>LVUseSppCodesOnly</code>){ctrl.settings?.combineVariants
-        ? ' — active in backend options'
-        : ''}
+      Combine species variants / subspecies{ctrl.settings?.combineVariants ? ' — active in saved options' : ''}
     </span>
   </label>
   <label class="toggle-field">
@@ -355,9 +353,9 @@
         : 'Publish reviewed unlumped XLSX workbook'}
     </button>
     <p class="guidance">
-      Source settings/layout are read-only. Hidden lossless source metadata retains typed identities, reference
-      candidates and diagnostics. Publication never replaces an existing file. Every returned or unknown outcome clears
-      preparation; acknowledge it and explicitly obtain a new review before retrying.
+      Report settings and layout remain read-only during export. Exporting writes a new .xlsx file and never overwrites
+      an existing file. If an export is interrupted, inspect the destination file, acknowledge the notice, and review
+      again before retrying.
     </p>
   </section>
 {/if}

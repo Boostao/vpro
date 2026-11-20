@@ -143,9 +143,8 @@ test('source-labelled Unit Groups presentation preserves one responsive live con
     for(const caption of ['Unit Groups','Site unit table','Selected fields','None'])assert.ok(body.includes(caption));
     if(old!==2)assert.match(body,/value="2" disabled/);
     if(old!==3)assert.match(body,/value="3" disabled/);
-    assert.match(body,/Selected fields require a current owned session Build/);
-    assert.match(body,/all-project fallback remains unavailable/);
-    assert.match(body,/resets the saved Unit Groups to Site unit table/);
+    assert.match(body,/Selected fields require a current SU List build in this session/);
+    assert.match(body,/resets saved Unit Groups to Site unit table/);
   }
   assert.match(source('LongVegetationUnitPreferences.svelte'),/grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(source('LongVegetationUnitPreferences.svelte'),/const raw = event\.currentTarget\.value;\s*edit\(raw\)/);

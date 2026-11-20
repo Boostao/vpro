@@ -149,7 +149,7 @@ test('source captions and bindings render once with live correction/Undo and no 
     }
     assert.match(body, /data-long-vegetation-switch-save[^>]*disabled/);
     if (initialized) assert.doesNotMatch(body, /data-long-vegetation-switch-undo[^>]*disabled/);
-    else assert.match(body, /unloaded boxes do not represent saved values/);
+    else assert.match(body, /unloaded boxes do not show saved values/);
   }
 });
 test('actual report composition renders switches and propagates retained draft barriers to root', () => {

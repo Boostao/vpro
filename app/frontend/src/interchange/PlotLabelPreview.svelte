@@ -2,7 +2,7 @@
   import { onDestroy, untrack } from 'svelte';
   import { ContextService, ImportExportService } from '../../bindings/github.com/boostao/vpro/app';
   import type { PlotLabelPDFExportReview, PlotLabelPDFExportOutcome } from '../../bindings/github.com/boostao/vpro/app';
-  import { ReadRequests } from '../shared/readRequests';
+  import { ReadRequests, formatError } from '../shared/readRequests';
   import { plotLookupInputError } from '../shared/scopedPlotLookup';
   import { plotLabelFromHeader, type PlotLabelPreview } from './plotLabelPreview';
   import { validatePlotLabelRegionalPreview, type PlotLabelRegionalEvidence } from './plotLabelRegional';
@@ -144,7 +144,7 @@
       }
     } catch (cause) {
       if (request === generation && key === ownerKey) {
-        error = `Plot label preview unavailable: ${String(cause)}`;
+        error = `Plot label preview unavailable: ${formatError(cause)}`;
         notifications.error('Plot label preview unavailable', error, toastOpts);
       }
     } finally {
@@ -174,7 +174,7 @@
         emitPlotLabelPdfExportToast(notifications, latest, pdfReview.preview.plotNumber, destination, project);
       }
     } catch (cause) {
-      error = `Label PDF export unavailable: ${String(cause)}`;
+      error = `Label PDF export unavailable: ${formatError(cause)}`;
       notifications.error('Label PDF export failed', error, toastOpts);
     }
   }
@@ -194,7 +194,7 @@
         emitPlotLabelPdfRecoveryToast(notifications, latest, project);
       }
     } catch (cause) {
-      error = `PDF status check unavailable: ${String(cause)}`;
+      error = `PDF status check unavailable: ${formatError(cause)}`;
       notifications.error('Label PDF recovery failed', error, toastOpts);
     }
   }
@@ -204,7 +204,7 @@
     try {
       pdfSession.acknowledge();
     } catch (cause) {
-      error = String(cause);
+      error = formatError(cause);
       notifications.error('Label PDF acknowledgement failed', error, {
         category: 'reports',
         source: 'Plot Labels',

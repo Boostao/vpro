@@ -1,5 +1,6 @@
 import type { ProjectMetadataTable } from '../../bindings/github.com/boostao/vpro/app';
 import { ownedScope, type ProjectSUScope as GoogleEarthScope } from '../shared/scope';
+import { formatError } from '../shared/readRequests';
 import { lifeformShape } from './lifeformSummary';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { validateQualityMinimumReference } from './qualityMinimumReference';
@@ -164,7 +165,7 @@ export class SummaryVegetationQualityPreferencesSession extends ReportPreference
     return { ...super.view(), readError: this.readError };
   }
   rejectRead(cause: unknown) {
-    this.readError = `Saved Summary quality options unavailable; no defaults applied: ${String(cause)}`;
+    this.readError = `Saved Summary quality options unavailable; no defaults applied: ${formatError(cause)}`;
     this.notify();
   }
   override apply(value: SummaryVegetationQualityPreferencesReview | null, preserveDraft = false) {

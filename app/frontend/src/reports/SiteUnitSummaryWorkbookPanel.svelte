@@ -341,7 +341,7 @@
     </div>
   {/if}
   <label class="destination"
-    >Workbook destination (.xlsx, literal path)
+    >Workbook destination (.xlsx)
     <input
       data-site-unit-workbook-destination
       type="text"
@@ -357,11 +357,12 @@
     onclick={publish}>Publish reviewed workbook</button
   >
   <p class="guidance">
-    Review is read-only and cancellable. The selected method is an explicit override, not a saved-option change.
-    {#if extended}Normal Site Unit summaries use the explicit grouping, inclusion and species criteria above.
-    {:else}Only normal Site Unit layer-cover summaries without species are available.{/if} Enter an explicit .xlsx path; it
-    is never trimmed or replaced automatically. Publication is irreversible; acknowledge every returned or unknown outcome
-    before navigation, close or another publication. Unavailable workflows remain disabled.
+    Review is read-only and can be cancelled at any time. Selecting a summary method here previews and exports without
+    changing your saved preferences.
+    {#if extended}Site Unit summaries apply the grouping, inclusion, and species criteria selected above.
+    {:else}Site Unit layer-cover summaries export environmental and stratum cover rows.{/if} Enter a new .xlsx file path;
+    existing files are never overwritten. If an export is interrupted before finishing, inspect the destination file and acknowledge
+    the notice before exporting again.
   </p>
 </WorkbookPublicationSection>
 

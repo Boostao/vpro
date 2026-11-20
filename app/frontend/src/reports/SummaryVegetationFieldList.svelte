@@ -214,12 +214,12 @@
       {/if}
     {/each}
     {#if outstanding()}<p role="status">
-        Do not replay Save. Unknown, unverified or error outcomes require explicit Load, correction to loaded authority,
-        then acknowledgement. Acknowledgement retains evidence.
+        Do not repeat Save right away. If a save was interrupted or failed, click Load field list, reconcile your
+        selection, and then acknowledge the result.
       </p>{/if}
     {#if view.reconciliationReview}<p role="status">
-        Loaded reconciliation: {view.reconciliationReview.physical.rows.length} physical rows. Historical draft remains shown
-        until explicit correction.
+        Loaded field list ({view.reconciliationReview.physical.rows.length} rows). Your unsaved draft stays visible until
+        you reconcile or undo.
       </p>{/if}
   </div>
   <p data-field-list-enablement>
@@ -230,18 +230,18 @@
   {#if view.proposedIndex.error}<p role="alert">Draft selection diagnostic: {view.proposedIndex.error}</p>{/if}
   {#if view.review && view.proposed}
     <p data-field-list-counts>
-      {view.proposed.rows.length} physical rows;
-      {visibleRows().length} visible positive-order rows;
-      {view.proposed.rows.length - visibleRows().length} hidden rows. Source selected {view.sourceIndex.error
+      {view.proposed.rows.length} total rows;
+      {visibleRows().length} visible ordered rows;
+      {view.proposed.rows.length - visibleRows().length} hidden rows. Saved selected {view.sourceIndex.error
         ? 'unavailable (see diagnostic)'
         : view.sourceIndex.selected.length}; draft selected {view.proposedIndex.error
         ? 'unavailable (see diagnostic)'
         : view.proposedIndex.selected.length}
-      (source SQL selection includes hidden rows).
+      (includes hidden rows).
     </p>
     <p data-field-list-bulk-warning>
-      Select All / Select None changes Report for every physical row, including hidden rows and NULL/incompatible
-      historical Report values.
+      Select All / Select None updates Report for every row in the field list, including hidden rows and legacy unset
+      entries.
     </p>
     <table>
       <caption>Environmental field selection — Label is locked, no additions</caption>
@@ -277,11 +277,11 @@
       </tbody>
     </table>
     <details data-field-list-physical>
-      <summary>Complete physical diagnostics ({view.proposed.rows.length} rows)</summary>
+      <summary>Complete field-list diagnostics ({view.proposed.rows.length} rows)</summary>
       <pre>{JSON.stringify(view.proposed, null, 2)}</pre>
     </details>
   {:else}<p role="status">
-      Explicitly Load the owned complete field list before staging. Unloaded controls are not saved values.
+      Click Load field list before editing selections. Unloaded checkboxes do not show saved settings.
     </p>{/if}
   <div class="actions">
     <button data-field-list-all disabled={!canStage()} onclick={() => bulk(true)}>Select All</button>
@@ -296,16 +296,15 @@
     <button
       data-field-list-correct
       disabled={held() || !outstanding() || !view.reconciliationReview || !!view.readError}
-      onclick={correct}>Correct to loaded authority</button
+      onclick={correct}>Adopt loaded field list</button
     >
     <button data-field-list-acknowledge disabled={!canAcknowledge()} onclick={acknowledge}>Acknowledge outcome</button>
     {#if view.busy}<button data-field-list-cancel onclick={cancel}>Cancel operation</button>{/if}
   </div>
   <p class="guidance">
-    Owned context {ownedScope.contextId}; project {ownedScope.project}; unit {ownedScope.su}. Configuration-only
-    physical field-list draft, not formatted-output parity. Labels remain literal read-only historical values; hidden
-    rows remain in complete diagnostics. Load is observation, not proof of an unknown commit. Undo clears local
-    actions/errors, never Save receipts.
+    Project {ownedScope.project} · Site Unit {ownedScope.su}. Choose which environmental fields appear in Summary
+    Vegetation environmental previews and exports. Field labels are read-only; hidden rows remain listed in diagnostics
+    above. Undo clears unsaved edits while keeping your save history.
   </p>
 </section>
 

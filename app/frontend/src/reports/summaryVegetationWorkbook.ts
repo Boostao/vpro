@@ -1,4 +1,5 @@
 import { registerContextDisposer } from '../shared/contextSessionRegistry';
+import { formatError } from '../shared/readRequests';
 import type { VegetationWorkbookOutcome } from '../../bindings/github.com/boostao/vpro/app';
 import type {
   SummaryVegetationWorkbookOptions as GeneratedSummaryWorkbookOptions,
@@ -745,7 +746,7 @@ export class SummaryVegetationWorkbookSession {
       return true;
     } catch (cause) {
       if (generation === this.generation)
-        this.state.error = `Workbook review unavailable; no file published: ${String(cause)}`;
+        this.state.error = `Workbook review unavailable; no file published: ${formatError(cause)}`;
       return false;
     } finally {
       this.read = null;
@@ -789,7 +790,7 @@ export class SummaryVegetationWorkbookSession {
       return result;
     } catch (cause) {
       if (generation === this.generation)
-        this.state.error = `Workbook review unavailable; no file published: ${String(cause)}`;
+        this.state.error = `Workbook review unavailable; no file published: ${formatError(cause)}`;
       return null;
     } finally {
       this.read = null;

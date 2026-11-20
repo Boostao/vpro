@@ -8,6 +8,7 @@ import { ownedScope, type ProjectSUScope as GoogleEarthScope } from '../shared/s
 import { validatePlotLabelRegionalPreview } from './plotLabelRegional';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { PublicationSession, type PublicationView } from '../shared/publicationSession';
+import { formatError } from '../shared/readRequests';
 
 const hash = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
 const text = (value: unknown): value is string =>
@@ -176,7 +177,7 @@ export class PlotLabelPDFPublicationSession {
         throw new Error('Readonly PDF recovery cannot certify the retained attempt.');
       }
     } catch (cause) {
-      this.recoveryError = `Label PDF outcome remains unknown; never replay the retained request: ${String(cause)}`;
+      this.recoveryError = `Label PDF outcome remains unknown; never replay the retained request: ${formatError(cause)}`;
     } finally {
       this.recovering = false;
       this.notify();

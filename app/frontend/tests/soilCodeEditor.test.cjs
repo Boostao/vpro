@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { compile } = require('svelte/compiler');
 const { render } = require('svelte/server');
-const { serverComponent, presentationHelpers, srcPath } = require('./svelteTestHelpers.cjs');
+const { serverComponent, presentationHelpers, srcPath, serverReads } = require('./svelteTestHelpers.cjs');
 const { presentation } = presentationHelpers();
 const read = name => readFileSync(srcPath(name), 'utf8');
 function load(name, dependencies = {}) {
@@ -14,6 +14,7 @@ function load(name, dependencies = {}) {
   vm.runInNewContext(ts.transpileModule(read(name), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   }).outputText, { exports, require: name => {
+    if (name === '../shared/readRequests') return serverReads;
     if (!(name in dependencies)) throw new Error(`Unexpected dependency ${name}`);
     return dependencies[name];
   } });

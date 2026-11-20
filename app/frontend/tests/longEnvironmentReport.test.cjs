@@ -67,7 +67,7 @@ test('report view is independently gated, scoped, cancellable and participates i
   assert.match(panel,/EnvironmentReportService\.PreviewLongEnvironment\(\s*contextId/);
   assert.match(panel,/data-source-control="rptSvTitle"/);
   assert.match(panel,/data-source-control="btnViewReport"/);
-  assert.match(panel,/Input and report preparation never save preferences/);
+  assert.match(panel,/typing or viewing the report does not alter saved\s+preferences/);
   assert.equal(renderShellDeferredViews('long-environment', null), '');
   assert.match(renderShellDeferredViews('long-environment', { contextId: 'c1', activeProject: 'Sample', activeSU: 'S1' }), /Loading Long Environment Report/);
   const appCtx = componentFunctions('App.svelte', ['requestTransition'], { editorBusy: true, error: '' });

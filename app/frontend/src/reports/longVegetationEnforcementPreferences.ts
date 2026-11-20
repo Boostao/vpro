@@ -1,4 +1,5 @@
 import { ownedScope, type ProjectSUScope as GoogleEarthScope } from '../shared/scope';
+import { formatError } from '../shared/readRequests';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import {
   ReportPreferencesSession,
@@ -131,7 +132,7 @@ export class LongVegetationEnforcementPreferencesSession extends ReportPreferenc
         this.observation.value = validatePrinterObservation(outcome.printers);
         this.observation.error = '';
       } catch (cause) {
-        this.observation.error = `Printer refresh unavailable; retain the preference receipt and do not replay: ${String(cause)}`;
+        this.observation.error = `Printer refresh unavailable; retain the preference receipt and do not replay: ${formatError(cause)}`;
       }
       // The independently validated preference receipt survives a failed host observation.
       return {

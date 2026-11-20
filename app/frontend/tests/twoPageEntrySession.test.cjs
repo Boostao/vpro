@@ -3,9 +3,9 @@ const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
-const { loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
+const { loadTypeScript, srcPath, serverReads } = require('./svelteTestHelpers.cjs');
 const { editor, transport, writeSession, metadata, cell } = require('./siviParentTestHelpers.cjs');
-const modules = { siviParentEditor: editor, siviParentTransport: transport,
+const modules = { readRequests: serverReads, siviParentEditor: editor, siviParentTransport: transport,
   siviParentWriteSession: writeSession, projectMetadataEditor: metadata };
 function load(name) {
   if (modules[name]) return modules[name];

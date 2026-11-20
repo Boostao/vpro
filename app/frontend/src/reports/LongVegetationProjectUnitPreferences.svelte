@@ -143,11 +143,10 @@
   undoLabel="Undo Unit Groups draft"
   acknowledgeLabel="Acknowledge Unit Groups outcome"
   cancelLabel="Cancel Unit Groups read"
-  guidance={'Build the explicit project source before Load. Actual saved values are never normalized into ' +
-    'the planned source choice. Save only the choice matching that source; changing source requires ' +
-    'an explicit scope switch. Drafts do not change report output. Receipts remain after ' +
-    'acknowledgement and tab remounts. Only LVUnitGroups changes in YAML; no project data, audits, ' +
-    'registry or printing.'}
+  guidance={'Build the selected project source before loading Unit Groups. Save only the Unit Groups choice ' +
+    'matching your active report source; switch report source above to use another mode. Unsaved edits do not ' +
+    'change report output. Saving updates only your default Unit Groups preference; project data, audit ' +
+    'history, and printing settings are untouched.'}
   onload={load}
   onsave={save}
   onundo={undo}

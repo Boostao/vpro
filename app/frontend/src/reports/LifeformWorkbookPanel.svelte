@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
-  import { ReadRequests } from '../shared/readRequests';
+  import { ReadRequests, formatError } from '../shared/readRequests';
   import WorkbookPublicationSection from '../shared/WorkbookPublicationSection.svelte';
   import { lifeformCellText, lifeformRatioText, type LifeformSummaryOwner } from './lifeformSummary';
   import { speciesAttributeCountText } from './speciesAttributeSummary';
@@ -82,7 +82,7 @@
       review = validateLifeformWorkbookReview(value, owned, requestedDetails);
     } catch (cause) {
       if (!disposed && requestGeneration === generation) {
-        error = `Workbook review unavailable; no file exported: ${String(cause)}`;
+        error = `Workbook review unavailable; no file exported: ${formatError(cause)}`;
         notifications.error('Lifeform Summary workbook review failed', error, {
           category: 'reports',
           source: 'Lifeform Summary',
@@ -127,7 +127,7 @@
       }
     } catch (cause) {
       if (!disposed) {
-        error = String(cause);
+        error = formatError(cause);
         notifications.error('Lifeform Summary workbook export failed', error, {
           category: 'reports',
           source: 'Lifeform Summary',
@@ -143,7 +143,7 @@
       session.acknowledge();
       review = null;
     } catch (cause) {
-      error = String(cause);
+      error = formatError(cause);
       notifications.error('Lifeform Summary workbook acknowledgement failed', error, {
         category: 'reports',
         source: 'Lifeform Summary',

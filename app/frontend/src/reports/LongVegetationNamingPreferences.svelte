@@ -118,14 +118,11 @@
   undoLabel="Undo Show draft"
   acknowledgeLabel="Acknowledge Show outcome"
   cancelLabel="Cancel Show read"
-  guidance={'Load saved Show values before editing; no defaults are applied. A staged source Show selection ' +
-    'clears its paired selected field, even after returning to the original choice. Undo restores ' +
-    'the saved pair. Drafts do not change report output. Save explicitly, acknowledge and reload ' +
-    'report options. Historical unavailable modes can remain unchanged without enabling their ' +
-    'report. Receipts remain after acknowledgement; unknown outcomes require explicit owned Load, ' +
-    'never blind Save replay. Only LVShowEnglishName and the source-required empty LVShowField ' +
-    'change in YAML; no registry, project data, source audits, custom-field selection, new ' +
-    'calculations or printing.'}
+  guidance={'Load saved Show settings before editing; no defaults are applied. Choosing a Show option clears ' +
+    'any paired custom field selection until you Undo back to your saved pair. Unsaved edits do not change ' +
+    'report output until you save and reload report options. If a save is interrupted, reload saved Show ' +
+    'settings before saving again. Saving updates only your default Show species-label preference; project ' +
+    'data, audit history, and printing settings are untouched.'}
   onload={load}
   onsave={save}
   oncancel={cancel}

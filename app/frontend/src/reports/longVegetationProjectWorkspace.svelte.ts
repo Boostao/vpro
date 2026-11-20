@@ -22,6 +22,7 @@ import {
   type ValidatedProjectWorkbookReview,
 } from './longVegetationProjectWorkbook.svelte';
 import { requireLongVegetationGrouping } from './longVegetationReport';
+import { formatError } from '../shared/readRequests';
 
 export type ProjectWorkspaceCapabilities = {
   enabled: boolean;
@@ -395,7 +396,7 @@ export class ProjectReportWorkspace {
       }
     } catch (cause) {
       if (generation === this.generation)
-        this.error = `Original project ${kind} unavailable; no data or file written: ${String(cause)}`;
+        this.error = `Original project ${kind} unavailable; no data or file written: ${formatError(cause)}`;
     } finally {
       if (generation === this.generation) {
         this.readBusy = false;

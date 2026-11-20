@@ -1,4 +1,5 @@
 import { evictMapEntriesByContext, registerContextDisposer } from '../shared/contextSessionRegistry';
+import { formatError } from '../shared/readRequests';
 import { lifeformShape, lifeformText } from './lifeformSummary';
 import {
   fieldListCell,
@@ -411,7 +412,7 @@ class SummaryEnvironmentalSessionBase<V, P extends SummaryEnvironmentalPreview<V
     try {
       pending?.cancel?.();
     } catch (cause) {
-      this.error += ` ${String(cause)}`;
+      this.error += ` ${formatError(cause)}`;
     }
     this.notify();
   }
@@ -440,7 +441,7 @@ class SummaryEnvironmentalSessionBase<V, P extends SummaryEnvironmentalPreview<V
       return true;
     } catch (cause) {
       if (generation === this.generation)
-        this.error = `Combined environmental preview unavailable; no data/settings saved: ${String(cause)}`;
+        this.error = `Combined environmental preview unavailable; no data/settings saved: ${formatError(cause)}`;
       return false;
     } finally {
       this.dispatches--;

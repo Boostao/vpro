@@ -114,13 +114,10 @@
   undoLabel="Undo report switch draft"
   acknowledgeLabel="Acknowledge report switch outcome"
   cancelLabel="Cancel report switch read"
-  guidance={(!view.initialized
-    ? 'Load saved switches before editing; unloaded boxes do not represent saved values. '
-    : '') +
-    'Drafts do not change report output. Save explicitly, acknowledge and reload report options. ' +
-    'Receipts remain after acknowledgement; unknown outcomes require explicit owned Load, never ' +
-    'blind Save replay. Only these four YAML preferences change; no registry, project data, source ' +
-    'audits or printing.'}
+  guidance={(!view.initialized ? 'Load saved switches before editing; unloaded boxes do not show saved values. ' : '') +
+    'Unsaved edits do not change report output until you save and reload report options. If a save is ' +
+    'interrupted, reload saved switches before saving again. Saving updates only these four Long Vegetation ' +
+    'display preferences; project data, audit history, and printing settings are untouched.'}
   onload={load}
   onsave={save}
   oncancel={cancel}

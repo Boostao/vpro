@@ -571,7 +571,7 @@ test('vegetation report uses responsive labelled read-only settings, separate na
   assert.match(result.body,/disabled[^>]*>View Report/);
   const composite=require('./svelteTestHelpers.cjs').readReportComposite('long-vegetation');
   assert.match(composite,/grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 19rem\), 1fr\)\)/);
-  assert.match(composite,/thresholds are bypassed, as in the source\s+report/);
+  assert.match(composite,/Presence and mean-cover thresholds are bypassed/);
   assert.match(composite,/<th scope="col">List English name<\/th>\s*<th scope="col">Matched report English name/);
   assert.match(composite,/value === null \? 'NULL' : String\(value\)/);
   assert.match(composite,/Unassigned \(NULL\)/);

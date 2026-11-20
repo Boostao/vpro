@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import { EnvironmentReportService } from '../../bindings/github.com/boostao/vpro/app';
-  import { ReadRequests } from '../shared/readRequests';
+  import { ReadRequests, formatError } from '../shared/readRequests';
   import {
     matrixPageFromWire,
     matrixWorkbookFromWire,
@@ -121,7 +121,7 @@
       if (request === generation) {
         preview = null;
         workbook = null;
-        error = `Subzone Matrix unavailable: ${String(cause)}`;
+        error = `Subzone Matrix unavailable: ${formatError(cause)}`;
         notifications.error('Subzone Matrix load failed', error, {
           category: 'reports',
           source: 'Subzone Matrix',
@@ -153,7 +153,7 @@
       preview = validated.preview;
     } catch (cause) {
       if (request === generation) {
-        error = `Workbook review unavailable: ${String(cause)}`;
+        error = `Workbook review unavailable: ${formatError(cause)}`;
         notifications.error('Subzone Matrix workbook review failed', error, {
           category: 'reports',
           source: 'Subzone Matrix',
@@ -198,7 +198,7 @@
         }
       }
     } catch (cause) {
-      error = String(cause);
+      error = formatError(cause);
       notifications.error('Subzone Matrix workbook export failed', error, {
         category: 'reports',
         source: 'Subzone Matrix',

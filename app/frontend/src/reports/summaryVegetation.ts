@@ -1,4 +1,5 @@
 import { evictMapEntriesByContext, registerContextDisposer } from '../shared/contextSessionRegistry';
+import { formatError } from '../shared/readRequests';
 import type {
   SummaryVegetationAppliedPreferences,
   SummaryVegetationGoldstreamMetadata,
@@ -865,7 +866,7 @@ export class SummaryVegetationSession {
       this.preview = result;
     } catch (cause) {
       if (request === this.generation)
-        this.error = `Summary Vegetation unavailable; no data or settings saved: ${String(cause)}`;
+        this.error = `Summary Vegetation unavailable; no data or settings saved: ${formatError(cause)}`;
     } finally {
       if (request === this.generation) {
         this.busy = false;
@@ -887,7 +888,7 @@ export class SummaryVegetationSession {
       await this.validateResolvedPreview(value, port, request, false);
     } catch (cause) {
       if (request === this.generation)
-        this.error = `Summary Vegetation unavailable; no data or settings saved: ${String(cause)}`;
+        this.error = `Summary Vegetation unavailable; no data or settings saved: ${formatError(cause)}`;
     } finally {
       if (request === this.generation) {
         this.busy = false;
@@ -910,7 +911,7 @@ export class SummaryVegetationSession {
       await this.validateResolvedPreview(value, port, request, true);
     } catch (cause) {
       if (request === this.generation)
-        this.error = `Summary Vegetation unavailable; no data or settings saved: ${String(cause)}`;
+        this.error = `Summary Vegetation unavailable; no data or settings saved: ${formatError(cause)}`;
     } finally {
       if (request === this.generation) {
         this.busy = false;
@@ -929,7 +930,7 @@ export class SummaryVegetationSession {
       await this.validateResolvedPreview(value, port, request, false);
     } catch (cause) {
       if (request === this.generation)
-        this.error = `Summary Vegetation unavailable; no data or settings saved: ${String(cause)}`;
+        this.error = `Summary Vegetation unavailable; no data or settings saved: ${formatError(cause)}`;
     } finally {
       if (request === this.generation) {
         this.busy = false;

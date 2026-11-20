@@ -1,5 +1,5 @@
 const { readJsonFixture } = require('./fixtureLoader.cjs');
-const { srcPath } = require('./svelteTestHelpers.cjs');
+const { srcPath, serverReads } = require('./svelteTestHelpers.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const fs = require('node:fs');
@@ -19,6 +19,7 @@ function load(name, dependencies = {}) {
   const module = { exports: {} };
   vm.runInNewContext(code, { module, exports: module.exports,
     crypto: { randomUUID }, require: id => {
+      if (id === '../shared/readRequests') return serverReads;
       if (!(id in dependencies)) throw new Error(`Uninjected dependency ${id}`);
       return dependencies[id];
     } }, { filename: name });

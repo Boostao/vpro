@@ -1,4 +1,5 @@
 import { ownedScope, type ProjectSUScope as GoogleEarthScope } from '../shared/scope';
+import { formatError } from '../shared/readRequests';
 import { lifeformShape } from './lifeformSummary';
 import {
   ReportPreferencesSession,
@@ -193,7 +194,7 @@ export class SummaryVegetationPreferencesSession extends ReportPreferencesSessio
     return { ...super.view(), readError: this.readError };
   }
   rejectRead(cause: unknown) {
-    this.readError = `Saved Summary options unavailable; no defaults applied: ${String(cause)}`;
+    this.readError = `Saved Summary options unavailable; no defaults applied: ${formatError(cause)}`;
     this.notify();
   }
   override apply(value: SummaryVegetationPreferencesReview | null, preserveDraft = false) {

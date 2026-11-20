@@ -115,14 +115,12 @@
   undoLabel="Undo selected field draft"
   acknowledgeLabel="Acknowledge selected field outcome"
   cancelLabel="Cancel selected field read"
-  guidance={'The source suggestions are not mandatory membership or proof that a physical field exists. ' +
-    'Preserve the literal field spelling; no trimming, case change or column creation occurs. A ' +
-    'nonempty edit sets Show mode 4, and a later empty edit retains it. Undo restores the saved ' +
-    'pair. Drafts do not change report output. Save explicitly, acknowledge and reload report ' +
-    'options. Missing or unsupported report fields remain unavailable; saving preferences does not ' +
-    'enable them. Receipts survive acknowledgement, and unknown outcomes require an owned Load ' +
-    'before further Save. Only LVShowField and its source-coupled mode change in YAML; no registry, ' +
-    'project data, source audits or printing.'}
+  guidance={'Field suggestions are not mandatory membership or proof that a column exists in the species list. ' +
+    'Enter the exact field name; no trimming, case change or column creation occurs. Entering a field name ' +
+    'selects custom-field Show mode, and Undo restores your saved pair. Unsaved edits do not change report ' +
+    'output until you save and reload report options. Missing or unsupported fields remain unavailable; saving ' +
+    'preferences does not enable them. If a save is interrupted, reload saved settings before saving again. ' +
+    'Saving updates only your custom Show field preference; project data and audit history are untouched.'}
   onload={load}
   onsave={save}
   oncancel={cancel}
@@ -169,7 +167,7 @@
   {/if}
   {#if definitions}
     <details data-long-vegetation-selected-field-definitions>
-      <summary>Owned physical fields ({definitions.length})</summary>
+      <summary>Available species attribute fields ({definitions.length})</summary>
       <ul>
         {#each definitions as column}<li>
             <code>{JSON.stringify(column.name)}</code> - {JSON.stringify(column.declaredType)}

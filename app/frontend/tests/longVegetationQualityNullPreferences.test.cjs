@@ -138,9 +138,9 @@ test('source group labels leaf controls and unloaded distinction render once wit
       assert.ok(body.includes(`for="long-vegetation-quality-null-${fields[index]}"`));
     }
     assert.match(body, /data-long-vegetation-quality-null-save[^>]*disabled/);
-    assert.match(body, /does not enable it or change minimum criteria/);
+    assert.match(body, /do not alter minimum thresholds/);
     if (initialized) assert.doesNotMatch(body, /data-long-vegetation-quality-null-undo[^>]*disabled/);
-    else assert.match(body, /unloaded disabled checkboxes do not represent saved values/);
+    else assert.match(body, /unloaded checkboxes do not show saved values/);
   }
 });
 test('actual report retains errors across remount and propagates barriers', () => {

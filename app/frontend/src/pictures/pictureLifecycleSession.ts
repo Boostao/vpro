@@ -1,5 +1,5 @@
 import type { EditorCloseState } from '../shell/closeLifecycle';
-import { ReadRequests, type CancellableRead } from '../shared/readRequests';
+import { ReadRequests, formatError, type CancellableRead } from '../shared/readRequests';
 import { pictureMetadataFromWire, type PictureOwner, type PictureReview } from './pictureRead';
 import {
   pictureDeletionRequest,
@@ -164,7 +164,7 @@ export class PictureLifecycleSession {
       return true;
     } catch (cause) {
       if (generation === this.generation)
-        this.state.error = `${label} failed; prior state retained without inference: ${String(cause)}`;
+        this.state.error = `${label} failed; prior state retained without inference: ${formatError(cause)}`;
       return false;
     } finally {
       if (generation === this.generation) {
@@ -278,11 +278,11 @@ export class PictureLifecycleSession {
       if (generation === this.generation) {
         if (this.attempted) {
           this.state.blocked = true;
-          this.state.error = `Picture mutation outcome remains unknown; original/request retained without replay: ${String(cause)}`;
+          this.state.error = `Picture mutation outcome remains unknown; original/request retained without replay: ${formatError(cause)}`;
         } else {
           this.pending = null;
           this.state.confirmed = false;
-          this.state.error = `Picture request preparation failed before dispatch; retained review requires correction: ${String(cause)}`;
+          this.state.error = `Picture request preparation failed before dispatch; retained review requires correction: ${formatError(cause)}`;
         }
       }
       return false;

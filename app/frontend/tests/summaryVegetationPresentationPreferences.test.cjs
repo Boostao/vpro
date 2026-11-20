@@ -153,7 +153,7 @@ test('regression independently reproduces the reviewed stale-ack bug with the ex
   const previous = source.replace(before, 'if (view.outcome &&');
   const module = { exports: {} };
   const dependencies = { './googleEarthReview': earth, './scope': earth, './qualityEditor': quality,
-    './lifeformSummary': lifeform, './reportTitlePreferences': shared };
+    './lifeformSummary': lifeform, './reportTitlePreferences': shared, '../shared/readRequests': require('./svelteTestHelpers.cjs').serverReads };
   vm.runInNewContext(ts.transpileModule(previous, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText, { module, exports: module.exports, structuredClone,
@@ -328,10 +328,10 @@ test('actual compiled pane preserves unique associated original labels and unava
   assert.match(html, /<input[^>]*id="summary-presentation-showCommon"[^>]*disabled/);
   assert.doesNotMatch(html.match(/<input[^>]*id="summary-presentation-hierarchyHeader"[^>]*>/)[0], /\bdisabled\b/);
   assert.match(html, /7\.25/);
-  assert.match(html, /Stored presentation drafts, not original report-output formatting parity/);
-  assert.match(html, /original Report output or printing/);
-  assert.match(html.replace(/\s+/g, ' '), /separately gated workbook inspection can consume the loaded Constancy draft without Save/);
-  assert.match(html, /does not apply the other presentation flags/);
+  assert.match(html, /Load saved presentation settings before editing/);
+  assert.match(html.replace(/\s+/g, ' '), /Enabling Use Constancy Format sets Group by Lifeform/);
+  assert.match(html.replace(/\s+/g, ' '), /Workbook export below can preview your loaded Constancy selection before saving/);
+  assert.doesNotMatch(html, /callback plan|Group by3|Display1/i);
   assert.match(panelSource, /const raw = event\.currentTarget\.value;\s*editTitle\(raw\)/);
   assert.match(panelSource, /const raw = event\.currentTarget\.checked;\s*editFlag\(field\.key, raw\)/);
   assert.match(panelSource, /\$state\.raw/);

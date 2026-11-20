@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import { ImportExportService, VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
-  import { ReadRequests } from '../shared/readRequests';
+  import { ReadRequests, formatError } from '../shared/readRequests';
   import { projectState } from '../shared/state';
   import { notifications } from '../shell/notificationService.svelte';
   import SiteUnitExclusionFilter from '../classification/SiteUnitExclusionFilter.svelte';
@@ -149,7 +149,7 @@
     try {
       await fieldList.load(ownedContext());
     } catch (cause) {
-      fieldListError = String(cause);
+      fieldListError = formatError(cause);
       notifications.error('Summary Vegetation field list failed', fieldListError, reportToastOpts());
     }
   }
@@ -159,7 +159,7 @@
     try {
       fieldList.dismissInitialReadError(ownedContext());
     } catch (cause) {
-      fieldListError = String(cause);
+      fieldListError = formatError(cause);
       notifications.error('Summary Vegetation field list acknowledgement failed', fieldListError, reportToastOpts());
     }
   }
@@ -292,7 +292,7 @@
       );
       if (typeof syncReportNotifications === 'function') syncReportNotifications();
     } catch (cause) {
-      preferenceReadError = String(cause);
+      preferenceReadError = formatError(cause);
       notifications.error('Summary Vegetation preferences save failed', preferenceReadError, reportToastOpts());
     }
   }

@@ -1,5 +1,5 @@
 const { readJsonFixture } = require('./fixtureLoader.cjs');
-const { srcPath, resolveDependency, noopNotificationsStub } = require('./svelteTestHelpers.cjs');
+const { srcPath, resolveDependency, noopNotificationsStub, serverReads } = require('./svelteTestHelpers.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const fs = require('node:fs');
@@ -18,7 +18,17 @@ function execute(code, dependencies = {}, globals = {}) {
   } }).outputText;
   vm.runInNewContext(js, { ...globals, module, exports: module.exports, setTimeout,
     crypto: { randomUUID: () => wire.request.requestId },
-    require(id) { const m = resolveDependency(id, dependencies); assert.ok(m.found, `Uninjected import ${id}`); return m.value; } });
+    require(id) {
+      const m = resolveDependency(id, dependencies);
+      if (m.found) {
+        if (id.endsWith('/readRequests') && m.value && typeof m.value === 'object') {
+          return { ...serverReads, ...m.value };
+        }
+        return m.value;
+      }
+      if (id.endsWith('/readRequests')) return serverReads;
+      assert.fail(`Uninjected import ${id}`);
+    } });
   return module.exports;
 }
 const client = execute(fs.readFileSync(srcPath('summaryVegetationFieldList.ts'), 'utf8'));

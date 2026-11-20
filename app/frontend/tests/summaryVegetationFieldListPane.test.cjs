@@ -23,7 +23,9 @@ function execute(code, dependencies, globals = {}) {
     require(id) { assert.ok(id in dependencies, `Uninjected import ${id}`); return dependencies[id]; } });
   return module.exports;
 }
-const client = execute(fs.readFileSync(srcPath('summaryVegetationFieldList.ts'), 'utf8'), {});
+const client = execute(fs.readFileSync(srcPath('summaryVegetationFieldList.ts'), 'utf8'), {
+  '../shared/readRequests': serverReads,
+});
 // Execute the actual component script, not separately rewritten action helpers.
 // The private harness substitutes lifecycle/props plumbing; full component is separately compiled/checked.
 function mount(session, options = {}) {
@@ -289,8 +291,8 @@ test('source headers, one checkbox binding, locked Label, safety order and expli
   assert.match(source, /currentTarget\.checked;\s*edit\(row\.rowId, raw\)/);
   assert.match(source, /aria-label=\{'Report — ' \+ rowName\(row\)\}/);
   assert.match(source, /data-source-binding="Label"\s*><span class="literal">/);
-  assert.match(source, /source SQL selection includes hidden rows/);
-  assert.match(source, /including hidden rows and NULL\/incompatible\s+historical Report/);
+  assert.match(source, /includes hidden rows/);
+  assert.match(source, /including hidden rows and legacy unset/);
   assert.match(source, /JSON\.stringify\(view\.proposed, null, 2\)/);
   assert.ok(source.indexOf('class="safety"') < source.indexOf('<table>'));
   assert.ok(source.indexOf('class="guidance"') > source.indexOf('data-field-list-acknowledge'));

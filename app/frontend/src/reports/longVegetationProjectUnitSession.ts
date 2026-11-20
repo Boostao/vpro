@@ -1,4 +1,5 @@
 import { registerContextDisposer } from '../shared/contextSessionRegistry';
+import { formatError } from '../shared/readRequests';
 import type {
   LongVegetationProjectUnitOutcome,
   LongVegetationProjectUnitPreferences,
@@ -191,7 +192,7 @@ export class ProjectUnitPreferencesSession extends ReportPreferencesSession<
       if (this.applyLoaded(detached, generation, preserveDraft)) this.readReady = true;
     } catch (cause) {
       if (request === this.readGeneration)
-        this.readError = `Project Unit preferences unavailable; no defaults applied: ${String(cause)}`;
+        this.readError = `Project Unit preferences unavailable; no defaults applied: ${formatError(cause)}`;
     } finally {
       if (request === this.readGeneration) {
         this.readBusy = false;
@@ -249,7 +250,7 @@ export class ProjectUnitPreferencesSession extends ReportPreferencesSession<
           kind: 'unknown',
           contextId: this.owner.contextId,
           request: full,
-          errorMessage: String(cause),
+          errorMessage: formatError(cause),
         });
         throw cause;
       }

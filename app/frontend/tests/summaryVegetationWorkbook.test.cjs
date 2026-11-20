@@ -324,7 +324,7 @@ test('consumed Constancy table renders numeric lifeforms and duplicate visible g
     owner, calculation: value.options, disabled: false, onBusyChange() {},
   } }).body.replace(/<!--[\s\S]*?-->/g, '');
   assert.equal(subscribed, 1);
-  assert.match(html, /loaded presentation Constancy draft/);
+  assert.match(html, /active Constancy presentation setting/);
   const table = html.match(/<table\b[^>]*aria-label="Reviewed effective reference groups"[^>]*>([\s\S]*?)<\/table>/);
   assert.ok(table);
   assert.match(table[1], /<th\b[^>]*scope="col"[^>]*>Lifeform<\/th>/);

@@ -115,15 +115,12 @@
   undoLabel="Undo Unit Groups draft"
   acknowledgeLabel="Acknowledge Unit Groups outcome"
   cancelLabel="Cancel Unit Groups read"
-  guidance={'Load saved Unit Groups before editing; no defaults are applied. Drafts do not change report ' +
-    'output. Save explicitly, acknowledge and reload report options. Selected fields require a ' +
-    'current owned session Build and independently enabled consumers; all-project fallback remains ' +
-    'unavailable. None uses Env/current selected-list joins, not None species grouping. Retaining an ' +
-    'unchanged unavailable saved choice does not enable its report. Changing Enforce rules resets ' +
-    'the saved Unit Groups to Site unit table; retained drafts require owned Load or correction. ' +
-    'Receipts remain after acknowledgement; unknown outcomes require explicit owned Load, never ' +
-    'blind Save replay. Only LVUnitGroups changes in YAML; no registry, project data, source scratch ' +
-    'tables, audits or printing.'}
+  guidance={'Load saved Unit Groups before editing; no defaults are applied. Unsaved edits do not change report ' +
+    'output until you save and reload report options. Selected fields require a current SU List build in this ' +
+    'session, while None summarizes plots across the active selected list. Toggling Enforce rules resets saved ' +
+    'Unit Groups to Site unit table. If a save is interrupted, reload saved Unit Groups before saving again. ' +
+    'Saving updates only your default Unit Groups preference; project data, audit history, and printing ' +
+    'settings are untouched.'}
   onload={load}
   onsave={save}
   oncancel={cancel}

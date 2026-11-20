@@ -321,17 +321,17 @@
   <p data-summary-workbook-group>
     Workbook grouping: {groupLabel}.
     {#if constancy}
-      Uses the loaded presentation Constancy draft: Lifeform grouping, Display Values1 and effective references without
-      common/guide names.
+      Uses the active Constancy presentation setting: Lifeform grouping, Presence Class and Mean Cover, and species
+      references without common or guide names.
     {:else}
       Uses the Summary Group by selection.
     {/if}
   </p>
   {#if constancy}
     <p data-summary-workbook-constancy>
-      Constancy inspection retains numeric lifeform and separate raw-species groups, including visibly identical rows.
-      Equal visible keys use an adapted raw-code tie order. Independent workbook name/reference drafts are retained for
-      deselection; no preferences were saved.
+      Constancy export keeps lifeform and species groups distinct, ordering tied labels consistently by species code.
+      Your other workbook name and reference choices stay remembered if you turn Constancy off; previewing does not save
+      preferences.
     </p>
   {/if}
   {#if groupingUnavailable}
@@ -427,10 +427,10 @@
   </div>
   {#if unanimousCommon}
     <p data-summary-workbook-unanimous-common>
-      Lifeform/None Display Values6 retains the original group and species key. Every contributing source name across
-      all units must agree exactly; differing names stop review rather than split groups or choose an arbitrary name.
-      Original First projects a unanimous empty name as NULL. Guide-name selection is an effective reference projection,
-      not the original saved callback.
+      In Lifeform or None grouping with Presence Class and Mean Cover, rows remain grouped by species code. Every
+      contributing source name across all units must agree; differing names stop review rather than splitting groups. An
+      empty name is projected as NULL. Guide-name selection is an effective reference projection from the species
+      catalogue.
     </p>
   {/if}
   <div class="actions">
@@ -473,12 +473,10 @@
     />
   {/if}
   <p>
-    Explicit inspection export using the grouping, Calculate, Display Values and Show above, plus these
-    title/environment options. Saved presentation callbacks are not applied. Source data, preferences and audit history
-    are not changed. This is not the original Access Report action: quality/lumping callbacks, original formatting,
-    Excel coercion, printing and macros remain unavailable. Optional attribute/common/guide projection is read-only and
-    uses literal comparison, not Access collation or physical preflight mutations. Source worksheets are a separate
-    inspection option. Existing destinations are never replaced.
+    Exports an Excel (.xlsx) workbook using the grouping, Calculate, Display Values, and Show selections above together
+    with your workbook title and environmental row options. Exporting never alters project records, saved preferences,
+    or audit history, and never overwrites an existing file. Optional species attribute, common-name, and guide-name
+    columns are matched read-only by exact species code.
   </p>
 </WorkbookPublicationSection>
 

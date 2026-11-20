@@ -1,4 +1,4 @@
-const { srcPath } = require('./svelteTestHelpers.cjs');
+const { srcPath, serverReads } = require('./svelteTestHelpers.cjs');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
@@ -9,7 +9,7 @@ const { compile } = require('svelte/compiler');
 const exportsForTest = {};
 vm.runInNewContext(ts.transpileModule(readFileSync(srcPath('becEditor.ts'), 'utf8'),
   { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText,
-  { exports: exportsForTest });
+  { exports: exportsForTest, require: (id) => (id === '../shared/readRequests' ? serverReads : {}) });
 const { BECLookup, becGroups, becWarnings, becValidation, becLengthError, becAcknowledged, rememberBECAcknowledgement } = exportsForTest;
 const codes = (zone = 'BG', subZone = 'xh1', siteSeries = '01') => ({ zone, subZone, siteSeries });
 const row = (rowId, siteSeries = '01', description = null) => ({

@@ -212,7 +212,7 @@ test('compiled private panel has one labeled control per original quality field 
   }
   assert.equal(html.split('data-source-control="optEnforceQC"').length - 1, 1);
   assert.doesNotMatch(html.match(/<input[^>]*data-source-control="optEnforceQC"[^>]*>/)[0], /\bdisabled\b/);
-  assert.match(html.replace(/\s+/g, ' '), /Save updates these quality YAML options including Enforce QC/);
+  assert.match(html.replace(/\s+/g, ' '), /Save updates these plot quality preferences, including Enforce QC/);
 });
 test('actual private panel handlers preserve failed reload guards and cancel late reads without replay', async () => {
   const session = ready();

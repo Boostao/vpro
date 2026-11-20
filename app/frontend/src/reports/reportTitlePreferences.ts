@@ -1,4 +1,5 @@
 import { registerContextDisposer } from '../shared/contextSessionRegistry';
+import { formatError } from '../shared/readRequests';
 import { ownedScope, type ProjectSUScope as GoogleEarthScope } from '../shared/scope';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 
@@ -179,7 +180,7 @@ export class ReportPreferencesSession<Values, Draft, Review> {
       this.state.error = outcome.errorMessage;
       if (outcome.committed || !outcome.errorMessage) this.state.saved = structuredClone(request.proposed);
     } catch (cause) {
-      this.state.error = `Preference save outcome unknown. Do not replay; acknowledge and explicitly Load ${this.policy.savedLabel} before another Save: ${String(cause)}`;
+      this.state.error = `Preference save outcome unknown. Do not replay; acknowledge and explicitly Load ${this.policy.savedLabel} before another Save: ${formatError(cause)}`;
       this.state.saved = null;
       this.state.authorityUnknown = true;
       this.state.receipts.push({

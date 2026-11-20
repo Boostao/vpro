@@ -319,7 +319,7 @@
       <summary>Owned quality and BEC suggestions</summary>
       <p>{reference.source}</p>
       {#each [{ name: 'PlotQualitySite', rows: reference.qualityDefinitions.rows ?? [] }, { name: 'BEC_Use', rows: reference.becDefinitions.rows ?? [] }] as list}
-        <h3>{list.name}: {list.rows.length} physical rows</h3>
+        <h3>{list.name} ({list.rows.length} entries)</h3>
         <ul>
           {#each list.rows as row (row.rowId)}
             <li>
@@ -333,10 +333,10 @@
     </details>
   {/if}
   <p class="guidance">
-    Load before editing; disabled unloaded controls do not represent saved values. Suggestions are optional, not
-    DataQuality ranks. Literal text and unchanged historical values are retained. Save updates these quality YAML
-    options including Enforce QC (DataQuality and BEC_Use plot filtering). Unknown outcomes require explicit owned Load,
-    never blind Save replay.
+    Load saved quality settings before editing; unloaded controls do not show saved values. Suggestions are optional
+    examples rather than strict DataQuality ranks, and exact text is preserved as entered. Save updates these plot
+    quality preferences, including Enforce QC (DataQuality and BEC_Use plot filtering). If a save is interrupted, reload
+    saved settings before saving again.
   </p>
 </section>
 

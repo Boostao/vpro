@@ -839,6 +839,52 @@ test('ENG-FE-007 & UX-ENV-008: formatError strips RuntimeError prefixes, transla
   );
   assert.doesNotMatch(membershipTranslated, /CallError|certified physical source membership/i);
 
+  const labelPdfTranslated = readsMod.formatError(
+    new FakeRuntimeError('label PDF requires one complete literal physical Env/Admin pair')
+  );
+  assert.doesNotMatch(labelPdfTranslated, /RuntimeError|literal physical Env\/Admin pair/i);
+  assert.match(labelPdfTranslated, /Plot not found/i);
+
+  const fileDialogTranslated = readsMod.formatError(
+    new FakeRuntimeError('file selection requires an active desktop window; enter a file path directly when running in a browser')
+  );
+  assert.doesNotMatch(fileDialogTranslated, /RuntimeError:/);
+  assert.match(fileDialogTranslated, /^File selection requires an active desktop window/);
+
+  const becMod = loadTypeScript('entry/becEditor.ts');
+  const siviMembershipTranslated = becMod.cleanEntryError(
+    new FakeRuntimeError(
+      'SIVI parent writing requires certified physical source membership: Source comparison finds 2 Env and 1 Admin rows; one exact unambiguous physical pair is required.'
+    )
+  );
+  assert.doesNotMatch(siviMembershipTranslated, /RuntimeError|certified physical source membership/i);
+  assert.match(siviMembershipTranslated, /Plot changes could not be saved/i);
+
+  // Sweep all frontend source files: zero user-facing String(cause|e|err|error|reason) catch-block interpolations
+  const { srcFiles } = require('./svelteTestHelpers.cjs');
+  const allowedInternalClassifierFiles = new Set([
+    'entry/siviChildWriteSession.ts',
+    'entry/siviHeightSession.ts',
+    'entry/siviParentWriteSession.ts',
+    'shell/plotProfileOps.ts',
+    'shell/workspaceSidebarOps.ts',
+    'shared/readRequests.ts',
+  ]);
+  for (const rel of srcFiles()) {
+    const src = readSrc(rel);
+    const lines = src.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!/String\((cause|e|err|error|reason)\)/.test(line)) continue;
+      assert.equal(
+        allowedInternalClassifierFiles.has(rel) &&
+          (rel === 'shared/readRequests.ts' || /\.includes\(|\.toLowerCase\(/.test(line)),
+        true,
+        `Unexpected user-facing String(cause) in ${rel}:${i + 1}: ${line.trim()}`
+      );
+    }
+  }
+
   // Verify WorkspaceSidebar inspectAccessSource cancels prior in-flight ReadRequests on re-invocation
   let cancelledCount = 0;
   let resolveFirst;

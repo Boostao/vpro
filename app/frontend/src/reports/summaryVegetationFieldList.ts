@@ -1,3 +1,5 @@
+import { formatError } from '../shared/readRequests';
+
 const fieldListSource =
   'owned imported SQLite VPro64.USysShortVegSummaryFieldList; complete physical rows; Label read-only';
 export const fieldListLimits = Object.freeze({
@@ -274,7 +276,7 @@ export function fieldListIndex(table: FieldListTable): FieldListIndex {
       error: '',
     };
   } catch (cause) {
-    return { visible: [], selected: [], error: String(cause) };
+    return { visible: [], selected: [], error: formatError(cause) };
   }
 }
 function action(value: unknown): FieldListAction {
@@ -579,7 +581,7 @@ export class SummaryVegetationFieldListSession {
       this.changed();
       return true;
     } catch (cause) {
-      this.draftError = String(cause);
+      this.draftError = formatError(cause);
       this.changed();
       return false;
     }
@@ -634,7 +636,7 @@ export class SummaryVegetationFieldListSession {
       return true;
     } catch (cause) {
       if (generation === this.generation)
-        this.readError = `Owned field-list read failed; no repaired/default authority: ${String(cause)}`;
+        this.readError = `Owned field-list read failed; no repaired/default authority: ${formatError(cause)}`;
       return false;
     } finally {
       this.finish(generation);
@@ -646,7 +648,7 @@ export class SummaryVegetationFieldListSession {
         kind: 'unknown',
         request,
         outcome: null,
-        error: String(cause),
+        error: formatError(cause),
         reconciliation: null,
         acknowledged: false,
       });
@@ -669,7 +671,7 @@ export class SummaryVegetationFieldListSession {
     try {
       pending?.cancel?.();
     } catch (cause) {
-      this.operationError += ` Cancellation failed: ${String(cause)}`;
+      this.operationError += ` Cancellation failed: ${formatError(cause)}`;
     }
     this.changed();
   }

@@ -115,13 +115,11 @@
   acknowledgeLabel="Acknowledge enforcement outcome"
   cancelLabel="Cancel enforcement read"
   guidance={'An enforcement edit resets the unit group to Site unit table, including a toggle away and back. ' +
-    'Undo restores the saved pair; remounting does not reset it. Save explicitly, acknowledge and ' +
-    'reload report options. Quality minima and NULL choices remain editable with enforcement off; ' +
-    'other retained drafts are not reloaded. Printer refresh is read-only and separate from YAML ' +
-    'persistence. A committed receipt survives a failed refresh: do not replay; acknowledge and ' +
-    'Load. Only enforcement and its source-coupled unit group change. No source data, audits, ' +
-    'printer default or physical printing is changed. Selected-fields/None unit-group reports remain ' +
-    'unavailable.'}
+    'Undo restores the saved pair; switching tabs keeps unsaved edits intact. Click Save enforcement preferences ' +
+    'and reload report options to apply changes. Quality minima and Include Nulls choices stay editable when ' +
+    'enforcement is off. Printer status refresh is read-only and separate from saved preferences; if a refresh ' +
+    'fails after saving, acknowledge the notice and reload rather than saving again. No printer selection, ' +
+    'default change or printing occurs, and project records and audit history are untouched.'}
   onload={load}
   onsave={save}
   oncancel={cancel}

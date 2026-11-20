@@ -1,4 +1,5 @@
 import { registerContextDisposer } from '../shared/contextSessionRegistry';
+import { formatError } from '../shared/readRequests';
 import type {
   LongVegetationProjectFieldDefinitions,
   LongVegetationReportScope,
@@ -220,7 +221,8 @@ export class ProjectScopeSelectionSession {
       if (request !== this.generation) return;
       this.apply(scope, catalogue, true, !pending && settlement === this.mutationSettlement);
     } catch (cause) {
-      if (request === this.generation) this.error = `Project scope unavailable; no defaults applied: ${String(cause)}`;
+      if (request === this.generation)
+        this.error = `Project scope unavailable; no defaults applied: ${formatError(cause)}`;
     } finally {
       if (request === this.generation) {
         this.busy = false;
@@ -273,7 +275,7 @@ export class ProjectScopeSelectionSession {
     } catch (cause) {
       if (request === this.generation) {
         this.authorityUnknown = true;
-        this.error = `Report scope switch outcome unknown; reload owned scope before retry: ${String(cause)}`;
+        this.error = `Report scope switch outcome unknown; reload owned scope before retry: ${formatError(cause)}`;
       }
     } finally {
       if (request === this.generation) {
@@ -342,7 +344,7 @@ export class ProjectScopeSelectionSession {
     } catch (cause) {
       if (request === this.generation) {
         this.authorityUnknown = true;
-        this.error = `Project Build outcome unknown; reload owned scope before retry: ${String(cause)}`;
+        this.error = `Project Build outcome unknown; reload owned scope before retry: ${formatError(cause)}`;
       }
     } finally {
       if (request === this.generation) {

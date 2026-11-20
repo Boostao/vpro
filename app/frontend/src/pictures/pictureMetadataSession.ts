@@ -1,6 +1,6 @@
 import type { PictureMetadataWriteResult } from '../../bindings/github.com/boostao/vpro/app';
 import type { EditorCloseState } from '../shell/closeLifecycle';
-import { ReadRequests, type CancellableRead } from '../shared/readRequests';
+import { ReadRequests, formatError, type CancellableRead } from '../shared/readRequests';
 import { equalCell } from '../admin/projectMetadataEditor';
 import { pictureMetadataFromWire, type PictureOwner, type PictureReview } from './pictureRead';
 import {
@@ -261,7 +261,7 @@ export class PictureMetadataSession {
     } catch (cause) {
       if (generation === this.generation) {
         this.state.blocked = true;
-        this.state.error = `Picture Save outcome is unknown; draft/request retained and no automatic replay: ${String(cause)}`;
+        this.state.error = `Picture Save outcome is unknown; draft/request retained and no automatic replay: ${formatError(cause)}`;
       }
       return false;
     } finally {
@@ -295,7 +295,7 @@ export class PictureMetadataSession {
       return true;
     } catch (cause) {
       if (generation === this.generation)
-        this.state.error = `Picture discard/reload failed; draft and unknown state retained: ${String(cause)}`;
+        this.state.error = `Picture discard/reload failed; draft and unknown state retained: ${formatError(cause)}`;
       return false;
     } finally {
       if (generation === this.generation) {

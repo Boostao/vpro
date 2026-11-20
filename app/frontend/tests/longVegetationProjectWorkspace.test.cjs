@@ -58,6 +58,7 @@ function compiledModule(filename,dependencies) {
     if(name==='svelte/internal/client') return client;
     const matched = resolveDependency(name, dependencies);
     if(matched.found) return matched.value;
+    if(name.endsWith('/readRequests')) return require('./svelteTestHelpers.cjs').serverReads;
     throw new Error(`Unexpected workspace dependency ${name}`);
   }});
   return module.exports;

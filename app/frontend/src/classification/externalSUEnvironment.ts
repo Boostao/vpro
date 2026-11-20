@@ -7,7 +7,7 @@ import type {
 import { validateSiteUnitEnvironmentReview, validateSiteUnitEnvironmentResult } from './siteUnitEnvironment';
 import { ownedScope, type ProjectSUScope as GoogleEarthScope } from '../shared/scope';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
-import { ReadRequests, type CancellableRead } from '../shared/readRequests';
+import { ReadRequests, formatError, type CancellableRead } from '../shared/readRequests';
 import type { EditorCloseState } from '../shell/closeLifecycle';
 import type { TwoPageParentForm } from '../entry/twoPageParentSession';
 
@@ -183,7 +183,7 @@ export class ExternalSUEnvironmentSession {
       this.accept(value);
     } catch (cause) {
       if (generation === this.generation)
-        this.state.error = `Transfer outcome remains unknown; retain the request and recover readonly, never replay: ${String(cause)}`;
+        this.state.error = `Transfer outcome remains unknown; retain the request and recover readonly, never replay: ${formatError(cause)}`;
     } finally {
       if (generation === this.generation) {
         this.state.busy = false;
@@ -222,7 +222,7 @@ export class ExternalSUEnvironmentSession {
       else throw new Error('Readonly recovery cannot certify the retained transfer.');
     } catch (cause) {
       if (generation === this.generation)
-        this.state.error = `Transfer outcome remains unknown; never replay: ${String(cause)}`;
+        this.state.error = `Transfer outcome remains unknown; never replay: ${formatError(cause)}`;
     } finally {
       if (generation === this.generation) {
         this.state.busy = false;

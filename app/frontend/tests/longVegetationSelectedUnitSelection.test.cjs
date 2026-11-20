@@ -146,7 +146,7 @@ test('selector source grouping uses responsive Field List/Selected List and expl
   assert.match(body,/Field List/);assert.match(body,/Selected List/);assert.match(body,/Build SU List/);
   assert.match(body,/uncalibrated type/);assert.match(body,/data-selected-unit-add="2" disabled/);
   assert.match(source,/minmax\(0, 1fr\)/);assert.match(source,/cancelAll\(\)/);
-  assert.match(body,/Build is read-only/);assert.match(body,/does not save Unit Groups/);
+  assert.match(body,/Building the SU List is read-only/);assert.match(body,/never\s+modifies project records/);
 });
 test('selector changes invalidate held actual parent options/preview/workbook responses without replaying output',async()=>{
   const { componentFunctions } = require('./svelteTestHelpers.cjs');

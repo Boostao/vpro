@@ -5,7 +5,7 @@ import type {
   SiteUnitSummaryOptions,
   SiteUnitSummaryPreview,
 } from '../../bindings/github.com/boostao/vpro/app';
-import type { CancellableRead, ReadRequests } from '../shared/readRequests';
+import { formatError, type CancellableRead, type ReadRequests } from '../shared/readRequests';
 import type { validateSiteUnitSummary, SiteUnitSummaryMode, ValidatedSiteUnitSummary } from './siteUnitSummary';
 import type { SummaryFullPreferenceValues } from './siteUnitSummaryPreferences';
 import type { validateSummarySpecies, ValidatedSummarySpecies } from './siteUnitSummarySpecies';
@@ -405,7 +405,7 @@ export async function runSiteUnitPrefSave(
     await saveFn();
     onSync();
   } catch (cause) {
-    onError(String(cause));
+    onError(formatError(cause));
   }
 }
 
@@ -423,7 +423,7 @@ export async function runSiteUnitShowReport(input: {
     if (!input.isCurrent()) return;
     input.onSuccess(input.validate(value));
   } catch (cause) {
-    if (input.isCurrent()) input.onError(`Summary Environment report unavailable: ${String(cause)}`);
+    if (input.isCurrent()) input.onError(`Summary Environment report unavailable: ${formatError(cause)}`);
   } finally {
     if (input.isCurrent()) input.onDone();
   }
@@ -459,7 +459,7 @@ export async function runSiteUnitCombinedPrefLoad(input: {
       input.applyFallbackDraft();
     }
   } catch (cause) {
-    if (input.isCurrent()) input.onError(`Saved summary options unavailable: ${String(cause)}`);
+    if (input.isCurrent()) input.onError(`Saved summary options unavailable: ${formatError(cause)}`);
   } finally {
     if (input.isCurrent()) input.onDone();
   }
@@ -488,7 +488,7 @@ export async function runSiteUnitOptionsLoad(input: {
       );
     }
   } catch (cause) {
-    if (input.isCurrent()) input.onError(`Summary options unavailable: ${String(cause)}`);
+    if (input.isCurrent()) input.onError(`Summary options unavailable: ${formatError(cause)}`);
   } finally {
     if (input.isCurrent()) input.onDone();
   }
@@ -508,7 +508,7 @@ export async function runSiteUnitFullPreferencesLoad(input: {
     if (!input.isCurrent()) return;
     if (fullValue && input.applyLoaded(fullValue)) input.onApplied(fullValue.values);
   } catch (cause) {
-    if (input.isCurrent()) input.onError(`Saved summary preferences unavailable: ${String(cause)}`);
+    if (input.isCurrent()) input.onError(`Saved summary preferences unavailable: ${formatError(cause)}`);
   } finally {
     if (input.isCurrent()) input.onDone();
   }

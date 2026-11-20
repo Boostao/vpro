@@ -1,4 +1,5 @@
 import { ownedScope, type ProjectSUScope as GoogleEarthScope } from '../shared/scope';
+import { formatError } from '../shared/readRequests';
 import { lifeformShape } from './lifeformSummary';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import {
@@ -172,7 +173,7 @@ export class SummaryVegetationPresentationPreferencesSession extends ReportPrefe
     return { ...view, receipts, readError: this.readError };
   }
   rejectRead(cause: unknown) {
-    this.readError = `Saved Summary presentation unavailable; no defaults applied: ${String(cause)}`;
+    this.readError = `Saved Summary presentation unavailable; no defaults applied: ${formatError(cause)}`;
     this.notify();
   }
   override apply(value: SummaryVegetationPresentationPreferencesReview | null, preserveDraft = false) {

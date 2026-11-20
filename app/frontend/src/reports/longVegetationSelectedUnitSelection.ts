@@ -1,4 +1,5 @@
 import { registerContextDisposer } from '../shared/contextSessionRegistry';
+import { formatError } from '../shared/readRequests';
 import type { LongVegetationSelectedUnitSelection } from '../../bindings/github.com/boostao/vpro/app';
 import type { LongVegetationSelectedUnitField } from '../../bindings/github.com/boostao/vpro/app/internal/vegreport/models';
 import { ownedScope, type ProjectSUScope as GoogleEarthScope } from '../shared/scope';
@@ -227,7 +228,7 @@ export class SelectedUnitSelectionSession {
       this.apply(value, true);
     } catch (cause) {
       if (request === this.generation) {
-        this.error = `Selected unit fields unavailable; no defaults applied: ${String(cause)}`;
+        this.error = `Selected unit fields unavailable; no defaults applied: ${formatError(cause)}`;
       }
     } finally {
       if (request === this.generation) {
@@ -282,7 +283,7 @@ export class SelectedUnitSelectionSession {
     } catch (cause) {
       if (request === this.generation) {
         this.authorityUnknown = true;
-        this.error = `Selected unit Build unavailable; reload owned fields before retry: ${String(cause)}`;
+        this.error = `Selected unit Build unavailable; reload owned fields before retry: ${formatError(cause)}`;
       }
     } finally {
       if (request === this.generation) {

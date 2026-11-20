@@ -1,4 +1,5 @@
 import { registerContextDisposer } from '../shared/contextSessionRegistry';
+import { formatError } from '../shared/readRequests';
 import type {
   SiteUnitSummaryFullPreferences,
   SiteUnitSummaryOptions,
@@ -148,7 +149,7 @@ export class SiteUnitSummaryPreferencesSession {
       this.state.error = outcome.errorMessage;
       if (outcome.committed || !outcome.errorMessage) this.state.saved = structuredClone(request.proposed);
     } catch (cause) {
-      this.state.error = `Summary preference outcome unknown. Do not replay; acknowledge and explicitly Load before another Save: ${String(cause)}`;
+      this.state.error = `Summary preference outcome unknown. Do not replay; acknowledge and explicitly Load before another Save: ${formatError(cause)}`;
       this.state.saved = null;
       this.state.authorityUnknown = true;
       this.state.receipts.push({ kind: 'unknown', request: structuredClone(request), errorMessage: this.state.error });
@@ -347,7 +348,7 @@ class SiteUnitSummaryFullPreferencesSession {
       this.state.error = outcome.errorMessage;
       if (outcome.committed || !outcome.errorMessage) this.state.saved = structuredClone(request.proposed);
     } catch (cause) {
-      this.state.error = `Full summary preference outcome unknown. Do not replay; acknowledge and explicitly Load before another Save: ${String(cause)}`;
+      this.state.error = `Full summary preference outcome unknown. Do not replay; acknowledge and explicitly Load before another Save: ${formatError(cause)}`;
       this.state.saved = null;
       this.state.authorityUnknown = true;
       this.state.receipts.push({ kind: 'unknown', request: structuredClone(request), errorMessage: this.state.error });

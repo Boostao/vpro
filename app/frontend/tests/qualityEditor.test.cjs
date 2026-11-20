@@ -1,4 +1,4 @@
-const { srcPath } = require('./svelteTestHelpers.cjs');
+const { srcPath, serverReads } = require('./svelteTestHelpers.cjs');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
@@ -11,6 +11,7 @@ function load(name, dependencies = {}) {
   vm.runInNewContext(ts.transpileModule(readFileSync(srcPath(name), 'utf8'),
     { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText,
   { exports, require: name => {
+    if (name === '../shared/readRequests') return serverReads;
     if (!(name in dependencies)) throw new Error(`Unexpected test dependency ${name}`);
     return dependencies[name];
   } });

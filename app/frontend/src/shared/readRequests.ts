@@ -41,17 +41,29 @@ function translateInternalBackendJargon(cleaned: string): string {
   if (/literal plot requires exactly one original Env and Admin record/i.test(cleaned)) {
     return 'Plot was not found in the active project scope, or its site and admin records are incomplete.';
   }
+  if (/label PDF requires one complete literal physical Env\/Admin pair/i.test(cleaned)) {
+    return 'Plot not found or missing required Site/Admin record — enter an existing plot number.';
+  }
   if (/literal plot requires\b/i.test(cleaned)) {
     return 'Plot number must contain 1 to 7 characters without spaces or unsupported control characters.';
   }
-  if (/certified physical source membership/i.test(cleaned)) {
+  if (/certified physical source membership.*Source comparison finds/i.test(cleaned)) {
+    return 'Plot changes could not be saved because this Plot Number is missing or duplicated in the project Site and Admin tables. Reload the plot and verify its Plot Number.';
+  }
+  if (/certified physical source membership|physical join identity has unsupported storage/i.test(cleaned)) {
     return 'Plot changes could not be saved because one or more plot key fields (such as Plot Number or Project ID) are missing or unsupported. Check the plot header and try again.';
+  }
+  if (/file selection requires an active desktop window/i.test(cleaned)) {
+    return 'File selection requires an active desktop window; enter a file path directly when running in a browser.';
   }
   if (/is missing a required physical table/i.test(cleaned)) {
     return 'The selected file is missing required VPro project tables. Choose a complete VPro project file (.db).';
   }
   if (/file is not a database|file is encrypted or is not a database/i.test(cleaned)) {
     return 'The selected file is not a valid VPro project file (.db).';
+  }
+  if (/\b(?:lstat|stat|open)\b[^:]*:\s*no such file/i.test(cleaned)) {
+    return 'The selected file or folder was not found. Check the path and try again.';
   }
   return cleaned;
 }

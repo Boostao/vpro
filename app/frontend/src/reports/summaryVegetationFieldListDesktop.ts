@@ -12,6 +12,7 @@ import {
   type SummaryVegetationFieldListSession,
 } from './summaryVegetationFieldList';
 import { fieldListRegistry } from './summaryVegetationFieldListSessions';
+import { formatError } from '../shared/readRequests';
 
 export type FieldListContext = Omit<FieldListOwner, 'sourcePath'>;
 export interface FieldListDesktopPort {
@@ -171,7 +172,7 @@ export function fieldListDesktop(port: FieldListDesktopPort, uuid?: () => string
       try {
         pending?.cancel?.();
       } catch (cause) {
-        current.state.readError += ` ${String(cause)}`;
+        current.state.readError += ` ${formatError(cause)}`;
       }
       changed();
     }
@@ -213,7 +214,7 @@ export function fieldListDesktop(port: FieldListDesktopPort, uuid?: () => string
       return loaded;
     } catch (cause) {
       if (generation === current.generation)
-        current.state.readError = `Owned field-list bootstrap failed; no default authority: ${String(cause)}`;
+        current.state.readError = `Owned field-list bootstrap failed; no default authority: ${formatError(cause)}`;
       return false;
     } finally {
       current.bootstrapDispatches--;

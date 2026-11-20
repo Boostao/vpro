@@ -252,7 +252,12 @@ function serverComponent(source, filename, dependencies = {}, _environment = {})
     require(rawName) {
       const canon = canonicalLocalSpecifier(rawName);
       const matched = resolveDependency(rawName, dependencies);
-      if (matched.found) return matched.value;
+      if (matched.found) {
+        if (canon === './readRequests' && matched.value && typeof matched.value === 'object') {
+          return { ...serverReads, ...matched.value };
+        }
+        return matched.value;
+      }
       if (rawName === 'svelte' || rawName.startsWith('svelte/')) return require(rawName);
       if (rawName === '@wailsio/runtime') return wailsRuntimeStub;
       if (rawName === '@lucide/svelte') {
@@ -330,7 +335,12 @@ function loadTypeScript(filename, dependencies = {}, globals = {}, evalCache = n
     require(rawName) {
       const canon = canonicalLocalSpecifier(rawName);
       const matched = resolveDependency(rawName, dependencies);
-      if (matched.found) return matched.value;
+      if (matched.found) {
+        if (canon === './readRequests' && matched.value && typeof matched.value === 'object') {
+          return { ...serverReads, ...matched.value };
+        }
+        return matched.value;
+      }
       if (rawName === 'svelte' || rawName.startsWith('svelte/')) return require(rawName);
       if (rawName === '@wailsio/runtime') return wailsRuntimeStub;
       if (canon === './notificationService.svelte') return noopNotificationsStub;
@@ -1011,9 +1021,14 @@ function loadReactiveRuneModule(filename, dependencies = {}, globals = {}, evalC
         };
       }
       if (rawName === '@wailsio/runtime') return wailsRuntimeStub;
-      const m = resolveDependency(rawName, dependencies);
-      if (m.found) return m.value;
       const canon = canonicalLocalSpecifier(rawName);
+      const m = resolveDependency(rawName, dependencies);
+      if (m.found) {
+        if (canon === './readRequests' && m.value && typeof m.value === 'object') {
+          return { ...serverReads, ...m.value };
+        }
+        return m.value;
+      }
       if (canon === './notificationService.svelte') return noopNotificationsStub;
       if (canon === './readRequests') return serverReads;
       if (canon.endsWith('bindings/github.com/boostao/vpro/app')) {

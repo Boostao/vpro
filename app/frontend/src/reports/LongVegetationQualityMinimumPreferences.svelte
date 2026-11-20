@@ -117,15 +117,12 @@
   undoLabel="Undo quality minimum draft"
   acknowledgeLabel="Acknowledge quality minimum outcome"
   cancelLabel="Cancel quality minimum read"
-  guidance={'Load saved strings before editing; unloaded disabled inputs do not represent saved values. All ' +
-    'three controls suggest the same owned PlotQualitySite items, not active DataQuality ranks. ' +
-    'Suggestions are optional; case, whitespace, empty strings and unchanged historical values are ' +
-    'retained. Drafts do not change output. Save explicitly, acknowledge and reload report options. ' +
-    'These minima apply only when existing quality enforcement is active; this panel does not enable ' +
-    'it. Unknown outcomes require owned Load, never blind Save replay. Only these three YAML strings ' +
-    'change; no registry, project data, source audits, new qualification logic, printer reset or ' +
-    'printing. Explicit Save is a desktop adaptation, not proof of Access automatic Change typing ' +
-    'timing.'}
+  guidance={'Load saved quality minima before editing; unloaded inputs do not show saved values. All three ' +
+    'fields suggest standard PlotQualitySite codes, while preserving exact text, spacing, and blank values as ' +
+    'entered. Unsaved edits do not change report output until you save and reload report options. These minima ' +
+    'filter plots only when Enforce rules is enabled. If a save is interrupted, reload saved quality minima ' +
+    'before saving again. Saving updates only these three quality minimum preferences; project data and audit ' +
+    'history are untouched.'}
   onload={load}
   onsave={save}
   oncancel={cancel}
@@ -163,7 +160,7 @@
   {#snippet afterActions()}
     {#if reference}
       <details data-long-vegetation-quality-minimum-definitions>
-        <summary>Owned PlotQualitySite suggestions ({rows.length} physical rows)</summary>
+        <summary>PlotQualitySite code suggestions ({rows.length} entries)</summary>
         <p>{reference.source}</p>
         {#if rows.length === 0}<p>No suggestions; literal editing remains available.</p>{/if}
         <ul>

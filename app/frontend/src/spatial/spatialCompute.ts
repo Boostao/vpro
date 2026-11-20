@@ -1,3 +1,5 @@
+import { formatError } from '../shared/readRequests';
+
 export type SpatialComputeBackendKind = 'webgpu' | 'webgl2-cpu';
 
 export interface SpatialComputeBackendInfo {
@@ -178,7 +180,7 @@ export async function detectSpatialComputeBackend(nav?: unknown): Promise<Spatia
       available: false,
       adapterLabel: 'WebGL2 + TypedArray CPU Fallback',
       maxComputeWorkgroupSizeX: 0,
-      fallbackReason: cause instanceof Error ? cause.message : String(cause),
+      fallbackReason: formatError(cause),
     };
   }
 }

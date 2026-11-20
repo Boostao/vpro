@@ -74,8 +74,8 @@
 
 {#if settings?.constantSpeciesList}
   <p class="notice">
-    Constant species list is enabled in retained YAML. Presence and mean-cover thresholds are bypassed, as in the source
-    report; missing combinations have NULL statistics, not zero.
+    Constant species list is enabled in saved report options. Presence and mean-cover thresholds are bypassed; missing
+    species-unit combinations show NULL statistics rather than zero.
   </p>
 {/if}
 {#if settings?.grouping === 'none'}

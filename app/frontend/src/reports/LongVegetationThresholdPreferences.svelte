@@ -114,11 +114,11 @@
   undoLabel="Undo report threshold draft"
   acknowledgeLabel="Acknowledge report threshold outcome"
   cancelLabel="Cancel report threshold read"
-  guidance={'Load saved thresholds before editing; no defaults are applied. Drafts do not change report ' +
-    'output. Save explicitly, acknowledge and reload report options. Source comparisons are strict; ' +
-    'constant-list mode bypasses these thresholds. No new range is imposed. Receipts remain after ' +
-    'acknowledgement; unknown outcomes require explicit owned Load, never blind Save replay. Only ' +
-    'these two YAML preferences change; no registry, project data, source audits or printing.'}
+  guidance={'Load saved thresholds before editing; no defaults are applied. Unsaved edits do not change report ' +
+    'output until you save and reload report options. Presence and cover cutoffs are bypassed when Constant ' +
+    'species list is enabled. If a save is interrupted, reload saved thresholds before saving again. Saving ' +
+    'updates only these two threshold preferences; project data, audit history, and printing settings are ' +
+    'untouched.'}
   onload={load}
   onsave={save}
   oncancel={cancel}

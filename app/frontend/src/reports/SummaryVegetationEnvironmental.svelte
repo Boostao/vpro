@@ -88,19 +88,16 @@
       Cancelled dispatch or validation is still settling. Navigation, close and another Preview must wait.
     </p>{/if}
   <p>
-    This read-only inspection uses Layer, By n Plots and % Cover to establish the unit frame. It does not consume the
-    controls or saved Include Env preference above. Every selected physical Report=Yes field is read afresh, including
-    hidden and NULL-order rows. Count and nineteen direct category summaries are available, along with Bedrock arguments
-    1/2/3 and Disturbance arguments 1/2.
-    {#if numeric}The numeric inspection also supports Seepage, Rooting Depth, Stand Age, Elevation, Slope and the six
-      substrate/four stratum covers. Empty numeric results are explicitly labelled, not converted to zero or an empty
-      string.
-    {:else}Numeric functions remain unavailable in this categorical inspection.{/if}
-    {#if lifeform}Lifeform cover arguments 1 through 13 use the raw physical vegetation and master species reference
-      from the same owned snapshot. A lifeform String empty remains an empty string, not an Empty numeric result.{:else}Lifeform
-      environmental rows remain unavailable in this inspection.{/if}
-    Unsupported selections refuse the whole result. Grouped environmental reports, formatting, workbooks and printing remain
-    unavailable. No data or settings are saved.
+    This read-only preview summarizes environmental fields across your active Site Unit table using Layer, By n Plots,
+    and % Cover. Each field marked for reporting in your environmental field list is read directly from the project,
+    including plot counts, category summaries, Bedrock 1–3, and Disturbance 1–2.
+    {#if numeric}Numeric summaries also include Seepage, Rooting Depth, Stand Age, Elevation, Slope, substrate covers,
+      and stratum covers; missing numeric values are shown explicitly rather than replaced with zero.
+    {:else}Numeric environmental summaries are not enabled in this categorical view.{/if}
+    {#if lifeform}Lifeform cover rows (1 through 13) summarize plot vegetation against the species reference list,
+      keeping blank text distinct from missing numeric values.{:else}Lifeform environmental rows are not enabled in this
+      view.{/if}
+    Previewing never alters project data or saved report settings.
   </p>
   {#if view.result && !operationHeld}
     <article data-summary-environment-result>

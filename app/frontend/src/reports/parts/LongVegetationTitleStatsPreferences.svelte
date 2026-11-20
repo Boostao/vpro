@@ -239,9 +239,8 @@
       {/if}
     {/each}
     <p class="guidance">
-      Drafts do not change report output. Save explicitly, acknowledge the outcome, then reload report options.
-      Acknowledgement retains receipts; an unknown outcome requires an explicit owned Load, never blind Save replay. No
-      registry, project data or source audits are written.
+      Unsaved edits do not change report output. Save your title, then reload report options to apply changes. If a save
+      is interrupted, reload the saved title before saving again. Project data and audit history are untouched.
     </p>
   </section>
 {/if}
@@ -359,8 +358,8 @@
       {/if}
     {/each}
     <p class="guidance">
-      Drafts do not change report output. Save explicitly, acknowledge the outcome, then reload report options. Only the
-      two saved source choices are changed; no registry, project data or source audits are written.
+      Unsaved edits do not change report output. Save your selections, then reload report options to apply changes.
+      Saving updates only Calculate and Order species by; project data and audit history are untouched.
     </p>
   </section>
 {/if}

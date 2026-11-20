@@ -114,13 +114,11 @@
   undoLabel="Undo quality Include Nulls draft"
   acknowledgeLabel="Acknowledge quality Include Nulls outcome"
   cancelLabel="Cancel quality Include Nulls read"
-  guidance={'Load saved flags before editing; unloaded disabled checkboxes do not represent saved values. ' +
-    'Drafts do not change report output. Save explicitly, acknowledge and reload report options. ' +
-    'These flags apply only when the existing saved quality enforcement is active; this panel does ' +
-    'not enable it or change minimum criteria. Receipts remain after acknowledgement; unknown ' +
-    'outcomes require explicit owned Load, never blind Save replay. Only these three YAML ' +
-    'preferences change; no registry, project data, source audits, new qualification logic or ' +
-    'printing.'}
+  guidance={'Load saved flags before editing; unloaded checkboxes do not show saved values. Unsaved edits do ' +
+    'not change report output until you save and reload report options. These Include Nulls flags apply only ' +
+    'when Enforce rules is enabled and do not alter minimum thresholds. If a save is interrupted, reload saved ' +
+    'flags before saving again. Saving updates only these three Include Nulls preferences; project data and ' +
+    'audit history are untouched.'}
   onload={load}
   onsave={save}
   oncancel={cancel}

@@ -78,7 +78,8 @@
 <section class="selection" aria-label="Selected report unit fields" data-long-vegetation-selected-unit-selection>
   {#if view.draftError}<p role="alert" class="error">{view.draftError}</p>{/if}
   {#if view.authorityUnknown}<p role="alert">
-      Field selection authority is unknown; Load owned Field List before Build or output. No Save was replayed.
+      Field selection status is uncertain after an interrupted update; reload the Field List before building or viewing
+      the report.
     </p>{/if}
   <div class="lists">
     <div>
@@ -101,7 +102,7 @@
             </li>
           {/each}
         </ul>
-      {:else}<p>Load the owned physical Env/Admin Field List; no exported defaults are inferred.</p>{/if}
+      {:else}<p>Load the Site and Admin Field List to choose grouping fields; no defaults are assumed.</p>{/if}
     </div>
     <div>
       <h4>Selected List</h4>
@@ -160,11 +161,10 @@
     </div>
   {/if}
   <p class="guidance">
-    Fields concatenate in Selected List order with no separator. Build is read-only and does not save Unit Groups,
-    create/delete scratch tables, change project data or audit rows. After a current Build, Load saved Unit Groups and
-    explicitly Save Selected fields. Saved mode 2 without this session's reviewed fields stays unavailable. Unsupported
-    or ambiguous physical fields remain disabled. New empty, malformed or overlength labels refuse rather than silently
-    dropping or truncating rows. All-project scope remains unavailable.
+    Selected fields combine in Selected List order without a separator. Building the SU List is read-only and never
+    modifies project records, temporary tables, or audit history. After building, load saved Unit Groups and save
+    Selected fields to apply. Unsupported or ambiguous fields stay disabled, and blank or overlength unit labels are
+    rejected rather than truncated.
   </p>
 </section>
 

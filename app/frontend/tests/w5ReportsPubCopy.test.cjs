@@ -284,4 +284,29 @@ test('UX-REPORTS-009 + W5 hygiene: report and label components use plain CBC cop
     assert.equal(compile(source, { filename: srcPath(rel), generate: 'client' }).warnings.length, 0);
     assert.equal(compile(source, { filename: srcPath(rel), generate: 'server' }).warnings.length, 0);
   }
+
+  const { srcFiles } = require('./svelteTestHelpers.cjs');
+  const childReportBannedJargon = [
+    /\bYAML\b/,
+    /blind Save replay/i,
+    /callback plan/i,
+    /physical Report=Yes/i,
+    /Access collation/i,
+    /acknowledge every returned/i,
+    /ReportOptions\./,
+    /\bLV(?:GroupBy|ShowEnglishName|ShowField|UnitGroups|LumpTable)\b/,
+    /Load is observation/i,
+    /Correct to loaded authority/i,
+    /Excel coercion/i,
+    /preflight mutations/i,
+  ];
+  for (const rel of srcFiles()) {
+    if (!rel.endsWith('.svelte') || (!rel.startsWith('reports/') && !rel.startsWith('shared/'))) continue;
+    const source = readFileSync(srcPath(rel), 'utf8');
+    const lines = source.split('\n');
+    assert.ok(lines.length <= 600, `${rel} has ${lines.length} lines (expected <= 600)`);
+    for (const pattern of childReportBannedJargon) {
+      assert.doesNotMatch(source, pattern, `${rel} contains developer jargon ${pattern}`);
+    }
+  }
 });

@@ -1,5 +1,5 @@
 import type { EditorCloseState } from '../shell/closeLifecycle';
-import { ReadRequests, type CancellableRead } from '../shared/readRequests';
+import { ReadRequests, formatError, type CancellableRead } from '../shared/readRequests';
 import { pictureImageFromWire, type PictureOwner, type PicturePreview } from './pictureRead';
 import { validSIVIRequestId } from '../entry/siviRequestId';
 import {
@@ -183,7 +183,7 @@ export class PictureCreationSession {
         this.state.request = null;
         this.state.blocked = false;
         this.plannedId = null;
-        this.state.error = `Picture selection unavailable; no picture was attached: ${String(cause)}`;
+        this.state.error = `Picture selection unavailable; no picture was attached: ${formatError(cause)}`;
       }
     } finally {
       this.finish(generation);
@@ -232,9 +232,9 @@ export class PictureCreationSession {
           this.state.request = null;
           this.state.blocked = false;
           this.plannedId = null;
-          this.state.error = `Picture selection recovery unavailable; workspace unlocked: ${String(cause)}`;
+          this.state.error = `Picture selection recovery unavailable; workspace unlocked: ${formatError(cause)}`;
         } else {
-          this.state.error = `Picture selection recovery failed; retained state remains blocked: ${String(cause)}`;
+          this.state.error = `Picture selection recovery failed; retained state remains blocked: ${formatError(cause)}`;
         }
       }
       return false;
@@ -261,7 +261,7 @@ export class PictureCreationSession {
       return true;
     } catch (cause) {
       if (generation === this.generation)
-        this.state.error = `Picture Create outcome is unknown; recover its exact durable receipt, never repeat Create: ${String(cause)}`;
+        this.state.error = `Picture Create outcome is unknown; recover its exact durable receipt, never repeat Create: ${formatError(cause)}`;
       return false;
     } finally {
       this.finish(generation);
@@ -286,7 +286,7 @@ export class PictureCreationSession {
       return true;
     } catch (cause) {
       if (generation === this.generation)
-        this.state.error = `Picture receipt recovery failed; the original request remains blocked: ${String(cause)}`;
+        this.state.error = `Picture receipt recovery failed; the original request remains blocked: ${formatError(cause)}`;
       return false;
     } finally {
       this.finish(generation);
@@ -309,7 +309,7 @@ export class PictureCreationSession {
       return true;
     } catch (cause) {
       if (generation === this.generation)
-        this.state.error = `Selected-file preview unavailable; metadata commit and receipt retained: ${String(cause)}`;
+        this.state.error = `Selected-file preview unavailable; metadata commit and receipt retained: ${formatError(cause)}`;
       return false;
     } finally {
       this.finish(generation);
@@ -333,7 +333,7 @@ export class PictureCreationSession {
       this.plannedId = null;
       return true;
     } catch (cause) {
-      this.state.error = `Picture selection release acknowledgement failed; recover selection before leaving: ${String(cause)}`;
+      this.state.error = `Picture selection release acknowledgement failed; recover selection before leaving: ${formatError(cause)}`;
       return false;
     } finally {
       this.finish(generation);
@@ -353,7 +353,7 @@ export class PictureCreationSession {
       this.state.blocked = false;
       return true;
     } catch (cause) {
-      this.state.error = `Picture receipt acknowledgement failed; receipt retained and close remains blocked: ${String(cause)}`;
+      this.state.error = `Picture receipt acknowledgement failed; receipt retained and close remains blocked: ${formatError(cause)}`;
       return false;
     } finally {
       this.finish(generation);

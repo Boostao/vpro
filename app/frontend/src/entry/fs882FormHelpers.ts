@@ -285,7 +285,7 @@ export function projectSourceRows(
 }
 
 export function historicalSoilReadError(kind: 'Humus' | 'Mineral', cause: unknown): string | null {
-  const detail = cause instanceof Error ? cause.message : String(cause);
+  const detail = formatError(cause);
   if (
     /(?:Humus|Mineral) row for plot .* has unsupported NULL ID/i.test(detail) ||
     /sql:\s*Scan error on column index \d+,\s*name\b/i.test(detail)

@@ -10,6 +10,7 @@ import {
   type ValidatedProjectTableCSVReview,
 } from './projectTableCSV';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
+import { formatError } from '../shared/readRequests';
 
 export function chooseTableCSVArchiveFile(): Promise<string> {
   return ImportExportService.ChooseTableCSVArchiveFile();
@@ -197,7 +198,7 @@ export class TableCSVArchivePublicationSession {
         this.persist();
       }
     } catch (cause) {
-      this.state.storageError = `Archive receipt history unavailable; export is blocked to preserve evidence: ${String(cause)}`;
+      this.state.storageError = `Archive receipt history unavailable; export is blocked to preserve evidence: ${formatError(cause)}`;
       this.state.blocked = true;
     }
   }
@@ -264,7 +265,7 @@ export class TableCSVArchivePublicationSession {
         this.persist();
       } catch (cause) {
         this.state.receipts.pop();
-        this.state.storageError = `Cannot retain archive attempt history; no publication invoked: ${String(cause)}`;
+        this.state.storageError = `Cannot retain archive attempt history; no publication invoked: ${formatError(cause)}`;
         this.state.blocked = true;
         throw cause;
       }
@@ -280,12 +281,12 @@ export class TableCSVArchivePublicationSession {
         receipt.error = receipt.outcome.errorMessage;
       } catch (cause) {
         receipt.phase = 'unknown';
-        receipt.error = `Archive outcome unknown. Do not replay this destination; inspect it before proceeding: ${String(cause)}`;
+        receipt.error = `Archive outcome unknown. Do not replay this destination; inspect it before proceeding: ${formatError(cause)}`;
       }
       try {
         this.persist();
       } catch (cause) {
-        this.state.storageError = `Archive receipt persistence failed; retain this visible evidence, do not replay: ${String(cause)}`;
+        this.state.storageError = `Archive receipt persistence failed; retain this visible evidence, do not replay: ${formatError(cause)}`;
       }
     } finally {
       this.state.busy = false;
@@ -300,7 +301,7 @@ export class TableCSVArchivePublicationSession {
       this.persist();
       this.state.blocked = false;
     } catch (cause) {
-      this.state.storageError = `Cannot persist archive acknowledgement: ${String(cause)}`;
+      this.state.storageError = `Cannot persist archive acknowledgement: ${formatError(cause)}`;
     }
     this.notify();
   }

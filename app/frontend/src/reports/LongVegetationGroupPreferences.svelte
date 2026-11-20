@@ -115,12 +115,10 @@
   undoLabel="Undo report grouping draft"
   acknowledgeLabel="Acknowledge report grouping outcome"
   cancelLabel="Cancel report grouping read"
-  guidance={'Load saved grouping before editing; no defaults are applied. Drafts do not change report ' +
-    'output. Save explicitly, acknowledge and reload report options. Unavailable modes cannot be ' +
-    'newly selected; retaining an unchanged saved mode does not enable its report. Receipts remain ' +
-    'after acknowledgement; unknown outcomes require explicit owned Load, never blind Save replay. ' +
-    'Only LVGroupBy changes in YAML; no registry, project data, source audits, new calculations or ' +
-    'printing.'}
+  guidance={'Load saved grouping before editing; no defaults are applied. Unsaved edits do not change report ' +
+    'output until you save and reload report options. If a save is interrupted, reload saved grouping before ' +
+    'saving again. Saving updates only your default Long Vegetation report grouping; project data, audit ' +
+    'history, and printing settings are untouched.'}
   onload={load}
   onsave={save}
   oncancel={cancel}

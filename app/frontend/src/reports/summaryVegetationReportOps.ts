@@ -2,7 +2,7 @@ import type {
   SummaryVegetationPreferencesReview,
   VegetationReportService,
 } from '../../bindings/github.com/boostao/vpro/app';
-import type { CancellableRead, ReadRequests } from '../shared/readRequests';
+import { formatError, type CancellableRead, type ReadRequests } from '../shared/readRequests';
 import type { SummaryVegetationPort } from './summaryVegetation';
 import type { SummaryWorkbookCalculation } from './summaryVegetationWorkbook';
 import type { FieldListDesktopState } from './summaryVegetationFieldListDesktop';
@@ -204,7 +204,7 @@ export function initSummaryVegEnvironmentalSession(
   try {
     return { canInspect: true, session: envDesktop.session(owner), error: '' };
   } catch (cause) {
-    const envErr = `Combined environmental inspection unavailable: ${String(cause)}`;
+    const envErr = `Combined environmental inspection unavailable: ${formatError(cause)}`;
     sink.error('Summary Vegetation environmental inspection unavailable', envErr, {
       category: 'reports',
       source: 'Summary Vegetation',
@@ -957,7 +957,7 @@ export async function discoverSummaryVegLumpNames(
       )
     );
   } catch (cause) {
-    onError(String(cause));
+    onError(formatError(cause));
   }
 }
 
@@ -973,6 +973,6 @@ export async function runSummaryVegPreviewAction(
     const err = readError();
     if (err) sink.error('Summary Vegetation preview failed', err, opts);
   } catch (cause) {
-    sink.error('Summary Vegetation preview failed', String(cause), opts);
+    sink.error('Summary Vegetation preview failed', formatError(cause), opts);
   }
 }

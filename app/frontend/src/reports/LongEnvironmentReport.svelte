@@ -474,8 +474,9 @@
     {/if}
   {/each}
   <p class="guidance">
-    Load saved title explicitly, review the literal draft, then Save or Undo. Save changes only
-    ReportOptions.LEReportTitle in YAML. Input and report preparation never save preferences.
+    Load the saved title before editing, review your changes, then click Save reviewed title or Undo title. Saving
+    updates only your default Long Environment report title; typing or viewing the report does not alter saved
+    preferences.
   </p>
   {#if su === 'None'}<p>Select an SU in Projects &amp; context before viewing the report.</p>{/if}
   {#if preview}

@@ -1,3 +1,5 @@
+import { formatError } from './readRequests';
+
 export interface PublicationView<Outcome> {
   busy: boolean;
   blocked: boolean;
@@ -60,7 +62,7 @@ export class PublicationSession<Outcome extends { errorMessage: string; status?:
         this.state.blocked = false;
       }
     } catch (cause) {
-      this.state.error = `${this.label} outcome unknown. Do not repeat this destination; retain and inspect it before proceeding: ${String(cause)}`;
+      this.state.error = `${this.label} outcome unknown. Do not repeat this destination; retain and inspect it before proceeding: ${formatError(cause)}`;
     } finally {
       this.state.busy = false;
       this.notify();

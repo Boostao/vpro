@@ -1,16 +1,7 @@
+import { formatError } from '../shared/readRequests';
+
 export function cleanEntryError(cause: unknown): string {
-  const raw =
-    cause instanceof Error
-      ? cause.message || cause.name
-      : cause !== null &&
-          typeof cause === 'object' &&
-          'message' in cause &&
-          typeof (cause as { message: unknown }).message === 'string'
-        ? (cause as { message: string }).message
-        : String(cause ?? '');
-  return (
-    raw.replace(/^(?:(?:RuntimeError|CallError|Error|TypeError|RangeError):\s*)+/, '').trim() || 'Unexpected error'
-  );
+  return formatError(cause);
 }
 
 export type BECKey = 'zone' | 'subZone' | 'siteSeries';
