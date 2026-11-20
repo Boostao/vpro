@@ -58,7 +58,8 @@
     (next) => {
       disturbance = next;
     },
-    'Disturbance'
+    'Disturbance',
+    'siteDisturbance'
   );
   const exposureLookup = new CatalogueLookup(
     async (force, requests) => {
@@ -70,10 +71,11 @@
     (next) => {
       exposure = next;
     },
-    'Exposure'
+    'Exposure',
+    'siteExposure'
   );
-  let disturbance = $state(disturbanceLookup.snapshot());
-  let exposure = $state(exposureLookup.snapshot());
+  let disturbance = $state.raw(disturbanceLookup.snapshot());
+  let exposure = $state.raw(exposureLookup.snapshot());
   const views = $derived({ SiteDisturbance: disturbance, Exposure: exposure });
   const lookupBusy = $derived(disturbance.busy || exposure.busy);
   let acknowledged = $state(false);
@@ -86,8 +88,10 @@
     const identity = draft;
     if (identity)
       untrack(() => {
-        void disturbanceLookup.refresh();
-        void exposureLookup.refresh();
+        const dSnap = disturbanceLookup.snapshot();
+        if (!(dSnap.ready && !dSnap.error) && !dSnap.busy) void disturbanceLookup.refresh();
+        const eSnap = exposureLookup.snapshot();
+        if (!(eSnap.ready && !eSnap.error) && !eSnap.busy) void exposureLookup.refresh();
       });
   });
   $effect(() => {

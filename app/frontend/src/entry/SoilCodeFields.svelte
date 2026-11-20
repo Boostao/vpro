@@ -54,7 +54,8 @@
     (next) => {
       group = next;
     },
-    'Soil great group'
+    'Soil great group',
+    'soilGroup'
   );
   const subgroupLookup = new CatalogueLookup(
     async (force, requests) => {
@@ -66,10 +67,11 @@
     (next) => {
       subgroup = next;
     },
-    'Soil subgroup'
+    'Soil subgroup',
+    'soilSubgroup'
   );
-  let group = $state(groupLookup.snapshot());
-  let subgroup = $state(subgroupLookup.snapshot());
+  let group = $state.raw(groupLookup.snapshot());
+  let subgroup = $state.raw(subgroupLookup.snapshot());
   const views = $derived({ SoilClassGroup: group, SoilClassSubgroup: subgroup });
   const lookupBusy = $derived(group.busy || subgroup.busy);
   let acknowledged = $state(false);
@@ -81,8 +83,10 @@
     const identity = draft;
     if (identity)
       untrack(() => {
-        void groupLookup.refresh();
-        void subgroupLookup.refresh();
+        const gSnap = groupLookup.snapshot();
+        if (!(gSnap.ready && !gSnap.error) && !gSnap.busy) void groupLookup.refresh();
+        const sSnap = subgroupLookup.snapshot();
+        if (!(sSnap.ready && !sSnap.error) && !sSnap.busy) void subgroupLookup.refresh();
       });
   });
   $effect(() => {

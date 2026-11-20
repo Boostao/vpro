@@ -1,5 +1,6 @@
 import { ContextService, PictureService, PlotEntryService } from '../../bindings/github.com/boostao/vpro/app';
 import type { UserAccreditation } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
+import { invalidateMasterBECPolicy } from '../entry/entryReferenceCache';
 
 export type { UserAccreditation };
 
@@ -37,9 +38,12 @@ export const defaultUserSetupPort: UserSetupPort = {
   },
   async setUserName(contextId: string, user: string): Promise<UserAccreditation> {
     if (contextId) {
-      return ContextService.SetUserName(contextId, user);
+      const result = await ContextService.SetUserName(contextId, user);
+      invalidateMasterBECPolicy();
+      return result;
     }
     await PlotEntryService.SetCurrentUser(user);
+    invalidateMasterBECPolicy();
     return PlotEntryService.UserAccreditationStatus();
   },
   async getPictureOptions(): Promise<PictureOptionsState> {

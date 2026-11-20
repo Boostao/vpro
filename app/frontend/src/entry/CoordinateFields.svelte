@@ -193,7 +193,18 @@
     }
   }
   $effect(() => {
+    const previous = identity;
     identity = draft;
+    if (previous !== draft) {
+      auto1Generation += 1;
+      auto1Reads.cancelAll();
+      auto1Summary = '';
+      auto1OutOfBounds = false;
+      if (auto1Busy) {
+        auto1Busy = false;
+        reportBusy?.(coordinateBusy(busyIdentity, busyOwner, view.busy));
+      }
+    }
     editor.syncDraft(draft.latitude, draft.longitude, draft);
   });
   onMount(() => {

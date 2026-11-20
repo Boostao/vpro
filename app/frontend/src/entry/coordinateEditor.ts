@@ -38,6 +38,8 @@ export interface CoordinateAPI {
   setMode(mode: CoordinateDisplayMode): Promise<void>;
   decompose(value: number | null, mode: CoordinateDisplayMode): Promise<CoordinateParts>;
   convert(axis: CoordinateAxis, mode: CoordinateDisplayMode, parts: CoordinateParts): Promise<number | null>;
+  peekMode?(): string | undefined;
+  peekDecompose?(value: number | null, mode: CoordinateDisplayMode): CoordinateParts | undefined;
 }
 export interface CoordinateCallbacks {
   state(state: CoordinateState): void;
@@ -267,6 +269,21 @@ export class CoordinateEditor {
     const revision = ++this.revisions[axis],
       epoch = this.epoch,
       state = this.data.axes[axis];
+    const cachedParts = this.api.peekDecompose?.(state.value, this.data.mode);
+    if (cachedParts !== undefined) {
+      const hadError = state.error !== null;
+      try {
+        state.buffers = buffersFrom(cachedParts);
+        state.ready = true;
+        state.error = null;
+        state.pending = false;
+        if (hadError) this.callbacks.validation(axis, null);
+        this.publish();
+      } catch (cause) {
+        this.fail(axis, cause);
+      }
+      return Promise.resolve();
+    }
     state.ready = false;
     this.begin();
     let settled = false;
@@ -296,6 +313,36 @@ export class CoordinateEditor {
   async initialize() {
     if (!this.alive || this.data.busy) return;
     const epoch = ++this.epoch;
+    const cachedMode = this.api.peekMode?.();
+    if (cachedMode !== undefined && isCoordinateMode(cachedMode)) {
+      const invalid = axes.some(
+        (axis) => this.data.axes[axis].touched && (this.data.axes[axis].error || this.data.axes[axis].pending)
+      );
+      if (cachedMode !== this.data.mode && invalid)
+        this.callbacks.error(
+          'Coordinate preference changed while input is invalid; finish the input or Undo before changing display mode.'
+        );
+      else if (cachedMode !== this.data.mode) {
+        this.data.mode = cachedMode;
+        for (const axis of axes) {
+          this.revisions[axis]++;
+          this.data.axes[axis] = { ...axisState(), value: this.data.axes[axis].value };
+        }
+      }
+      this.data.ready = true;
+      this.preferencePending = false;
+      for (const axis of axes) {
+        const state = this.data.axes[axis];
+        if (state.touched) {
+          state.ready = true;
+          if (state.pending) void this.convert(axis);
+          else if (state.error) this.callbacks.validation(axis, state.error);
+        } else void this.decompose(axis);
+      }
+      this.publish();
+      await this.settleDecompositions(epoch);
+      return;
+    }
     this.preferencePending = true;
     this.begin();
     try {

@@ -55,9 +55,10 @@
       view = next;
       onbusy?.(next.busy);
     },
-    'Quality'
+    'Quality',
+    'plotQuality'
   );
-  let view = $state(lookup.snapshot());
+  let view = $state.raw(lookup.snapshot());
   let acknowledged = $state(false);
   const changed = $derived(qualityChanged(draft, original));
   const invalid = $derived(qualityLengthError(draft, original));
@@ -68,7 +69,8 @@
     const identity = draft;
     if (identity)
       untrack(() => {
-        void lookup.refresh();
+        const snap = lookup.snapshot();
+        if (!(snap.ready && !snap.error) && !snap.busy) void lookup.refresh();
       });
   });
   $effect(() => {
@@ -99,7 +101,7 @@
   {#if view.busy}<span role="status">Refreshing quality choices...</span>{/if}
   {#if view.error}
     <span role="alert">{view.error}</span>
-    <button type="button" disabled={disabled || view.busy} onclick={() => void lookup.refresh()}
+    <button type="button" disabled={disabled || view.busy} onclick={() => void lookup.refresh(true)}
       >Retry quality choices</button
     >
   {/if}

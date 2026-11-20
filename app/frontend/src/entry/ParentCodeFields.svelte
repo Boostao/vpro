@@ -37,7 +37,7 @@
   } = $props();
   const editor = createParentCodeEditor(untrack(() => scope));
   const validationKey = `parentCodes-${untrack(() => scope)}`;
-  let views = $state<ParentCodeViews>({});
+  let views = $state.raw<ParentCodeViews>({});
   const lookups = editor.lists.map(
     (list) =>
       new CatalogueLookup(
@@ -50,7 +50,8 @@
         (next) => {
           views = { ...views, [list]: next };
         },
-        list
+        list,
+        `parentCode:${list}`
       )
   );
   views = Object.fromEntries(editor.lists.map((list, index) => [list, lookups[index].snapshot()]));
@@ -61,7 +62,10 @@
     const identity = draft;
     if (identity)
       untrack(() => {
-        for (const lookup of lookups) void lookup.refresh();
+        for (const lookup of lookups) {
+          const snap = lookup.snapshot();
+          if (!(snap.ready && !snap.error) && !snap.busy) void lookup.refresh();
+        }
       });
   });
   $effect(() => {
