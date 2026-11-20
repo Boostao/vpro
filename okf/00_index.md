@@ -5,7 +5,7 @@
 **Legacy Architect (`1997–2023`):** Russell Klassen (`VENUSPro 97` $\rightarrow$ `VPro 64`, `vuser.ca`)  
 **Modernization Engineering (`2026`):** BooSTAO IT Consultancy Ltd. (`Boostao/vpro` unified monorepo — `app/` Desktop Workstation & `r/` Headless R Companion SDK, Contract `RE26OCF433`)  
 **Canonical Repository Path:** `okf/` (in-tree at root of `Boostao/vpro`)  
-**Audit Baseline Date:** `2026-11-19` (`Boostao/vpro` Wave 5 hardened `main` · Desktop `app/` `v2.0.0` · R SDK `r/` `v2.0.0`, `89` exports)
+**Audit Baseline Date:** `2026-11-20` (`Boostao/vpro` Wave 5 hardened `main` · Desktop `app/` `v2.0.0` · R SDK `r/` `v2.0.0`, `89` exports)
 
 ---
 
@@ -91,7 +91,7 @@ okf/
 │   └── documentation_help_and_release_portal.md    # Offline F1 LMH25 help, guided tours & BC Gov Design System release portal
 ├── 04_evidence_and_sources/
 │   ├── citations_index.md              # Direct mapping to contracts, 106 emails, manuals, vuser.ca & code lines
-│   └── decisions_and_gaps.md           # Domain/contract/technical decision register (D-01–D-12)
+│   └── decisions_and_gaps.md           # Domain/contract/technical decision register (D-01–D-13)
 └── 05_engineering_and_agents/
     ├── desktop_app_engineering.md      # Deep Go/Wails v3/Svelte 5/CGO/COM/SQLite WAL/cloudsync engineering playbook (app/)
     └── r_sdk_engineering.md            # Deep headless R SDK/SQLite WAL/Access calibration/BECMaster cloud playbook (r/)
@@ -116,7 +116,7 @@ okf/
 | **`03.5`** | **[Automations & Abstractions](./03_future_architecture/intelligent_automation_and_abstractions.md)** | Architecture & implementation record for `Auto-1`..`Auto-7` (`.pmtiles` auto-stamp, `LMH25` rules, live Diagnostics, 3-way merge, `LumpSpec`, metadata, R sidecar). |
 | **`03.6`** | **[Docs, Help & Release Portal](./03_future_architecture/documentation_help_and_release_portal.md)** | Single-source `docs-src/` offline `F1` `LMH25` help, 4 spotlight tours, static `release-manifest.json` BC Gov Design System portal (`site/`) & signing roadmap. |
 | **`04.1`** | **[Citations Index](./04_evidence_and_sources/citations_index.md)** | Master lookup mapping claims to exact contracts, emails, PDF pages, Access modules/lines, `vuser.ca` SHA-256s, and `app/` / `r/` files. |
-| **`04.2`** | **[Decisions & Gaps](./04_evidence_and_sources/decisions_and_gaps.md)** | Updated decision & resolution register (`D-01`–`D-12`) tracking resolved desktop/R Wave 1–5 parity sign-offs and remaining client/cloud governance items. |
+| **`04.2`** | **[Decisions & Gaps](./04_evidence_and_sources/decisions_and_gaps.md)** | Updated decision & resolution register (`D-01`–`D-13`) tracking resolved desktop/R parity & instant plot-navigation sign-offs and remaining client/cloud governance items. |
 | **`05.1`** | **[Desktop App Engineering Playbook](./05_engineering_and_agents/desktop_app_engineering.md)** | Complete Go `github.com/boostao/vpro/app` 4-layer DAG, 12 Wails services, CGO/GTK/COM/chunked IPC/Excelize/Svelte 5 `$state.snapshot` & `cloudsync` invariants. |
 | **`05.2`** | **[Headless R SDK Engineering Playbook](./05_engineering_and_agents/r_sdk_engineering.md)** | Complete `r/` zero-Shiny boundary, SQLite WAL RO/write-back guards, Access/BEC oracle calibration, Wave 6 Cloud `BECMaster`, `air`, and tarball `R CMD check` gates. |
 
