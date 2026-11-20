@@ -22,8 +22,7 @@ type VegetationReadAvailability struct {
 	Records   []VegRecord `json:"records"`
 }
 
-func VegetationReadAvailabilityInternal(plots *PlotService, plot string) (*VegetationReadAvailability, error) {
-	records, err := plots.ListVegRecords(plot)
+func buildVegetationReadAvailability(records []VegRecord, err error) (*VegetationReadAvailability, error) {
 	if err != nil {
 		var identity *childNullIdentityError
 		if !errors.As(err, &identity) || identity.kind != "Veg" {
@@ -42,6 +41,11 @@ func VegetationReadAvailabilityInternal(plots *PlotService, plot string) (*Veget
 		seen[record.ID] = true
 	}
 	return &VegetationReadAvailability{Available: true, Records: records}, nil
+}
+
+func VegetationReadAvailabilityInternal(plots *PlotService, plot string) (*VegetationReadAvailability, error) {
+	records, err := plots.ListVegRecords(plot)
+	return buildVegetationReadAvailability(records, err)
 }
 
 func (s *ContextService) GetVegetationReadAvailability(ctx context.Context, contextID, plot string) (*VegetationReadAvailability, error) {

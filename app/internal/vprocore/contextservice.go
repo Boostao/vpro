@@ -113,6 +113,12 @@ func (s *ContextService) GetPlot(ctx context.Context, contextID, plot string) (*
 	return WithContextPlotRequest(ctx, s, contextID, func(plots *PlotService) (*FS882Header, error) { return plots.GetPlot(plot) })
 }
 
+func (s *ContextService) GetPlotBundle(ctx context.Context, contextID, plot string, includeCapabilities bool) (*PlotBundle, error) {
+	return WithContextPlotRequest(ctx, s, contextID, func(plots *PlotService) (*PlotBundle, error) {
+		return plots.GetPlotBundle(plot, includeCapabilities)
+	})
+}
+
 func (s *ContextService) GetHeaderCapabilities(ctx context.Context, contextID string) (map[string]bool, error) {
 	return WithContextPlotRequest(ctx, s, contextID, func(plots *PlotService) (map[string]bool, error) { return plots.GetHeaderCapabilities() })
 }

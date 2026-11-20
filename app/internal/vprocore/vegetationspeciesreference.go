@@ -2,6 +2,7 @@ package vprocore
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 
@@ -80,23 +81,31 @@ func (s *ContextService) ListVegetationSpecies(ctx context.Context, contextID, f
 		if err != nil {
 			return nil, err
 		}
-		rows, err := plots.Projects.Sqlite.conn.QueryContext(ctx, `SELECT Code,ScientificName,Lifeform,EnglishName,Codetype
-			FROM (`+vegetationSpeciesUnion+`) WHERE `+predicate+`
-			ORDER BY Code COLLATE NOCASE,Code,ScientificName,EnglishName,Codetype`)
-		if err != nil {
-			return nil, fmt.Errorf("vegetation species references unavailable: %w", err)
-		}
-		defer rows.Close()
-		result := []VegetationSpeciesOption{}
-		for rows.Next() {
-			var option VegetationSpeciesOption
-			if err := rows.Scan(&option.Code, &option.ScientificName, &option.Lifeform, &option.EnglishName, &option.CodeType); err != nil {
-				return nil, fmt.Errorf("vegetation species metadata could not be read: %w", err)
+		var result []VegetationSpeciesOption
+		err = plots.Projects.Sqlite.WithCoordinatorConn(ctx, func(conn *sql.Conn) error {
+			rows, err := conn.QueryContext(ctx, `SELECT Code,ScientificName,Lifeform,EnglishName,Codetype
+				FROM (`+vegetationSpeciesUnion+`) WHERE `+predicate+`
+				ORDER BY Code COLLATE NOCASE,Code,ScientificName,EnglishName,Codetype`)
+			if err != nil {
+				return fmt.Errorf("vegetation species references unavailable: %w", err)
 			}
-			result = append(result, option)
-		}
-		if err := rows.Err(); err != nil {
-			return nil, fmt.Errorf("vegetation species reference read failed: %w", err)
+			defer rows.Close()
+			list := []VegetationSpeciesOption{}
+			for rows.Next() {
+				var option VegetationSpeciesOption
+				if err := rows.Scan(&option.Code, &option.ScientificName, &option.Lifeform, &option.EnglishName, &option.CodeType); err != nil {
+					return fmt.Errorf("vegetation species metadata could not be read: %w", err)
+				}
+				list = append(list, option)
+			}
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("vegetation species reference read failed: %w", err)
+			}
+			result = list
+			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
 		return result, nil
 	})
@@ -108,23 +117,31 @@ func (s *ContextService) ListVegetationSpeciesAliases(ctx context.Context, conte
 		if err := ValidateVegetationSpeciesLookup(code); err != nil {
 			return nil, err
 		}
-		rows, err := plots.Projects.Sqlite.conn.QueryContext(ctx, `SELECT Code,ScientificName,Lifeform,EnglishName,Codetype,OldCode
-			FROM USysAllSpecs WHERE OldCode COLLATE NOCASE=?
-			ORDER BY Code COLLATE NOCASE,Code,ScientificName,EnglishName,Codetype`, code)
-		if err != nil {
-			return nil, fmt.Errorf("vegetation species aliases unavailable: %w", err)
-		}
-		defer rows.Close()
-		result := []VegetationSpeciesAlias{}
-		for rows.Next() {
-			var alias VegetationSpeciesAlias
-			if err := rows.Scan(&alias.Code, &alias.ScientificName, &alias.Lifeform, &alias.EnglishName, &alias.CodeType, &alias.OldCode); err != nil {
-				return nil, fmt.Errorf("vegetation species alias metadata could not be read: %w", err)
+		var result []VegetationSpeciesAlias
+		err := plots.Projects.Sqlite.WithCoordinatorConn(ctx, func(conn *sql.Conn) error {
+			rows, err := conn.QueryContext(ctx, `SELECT Code,ScientificName,Lifeform,EnglishName,Codetype,OldCode
+				FROM USysAllSpecs WHERE OldCode COLLATE NOCASE=?
+				ORDER BY Code COLLATE NOCASE,Code,ScientificName,EnglishName,Codetype`, code)
+			if err != nil {
+				return fmt.Errorf("vegetation species aliases unavailable: %w", err)
 			}
-			result = append(result, alias)
-		}
-		if err := rows.Err(); err != nil {
-			return nil, fmt.Errorf("vegetation species alias read failed: %w", err)
+			defer rows.Close()
+			list := []VegetationSpeciesAlias{}
+			for rows.Next() {
+				var alias VegetationSpeciesAlias
+				if err := rows.Scan(&alias.Code, &alias.ScientificName, &alias.Lifeform, &alias.EnglishName, &alias.CodeType, &alias.OldCode); err != nil {
+					return fmt.Errorf("vegetation species alias metadata could not be read: %w", err)
+				}
+				list = append(list, alias)
+			}
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("vegetation species alias read failed: %w", err)
+			}
+			result = list
+			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
 		return result, nil
 	})
@@ -135,23 +152,31 @@ func (s *ContextService) ListVegetationSpeciesUsers(ctx context.Context, context
 		if err := ValidateVegetationSpeciesLookup(lookup.Code); err != nil {
 			return nil, err
 		}
-		rows, err := plots.Projects.Sqlite.conn.QueryContext(ctx, `SELECT Code,ScientificName,Lifeform,EnglishName,Codetype
-			FROM USysUserSpp WHERE Code COLLATE NOCASE=?
-			ORDER BY Code,ScientificName,EnglishName,Codetype,Lifeform`, lookup.Code)
-		if err != nil {
-			return nil, fmt.Errorf("vegetation personal species references unavailable: %w", err)
-		}
-		defer rows.Close()
-		result := []VegetationSpeciesOption{}
-		for rows.Next() {
-			var option VegetationSpeciesOption
-			if err := rows.Scan(&option.Code, &option.ScientificName, &option.Lifeform, &option.EnglishName, &option.CodeType); err != nil {
-				return nil, fmt.Errorf("vegetation personal species metadata could not be read: %w", err)
+		var result []VegetationSpeciesOption
+		err := plots.Projects.Sqlite.WithCoordinatorConn(ctx, func(conn *sql.Conn) error {
+			rows, err := conn.QueryContext(ctx, `SELECT Code,ScientificName,Lifeform,EnglishName,Codetype
+				FROM USysUserSpp WHERE Code COLLATE NOCASE=?
+				ORDER BY Code,ScientificName,EnglishName,Codetype,Lifeform`, lookup.Code)
+			if err != nil {
+				return fmt.Errorf("vegetation personal species references unavailable: %w", err)
 			}
-			result = append(result, option)
-		}
-		if err := rows.Err(); err != nil {
-			return nil, fmt.Errorf("vegetation personal species read failed: %w", err)
+			defer rows.Close()
+			list := []VegetationSpeciesOption{}
+			for rows.Next() {
+				var option VegetationSpeciesOption
+				if err := rows.Scan(&option.Code, &option.ScientificName, &option.Lifeform, &option.EnglishName, &option.CodeType); err != nil {
+					return fmt.Errorf("vegetation personal species metadata could not be read: %w", err)
+				}
+				list = append(list, option)
+			}
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("vegetation personal species read failed: %w", err)
+			}
+			result = list
+			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
 		return result, nil
 	})

@@ -229,6 +229,15 @@ func (s *ContextService) GetPlot(ctx context.Context, contextID, plot string) (*
 	return s.core.GetPlot(ctx, contextID, plot)
 }
 
+func (s *ContextService) GetPlotBundle(ctx context.Context, contextID, plot string, includeCapabilities bool) (*vprocorepkg.PlotBundle, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.core == nil {
+		return nil, errors.New("project context is unavailable")
+	}
+	return s.core.GetPlotBundle(ctx, contextID, plot, includeCapabilities)
+}
+
 func (s *ContextService) GetHeaderCapabilities(ctx context.Context, contextID string) (map[string]bool, error) {
 	s, release := s.acquire()
 	defer release()

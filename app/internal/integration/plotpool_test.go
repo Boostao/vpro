@@ -52,7 +52,7 @@ func TestPlotPoolWarmReadsReuseOwnedHandleAndPreserveFiles(t *testing.T) {
 		}
 	}
 	stats := pool.Stats()
-	if stats.MaxOpenConnections != 2 || stats.OpenConnections != 1 || stats.InUse != 0 || stats.Idle != 1 {
+	if stats.MaxOpenConnections != 4 || stats.OpenConnections != 1 || stats.InUse != 0 || stats.Idle != 1 {
 		t.Fatalf("serial warm workload did not reuse one idle connection: %+v", stats)
 	}
 	vprotest.AssertNoWALSidecars(t, state.ProjectPath)
@@ -98,17 +98,16 @@ func TestPlotPoolEveryConnectionKeepsForeignKeysAndBusyPolicy(t *testing.T) {
 	pool := service.Projects.Sqlite.ProjectReadDB
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	first, err := pool.Conn(ctx)
-	if err != nil {
-		t.Fatal(err)
+	conns := make([]*sql.Conn, 0, 4)
+	for range 4 {
+		conn, err := pool.Conn(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+		conns = append(conns, conn)
 	}
-	defer first.Close()
-	second, err := pool.Conn(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer second.Close()
-	for _, connection := range []*sql.Conn{first, second} {
+	for _, connection := range conns {
 		var foreignKeys, timeout int
 		if err := connection.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&foreignKeys); err != nil {
 			t.Fatal(err)
@@ -120,7 +119,7 @@ func TestPlotPoolEveryConnectionKeepsForeignKeysAndBusyPolicy(t *testing.T) {
 			t.Fatalf("connection policy lost: foreign_keys=%d busy_timeout=%d", foreignKeys, timeout)
 		}
 	}
-	if stats := pool.Stats(); stats.OpenConnections != 2 || stats.MaxOpenConnections != 2 {
+	if stats := pool.Stats(); stats.OpenConnections != 4 || stats.MaxOpenConnections != 4 {
 		t.Fatalf("pool connection bound differs: %+v", stats)
 	}
 }
@@ -151,7 +150,7 @@ func TestPlotPoolConcurrentReadsKeepOneOwnerAndBoundedConnections(t *testing.T) 
 		}
 	}
 	vprotest.AssertNoWALSidecars(t, state.ProjectPath)
-	if service.Projects.Sqlite.ProjectReadDB != pool || service.Projects.Sqlite.ProjectDB != nil || pool.Stats().OpenConnections > 2 || pool.Stats().InUse != 0 {
+	if service.Projects.Sqlite.ProjectReadDB != pool || service.Projects.Sqlite.ProjectDB != nil || pool.Stats().OpenConnections > 4 || pool.Stats().InUse != 0 {
 		t.Fatal("concurrent reads lost ownership, opened writable pool, or exceeded the pool bound")
 	}
 }

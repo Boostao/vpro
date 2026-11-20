@@ -214,9 +214,14 @@ func ChildCapabilities(db sqlutil.HeaderDB, project, kind string) (map[string]bo
 	return columns, nil
 }
 
-// GetChildCapabilities reports exact DTO property support, without schema alias
-// guessing. Unbound stored columns are not advertised as editable properties.
-func (s *PlotService) GetChildCapabilities(kind string) (map[string]bool, error) {
+func (s *PlotService) childCapabilities(db sqlutil.HeaderDB, project, kind string) (map[string]bool, error) {
+	if coordinator := s.activeSqliteContext(); coordinator != nil {
+		return coordinator.CachedChildCapabilities(db, project, kind)
+	}
+	return ChildCapabilities(db, project, kind)
+}
+
+func childDTOCapabilities(kind string, caps map[string]bool) (map[string]bool, error) {
 	var record any
 	switch kind {
 	case "Veg":
@@ -230,15 +235,6 @@ func (s *PlotService) GetChildCapabilities(kind string) (map[string]bool, error)
 	default:
 		return nil, fmt.Errorf("unsupported child kind %q", kind)
 	}
-	db, project, release, err := s.GetActiveReadDB()
-	if err != nil {
-		return nil, err
-	}
-	defer release()
-	caps, err := ChildCapabilities(s.ReadDB(db), project, kind)
-	if err != nil {
-		return nil, err
-	}
 	result := map[string]bool{"id": true, "plotNumber": true}
 	value := reflect.ValueOf(record)
 	for _, field := range ChildFields[kind] {
@@ -247,16 +243,27 @@ func (s *PlotService) GetChildCapabilities(kind string) (map[string]bool, error)
 	return result, nil
 }
 
-func listChildRecords[T any](s *PlotService, kind, plot string) ([]T, error) {
+// GetChildCapabilities reports exact DTO property support, without schema alias
+// guessing. Unbound stored columns are not advertised as editable properties.
+func (s *PlotService) GetChildCapabilities(kind string) (map[string]bool, error) {
+	switch kind {
+	case "Veg", "Humus", "Mineral", "Other":
+	default:
+		return nil, fmt.Errorf("unsupported child kind %q", kind)
+	}
 	db, project, release, err := s.GetActiveReadDB()
 	if err != nil {
 		return nil, err
 	}
 	defer release()
-	caps, err := ChildCapabilities(s.ReadDB(db), project, kind)
+	caps, err := s.childCapabilities(s.ReadDB(db), project, kind)
 	if err != nil {
 		return nil, err
 	}
+	return childDTOCapabilities(kind, caps)
+}
+
+func queryChildRecords[T any](db sqlutil.HeaderDB, project, kind, plot string, caps map[string]bool) ([]T, error) {
 	columns := []string{`"ID"`, `"PlotNumber"`}
 	recordType := reflect.ValueOf(new(T)).Elem()
 	var fields []ChildField
@@ -280,7 +287,7 @@ func listChildRecords[T any](s *PlotService, kind, plot string) ([]T, error) {
 			order = `"UpperDepth", "ID"`
 		}
 	}
-	rows, err := s.ReadDB(db).Query(`SELECT `+strings.Join(columns, ",")+` FROM `+
+	rows, err := db.Query(`SELECT `+strings.Join(columns, ",")+` FROM `+
 		QuoteHeaderIdentifier(project+"_"+kind)+` WHERE `+ExactTextPlotPredicate(`"PlotNumber"`)+` ORDER BY `+order, plot, plot)
 	if err != nil {
 		return nil, err
@@ -312,6 +319,20 @@ func listChildRecords[T any](s *PlotService, kind, plot string) ([]T, error) {
 		records = append(records, record)
 	}
 	return records, rows.Err()
+}
+
+func listChildRecords[T any](s *PlotService, kind, plot string) ([]T, error) {
+	db, project, release, err := s.GetActiveReadDB()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	reader := s.ReadDB(db)
+	caps, err := s.childCapabilities(reader, project, kind)
+	if err != nil {
+		return nil, err
+	}
+	return queryChildRecords[T](reader, project, kind, plot, caps)
 }
 
 func ChildValue(record reflect.Value, field ChildField) any {

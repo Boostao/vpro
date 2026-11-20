@@ -178,6 +178,23 @@ func HeaderCapabilities(db sqlutil.HeaderDB, project string) (map[string]bool, e
 	return caps, nil
 }
 
+func (s *PlotService) activeSqliteContext() *SqliteContext {
+	if s == nil || s.Projects == nil {
+		return nil
+	}
+	s.Projects.Mu.RLock()
+	coordinator := s.Projects.Sqlite
+	s.Projects.Mu.RUnlock()
+	return coordinator
+}
+
+func (s *PlotService) headerCapabilities(db sqlutil.HeaderDB, project string) (map[string]bool, error) {
+	if coordinator := s.activeSqliteContext(); coordinator != nil {
+		return coordinator.CachedHeaderCapabilities(db, project)
+	}
+	return HeaderCapabilities(db, project)
+}
+
 // GetHeaderCapabilities returns exact DTO JSON keys, not guessed schema aliases.
 // locked is always false: the Access option is runtime UI state, not stored data.
 func (s *PlotService) GetHeaderCapabilities() (map[string]bool, error) {
@@ -186,7 +203,7 @@ func (s *PlotService) GetHeaderCapabilities() (map[string]bool, error) {
 		return nil, err
 	}
 	defer release()
-	return HeaderCapabilities(s.ReadDB(db), project)
+	return s.headerCapabilities(s.ReadDB(db), project)
 }
 
 func ReadHeader(db sqlutil.HeaderDB, project, plot string, caps map[string]bool) (*FS882Header, error) {
@@ -222,11 +239,12 @@ func (s *PlotService) GetPlot(plotNumber string) (*FS882Header, error) {
 		return nil, err
 	}
 	defer release()
-	caps, err := HeaderCapabilities(s.ReadDB(db), project)
+	reader := s.ReadDB(db)
+	caps, err := s.headerCapabilities(reader, project)
 	if err != nil {
 		return nil, err
 	}
-	h, err := ReadHeader(s.ReadDB(db), project, plotNumber, caps)
+	h, err := ReadHeader(reader, project, plotNumber, caps)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("plot %q not found", plotNumber)
 	}

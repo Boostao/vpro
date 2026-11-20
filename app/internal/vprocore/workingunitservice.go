@@ -291,15 +291,23 @@ func (s *WorkingUnitService) GetWorkingUnitChoices(ctx context.Context, mode str
 	if mode == "su" && su == "None" {
 		return nil, errors.New("select an authorized SU table before requesting Working Unit SU choices")
 	}
-	path := s.projects.ProjectFile(project)
-	if mode == "su" && s.projects.Sqlite != nil {
-		path = s.projects.Sqlite.Selection.SUPath
+	var db *sql.DB
+	if mode == "env" && s.projects.Sqlite != nil {
+		db, err = s.projects.Sqlite.ProjectReadDatabase(ctx)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		path := s.projects.ProjectFile(project)
+		if mode == "su" && s.projects.Sqlite != nil {
+			path = s.projects.Sqlite.Selection.SUPath
+		}
+		db, err = sqlutil.OpenReadOnly(path)
+		if err != nil {
+			return nil, err
+		}
+		defer db.Close()
 	}
-	db, err := sqlutil.OpenReadOnly(path)
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, err

@@ -32,6 +32,12 @@ type SqliteContext struct {
 	userLogPath    string
 	userLogRowID   int64
 	userLogUser    string
+
+	capsMu     sync.RWMutex               `json:"-" yaml:"-"`
+	capsClosed bool                       `json:"-" yaml:"-"`
+	headerCaps map[string]bool            `json:"-" yaml:"-"`
+	childCaps  map[string]map[string]bool `json:"-" yaml:"-"`
+	closeHooks []func()                   `json:"-" yaml:"-"`
 }
 
 // BeginConnReadSnapshot starts a caller-owned read-only snapshot transaction on a pinned
@@ -63,6 +69,14 @@ func (c *SqliteContext) BeginReadSnapshot(ctx context.Context) (*sql.Tx, error) 
 	return BeginConnReadSnapshot(ctx, c.conn)
 }
 
+// ProjectReadDatabase returns the pooled read-only project database handle (or the active WAL write pool).
+func (c *SqliteContext) ProjectReadDatabase(ctx context.Context) (*sql.DB, error) {
+	if c == nil {
+		return nil, errors.New("project context is closed")
+	}
+	return c.projectReadDatabase(ctx)
+}
+
 func (c *SqliteContext) projectReadDatabase(ctx context.Context) (*sql.DB, error) {
 	if err := sqlutil.AcquireMutexLease(ctx, &c.mu); err != nil {
 		return nil, err
@@ -85,13 +99,109 @@ func (c *SqliteContext) projectReadDatabaseLocked(ctx context.Context) (*sql.DB,
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(2)
-	db.SetMaxIdleConns(2)
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(4)
 	if err := db.PingContext(ctx); err != nil {
 		return nil, errors.Join(err, db.Close())
 	}
 	c.ProjectReadDB = db
 	return db, nil
+}
+
+func cloneBoolMap(src map[string]bool) map[string]bool {
+	if src == nil {
+		return nil
+	}
+	dst := make(map[string]bool, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+// InvalidateSchemaCache clears cached header and child table capability maps on this context.
+func (c *SqliteContext) InvalidateSchemaCache() {
+	if c == nil {
+		return
+	}
+	c.capsMu.Lock()
+	c.headerCaps = nil
+	c.childCaps = nil
+	c.capsMu.Unlock()
+}
+
+// OnClose registers a callback invoked once when this SqliteContext closes (or immediately if already closed).
+func (c *SqliteContext) OnClose(fn func()) {
+	if c == nil || fn == nil {
+		return
+	}
+	c.capsMu.Lock()
+	if c.capsClosed {
+		c.capsMu.Unlock()
+		fn()
+		return
+	}
+	c.closeHooks = append(c.closeHooks, fn)
+	c.capsMu.Unlock()
+}
+
+// CachedHeaderCapabilities returns a defensive clone of the cached header capabilities for the
+// active project on this context, falling back to PRAGMA table_info when uncached or on mismatch.
+func (c *SqliteContext) CachedHeaderCapabilities(db sqlutil.HeaderDB, project string) (map[string]bool, error) {
+	if c == nil || project != c.Selection.Project {
+		return HeaderCapabilities(db, project)
+	}
+	c.capsMu.RLock()
+	if !c.capsClosed && c.headerCaps != nil {
+		cloned := cloneBoolMap(c.headerCaps)
+		c.capsMu.RUnlock()
+		return cloned, nil
+	}
+	c.capsMu.RUnlock()
+
+	caps, err := HeaderCapabilities(db, project)
+	if err != nil {
+		return nil, err
+	}
+	c.capsMu.Lock()
+	if !c.capsClosed && c.headerCaps == nil {
+		c.headerCaps = cloneBoolMap(caps)
+	}
+	c.capsMu.Unlock()
+	return cloneBoolMap(caps), nil
+}
+
+// CachedChildCapabilities returns a defensive clone of the cached child column capabilities for
+// the active project and kind, falling back to PRAGMA table_info when uncached or on mismatch.
+func (c *SqliteContext) CachedChildCapabilities(db sqlutil.HeaderDB, project, kind string) (map[string]bool, error) {
+	if c == nil || project != c.Selection.Project {
+		return ChildCapabilities(db, project, kind)
+	}
+	c.capsMu.RLock()
+	if !c.capsClosed && c.childCaps != nil {
+		if existing, ok := c.childCaps[kind]; ok {
+			cloned := cloneBoolMap(existing)
+			c.capsMu.RUnlock()
+			return cloned, nil
+		}
+	}
+	c.capsMu.RUnlock()
+
+	caps, err := ChildCapabilities(db, project, kind)
+	if err != nil {
+		return nil, err
+	}
+	c.capsMu.Lock()
+	if !c.capsClosed {
+		if c.childCaps == nil {
+			c.childCaps = make(map[string]map[string]bool, 4)
+		}
+		if _, exists := c.childCaps[kind]; !exists {
+			c.childCaps[kind] = cloneBoolMap(caps)
+		}
+	}
+	c.capsMu.Unlock()
+	return cloneBoolMap(caps), nil
 }
 
 func (c *SqliteContext) ProjectDatabase(ctx context.Context) (*sql.DB, error) {
@@ -519,24 +629,34 @@ func (c *SqliteContext) createViews(ctx context.Context) error {
 
 func (c *SqliteContext) Close() error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	_ = c.endUserLogSessionLocked()
-	if c.conn == nil {
-		return nil
+	c.capsMu.Lock()
+	c.capsClosed = true
+	c.headerCaps = nil
+	c.childCaps = nil
+	hooks := c.closeHooks
+	c.closeHooks = nil
+	c.capsMu.Unlock()
+	var err error
+	if c.conn != nil {
+		connErr := errors.Join(c.conn.Close(), c.db.Close())
+		var readErr error
+		if c.ProjectReadDB != nil {
+			readErr = c.ProjectReadDB.Close()
+		}
+		var projectErr error
+		if c.ProjectDB != nil {
+			projectErr = c.ProjectDB.Close()
+		}
+		err = errors.Join(connErr, readErr, projectErr)
+		c.conn, c.db = nil, nil
+		c.ProjectReadDB = nil
+		c.ProjectDB = nil
 	}
-	connErr := errors.Join(c.conn.Close(), c.db.Close())
-	var readErr error
-	if c.ProjectReadDB != nil {
-		readErr = c.ProjectReadDB.Close()
+	c.mu.Unlock()
+	for _, fn := range hooks {
+		fn()
 	}
-	var projectErr error
-	if c.ProjectDB != nil {
-		projectErr = c.ProjectDB.Close()
-	}
-	err := errors.Join(connErr, readErr, projectErr)
-	c.conn, c.db = nil, nil
-	c.ProjectReadDB = nil
-	c.ProjectDB = nil
 	return err
 }
 

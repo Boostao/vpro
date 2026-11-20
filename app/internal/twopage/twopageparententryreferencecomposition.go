@@ -4,10 +4,231 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
+	"reflect"
+	"sync"
 
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
+
+const twoPageStaticRefCacheMaxEntries = 16
+
+type twoPageStaticReaderPtrs struct {
+	region     uintptr
+	site       uintptr
+	parent     uintptr
+	geology    uintptr
+	bec        uintptr
+	ecosection uintptr
+	quality    uintptr
+	soil       uintptr
+}
+
+type twoPageStaticRefCacheKey struct {
+	owner      *vprocore.SqliteContext
+	contextID  string
+	form       string
+	listsAlias string
+	readers    twoPageStaticReaderPtrs
+}
+
+type twoPageStaticVListsStamp struct {
+	dataVersion int64
+	modUnixNano int64
+	size        int64
+}
+
+type twoPageStaticRefCacheEntry struct {
+	stamp  twoPageStaticVListsStamp
+	fields map[string]sourceform.SourceParentSharedReference
+}
+
+type twoPageStaticRefCacheStore struct {
+	mu         sync.RWMutex
+	entries    map[twoPageStaticRefCacheKey]*twoPageStaticRefCacheEntry
+	registered map[*vprocore.SqliteContext]bool
+}
+
+var twoPageStaticRefCache = &twoPageStaticRefCacheStore{
+	entries:    make(map[twoPageStaticRefCacheKey]*twoPageStaticRefCacheEntry),
+	registered: make(map[*vprocore.SqliteContext]bool),
+}
+
+func (s *twoPageStaticRefCacheStore) get(key twoPageStaticRefCacheKey, stamp twoPageStaticVListsStamp) (map[string]sourceform.SourceParentSharedReference, bool) {
+	s.mu.RLock()
+	entry, ok := s.entries[key]
+	if !ok || entry.stamp != stamp {
+		s.mu.RUnlock()
+		return nil, false
+	}
+	fields := entry.fields
+	s.mu.RUnlock()
+	return fields, true
+}
+
+func (s *twoPageStaticRefCacheStore) put(key twoPageStaticRefCacheKey, stamp twoPageStaticVListsStamp, fields map[string]sourceform.SourceParentSharedReference) {
+	s.mu.Lock()
+	if _, exists := s.entries[key]; !exists && len(s.entries) >= twoPageStaticRefCacheMaxEntries {
+		clear(s.entries)
+	}
+	s.entries[key] = &twoPageStaticRefCacheEntry{stamp: stamp, fields: fields}
+	needHook := !s.registered[key.owner]
+	if needHook {
+		s.registered[key.owner] = true
+	}
+	s.mu.Unlock()
+	if needHook {
+		owner := key.owner
+		owner.OnClose(func() {
+			s.evictOwner(owner)
+		})
+	}
+}
+
+func (s *twoPageStaticRefCacheStore) evictOwner(owner *vprocore.SqliteContext) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.registered, owner)
+	for key := range s.entries {
+		if key.owner == owner {
+			delete(s.entries, key)
+		}
+	}
+}
+
+func (s *twoPageStaticRefCacheStore) hasOwnerForTest(owner *vprocore.SqliteContext) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for key := range s.entries {
+		if key.owner == owner {
+			return true
+		}
+	}
+	return false
+}
+
+func isTwoPageStaticReferenceField(field TwoPageEntryReferenceField) bool {
+	if field.Column == "SubZone" || field.Column == "SiteSeries" {
+		return false
+	}
+	switch field.Reader {
+	case "project", "working-unit", "bec-series":
+		return false
+	default:
+		return true
+	}
+}
+
+func readerPointerIdentity(iface any) (uintptr, bool) {
+	if iface == nil {
+		return 0, false
+	}
+	v := reflect.ValueOf(iface)
+	if v.Kind() != reflect.Pointer || v.IsNil() {
+		return 0, false
+	}
+	return v.Pointer(), true
+}
+
+func twoPageStaticReadersKey(readers TwoPageEntryReferenceReaders) (twoPageStaticReaderPtrs, bool) {
+	var ptrs twoPageStaticReaderPtrs
+	var ok bool
+	if ptrs.region, ok = readerPointerIdentity(readers.Shared.Region); !ok {
+		return ptrs, false
+	}
+	if ptrs.site, ok = readerPointerIdentity(readers.Shared.Site); !ok {
+		return ptrs, false
+	}
+	if ptrs.parent, ok = readerPointerIdentity(readers.Shared.Parent); !ok {
+		return ptrs, false
+	}
+	if ptrs.geology, ok = readerPointerIdentity(readers.Shared.Geology); !ok {
+		return ptrs, false
+	}
+	if ptrs.bec, ok = readerPointerIdentity(readers.Shared.Bec); !ok {
+		return ptrs, false
+	}
+	if ptrs.ecosection, ok = readerPointerIdentity(readers.Ecosection); !ok {
+		return ptrs, false
+	}
+	if ptrs.quality, ok = readerPointerIdentity(readers.Quality); !ok {
+		return ptrs, false
+	}
+	if ptrs.soil, ok = readerPointerIdentity(readers.Soil); !ok {
+		return ptrs, false
+	}
+	return ptrs, true
+}
+
+func readTwoPageVListsStamp(ctx context.Context, tx *sql.Tx, owner *vprocore.SqliteContext, listsAlias string) (twoPageStaticVListsStamp, bool) {
+	path := owner.Attachments["VLists"]
+	if path == "" || listsAlias == "" {
+		return twoPageStaticVListsStamp{}, false
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return twoPageStaticVListsStamp{}, false
+	}
+	var dataVersion int64
+	if err := tx.QueryRowContext(ctx, `PRAGMA `+vprocore.QuoteHeaderIdentifier(listsAlias)+`.data_version`).Scan(&dataVersion); err != nil {
+		return twoPageStaticVListsStamp{}, false
+	}
+	return twoPageStaticVListsStamp{
+		dataVersion: dataVersion,
+		modUnixNano: info.ModTime().UnixNano(),
+		size:        info.Size(),
+	}, true
+}
+
+func cloneStringPtr(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	copied := *value
+	return &copied
+}
+
+func cloneProjectMetadataTable(table vprocore.ProjectMetadataTable) vprocore.ProjectMetadataTable {
+	var cols []vprocore.ProjectMetadataColumn
+	if table.Columns != nil {
+		cols = make([]vprocore.ProjectMetadataColumn, len(table.Columns))
+		copy(cols, table.Columns)
+	}
+	var rows []vprocore.ProjectMetadataRow
+	if table.Rows != nil {
+		rows = make([]vprocore.ProjectMetadataRow, len(table.Rows))
+		for i, row := range table.Rows {
+			var cells []vprocore.ProjectMetadataCell
+			if row.Cells != nil {
+				cells = make([]vprocore.ProjectMetadataCell, len(row.Cells))
+				for j, cell := range row.Cells {
+					cells[j] = vprocore.CloneSiteUnitCell(cell)
+				}
+			}
+			rows[i] = vprocore.ProjectMetadataRow{RowID: row.RowID, Cells: cells}
+		}
+	}
+	return vprocore.ProjectMetadataTable{Columns: cols, Rows: rows}
+}
+
+func cloneSourceParentSharedReference(ref sourceform.SourceParentSharedReference) sourceform.SourceParentSharedReference {
+	cloned := ref
+	cloned.Definitions = cloneProjectMetadataTable(ref.Definitions)
+	if ref.Choices != nil {
+		cloned.Choices = make([]sourceform.SourceParentSharedReferenceChoice, len(ref.Choices))
+		for i, choice := range ref.Choices {
+			cloned.Choices[i] = sourceform.SourceParentSharedReferenceChoice{
+				RowID:       choice.RowID,
+				Code:        cloneStringPtr(choice.Code),
+				Description: cloneStringPtr(choice.Description),
+				Selectable:  choice.Selectable,
+				Diagnostic:  choice.Diagnostic,
+			}
+		}
+	}
+	return cloned
+}
 
 type TwoPageEntryReferenceSnapshot struct {
 	Original                     *sourceform.SourceParentProjection
@@ -54,8 +275,46 @@ func readTwoPageEntryReferenceFieldsWithHistoricalFilters(ctx context.Context, t
 			return nil, errors.New("complete-entry reference provider changed its exact source policies")
 		}
 	}
-	result := []sourceform.SourceParentSharedReference{}
+
+	var cacheKey twoPageStaticRefCacheKey
+	var stamp twoPageStaticVListsStamp
+	var cachedStatic map[string]sourceform.SourceParentSharedReference
+	cacheable := false
+	if contextID != "" &&
+		selection.ProjectSource >= 1 && selection.ProjectSource <= 2 &&
+		selection.WorkingSource >= 1 && selection.WorkingSource <= 3 &&
+		(aliases.Project == "project" || aliases.Project == "main") &&
+		(aliases.Lists == "VLists" || aliases.Lists == "two_page_entry_refs") &&
+		(aliases.Su == "" || aliases.Su == "su" || aliases.Su == "sivi_su" || aliases.Su == "main") {
+		if readerPtrs, ok := twoPageStaticReadersKey(provider.Readers); ok {
+			if st, ok := readTwoPageVListsStamp(ctx, tx, owner, aliases.Lists); ok {
+				cacheKey = twoPageStaticRefCacheKey{
+					owner:      owner,
+					contextID:  contextID,
+					form:       form,
+					listsAlias: aliases.Lists,
+					readers:    readerPtrs,
+				}
+				stamp = st
+				cacheable = true
+				cachedStatic, _ = twoPageStaticRefCache.get(cacheKey, stamp)
+			}
+		}
+	}
+
+	var freshStatic map[string]sourceform.SourceParentSharedReference
+	if cacheable && cachedStatic == nil {
+		freshStatic = make(map[string]sourceform.SourceParentSharedReference, len(fields))
+	}
+
+	result := make([]sourceform.SourceParentSharedReference, 0, len(fields))
 	for _, field := range fields {
+		if cachedStatic != nil && isTwoPageStaticReferenceField(field) {
+			if cachedRef, ok := cachedStatic[field.Column]; ok {
+				result = append(result, cloneSourceParentSharedReference(cachedRef))
+				continue
+			}
+		}
 		var reference sourceform.SourceParentSharedReference
 		var err error
 		if historical && (field.Column == "SubZone" || field.Column == "SiteSeries") {
@@ -81,6 +340,9 @@ func readTwoPageEntryReferenceFieldsWithHistoricalFilters(ctx context.Context, t
 		if err != nil {
 			return nil, err
 		}
+		if freshStatic != nil && isTwoPageStaticReferenceField(field) {
+			freshStatic[field.Column] = cloneSourceParentSharedReference(reference)
+		}
 		result = append(result, reference)
 	}
 	if err := vprocore.ProfileOwnedFiles(owner); err != nil {
@@ -88,6 +350,9 @@ func readTwoPageEntryReferenceFieldsWithHistoricalFilters(ctx context.Context, t
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if freshStatic != nil {
+		twoPageStaticRefCache.put(cacheKey, stamp, freshStatic)
 	}
 	return result, nil
 }

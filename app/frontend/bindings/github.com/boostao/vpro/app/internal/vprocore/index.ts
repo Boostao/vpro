@@ -30,6 +30,7 @@ export type {
     OtherRecord,
     OtherRecordUpdate,
     OtherTextUpdate,
+    PlotBundle,
     PlotLocationReport,
     PlotLocationReview,
     PlotLocationRow,

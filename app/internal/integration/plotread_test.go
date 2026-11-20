@@ -3,6 +3,7 @@ package integration
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"testing"
@@ -83,19 +84,28 @@ func TestScopedReadCancellationReleasesPoolWaitAndInterruptsSQLite(t *testing.T)
 	if db == nil || service.Projects.Sqlite.ProjectDB != nil {
 		t.Fatal("expected read-only project pool without writable pool")
 	}
-	first, err := db.Conn(context.Background())
-	if err != nil {
-		t.Fatal(err)
+	maxOpen := db.Stats().MaxOpenConnections
+	if maxOpen != 4 {
+		t.Fatalf("expected MaxOpenConnections=4, got %d", maxOpen)
 	}
-	second, err := db.Conn(context.Background())
-	if err != nil {
-		first.Close()
-		t.Fatal(err)
+	held := make([]*sql.Conn, 0, maxOpen)
+	for range maxOpen {
+		conn, err := db.Conn(context.Background())
+		if err != nil {
+			for _, h := range held {
+				_ = h.Close()
+			}
+			t.Fatal(err)
+		}
+		held = append(held, conn)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	_, err = service.GetPlot(ctx, state.ContextID, original.PlotNumber)
+	_, err := service.GetPlot(ctx, state.ContextID, original.PlotNumber)
 	cancel()
-	closeErr := errors.Join(first.Close(), second.Close())
+	var closeErr error
+	for _, h := range held {
+		closeErr = errors.Join(closeErr, h.Close())
+	}
 	if !errors.Is(err, context.DeadlineExceeded) || closeErr != nil {
 		t.Fatal("pool wait was not cancelled", err, closeErr)
 	}

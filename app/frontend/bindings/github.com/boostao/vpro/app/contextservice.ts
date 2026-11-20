@@ -180,6 +180,10 @@ export function GetPlot(contextID: string, plot: string): $CancellablePromise<vp
     return $Call.ByID(2787654197, contextID, plot);
 }
 
+export function GetPlotBundle(contextID: string, plot: string, includeCapabilities: boolean): $CancellablePromise<vprocore$0.PlotBundle | null> {
+    return $Call.ByID(2342668021, contextID, plot, includeCapabilities);
+}
+
 export function GetPlotLocationReview(p1: string): $CancellablePromise<$models.PlotLocationReview | null> {
     return $Call.ByID(4147890270, p1);
 }

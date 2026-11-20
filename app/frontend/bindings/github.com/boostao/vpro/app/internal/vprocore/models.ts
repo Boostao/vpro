@@ -339,6 +339,24 @@ export interface OtherTextUpdate {
     "expected": string | null;
 }
 
+/**
+ * PlotBundle batches the plot header, capabilities, Master BEC policy, and all non-audit
+ * child tables (Vegetation, Humus, Mineral, Other) from one read-only SQLite WAL snapshot.
+ * Audit entries are intentionally omitted so the Audit Trail tab can lazy-load on demand.
+ */
+export interface PlotBundle {
+    "header": FS882Header | null;
+    "headerCapabilities"?: { [_ in string]?: boolean } | null;
+    "canEditMasterBEC": boolean;
+    "childCapabilities"?: { [_ in string]?: { [_ in string]?: boolean } | null } | null;
+    "vegetation": VegetationReadAvailability | null;
+    "humus": HumusRecord[] | null;
+    "humusError"?: string;
+    "mineral": MineralRecord[] | null;
+    "mineralError"?: string;
+    "other": OtherRecord[] | null;
+}
+
 export interface PlotLocationReport {
     "project": string;
     "su": string;
