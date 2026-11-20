@@ -94,7 +94,8 @@
       onclosed={() => {
         ctrl.environmentSUOpen = false;
         ctrl.error = null;
-        if (ctrl.environmentSUDirection === 'reverse') void ctrl.load(originalPlotNumber);
+        ctrl.invalidateAfterSUTransfer(ctrl.environmentSUDirection === 'reverse');
+        if (ctrl.environmentSUDirection === 'reverse') void ctrl.load(originalPlotNumber, { force: true });
       }}
     />
   {:catch loadError}
@@ -118,7 +119,8 @@
       onclosed={() => {
         ctrl.environmentSUOpen = false;
         ctrl.error = null;
-        void ctrl.load(originalPlotNumber);
+        ctrl.invalidateAfterSUTransfer(true);
+        void ctrl.load(originalPlotNumber, { force: true });
       }}
     />
   {:catch loadError}
@@ -251,53 +253,55 @@
     })}
       <p role="status" data-two-page-loading="entry" class="p-3 text-xs">Loading two-page complete entry...</p>
     {:then { default: TwoPageEntryEditor }}
-      <TwoPageEntryEditor
-        bind:this={ctrl.twoPageEditor}
-        {contextId}
-        project={ctrl.twoPageProject}
-        plot={plotNumber}
-        initialForm={ctrl.twoPageEntryInitialForm}
-        standalone={ctrl.standaloneTwoPage}
-        onExtendedShrubsChange={ctrl.setExtendedShrubs}
-        pictureReaderAvailable={true}
-        auditReaderAvailable={true}
-        googleEarthReaderAvailable={true}
-        vegetationTableReaderAvailable={true}
-        environmentTableReaderAvailable={true}
-        projectMetadataReaderAvailable={true}
-        projectMetadataClient={ctrl.PlotService}
-        metadataRestorationAvailable={true}
-        profilingReaderAvailable={true}
-        profilingSource={ctrl.pState?.plotProfile?.source ?? null}
-        vegetationTableSU={activeSU}
-        vegetationTableSUPath={suPath}
-        sourceProjectPath={projectPath}
-        externalScope={ctrl.separateSUSelected && !ctrl.siviStandalone && projectPath && suPath
-          ? { contextId, project: activeProject, projectPath, su: activeSU, suPath }
-          : null}
-        sourceBlocked={ctrl.twoPageLinkedParentBlocked ||
-          Object.keys(ctrl.headerValidation).length > 0 ||
-          linkedChildBlocked}
-        cache={ctrl.twoPageEntrySessions}
-        revision={ctrl.twoPageRevision}
-        onchange={() => {
-          ctrl.twoPageRevision += 1;
-        }}
-        childBlocked={linkedChildBlocked || ctrl.pictureBusy || ctrl.sivi.pictureMetadataPending}
-        onbusy={(value) => {
-          ctrl.twoPageBusy = value;
-        }}
-        onclosed={() => {
-          ctrl.twoPageOpen = false;
-          ctrl.twoPageBusy = false;
-          ctrl.twoPageProject = null;
-          ctrl.error = null;
-          if (ctrl.standaloneTwoPage) onCloseStandalone?.();
-        }}
-        onOpenProfileSU={!ctrl.siviStandalone ? ctrl.openProfileSUFromTwoPage : undefined}
-        oncommitted={() => ctrl.refreshTwoPagePeers('entry')}
-        embedded={twoPageLinkedChild}
-      />
+      {#key plotNumber}
+        <TwoPageEntryEditor
+          bind:this={ctrl.twoPageEditor}
+          {contextId}
+          project={ctrl.twoPageProject}
+          plot={plotNumber}
+          initialForm={ctrl.twoPageEntryInitialForm}
+          standalone={ctrl.standaloneTwoPage}
+          onExtendedShrubsChange={ctrl.setExtendedShrubs}
+          pictureReaderAvailable={true}
+          auditReaderAvailable={true}
+          googleEarthReaderAvailable={true}
+          vegetationTableReaderAvailable={true}
+          environmentTableReaderAvailable={true}
+          projectMetadataReaderAvailable={true}
+          projectMetadataClient={ctrl.PlotService}
+          metadataRestorationAvailable={true}
+          profilingReaderAvailable={true}
+          profilingSource={ctrl.pState?.plotProfile?.source ?? null}
+          vegetationTableSU={activeSU}
+          vegetationTableSUPath={suPath}
+          sourceProjectPath={projectPath}
+          externalScope={ctrl.separateSUSelected && !ctrl.siviStandalone && projectPath && suPath
+            ? { contextId, project: activeProject, projectPath, su: activeSU, suPath }
+            : null}
+          sourceBlocked={ctrl.twoPageLinkedParentBlocked ||
+            Object.keys(ctrl.headerValidation).length > 0 ||
+            linkedChildBlocked}
+          cache={ctrl.twoPageEntrySessions}
+          revision={ctrl.twoPageRevision}
+          onchange={() => {
+            ctrl.twoPageRevision += 1;
+          }}
+          childBlocked={linkedChildBlocked || ctrl.pictureBusy || ctrl.sivi.pictureMetadataPending}
+          onbusy={(value) => {
+            ctrl.twoPageBusy = value;
+          }}
+          onclosed={() => {
+            ctrl.twoPageOpen = false;
+            ctrl.twoPageBusy = false;
+            ctrl.twoPageProject = null;
+            ctrl.error = null;
+            if (ctrl.standaloneTwoPage) onCloseStandalone?.();
+          }}
+          onOpenProfileSU={!ctrl.siviStandalone ? ctrl.openProfileSUFromTwoPage : undefined}
+          oncommitted={() => ctrl.refreshTwoPagePeers('entry')}
+          embedded={twoPageLinkedChild}
+        />
+      {/key}
     {:catch loadError}
       <p role="alert" data-two-page-load-error="entry" class="p-3 text-xs text-red-700">
         Two-page complete entry could not load: {formatError(loadError)}
@@ -421,6 +425,7 @@
     <SpeciesCodeCheck
       bind:this={ctrl.codeCheckEditor}
       client={ctrl.PlotService}
+      {contextId}
       onbusy={(value) => {
         ctrl.codeCheckBusy = value;
       }}
@@ -428,7 +433,10 @@
         ctrl.codeCheckOpen = false;
         ctrl.error = null;
       }}
-      oncommitted={() => ctrl.children.loadChildData(plotNumber)}
+      oncommitted={() => {
+        ctrl.invalidateAfterSpeciesCodeCheck();
+        return ctrl.children.loadChildData(plotNumber);
+      }}
     />
   {:catch loadError}
     <p role="alert" class="p-3 text-xs text-red-700">Species code check could not load: {formatError(loadError)}</p>

@@ -15,6 +15,7 @@
     draft = $bindable(),
     original,
     capabilities,
+    headerRevision = 0,
     sourceHeaderValues,
     ordinarySoilUnavailable,
     historicalSoilUnavailable,
@@ -48,7 +49,7 @@
     stageSoilCell,
     deleteSourceChild,
     deleteHumus,
-  }: FS882SoilHorizonSectionProps = $props();
+  }: FS882SoilHorizonSectionProps & { headerRevision?: number } = $props();
 </script>
 
 {#if ordinarySoilUnavailable}<p role="status" data-soil-ordinary-unavailable>{ordinarySoilUnavailable}</p>{/if}
@@ -142,38 +143,40 @@
                   }}
                 >
                   {#snippet children(parentEditor)}
-                    <SourcePage
-                      name="Soil/Terrain"
-                      values={sourceHeaderValues}
-                      {editor}
-                      editors={[
-                        ...(geologyEditor ? [geologyEditor] : []),
-                        ...(parentEditor ? [parentEditor] : []),
-                        ...(ordinaryEditor ? [ordinaryEditor] : []),
-                        ...(drainageEditor ? [drainageEditor] : []),
-                      ]}
-                    >
-                      {#snippet embedded(control)}
-                        {@const child = embeddedForm(control.controlId)}
-                        {#if ordinarySoilUnavailable}
-                          <p role="status" data-soil-ordinary-unavailable={child.form}>{ordinarySoilUnavailable}</p>
-                        {:else if historicalSoilUnavailable}
-                          <p role="status" data-soil-historical-unavailable={child.form}>{historicalSoilUnavailable}</p>
-                        {:else}
-                          <SourceChild
-                            name={child.form}
-                            rows={sourceRows(child.form)}
-                            revision={childRevision}
-                            disabled={soilEditingDisabled}
-                            deleteDisabled={soilUnsaved}
-                            onsoilstage={stageSoilCell}
-                            {soilDrafts}
-                            {soilSuggestions}
-                            ondelete={deleteSourceChild}
-                          />
-                        {/if}
-                      {/snippet}
-                    </SourcePage>
+                    {#key headerRevision}
+                      <SourcePage
+                        name="Soil/Terrain"
+                        values={sourceHeaderValues}
+                        {editor}
+                        editors={[
+                          ...(geologyEditor ? [geologyEditor] : []),
+                          ...(parentEditor ? [parentEditor] : []),
+                          ...(ordinaryEditor ? [ordinaryEditor] : []),
+                          ...(drainageEditor ? [drainageEditor] : []),
+                        ]}
+                      >
+                        {#snippet embedded(control)}
+                          {@const child = embeddedForm(control.controlId)}
+                          {#if ordinarySoilUnavailable}
+                            <p role="status" data-soil-ordinary-unavailable={child.form}>{ordinarySoilUnavailable}</p>
+                          {:else if historicalSoilUnavailable}
+                            <p role="status" data-soil-historical-unavailable={child.form}>{historicalSoilUnavailable}</p>
+                          {:else}
+                            <SourceChild
+                              name={child.form}
+                              rows={sourceRows(child.form)}
+                              revision={childRevision}
+                              disabled={soilEditingDisabled}
+                              deleteDisabled={soilUnsaved}
+                              onsoilstage={stageSoilCell}
+                              {soilDrafts}
+                              {soilSuggestions}
+                              ondelete={deleteSourceChild}
+                            />
+                          {/if}
+                        {/snippet}
+                      </SourcePage>
+                    {/key}
                   {/snippet}
                 </ParentCodeFields>
               {/snippet}

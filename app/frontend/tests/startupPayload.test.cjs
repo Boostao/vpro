@@ -44,7 +44,8 @@ test('entry panels compile as guarded deferred components with explicit loading 
     assert.match(deferredCompiled.js.code, new RegExp(`import\\(['"]\\.\\.?/(?:[a-z]+/)?${component}\\.svelte['"]\\)`));
   }
   assert.doesNotMatch(shellComposite, /SIVICHARSForm/);
-  assert.match(shellComposite, /\{#key \$projectState\?\.contextId\}[\s\S]*?\{#key editorEntryForm\}[\s\S]*?\{#key editorPlotNumber\}/);
+  assert.match(shellComposite, /\{#key \$projectState\?\.contextId\}[\s\S]*?\{#key editorEntryForm\}[\s\S]*?<FS882Form/);
+  assert.doesNotMatch(shellComposite, /\{#key editorPlotNumber\}/);
   assert.equal((entryHostSrc.match(/bind:this=\{editor\}/g) ?? []).length, 1);
 
   const fs882Source = readFileSync(srcPath('FS882Form.svelte'), 'utf8');

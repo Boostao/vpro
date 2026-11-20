@@ -32,6 +32,12 @@ export function bindContextPlots(
   if (!contextId) throw new Error('An editor requires a loaded project context identity.');
   return {
     GetPlot: (plot: string) => port.GetPlot(contextId, plot),
+    ...(typeof port.GetPlotBundle === 'function'
+      ? {
+          GetPlotBundle: (plot: string, includeCapabilities: boolean) =>
+            port.GetPlotBundle(contextId, plot, includeCapabilities),
+        }
+      : {}),
     ReviewEnvironmentSiteUnits: () => port.ReviewEnvironmentSiteUnits(contextId),
     TransferEnvironmentSiteUnits: (request: Parameters<typeof port.TransferEnvironmentSiteUnits>[1]) =>
       port.TransferEnvironmentSiteUnits(contextId, request),

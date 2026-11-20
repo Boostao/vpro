@@ -74,7 +74,10 @@ test('Apply/Clear/Previous/Next reuse transition ownership and revalidation befo
   assert.match(app,/resolveNavigation\(\s*(?:source|s0\.profileNavigation)\.proposal,\s*(?:source|s0\.profileNavigation)\.contextId\s*\)/);
   assert.match(app,/(?:latest\.)?profileNavigation && (?:latest\.)?profileNavigation\.contextId !== state\.contextId/);
   assert.match(app,/projectState\.set\(state\)[\s\S]*?profileNavigation = null|profileNavigation:\s*null/);
-  assert.match(app,/\{#key \$projectState\?\.contextId\}[\s\S]*?\{#key editorEntryForm\}[\s\S]*?\{#key editorPlotNumber\}/);
+  assert.match(app,/\{#key \$projectState\?\.contextId\}[\s\S]*?\{#key editorEntryForm\}[\s\S]*?<FS882Form/);
+  assert.doesNotMatch(app,/\{#key editorPlotNumber\}/);
+  const { readFS882Composite } = require('./svelteTestHelpers.cjs');
+  assert.match(readFS882Composite(),/resetTransientUiForPlot\(/);
   assert.match(app,/<fieldset disabled=\{busy\} class="contents">/);
   assert.match(app,/await tick\(\);\s*const next = await resolveNavigation/);
   assert.doesNotMatch(app,/SetProfileFilter|CreateSU|UpdatePlotCount/);

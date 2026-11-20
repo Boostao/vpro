@@ -38,6 +38,7 @@ export type ShellViewId =
   | 'plot-label-preview';
 
 export interface DiagnosticsDraftContext {
+  plotNumber: string;
   header: Record<string, unknown> | null;
   humus: Record<string, unknown>[];
   mineral: Record<string, unknown>[];

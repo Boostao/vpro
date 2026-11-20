@@ -4,6 +4,7 @@ import {
   type FS882Header,
   type ProjectPlotProfileFilterRequest,
 } from '../../bindings/github.com/boostao/vpro/app';
+import type { PlotBundle } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
 import type { projectState } from '../shared/state';
 
 type ProjectStateValue = Parameters<Parameters<typeof projectState.subscribe>[0]>[0];
@@ -17,6 +18,19 @@ import { formatError, ReadRequests } from '../shared/readRequests';
 import { notifications } from '../shell/notificationService.svelte';
 import type { AvailablePlotOption } from './FS882TwoPagePlotPrompt.svelte';
 import { navigateSourceEnter } from './enterNavigation';
+import {
+  getCachedContextCapabilities,
+  getCachedContextValue,
+  getCachedPlotBundle,
+  invalidatePlotBundle,
+  invalidateProjectIdChoices,
+  invalidateSpeciesLists,
+  invalidateWorkingUnitChoices,
+  peekPlotBundle,
+  prefetchPlotBundle,
+  setCachedContextCapabilities,
+  type CachedContextCapabilities,
+} from './entryReferenceCache';
 import { buildFieldCardViewModel } from './fieldCardPreview';
 import { buildFormValidationItems, focusValidationTarget, type FormValidationItem } from './formValidationSummary';
 import { mergeSoilDraftRows } from './fs882FormChildren';
@@ -51,6 +65,7 @@ import type { WorkingUnitSession } from './workingUnitEditor';
 export type FS882TabId = 'site' | 'veg' | 'vegOther' | 'soils' | 'other' | 'audit' | 'siviParent';
 
 export interface FS882DiagnosticsState {
+  plotNumber: string;
   header: Record<string, unknown> | null;
   humus: Record<string, unknown>[];
   mineral: Record<string, unknown>[];
@@ -58,6 +73,7 @@ export interface FS882DiagnosticsState {
 
 export interface FS882FormBaseProps {
   plotNumber?: string;
+  neighborPlots?: string[];
   contextId: string;
   onSaved?: (p: string) => void | Promise<void>;
   onClosed?: () => void;
@@ -77,6 +93,7 @@ export interface FS882ControllerDeps {
   contextId: string;
   getEntryForm: () => 'fs882' | 'sivi' | 'fs882-twopage';
   getPlotNumber: () => string | undefined;
+  getNeighborPlots?: () => string[];
   getProjectState: () => ProjectStateValue;
   setSuccess: (msg: string | null, markNotified?: boolean) => void;
   onSaved?: (p: string) => void | Promise<void>;
@@ -170,10 +187,42 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
     container = $state<HTMLDivElement>(),
     subEditorGeneration = 0,
     headerRevision = $state(0);
+  let prefetchGeneration = 0;
+  let prefetchTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastSiviProjectSource: string | null = null;
   let draft = $state<FS882Header>(newEmptyFS882Draft()),
     original = $state<FS882Header | null>(null);
   let activeLayerDepthRaw = $state<string | null>(null),
     projectIdDatalist = $state<string[]>([]);
+
+  function cancelNeighborPrefetch() {
+    prefetchGeneration += 1;
+    if (prefetchTimer !== null) {
+      clearTimeout(prefetchTimer);
+      prefetchTimer = null;
+    }
+  }
+
+  function scheduleNeighborPrefetch(currentPlot: string) {
+    const getPlotBundle = PlotService.GetPlotBundle;
+    if (typeof getPlotBundle !== 'function' || !siviContextId) return;
+    cancelNeighborPrefetch();
+    const gen = prefetchGeneration;
+    const neighbors = (deps.getNeighborPlots?.() ?? []).filter((n) => Boolean(n && n !== currentPlot));
+    if (neighbors.length === 0) return;
+    prefetchTimer = setTimeout(() => {
+      prefetchTimer = null;
+      if (gen !== prefetchGeneration) return;
+      for (const neighbor of neighbors) {
+        if (gen !== prefetchGeneration) return;
+        void prefetchPlotBundle<PlotBundle>(siviContextId, neighbor, async () => {
+          const res = await getPlotBundle(neighbor, false);
+          if (!res || !res.header) throw new Error(`Plot ${neighbor} could not be prefetched.`);
+          return res;
+        });
+      }
+    }, 0);
+  }
 
   const children = createFS882ChildWorkflows({
     contextId: siviContextId,
@@ -203,6 +252,8 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
       error = (error ?? '') + s;
     },
     setSuccess: (s) => deps.setSuccess(s, false),
+    isAuditTabActive: () => activeTab === 'audit',
+    onChildWrite: () => cancelNeighborPrefetch(),
   });
 
   const sivi = createSiviSessions({
@@ -237,8 +288,20 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
     onShowParentTab: () => {
       activeTab = 'siviParent';
     },
-    loadChildData: (p) => children.loadChildData(p),
+    loadChildData: (p) => {
+      cancelNeighborPrefetch();
+      invalidatePlotBundle(siviContextId, p);
+      return children.loadChildData(p);
+    },
     applyRefreshedHeader: (header) => {
+      cancelNeighborPrefetch();
+      invalidatePlotBundle(siviContextId, header.plotNumber);
+      if ((original?.userSiteUnit ?? null) !== (header.userSiteUnit ?? null)) {
+        invalidateWorkingUnitChoices(siviContextId, 'env');
+      }
+      if ((original?.projectId ?? null) !== (header.projectId ?? null)) {
+        invalidateProjectIdChoices(siviContextId);
+      }
       draft = { ...header };
       original = structuredClone(header);
       activeLayerDepthRaw = null;
@@ -523,27 +586,40 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
   $effect(() => {
     deps.onBusyChange?.(hostEditorBusy);
   });
-  $effect(() =>
-    observeProjectIdDatalist({
+  $effect(() => {
+    const source = sivi.parentSourceView?.choices?.Source ?? null;
+    if (source !== null && lastSiviProjectSource !== null && source !== lastSiviProjectSource) {
+      invalidateProjectIdChoices(siviContextId);
+    }
+    if (source !== null) lastSiviProjectSource = source;
+  });
+  $effect(() => {
+    if (standaloneTwoPage) return;
+    return observeProjectIdDatalist({
       sourceChoices: sivi.parentSourceView?.choices,
       assignmentChoices: sivi.projectAssignmentView?.choices,
       contextId: siviContextId,
       fetchChoices:
         typeof ContextService?.GetSIVIProjectIDChoices === 'function'
-          ? (cid) => ContextService.GetSIVIProjectIDChoices(cid)
+          ? (cid) =>
+              getCachedContextValue(cid, 'projectIdChoices', () => ContextService.GetSIVIProjectIDChoices(cid))
           : undefined,
       onChoices: (next) => {
         projectIdDatalist = next;
       },
-    })
-  );
+    });
+  });
   $effect(() => {
+    const loadedPlot = original?.plotNumber ?? '';
+    const expected = deps.getPlotNumber() ?? '';
+    const matches = Boolean(loadedPlot && (!expected || loadedPlot === expected));
     deps.onDiagnosticsContextChange?.({
-      header: original ? toRecord($state.snapshot(draft)) : null,
-      humus: original
+      plotNumber: matches ? loadedPlot : '',
+      header: matches ? toRecord($state.snapshot(draft)) : null,
+      humus: matches
         ? mergeSoilDraftRows('Humus', children.humusList, children.soilDrafts, (r) => toRecord($state.snapshot(r)))
         : [],
-      mineral: original
+      mineral: matches
         ? mergeSoilDraftRows('Mineral', children.mineralList, children.soilDrafts, (r) => toRecord($state.snapshot(r)))
         : [],
     });
@@ -553,16 +629,35 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
     untrack(() => void load(plot));
   });
   $effect(() => {
-    void children.loadReferenceLists();
+    if (siviStandalone || standaloneTwoPage) return;
+    untrack(() => void children.loadReferenceLists());
   });
   $effect(() => {
+    const tab = activeTab;
+    const loadedPlot = original?.plotNumber ?? null;
+    const isBusy = busy;
+    if (standaloneTwoPage) return;
     untrack(() => {
-      void children.loadSpeciesReferences();
-      void children.loadSoilSuggestions();
-      void children.loadAttributeSuggestions();
+      if (tab === 'veg') {
+        void children.ensureSpeciesReferencesLoaded();
+        void children.ensureAttributeSuggestionsLoaded();
+      } else if (tab === 'vegOther') {
+        void children.ensureAttributeSuggestionsLoaded();
+      } else if (tab === 'soils') {
+        void children.ensureSoilSuggestionsLoaded();
+      } else if (tab === 'audit' && loadedPlot && !isBusy) {
+        void children.loadAuditEntries(loadedPlot);
+      }
     });
   });
+  $effect(() => {
+    const neighbors = deps.getNeighborPlots?.() ?? [];
+    const loadedPlot = original?.plotNumber ?? '';
+    if (!loadedPlot || busy || !capabilitiesReady || neighbors.length === 0) return;
+    untrack(() => scheduleNeighborPrefetch(loadedPlot));
+  });
   onDestroy(() => {
+    cancelNeighborPrefetch();
     disposeTwoPageSessionCaches([twoPageSessions, twoPageCommonSessions, twoPageEntrySessions]);
     sivi.disposeAll();
     children.disposeAll();
@@ -789,6 +884,10 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
     headerRevision += 1;
   }
   function refreshTwoPagePeers(scope: 'extra' | 'common' | 'entry') {
+    cancelNeighborPrefetch();
+    invalidatePlotBundle(siviContextId, draft.plotNumber);
+    invalidateWorkingUnitChoices(siviContextId, 'env');
+    invalidateProjectIdChoices(siviContextId);
     return refreshTwoPagePeersImpl({
       scope,
       contextId: deps.contextId,
@@ -799,6 +898,16 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
       twoPageEntrySessions,
       refreshParent: () => sivi.refreshAllParentPeers(draft.plotNumber),
     });
+  }
+  function invalidateAfterSUTransfer(bulkPlots: boolean) {
+    cancelNeighborPrefetch();
+    invalidateWorkingUnitChoices(siviContextId);
+    if (bulkPlots) invalidatePlotBundle(siviContextId);
+  }
+  function invalidateAfterSpeciesCodeCheck() {
+    cancelNeighborPrefetch();
+    invalidatePlotBundle(siviContextId);
+    invalidateSpeciesLists(siviContextId);
   }
   function openEnvironmentSU(direction: 'forward' | 'reverse' = 'forward') {
     if (
@@ -848,47 +957,200 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
     deps.setSuccess(null);
   }
   async function refreshAfterRestore(plot: string, request: number) {
+    cancelNeighborPrefetch();
+    invalidatePlotBundle(siviContextId, plot);
+    invalidateWorkingUnitChoices(siviContextId, 'env');
+    invalidateProjectIdChoices(siviContextId);
     const header = await reads.track(PlotService.GetPlot(plot));
     if (!header) throw new Error('Restored plot could not be reloaded.');
-    await children.loadChildData(plot);
+    await children.loadChildData(plot, { includeAudit: true });
     if (request !== loadRequest) return;
     draft = { ...header, locked: draft.locked };
     original = structuredClone(header);
     activeLayerDepthRaw = null;
     dirty = false;
     headerValidation = {};
+    headerRevision += 1;
   }
 
-  async function load(p?: string) {
+  function resetTransientUiForPlot(p?: string) {
+    const hadInvalidHeader =
+      Object.keys(headerValidation).length > 0 || Boolean(container?.querySelector('.header-editor input:invalid'));
+    managePlotOpen = false;
+    codeCheckOpen = false;
+    codeCheckBusy = false;
+    metadataOpen = false;
+    metadataBusy = false;
+    profileReviewOpen = false;
+    profileReviewBusy = false;
+    profileReviewBlocked = false;
+    environmentSUOpen = false;
+    fieldCardModalOpen = false;
+    error = null;
+    deps.setSuccess(null);
+    activeLayerDepthRaw = null;
+    dirty = false;
+    headerValidation = {};
+    if (!standaloneTwoPage) {
+      twoPageOpen = false;
+      twoPageBusy = false;
+      twoPageProject = null;
+    } else {
+      twoPageBusy = false;
+    }
+    if (!siviStandalone && activeTab === 'siviParent') {
+      activeTab = 'site';
+    }
+    if (workingUnitSession.plot !== (p ?? '')) workingUnitSession.mode = null;
+    workingUnitSession.plot = p ?? '';
+    sivi.resetForPlot();
+    children.resetForPlot();
+    if (hadInvalidHeader) headerRevision += 1;
+  }
+
+  function applyLoadedBundle(
+    bundle: PlotBundle,
+    cachedCaps?: CachedContextCapabilities,
+    skipSiviInit = false
+  ): CachedContextCapabilities {
+    if (!bundle.header) throw new Error('Plot could not be loaded.');
+    const resolvedHeaderCaps = bundle.headerCapabilities ?? cachedCaps?.headerCapabilities ?? null;
+    if (resolvedHeaderCaps === null) throw new Error('Header capabilities were not returned.');
+    const resolvedMaster =
+      typeof bundle.canEditMasterBEC === 'boolean'
+        ? bundle.canEditMasterBEC
+        : (cachedCaps?.masterAllowed ?? false);
+    const resolvedChildCaps = children.applyBundleChildren(bundle, cachedCaps?.childCapabilities);
+    const nextCaps: CachedContextCapabilities = {
+      headerCapabilities: resolvedHeaderCaps,
+      childCapabilities: resolvedChildCaps,
+      masterAllowed: resolvedMaster,
+    };
+    setCachedContextCapabilities(siviContextId, nextCaps);
+    capabilities = resolvedHeaderCaps;
+    masterAllowed = resolvedMaster;
+    draft = structuredClone(bundle.header);
+    original = structuredClone(bundle.header);
+    activeLayerDepthRaw = null;
+    dirty = false;
+    headerValidation = {};
+    if (!skipSiviInit) {
+      sivi.initForLoadedPlot(bundle.header.plotNumber, extendedShrubs);
+    }
+    capabilitiesReady = true;
+    return nextCaps;
+  }
+
+  async function load(p?: string, options?: { force?: boolean }) {
     const blockedReason = sivi.blockedLoadReason();
     if (blockedReason) {
       error = blockedReason;
       return;
     }
-    sivi.resetForPlot();
-    if (activeTab === 'siviParent') activeTab = 'site';
+    const force = Boolean(options?.force);
     loadRequest += 1;
     const request = loadRequest;
     reads.cancelAll();
-    if (workingUnitSession.plot !== (p ?? '')) workingUnitSession.mode = null;
-    workingUnitSession.plot = p ?? '';
+    resetTransientUiForPlot(p);
+
+    const getPlotBundle = PlotService.GetPlotBundle;
+    const cachedCaps = !force ? getCachedContextCapabilities(siviContextId) : undefined;
+
+    // Synchronous prefetch hit: apply atomically with ZERO busy=true transition and ZERO RPCs
+    if (p && !force && cachedCaps && typeof getPlotBundle === 'function') {
+      const cachedBundle = peekPlotBundle<PlotBundle>(siviContextId, p);
+      if (cachedBundle && cachedBundle.header) {
+        try {
+          applyLoadedBundle(cachedBundle, cachedCaps);
+          if (siviStandalone && sivi.parentSession) {
+            if (activeTab !== 'veg') activeTab = 'siviParent';
+            sivi.parentOpen = true;
+            busy = true;
+            try {
+              await sivi.loadParentOriginals();
+            } finally {
+              if (request === loadRequest) busy = false;
+            }
+          }
+          if (request === loadRequest) scheduleNeighborPrefetch(p);
+          return;
+        } catch (e) {
+          if (request === loadRequest) {
+            error = formatError(e);
+            capabilitiesReady = false;
+          }
+          return;
+        }
+      }
+    }
+
     busy = true;
-    error = null;
     capabilitiesReady = false;
     masterAllowed = false;
-    children.resetForPlot();
     try {
+      if (p && typeof getPlotBundle === 'function') {
+        if (force) invalidatePlotBundle(siviContextId, p);
+        const includeCaps = !cachedCaps;
+        let siviPreInitialized = false;
+        let siviOriginalsPromise: Promise<void> | null = null;
+        if (siviStandalone) {
+          sivi.initForLoadedPlot(p, extendedShrubs);
+          if (sivi.parentSession) {
+            siviPreInitialized = true;
+            if (activeTab !== 'veg') activeTab = 'siviParent';
+            sivi.parentOpen = true;
+            siviOriginalsPromise = sivi.loadParentOriginals();
+          }
+        }
+        const bundlePromise = getCachedPlotBundle<PlotBundle>(siviContextId, p, async () => {
+          const res = await getPlotBundle(p, includeCaps);
+          if (!res || !res.header) throw new Error(`Plot ${p} could not be loaded.`);
+          return res;
+        });
+        let bundle: PlotBundle;
+        if (siviOriginalsPromise) {
+          const [resolvedBundle] = await Promise.all([bundlePromise, siviOriginalsPromise]);
+          bundle = resolvedBundle;
+        } else {
+          bundle = await bundlePromise;
+        }
+        if (request !== loadRequest) return;
+        if (!cachedCaps && (!bundle.headerCapabilities || !bundle.childCapabilities)) {
+          invalidatePlotBundle(siviContextId, p);
+          bundle = await getCachedPlotBundle<PlotBundle>(siviContextId, p, async () => {
+            const res = await getPlotBundle(p, true);
+            if (!res || !res.header) throw new Error(`Plot ${p} could not be loaded.`);
+            return res;
+          });
+          if (request !== loadRequest) return;
+        }
+        const skipInit = siviPreInitialized && bundle.header?.plotNumber === p;
+        applyLoadedBundle(bundle, cachedCaps, skipInit);
+        if (siviStandalone && sivi.parentSession && !skipInit) {
+          if (activeTab !== 'veg') activeTab = 'siviParent';
+          sivi.parentOpen = true;
+          await sivi.loadParentOriginals();
+        }
+        if (request === loadRequest) scheduleNeighborPrefetch(p);
+        return;
+      }
+
+      // Fallback path: brand-new plot (p === undefined) OR minimal mock PlotService without GetPlotBundle
       const [fields, res, masterPolicy] = await Promise.all([
-        reads.track(PlotService.GetHeaderCapabilities()),
+        cachedCaps?.headerCapabilities
+          ? Promise.resolve(cachedCaps.headerCapabilities)
+          : reads.track(PlotService.GetHeaderCapabilities()),
         p ? reads.track(PlotService.GetPlot(p)) : Promise.resolve(null),
-        reads.track(PlotService.CanEditMasterBEC()),
+        cachedCaps !== undefined
+          ? Promise.resolve(cachedCaps.masterAllowed)
+          : reads.track(PlotService.CanEditMasterBEC()),
       ]);
       if (request !== loadRequest) return;
       if (fields === null) throw new Error('Header capabilities were not returned.');
       capabilities = fields;
       masterAllowed = masterPolicy;
       if (p && !res) throw new Error(`Plot ${p} could not be loaded.`);
-      if (p) await children.loadChildData(p);
+      if (p && !standaloneTwoPage) await children.loadChildData(p);
       if (request !== loadRequest) return;
       if (res !== null) {
         draft = { ...res };
@@ -896,8 +1158,14 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
         activeLayerDepthRaw = null;
         dirty = false;
         headerValidation = {};
-        headerRevision += 1;
         sivi.initForLoadedPlot(res.plotNumber, extendedShrubs);
+        if (!cachedCaps && !standaloneTwoPage) {
+          setCachedContextCapabilities(siviContextId, {
+            headerCapabilities: fields,
+            childCapabilities: children.childCapabilities,
+            masterAllowed: masterPolicy,
+          });
+        }
       } else {
         draft = newEmptyFS882Draft();
         original = null;
@@ -907,7 +1175,7 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
       }
       capabilitiesReady = true;
       if (siviStandalone && sivi.parentSession) {
-        activeTab = 'siviParent';
+        if (activeTab !== 'veg') activeTab = 'siviParent';
         sivi.parentOpen = true;
         await sivi.loadParentOriginals();
       }
@@ -984,10 +1252,21 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
     busy = true;
     error = null;
     deps.setSuccess(null);
+    const prevUserSiteUnit = original?.userSiteUnit ?? null;
+    const prevProjectId = original?.projectId ?? null;
     try {
       const payload = $state.snapshot({ ...draft, locked: capabilities.locked === true && draft.locked });
       if (original) await PlotService.UpdatePlot({ ...payload, original: $state.snapshot(original) } as FS882Header);
       else await PlotService.CreatePlot(payload);
+      cancelNeighborPrefetch();
+      invalidatePlotBundle(siviContextId, draft.plotNumber);
+      if (prevUserSiteUnit !== (draft.userSiteUnit ?? null)) {
+        invalidateWorkingUnitChoices(siviContextId, 'env');
+      }
+      if (prevProjectId !== (draft.projectId ?? null)) {
+        invalidateProjectIdChoices(siviContextId);
+      }
+      children.invalidateAuditForPlot();
       original = structuredClone($state.snapshot(draft));
       activeLayerDepthRaw = null;
       workingUnitSession.plot = draft.plotNumber;
@@ -999,7 +1278,7 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
         source: 'FS882 Form',
         contextTag: draft.plotNumber ? `Plot ${draft.plotNumber}` : undefined,
       });
-      await children.loadChildData(draft.plotNumber);
+      await children.loadChildData(draft.plotNumber, { includeAudit: activeTab === 'audit' });
       if (sivi.parentSession?.view().original || sivi.parentSession?.view().error)
         await sivi.refreshAllParentPeers(draft.plotNumber);
       if (deps.onSaved) await deps.onSaved(draft.plotNumber);
@@ -1522,6 +1801,8 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
     applyDiagnosticSMR,
     applyDiagnosticSNR,
     refreshTwoPagePeers,
+    invalidateAfterSUTransfer,
+    invalidateAfterSpeciesCodeCheck,
     openEnvironmentSU,
     openExternalSUEnvironment,
     refreshAfterRestore,

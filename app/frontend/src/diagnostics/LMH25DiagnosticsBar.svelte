@@ -19,6 +19,7 @@
     header = null,
     humus = [],
     mineral = [],
+    waitForDraft = false,
     port = defaultLMH25DiagnosticsPort,
     onApplyHumusThickness,
     onApplyKeyedSMR,
@@ -29,6 +30,7 @@
     header?: Record<string, unknown> | null;
     humus?: Record<string, unknown>[];
     mineral?: Record<string, unknown>[];
+    waitForDraft?: boolean;
     port?: LMH25DiagnosticsPort;
     onApplyHumusThickness?: (value: number) => void;
     onApplyKeyedSMR?: (smrCode: string) => void;
@@ -60,8 +62,20 @@
       !diagnostics.snrDivergent &&
       (diagnostics.substratePopulated === 0 || diagnostics.substrateValid)
   );
+  const matchingHeader = $derived.by(() => {
+    if (!header) return null;
+    if (waitForDraft && plotNumber) {
+      const headerPlot = typeof header.plotNumber === 'string' ? header.plotNumber : '';
+      if (headerPlot !== plotNumber) return null;
+    }
+    return header;
+  });
   const inputSignature = $derived.by(() => {
-    const hdr = header ? JSON.stringify($state.snapshot(header)) : '';
+    if (!matchingHeader) {
+      if (waitForDraft) return '';
+      return contextId && plotNumber ? `${contextId}|${plotNumber}||[]|[]` : '';
+    }
+    const hdr = JSON.stringify($state.snapshot(matchingHeader));
     const hum = JSON.stringify($state.snapshot(humus));
     const min = JSON.stringify($state.snapshot(mineral));
     return `${contextId}|${plotNumber}|${hdr}|${hum}|${min}`;
@@ -69,10 +83,10 @@
 
   $effect(() => {
     const sig = inputSignature;
-    const hasHeader = !!header;
-    const hasStored = !!(contextId && plotNumber);
+    const hasHeader = !!matchingHeader;
+    const hasStored = !waitForDraft && !!(contextId && plotNumber);
     if (!sig || (!hasHeader && !hasStored)) {
-      diagnostics = null;
+      if (!waitForDraft || !contextId || !plotNumber) diagnostics = null;
       return;
     }
     const timer = setTimeout(
@@ -91,12 +105,12 @@
     busy = true;
     try {
       let raw: PlotDiagnosticsResult;
-      if (header) {
-        const headerSnap = $state.snapshot(header);
+      if (matchingHeader) {
+        const headerSnap = $state.snapshot(matchingHeader);
         const humusSnap = $state.snapshot(humus);
         const mineralSnap = $state.snapshot(mineral);
         raw = await port.evaluatePlotDiagnostics(headerSnap, humusSnap, mineralSnap);
-      } else if (owner && plotNumber) {
+      } else if (!waitForDraft && owner && plotNumber) {
         raw = await port.evaluateStoredPlotDiagnostics(owner, plotNumber);
       } else {
         busy = false;
@@ -248,7 +262,7 @@
       <button
         type="button"
         class="bcgov-btn"
-        disabled={busy || (!header && (!contextId || !plotNumber))}
+        disabled={busy || (!matchingHeader && (waitForDraft || !contextId || !plotNumber))}
         onclick={evaluateCurrent}
       >
         {busy ? 'Checking...' : 'Evaluate LMH25 Rules'}

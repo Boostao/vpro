@@ -64,6 +64,10 @@ test('form refuses save-and-close on invalid, locked, loading or incomplete chil
   assert.match(source, /return !dirty && !childUnsaved && Object\.keys\(headerValidation\)\.length === 0 && error === null/);
   assert.match(source, /successMsg = 'Changes undone\.'/);
   assert.match(source, /\{#key headerRevision\}/);
+  assert.match(read('HeaderEditor.svelte'), /\{#key headerRevision\}[\s\S]*?<HeaderGroupGrid/);
+  assert.match(read('FS882SoilHorizonSection.svelte'), /\{#key headerRevision\}[\s\S]*?<SourcePage/);
+  assert.doesNotMatch(read('FS882WorkspaceBody.svelte'), /\{#key ctrl\.headerRevision\}/);
+  assert.doesNotMatch(read('FS882SoilTab.svelte'), /\{#key headerRevision\}/);
 });
 test('root retrieves missed events, flushes focused edits, cancels busy close and awaits save before approval', () => {
   const { readShellComposite } = require('./svelteTestHelpers.cjs');

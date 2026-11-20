@@ -24,6 +24,7 @@ import {
   type HelpMenuAction,
   type WhatsNewStatus,
 } from '../help/helpSystem';
+import { invalidatePlotBundle, peekPlotBundle } from '../entry/entryReferenceCache';
 import { onContextDisposed } from '../shared/contextSessionRegistry';
 import { formatError, ReadRequests } from '../shared/readRequests';
 import { plotLookupInputError, validateScopedPlotLookup } from '../shared/scopedPlotLookup';
@@ -476,7 +477,7 @@ export function createShellUiController(bridge: ShellControllerBridge) {
         if (!next.plots.some((plot) => plot.plotNumber === target)) {
           throw new Error('Reviewed navigation target is no longer available.');
         }
-        diagnosticsDraft = null;
+        if (!peekPlotBundle(contextId, target)) diagnosticsDraft = null;
         bridge.patch({
           profileNavigation: next,
           editorPlotNumber: target,
@@ -523,7 +524,7 @@ export function createShellUiController(bridge: ShellControllerBridge) {
         if (JSON.stringify(current) !== JSON.stringify(proposal)) {
           throw new Error('Found plot summary changed since review; find again before opening.');
         }
-        diagnosticsDraft = null;
+        if (!peekPlotBundle(contextId, current.plot.plotNumber)) diagnosticsDraft = null;
         clearPlotFind();
         bridge.patch({
           editorPlotNumber: current.plot.plotNumber,
@@ -611,6 +612,7 @@ export function createShellUiController(bridge: ShellControllerBridge) {
       allAvailablePlots,
       contextService: ContextService,
       reloadAndSelect: async (targetPlot, fallbackSummary) => {
+        if (snap.state?.contextId) invalidatePlotBundle(snap.state.contextId);
         await refreshCatalogAfterWrite();
         const selected = allAvailablePlots.find((p) => p.plotNumber === targetPlot) ?? fallbackSummary;
         bridge.patch(
@@ -635,6 +637,7 @@ export function createShellUiController(bridge: ShellControllerBridge) {
       contextService: ContextService,
       datasheetService: DatasheetService,
       onUndoneSivi: async (removed) => {
+        if (snap.state?.contextId) invalidatePlotBundle(snap.state.contextId);
         const cur = bridge.read();
         const patch: ShellStatePatch = {};
         if (cur.selected?.plotNumber === removed) patch.selected = null;
@@ -648,6 +651,7 @@ export function createShellUiController(bridge: ShellControllerBridge) {
       },
       onSplinterSwitched: async (result) => {
         const prevCtx = bridge.read().state?.contextId;
+        if (prevCtx) invalidatePlotBundle(prevCtx);
         if (result?.state && prevCtx && result.state.contextId !== prevCtx) onContextDisposed(prevCtx);
         clearCatalogCaches();
         if (result?.state) projectState.set(result.state);

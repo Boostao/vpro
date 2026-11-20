@@ -20,6 +20,7 @@
 
   let {
     plotNumber,
+    neighborPlots = [],
     contextId,
     onSaved,
     onClosed,
@@ -71,6 +72,7 @@
     contextId: untrack(() => contextId),
     getEntryForm: () => entryForm,
     getPlotNumber: () => plotNumber,
+    getNeighborPlots: () => neighborPlots,
     getProjectState: () => $projectState,
     setSuccess: (msg, markNotified = false) => {
       successMsg = msg;
@@ -100,23 +102,27 @@
     }
     const loadedPlot = ctrl.original?.plotNumber ?? null;
     const activeProject = $projectState?.activeProject ?? null;
+    if (!loadedPlot || !activeProject) {
+      autoOpenedTwoPageKey = null;
+      return;
+    }
+    const key = `${ctrl.siviContextId}:${activeProject}:${loadedPlot}`;
+    if (twoPageOpen) {
+      autoOpenedTwoPageKey = key;
+      return;
+    }
     if (
-      !loadedPlot ||
-      !activeProject ||
       $projectState?.contextId !== ctrl.siviContextId ||
       siviStandalone ||
       ctrl.childParentDisabled ||
-      twoPageOpen ||
       ctrl.profileReviewOpen ||
       initialProfileReviewOpen ||
       childUnsaved ||
       ctrl.dirty ||
       Object.keys(ctrl.headerValidation).length > 0
     ) {
-      if (!loadedPlot) autoOpenedTwoPageKey = null;
       return;
     }
-    const key = `${ctrl.siviContextId}:${activeProject}:${loadedPlot}`;
     if (autoOpenedTwoPageKey === key) return;
     autoOpenedTwoPageKey = key;
     ctrl.openTwoPageReview('entry');
@@ -254,7 +260,7 @@
               class="rounded bg-vpro-navy px-2.5 py-0.5 text-[11px] font-semibold text-white hover:bg-vpro-navy-dark disabled:opacity-50"
               disabled={ctrl.busy || headerWorkflowBusy}
               onclick={() => {
-                if (ctrl.original) void ctrl.load(ctrl.original.plotNumber);
+                if (ctrl.original) void ctrl.load(ctrl.original.plotNumber, { force: true });
               }}>Reload Latest Plot</button
             >
             <button

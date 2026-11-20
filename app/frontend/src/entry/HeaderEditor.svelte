@@ -19,7 +19,11 @@
   import HeaderStandardField, { type HeaderFieldDef } from './HeaderStandardField.svelte';
   import HeaderGroupGrid, { type HeaderValidationContext } from './HeaderGroupGrid.svelte';
 
-  type HeaderEditorProps = HeaderEditorBaseProps & { onCoordinateBusyChange?: (busy: boolean) => void };
+  type HeaderEditorProps = HeaderEditorBaseProps & {
+    contextId?: string;
+    headerRevision?: number;
+    onCoordinateBusyChange?: (busy: boolean) => void;
+  };
 
   let {
     draft = $bindable(),
@@ -37,6 +41,8 @@
     onSiteCodeBusyChange,
     onRegionCodeBusyChange,
     workingUnitSession,
+    contextId = '',
+    headerRevision = 0,
     masterAllowed = false,
     extendedShrubs = false,
     snowCoverRegime = '',
@@ -172,6 +178,7 @@
   {onerror}
   {onvalidation}
   {masterAllowed}
+  {contextId}
   onbusy={onWorkingUnitBusyChange}
   session={workingUnitSession}
 >
@@ -348,97 +355,100 @@
                                 />
                               {/if}
                             {/snippet}
-                            <HeaderGroupGrid
-                              bind:draft
-                              {original}
-                              {existing}
-                              {disabled}
-                              {pageName}
-                              {groups}
-                              hasCustomLayout={Boolean(layoutContent)}
-                              {onchange}
-                              {onerror}
-                              {onvalidation}
-                              renderControl={fieldInput}
-                            >
-                              {#snippet customLayout(vCtx)}
-                                {#snippet slotInput(control: PaperControl, _position: string)}{@render fieldInput(
-                                    inputOwner(control),
-                                    vCtx
-                                  )}{/snippet}
-                                {#if layoutContent}{@render layoutContent(
-                                    {
-                                      columns: ownedColumns,
-                                      controls: ownedControls,
-                                      input: slotInput,
-                                      labelled: true,
-                                    },
-                                    coordinateMode
-                                  )}{/if}
-                              {/snippet}
-                              {#snippet arcticFields()}
-                                {#if extendedShrubs}
-                                  <fieldset
-                                    class="form-group"
-                                    data-card-zone="full"
-                                    data-extended-arctic-fields
-                                    data-help-id="site.realm_class"
-                                  >
-                                    <legend>Arctic / extended site fields</legend>
-                                    <div class="field-grid">
-                                      <div class="form-field" data-col-span={6} data-help-id="site.realm_class">
-                                        <label class="field-label" for="header-snowCoverregime">Snow cover regime</label
-                                        >
-                                        <input
-                                          class="paper-control"
-                                          id="header-snowCoverregime"
-                                          data-column="SnowCoverregime"
-                                          type="text"
-                                          value={snowCoverRegime}
-                                          disabled={(snowCoverRegimeDisabled ?? disabled) ||
-                                            capabilities.snowCoverRegime !== true ||
-                                            !onSnowCoverRegimeChange}
-                                          aria-invalid={snowCoverRegimeError ? 'true' : undefined}
-                                          data-help-id="site.realm_class"
-                                          title={onSnowCoverRegimeChange
-                                            ? 'SnowCoverregime'
-                                            : 'Use Complete two-page entry or SIVI parent editor to save SnowCoverregime'}
-                                          oninput={(event) => onSnowCoverRegimeChange?.(event.currentTarget.value)}
-                                        />
-                                        {#if snowCoverRegimeError}<p role="alert" class="text-xs text-red-700 mt-1">
-                                            {snowCoverRegimeError}
-                                          </p>{/if}
+                            {#key headerRevision}
+                              <HeaderGroupGrid
+                                bind:draft
+                                {original}
+                                {existing}
+                                {disabled}
+                                {pageName}
+                                {groups}
+                                hasCustomLayout={Boolean(layoutContent)}
+                                {onchange}
+                                {onerror}
+                                {onvalidation}
+                                renderControl={fieldInput}
+                              >
+                                {#snippet customLayout(vCtx)}
+                                  {#snippet slotInput(control: PaperControl, _position: string)}{@render fieldInput(
+                                      inputOwner(control),
+                                      vCtx
+                                    )}{/snippet}
+                                  {#if layoutContent}{@render layoutContent(
+                                      {
+                                        columns: ownedColumns,
+                                        controls: ownedControls,
+                                        input: slotInput,
+                                        labelled: true,
+                                      },
+                                      coordinateMode
+                                    )}{/if}
+                                {/snippet}
+                                {#snippet arcticFields()}
+                                  {#if extendedShrubs}
+                                    <fieldset
+                                      class="form-group"
+                                      data-card-zone="full"
+                                      data-extended-arctic-fields
+                                      data-help-id="site.realm_class"
+                                    >
+                                      <legend>Arctic / extended site fields</legend>
+                                      <div class="field-grid">
+                                        <div class="form-field" data-col-span={6} data-help-id="site.realm_class">
+                                          <label class="field-label" for="header-snowCoverregime"
+                                            >Snow cover regime</label
+                                          >
+                                          <input
+                                            class="paper-control"
+                                            id="header-snowCoverregime"
+                                            data-column="SnowCoverregime"
+                                            type="text"
+                                            value={snowCoverRegime}
+                                            disabled={(snowCoverRegimeDisabled ?? disabled) ||
+                                              capabilities.snowCoverRegime !== true ||
+                                              !onSnowCoverRegimeChange}
+                                            aria-invalid={snowCoverRegimeError ? 'true' : undefined}
+                                            data-help-id="site.realm_class"
+                                            title={onSnowCoverRegimeChange
+                                              ? 'SnowCoverregime'
+                                              : 'Use Complete two-page entry or SIVI parent editor to save SnowCoverregime'}
+                                            oninput={(event) => onSnowCoverRegimeChange?.(event.currentTarget.value)}
+                                          />
+                                          {#if snowCoverRegimeError}<p role="alert" class="text-xs text-red-700 mt-1">
+                                              {snowCoverRegimeError}
+                                            </p>{/if}
+                                        </div>
+                                        <div class="form-field" data-col-span={6} data-help-id="site.realm_class">
+                                          <label class="field-label" for="header-activeLayerDepth"
+                                            >Active layer depth (cm)</label
+                                          >
+                                          <input
+                                            class="paper-control numeric-control"
+                                            id="header-activeLayerDepth"
+                                            data-column="ActiveLayerDepth"
+                                            type="text"
+                                            inputmode="decimal"
+                                            value={activeLayerDepth}
+                                            disabled={(activeLayerDepthDisabled ?? disabled) ||
+                                              capabilities.activeLayerDepth !== true ||
+                                              !onActiveLayerDepthChange}
+                                            aria-invalid={activeLayerDepthError ? 'true' : undefined}
+                                            data-help-id="site.realm_class"
+                                            title={onActiveLayerDepthChange
+                                              ? 'ActiveLayerDepth'
+                                              : 'Use Complete two-page entry or Two-page additional fields to save ActiveLayerDepth'}
+                                            oninput={(event) => onActiveLayerDepthChange?.(event.currentTarget.value)}
+                                          />
+                                          {#if activeLayerDepthError}<p role="alert" class="text-xs text-red-700 mt-1">
+                                              {activeLayerDepthError}
+                                            </p>{/if}
+                                        </div>
                                       </div>
-                                      <div class="form-field" data-col-span={6} data-help-id="site.realm_class">
-                                        <label class="field-label" for="header-activeLayerDepth"
-                                          >Active layer depth (cm)</label
-                                        >
-                                        <input
-                                          class="paper-control numeric-control"
-                                          id="header-activeLayerDepth"
-                                          data-column="ActiveLayerDepth"
-                                          type="text"
-                                          inputmode="decimal"
-                                          value={activeLayerDepth}
-                                          disabled={(activeLayerDepthDisabled ?? disabled) ||
-                                            capabilities.activeLayerDepth !== true ||
-                                            !onActiveLayerDepthChange}
-                                          aria-invalid={activeLayerDepthError ? 'true' : undefined}
-                                          data-help-id="site.realm_class"
-                                          title={onActiveLayerDepthChange
-                                            ? 'ActiveLayerDepth'
-                                            : 'Use Complete two-page entry or Two-page additional fields to save ActiveLayerDepth'}
-                                          oninput={(event) => onActiveLayerDepthChange?.(event.currentTarget.value)}
-                                        />
-                                        {#if activeLayerDepthError}<p role="alert" class="text-xs text-red-700 mt-1">
-                                            {activeLayerDepthError}
-                                          </p>{/if}
-                                      </div>
-                                    </div>
-                                  </fieldset>
-                                {/if}
-                              {/snippet}
-                            </HeaderGroupGrid>
+                                    </fieldset>
+                                  {/if}
+                                {/snippet}
+                              </HeaderGroupGrid>
+                            {/key}
                           {/snippet}</CoordinateFields
                         >
                       {/snippet}</BECFields

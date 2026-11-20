@@ -44,7 +44,15 @@
 
 {#snippet tabPanels()}
   {#if ctrl.activeTab === 'site' && !ctrl.siviStandalone}
-    {#key ctrl.headerRevision}
+    {#if ctrl.standaloneTwoPage && expectedPlotNumber}
+      <p role="status" class="p-4 text-xs text-vpro-ink-secondary" data-entry-loading="twopage-plot">
+        Loading plot {expectedPlotNumber}...
+      </p>
+    {:else if expectedPlotNumber && ctrl.original === null && ctrl.busy}
+      <p role="status" class="p-4 text-xs text-vpro-ink-secondary" data-entry-loading="site-plot">
+        Loading plot {expectedPlotNumber}...
+      </p>
+    {:else}
       <FS882SiteTab
         bind:draft={ctrl.draft}
         original={ctrl.original}
@@ -80,6 +88,7 @@
         }}
         twoPageOpen={ctrl.twoPageOpen}
         contextId={ctrl.siviContextId}
+        headerRevision={ctrl.headerRevision}
         activeProject={ctrl.pState?.activeProject ?? null}
         pictureDisabled={ctrl.busy ||
           ctrl.otherHeaderWorkflowBusy ||
@@ -92,7 +101,7 @@
           (!ctrl.sivi.pictureMetadataPending && (ctrl.dirty || ctrl.childUnsaved))}
         pictureMetadataSession={ctrl.sivi.pictureMetadataSession}
       />
-    {/key}
+    {/if}
   {:else if ctrl.activeTab === 'veg'}
     <FS882VegTab
       sivi={ctrl.sivi}

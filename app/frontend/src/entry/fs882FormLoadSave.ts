@@ -8,7 +8,10 @@ import type {
   VegRecord,
   VegetationSpeciesOption,
 } from '../../bindings/github.com/boostao/vpro/app';
-import type { VegetationReadAvailability } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
+import type {
+  PlotBundle,
+  VegetationReadAvailability,
+} from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
 import {
   historicalSoilReadError,
   validateOrdinarySoilRecordIds,
@@ -188,11 +191,75 @@ export interface ChildDataLoadResult {
   auditList: OrdinaryAuditReadEntry[];
 }
 
+/** Normalize child records and capabilities from a batched GetPlotBundle response. */
+export function normalizePlotBundleChildren(
+  bundle: PlotBundle,
+  opts: {
+    ordinaryVegetationUnavailable: string | null;
+    ordinarySoilUnavailable: string | null;
+    cachedChildCapabilities?: FS882ChildCapabilities;
+  }
+): Omit<ChildDataLoadResult, 'auditList'> {
+  let childCapabilities: FS882ChildCapabilities;
+  if (bundle.childCapabilities) {
+    const vc = bundle.childCapabilities.Veg ?? null;
+    const hc = bundle.childCapabilities.Humus ?? null;
+    const mc = bundle.childCapabilities.Mineral ?? null;
+    const oc = bundle.childCapabilities.Other ?? null;
+    if (vc === null || hc === null || mc === null || oc === null) {
+      throw new Error('Child capabilities were not returned.');
+    }
+    childCapabilities = { Veg: vc, Humus: hc, Mineral: mc, Other: oc };
+  } else if (opts.cachedChildCapabilities) {
+    childCapabilities = opts.cachedChildCapabilities;
+  } else {
+    throw new Error('Child capabilities were not returned.');
+  }
+
+  const veg = opts.ordinaryVegetationUnavailable
+    ? { records: [] as VegRecord[], reason: opts.ordinaryVegetationUnavailable }
+    : vegetationReadAvailability(bundle.vegetation);
+
+  let hOutcome: { records: HumusRecord[]; reason: string | null };
+  if (opts.ordinarySoilUnavailable) {
+    hOutcome = { records: [], reason: null };
+  } else if (bundle.humusError) {
+    const reason = historicalSoilReadError('Humus', bundle.humusError);
+    if (!reason) throw new Error(bundle.humusError);
+    hOutcome = { records: [], reason };
+  } else {
+    hOutcome = validateOrdinarySoilRecordIds('Humus', bundle.humus ?? []);
+  }
+
+  let mOutcome: { records: MineralRecord[]; reason: string | null };
+  if (opts.ordinarySoilUnavailable) {
+    mOutcome = { records: [], reason: null };
+  } else if (bundle.mineralError) {
+    const reason = historicalSoilReadError('Mineral', bundle.mineralError);
+    if (!reason) throw new Error(bundle.mineralError);
+    mOutcome = { records: [], reason };
+  } else {
+    mOutcome = validateOrdinarySoilRecordIds('Mineral', bundle.mineral ?? []);
+  }
+
+  const soilHistoryReason = [hOutcome.reason, mOutcome.reason].filter(Boolean).join(' ') || null;
+  return {
+    childCapabilities,
+    vegList: veg.records.map((r) => ({ ...r })),
+    vegetationReadUnavailable: veg.reason,
+    historicalSoilUnavailable: soilHistoryReason,
+    humusList: soilHistoryReason ? [] : hOutcome.records.map((r) => ({ ...r })),
+    mineralList: soilHistoryReason ? [] : mOutcome.records.map((r) => ({ ...r })),
+    otherList: (bundle.other ?? []).map((r) => ({ ...r })),
+  };
+}
+
 /** Execute parallel child reads + capability checks and normalize soil/veg unavailability states. */
 export async function executeChildDataLoad(ports: {
   ordinaryVegetationUnavailable: string | null;
   ordinarySoilUnavailable: string | null;
   siviIdentityEnabled: boolean;
+  includeAudit?: boolean;
   readVegetationAvailability: () => Promise<VegetationReadAvailability | null>;
   listVegRecords: () => Promise<VegRecord[] | null>;
   listHumusRecords: () => Promise<HumusRecord[] | null>;
@@ -204,6 +271,7 @@ export async function executeChildDataLoad(ports: {
   getMineralCaps: () => Promise<Record<string, boolean | undefined> | null>;
   getOtherCaps: () => Promise<Record<string, boolean | undefined> | null>;
 }): Promise<ChildDataLoadResult> {
+  const includeAudit = ports.includeAudit !== false;
   try {
     const [v, hOutcome, mOutcome, o, a, vc, hc, mc, oc] = await Promise.all([
       ports.ordinaryVegetationUnavailable
@@ -232,7 +300,7 @@ export async function executeChildDataLoad(ports: {
             }
           ),
       ports.listOtherRecords(),
-      ports.listAuditReadEntries(),
+      includeAudit ? ports.listAuditReadEntries() : Promise.resolve([] as OrdinaryAuditReadEntry[]),
       ports.getVegCaps(),
       ports.getHumusCaps(),
       ports.getMineralCaps(),
@@ -295,6 +363,7 @@ export async function executeSpeciesReferencesLoad(params: {
   forms: readonly string[];
   currentRequest: () => number;
   fetchFormSpecies: (form: string) => Promise<VegetationSpeciesOption[] | null>;
+  fetchSpeciesLists?: () => Promise<SpeciesLists>;
   getSpeciesDrafts: () => SpeciesDrafts;
   setBusy: (b: boolean) => void;
   setReady: (r: boolean) => void;
@@ -308,14 +377,20 @@ export async function executeSpeciesReferencesLoad(params: {
   params.setReady(false);
   params.setError(null);
   try {
-    const rows = await Promise.all(params.forms.map((form) => params.fetchFormSpecies(form)));
-    if (request !== params.currentRequest()) return;
-    const lists: SpeciesLists = {};
-    params.forms.forEach((form, index) => {
-      const options = rows[index];
-      if (options === null) throw new Error(`Species metadata for ${form} was not returned.`);
-      lists[form] = options;
-    });
+    let lists: SpeciesLists;
+    if (params.fetchSpeciesLists) {
+      lists = await params.fetchSpeciesLists();
+      if (request !== params.currentRequest()) return;
+    } else {
+      const rows = await Promise.all(params.forms.map((form) => params.fetchFormSpecies(form)));
+      if (request !== params.currentRequest()) return;
+      lists = {};
+      params.forms.forEach((form, index) => {
+        const options = rows[index];
+        if (options === null) throw new Error(`Species metadata for ${form} was not returned.`);
+        lists[form] = options;
+      });
+    }
     params.setLists(lists);
     let drafts = params.getSpeciesDrafts();
     for (const [id, cell] of Object.entries(drafts)) {

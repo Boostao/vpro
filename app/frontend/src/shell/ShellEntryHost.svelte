@@ -104,6 +104,18 @@
     refreshCatalogAfterWrite: () => Promise<void>;
   } = $props();
 
+  const adjacentEditorPlots = $derived.by<string[]>(() => {
+    if (!editorPlotNumber || allAvailablePlots.length === 0) return [];
+    const idx = allAvailablePlots.findIndex((p) => p.plotNumber === editorPlotNumber);
+    if (idx === -1) return [];
+    const neighbors: string[] = [];
+    const next = allAvailablePlots[idx + 1]?.plotNumber;
+    const prev = allAvailablePlots[idx - 1]?.plotNumber;
+    if (next && next !== editorPlotNumber) neighbors.push(next);
+    if (prev && prev !== editorPlotNumber) neighbors.push(prev);
+    return neighbors;
+  });
+
   async function loadFS882Editor() {
     const module = await import('../entry/FS882Form.svelte');
     fs882ModuleLoaded = true;
@@ -247,70 +259,69 @@
     <fieldset disabled={busy} class="contents">
       {#key $projectState?.contextId}
         {#key editorEntryForm}
-          {#key editorPlotNumber}
-            {#await loadFS882Editor()}
-              <p role="status" data-entry-loading="fs882">Loading {editorLabel} editor...</p>
-            {:then { default: FS882Form }}
-              <FS882Form
-                bind:this={editor}
-                plotNumber={editorPlotNumber}
-                contextId={$projectState?.contextId ?? ''}
-                entryForm={editorEntryForm}
-                availablePlots={allAvailablePlots}
-                onSelectPlotForTwoPage={(p) => {
-                  void requestTransition(async () => {
-                    const found = allAvailablePlots.find((item) => item.plotNumber === p) ?? null;
-                    if (found) selected = found;
-                    editorPlotNumber = p;
-                    editorEntryForm = 'fs882-twopage';
-                    view = 'fs882';
-                    error = '';
-                  });
-                }}
-                onSwitchTo6x4NewPlot={() => {
-                  void requestTransition(async () => {
-                    editorPlotNumber = undefined;
-                    editorEntryForm = 'fs882';
-                    view = 'fs882';
-                    error = '';
-                  });
-                }}
-                canUndoPlotDelete={canUndoEditorPlot}
-                onCopyPlotToNumber={copyPlotToNewNumber}
-                onRemovePlotAction={removePlotFromProject}
-                onSaved={async (p) => {
+          {#await loadFS882Editor()}
+            <p role="status" data-entry-loading="fs882">Loading {editorLabel} editor...</p>
+          {:then { default: FS882Form }}
+            <FS882Form
+              bind:this={editor}
+              plotNumber={editorPlotNumber}
+              neighborPlots={adjacentEditorPlots}
+              contextId={$projectState?.contextId ?? ''}
+              entryForm={editorEntryForm}
+              availablePlots={allAvailablePlots}
+              onSelectPlotForTwoPage={(p) => {
+                void requestTransition(async () => {
+                  const found = allAvailablePlots.find((item) => item.plotNumber === p) ?? null;
+                  if (found) selected = found;
                   editorPlotNumber = p;
-                  await refreshCatalogAfterWrite();
-                }}
-                onClosed={() => navigate('plots')}
-                onBusyChange={(val) => {
-                  localEditorBusy = val;
-                }}
-                onProfileNavigation={applyProfileNavigation}
-                onProfileSUReview={reviewProfileSU}
-                {profileSelection}
-                {initialProfileReviewOpen}
-                {onConsumedInitialProfileReview}
-                onFindPlot={() => {
-                  plotFindOpen = true;
-                }}
-                onOpenPictureManager={(p) => {
-                  void requestTransition(async () => {
-                    pictureManagerPlot = p || editorPlotNumber || '';
-                    view = 'picture-manager';
-                    error = '';
-                  });
-                }}
-                onDiagnosticsContextChange={(ctx) => {
-                  diagnosticsDraft = ctx;
-                }}
-              />
-            {:catch loadErr}
-              <p class="error" role="alert" data-entry-load-error="fs882">
-                {editorLabel} editor could not load: {formatError(loadErr)}
-              </p>
-            {/await}
-          {/key}
+                  editorEntryForm = 'fs882-twopage';
+                  view = 'fs882';
+                  error = '';
+                });
+              }}
+              onSwitchTo6x4NewPlot={() => {
+                void requestTransition(async () => {
+                  editorPlotNumber = undefined;
+                  editorEntryForm = 'fs882';
+                  view = 'fs882';
+                  error = '';
+                });
+              }}
+              canUndoPlotDelete={canUndoEditorPlot}
+              onCopyPlotToNumber={copyPlotToNewNumber}
+              onRemovePlotAction={removePlotFromProject}
+              onSaved={async (p) => {
+                editorPlotNumber = p;
+                await refreshCatalogAfterWrite();
+              }}
+              onClosed={() => navigate('plots')}
+              onBusyChange={(val) => {
+                localEditorBusy = val;
+              }}
+              onProfileNavigation={applyProfileNavigation}
+              onProfileSUReview={reviewProfileSU}
+              {profileSelection}
+              {initialProfileReviewOpen}
+              {onConsumedInitialProfileReview}
+              onFindPlot={() => {
+                plotFindOpen = true;
+              }}
+              onOpenPictureManager={(p) => {
+                void requestTransition(async () => {
+                  pictureManagerPlot = p || editorPlotNumber || '';
+                  view = 'picture-manager';
+                  error = '';
+                });
+              }}
+              onDiagnosticsContextChange={(ctx) => {
+                diagnosticsDraft = ctx;
+              }}
+            />
+          {:catch loadErr}
+            <p class="error" role="alert" data-entry-load-error="fs882">
+              {editorLabel} editor could not load: {formatError(loadErr)}
+            </p>
+          {/await}
         {/key}
       {/key}
     </fieldset>
@@ -327,13 +338,15 @@
   />
   {#if editorPlotNumber && $projectState?.contextId}
     {#await import('../diagnostics/LMH25DiagnosticsBar.svelte') then { default: LMH25DiagnosticsBar }}
+      {@const matchingDraft = diagnosticsDraft?.plotNumber === editorPlotNumber ? diagnosticsDraft : null}
       <div class="px-2 pb-2">
         <LMH25DiagnosticsBar
           contextId={$projectState.contextId}
           plotNumber={editorPlotNumber}
-          header={diagnosticsDraft?.header ?? null}
-          humus={diagnosticsDraft?.humus ?? []}
-          mineral={diagnosticsDraft?.mineral ?? []}
+          header={matchingDraft?.header ?? null}
+          humus={matchingDraft?.humus ?? []}
+          mineral={matchingDraft?.mineral ?? []}
+          waitForDraft={true}
           onApplyHumusThickness={(v) => editor?.applyDiagnosticHumusThickness?.(v)}
           onApplyKeyedSMR={(v) => editor?.applyDiagnosticSMR?.(v)}
           onApplyKeyedSNR={(v) => editor?.applyDiagnosticSNR?.(v)}

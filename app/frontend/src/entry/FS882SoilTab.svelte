@@ -74,45 +74,44 @@
 </script>
 
 {#if activeTab === 'soils'}
-  {#key headerRevision}
-    <FS882SoilHorizonSection
-      bind:draft
-      bind:soilCodeBusy
-      bind:geologyCodeBusy
-      bind:parentCodeBusy
-      bind:drainageBusy
-      {original}
-      {capabilities}
-      {sourceHeaderValues}
-      ordinarySoilUnavailable={c.ordinarySoilUnavailable}
-      historicalSoilUnavailable={c.historicalSoilUnavailable}
-      soilReferenceBusy={c.soilReferenceBusy}
-      soilReferenceError={c.soilReferenceError}
-      soilEditingDisabled={c.soilEditingDisabled}
-      soilUnsaved={c.soilUnsaved}
-      {headerInputsDisabled}
-      {busy}
-      {headerWorkflowBusy}
-      {coordinateBusy}
-      {workingUnitBusy}
-      {qualityBusy}
-      {siteCodeBusy}
-      {regionCodeBusy}
-      childRevision={c.childRevision}
-      soilDrafts={c.soilDrafts}
-      soilSuggestions={c.soilSuggestions}
-      humusList={c.humusList}
-      mineralList={c.mineralList}
-      sourceRows={c.sourceRows}
-      {markDirty}
-      {validateHeader}
-      loadSoilSuggestions={c.loadSoilSuggestions}
-      openNewChild={c.openNewChild}
-      stageSoilCell={c.stageSoilCell}
-      deleteSourceChild={c.deleteSourceChild}
-      deleteHumus={c.deleteHumus}
-    />
-  {/key}
+  <FS882SoilHorizonSection
+    bind:draft
+    bind:soilCodeBusy
+    bind:geologyCodeBusy
+    bind:parentCodeBusy
+    bind:drainageBusy
+    {original}
+    {capabilities}
+    {headerRevision}
+    {sourceHeaderValues}
+    ordinarySoilUnavailable={c.ordinarySoilUnavailable}
+    historicalSoilUnavailable={c.historicalSoilUnavailable}
+    soilReferenceBusy={c.soilReferenceBusy}
+    soilReferenceError={c.soilReferenceError}
+    soilEditingDisabled={c.soilEditingDisabled}
+    soilUnsaved={c.soilUnsaved}
+    {headerInputsDisabled}
+    {busy}
+    {headerWorkflowBusy}
+    {coordinateBusy}
+    {workingUnitBusy}
+    {qualityBusy}
+    {siteCodeBusy}
+    {regionCodeBusy}
+    childRevision={c.childRevision}
+    soilDrafts={c.soilDrafts}
+    soilSuggestions={c.soilSuggestions}
+    humusList={c.humusList}
+    mineralList={c.mineralList}
+    sourceRows={c.sourceRows}
+    {markDirty}
+    {validateHeader}
+    loadSoilSuggestions={c.loadSoilSuggestions}
+    openNewChild={c.openNewChild}
+    stageSoilCell={c.stageSoilCell}
+    deleteSourceChild={c.deleteSourceChild}
+    deleteHumus={c.deleteHumus}
+  />
 {:else if activeTab === 'vegOther'}
   <FS882OtherRecordsSection
     mode="vegOther"

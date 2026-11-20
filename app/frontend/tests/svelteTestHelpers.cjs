@@ -1006,6 +1006,9 @@ function loadReactiveRuneModule(filename, dependencies = {}, globals = {}, evalC
     module: mod,
     exports: mod.exports,
     structuredClone,
+    setTimeout,
+    clearTimeout,
+    queueMicrotask,
     crypto: require('node:crypto'),
     document: { activeElement: null, querySelector: () => null, querySelectorAll: () => [] },
     __vproContextDisposers: globalThis.__vproContextDisposers,
@@ -1078,11 +1081,13 @@ function createFS882TestController(overrides = {}) {
   );
   const entryFormBox = runtime.state(overrides.entryForm ?? 'fs882');
   const plotNumberBox = runtime.state(overrides.plotNumber ?? '00337');
+  const neighborPlotsBox = runtime.state(overrides.neighborPlots ?? []);
   const dispose = runtime.effect_root(() => {
     ctrl = mod.createFS882Controller({
       contextId: overrides.contextId ?? 'ctx-1',
       getEntryForm: () => runtime.get(entryFormBox),
       getPlotNumber: () => runtime.get(plotNumberBox),
+      getNeighborPlots: () => runtime.get(neighborPlotsBox),
       getProjectState: () => runtime.get(projectStateBox),
       setSuccess: overrides.setSuccess ?? (() => {}),
       onSaved: overrides.onSaved,
@@ -1124,6 +1129,10 @@ function createFS882TestController(overrides = {}) {
     },
     setPlotNumber: (p) => {
       runtime.set(plotNumberBox, p);
+      runtime.flush();
+    },
+    setNeighborPlots: (plots) => {
+      runtime.set(neighborPlotsBox, plots);
       runtime.flush();
     },
     dispose,

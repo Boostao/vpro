@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { PictureService } from '../../bindings/github.com/boostao/vpro/app';
   import { equalCell } from '../admin/projectMetadataEditor';
   import { observeSession, observeSessionView } from '../shared/reactiveSession.svelte';
@@ -53,6 +53,19 @@
   let viewerOpen = $state(false);
   let viewer = $state<HTMLDialogElement>();
   const ownerKey = $derived(JSON.stringify([contextId, project, plotNumber, view]));
+  let lastOwnerKey = '';
+  $effect(() => {
+    const key = ownerKey;
+    if (lastOwnerKey && lastOwnerKey !== key) {
+      untrack(() => {
+        cancel();
+        error = '';
+        viewerOpen = false;
+        selected = '';
+      });
+    }
+    lastOwnerKey = key;
+  });
   let reviewKey = $state('');
   const currentReview = $derived(reviewKey === ownerKey ? review : null);
   const currentImage = $derived(reviewKey === ownerKey ? image : null);

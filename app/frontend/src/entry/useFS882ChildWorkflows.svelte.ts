@@ -12,8 +12,19 @@ import {
   type VegRecord,
   type VegetationDeletionReview,
 } from '../../bindings/github.com/boostao/vpro/app';
+import type { PlotBundle } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
 import type { bindContextPlots } from '../shared/contextPlots';
 import { formatError, ReadRequests } from '../shared/readRequests';
+import {
+  getCachedContextValue,
+  getCachedGlobalCatalogue,
+  getCachedSpeciesLists,
+  invalidatePlotBundle,
+  invalidateSpeciesLists,
+  peekContextValue,
+  peekGlobalCatalogue,
+  peekSpeciesLists,
+} from './entryReferenceCache';
 import {
   aCoverSourceNotice,
   aCoverSourceNotices,
@@ -66,7 +77,12 @@ import {
   projectSourceRows,
   type FS882ChildCapabilities,
 } from './fs882FormHelpers';
-import { executeChildDataLoad, executeSpeciesReferencesLoad, executeSuggestionLoad } from './fs882FormLoadSave';
+import {
+  executeChildDataLoad,
+  executeSpeciesReferencesLoad,
+  executeSuggestionLoad,
+  normalizePlotBundleChildren,
+} from './fs882FormLoadSave';
 import {
   beginCreationPersonalSpecies,
   beginPersonalSpecies,
@@ -110,6 +126,8 @@ export interface FS882ChildWorkflowsDeps {
   setError: (msg: string | null) => void;
   appendError: (suffix: string) => void;
   setSuccess: (msg: string | null) => void;
+  isAuditTabActive?: () => boolean;
+  onChildWrite?: (plot: string) => void;
 }
 
 export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
@@ -126,6 +144,7 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
   let speciesReferenceRequest = 0;
   let speciesChoiceRequest = 0;
   let deletionRequest = 0;
+  let auditRequest = 0;
 
   let deletionBusy = $state(false);
   let deletionReview = $state<VegetationDeletionReview | null>(null);
@@ -148,30 +167,32 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
   let mineralList = $state<MineralRecord[]>([]);
   let otherList = $state<OtherRecord[]>([]);
   let auditList = $state<OrdinaryAuditReadEntry[]>([]);
+  let auditLoadedForPlot = $state<string | null>(null);
+  let auditBusy = $state(false);
   let vegetationReadUnavailable = $state<string | null>(null);
   let historicalSoilUnavailable = $state<string | null>(null);
   let childCapabilities = $state<FS882ChildCapabilities>({ Veg: {}, Humus: {}, Mineral: {}, Other: {} });
   let childRevision = $state(0);
 
-  let soilSuggestions = $state<SoilSuggestion[]>([]);
+  let soilSuggestions = $state.raw<SoilSuggestion[]>([]);
   let soilReferenceReady = $state(false);
   let soilReferenceBusy = $state(false);
   let soilReferenceError = $state<string | null>(null);
 
-  let attributeSuggestions = $state<SoilSuggestion[]>([]);
+  let attributeSuggestions = $state.raw<SoilSuggestion[]>([]);
   let attributeReferenceReady = $state(false);
   let attributeReferenceBusy = $state(false);
   let attributeReferenceError = $state<string | null>(null);
 
-  let speciesLists = $state<SpeciesLists>({});
+  let speciesLists = $state.raw<SpeciesLists>({});
   let speciesReferenceReady = $state(false);
   let speciesReferenceBusy = $state(false);
   let speciesReferenceError = $state<string | null>(null);
 
-  let moistureList = $state<ListItem[]>([]);
-  let nutrientList = $state<ListItem[]>([]);
-  let mesoSlopeList = $state<ListItem[]>([]);
-  let surfaceShapeList = $state<ListItem[]>([]);
+  let moistureList = $state.raw<ListItem[]>([]);
+  let nutrientList = $state.raw<ListItem[]>([]);
+  let mesoSlopeList = $state.raw<ListItem[]>([]);
+  let surfaceShapeList = $state.raw<ListItem[]>([]);
 
   let showSpeciesModal = $state(false);
   let speciesSearchQuery = $state('');
@@ -311,12 +332,60 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
     return projectSourceRows(name, { vegList, humusList, mineralList, otherList, childCapabilities });
   }
 
-  async function loadChildData(p: string) {
+  function applyBundleChildren(bundle: PlotBundle, cachedChildCaps?: FS882ChildCapabilities): FS882ChildCapabilities {
+    const outcome = normalizePlotBundleChildren(bundle, {
+      ordinaryVegetationUnavailable,
+      ordinarySoilUnavailable,
+      cachedChildCapabilities: cachedChildCaps,
+    });
+    childCapabilities = outcome.childCapabilities;
+    vegList = outcome.vegList;
+    vegetationReadUnavailable = outcome.vegetationReadUnavailable;
+    historicalSoilUnavailable = outcome.historicalSoilUnavailable;
+    humusList = outcome.humusList;
+    mineralList = outcome.mineralList;
+    otherList = outcome.otherList;
+    auditList = [];
+    auditLoadedForPlot = null;
+    childRevision += 1;
+    return outcome.childCapabilities;
+  }
+
+  function invalidateAuditForPlot() {
+    auditLoadedForPlot = null;
+  }
+
+  async function loadAuditEntries(p: string, force = false) {
+    if (!p) return;
+    if (!force && auditLoadedForPlot === p) return;
     const request = deps.getLoadRequest();
+    const currentAuditReq = ++auditRequest;
+    auditBusy = true;
+    try {
+      const rows = await deps.reads.track(deps.plotService.ListAuditReadEntries(p));
+      if (request !== deps.getLoadRequest() || currentAuditReq !== auditRequest) return;
+      auditList = rows ?? [];
+      auditLoadedForPlot = p;
+      childRevision += 1;
+    } catch (e) {
+      if (request === deps.getLoadRequest() && currentAuditReq === auditRequest) {
+        deps.setError(`Audit trail could not be loaded: ${formatError(e)}`);
+      }
+    } finally {
+      if (request === deps.getLoadRequest() && currentAuditReq === auditRequest) {
+        auditBusy = false;
+      }
+    }
+  }
+
+  async function loadChildData(p: string, opts?: { includeAudit?: boolean }) {
+    const request = deps.getLoadRequest();
+    const includeAudit = opts?.includeAudit ?? Boolean(deps.isAuditTabActive?.());
     const outcome = await executeChildDataLoad({
       ordinaryVegetationUnavailable,
       ordinarySoilUnavailable,
       siviIdentityEnabled: true,
+      includeAudit,
       readVegetationAvailability: () =>
         deps.reads.track(ContextService.GetVegetationReadAvailability(deps.contextId, p)),
       listVegRecords: () => deps.reads.track(deps.plotService.ListVegRecords(p)),
@@ -338,19 +407,43 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
     mineralList = outcome.mineralList;
     otherList = outcome.otherList;
     auditList = outcome.auditList;
+    auditLoadedForPlot = includeAudit ? p : null;
     childRevision += 1;
   }
 
   async function loadReferenceLists() {
+    const cachedM = peekGlobalCatalogue<ListItem>('listItems:MoistureRegime');
+    const cachedN = peekGlobalCatalogue<ListItem>('listItems:NutrientRegime');
+    const cachedMS = peekGlobalCatalogue<ListItem>('listItems:MesoSlopePosition');
+    const cachedSS = peekGlobalCatalogue<ListItem>('listItems:SurfaceShape');
+    if (cachedM && cachedN && cachedMS && cachedSS) {
+      moistureList = cachedM;
+      nutrientList = cachedN;
+      mesoSlopeList = cachedMS;
+      surfaceShapeList = cachedSS;
+      return;
+    }
     referenceRequest += 1;
     const request = referenceRequest;
     referenceReads.cancelAll();
     try {
       const [m, n, ms, ss] = await Promise.all([
-        referenceReads.track(PlotEntryService.GetListItems('MoistureRegime')),
-        referenceReads.track(PlotEntryService.GetListItems('NutrientRegime')),
-        referenceReads.track(PlotEntryService.GetListItems('MesoSlopePosition')),
-        referenceReads.track(PlotEntryService.GetListItems('SurfaceShape')),
+        getCachedGlobalCatalogue<ListItem>(
+          'listItems:MoistureRegime',
+          () => referenceReads.track(PlotEntryService.GetListItems('MoistureRegime')) as Promise<ListItem[]>
+        ),
+        getCachedGlobalCatalogue<ListItem>(
+          'listItems:NutrientRegime',
+          () => referenceReads.track(PlotEntryService.GetListItems('NutrientRegime')) as Promise<ListItem[]>
+        ),
+        getCachedGlobalCatalogue<ListItem>(
+          'listItems:MesoSlopePosition',
+          () => referenceReads.track(PlotEntryService.GetListItems('MesoSlopePosition')) as Promise<ListItem[]>
+        ),
+        getCachedGlobalCatalogue<ListItem>(
+          'listItems:SurfaceShape',
+          () => referenceReads.track(PlotEntryService.GetListItems('SurfaceShape')) as Promise<ListItem[]>
+        ),
       ]);
       if (request !== referenceRequest) return;
       moistureList = m ?? [];
@@ -362,7 +455,14 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
     }
   }
 
+  function noteChildWrite(plot: string) {
+    invalidatePlotBundle(deps.contextId, plot);
+    auditLoadedForPlot = null;
+    deps.onChildWrite?.(plot);
+  }
+
   function childOperation(operation: () => Promise<void>) {
+    const plot = deps.getDraft().plotNumber;
     return childOperationImpl(
       {
         busy: deps.getBusy(),
@@ -370,7 +470,7 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
         capabilitiesReady: deps.getCapabilitiesReady(),
         locked: deps.getDraft().locked,
         hasOriginal: Boolean(deps.getOriginal()),
-        plotNumber: deps.getDraft().plotNumber,
+        plotNumber: plot,
         dirty: deps.getDirty(),
         childUnsaved: deps.getChildUnsaved(),
         setBusy: deps.setBusy,
@@ -380,7 +480,10 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
         invalidateCapabilities: deps.invalidateCapabilities,
         loadChildData,
       },
-      operation
+      async () => {
+        await operation();
+        noteChildWrite(plot);
+      }
     );
   }
 
@@ -425,13 +528,19 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
     }
   }
 
-  function loadSpeciesReferences() {
+  function runSpeciesReferencesLoad(force: boolean) {
     return executeSpeciesReferencesLoad({
       enabled: true,
       busy: speciesReferenceBusy,
       forms: speciesForms,
       currentRequest: () => speciesReferenceRequest,
       fetchFormSpecies: (form) => speciesReferenceReads.track(deps.plotService.ListVegetationSpecies(form)),
+      fetchSpeciesLists: () =>
+        getCachedSpeciesLists(
+          deps.contextId,
+          (form) => speciesReferenceReads.track(deps.plotService.ListVegetationSpecies(form)),
+          force
+        ),
       getSpeciesDrafts: () => speciesDrafts,
       setBusy: (b) => {
         speciesReferenceBusy = b;
@@ -451,7 +560,23 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
     });
   }
 
-  function loadSoilSuggestions() {
+  function loadSpeciesReferences() {
+    return runSpeciesReferencesLoad(speciesReferenceReady);
+  }
+
+  function ensureSpeciesReferencesLoaded() {
+    if (speciesReferenceReady || speciesReferenceBusy) return Promise.resolve();
+    const cached = peekSpeciesLists(deps.contextId);
+    if (cached) {
+      speciesLists = cached;
+      speciesReferenceReady = true;
+      speciesReferenceError = null;
+      return Promise.resolve();
+    }
+    return runSpeciesReferencesLoad(false);
+  }
+
+  function runSoilSuggestionsLoad(force: boolean) {
     if (ordinarySoilUnavailable || soilReferenceBusy) return Promise.resolve();
     return executeSuggestionLoad({
       enabled: true,
@@ -459,7 +584,17 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
       missingMessage: 'Soil reference metadata was not returned.',
       unavailablePrefix: 'Soil reference suggestions unavailable',
       currentRequest: () => referenceRequest,
-      fetchRows: () => referenceReads.track(deps.plotService.ListSoilSuggestions()),
+      fetchRows: () =>
+        getCachedContextValue<SoilSuggestion[]>(
+          deps.contextId,
+          'soilSuggestions',
+          async () => {
+            const rows = await referenceReads.track(deps.plotService.ListSoilSuggestions());
+            if (rows === null) throw new Error('Soil reference metadata was not returned.');
+            return rows;
+          },
+          force
+        ),
       setBusy: (b) => {
         soilReferenceBusy = b;
       },
@@ -475,14 +610,40 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
     });
   }
 
-  function loadAttributeSuggestions() {
+  function loadSoilSuggestions() {
+    return runSoilSuggestionsLoad(soilReferenceReady);
+  }
+
+  function ensureSoilSuggestionsLoaded() {
+    if (ordinarySoilUnavailable || soilReferenceReady || soilReferenceBusy) return Promise.resolve();
+    const cached = peekContextValue<SoilSuggestion[]>(deps.contextId, 'soilSuggestions');
+    if (cached) {
+      soilSuggestions = cached;
+      soilReferenceReady = true;
+      soilReferenceError = null;
+      return Promise.resolve();
+    }
+    return runSoilSuggestionsLoad(false);
+  }
+
+  function runAttributeSuggestionsLoad(force: boolean) {
     return executeSuggestionLoad({
       enabled: true,
       busy: attributeReferenceBusy,
       missingMessage: 'Vegetation attribute reference metadata was not returned.',
       unavailablePrefix: 'Vegetation attribute references unavailable',
       currentRequest: () => referenceRequest,
-      fetchRows: () => referenceReads.track(deps.plotService.ListVegetationAttributeSuggestions()),
+      fetchRows: () =>
+        getCachedContextValue<SoilSuggestion[]>(
+          deps.contextId,
+          'attributeSuggestions',
+          async () => {
+            const rows = await referenceReads.track(deps.plotService.ListVegetationAttributeSuggestions());
+            if (rows === null) throw new Error('Vegetation attribute reference metadata was not returned.');
+            return rows;
+          },
+          force
+        ),
       setBusy: (b) => {
         attributeReferenceBusy = b;
       },
@@ -496,6 +657,22 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
         attributeSuggestions = r;
       },
     });
+  }
+
+  function loadAttributeSuggestions() {
+    return runAttributeSuggestionsLoad(attributeReferenceReady);
+  }
+
+  function ensureAttributeSuggestionsLoaded() {
+    if (attributeReferenceReady || attributeReferenceBusy) return Promise.resolve();
+    const cached = peekContextValue<SoilSuggestion[]>(deps.contextId, 'attributeSuggestions');
+    if (cached) {
+      attributeSuggestions = cached;
+      attributeReferenceReady = true;
+      attributeReferenceError = null;
+      return Promise.resolve();
+    }
+    return runAttributeSuggestionsLoad(false);
   }
 
   function stageSpeciesCell(form: string, id: number, raw: string) {
@@ -635,7 +812,11 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
       capabilitiesReady: deps.getCapabilitiesReady(),
       personalSourceMatches,
       speciesChoiceReads,
-      CreatePersonalSpeciesDefinition: (req) => deps.plotService.CreatePersonalSpeciesDefinition(req),
+      CreatePersonalSpeciesDefinition: async (req) => {
+        const res = await deps.plotService.CreatePersonalSpeciesDefinition(req);
+        invalidateSpeciesLists(deps.contextId);
+        return res;
+      },
       ListVegetationSpeciesUsers: (req) => deps.plotService.ListVegetationSpeciesUsers(req),
       ListVegetationSpeciesAliases: (req) => deps.plotService.ListVegetationSpeciesAliases(req),
       getSpeciesDrafts: () => speciesDrafts,
@@ -679,7 +860,11 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
       clearEmpty: () => {
         speciesDrafts = {};
       },
-      commit: () => deps.plotService.UpdateVegetationSpecies(deps.getDraft().plotNumber, updates),
+      commit: async () => {
+        const plot = deps.getDraft().plotNumber;
+        await deps.plotService.UpdateVegetationSpecies(plot, updates);
+        noteChildWrite(plot);
+      },
       clearOnCommit: () => {
         speciesDrafts = {};
         speciesChoices = {};
@@ -749,7 +934,11 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
       clearEmpty: () => {
         collectedDrafts = {};
       },
-      commit: () => deps.plotService.UpdateCollectedRecords(deps.getDraft().plotNumber, updates),
+      commit: async () => {
+        const plot = deps.getDraft().plotNumber;
+        await deps.plotService.UpdateCollectedRecords(plot, updates);
+        noteChildWrite(plot);
+      },
       clearOnCommit: () => {
         collectedDrafts = {};
       },
@@ -925,7 +1114,11 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
       proposed: creationDraft,
       plotNumber: deps.getDraft().plotNumber,
       speciesLists,
-      CreateSourceVegetation: (p, r) => deps.plotService.CreateSourceVegetation(p, r),
+      CreateSourceVegetation: async (p, r) => {
+        const res = await deps.plotService.CreateSourceVegetation(p, r);
+        noteChildWrite(p);
+        return res;
+      },
       loadChildData,
       getVegList: () => vegList,
       setBusy: deps.setBusy,
@@ -996,7 +1189,11 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
       ),
       reviewed: deletionReview,
       plotNumber: deps.getDraft().plotNumber,
-      DeleteReviewedVegetation: (p, r) => deps.plotService.DeleteReviewedVegetation(p, r),
+      DeleteReviewedVegetation: async (p, r) => {
+        const res = await deps.plotService.DeleteReviewedVegetation(p, r);
+        noteChildWrite(p);
+        return res;
+      },
       loadChildData,
       setBusy: deps.setBusy,
       setError: deps.setError,
@@ -1060,8 +1257,11 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
       clearEmpty: () => {
         heightDrafts = {};
       },
-      commit: () =>
-        deps.plotService.UpdateVegetationNumbers(deps.getDraft().plotNumber, vegetationNumberUpdates(heightDrafts)),
+      commit: async () => {
+        const plot = deps.getDraft().plotNumber;
+        await deps.plotService.UpdateVegetationNumbers(plot, vegetationNumberUpdates(heightDrafts));
+        noteChildWrite(plot);
+      },
       clearOnCommit: () => {
         heightDrafts = {};
       },
@@ -1127,7 +1327,11 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
       clearEmpty: () => {
         otherDrafts = {};
       },
-      commit: () => deps.plotService.UpdateOtherRecords(deps.getDraft().plotNumber, updates),
+      commit: async () => {
+        const plot = deps.getDraft().plotNumber;
+        await deps.plotService.UpdateOtherRecords(plot, updates);
+        noteChildWrite(plot);
+      },
       clearOnCommit: () => {
         otherDrafts = {};
       },
@@ -1205,7 +1409,11 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
       clearEmpty: () => {
         soilDrafts = {};
       },
-      commit: () => deps.plotService.UpdateSoilRecords(deps.getDraft().plotNumber, updates),
+      commit: async () => {
+        const plot = deps.getDraft().plotNumber;
+        await deps.plotService.UpdateSoilRecords(plot, updates);
+        noteChildWrite(plot);
+      },
       clearOnCommit: () => {
         soilDrafts = {};
       },
@@ -1271,7 +1479,11 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
       clearEmpty: () => {
         attributeDrafts = {};
       },
-      commit: () => deps.plotService.UpdateVegetationAttributes(deps.getDraft().plotNumber, updates),
+      commit: async () => {
+        const plot = deps.getDraft().plotNumber;
+        await deps.plotService.UpdateVegetationAttributes(plot, updates);
+        noteChildWrite(plot);
+      },
       clearOnCommit: () => {
         attributeDrafts = {};
       },
@@ -1374,6 +1586,10 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
     creationChoices = null;
     personalDraft = null;
     savedPersonalCodes = [];
+    newChild = null;
+    showSpeciesModal = false;
+    speciesSearchQuery = '';
+    speciesSearchResults = [];
     vegList = [];
     vegetationReadUnavailable = null;
     historicalSoilUnavailable = null;
@@ -1381,7 +1597,9 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
     mineralList = [];
     otherList = [];
     auditList = [];
-    childCapabilities = { Veg: {}, Humus: {}, Mineral: {}, Other: {} };
+    auditLoadedForPlot = null;
+    auditBusy = false;
+    auditRequest += 1;
   }
 
   function disposeAll() {
@@ -1390,6 +1608,7 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
     speciesReferenceRequest += 1;
     speciesChoiceRequest += 1;
     deletionRequest += 1;
+    auditRequest += 1;
     for (const r of [referenceReads, speciesReads, speciesReferenceReads, speciesChoiceReads, deletionReads])
       r.cancelAll();
   }
@@ -1492,6 +1711,12 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
     },
     get auditList() {
       return auditList;
+    },
+    get auditBusy() {
+      return auditBusy;
+    },
+    get auditLoadedForPlot() {
+      return auditLoadedForPlot;
     },
     get childCapabilities() {
       return childCapabilities;
@@ -1748,11 +1973,17 @@ export function createFS882ChildWorkflows(deps: FS882ChildWorkflowsDeps) {
       return anyBusy;
     },
     sourceRows,
+    applyBundleChildren,
+    loadAuditEntries,
+    invalidateAuditForPlot,
     loadChildData,
     loadReferenceLists,
     loadSpeciesReferences,
+    ensureSpeciesReferencesLoaded,
     loadSoilSuggestions,
+    ensureSoilSuggestionsLoaded,
     loadAttributeSuggestions,
+    ensureAttributeSuggestionsLoaded,
     searchSpecies,
     selectSpeciesToAdd,
     stageSpeciesCell,

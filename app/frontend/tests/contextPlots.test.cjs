@@ -34,7 +34,7 @@ test('every editor read and mutation carries the original context identity and u
     }
     if (!['GetHeaderCapabilities', 'CanEditMasterBEC', 'ListSoilSuggestions', 'ListVegetationAttributeSuggestions', 'ReviewSpeciesCodes', 'ListProjectMetadataFields', 'ReviewProjectPlotProfile', 'ReviewProjectPlotProfileLump', 'ListProjectPlotProfileChoices', 'ReviewEnvironmentSiteUnits', 'ReviewSiteUnitEnvironment'].includes(name)) assert.equal(call[2], payload);
   }
-  assert.equal(calls.length, 66);
+  assert.equal(calls.length, 67);
   assert.throws(() => output.bindContextPlots('', port), /loaded project context identity/);
 });
 

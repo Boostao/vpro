@@ -40,6 +40,7 @@
     onError,
     twoPageOpen,
     contextId,
+    headerRevision = 0,
     activeProject,
     pictureDisabled,
     pictureMetadataDisabled,
@@ -82,6 +83,7 @@
     onError: (message: string) => void;
     twoPageOpen: boolean;
     contextId: string;
+    headerRevision?: number;
     activeProject: string | null;
     pictureDisabled: boolean;
     pictureMetadataDisabled: boolean;
@@ -154,6 +156,8 @@
             regionCodeBusy = pending;
           }}
           {workingUnitSession}
+          {contextId}
+          {headerRevision}
           pictureEditor={!twoPageOpen ? linkedPictures : undefined}
         />
       {/snippet}
