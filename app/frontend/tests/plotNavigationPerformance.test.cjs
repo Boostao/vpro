@@ -566,8 +566,13 @@ test('keyed boundaries, contextId wiring, and PicturePanel ownerKey reset compil
   }
 
   const modals = readFileSync(srcPath('entry/FS882Modals.svelte'), 'utf8');
+  assert.match(modals, /\{#if ctrl\.twoPageOpen && ctrl\.twoPageProject !== null && plotNumber\}/);
   assert.match(modals, /\{#key plotNumber\}[\s\S]*?<TwoPageEntryEditor/);
   assert.match(modals, /<SpeciesCodeCheck[\s\S]*?\{contextId\}/);
+  assert.match(modals, /ctrl\.invalidateAfterProjectMetadata\(\)/);
+
+  const entryHost = readFileSync(srcPath('shell/ShellEntryHost.svelte'), 'utf8');
+  assert.match(entryHost, /invalidateProjectIdChoices\(/);
 
   const headerEditor = readFileSync(srcPath('entry/HeaderEditor.svelte'), 'utf8');
   assert.match(headerEditor, /<WorkingUnitFields[\s\S]*?\{contextId\}/);
@@ -575,4 +580,94 @@ test('keyed boundaries, contextId wiring, and PicturePanel ownerKey reset compil
 
   const picturePanel = readFileSync(srcPath('pictures/PicturePanel.svelte'), 'utf8');
   assert.match(picturePanel, /lastOwnerKey && lastOwnerKey !== key[\s\S]*?cancel\(\)/);
+});
+
+test('leaving FS882 (onDestroy) evicts context plot bundles, workingUnitChoices, and projectIdChoices so non-FS882 edits are never stale on return', async () => {
+  const ctxId = 'ctx-non-fs882-edit';
+  const { harness, entryCache } = makeControllerHarness({
+    contextId: ctxId,
+    plotNumber: '001',
+    neighborPlots: ['002'],
+  });
+  try {
+    await flushMicrotasks(30);
+    harness.flush();
+
+    // Populate workingUnitChoices and projectIdChoices for this context
+    await entryCache.getCachedWorkingUnitChoices(ctxId, 'env', async () => [{ code: 'SU1', description: 'Unit 1' }]);
+    await entryCache.getCachedContextValue(ctxId, 'projectIdChoices', async () => ({
+      Source: 'Env',
+      Choices: { columns: [{ name: 'ProjectID' }], rows: [] },
+    }));
+
+    assert.ok(entryCache.peekPlotBundle(ctxId, '001'), 'plot 001 cached while in FS882');
+    assert.ok(entryCache.peekPlotBundle(ctxId, '002'), 'neighbor 002 cached while in FS882');
+    assert.ok(entryCache.peekWorkingUnitChoices(ctxId, 'env'), 'workingUnitChoices cached while in FS882');
+    assert.ok(entryCache.peekContextValue(ctxId, 'projectIdChoices'), 'projectIdChoices cached while in FS882');
+
+    // ProjectMetadataEditor commit invalidates projectIdChoices in-place
+    harness.ctrl.invalidateAfterProjectMetadata();
+    assert.equal(entryCache.peekContextValue(ctxId, 'projectIdChoices'), undefined);
+    await entryCache.getCachedContextValue(ctxId, 'projectIdChoices', async () => ({
+      Source: 'Env',
+      Choices: { columns: [{ name: 'ProjectID' }], rows: [] },
+    }));
+    assert.ok(entryCache.peekContextValue(ctxId, 'projectIdChoices'));
+  } finally {
+    // Unmounting FS882 (e.g. navigating to Datasheet / Project Admin) triggers onDestroy
+    harness.dispose();
+  }
+
+  assert.equal(entryCache.peekPlotBundle(ctxId, '001'), undefined, 'plot 001 bundle evicted on FS882 destroy');
+  assert.equal(entryCache.peekPlotBundle(ctxId, '002'), undefined, 'neighbor 002 bundle evicted on FS882 destroy');
+  assert.equal(entryCache.peekWorkingUnitChoices(ctxId, 'env'), undefined, 'workingUnitChoices evicted on FS882 destroy');
+  assert.equal(entryCache.peekContextValue(ctxId, 'projectIdChoices'), undefined, 'projectIdChoices evicted on FS882 destroy');
+  // Context capabilities remain warm for fast re-entry in same context
+  assert.ok(entryCache.getCachedContextCapabilities(ctxId), 'context capabilities remain cached across view switch');
+});
+
+test('standalone Two-Page clears twoPageOpen/twoPageProject on plotNumber -> undefined and on load error', async () => {
+  const { harness } = makeControllerHarness({
+    contextId: 'ctx-twopage-reset',
+    entryForm: 'fs882-twopage',
+    plotNumber: '001',
+  });
+  const { ctrl } = harness;
+  try {
+    await flushMicrotasks();
+    harness.flush();
+    assert.equal(ctrl.original?.plotNumber, '001');
+
+    // Open two-page review as FS882Form auto-open effect does
+    ctrl.openTwoPageReview('entry');
+    harness.flush();
+    assert.equal(ctrl.twoPageOpen, true);
+    assert.equal(ctrl.twoPageProject, 'Sample');
+
+    // Transition 001 -> undefined (plot prompt) must close twoPageOpen & clear twoPageProject
+    harness.setPlotNumber(undefined);
+    await flushMicrotasks();
+    harness.flush();
+    assert.equal(ctrl.twoPageOpen, false, 'twoPageOpen must reset when plotNumber becomes undefined');
+    assert.equal(ctrl.twoPageProject, null, 'twoPageProject must reset when plotNumber becomes undefined');
+    assert.equal(ctrl.draft.plotNumber, '');
+
+    // Transition undefined -> 002 -> reopen two-page -> then transition to missing plot '999' (load error)
+    harness.setPlotNumber('002');
+    await flushMicrotasks();
+    harness.flush();
+    assert.equal(ctrl.original?.plotNumber, '002');
+    ctrl.openTwoPageReview('entry');
+    harness.flush();
+    assert.equal(ctrl.twoPageOpen, true);
+
+    harness.setPlotNumber('999');
+    await flushMicrotasks();
+    harness.flush();
+    assert.ok(ctrl.error, 'missing plot 999 must surface load error');
+    assert.equal(ctrl.twoPageOpen, false, 'standalone Two-Page load error must close stale twoPageOpen');
+    assert.equal(ctrl.twoPageProject, null, 'standalone Two-Page load error must clear stale twoPageProject');
+  } finally {
+    harness.dispose();
+  }
 });

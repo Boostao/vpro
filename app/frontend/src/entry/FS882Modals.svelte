@@ -244,7 +244,7 @@
   {/if}
 {/snippet}
 
-{#if ctrl.twoPageOpen && ctrl.twoPageProject !== null}
+{#if ctrl.twoPageOpen && ctrl.twoPageProject !== null && plotNumber}
   {#if ctrl.twoPageScope === 'entry'}
     {#await loadSubEditor(loaders.twoPageEntry, 'Two-page complete entry', () => {
       ctrl.twoPageOpen = false;
@@ -406,7 +406,10 @@
         ctrl.metadataOpen = false;
         ctrl.error = null;
       }}
-      oncommitted={() => ctrl.sivi.refreshProjectMetadata(plotNumber)}
+      oncommitted={() => {
+        ctrl.invalidateAfterProjectMetadata();
+        return ctrl.sivi.refreshProjectMetadata(plotNumber);
+      }}
     />
   {:catch loadError}
     <p role="alert" class="p-3 text-xs text-red-700">

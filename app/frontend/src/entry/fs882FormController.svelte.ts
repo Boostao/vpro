@@ -658,6 +658,9 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
   });
   onDestroy(() => {
     cancelNeighborPrefetch();
+    invalidatePlotBundle(siviContextId);
+    invalidateWorkingUnitChoices(siviContextId);
+    invalidateProjectIdChoices(siviContextId);
     disposeTwoPageSessionCaches([twoPageSessions, twoPageCommonSessions, twoPageEntrySessions]);
     sivi.disposeAll();
     children.disposeAll();
@@ -909,6 +912,9 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
     invalidatePlotBundle(siviContextId);
     invalidateSpeciesLists(siviContextId);
   }
+  function invalidateAfterProjectMetadata() {
+    invalidateProjectIdChoices(siviContextId);
+  }
   function openEnvironmentSU(direction: 'forward' | 'reverse' = 'forward') {
     if (
       childParentDisabled ||
@@ -991,7 +997,7 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
     activeLayerDepthRaw = null;
     dirty = false;
     headerValidation = {};
-    if (!standaloneTwoPage) {
+    if (!standaloneTwoPage || !p) {
       twoPageOpen = false;
       twoPageBusy = false;
       twoPageProject = null;
@@ -1078,6 +1084,11 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
           if (request === loadRequest) {
             error = formatError(e);
             capabilitiesReady = false;
+            if (standaloneTwoPage) {
+              twoPageOpen = false;
+              twoPageBusy = false;
+              twoPageProject = null;
+            }
           }
           return;
         }
@@ -1180,7 +1191,14 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
         await sivi.loadParentOriginals();
       }
     } catch (e) {
-      if (request === loadRequest) error = formatError(e);
+      if (request === loadRequest) {
+        error = formatError(e);
+        if (standaloneTwoPage) {
+          twoPageOpen = false;
+          twoPageBusy = false;
+          twoPageProject = null;
+        }
+      }
     } finally {
       if (request === loadRequest) busy = false;
     }
@@ -1803,6 +1821,7 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
     refreshTwoPagePeers,
     invalidateAfterSUTransfer,
     invalidateAfterSpeciesCodeCheck,
+    invalidateAfterProjectMetadata,
     openEnvironmentSU,
     openExternalSUEnvironment,
     refreshAfterRestore,

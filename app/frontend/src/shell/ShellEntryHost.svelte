@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ContextService, type ProjectPlotProfileFilterRequest } from '../../bindings/github.com/boostao/vpro/app';
   import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
+  import { invalidateProjectIdChoices } from '../entry/entryReferenceCache';
   import { bindContextPlots } from '../shared/contextPlots';
   import { formatError, type ReadRequests } from '../shared/readRequests';
   import { projectState } from '../shared/state';
@@ -178,6 +179,8 @@
             localEditorBusy = b;
           }}
           oncommitted={async () => {
+            const currentCtx = $projectState?.contextId;
+            if (currentCtx) invalidateProjectIdChoices(currentCtx);
             const nextState = await stateReads.track(ContextService.GetState());
             projectState.set(nextState);
           }}
