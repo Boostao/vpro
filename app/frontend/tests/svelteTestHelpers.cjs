@@ -982,6 +982,7 @@ function qualityPreferenceHelpers() {
 
 const cachedReactiveCjs = new Map();
 let cachedFs882CtrlMod = null;
+let activeReactiveDestroyCollector = null;
 
 function loadReactiveRuneModule(filename, dependencies = {}, globals = {}, evalCache = new Map()) {
   const { compileModule } = require('svelte/compiler');
@@ -1018,7 +1019,9 @@ function loadReactiveRuneModule(filename, dependencies = {}, globals = {}, evalC
       if (rawName === 'svelte') {
         return {
           ...require('svelte'),
-          onDestroy: () => {},
+          onDestroy: (fn) => {
+            if (activeReactiveDestroyCollector) activeReactiveDestroyCollector.push(fn);
+          },
           tick: async () => {},
           untrack: runtime.untrack,
         };
@@ -1082,19 +1085,31 @@ function createFS882TestController(overrides = {}) {
   const entryFormBox = runtime.state(overrides.entryForm ?? 'fs882');
   const plotNumberBox = runtime.state(overrides.plotNumber ?? '00337');
   const neighborPlotsBox = runtime.state(overrides.neighborPlots ?? []);
-  const dispose = runtime.effect_root(() => {
-    ctrl = mod.createFS882Controller({
-      contextId: overrides.contextId ?? 'ctx-1',
-      getEntryForm: () => runtime.get(entryFormBox),
-      getPlotNumber: () => runtime.get(plotNumberBox),
-      getNeighborPlots: () => runtime.get(neighborPlotsBox),
-      getProjectState: () => runtime.get(projectStateBox),
-      setSuccess: overrides.setSuccess ?? (() => {}),
-      onSaved: overrides.onSaved,
-      onBusyChange: overrides.onBusyChange,
-      onDiagnosticsContextChange: overrides.onDiagnosticsContextChange,
+  const destroyCallbacks = [];
+  const prevCollector = activeReactiveDestroyCollector;
+  activeReactiveDestroyCollector = destroyCallbacks;
+  let disposeRoot;
+  try {
+    disposeRoot = runtime.effect_root(() => {
+      ctrl = mod.createFS882Controller({
+        contextId: overrides.contextId ?? 'ctx-1',
+        getEntryForm: () => runtime.get(entryFormBox),
+        getPlotNumber: () => runtime.get(plotNumberBox),
+        getNeighborPlots: () => runtime.get(neighborPlotsBox),
+        getProjectState: () => runtime.get(projectStateBox),
+        setSuccess: overrides.setSuccess ?? (() => {}),
+        onSaved: overrides.onSaved,
+        onBusyChange: overrides.onBusyChange,
+        onDiagnosticsContextChange: overrides.onDiagnosticsContextChange,
+      });
     });
-  });
+  } finally {
+    activeReactiveDestroyCollector = prevCollector;
+  }
+  const dispose = () => {
+    for (const fn of destroyCallbacks.splice(0)) fn();
+    disposeRoot();
+  };
   const cwProxy = new Proxy(ctrl.children, {
     get(target, prop, receiver) {
       if (prop === 'auditBlocked') {
