@@ -23,7 +23,7 @@ flowchart TB
     subgraph Desktop["Primary Desktop App: app/ (github.com/boostao/vpro/app · 4-Layer Go DAG + Wails v3)"]
         UI["Svelte 5 Runes Frontend (app/frontend · Vite 8 + Tailwind v4)<br/>24 Views · 267 Components · MapLibre v6 + WebGPU · F1 Help"]
         IPC["Wails v3 Typed IPC Bridge (-ts -i)<br/>Strictly 12 Domain Services + Close Nonce Handshake"]
-        CTX["Dual-Connection SQLiteContext (app/internal/vprocore)<br/>1) Pinned :memory: RO Coordinator (beginReadSnapshot)<br/>2) Lazy rw+WAL c.projectDB Writer (FK=ON, busy_timeout=5000)"]
+        CTX["Dual-Connection SqliteContext (app/internal/vprocore)<br/>1) Pinned :memory: RO Coordinator + ProjectReadDB (4 conns, cached caps)<br/>2) Lazy rw+WAL ProjectDB Writer (FK=ON, busy_timeout=5000)"]
         CAT["2026 Embedded SHA-256 Read-Model Catalogues<br/>BECdb v13, BCPlantTaxonomy v19, LMH25 (2023), bc-overview.pmtiles"]
         CGO["app/internal/accessreader + accessimport (Win/Linux/macOS)<br/>Vendored libmdb 1.0.1 + Orphan Quarantine"]
         EXP["Interchange & Cloud Sync (app/internal/interchange + cloudsync)<br/>TurboVeg 3 SQLite+XML, .gpkg, .rds, .xlsx, .pdf, .kml, PG BECMaster"]
@@ -105,16 +105,20 @@ sequenceDiagram
     end
 ```
 
-### 3.2 Dual-Connection `sqliteContext` & Stale-Tab Isolation (`app/internal/vprocore/sqlitecontext.go`)
-Legacy Access rewrote shared `QueryDefs` on disk (`SetCurrentProject`), making multi-window/multi-user operation unsafe. `app/` replaces this with an isolated dual-connection design (`app/internal/vprocore/sqlitecontext.go`, `sqliteprojectservice.go`):
+### 3.2 Dual-Connection `SqliteContext`, Batched `GetPlotBundle` & Stale-Tab Isolation (`app/internal/vprocore/sqlitecontext.go`)
+Legacy Access rewrote shared `QueryDefs` on disk (`SetCurrentProject`), making multi-window/multi-user operation unsafe. `app/` replaces this with an isolated connection and caching design (`app/internal/vprocore/sqlitecontext.go`, `plotbundle.go`, `sqliteprojectservice.go`):
 
 * **Connection 1 — Pinned `:memory:` Read Coordinator (`MaxOpenConns(1)`):**
-  * Attaches `VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, active `<Project>.db`, and optional `<SU>.db`, `<Hierarchy>.db`, `<Profile>.db` using SQLite URI **`mode=ro`**, verifying `os.SameFile` before and after `ATTACH DATABASE` to prevent TOCTOU path swapping (`sqlitecontext.go:95-248`).
-  * Validates exact column counts, indexes, and `_table_metadata` (`'VP08'`) across all 8 project tables (`sqlitecontext.go:332-360`).
-  * Synthesizes temporary `:memory:` SQL views (`Filtered_Env`, `USysEnv`, `USysVeg`, `USysVegA..D`, `USysHumus`, `USysMineral`, `USysOther`, `USysAuditTrail`, `USysMetadata`, `MasterSiteUnitList`, `USysSU`, `USysHierarchy`) (`sqlitecontext.go:363-444`).
-* **Connection 2 — Lazy Read-Write Project Handle (`c.projectDB`):**
-  * Opened on demand with `mode=rw&_foreign_keys=on&_busy_timeout=5000` (`MaxOpenConns(2)`) solely for atomic `BEGIN IMMEDIATE ... COMMIT` transactions writing `<Project>_Env`, `<Project>_Admin`, child tables, `<Project>_Audit`, and `__VPRO_*` receipt tables (`sqlitecontext.go:56-75`).
-* **128-Bit `contextID` Epoch Fencing (`contextservice.go:70-100`):** Every project/SU/hierarchy switch mints a new 128-bit hex `contextID`. Every mutation and scoped query checks the caller's `contextID`, deterministically rejecting late IPC calls from stale UI views.
+  * Attaches `VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, active `<Project>.db`, and optional `<SU>.db`, `<Hierarchy>.db`, `<Profile>.db` using SQLite URI **`mode=ro`**, verifying `os.SameFile` before and after `ATTACH DATABASE` to prevent TOCTOU path swapping (`sqlitecontext.go`).
+  * Validates exact column counts, indexes, and `_table_metadata` (`'VP08'`) across all 8 project tables, synthesizes temporary `:memory:` SQL views (`Filtered_Env`, `USysEnv`, `USysVeg`, `USysVegA..D`, `USysHumus`, `USysMineral`, `USysOther`, `USysAuditTrail`, `USysMetadata`, `MasterSiteUnitList`, `USysSU`, `USysHierarchy`), and serializes `VLists`/`VUser` species reference reads (`vegetationspeciesreference.go`) via `WithCoordinatorConn` (matching `soilchildreference.go`).
+* **Connection 2 — Pooled Read-Only Project Handle (`ProjectReadDB`) & Lazy Writer (`ProjectDB`):**
+  * `ProjectReadDB` (`ProjectReadDatabase(ctx)`, `SetMaxOpenConns(4)` / `SetMaxIdleConns(4)`) serves concurrent WAL read snapshots—including `ContextService.GetPlotBundle` and `WorkingUnitService.GetWorkingUnitChoices("env")` (eliminating per-switch disk opens while preserving `sqlutil.OpenReadOnly` for separate-file `"su"` mode).
+  * `ProjectDB` opens lazily with `mode=rw&_foreign_keys=on&_busy_timeout=5000` (`MaxOpenConns(2)`) solely for atomic `BEGIN IMMEDIATE ... COMMIT` transactions writing `<Project>_Env`, `<Project>_Admin`, child tables, `<Project>_Audit`, and `__VPRO_*` receipt tables.
+* **Schema Capability Cache, Batched `GetPlotBundle` & Two-Page Static Reference Cache:**
+  * `SqliteContext` caches `headerCaps` and `childCaps` behind a leaf `capsMu sync.RWMutex` (`CachedHeaderCapabilities` / `CachedChildCapabilities` returning defensive map clones), exposes `InvalidateSchemaCache()` for DDL/migration paths, and invokes `OnClose(fn func())` teardown hooks on context close.
+  * `ContextService.GetPlotBundle(ctx, contextID, plot, includeCapabilities)` (`app/internal/vprocore/plotbundle.go`, `app/domainservices_context.go`) reads `Header`, `Veg`, `Humus`, `Mineral`, and `Other` in a single `ReadOnly: true` SQLite WAL snapshot transaction using cached capabilities—preserving exact historical NULL-ID / duplicate / unsafe-int64 isolation (`Vegetation.Reason`, `HumusError`, `MineralError`) while omitting `Audit` (lazy-loaded when the Audit Trail tab opens).
+  * Two-Page static ComboBox reference fields (`app/internal/twopage/twopageparententryreferencecomposition.go`, excluding plot-filtered `SubZone`/`SiteSeries` and dynamic `project`/`working-unit`/`bec-series` readers) are cached per `(owner, contextID, form, listsAlias, readers)` with `ProfileOwnedFiles`, `PRAGMA <alias>.data_version`, and file-stat validation, evicted via `owner.OnClose`, and defensively cloned to preserve exact `TwoPageEntryReferenceSnapshot` wire parity.
+* **128-Bit `contextID` Epoch Fencing (`contextservice.go`):** Every project/SU/hierarchy switch mints a new 128-bit hex `contextID`. Every mutation and scoped query checks the caller's `contextID`, deterministically rejecting late IPC calls from stale UI views.
 
 ### 3.3 4-Layer Acyclic Package Decomposition & 12 Registered Wails Services
 Wave 1C–1D consolidated the earlier 86 flat root Wails services into a strict **4-layer acyclic `app/internal/*` DAG** enforced by automated architectural tests (`app/internal/integration/architecture_dag_test.go`), registering **strictly 12 cohesive domain services** in `app/main.go` (`app/domainservices_*.go`):
@@ -127,7 +131,7 @@ Wave 1C–1D consolidated the earlier 86 flat root Wails services into a strict 
 | # | Registered Wails Service (`app/main.go`) | Backing Domain Package(s) & Core Responsibilities |
 |---:|---|---|
 | `1` | **`LifecycleService`** | Startup activation/recovery hints, cryptographic close nonce (`CloseService`), `USysUserLog` review |
-| `2` | **`ContextService`** | Active `Project`/`SU`/`Hierarchy` switching, 128-bit `contextID` fencing, `New/SaveAs/Splinter/Compare/Merge` (`internal/projectops`), scoped plot lookup, 19 `cloudsync` RPCs |
+| `2` | **`ContextService`** | Active `Project`/`SU`/`Hierarchy` switching, 128-bit `contextID` fencing, `New/SaveAs/Splinter/Compare/Merge` (`internal/projectops`), scoped plot lookup & single-snapshot `GetPlotBundle`, 19 `cloudsync` RPCs |
 | `3` | **`PlotEntryService`** | 6-tab FS882, Two-Page (`internal/twopage`), FS1333 SIVI (`internal/sivi`), inline CHARS toggle, `LMH25` live pedon/edatopic diagnostics (`internal/lmh25rules`), `ProjectMetadata` presets & auto-derivation |
 | `4` | **`DatasheetService`** | Universal editable spreadsheet grid (`_Env`, `_Admin`, `_Veg`, `_Humus`, `_Mineral`, `_Other`, `_SU`), global search, TSV paste (`internal/datasheet`) |
 | `5` | **`ClassificationService`** | Dual-pane `SU`/`Hierarchy` tree explorer, `Env <-> SU` sync, Plot Profiling, `Combine Species` (`*_Lump` + `LumpSpec`), reactive BEC Diagnostics (`internal/diagnostics`), R Sidecar (`internal/rsidecar`) |
@@ -160,8 +164,10 @@ flowchart LR
 
 ## 4. Frontend Svelte 5 Architecture (267 focused `.svelte` components, `24` Views)
 
-### 4.1 Reactive State, Session Machines & Bundle Splitting
-* **Svelte 5 Runes + Class Session Machines:** Uses Svelte 5 Runes (`$state`, `$derived`, `$effect`, `$props`) paired with stateful TypeScript session classes cached across view switches so unsaved drafts and preview snapshots survive tab navigation and block context-switch/close barriers (`41a09f8`, `d630301`).
+### 4.1 Reactive State, Session Machines, Reference Caching & In-Place Plot Switching
+* **Svelte 5 Runes + Class Session Machines:** Uses Svelte 5 Runes (`$state`, `$state.raw`, `$derived`, `$effect`, `$props`) paired with stateful TypeScript session classes cached across view switches so unsaved drafts and preview snapshots survive tab navigation and block context-switch/close barriers (`41a09f8`, `d630301`).
+* **Multi-Tier Reference & Prefetch Cache (`app/frontend/src/entry/entryReferenceCache.ts`):** Registered with `registerContextDisposer` (`contextSessionRegistry.ts`) for automatic context-switch eviction and strict non-caching of rejected promises. Caches frozen global static catalogues, a 64-entry BEC `(zone, subZone)` LRU, coordinate/working-unit preferences, per-context capabilities and dynamic lookups, 3-canonical-group $\rightarrow$ 6-form deduplicated species lists (`SubVegAXL_BC`/`SubVegAXL`/`SubVegAhtXL`, `SubVegCXL`/`SubVegChtXL`, `SubVegDXL`) stored in `$state.raw`, and a 6-plot per-context `GetPlotBundle` prefetch LRU with in-flight promise deduplication and explicit mutation invalidation.
+* **In-Place Plot Switching Across FS882, FS882 (2-Page) & SIVI:** `ShellEntryHost.svelte` keeps `{#key $projectState?.contextId}` and `{#key editorEntryForm}` while replacing `{#key editorPlotNumber}` with an audited in-place `resetForPlot()` boundary inside `FS882Form` (keying only `<TwoPageEntryEditor>` in `FS882Modals.svelte` so `twoPageEntrySessions` survives plot steps). Switching plots preserves `activeTab`, restricts `{#key headerRevision}` to leaf input grids (incremented only on Undo, diagnostic mutations, or restore), lazy-loads Audit Trail on tab entry, and gates `LMH25DiagnosticsBar` (`waitForDraft`) to a single debounced evaluation per plot switch.
 * **Proxy Detachment & Generation-Fenced Async Reads:** Before calling Wails v3 bindings, Svelte 5 deep proxies are stripped with `$state.snapshot(...)`, while `ReadRequests` (`readRequests.ts`) and post-await generation checks prevent stale async results from populating remounted views.
 * **Vendor & Sub-Editor Code Splitting (`e9fdb9d`):** Report workbenches, FS882 sub-editors, and MapLibre/WebGPU vendor chunks are lazy-loaded via dynamic `import(...)` with Vite worker asset bundling (`16960a8`).
 
