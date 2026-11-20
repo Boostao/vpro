@@ -1156,6 +1156,19 @@
   ],
   "whatsNew": [
     {
+      "version": "2.0.1",
+      "date": "2026-11-19",
+      "channel": "stable",
+      "highlights": [
+        "Stronger FS882, Two-Page, and SIVI data entry with consistent LMH25 (2023) soil horizon depth-sign, ordering, and coarse-fragment checks, full historical species synonym lookup in Check Spp Codes, and reliable coordinate and concurrent-edit protection.",
+        "Complete audit history and safer vegetation editing—leading zeroes on PlotNumber are preserved across every screen, covers are checked from 0 to under 100% with 99% lumped caps without locking the form, and every plot edit or restore records your User Setup name.",
+        "Cleaner Classification and Diagnostics—Hierarchy rank tables keep Superclass, Subclass, and inverted subtrees intact, flag hierarchy cycles for repair, honour personal Site Unit overrides in SU Into Env, and keep Synthesis Matrix headers readable on compact field screens.",
+        "More reliable Reports and legacy Access imports—Lifeform Summary counts each vegetation row once and includes personal species, Long Vegetation and Summary Environment Excel exports run and cancel cleanly, Plot Label PDFs wrap long fields with full accented character support, and .accdb/.mdb imports show progress without skipping rows.",
+        "Hardened 3D Map, Plot Pictures, and Cloud BECMaster sync—offline map packages are validated before loading with accurate northern B.C. and Zone 12 coordinates, Plot Pictures support comment edits and display options, and remote BECMaster connections enforce encrypted transport, fail-closed sensitive-species coordinate redaction, and full audit-chain checks.",
+        "Clearer plain-language notices and smoother workspace recovery—Startup Recovery backs up and restores damaged support databases automatically, keyboard shortcuts and F1 help work consistently across forms, and error messages across Data Entry, Reports, and Cloud Sync explain next steps in plain English."
+      ]
+    },
+    {
       "version": "2.0.0",
       "date": "2026-11-16",
       "channel": "stable",

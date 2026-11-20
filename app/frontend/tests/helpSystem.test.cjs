@@ -215,12 +215,14 @@ test('all 5 Svelte 5 Help/Tour/Modal components compile cleanly with zero warnin
     '@lucide/svelte': iconsProxy,
     './helpSystem': help,
   });
+  const latestWhatsNewVersion = helpBundleFixture.whatsNew[0].version;
+  const escapedLatestVersion = latestWhatsNewVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const whatsNewHtml = render(WhatsNew, {
     props: {
       open: true,
       initialStatus: {
-        latestVersion: '2.0.0',
-        lastSeenVersion: '0.1.0',
+        latestVersion: latestWhatsNewVersion,
+        lastSeenVersion: helpBundleFixture.whatsNew[1]?.version ?? '0.1.0',
         hasUnread: true,
         unreadCount: 1,
         entries: helpBundleFixture.whatsNew,
@@ -229,8 +231,8 @@ test('all 5 Svelte 5 Help/Tour/Modal components compile cleanly with zero warnin
     },
   }).body;
   assert.match(whatsNewHtml, /data-whats-new-unread-banner/);
-  assert.match(whatsNewHtml, /Mark v2\.0\.0 as Read/);
-  assert.match(whatsNewHtml, /Version 2\.0\.0/);
+  assert.match(whatsNewHtml, new RegExp(`Mark v${escapedLatestVersion} as Read`));
+  assert.match(whatsNewHtml, new RegExp(`Version ${escapedLatestVersion}`));
 
   // Build-tier presentation checks in AboutVProModal (dev vs alpha vs release)
   const About = serverComponent(readSrc('AboutVProModal.svelte'), 'AboutVProModal.svelte', {

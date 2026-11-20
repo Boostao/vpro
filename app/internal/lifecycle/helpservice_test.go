@@ -173,39 +173,49 @@ func TestWhatsNewPersistenceInDesktopConfig(t *testing.T) {
 	}
 	ctx := context.Background()
 
+	bundle, err := svc.GetHelpBundle(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bundle.WhatsNew) < 2 {
+		t.Fatalf("expected at least 2 WhatsNew entries, got %d", len(bundle.WhatsNew))
+	}
+	latestVersion := bundle.WhatsNew[0].Version
+	oldestVersion := bundle.WhatsNew[len(bundle.WhatsNew)-1].Version
+
 	initial, err := svc.GetWhatsNewStatus(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !initial.HasUnread || initial.UnreadCount != 2 || initial.LatestVersion != "2.0.0" || initial.LastSeenVersion != "" {
+	if !initial.HasUnread || initial.UnreadCount != len(bundle.WhatsNew) || initial.LatestVersion != latestVersion || initial.LastSeenVersion != "" {
 		t.Fatalf("unexpected initial WhatsNewStatus: %+v", initial)
 	}
 
-	afterPreview, err := svc.AcknowledgeWhatsNew(ctx, "0.1.0")
+	afterPreview, err := svc.AcknowledgeWhatsNew(ctx, oldestVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !afterPreview.HasUnread || afterPreview.UnreadCount != 1 || afterPreview.LastSeenVersion != "0.1.0" {
-		t.Fatalf("expected 1 unread entry after acknowledging 0.1.0, got %+v", afterPreview)
+	if !afterPreview.HasUnread || afterPreview.UnreadCount != len(bundle.WhatsNew)-1 || afterPreview.LastSeenVersion != oldestVersion {
+		t.Fatalf("expected %d unread entries after acknowledging %s, got %+v", len(bundle.WhatsNew)-1, oldestVersion, afterPreview)
 	}
 
 	if _, err := svc.AcknowledgeWhatsNew(ctx, "9.9.9-unknown"); err == nil {
 		t.Fatal("expected error acknowledging unknown release version")
 	}
 
-	afterLatest, err := svc.AcknowledgeWhatsNew(ctx, "2.0.0")
+	afterLatest, err := svc.AcknowledgeWhatsNew(ctx, latestVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if afterLatest.HasUnread || afterLatest.UnreadCount != 0 || afterLatest.LastSeenVersion != "2.0.0" {
-		t.Fatalf("expected 0 unread entries after acknowledging 2.0.0, got %+v", afterLatest)
+	if afterLatest.HasUnread || afterLatest.UnreadCount != 0 || afterLatest.LastSeenVersion != latestVersion {
+		t.Fatalf("expected 0 unread entries after acknowledging %s, got %+v", latestVersion, afterLatest)
 	}
 
 	rawYAML, err := os.ReadFile(filepath.Join(configDir, "config.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(rawYAML), "last_seen_whats_new_version: 2.0.0") {
+	if !strings.Contains(string(rawYAML), "last_seen_whats_new_version: "+latestVersion) {
 		t.Fatalf("expected last_seen_whats_new_version persisted in config.yml, got:\n%s", string(rawYAML))
 	}
 
@@ -222,7 +232,7 @@ func TestWhatsNewPersistenceInDesktopConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reloaded.HasUnread || reloaded.UnreadCount != 0 || reloaded.LastSeenVersion != "2.0.0" {
+	if reloaded.HasUnread || reloaded.UnreadCount != 0 || reloaded.LastSeenVersion != latestVersion {
 		t.Fatalf("expected persisted WhatsNew acknowledgement after restart, got %+v", reloaded)
 	}
 }

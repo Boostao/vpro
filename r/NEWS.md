@@ -1,3 +1,11 @@
+# vpro 2.0.1
+
+* **Workspace & Standards Parity:** Aligned `vpro_data_dir()` and `vpro_config_dir()` folder resolution with VPro Desktop across Windows, macOS, and Linux, standardized `VLists.db` and `Sample.db` lookup precedence in `vpro_status()` and `vpro_standards()`, and fixed clearing active Site Unit filters with `vpro_use(..., su = "None")`.
+* **LMH25 (2023) Soil, Vegetation & Rounding Consistency:** Unified upland and wetland humus depth-sign validation and horizon ordering with VPro Desktop, aligned `0` to under `100%` vegetation cover checks and `99%` lumped caps, hardened numeric rounding, and made plot and species sorting consistent regardless of system locale.
+* **Safe Write-Back to VPro Desktop:** Aligned `vpro_write_su()` and `vpro_write_lump()` with VPro Desktop's non-reusing record numbering, audit-log entries, and candidate Site Unit table naming limits so edits round-trip cleanly between R and the desktop app.
+* **Cloud `BECMaster` Security & Custodian Diffs:** Required encrypted TLS connections for all remote `BECMaster` hosts (`vpro_master_connect()`), added fail-closed sensitive-species coordinate redaction when conservation metadata is absent, preserved Access Yes/No values cleanly, and aligned custodian diff rounding and full audit-chain verification (`vpro_staging_diff()`, `vpro_master_audit()`).
+* **Clearer Errors & Reliability:** Standardized structured plain-language error messages across all `vpro` functions and expanded offline verification for cloud sync, exports, and standalone package builds.
+
 # vpro 2.0.0
 
 * **Workspace, Standards & Plot Extraction:** Connect directly to your live VPro Desktop project or bundled `Sample` project without file-locking conflicts (`vpro_connect()`, `vpro_use()`, `vpro_status()`), verify 2026 `BECdb v13` and `BCPlantTaxonomy v19` standards (`vpro_standards()`), convert legacy Access `.accdb`/`.mdb` databases (`vpro_import_access()`), and extract plot environment, lumped vegetation (`0` to under `100%` cover with `99%` per-layer caps), and `LMH25 (2023)`-ordered soil horizons while preserving leading zeroes on `PlotNumber` (`vpro_env()`, `vpro_veg()`, `vpro_soil()`, `vpro_hierarchy()`).
