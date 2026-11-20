@@ -19,26 +19,8 @@ const {
   srcPath,
 } = require('./svelteTestHelpers.cjs');
 
-//Siblings owned by @w5-reports-copy (ed0fbca1) and @w5-go-wails-lint in parallel worktrees:
-const SIBLING_OWNED_FILES = new Set([
-  'interchange/PlotLabelPreview.svelte',
-  'reports/LifeformSummary.svelte',
-  'reports/LifeformWorkbookPanel.svelte',
-  'reports/SiteUnitSummary.svelte',
-  'reports/SubzoneMatrixReport.svelte',
-  'reports/SummaryVegetationReport.svelte',
-  'shared/publicationSession.ts',
-  'datasheet/datasheetCellRules.ts',
-  'datasheet/universalDatasheetGrid.ts',
-  'entry/fs882FormChildren.ts',
-  'entry/siviCreationSessions.ts',
-  'entry/siviCreationUndoSessions.ts',
-  'pictures/pictureCreationSessions.ts',
-  'pictures/pictureLifecycleSessions.ts',
-  'pictures/pictureMetadataSessions.ts',
-  'reports/longVegetationProjectWorkspaces.ts',
-  'reports/summaryVegetationFieldListDesktop.ts',
-]);
+// All sibling files formatted and verified on post-merge main:
+const SIBLING_OWNED_FILES = new Set([]);
 
 function createMiniDomEnvironment() {
   class MiniNode extends EventTarget {

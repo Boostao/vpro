@@ -122,10 +122,11 @@ test('actual species dispatch, late cancellation and workbook/preference/error b
   assert.equal(criteria.view().error,'');
   context.actions.editSpeciesText('coverGreaterThan','1x');
   context.actions.resetSpeciesCriteria();assert.equal(criteria.view().error,'');
-  const panel=readFileSync(srcPath('SiteUnitSummary.svelte'),'utf8');
-  assert.equal(compile(panel,{filename:'SiteUnitSummary.svelte',generate:'client'}).warnings.length,0);
+  const rootPanel=readFileSync(srcPath('SiteUnitSummary.svelte'),'utf8');
+  assert.equal(compile(rootPanel,{filename:'SiteUnitSummary.svelte',generate:'client'}).warnings.length,0);
+  const panel=rootPanel+'\n'+readFileSync(srcPath('SiteUnitSummaryFieldsets.svelte'),'utf8');
   assert.match(panel,/mode === 'layer' && !speciesView\?\.enabled/);
-  assert.match(panel,/onBusyChange\(busy \|\| preferenceBarrier \|\| workbookBusy \|\| speciesBarrier\)/);
-  assert.match(panel,/<fieldset disabled=\{busy \|\| workbookBusy \|\| preferenceBarrier\}>\s*<legend>Species preview criteria/);
-  assert.match(panel,/<fieldset disabled=\{busy \|\| workbookBusy \|\| speciesBarrier \|\| preferenceView/);
+  assert.match(panel,/onBusyChange\(\s*busy\s*\|\|\s*preferenceBarrier\s*\|\|\s*workbookBusy\s*\|\|\s*speciesBarrier\s*\)/);
+  assert.match(panel,/<fieldset\s+disabled=\{(?:model\.)?busy\s*\|\|\s*(?:model\.)?workbookBusy\s*\|\|\s*(?:model\.)?preferenceBarrier\}>\s*<legend>Species preview criteria/);
+  assert.match(panel,/<fieldset\s+disabled=\{(?:model\.)?busy\s*\|\|\s*(?:model\.)?workbookBusy\s*\|\|\s*(?:model\.)?speciesBarrier\s*\|\|\s*(?:model\.)?preferenceView/);
 });

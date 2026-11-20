@@ -47,11 +47,9 @@
   let attributeKey = $state('');
   const currentPreview = $derived(previewKey === ownerKey ? preview : null);
   const currentAttributes = $derived(
-    attributeKey === ownerKey || (!attributeKey && previewKey === ownerKey) ? attributePreview : null,
+    attributeKey === ownerKey || (!attributeKey && previewKey === ownerKey) ? attributePreview : null
   );
-  const scopeBlocked = $derived(
-    unitScope === 'su' ? su === 'None' || su === 'USysSuTableDynamic' : su === 'None',
-  );
+  const scopeBlocked = $derived(unitScope === 'su' ? su === 'None' || su === 'USysSuTableDynamic' : su === 'None');
 
   function reportBusy() {
     onBusyChange(busy || workbookBusy);
@@ -76,13 +74,18 @@
     else preview = null;
     reportBusy();
     try {
-      const value = await reads.track<unknown>(kind === 'attributes'
-        ? (unitScope === 'hierarchy'
-            ? VegetationReportService.PreviewSpeciesAttributeSummaryWithHierarchyBreakpoints(contextId, breakpointPolicy)
-            : VegetationReportService.PreviewSpeciesAttributeSummary(contextId))
-        : (unitScope === 'hierarchy'
+      const value = await reads.track<unknown>(
+        kind === 'attributes'
+          ? unitScope === 'hierarchy'
+            ? VegetationReportService.PreviewSpeciesAttributeSummaryWithHierarchyBreakpoints(
+                contextId,
+                breakpointPolicy
+              )
+            : VegetationReportService.PreviewSpeciesAttributeSummary(contextId)
+          : unitScope === 'hierarchy'
             ? VegetationReportService.PreviewLifeformSummaryWithHierarchyBreakpoints(contextId, breakpointPolicy)
-            : VegetationReportService.PreviewLifeformSummary(contextId)));
+            : VegetationReportService.PreviewLifeformSummary(contextId)
+      );
       if (request !== generation || key !== ownerKey) return;
       if (kind === 'attributes') {
         attributePreview =
@@ -107,7 +110,7 @@
             category: 'reports',
             source: 'Lifeform Summary',
             contextTag: (typeof project === 'string' && project) || undefined,
-          },
+          }
         );
       }
     } finally {
@@ -129,17 +132,31 @@
     <h1>Lifeform Summary</h1>
     <div class="actions">
       {#if unitScope === 'su'}
-        <button onclick={() => show('lifeform')} disabled={!enabled || busy || workbookBusy || su === 'None' || su === 'USysSuTableDynamic'}>
+        <button
+          onclick={() => show('lifeform')}
+          disabled={!enabled || busy || workbookBusy || su === 'None' || su === 'USysSuTableDynamic'}
+        >
           Preview Lifeform Summary
         </button>
-        <button onclick={() => show('attributes')} disabled={!enabled || busy || workbookBusy || su === 'None' || su === 'USysSuTableDynamic'}>
+        <button
+          onclick={() => show('attributes')}
+          disabled={!enabled || busy || workbookBusy || su === 'None' || su === 'USysSuTableDynamic'}
+        >
           Preview species attribute summaries
         </button>
       {:else}
-        <button data-lifeform-hierarchy-preview onclick={() => show('lifeform')} disabled={!enabled || busy || workbookBusy || su === 'None'}>
+        <button
+          data-lifeform-hierarchy-preview
+          onclick={() => show('lifeform')}
+          disabled={!enabled || busy || workbookBusy || su === 'None'}
+        >
           Preview Lifeform (~) Summary
         </button>
-        <button data-attributes-hierarchy-preview onclick={() => show('attributes')} disabled={!enabled || busy || workbookBusy || su === 'None'}>
+        <button
+          data-attributes-hierarchy-preview
+          onclick={() => show('attributes')}
+          disabled={!enabled || busy || workbookBusy || su === 'None'}
+        >
           Preview species attribute (~) summaries
         </button>
       {/if}
@@ -152,7 +169,7 @@
       Unit Scope
       <select
         value={unitScope}
-        onchange={event => {
+        onchange={(event) => {
           unitScope = (event.currentTarget as HTMLSelectElement).value as 'su' | 'hierarchy';
         }}
         disabled={busy || workbookBusy}
@@ -167,7 +184,7 @@
         Breakpoint Policy
         <select
           value={breakpointPolicy}
-          onchange={event => {
+          onchange={(event) => {
             breakpointPolicy = (event.currentTarget as HTMLSelectElement).value as 'lowest' | 'highest';
           }}
           disabled={busy || workbookBusy}
@@ -186,16 +203,31 @@
         : 'Select a Site Unit table in the sidebar, or switch Unit Scope to Hierarchy Breakpoints (~).'}
     </p>
   {/if}
-  <LifeformWorkbookPanel owner={{ contextId, project, projectPath, su, suPath }} disabled={busy}
-    onBusyChange={(held) => { workbookBusy = held; reportBusy(); }} />
+  <LifeformWorkbookPanel
+    owner={{ contextId, project, projectPath, su, suPath }}
+    disabled={busy}
+    onBusyChange={(held) => {
+      workbookBusy = held;
+      reportBusy();
+    }}
+  />
   {#if currentPreview}
     {#each currentPreview.report.units as unit}
       <article>
         <h2>Unit: {lifeformCellText(unit.code)}</h2>
         <dl>
-          <div><dt>Plots (nPlots)</dt><dd>{unit.nPlots}</dd></div>
-          <div><dt>Number of unique species</dt><dd>{unit.uniqueSpecies}</dd></div>
-          <div><dt>Total species occurrences</dt><dd>{unit.occurrences}</dd></div>
+          <div>
+            <dt>Plots (nPlots)</dt>
+            <dd>{unit.nPlots}</dd>
+          </div>
+          <div>
+            <dt>Number of unique species</dt>
+            <dd>{unit.uniqueSpecies}</dd>
+          </div>
+          <div>
+            <dt>Total species occurrences</dt>
+            <dd>{unit.occurrences}</dd>
+          </div>
         </dl>
         <div class="table-scroll">
           <table>
@@ -212,9 +244,15 @@
             </thead>
             <tbody>
               {#each unit.rows as row, i}
-                <tr><th scope="row">{row.lifeform}</th><td>{lifeformCellText(currentPreview.report.catalogue[i].label)}</td>
-                  <td>{lifeformCellText(currentPreview.report.catalogue[i].definition)}</td><td>{lifeformCellText(currentPreview.report.catalogue[i].shortName)}</td>
-                  <td>{lifeformRatioText(row.presence)}</td><td>{lifeformRatioText(row.meanCover)}</td></tr>
+                <tr
+                  ><th scope="row">{row.lifeform}</th><td
+                    >{lifeformCellText(currentPreview.report.catalogue[i].label)}</td
+                  >
+                  <td>{lifeformCellText(currentPreview.report.catalogue[i].definition)}</td><td
+                    >{lifeformCellText(currentPreview.report.catalogue[i].shortName)}</td
+                  >
+                  <td>{lifeformRatioText(row.presence)}</td><td>{lifeformRatioText(row.meanCover)}</td></tr
+                >
               {/each}
             </tbody>
           </table>
@@ -242,7 +280,11 @@
             </thead>
             <tbody>
               {#each unit.rows as row, i}
-                <tr><th scope="row">{currentAttributes.report.definitions[i].label}</th><td>{speciesAttributeCountText(row.count)}</td><td>{row.plotOccurrences}</td></tr>
+                <tr
+                  ><th scope="row">{currentAttributes.report.definitions[i].label}</th><td
+                    >{speciesAttributeCountText(row.count)}</td
+                  ><td>{row.plotOccurrences}</td></tr
+                >
               {/each}
             </tbody>
           </table>
@@ -250,7 +292,9 @@
         {#each unit.rows as row, i}
           <div class="table-scroll">
             <table>
-              <caption>{currentAttributes.report.definitions[i].label} details for {lifeformCellText(unit.code)}</caption>
+              <caption
+                >{currentAttributes.report.definitions[i].label} details for {lifeformCellText(unit.code)}</caption
+              >
               <thead>
                 <tr>
                   {#each currentAttributes.report.definitions[i].categories as category}
@@ -273,32 +317,138 @@
     {/if}
   {/if}
   <p class="guidance">
-    Previews lifeform presence, mean cover, and species attribute counts by Site Unit without changing project data or settings.
-    Lifeform and Species Attribute tables can be viewed side by side.
-    Choose Hierarchy Breakpoints (~) to roll plots up to the lowest or highest (~) group in the active hierarchy.
+    Previews lifeform presence, mean cover, and species attribute counts by Site Unit without changing project data or
+    settings. Lifeform and Species Attribute tables can be viewed side by side. Choose Hierarchy Breakpoints (~) to roll
+    plots up to the lowest or highest (~) group in the active hierarchy.
   </p>
 </section>
 
 <style>
-  .lifeform-summary { display: grid; gap: 1rem; padding: 1rem; background: var(--vpro-canvas); color: var(--vpro-ink); min-width: 0; }
-  .report-sticky-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding-inline: .75rem; border-radius: .35rem; }
-  h1, h2 { margin: 0; color: var(--vpro-navy); }
-  p { margin: 0; }
-  .scope-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: .75rem; background: var(--vpro-surface); padding: .85rem; border: 1px solid var(--vpro-border); border-radius: .5rem; }
-  .scope-controls label { display: flex; flex-direction: column; gap: .35rem; min-width: 0; font-weight: 500; color: var(--vpro-ink); }
-  .scope-controls select { box-sizing: border-box; width: 100%; min-width: 0; padding: .5rem; border: 1px solid var(--vpro-border); border-radius: .25rem; background: var(--vpro-surface); color: var(--vpro-ink); }
-  .actions { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; }
-  .actions button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid var(--vpro-navy); border-radius: .25rem; background: var(--vpro-navy); color: var(--vpro-surface); font-weight: 600; cursor: pointer; }
-  .actions button:hover:not(:disabled) { background: var(--vpro-navy-dark); border-color: var(--vpro-navy-dark); }
-  .actions button:disabled { opacity: .6; cursor: not-allowed; }
-  article { display: grid; gap: .75rem; padding: 1rem; background: var(--vpro-surface); border: 1px solid var(--vpro-border); border-radius: .5rem; min-width: 0; }
-  dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: .75rem; margin: 0; }
-  dt { font-weight: 600; color: var(--vpro-navy); }
-  dd { margin: .25rem 0 0; }
-  .table-scroll { overflow-x: auto; max-width: 100%; }
-  table { border-collapse: collapse; width: 100%; background: var(--vpro-surface); }
-  th, td { padding: .5rem; border-bottom: 1px solid var(--vpro-border); text-align: left; }
-  thead th { background: var(--vpro-canvas); color: var(--vpro-navy); }
-  caption { text-align: left; padding-bottom: .5rem; font-weight: 600; color: var(--vpro-navy); }
-  .guidance { font-size: .9rem; color: var(--vpro-ink-secondary); }
+  .lifeform-summary {
+    display: grid;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--vpro-canvas);
+    color: var(--vpro-ink);
+    min-width: 0;
+  }
+  .report-sticky-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-inline: 0.75rem;
+    border-radius: 0.35rem;
+  }
+  h1,
+  h2 {
+    margin: 0;
+    color: var(--vpro-navy);
+  }
+  p {
+    margin: 0;
+  }
+  .scope-controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    gap: 0.75rem;
+    background: var(--vpro-surface);
+    padding: 0.85rem;
+    border: 1px solid var(--vpro-border);
+    border-radius: 0.5rem;
+  }
+  .scope-controls label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+    font-weight: 500;
+    color: var(--vpro-ink);
+  }
+  .scope-controls select {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding: 0.5rem;
+    border: 1px solid var(--vpro-border);
+    border-radius: 0.25rem;
+    background: var(--vpro-surface);
+    color: var(--vpro-ink);
+  }
+  .actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .actions button {
+    min-height: 2.5rem;
+    padding: 0.5rem 0.85rem;
+    border: 1px solid var(--vpro-navy);
+    border-radius: 0.25rem;
+    background: var(--vpro-navy);
+    color: var(--vpro-surface);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .actions button:hover:not(:disabled) {
+    background: var(--vpro-navy-dark);
+    border-color: var(--vpro-navy-dark);
+  }
+  .actions button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  article {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--vpro-surface);
+    border: 1px solid var(--vpro-border);
+    border-radius: 0.5rem;
+    min-width: 0;
+  }
+  dl {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    gap: 0.75rem;
+    margin: 0;
+  }
+  dt {
+    font-weight: 600;
+    color: var(--vpro-navy);
+  }
+  dd {
+    margin: 0.25rem 0 0;
+  }
+  .table-scroll {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    background: var(--vpro-surface);
+  }
+  th,
+  td {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--vpro-border);
+    text-align: left;
+  }
+  thead th {
+    background: var(--vpro-canvas);
+    color: var(--vpro-navy);
+  }
+  caption {
+    text-align: left;
+    padding-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--vpro-navy);
+  }
+  .guidance {
+    font-size: 0.9rem;
+    color: var(--vpro-ink-secondary);
+  }
 </style>

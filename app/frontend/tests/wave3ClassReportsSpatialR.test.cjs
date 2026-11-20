@@ -166,10 +166,16 @@ test('Wave 3 functional wiring spans Classification, Reports, Diagnostics, Spati
   // 2. Reports contracts
   const { readReportComposite } = require('./svelteTestHelpers.cjs');
   const longVegSrc = readReportComposite('long-vegetation');
-  const sumVegSrc = readFileSync(srcPath('reports/SummaryVegetationReport.svelte'), 'utf8');
+  const sumVegSrc =
+    readFileSync(srcPath('reports/SummaryVegetationReport.svelte'), 'utf8') +
+    '\n' +
+    readFileSync(srcPath('reports/SummaryVegetationOptionsBar.svelte'), 'utf8');
   const sumVegQualSrc = readFileSync(srcPath('reports/SummaryVegetationQualityPreferences.svelte'), 'utf8');
   const lifeformSrc = readFileSync(srcPath('reports/LifeformSummary.svelte'), 'utf8');
-  const suSummarySrc = readFileSync(srcPath('reports/SiteUnitSummary.svelte'), 'utf8');
+  const suSummarySrc =
+    readFileSync(srcPath('reports/SiteUnitSummary.svelte'), 'utf8') +
+    '\n' +
+    readFileSync(srcPath('reports/SiteUnitSummaryFieldsets.svelte'), 'utf8');
   assert.match(longVegSrc, /LVUseSppCodesOnly/);
   assert.match(longVegSrc, /reportMode="long"/);
   assert.doesNotMatch(sumVegQualSrc, /disabled[^>]*optEnforceQC|optEnforceQC[^>]*disabled/);

@@ -1,9 +1,4 @@
-import type {
-  HumusRecord,
-  MineralRecord,
-  OtherRecord,
-  VegRecord,
-} from '../../bindings/github.com/boostao/vpro/app';
+import type { HumusRecord, MineralRecord, OtherRecord, VegRecord } from '../../bindings/github.com/boostao/vpro/app';
 import {
   aCoverSourceNotice,
   aCoverSourceNotices,
@@ -16,8 +11,24 @@ import {
   vegetationNumberUpdates,
   type HeightDrafts,
 } from './heightEditor';
-import { otherDirty, otherErrors, otherField, otherUpdates, stageOther, type OtherDrafts, type OtherValue } from './otherEditor';
-import { soilDirty, soilErrors, soilField, soilUpdates, stageSoil, type SoilDrafts, type SoilKind } from './soilChildEditor';
+import {
+  otherDirty,
+  otherErrors,
+  otherField,
+  otherUpdates,
+  stageOther,
+  type OtherDrafts,
+  type OtherValue,
+} from './otherEditor';
+import {
+  soilDirty,
+  soilErrors,
+  soilField,
+  soilUpdates,
+  stageSoil,
+  type SoilDrafts,
+  type SoilKind,
+} from './soilChildEditor';
 import {
   stageVegetationAttribute,
   vegetationAttributeDirty,
@@ -39,20 +50,14 @@ import {
   type SpeciesDrafts,
   type SpeciesLists,
 } from './vegetationSpeciesEditor';
-import {
-  projectSourceRows,
-  type FS882ChildCapabilities,
-} from './fs882FormHelpers';
+import { projectSourceRows, type FS882ChildCapabilities } from './fs882FormHelpers';
 
 function formatChildErrorMessage(cause: unknown): string {
   let msg = cause instanceof Error ? cause.message : String(cause ?? '');
   while (/^(?:RuntimeError|Error):\s*/i.test(msg)) {
     msg = msg.replace(/^(?:RuntimeError|Error):\s*/i, '');
   }
-  msg = msg.replace(
-    /\b(Humus|Mineral|Veg|Other)\s+identity\s+\("([^"]+)",\s*-?\d+\):\s*/g,
-    '$1 layer (Plot $2): ',
-  );
+  msg = msg.replace(/\b(Humus|Mineral|Veg|Other)\s+identity\s+\("([^"]+)",\s*-?\d+\):\s*/g, '$1 layer (Plot $2): ');
   msg = msg.replace(/\b(Humus|Mineral|Veg|Other)\.([A-Za-z0-9_]+)\b/g, '$1 $2');
   return msg.trim() || 'Unexpected error';
 }
@@ -79,9 +84,9 @@ export function mergeSoilDraftRows<T extends { id: number }>(
   kind: 'Humus' | 'Mineral',
   rows: T[],
   drafts: SoilDrafts,
-  snapshotRow: (row: T) => Record<string, unknown>,
+  snapshotRow: (row: T) => Record<string, unknown>
 ): Record<string, unknown>[] {
-  return rows.map(row => {
+  return rows.map((row) => {
     const snap = snapshotRow(row);
     const staged = drafts[`${kind}/${row.id}`];
     if (!staged) return snap;
@@ -169,21 +174,14 @@ export async function saveChildDraftsImpl(params: {
   } catch (cause) {
     if (committed) params.invalidateCapabilities();
     const detail = formatChildErrorMessage(cause);
-    params.setError(
-      committed
-        ? `${params.committedRefreshPrefix}: ${detail}`
-        : `${params.failedPrefix}: ${detail}`,
-    );
+    params.setError(committed ? `${params.committedRefreshPrefix}: ${detail}` : `${params.failedPrefix}: ${detail}`);
   } finally {
     params.setBusy(false);
   }
 }
 
 /** Generic exclusive child write helper for direct source record operations. */
-export async function childOperationImpl(
-  ctx: ChildOperationContext,
-  operation: () => Promise<void>,
-): Promise<boolean> {
+export async function childOperationImpl(ctx: ChildOperationContext, operation: () => Promise<void>): Promise<boolean> {
   if (!ctx.capabilitiesReady || ctx.busy || ctx.headerWorkflowBusy || ctx.locked) {
     ctx.setError('Child editing is unavailable while the plot is loading, busy or locked.');
     return false;
@@ -230,7 +228,7 @@ function sourceRowsFor(
   humusList: HumusRecord[],
   mineralList: MineralRecord[],
   otherList: OtherRecord[],
-  childCapabilities: FS882ChildCapabilities,
+  childCapabilities: FS882ChildCapabilities
 ) {
   return projectSourceRows(name, { vegList, humusList, mineralList, otherList, childCapabilities });
 }
@@ -259,12 +257,23 @@ export function stageHeightCellImpl(params: {
     if (!field || params.childCapabilities.Veg[field] !== true) {
       throw new Error(`Height column ${params.column} is unavailable in the active schema.`);
     }
-    const rows = params.vegList.filter(row => row.id === params.id && row.plotNumber === params.plotNumber);
+    const rows = params.vegList.filter((row) => row.id === params.id && row.plotNumber === params.plotNumber);
     if (rows.length !== 1) throw new Error('Height row identity is missing or ambiguous; reload before editing.');
-    if (!sourceRowsFor(params.form, params.vegList, params.humusList, params.mineralList, params.otherList, params.childCapabilities).some(row => row.id === params.id)) {
+    if (
+      !sourceRowsFor(
+        params.form,
+        params.vegList,
+        params.humusList,
+        params.mineralList,
+        params.otherList,
+        params.childCapabilities
+      ).some((row) => row.id === params.id)
+    ) {
       throw new Error('Vegetation source row is unavailable; reload before editing.');
     }
-    return { heightDrafts: stageHeight(params.heightDrafts, params.id, field, params.raw, rows[0][field] ?? null, params.form) };
+    return {
+      heightDrafts: stageHeight(params.heightDrafts, params.id, field, params.raw, rows[0][field] ?? null, params.form),
+    };
   } catch (cause) {
     return {
       heightDrafts: params.heightDrafts,
@@ -286,12 +295,13 @@ export function stageOtherCellImpl(params: {
   raw: OtherValue;
 }): { otherDrafts: OtherDrafts; clearOtherError: boolean; error?: string; bumpRevision?: boolean } {
   try {
-    if (params.disabled) throw new Error('Other editing is unavailable while loading, locked, busy or another draft is unsaved.');
+    if (params.disabled)
+      throw new Error('Other editing is unavailable while loading, locked, busy or another draft is unsaved.');
     const field = otherField(params.column);
     if (!field || params.childCapabilities.Other[field.key] !== true) {
       throw new Error(`Other column ${params.column} is unavailable in the active schema.`);
     }
-    const rows = params.otherList.filter(row => row.id === params.id && row.plotNumber === params.plotNumber);
+    const rows = params.otherList.filter((row) => row.id === params.id && row.plotNumber === params.plotNumber);
     if (rows.length !== 1) throw new Error('Other row identity is missing or ambiguous; reload before editing.');
     return {
       otherDrafts: stageOther(params.otherDrafts, params.id, field, params.raw, rows[0][field.key] ?? null),
@@ -321,13 +331,14 @@ export function stageSoilCellImpl(params: {
   raw: string;
 }): { soilDrafts: SoilDrafts; clearSoilError: boolean; error?: string; bumpRevision?: boolean } {
   try {
-    if (params.disabled) throw new Error('Soil editing is unavailable while loading, locked, busy or another draft is unsaved.');
+    if (params.disabled)
+      throw new Error('Soil editing is unavailable while loading, locked, busy or another draft is unsaved.');
     const field = soilField(params.kind, params.column);
     if (!field || params.childCapabilities[params.kind][field.key] !== true) {
       throw new Error(`Soil column ${params.column} is unavailable in the active schema.`);
     }
     const rows = (params.kind === 'Humus' ? params.humusList : params.mineralList).filter(
-      row => row.id === params.id && row.plotNumber === params.plotNumber,
+      (row) => row.id === params.id && row.plotNumber === params.plotNumber
     );
     if (rows.length !== 1) throw new Error('Soil row identity is missing or ambiguous; reload before editing.');
     const stored = new Map(Object.entries(rows[0])).get(field.key);
@@ -360,12 +371,13 @@ export function stageAttributeCellImpl(params: {
   raw: string;
 }): { attributeDrafts: VegetationAttributeDrafts; clearAttrError: boolean; error?: string; bumpRevision?: boolean } {
   try {
-    if (params.disabled) throw new Error('Attribute editing is unavailable while loading, locked, busy or another draft is unsaved.');
+    if (params.disabled)
+      throw new Error('Attribute editing is unavailable while loading, locked, busy or another draft is unsaved.');
     const field = vegetationAttributeField(params.column);
     if (!field || params.childCapabilities.Veg[field.key] !== true) {
       throw new Error(`Attribute column ${params.column} is unavailable in the active schema.`);
     }
-    const rows = params.vegList.filter(row => row.id === params.id && row.plotNumber === params.plotNumber);
+    const rows = params.vegList.filter((row) => row.id === params.id && row.plotNumber === params.plotNumber);
     if (rows.length !== 1) throw new Error('Vegetation row identity is missing or ambiguous; reload before editing.');
     const stored = new Map(Object.entries(rows[0])).get(field.key);
     if (stored !== null && stored !== undefined && typeof stored !== 'number') {
@@ -399,11 +411,22 @@ export function stageCollectedCellImpl(params: {
   form: string;
 }): { collectedDrafts: CollectedDrafts; clearCollectedError: boolean; error?: string; bumpRevision?: boolean } {
   try {
-    if (params.disabled) throw new Error('Collected editing is unavailable while loading, locked, busy or another draft is unsaved.');
-    if (params.childCapabilities.Veg.collected !== true) throw new Error('Collected is unavailable in the active schema.');
-    const rows = params.vegList.filter(row => row.id === params.id && row.plotNumber === params.plotNumber);
+    if (params.disabled)
+      throw new Error('Collected editing is unavailable while loading, locked, busy or another draft is unsaved.');
+    if (params.childCapabilities.Veg.collected !== true)
+      throw new Error('Collected is unavailable in the active schema.');
+    const rows = params.vegList.filter((row) => row.id === params.id && row.plotNumber === params.plotNumber);
     if (rows.length !== 1) throw new Error('Collected row identity is missing or ambiguous; reload before editing.');
-    if (!sourceRowsFor(params.form, params.vegList, params.humusList, params.mineralList, params.otherList, params.childCapabilities).some(row => row.id === params.id)) {
+    if (
+      !sourceRowsFor(
+        params.form,
+        params.vegList,
+        params.humusList,
+        params.mineralList,
+        params.otherList,
+        params.childCapabilities
+      ).some((row) => row.id === params.id)
+    ) {
       throw new Error('Collected source row is unavailable; reload before editing.');
     }
     // VegRecord omits nil Collected; the empty string remains a distinct value.
@@ -445,13 +468,31 @@ export function stageSpeciesCellImpl(params: {
   bumpRevision?: boolean;
 } {
   try {
-    if (params.disabled) throw new Error('Species editing is unavailable while loading, locked, busy or another draft is unsaved.');
+    if (params.disabled)
+      throw new Error('Species editing is unavailable while loading, locked, busy or another draft is unsaved.');
     if (params.childCapabilities.Veg.species !== true) throw new Error('Species is unavailable in the active schema.');
-    const rows = params.vegList.filter(row => row.id === params.id && row.plotNumber === params.plotNumber);
-    if (rows.length !== 1 || !sourceRowsFor(params.form, params.vegList, params.humusList, params.mineralList, params.otherList, params.childCapabilities).some(row => row.id === params.id)) {
+    const rows = params.vegList.filter((row) => row.id === params.id && row.plotNumber === params.plotNumber);
+    if (
+      rows.length !== 1 ||
+      !sourceRowsFor(
+        params.form,
+        params.vegList,
+        params.humusList,
+        params.mineralList,
+        params.otherList,
+        params.childCapabilities
+      ).some((row) => row.id === params.id)
+    ) {
       throw new Error('Species source row is missing or ambiguous; reload before editing.');
     }
-    const nextDrafts = stageSpecies(params.speciesDrafts, params.form, params.id, params.raw, rows[0].species, params.speciesLists);
+    const nextDrafts = stageSpecies(
+      params.speciesDrafts,
+      params.form,
+      params.id,
+      params.raw,
+      rows[0].species,
+      params.speciesLists
+    );
     const choices = { ...params.speciesChoices };
     delete choices[String(params.id)];
     return { speciesDrafts: nextDrafts, speciesChoices: choices, clearSpeciesError: true };

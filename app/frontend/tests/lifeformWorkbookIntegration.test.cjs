@@ -99,7 +99,7 @@ test('root and parent wire the default-off workbook without authorizing hierarch
   } finally {
     h.dispose();
   }
-  assert.match(parent, /<LifeformWorkbookPanel owner=\{\{ contextId, project, projectPath, su, suPath \}\} disabled=\{busy\}/);
-  assert.match(parent, /onBusyChange=\{\(held\) => \{ workbookBusy = held; reportBusy\(\); \}\}/);
-  assert.match(parent, /disabled=\{!enabled \|\| busy \|\| workbookBusy \|\| su === 'None' \|\| su === 'USysSuTableDynamic'\}/);
+  assert.match(parent, /<LifeformWorkbookPanel[\s\S]*owner=\{\{ contextId, project, projectPath, su, suPath \}\}[\s\S]*disabled=\{busy\}/);
+  assert.match(parent, /onBusyChange=\{\(held\) => \{\s*workbookBusy = held;\s*reportBusy\(\);\s*\}\}/);
+  assert.match(parent, /disabled=\{!enabled\s*\|\|\s*busy\s*\|\|\s*workbookBusy\s*\|\|\s*su === 'None'\s*\|\|\s*su === 'USysSuTableDynamic'\}/);
 });

@@ -25,16 +25,11 @@
   } = $props();
 </script>
 
-<section
-  class="linked-field-list"
-  data-summary-field-list-desktop
-  aria-label="Linked Summary environmental field list"
->
+<section class="linked-field-list" data-summary-field-list-desktop aria-label="Linked Summary environmental field list">
   {#if fieldListState.readError && !fieldListState.session}
     <p>
-      Environmental field list could not be loaded. Acknowledge this error once background
-      validation finishes, then click Load environmental fields to try again. Existing drafts and
-      saved changes are preserved.
+      Environmental field list could not be loaded. Acknowledge this error once background validation finishes, then
+      click Load environmental fields to try again. Existing drafts and saved changes are preserved.
     </p>
     <button
       data-summary-field-list-bootstrap-dismiss
@@ -45,14 +40,10 @@
     </button>
   {/if}
   {#if fieldListState.bootstrapPending && !fieldListState.readBusy}
-    <p role="status">
-      Environmental field list is still loading. Please wait before retrying.
-    </p>
+    <p role="status">Environmental field list is still loading. Please wait before retrying.</p>
   {/if}
   {#if !presentationReady}
-    <p role="status">
-      Load saved presentation options above before editing environmental fields.
-    </p>
+    <p role="status">Load saved presentation options above before editing environmental fields.</p>
   {/if}
   {#if fieldListState.session && fieldListState.scope}
     {#key fieldListState.session}
@@ -67,8 +58,8 @@
     {/key}
   {:else}
     <p>
-      Load the environmental field list from your VPro workspace to select which site and soil
-      fields appear in the summary.
+      Load the environmental field list from your VPro workspace to select which site and soil fields appear in the
+      summary.
     </p>
     <button
       data-summary-field-list-bootstrap-load
@@ -82,9 +73,7 @@
     </button>
   {/if}
   {#if fieldListState.readBusy}
-    <button data-summary-field-list-bootstrap-cancel onclick={onCancelRead}>
-      Cancel environmental field read
-    </button>
+    <button data-summary-field-list-bootstrap-cancel onclick={onCancelRead}> Cancel environmental field read </button>
   {/if}
 </section>
 

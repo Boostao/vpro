@@ -81,7 +81,7 @@ test('attribute read uses the shared cancellable busy boundary', () => {
   assert.match(source, /busy \|\| workbookBusy \|\| scopeBlocked/);
   assert.match(source, /VegetationReportService\.PreviewSpeciesAttributeSummary\(contextId\)/);
   assert.match(source, /validateSpeciesAttributeSummary\(value, owner\)/);
-  assert.match(source, /reads\.track<unknown>\(kind === 'attributes'/);
+  assert.match(source, /reads\.track<unknown>\(\s*kind === 'attributes'/);
   assert.match(source, /onDestroy\(cancel\)/);
   assert.match(source, /request !== generation \|\| key !== ownerKey/);
   assert.doesNotMatch(source, /localStorage|\.Save|\.Apply|\.Export/);

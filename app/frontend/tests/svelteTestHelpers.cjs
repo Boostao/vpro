@@ -721,6 +721,11 @@ function componentFunctions(filename, names, values = {}) {
         }
       : {}),
     ...(baseName === 'StartupRecoveryPanel.svelte' ? loadTypeScript('shell/startupRecovery.ts') : {}),
+    ...(baseName === 'PlotLabelPreview.svelte' ? loadTypeScript('interchange/plotLabelPreviewOps.ts') : {}),
+    ...(baseName === 'SiteUnitSummary.svelte' ? { ops: loadTypeScript('reports/siteUnitSummaryOps.ts') } : {}),
+    ...(baseName === 'SummaryVegetationReport.svelte'
+      ? { ops: loadTypeScript('reports/summaryVegetationReportOps.ts'), envDesk: {} }
+      : {}),
     ...appDefaults,
     ...sidebarDefaults,
     ...profileDefaults,

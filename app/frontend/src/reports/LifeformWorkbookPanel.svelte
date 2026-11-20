@@ -72,7 +72,12 @@
     error = '';
     reportBusy();
     try {
-      const value = await reads.track(VegetationReportService.GetLifeformWorkbookReview(owned.contextId, JSON.stringify({ details: requestedDetails })));
+      const value = await reads.track(
+        VegetationReportService.GetLifeformWorkbookReview(
+          owned.contextId,
+          JSON.stringify({ details: requestedDetails })
+        )
+      );
       if (disposed || requestGeneration !== generation) return;
       review = validateLifeformWorkbookReview(value, owned, requestedDetails);
     } catch (cause) {
@@ -96,11 +101,8 @@
     if (!enabled || held || !review) return;
     error = '';
     try {
-      await session.publish(review, destination, request =>
-        VegetationReportService.ExportReviewedLifeformWorkbook(
-          owned.contextId,
-          JSON.stringify(request),
-        ),
+      await session.publish(review, destination, (request) =>
+        VegetationReportService.ExportReviewedLifeformWorkbook(owned.contextId, JSON.stringify(request))
       );
       if (!disposed) {
         const s = session.view();
@@ -113,14 +115,13 @@
           notifications.success(
             'Lifeform Summary workbook exported',
             s.outcome.path || s.requestedDestination || destination,
-            opts,
+            opts
           );
         } else if (s.error || s.outcome) {
           notifications.error(
             'Lifeform Summary workbook export failed',
-            s.error ||
-              `Export ${s.outcome?.status ?? 'failed'} for ${s.requestedDestination || destination}`,
-            opts,
+            s.error || `Export ${s.outcome?.status ?? 'failed'} for ${s.requestedDestination || destination}`,
+            opts
           );
         }
       }
@@ -138,7 +139,10 @@
 
   function acknowledge() {
     if (publication.busy || !publication.blocked) return;
-    try { session.acknowledge(); review = null; } catch (cause) {
+    try {
+      session.acknowledge();
+      review = null;
+    } catch (cause) {
       error = String(cause);
       notifications.error('Lifeform Summary workbook acknowledgement failed', error, {
         category: 'reports',
@@ -180,7 +184,7 @@
           type="checkbox"
           data-lifeform-workbook-option={option.field}
           checked={details[i]}
-          onchange={event => changeDetail(i, event.currentTarget.checked)}
+          onchange={(event) => changeDetail(i, event.currentTarget.checked)}
         />
         {option.label}
       </label>
@@ -194,9 +198,7 @@
     >
       Review summary workbook
     </button>
-    <button data-lifeform-workbook-cancel disabled={!busy || barrier} onclick={cancel}>
-      Cancel review
-    </button>
+    <button data-lifeform-workbook-cancel disabled={!busy || barrier} onclick={cancel}> Cancel review </button>
   </div>
   {#if review}
     <div data-lifeform-workbook-plan>
@@ -265,27 +267,20 @@
       {/each}
     </div>
   {/if}
-  <label for="lifeform-workbook-destination">
-    New XLSX output file (existing files are never replaced)
-  </label>
+  <label for="lifeform-workbook-destination"> New XLSX output file (existing files are never replaced) </label>
   <textarea
     id="lifeform-workbook-destination"
     data-lifeform-workbook-destination
     rows="2"
     disabled={!enabled || held}
-    bind:value={destination}
-  ></textarea>
-  <button
-    data-lifeform-workbook-export
-    disabled={!enabled || held || !review || !destination}
-    onclick={publish}
-  >
+    bind:value={destination}></textarea>
+  <button data-lifeform-workbook-export disabled={!enabled || held || !review || !destination} onclick={publish}>
     Export reviewed summary workbook
   </button>
   <p class="guidance">
-    Review prepares the workbook from your current Site Unit table without changing project data.
-    All six attribute count totals are always included; check any optional detail tables to append them.
-    Enter a new .xlsx file path — export never replaces an existing file, and failed or interrupted exports pause until acknowledged.
+    Review prepares the workbook from your current Site Unit table without changing project data. All six attribute
+    count totals are always included; check any optional detail tables to append them. Enter a new .xlsx file path —
+    export never replaces an existing file, and failed or interrupted exports pause until acknowledged.
   </p>
 </WorkbookPublicationSection>
 

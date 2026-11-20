@@ -22,7 +22,7 @@
 {#each preview.report.units as unit, unitIndex (unit.code)}
   <article data-summary-unit>
     <h2>{unit.code === '' ? '"" (empty unit)' : unit.code}</h2>
-    <p>{unit.longName === '' ? '"" (empty name)' : unit.longName ?? `Name ${unit.nameStatus}`}</p>
+    <p>{unit.longName === '' ? '"" (empty name)' : (unit.longName ?? `Name ${unit.nameStatus}`)}</p>
     <p>Plots in unit: {unit.plots.length}</p>
     {#if speciesPreview}
       {@const speciesUnit = speciesPreview.units[unitIndex]}
@@ -30,7 +30,7 @@
         <h3>Vegetation species</h3>
         {#each speciesUnit.groups as group}
           <h4>{group.caption}</h4>
-          {#if group.rows.some(row => row.included)}
+          {#if group.rows.some((row) => row.included)}
             <div class="species-table">
               <table>
                 <thead>
@@ -42,12 +42,9 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {#each group.rows.filter(row => row.included) as row}
+                  {#each group.rows.filter((row) => row.included) as row}
                     <tr>
-                      <th
-                        scope="row"
-                        aria-label={`${reportCellText(row.scientificName)} (${row.species})`}
-                      >
+                      <th scope="row" aria-label={`${reportCellText(row.scientificName)} (${row.species})`}>
                         {reportCellText(row.scientificName)}
                       </th>
                       <td>{reportCellText(row.englishName)}</td>

@@ -264,11 +264,11 @@ test('panel compiles and exposes source options, independent gate, cancellable r
   assert.equal(compiled.warnings.length, 0);
   assert.match(source, /details = \$state<boolean\[\]>\(\[false, false, false, false, false, false\]\)/);
   assert.match(source, /onBusyChange\(busy \|\| publication.busy \|\| publication.blocked\)/);
-  assert.match(source, /reads\.track\(VegetationReportService\.GetLifeformWorkbookReview/);
+  assert.match(source, /reads\.track\(\s*VegetationReportService\.GetLifeformWorkbookReview/);
   assert.doesNotMatch(source, /reads\.track\(VegetationReportService\.ExportReviewedLifeformWorkbook/);
   assert.match(source, /disposed \|\| requestGeneration !== generation/);
   assert.match(source, /session\.publish\(review, destination/);
-  assert.match(source, /session\.acknowledge\(\); review = null/);
+  assert.match(source, /session\.acknowledge\(\);\s*review = null/);
   assert.match(source, /role="alert"/);
   assert.match(source, /before acknowledging; never repeat/);
   for (const selector of ['review', 'cancel', 'destination', 'export', 'acknowledge', 'option']) {

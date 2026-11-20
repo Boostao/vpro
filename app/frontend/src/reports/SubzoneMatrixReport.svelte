@@ -60,8 +60,7 @@
     ]);
     if (key === lastPubKey) return;
     lastPubKey = key;
-    const ctxTag =
-      typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined;
+    const ctxTag = typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined;
     if (settled.outcome?.status === 'published' && !settled.error) {
       const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
       notifications.success('Subzone Matrix workbook exported', exportedPath, {
@@ -78,7 +77,7 @@
           category: 'reports',
           source: 'Subzone Matrix',
           contextTag: ctxTag,
-        },
+        }
       );
     }
   }
@@ -108,17 +107,12 @@
     reportBusy();
     try {
       const value = await reads.track(
-        EnvironmentReportService.GetSubzoneMatrixPreview(
-          contextId,
-          JSON.stringify({ offset, limit }),
-        ),
+        EnvironmentReportService.GetSubzoneMatrixPreview(contextId, JSON.stringify({ offset, limit }))
       );
       if (request !== generation) return;
       const validated = matrixPageFromWire(value, owner, offset, limit);
       if (prior && !sameMatrixSource(prior, validated)) {
-        throw new Error(
-          'Complete source changed between pages. Reload from the first page before continuing.',
-        );
+        throw new Error('Complete source changed between pages. Reload from the first page before continuing.');
       }
       if (request !== generation) return;
       if (workbook && !sameMatrixSource(workbook.preview, validated)) workbook = null;
@@ -131,10 +125,7 @@
         notifications.error('Subzone Matrix load failed', error, {
           category: 'reports',
           source: 'Subzone Matrix',
-          contextTag:
-            typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None'
-              ? hierarchy
-              : undefined,
+          contextTag: typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined,
         });
       }
     } finally {
@@ -166,10 +157,7 @@
         notifications.error('Subzone Matrix workbook review failed', error, {
           category: 'reports',
           source: 'Subzone Matrix',
-          contextTag:
-            typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None'
-              ? hierarchy
-              : undefined,
+          contextTag: typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined,
         });
       }
     } finally {
@@ -184,11 +172,10 @@
     if (busy || barrier || !workbook) return;
     cancel();
     error = '';
-    const ctxTag =
-      typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined;
+    const ctxTag = typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined;
     try {
-      await session.publish(workbook, destination, request =>
-        EnvironmentReportService.ExportReviewedSubzoneMatrix(contextId, JSON.stringify(request)),
+      await session.publish(workbook, destination, (request) =>
+        EnvironmentReportService.ExportReviewedSubzoneMatrix(contextId, JSON.stringify(request))
       );
       if (typeof syncPublicationNotifications === 'function') {
         syncPublicationNotifications();
@@ -206,7 +193,7 @@
             'Subzone Matrix workbook export failed',
             settled.error ||
               `Export ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
-            { category: 'reports', source: 'Subzone Matrix', contextTag: ctxTag },
+            { category: 'reports', source: 'Subzone Matrix', contextTag: ctxTag }
           );
         }
       }
@@ -241,7 +228,12 @@
       <button type="button" data-matrix-read disabled={busy || barrier || !available} onclick={() => show()}>
         Review matrix
       </button>
-      <button type="button" data-matrix-workbook-review disabled={busy || barrier || !available} onclick={reviewWorkbook}>
+      <button
+        type="button"
+        data-matrix-workbook-review
+        disabled={busy || barrier || !available}
+        onclick={reviewWorkbook}
+      >
         Review XLSX workbook
       </button>
       {#if busy}
@@ -251,9 +243,18 @@
   </header>
   {#if !available}<p role="status">Select a hierarchy in the sidebar to view this report.</p>{/if}
   <dl class="provenance">
-    <div><dt>Selected hierarchy</dt><dd>{hierarchy}</dd></div>
-    <div><dt>Hierarchy file</dt><dd>{hierarchyPath}</dd></div>
-    {#if preview}<div><dt>Reference labels file</dt><dd>{preview.labelsPath}</dd></div>{/if}
+    <div>
+      <dt>Selected hierarchy</dt>
+      <dd>{hierarchy}</dd>
+    </div>
+    <div>
+      <dt>Hierarchy file</dt>
+      <dd>{hierarchyPath}</dd>
+    </div>
+    {#if preview}<div>
+        <dt>Reference labels file</dt>
+        <dd>{preview.labelsPath}</dd>
+      </div>{/if}
   </dl>
   {#if preview}
     <p data-matrix-count>
@@ -304,8 +305,14 @@
       <h2>Excel workbook preview</h2>
       <p>Estimated size: {workbook.bytes} bytes (1 worksheet).</p>
       <dl>
-        <div><dt>Workbook checksum (SHA-256)</dt><dd>{workbook.workbookSHA256}</dd></div>
-        <div><dt>Review snapshot ID</dt><dd>{workbook.approvalHash}</dd></div>
+        <div>
+          <dt>Workbook checksum (SHA-256)</dt>
+          <dd>{workbook.workbookSHA256}</dd>
+        </div>
+        <div>
+          <dt>Review snapshot ID</dt>
+          <dd>{workbook.approvalHash}</dd>
+        </div>
       </dl>
       <label for="matrix-destination">
         New XLSX destination
@@ -318,17 +325,17 @@
   {/if}
   {#if !publication.outcome && publication.blocked && !publication.busy}
     <p data-matrix-unknown role="alert">
-      Workbook export status is unknown. Inspect {publication.requestedDestination || 'the destination file'} before exporting again.
+      Workbook export status is unknown. Inspect {publication.requestedDestination || 'the destination file'} before exporting
+      again.
     </p>
   {/if}
   {#if publication.blocked && !publication.busy}
     <button type="button" data-matrix-acknowledge onclick={acknowledge}>Acknowledge workbook outcome</button>
   {/if}
   <p class="guidance">
-    Uses the selected hierarchy and standard BEC unit labels, not the current project or site-unit table.
-    Previewing and exporting leave your hierarchy and saved settings unchanged.
-    Exported Excel workbooks use rotated column headings and estimated column widths (not native Excel AutoFit),
-    and export never overwrites an existing file.
+    Uses the selected hierarchy and standard BEC unit labels, not the current project or site-unit table. Previewing and
+    exporting leave your hierarchy and saved settings unchanged. Exported Excel workbooks use rotated column headings
+    and estimated column widths (not native Excel AutoFit), and export never overwrites an existing file.
   </p>
 </section>
 

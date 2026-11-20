@@ -163,7 +163,10 @@ test('actual Summary parent prevents method, preview and preference changes whil
 });
 
 test('Summary root and parent wire persistent publication authority', () => {
-  const parent = readFileSync(srcPath('SiteUnitSummary.svelte'), 'utf8');
+  const parent =
+    readFileSync(srcPath('SiteUnitSummary.svelte'), 'utf8') +
+    '\n' +
+    readFileSync(srcPath('SiteUnitSummaryActionBar.svelte'), 'utf8');
   let redirected = '';
   const mod = loadOperationGuardWithSummaryStubs(
     {
@@ -190,9 +193,9 @@ test('Summary root and parent wire persistent publication authority', () => {
   );
   assert.equal(guard.isBusy(), true);
   assert.equal(redirected, 'summary-environment');
-  assert.match(parent, /<SiteUnitSummaryWorkbookPanel owner=\{\{ contextId, project, projectPath, su, suPath \}\} \{method\}/);
-  assert.match(parent, /onBusyChange=\{\(held\) => \{ workbookBusy = held; reportBusy\(\); \}\}/);
+  assert.match(parent, /<SiteUnitSummaryWorkbookPanel[\s\S]*owner=\{\{ contextId, project, projectPath, su, suPath \}\}[\s\S]*\{method\}/);
+  assert.match(parent, /onBusyChange=\{\(held\) => \{\s*workbookBusy = held;\s*reportBusy\(\);\s*\}\}/);
   for (const selector of ['undo', 'normal', 'acknowledge']) {
-    assert.match(parent, new RegExp(`data-summary-preferences-${selector} disabled=\\{workbookBusy`));
+    assert.match(parent, new RegExp(`data-summary-preferences-${selector}[\\s\\S]*?disabled=\\{(?:model\\.)?workbookBusy`));
   }
 });

@@ -4,7 +4,7 @@ import type { SIVISpeciesOwner } from './siviSpeciesEditor';
 
 const sessions = new Map<string, SIVICreationUndoSession>();
 const host = globalThis as typeof globalThis & { __vproContextDisposers?: Set<(id: string) => void> };
-(host.__vproContextDisposers ??= new Set()).add(id => {
+(host.__vproContextDisposers ??= new Set()).add((id) => {
   for (const key of sessions.keys()) {
     if (JSON.parse(key)[0] === id) sessions.delete(key);
   }
@@ -19,12 +19,15 @@ export function siviCreationUndoSession(owner: SIVISpeciesOwner): SIVICreationUn
   let session = sessions.get(identity);
   if (!session) {
     const { contextId, project, plot } = owner;
-    session = new SIVICreationUndoSession({ contextId, project, plot }, {
-      history: () => PlotEntryService.GetSIVICreationUndoHistory(contextId, plot),
-      review: historyId => PlotEntryService.ReviewSIVICreationUndo(contextId, plot, historyId),
-      undo: request => PlotEntryService.UndoSIVICreation(contextId, parseUndoRequest(request)),
-      receipt: request => PlotEntryService.LookupSIVICreationUndoReceipt(contextId, parseUndoRequest(request)),
-    });
+    session = new SIVICreationUndoSession(
+      { contextId, project, plot },
+      {
+        history: () => PlotEntryService.GetSIVICreationUndoHistory(contextId, plot),
+        review: (historyId) => PlotEntryService.ReviewSIVICreationUndo(contextId, plot, historyId),
+        undo: (request) => PlotEntryService.UndoSIVICreation(contextId, parseUndoRequest(request)),
+        receipt: (request) => PlotEntryService.LookupSIVICreationUndoReceipt(contextId, parseUndoRequest(request)),
+      }
+    );
     sessions.set(identity, session);
   }
   return session;

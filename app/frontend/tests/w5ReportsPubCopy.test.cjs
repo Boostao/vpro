@@ -37,12 +37,16 @@ const lifeformWorkbookMod = loadTypeScript('lifeformWorkbook.ts', {
 
 const OWNED_SVELTE_FILES = [
   'interchange/PlotLabelPreview.svelte',
+  'interchange/PlotLabelFieldDetails.svelte',
   'reports/LifeformSummary.svelte',
   'reports/LifeformWorkbookPanel.svelte',
   'reports/SiteUnitSummary.svelte',
+  'reports/SiteUnitSummaryFieldsets.svelte',
+  'reports/SiteUnitSummaryActionBar.svelte',
   'reports/SiteUnitSummaryResults.svelte',
   'reports/SubzoneMatrixReport.svelte',
   'reports/SummaryVegetationReport.svelte',
+  'reports/SummaryVegetationOptionsBar.svelte',
   'reports/SummaryVegetationPeerPanels.svelte',
   'reports/SummaryVegetationFieldListSection.svelte',
   'reports/SummaryVegetationResultPanel.svelte',

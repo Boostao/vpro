@@ -98,6 +98,7 @@ function report(value, { presentation = null, preferences = null, quality = null
     './summaryVegetationPresentationPreferences': { summaryVegetationPresentationPreferenceSession: presentation ? () => presentation : null },
     './summaryVegetationFieldListDesktop': { summaryVegetationFieldListDesktop: value },
     './summaryVegetationEnvironmentalDesktop': { summaryEnvironmentalEnabled: false, summaryEnvironmentalDesktop: {}, summaryEnvironmentalPort: {} },
+    './summaryVegetationReportOps': require('./svelteTestHelpers.cjs').loadTypeScript('reports/summaryVegetationReportOps.ts'),
   };
   return { ...scriptHandlers('SummaryVegetationReport.svelte', `
     export const handlers = { loadFieldList, dismissInitialFieldListReadError, loadPreferences, savePreferences, editPreference,

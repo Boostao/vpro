@@ -5,17 +5,7 @@ import { notifications } from '../shell/notificationService.svelte';
 export { notifications };
 
 export type DatasheetTableKey =
-  | 'Env'
-  | 'Admin'
-  | 'Veg'
-  | 'Humus'
-  | 'Mineral'
-  | 'Other'
-  | 'SU'
-  | 'Lump'
-  | 'Hierarchy'
-  | 'Audit'
-  | 'Metadata';
+  'Env' | 'Admin' | 'Veg' | 'Humus' | 'Mineral' | 'Other' | 'SU' | 'Lump' | 'Hierarchy' | 'Audit' | 'Metadata';
 
 export const CANONICAL_DATASHEET_KEYS: readonly DatasheetTableKey[] = [
   'Env',
@@ -29,18 +19,9 @@ export const CANONICAL_DATASHEET_KEYS: readonly DatasheetTableKey[] = [
   'Hierarchy',
 ];
 
-export const ALL_DATASHEET_KEYS: readonly DatasheetTableKey[] = [
-  ...CANONICAL_DATASHEET_KEYS,
-  'Audit',
-  'Metadata',
-];
+export const ALL_DATASHEET_KEYS: readonly DatasheetTableKey[] = [...CANONICAL_DATASHEET_KEYS, 'Audit', 'Metadata'];
 
-const EDITABLE_CHILD_TABLE_KEYS: readonly DatasheetTableKey[] = [
-  'Veg',
-  'Humus',
-  'Mineral',
-  'Other',
-];
+const EDITABLE_CHILD_TABLE_KEYS: readonly DatasheetTableKey[] = ['Veg', 'Humus', 'Mineral', 'Other'];
 
 export function isEditableChildTable(tableKey: string): boolean {
   return (EDITABLE_CHILD_TABLE_KEYS as readonly string[]).includes(tableKey);
@@ -229,31 +210,23 @@ export interface DatasheetBackendPort {
     request: DatasheetFindReplaceRequest
   ): CancellableRead<DatasheetFindReplacePreview>;
   applyEdits(contextId: string, request: DatasheetEditRequest): Promise<DatasheetEditResult>;
-  insertChildRow?(
-    contextId: string,
-    request: DatasheetInsertChildRowRequest
-  ): Promise<DatasheetInsertChildRowResult>;
-  deleteChildRow?(
-    contextId: string,
-    request: DatasheetDeleteChildRowRequest
-  ): Promise<DatasheetDeleteChildRowResult>;
+  insertChildRow?(contextId: string, request: DatasheetInsertChildRowRequest): Promise<DatasheetInsertChildRowResult>;
+  deleteChildRow?(contextId: string, request: DatasheetDeleteChildRowRequest): Promise<DatasheetDeleteChildRowResult>;
 }
 
 export const defaultDatasheetBackendPort: DatasheetBackendPort = {
-  listTables: (contextId: string) =>
-    (DatasheetService.ListDatasheetTables(contextId) as never),
-  listAllTables: (contextId: string) =>
-    (DatasheetService.ListDatasheetAllTables(contextId) as never),
+  listTables: (contextId: string) => DatasheetService.ListDatasheetTables(contextId) as never,
+  listAllTables: (contextId: string) => DatasheetService.ListDatasheetAllTables(contextId) as never,
   getPage: (contextId: string, request: DatasheetPageRequest) =>
-    (DatasheetService.GetDatasheetPage(contextId, request) as never),
+    DatasheetService.GetDatasheetPage(contextId, request) as never,
   previewFindReplace: (contextId: string, request: DatasheetFindReplaceRequest) =>
-    (DatasheetService.PreviewDatasheetFindReplace(contextId, request) as never),
+    DatasheetService.PreviewDatasheetFindReplace(contextId, request) as never,
   applyEdits: (contextId: string, request: DatasheetEditRequest) =>
-    (DatasheetService.ApplyDatasheetEdits(contextId, request as never) as never),
+    DatasheetService.ApplyDatasheetEdits(contextId, request as never) as never,
   insertChildRow: (contextId: string, request: DatasheetInsertChildRowRequest) =>
-    (DatasheetService.InsertDatasheetChildRow(contextId, request as never) as never),
+    DatasheetService.InsertDatasheetChildRow(contextId, request as never) as never,
   deleteChildRow: (contextId: string, request: DatasheetDeleteChildRowRequest) =>
-    (DatasheetService.DeleteDatasheetChildRow(contextId, request as never) as never),
+    DatasheetService.DeleteDatasheetChildRow(contextId, request as never) as never,
 };
 
 interface VirtualWindowSlice {
@@ -323,11 +296,7 @@ function hasUnpairedSurrogate(text: string): boolean {
   return false;
 }
 
-export function isColumnEditable(
-  tableKey: string,
-  col: DatasheetColumnMeta,
-  canEditMaster: boolean
-): boolean {
+export function isColumnEditable(tableKey: string, col: DatasheetColumnMeta, canEditMaster: boolean): boolean {
   if (tableKey === 'Audit' || tableKey === 'Metadata') {
     return false;
   }
@@ -434,9 +403,7 @@ export function parseAndValidateCellInput(
     if (!Number.isSafeInteger(num)) {
       return { cell: null, error: `${col.name} integer is out of bounds.` };
     }
-    const isInt32 =
-      col.declaredType.toUpperCase() === 'INTEGER' ||
-      ['ID', 'LL', 'PV', 'Parent'].includes(col.name);
+    const isInt32 = col.declaredType.toUpperCase() === 'INTEGER' || ['ID', 'LL', 'PV', 'Parent'].includes(col.name);
     if (isInt32) {
       if (num < -2147483648 || num > 2147483647) {
         return { cell: null, error: `${col.name} exceeds Access Long (-2147483648..2147483647).` };
@@ -611,7 +578,7 @@ export function toggleMultiColumnSort(
   column: string,
   appendMulti: boolean
 ): DatasheetSortSpec[] {
-  const idx = existing.findIndex(s => s.column.toLowerCase() === column.toLowerCase());
+  const idx = existing.findIndex((s) => s.column.toLowerCase() === column.toLowerCase());
   if (!appendMulti) {
     if (idx === 0 && existing.length === 1) {
       if (existing[0].direction === 'asc') {
@@ -621,7 +588,7 @@ export function toggleMultiColumnSort(
     }
     return [{ column, direction: 'asc' }];
   }
-  const copy = existing.map(s => ({ ...s }));
+  const copy = existing.map((s) => ({ ...s }));
   if (idx < 0) {
     copy.push({ column, direction: 'asc' });
   } else if (copy[idx].direction === 'asc') {

@@ -18,7 +18,7 @@ export class PublicationSession<Outcome extends { errorMessage: string; status?:
 
   constructor(
     private readonly label: string,
-    private readonly acknowledgementLabel = label,
+    private readonly acknowledgementLabel = label
   ) {}
 
   view(): PublicationView<Outcome> {
@@ -39,7 +39,7 @@ export class PublicationSession<Outcome extends { errorMessage: string; status?:
     request: Request,
     destination: string,
     port: (request: Request) => PromiseLike<Outcome | null>,
-    validate: (value: Outcome | null) => Outcome,
+    validate: (value: Outcome | null) => Outcome
   ): Promise<void> {
     if (this.state.busy || this.state.blocked) {
       throw new Error(`Acknowledge the prior ${this.label} outcome before a new publication.`);
@@ -70,7 +70,7 @@ export class PublicationSession<Outcome extends { errorMessage: string; status?:
   acknowledge() {
     if (this.state.busy) {
       throw new Error(
-        `Wait for ${this.acknowledgementLabel} publication to return; publication cannot be cancelled or replayed.`,
+        `Wait for ${this.acknowledgementLabel} publication to return; publication cannot be cancelled or replayed.`
       );
     }
     this.state.blocked = false;

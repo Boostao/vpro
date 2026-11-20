@@ -80,13 +80,13 @@ test('summary component is cancellable and enters shared draft-safe navigation',
   }
   assert.match(read('Navigation.svelte'),/name: 'Summary Environment', icon: ChartColumn, view: 'summary-environment'/);
   assert.match(require('./svelteTestHelpers.cjs').renderShellDeferredViews('summary-environment', { contextId: 'c1', activeProject: 'Sample', activeSU: 'S1' }), /Loading Site Unit Summary/);
-  const panel=read('SiteUnitSummary.svelte');
-  assert.match(panel,/onDestroy\(\(\) => \{ unsubscribe\?\.\(\); unsubscribeFull\?\.\(\); unsubscribeSpecies\?\.\(\); cancel\(\); \}\)/);assert.match(panel,/request !== generation/);
-  assert.match(panel,/onBusyChange\(busy \|\| preferenceBarrier \|\| workbookBusy \|\| speciesBarrier\)/);
-  assert.match(panel,/checked=\{method === 1\}/);assert.match(panel,/validateSiteUnitSummary/);
+  const panel=read('SiteUnitSummary.svelte')+'\n'+read('SiteUnitSummaryFieldsets.svelte');
+  assert.match(panel,/onDestroy\(\(\) => \{\s*unsubscribe\?\.\(\);\s*unsubscribeFull\?\.\(\);\s*unsubscribeSpecies\?\.\(\);\s*cancel\(\);\s*\}\)/);assert.match(panel,/request !== generation/);
+  assert.match(panel,/onBusyChange\(\s*busy\s*\|\|\s*preferenceBarrier\s*\|\|\s*workbookBusy\s*\|\|\s*speciesBarrier\s*\)/);
+  assert.match(panel,/checked=\{(?:model\.)?method === 1\}/);assert.match(panel,/validateSiteUnitSummary/);
   assert.match(panel,/if \(!preferences\) void options\(\)/);
   assert.match(panel,/GetSiteUnitSummaryOptions/);
-  assert.match(panel,/disabled=\{busy \|\| workbookBusy \|\| preferenceBarrier \|\| speciesBarrier \|\| !ready \|\| !scopeAllowed\}/);
+  assert.match(panel,/disabled=\{busy\s*\|\|\s*workbookBusy\s*\|\|\s*preferenceBarrier\s*\|\|\s*speciesBarrier\s*\|\|\s*!ready\s*\|\|\s*!scopeAllowed\}/);
   assert.match(panel,/data-source-control="optSiteUnitType"/);
   assert.match(panel,/GetFullSiteUnitSummaryPreferences/);
   assert.doesNotMatch(panel,/<button[^>]*>Export|localStorage/);

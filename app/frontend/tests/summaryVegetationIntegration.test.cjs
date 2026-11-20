@@ -7,6 +7,7 @@ const { compile } = require('svelte/compiler');
 const { render } = require('svelte/server');
 const { serverComponent, loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
 const component = readFileSync(srcPath('SummaryVegetationReport.svelte'), 'utf8');
+const compositeSource = component + '\n' + readFileSync(srcPath('SummaryVegetationOptionsBar.svelte'), 'utf8');
 const app = readFileSync(srcPath('App.svelte'), 'utf8');
 const nav = readFileSync(srcPath('Navigation.svelte'), 'utf8');
 
@@ -24,8 +25,11 @@ test('summary report native route and component state are wired cleanly', () => 
 test('owned tab remount and cancellable root-close/navigation/selection holds are wired', async () => {
   const { componentFunctions } = require('./svelteTestHelpers.cjs');
   assert.match(component, /session\.subscribe\([\s\S]*onBusyChange/);
-  assert.match(component, /onBusyChange\(viewState\.busy \|\| \(!preferences && !!viewState\.draftError\) \|\| preferenceReadBusy/);
-  assert.match(component, /onDestroy\(\(\) => \{\s*session\.cancel\(port\); unsubscribe\(\); unsubscribePreferences\?\.\(\); unsubscribeQuality\?\.\(\); unsubscribePresentation\?\.\(\);\s*unsubscribeFieldList\?\.\(\); unsubscribeEnvironment\?\.\(\); if \(fieldListScopeAvailable\) fieldList\.detach\(ownedContext\(\)\);\s*cancelPreferenceRead\(\); onBusyChange\(false\);\s*\}\)/);
+  assert.match(component, /onBusyChange\(\s*viewState\.busy\s*\|\|\s*\(!preferences && !!viewState\.draftError\)\s*\|\|\s*preferenceReadBusy/);
+  assert.match(
+    component,
+    /onDestroy\(\(\) => \{\s*session\.cancel\(port\);\s*unsubscribe\(\);\s*unsubscribePreferences\?\.\(\);\s*unsubscribeQuality\?\.\(\);\s*unsubscribePresentation\?\.\(\);\s*unsubscribeFieldList\?\.\(\);\s*unsubscribeEnvironment\?\.\(\);\s*if \(fieldListScopeAvailable\) fieldList\.detach\(ownedContext\(\)\);\s*cancelPreferenceRead\(\);\s*onBusyChange\(false\);\s*\}\)/
+  );
   const context = componentFunctions('App.svelte', ['loadPlots', 'refresh', 'loadHierarchy', 'requestTransition'], {
     view: 'summary-vegetation',
     editorBusy: true,
@@ -43,11 +47,11 @@ test('owned tab remount and cancellable root-close/navigation/selection holds ar
 });
 
 test('source labels, unsupported options and DOM-value-before-validation remain explicit', () => {
-  for (const label of ['Summary Report Units', 'Group by', 'Display Values', 'Calculate', 'By n Plots', 'Characteristic']) assert.ok(component.includes(label));
-  assert.match(component, /<option value=\{4\}>Prominence Class/);
-  assert.match(component, /<option value=\{5\}>Goldstream Class/);
-  assert.match(component, /viewState\.display <= 3/);
-  assert.match(component, /data-summary-show/);
+  for (const label of ['Summary Report Units', 'Group by', 'Display Values', 'Calculate', 'By n Plots', 'Characteristic']) assert.ok(compositeSource.includes(label));
+  assert.match(compositeSource, /<option value=\{4\}\s*>Prominence Class/);
+  assert.match(compositeSource, /<option value=\{5\}\s*>Goldstream Class/);
+  assert.match(compositeSource, /(?:model|viewState)\.display <= 3/);
+  assert.match(compositeSource, /data-summary-show/);
   assert.match(component, /const raw = \(event\.currentTarget as HTMLSelectElement\)\.value;\s*if \(preferences\)/);
   assert.match(component, /const current = Number\(raw\);\s*session\.edit/);
   assert.match(component, /grid-template-columns: minmax\(0, 1fr\)/);

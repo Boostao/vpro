@@ -124,7 +124,7 @@ test('held native label completion is discarded by cancel, owner change and tear
   await context.actions.load();
   assert.equal(context.labelDate, 'Sunday, October 11, 2026');
   const source = readFileSync(srcPath('PlotLabelPreview.svelte'), 'utf8');
-  assert.match(source, /onDestroy\(\(\) => \{ unsubscribe\?\.\(\); cancel\(\); \}\)/);
+  assert.match(source, /onDestroy\(\(\) => \{\s*unsubscribe\?\.\(\);\s*cancel\(\);\s*\}\)/);
 });
 
 test('native label validation cannot assign after its generation is invalidated', async () => {
