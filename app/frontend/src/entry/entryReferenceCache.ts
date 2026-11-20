@@ -465,6 +465,8 @@ export function setCachedContextCapabilities(contextId: string, caps: CachedCont
 
 export function invalidateMasterBECPolicy(): void {
   contextCapabilitiesCache.clear();
+  plotBundlesCache.clear();
+  plotBundlesPending.clear();
 }
 
 // ---------------------------------------------------------------------------

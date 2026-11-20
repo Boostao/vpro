@@ -1,6 +1,8 @@
 const assert = require('node:assert/strict');
+const { readFileSync } = require('node:fs');
 const { test } = require('node:test');
-const { loadTypeScript } = require('./svelteTestHelpers.cjs');
+const { compile } = require('svelte/compiler');
+const { loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
 
 function createHarness() {
   const evalCache = new Map();
@@ -567,10 +569,94 @@ test('userSetupModal invalidates cached Master BEC policy after SetUserName / Se
     masterAllowed: false,
   };
   cache.setCachedContextCapabilities('ctx-u1', caps);
+  await cache.getCachedPlotBundle('ctx-u1', '001', async () => ({ header: { plotNumber: '001' }, canEditMasterBEC: false }));
+  const inflightPrefetch = deferred();
+  const pendingPromise = cache.prefetchPlotBundle('ctx-u1', '002', () => inflightPrefetch.promise);
+
   await userSetup.defaultUserSetupPort.setUserName('ctx-u1', 'alice');
   assert.equal(cache.getCachedContextCapabilities('ctx-u1'), undefined);
+  assert.equal(cache.peekPlotBundle('ctx-u1', '001'), undefined, 'cached PlotBundle with stale canEditMasterBEC must be evicted');
+
+  // Late resolution of a pre-switch prefetch must not repopulate plotBundlesCache with stale policy
+  inflightPrefetch.resolve({ header: { plotNumber: '002' }, canEditMasterBEC: false });
+  await pendingPromise;
+  assert.equal(cache.peekPlotBundle('ctx-u1', '002'), undefined);
+
+  // Subsequent load fetches fresh bundle with updated canEditMasterBEC
+  const refreshed = await cache.getCachedPlotBundle('ctx-u1', '001', async () => ({ header: { plotNumber: '001' }, canEditMasterBEC: true }));
+  assert.equal(refreshed.canEditMasterBEC, true);
 
   cache.setCachedContextCapabilities('ctx-u2', caps);
+  await cache.getCachedPlotBundle('ctx-u2', '003', async () => ({ header: { plotNumber: '003' }, canEditMasterBEC: false }));
   await userSetup.defaultUserSetupPort.setUserName('', 'bob');
   assert.equal(cache.getCachedContextCapabilities('ctx-u2'), undefined);
+  assert.equal(cache.peekPlotBundle('ctx-u2', '003'), undefined);
+});
+
+test('WorkingUnitFields picks up invalidateWorkingUnitChoices while mounted and clears copy notice across plots', async () => {
+  const { cache, workingUnit } = createHarness();
+  let envChoicesVersion = 1;
+  let envFetches = 0;
+  let masterFetches = 0;
+  const masterRows = [{ rowId: 'm1', code: 'M1', origin: 'master', sourceId: null, description: null, scientificName: null, level: 1, selectable: true, diagnostic: '' }];
+  cache.setCachedWorkingUnitMode({ mode: 'env', warning: null });
+
+  const published = [];
+  const lookup = new workingUnit.WorkingUnitLookup(
+    {
+      getMode: () => cache.getCachedWorkingUnitMode(async () => ({ mode: 'env', warning: null })),
+      setMode: async (m) => ({ mode: m, warning: null }),
+      choices: (mode) =>
+        cache.getCachedWorkingUnitChoices('ctx-wu', mode, async () => {
+          envFetches += 1;
+          return envChoicesVersion === 1
+            ? [{ rowId: '1', code: 'E1', origin: 'env', sourceId: null, description: null, scientificName: null, level: null, selectable: true, diagnostic: '' }]
+            : [
+                { rowId: '1', code: 'E1', origin: 'env', sourceId: null, description: null, scientificName: null, level: null, selectable: true, diagnostic: '' },
+                { rowId: '2', code: 'E2', origin: 'env', sourceId: null, description: null, scientificName: null, level: null, selectable: true, diagnostic: '' },
+              ];
+        }),
+      master: () =>
+        cache.getCachedMasterWorkingUnitChoices(async () => {
+          masterFetches += 1;
+          return masterRows;
+        }),
+    },
+    (v) => published.push(v),
+    { mode: null },
+    undefined,
+    {
+      peekMode: () => cache.peekWorkingUnitMode(),
+      peekChoices: (m) => cache.peekWorkingUnitChoices('ctx-wu', m),
+      peekMaster: () => cache.peekMasterWorkingUnitChoices(),
+    }
+  );
+
+  // Initial cold fetch
+  await lookup.refresh();
+  assert.equal(envFetches, 1);
+  assert.equal(masterFetches, 1);
+  assert.deepEqual(lookup.snapshot().choices.map((r) => r.code), ['E1']);
+
+  // Warm plot switch calls refresh(): 0 RPCs, 0 publish, 0 busy flash
+  const publishCountBeforeWarm = published.length;
+  await lookup.refresh();
+  assert.equal(envFetches, 1);
+  assert.equal(masterFetches, 1);
+  assert.equal(published.length, publishCountBeforeWarm);
+
+  // After UserSiteUnit save / SU transfer invalidates workingUnitChoices('ctx-wu', 'env'):
+  // next refresh() re-fetches env choices while master stays cached (0 extra master RPCs)
+  envChoicesVersion = 2;
+  cache.invalidateWorkingUnitChoices('ctx-wu', 'env');
+  await lookup.refresh();
+  assert.equal(envFetches, 2);
+  assert.equal(masterFetches, 1);
+  assert.deepEqual(lookup.snapshot().choices.map((r) => r.code), ['E1', 'E2']);
+
+  // WorkingUnitFields.svelte compiles cleanly, clears notice on draft/original change, and delegates to lookup.refresh()
+  const source = readFileSync(srcPath('entry/WorkingUnitFields.svelte'), 'utf8');
+  assert.equal(compile(source, { filename: 'WorkingUnitFields.svelte', generate: 'client' }).warnings.length, 0);
+  assert.match(source, /identity !== lastDraftIdentity \|\| orig !== lastOriginalIdentity[\s\S]*?notice = null/);
+  assert.match(source, /if \(!lookup\.snapshot\(\)\.busy\)\s*\{\s*void lookup\.refresh\(\);/);
 });

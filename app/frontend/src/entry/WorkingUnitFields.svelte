@@ -144,12 +144,20 @@
   const masterGroups = $derived(workingUnitGroups(view.master));
   const modeControls: Record<string, WorkingUnitMode> = { Option455: 'env', Option457: 'master', Option459: 'su' };
 
+  let lastDraftIdentity: FS882Header | undefined = untrack(() => draft);
+  let lastOriginalIdentity: WorkingUnitCodes | null = untrack(() => original);
+
   $effect(() => {
     const identity = draft;
+    const orig = original;
     if (identity)
       untrack(() => {
-        const snap = lookup.snapshot();
-        if (!(snap.ready && snap.masterReady && !snap.error && !snap.masterError) && !snap.busy) {
+        if (identity !== lastDraftIdentity || orig !== lastOriginalIdentity) {
+          lastDraftIdentity = identity;
+          lastOriginalIdentity = orig;
+          notice = null;
+        }
+        if (!lookup.snapshot().busy) {
           void lookup.refresh();
         }
       });
