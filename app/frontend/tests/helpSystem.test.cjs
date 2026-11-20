@@ -343,3 +343,39 @@ test('index.html embeds inline SVG data-URI favicon and LMH25 2023 help bundle i
   assert.equal(help.resolveContextualHelpTarget(makeColNode('Exposure1'), 'fs882'), 'site.elevation');
   assert.equal(help.resolveContextualHelpTarget(makeColNode('FloodingRegimeDur'), 'fs882'), 'soil.rooting_seepage');
 });
+
+test('HelpDrawerTopicView optgroup labels stay free of Pango markup metacharacters for WebKitGTK', () => {
+  assert.equal(help.formatOptgroupLabel('Site & Plot Identification'), 'Site and Plot Identification');
+  assert.equal(help.formatOptgroupLabel('A&B <100%>'), 'A and B 100%');
+  assert.equal(help.formatOptgroupLabel('Mineral Soil Horizons'), 'Mineral Soil Horizons');
+
+  for (const field of helpBundleFixture.fields) {
+    assert.doesNotMatch(
+      field.section,
+      /[&<>]/,
+      `help_bundle field ${field.id} section "${field.section}" must not contain raw &, <, or > for WebKitGTK <optgroup>`
+    );
+  }
+
+  const TopicView = serverComponent(readSrc('HelpDrawerTopicView.svelte'), 'HelpDrawerTopicView.svelte', {
+    '@lucide/svelte': iconsProxy,
+    './helpSystem': help,
+  });
+  const html = render(TopicView, {
+    props: {
+      groupedFields: [
+        ['Site & Plot Identification', [helpBundleFixture.fields[0]]],
+        ['Mineral Soil Horizons', [helpBundleFixture.fields.find((f) => f.section === 'Mineral Soil Horizons')]],
+      ],
+      selectedFieldId: helpBundleFixture.fields[0].id,
+      lookup: null,
+      onloadtopic: () => {},
+      onopenkey: () => {},
+      onopenguide: () => {},
+    },
+  }).body;
+
+  assert.match(html, /<optgroup label="Site and Plot Identification">/);
+  assert.match(html, /<optgroup label="Mineral Soil Horizons">/);
+  assert.doesNotMatch(html, /<optgroup label="[^"]*(&amp;|[&<>])[^"]*">/);
+});

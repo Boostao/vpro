@@ -897,3 +897,19 @@ export function computeTourDialogLayout(
   }
   return { placement: candidates[0].name, style: candidates[0].style };
 }
+
+/**
+ * Normalizes `<optgroup label>` text so it never contains raw Pango markup
+ * metacharacters (`&`, `<`, `>`). WebKitGTK 6.0 builds popup menu group headers
+ * via `g_strdup_printf("<b>%s</b>", label)` without escaping, causing GTK4's
+ * `GtkCellRendererText` to emit a markup parse warning and drop the header text.
+ * Avoiding those characters directly keeps labels identical across WebKitGTK,
+ * WebView2, and WKWebView without leaking literal `&amp;` entities.
+ */
+export function formatOptgroupLabel(label: string): string {
+  return label
+    .replace(/\s*&\s*/g, ' and ')
+    .replace(/[<>]/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}

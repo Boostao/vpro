@@ -1,6 +1,6 @@
 <script lang="ts">
   import { FileText } from '@lucide/svelte';
-  import type { HelpBundle, HelpGuide, HelpLookupResult } from './helpSystem';
+  import { formatOptgroupLabel, type HelpBundle, type HelpGuide, type HelpLookupResult } from './helpSystem';
 
   let {
     groupedFields,
@@ -34,7 +34,7 @@
       onchange={(e) => onloadtopic(e.currentTarget.value)}
     >
       {#each groupedFields as [sectionName, fields] (sectionName)}
-        <optgroup label={sectionName}>
+        <optgroup label={formatOptgroupLabel(sectionName)}>
           {#each fields as f (f.id)}
             <option value={f.id}>{f.code} — {f.title}</option>
           {/each}
