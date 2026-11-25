@@ -18,6 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_DIR="${VPRO_COMPOSE_DIR:-${SCRIPT_DIR}}"
 DATA_ROOT="${VPRO_DATA_ROOT:-}"
 INTERNAL_PORT="${VPRO_INTERNAL_PORT:-}"
+VPRO_IMAGE="${VPRO_IMAGE:-}"
 KEEP_RELEASES=3
 OVERRIDE_SNAPSHOT_ID=""
 FORCE=0
@@ -119,6 +120,8 @@ if [ -f "${ENV_FILE}" ]; then
       fi
     elif [ "${key}" = "VPRO_INTERNAL_PORT" ] && [ -z "${INTERNAL_PORT}" ]; then
       INTERNAL_PORT="${val}"
+    elif [ "${key}" = "VPRO_IMAGE" ] && [ -z "${VPRO_IMAGE}" ]; then
+      VPRO_IMAGE="${val}"
     fi
   done < "${ENV_FILE}"
 fi
@@ -126,6 +129,7 @@ fi
 COMPOSE_DATA_ROOT="${COMPOSE_DATA_ROOT:-/srv/vpro/data}"
 DATA_ROOT="${DATA_ROOT:-/srv/vpro/data}"
 INTERNAL_PORT="${INTERNAL_PORT:-9090}"
+VPRO_IMAGE="${VPRO_IMAGE:-ghcr.io/boostao/vpro/vpro-web:dev}"
 RELEASES_DIR="${DATA_ROOT}/releases"
 CURRENT_LINK="${DATA_ROOT}/current"
 
@@ -268,9 +272,11 @@ if vpro_web_running && [ "${DATA_ROOT}" = "${COMPOSE_DATA_ROOT}" ]; then
     verify_ok=1
   fi
 else
-  if "${COMPOSE_CMD[@]}" run --rm --no-deps --entrypoint /usr/local/bin/vpro-snapshot \
+  # Run standalone docker verify to avoid docker-compose bind-mount chicken-and-egg
+  # on first-time Droplet bootstrap before /srv/vpro/data/current exists.
+  if docker run --rm --entrypoint /usr/local/bin/vpro-snapshot \
       -v "${TARGET_RELEASE_DIR}:/verify-bundle:ro" \
-      vpro-web verify --bundle /verify-bundle; then
+      "${VPRO_IMAGE}" verify --bundle /verify-bundle; then
     verify_ok=1
   fi
 fi

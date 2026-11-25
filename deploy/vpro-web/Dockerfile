@@ -23,7 +23,7 @@ RUN cd /src/app/frontend && npm ci
 
 # Copy only the source inputs needed for RPC map verification and Vite web build
 COPY scripts/generate-web-rpc-map.mjs ./scripts/generate-web-rpc-map.mjs
-COPY app/resources/web_rpc_allowlist.json ./app/resources/web_rpc_allowlist.json
+COPY app/resources/*.json ./app/resources/
 COPY app/frontend/index.html app/frontend/tsconfig.json app/frontend/svelte.config.js ./app/frontend/
 COPY app/frontend/vite.config.ts app/frontend/vite.web.config.ts ./app/frontend/
 COPY app/frontend/bindings ./app/frontend/bindings
@@ -116,7 +116,7 @@ RUN Rscript -e ' \
     pkgs <- c( \
         "cli", "data.table", "DBI", "jsonlite", "rlang", "RSQLite", "tibble", "yaml", \
         "vegan", "vegclust", "cluster", "indicspecies", \
-        "knitr", "rmarkdown", "quarto", \
+        "ggplot2", "knitr", "rmarkdown", "quarto", \
         "sf", "terra", "Matrix", "remotes", "withr" \
     ); \
     install.packages(pkgs, lib = "/usr/local/lib/R/site-library"); \
@@ -149,6 +149,7 @@ RUN R CMD INSTALL --no-multiarch --library=/usr/local/lib/R/site-library /tmp/vp
         requireNamespace("climr", quietly = TRUE), \
         requireNamespace("vegclust", quietly = TRUE), \
         requireNamespace("vegan", quietly = TRUE), \
+        requireNamespace("ggplot2", quietly = TRUE), \
         requireNamespace("knitr", quietly = TRUE), \
         requireNamespace("rmarkdown", quietly = TRUE) \
     )'
