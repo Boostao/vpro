@@ -79,6 +79,9 @@ var Standards2026ProvenanceJSON []byte
 //go:embed help_bundle.json
 var HelpBundleJSON []byte
 
+//go:embed web_rpc_allowlist.json
+var WebRPCAllowlistJSON []byte
+
 //go:embed project-metadata-template.json
 var ProjectMetadataTemplateJSON []byte
 
