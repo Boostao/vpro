@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type {
     FileDialogFilter,
     InterchangeHubPort,
@@ -45,9 +46,15 @@
   let userSppImportResult = $state.raw<UserSpeciesImportResult | null>(null);
 
   async function runUserSpeciesExport() {
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
     const payload = $state.snapshot({
       format: userSppExportFormat,
-      destinationPath: userSppExportPath.trim(),
+      destinationPath:
+        webReadOnly && !userSppExportPath.trim()
+          ? userSppExportFormat === 'csv'
+            ? 'user_species.csv'
+            : 'user_species.json'
+          : userSppExportPath.trim(),
     });
     await onRunHubRpc(
       'User species export failed',
@@ -59,6 +66,7 @@
   }
 
   async function runUserSpeciesPreview() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     const payload = $state.snapshot({
       sourcePath: userSppImportPath.trim(),
       content: userSppImportContent,
@@ -74,6 +82,7 @@
   }
 
   async function runUserSpeciesImport() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     const payload = $state.snapshot({
       sourcePath: userSppImportPath.trim(),
       content: userSppImportContent,
@@ -101,43 +110,49 @@
           <option value="csv">Portable CSV</option>
         </select>
       </label>
-      <label>
-        <span>Destination File Path (optional; leave blank for inline copy)</span>
-        <div class="input-with-browse">
-          <input
-            type="text"
-            class="grow"
-            bind:value={userSppExportPath}
-            placeholder="/path/to/user_species.json"
-            disabled={busy || operationHeld}
-          />
-          <button
-            type="button"
-            class="btn-secondary"
-            data-save-userspp-export
-            disabled={busy || operationHeld}
-            onclick={() =>
-              onPickFilePath(
-                'save',
-                'Save User Species List',
-                userSppExportFormat === 'csv' ? 'user_species.csv' : 'user_species.json',
-                [{ DisplayName: 'Species List (*.json, *.csv)', Pattern: '*.json;*.csv' }],
-                (p) => {
-                  userSppExportPath = p;
-                }
-              )}
-          >
-            Save As...
-          </button>
-        </div>
-      </label>
+      {#if !IS_WEB_READONLY}
+        <label>
+          <span>Destination File Path (optional; leave blank for inline copy)</span>
+          <div class="input-with-browse">
+            <input
+              type="text"
+              class="grow"
+              bind:value={userSppExportPath}
+              placeholder="/path/to/user_species.json"
+              disabled={busy || operationHeld}
+            />
+            <button
+              type="button"
+              class="btn-secondary"
+              data-save-userspp-export
+              disabled={busy || operationHeld}
+              onclick={() =>
+                onPickFilePath(
+                  'save',
+                  'Save User Species List',
+                  userSppExportFormat === 'csv' ? 'user_species.csv' : 'user_species.json',
+                  [{ DisplayName: 'Species List (*.json, *.csv)', Pattern: '*.json;*.csv' }],
+                  (p) => {
+                    userSppExportPath = p;
+                  }
+                )}
+            >
+              Save As...
+            </button>
+          </div>
+        </label>
+      {/if}
       <button
         type="button"
         class="btn-primary"
         disabled={busy || operationHeld || !contextId}
         onclick={runUserSpeciesExport}
       >
-        Export User Species
+        {#if busy}
+          {IS_WEB_READONLY ? 'Preparing download...' : 'Exporting User Species...'}
+        {:else}
+          {IS_WEB_READONLY ? 'Download User Species' : 'Export User Species'}
+        {/if}
       </button>
     </div>
     {#if userSppExportResult}
@@ -152,8 +167,9 @@
     {/if}
   </div>
 
-  <div class="hub-card">
-    <h3>Import Crew Provisional Species with Collision Review</h3>
+  {#if !IS_WEB_READONLY}
+    <div class="hub-card">
+      <h3>Import Crew Provisional Species with Collision Review</h3>
     <div class="form-stack">
       <label>
         <span>Source File Path (.json or .csv, optional if pasting below)</span>
@@ -240,7 +256,8 @@
         </strong>
       </div>
     {/if}
-  </div>
+    </div>
+  {/if}
 </div>
 
 <style>

@@ -12,6 +12,8 @@
     TableProperties,
   } from '@lucide/svelte';
   import { formatShortCommit, type BuildMode } from '../help/helpSystem';
+  import { webShellRuntime } from '../shared/state';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
 
   type HubView =
     | 'plots'
@@ -52,7 +54,7 @@
 
   const shortCommit = $derived(formatShortCommit(gitCommit));
 
-  const workflows: {
+  const baseWorkflows: {
     id: string;
     title: string;
     subtitle: string;
@@ -123,10 +125,19 @@
       view: 'interchange-hub',
     },
   ];
+
+  const workflows = $derived(
+    IS_WEB_READONLY && $webShellRuntime?.hubOverrides
+      ? baseWorkflows.map((item) => {
+          const ov = $webShellRuntime?.hubOverrides[item.id];
+          return ov ? { ...item, ...ov } : item;
+        })
+      : baseWorkflows
+  );
 </script>
 
 <div class="space-y-4" data-home-workspace-hub>
-  {#if buildMode === 'alpha'}
+  {#if !IS_WEB_READONLY && buildMode === 'alpha'}
     <section
       data-home-tier-banner="alpha"
       aria-label="Alpha Preview Evaluation Notice"
@@ -184,12 +195,12 @@
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <div class="font-mono text-[11px] font-semibold uppercase tracking-wider text-vpro-navy">
-          Active BEC Workspace Context
+          {IS_WEB_READONLY ? 'Active Read-Only BEC Dataset' : 'Active BEC Workspace Context'}
         </div>
         <h2 class="mt-0.5 text-lg font-bold text-vpro-ink">
-          {activeProject || 'No project selected'}
+          {activeProject || (IS_WEB_READONLY ? 'No dataset selected' : 'No project selected')}
         </h2>
-        {#if projectPath}
+        {#if projectPath && !IS_WEB_READONLY}
           <div class="mt-0.5 break-all font-mono text-[11px] text-vpro-ink-muted">{projectPath}</div>
         {/if}
       </div>
@@ -209,7 +220,7 @@
           class="inline-flex items-center gap-1.5 rounded border border-vpro-navy bg-white px-3 py-1.5 text-xs font-semibold text-vpro-navy hover:bg-vpro-surface-subtle"
           onclick={() => onnavigate('fs882')}
         >
-          <span>FS882 Editor</span>
+          <span>{IS_WEB_READONLY ? 'FS882 Viewer' : 'FS882 Editor'}</span>
         </button>
       </div>
     </div>

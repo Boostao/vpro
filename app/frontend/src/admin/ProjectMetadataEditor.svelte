@@ -20,6 +20,8 @@
   import ProjectMetadataRestore from './ProjectMetadataRestore.svelte';
   import { notifications } from '../shell/notificationService.svelte';
 
+  const IS_WEB_READONLY = typeof __VPRO_WEB_READONLY__ !== 'undefined' && __VPRO_WEB_READONLY__ === true;
+
   let {
     client,
     contextId,
@@ -445,7 +447,7 @@
       data-workbench-sticky-bar
       class="my-4 flex flex-wrap gap-2 sticky top-0 z-20 border-b border-vpro-border bg-white/95 py-2 backdrop-blur-xs"
     >
-      {#if allowRestoration}
+      {#if !IS_WEB_READONLY && allowRestoration}
         <button
           type="button"
           class={BTN_CLS}
@@ -460,19 +462,21 @@
       <button type="button" class={BTN_CLS} onclick={reload} disabled={busy || dirty}
         >Reload metadata and references</button
       >
-      {#if draft}<button
-          type="button"
-          class={BTN_CLS}
-          data-metadata-populate-standard
-          disabled={!ready || busy || committedFailure}
-          onclick={() => (standardPreview = true)}>Populate Standard (LMH25 NAD83)</button
-        >{/if}
-      <button type="button" class={BTN_CLS} onclick={undo} disabled={busy || committedFailure}
-        >Undo metadata drafts</button
-      >
-      <button type="button" class={BTN_CLS} onclick={save} disabled={!ready || busy || !draft || !dirty || saveBlocked}
-        >Save metadata</button
-      >
+      {#if !IS_WEB_READONLY}
+        {#if draft}<button
+            type="button"
+            class={BTN_CLS}
+            data-metadata-populate-standard
+            disabled={!ready || busy || committedFailure}
+            onclick={() => (standardPreview = true)}>Populate Standard (LMH25 NAD83)</button
+          >{/if}
+        <button type="button" class={BTN_CLS} onclick={undo} disabled={busy || committedFailure}
+          >Undo metadata drafts</button
+        >
+        <button type="button" class={BTN_CLS} onclick={save} disabled={!ready || busy || !draft || !dirty || saveBlocked}
+          >Save metadata</button
+        >
+      {/if}
       <button
         type="button"
         class={BTN_CLS}
@@ -503,26 +507,28 @@
       {/each}
     </fieldset>
 
-    <ProjectMetadataCreationPanel
-      {ready}
-      {busy}
-      {dirty}
-      {committedFailure}
-      errorsCount={errors.length}
-      {allowCreation}
-      {allowTemplateCreation}
-      hasExistingRows={rows.length > 0}
-      {review}
-      {blank}
-      {template}
-      {available}
-      catalog={creationCatalog}
-      onreviewblank={reviewBlank}
-      oncreateblank={() => void createBlank()}
-      onreviewtemplate={reviewTemplate}
-      onstagetemplate={stageTemplate}
-      oncreatetemplate={() => void createTemplate()}
-    />
+    {#if !IS_WEB_READONLY}
+      <ProjectMetadataCreationPanel
+        {ready}
+        {busy}
+        {dirty}
+        {committedFailure}
+        errorsCount={errors.length}
+        {allowCreation}
+        {allowTemplateCreation}
+        hasExistingRows={rows.length > 0}
+        {review}
+        {blank}
+        {template}
+        {available}
+        catalog={creationCatalog}
+        onreviewblank={reviewBlank}
+        oncreateblank={() => void createBlank()}
+        onreviewtemplate={reviewTemplate}
+        onstagetemplate={stageTemplate}
+        oncreatetemplate={() => void createTemplate()}
+      />
+    {/if}
 
     <ProjectMetadataFieldsPanel
       {ready}

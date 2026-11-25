@@ -1,6 +1,9 @@
 <script module lang="ts">
   import { formatError } from '../shared/readRequests';
   import { notifications } from '../shell/notificationService.svelte';
+  import { defaultWebExportFilename } from '../shell/webReadOnlyShell';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
+  import { formatWebDownloadFeedback, getCachedWebMeta, resolveWebPMTilesBaseUrl } from '../web/webMeta';
 </script>
 
 <script lang="ts">
@@ -82,6 +85,7 @@
   let aoiDrawMode = $state(false);
   let aoiVertices = $state<Array<[number, number]>>([]);
   let aoiPreview = $state<Awaited<ReturnType<typeof SpatialService.SelectPlotsInPolygonAOI>> | null>(null);
+  let aoiFilterActive = $state(false);
   let aoiTargetMode = $state<'update_active' | 'create_project_su' | 'create_su_file'>('create_project_su');
   let aoiSUName = $state('');
   let aoiSiteUnit = $state('');
@@ -95,7 +99,13 @@
   let gpkgOutcome = $state.raw<GeoPackageExportOutcome | null>(null);
 
   const aoiMatchedSet = $derived(new Set(aoiPreview?.plotNumbers ?? []));
-  const filteredPoints = $derived(geoOps.filterWorkbenchPlots(plotPoints, zoneFilter, plotSearch));
+  const filteredPoints = $derived.by(() => {
+    const base = geoOps.filterWorkbenchPlots(plotPoints, zoneFilter, plotSearch);
+    if (IS_WEB_READONLY && aoiFilterActive && aoiMatchedSet.size > 0) {
+      return base.filter((pt) => aoiMatchedSet.has(pt.plotNumber));
+    }
+    return base;
+  });
   const distinctZones = $derived(geoOps.extractDistinctZones(plotPoints));
   const qaCoordinateDiagnosticRows = $derived(geoOps.filterCoordinateDiagnosticRows(qaReport?.rows));
   const setBusyState = (nextBusy: boolean) => onBusyChange?.(nextBusy);
@@ -167,12 +177,17 @@
     if (!mapInstance) return;
     const snap = $state.snapshot(visibility);
     const force = typeof pmtilesGraticuleFallback !== 'undefined' && pmtilesGraticuleFallback;
+    const webPmtilesBase =
+      typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY && typeof resolveWebPMTilesBaseUrl === 'function'
+        ? resolveWebPMTilesBaseUrl(typeof getCachedWebMeta === 'function' ? getCachedWebMeta() : null)
+        : undefined;
     mapInstance.setStyle(
       buildMapLibreGeospatialStyle(payload?.manifest, snap, {
         ...(force ? { forceGraticuleFallback: true } : {}),
         basemap: curBasemap,
         wmsLayer: curWmsLayer,
         opacity: curOpacity,
+        ...(webPmtilesBase ? { pmtilesBaseUrl: webPmtilesBase } : {}),
       })
     );
     mapInstance.easeTo({
@@ -247,10 +262,15 @@
       const curBasemap = typeof basemap !== 'undefined' ? basemap : 'offline-neutral';
       const curWmsLayer = typeof wmsLayer !== 'undefined' ? wmsLayer : 'bc-parks';
       const curOpacity = typeof layerOpacity !== 'undefined' ? $state.snapshot(layerOpacity) : undefined;
+      const webPmtilesBase =
+        typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY && typeof resolveWebPMTilesBaseUrl === 'function'
+          ? resolveWebPMTilesBaseUrl(typeof getCachedWebMeta === 'function' ? getCachedWebMeta() : null)
+          : undefined;
       const style = buildMapLibreGeospatialStyle(payload?.manifest, $state.snapshot(visibility), {
         basemap: curBasemap,
         wmsLayer: curWmsLayer,
         opacity: curOpacity,
+        ...(webPmtilesBase ? { pmtilesBaseUrl: webPmtilesBase } : {}),
       });
       const onLoad = () => {
         syncAOIOverlay();
@@ -407,6 +427,7 @@
   }
 
   async function applyAuto1SpatialStamp(opts: geoOps.SpatialStampOptions) {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!contextId || mutating || loading) return;
     const meta = { category: 'entry' as const, source: '3D Map', contextTag: project || undefined };
     if (!opts.allScoped && opts.plotNumbers.length === 0) {
@@ -446,24 +467,33 @@
 
   async function exportGeoPackageShortcut(opts: geoOps.SpatialGpkgExportInput) {
     if (!contextId || gpkgExporting || mutating || loading) return;
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
     const meta = { category: 'entry' as const, source: '3D Map', contextTag: project || undefined };
-    const rawDest = opts.destinationPath.trim();
-    if (!rawDest) {
-      errorMsg = 'Enter a destination .gpkg file path before exporting.';
-      notifications.error('GeoPackage destination required', errorMsg, meta);
-      return;
-    }
-    const isAbs = rawDest.startsWith('/') || /^[A-Za-z]:[\\/]/.test(rawDest) || rawDest.startsWith('\\\\');
-    const fallbackDest = isAbs ? (rawDest.toLowerCase().endsWith('.gpkg') ? rawDest : `${rawDest}.gpkg`) : null;
-    const resolvedDest =
-      typeof resolveGeoPackageDestinationPath === 'function'
-        ? resolveGeoPackageDestinationPath(rawDest, project, payload?.projectPath)
-        : fallbackDest;
-    if (!resolvedDest) {
-      errorMsg =
-        'Enter an absolute destination folder path (not a bare relative filename) before exporting GeoPackage.';
-      notifications.error('GeoPackage destination required', errorMsg, meta);
-      return;
+    let resolvedDest: string | null = null;
+    if (webReadOnly) {
+      resolvedDest =
+        typeof defaultWebExportFilename === 'function'
+          ? defaultWebExportFilename(`${project || 'vpro'}_plots`, '.gpkg')
+          : `${project || 'vpro'}_plots.gpkg`;
+    } else {
+      const rawDest = opts.destinationPath.trim();
+      if (!rawDest) {
+        errorMsg = 'Enter a destination .gpkg file path before exporting.';
+        notifications.error('GeoPackage destination required', errorMsg, meta);
+        return;
+      }
+      const isAbs = rawDest.startsWith('/') || /^[A-Za-z]:[\\/]/.test(rawDest) || rawDest.startsWith('\\\\');
+      const fallbackDest = isAbs ? (rawDest.toLowerCase().endsWith('.gpkg') ? rawDest : `${rawDest}.gpkg`) : null;
+      resolvedDest =
+        typeof resolveGeoPackageDestinationPath === 'function'
+          ? resolveGeoPackageDestinationPath(rawDest, project, payload?.projectPath)
+          : fallbackDest;
+      if (!resolvedDest) {
+        errorMsg =
+          'Enter an absolute destination folder path (not a bare relative filename) before exporting GeoPackage.';
+        notifications.error('GeoPackage destination required', errorMsg, meta);
+        return;
+      }
     }
     [gpkgExporting, errorMsg, statusMsg] = [true, '', ''];
     setBusyState(true);
@@ -471,11 +501,16 @@
       const outcome = await ImportExportService.ExportGeoPackage(contextId, { ...opts, destinationPath: resolvedDest });
       if (!alive || !outcome) return;
       gpkgOutcome = outcome;
-      statusMsg = `Exported ${outcome.featureCount} GeoPackage plot features (${outcome.crs}, SRS ${outcome.srsId}) to ${outcome.path}.`;
-      notifications.success('GeoPackage exported', statusMsg, meta);
+      statusMsg = webReadOnly
+        ? `Downloaded ${outcome.featureCount} GeoPackage plot features (${outcome.crs}, SRS ${outcome.srsId}).`
+        : `Exported ${outcome.featureCount} GeoPackage plot features (${outcome.crs}, SRS ${outcome.srsId}) to ${outcome.path}.`;
+      notifications.success(webReadOnly ? 'GeoPackage downloaded' : 'GeoPackage exported', statusMsg, meta);
     } catch (cause) {
       if (alive) {
-        errorMsg = `GeoPackage (.gpkg) export failed: ${formatError(cause)}`;
+        errorMsg =
+          webReadOnly && typeof formatWebDownloadFeedback === 'function'
+            ? formatWebDownloadFeedback(cause, 'GeoPackage (.gpkg) download')
+            : `GeoPackage (.gpkg) export failed: ${formatError(cause)}`;
         notifications.error('GeoPackage export failed', errorMsg, meta);
       }
     } finally {
@@ -489,6 +524,7 @@
   $effect(() => {
     void zoneFilter;
     void plotSearch;
+    void aoiFilterActive;
     refreshDeckOverlay();
   });
 
@@ -565,7 +601,19 @@
   const drwC = $derived({ qaCoordinateDiagnosticRows, loading, mutating, onOpenPlot, onInspectPlot: inspectPlotPin });
   const drwD = { getViewportBounds: getBounds, onSyncAOIOverlay: syncAOIOverlay, onRunMutation: runMutation };
   const drwE = { onPushError: pushGeoError, onCommittedAOI: handleCommittedAOI, onLoadBatchAuditQA: loadBatchAuditQA };
-  const drwAll = $derived({ ...drwA, ...drwB, ...drwC, ...drwD, ...drwE, onApplyStamp: applyAuto1SpatialStamp });
+  const drwAll = $derived({
+    ...drwA,
+    ...drwB,
+    ...drwC,
+    ...drwD,
+    ...drwE,
+    onApplyStamp: applyAuto1SpatialStamp,
+    aoiFilterActive,
+    onToggleAoiFilter: (active: boolean) => {
+      aoiFilterActive = active;
+      refreshDeckOverlay();
+    },
+  });
 </script>
 
 <section class="geospatial-workbench" data-tour="geospatial-workbench-root" aria-label="3D Map">

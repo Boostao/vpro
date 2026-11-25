@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { formatError } from '../shared/readRequests';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import LumpEditorCreatePanel from './LumpEditorCreatePanel.svelte';
   import LumpEditorHeader from './LumpEditorHeader.svelte';
   import LumpEditorPresetsTab from './LumpEditorPresetsTab.svelte';
@@ -77,7 +78,7 @@
     () => tables.find((t) => t.tableName === selectedTable && t.databasePath === selectedDbPath) ?? null
   );
   const baseLumpDbPath = $derived(
-    selectedSummary && !selectedSummary.isActiveProject ? selectedSummary.databasePath : ''
+    IS_WEB_READONLY ? '' : selectedSummary && !selectedSummary.isActiveProject ? selectedSummary.databasePath : ''
   );
 
   async function refreshTables() {
@@ -87,10 +88,13 @@
     error = '';
     setBusyState(true);
     try {
-      const extPaths = externalDbInput
-        .split(/[,;\n]+/)
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+      const extPaths = webReadOnly
+        ? []
+        : externalDbInput
+            .split(/[,;\n]+/)
+            .map((s) => s.trim())
+            .filter(Boolean);
       const [discovered, loadedPresets] = await Promise.all([
         port.discoverLumpTables(owner, $state.snapshot(extPaths)),
         port.listLumpPresets(),
@@ -106,9 +110,10 @@
         selectedDbPath = tables[0].databasePath;
       }
       if (selectedTable) {
+        const effectiveDbPath = webReadOnly ? '' : selectedDbPath;
         const [loadedRows, loadedImpact] = await Promise.all([
-          port.getLumpTableRows(owner, selectedTable, selectedDbPath),
-          port.previewLumpImpact(owner, selectedTable, selectedDbPath),
+          port.getLumpTableRows(owner, selectedTable, effectiveDbPath),
+          port.previewLumpImpact(owner, selectedTable, effectiveDbPath),
         ]);
         if (reqGen !== generation || owner !== contextId) return;
         rows = loadedRows ?? [];
@@ -134,9 +139,10 @@
     error = '';
     setBusyState(true);
     try {
+      const effectiveDbPath = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY ? '' : dbPath;
       const [loadedRows, loadedImpact] = await Promise.all([
-        port.getLumpTableRows(owner, tableName, dbPath),
-        port.previewLumpImpact(owner, tableName, dbPath),
+        port.getLumpTableRows(owner, tableName, effectiveDbPath),
+        port.previewLumpImpact(owner, tableName, effectiveDbPath),
       ]);
       if (reqGen !== generation || owner !== contextId) return;
       rows = loadedRows ?? [];
@@ -149,6 +155,7 @@
   }
 
   async function mutateActiveRows(run: (owner: string) => Promise<void>) {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!selectedSummary?.isActiveProject || busy || operationHeld || !contextId) return;
     const reqGen = ++generation;
     const owner = contextId;
@@ -261,7 +268,7 @@
           {/if}
         </h3>
 
-        {#if selectedSummary?.isActiveProject}
+        {#if !IS_WEB_READONLY && selectedSummary?.isActiveProject}
           <LumpEditorRowForm
             {contextId}
             {busy}
@@ -286,20 +293,34 @@
             onSetAllUse={(nextUse) =>
               void mutateActiveRows((o) => port.setAllLumpRowsUse(o, selectedTable, nextUse).then(() => {}))}
           />
+        {:else if IS_WEB_READONLY}
+          <div class="lump-readonly-filter">
+            <input
+              type="search"
+              aria-label="Filter lump rules"
+              bind:value={filterQuery}
+              placeholder="Filter LumpCode, SppCode, or scientific name..."
+            />
+          </div>
         {/if}
 
         <div class="table-scroll">
           <table>
             <thead>
-              <tr
-                ><th>LumpCode</th><th>SppCode</th><th>Scientific Name</th><th>Species Catalogue</th><th>Active</th><th
-                  >Actions</th
-                ></tr
-              >
+              <tr>
+                <th>LumpCode</th>
+                <th>SppCode</th>
+                <th>Scientific Name</th>
+                <th>Species Catalogue</th>
+                <th>Active</th>
+                {#if !IS_WEB_READONLY}<th>Actions</th>{/if}
+              </tr>
             </thead>
             <tbody>
               {#if groupedRows.length === 0}
-                <tr><td colspan="6" class="empty-row">No species mappings in current selection.</td></tr>
+                <tr>
+                  <td colspan={IS_WEB_READONLY ? 5 : 6} class="empty-row">No species mappings in current selection.</td>
+                </tr>
               {/if}
               {#each groupedRows as grp (grp.lumpCode)}
                 {@const allGroupActive = grp.rows.length > 0 && grp.activeCount === grp.rows.length}
@@ -308,8 +329,8 @@
                     <strong class="mono">{grp.lumpCode}</strong>
                     <span class="group-count">({grp.activeCount}/{grp.rows.length} active)</span>
                   </td>
-                  <td colspan="2">
-                    {#if selectedSummary?.isActiveProject}
+                  <td colspan={IS_WEB_READONLY ? 1 : 2}>
+                    {#if !IS_WEB_READONLY && selectedSummary?.isActiveProject}
                       <button
                         type="button"
                         class="link-btn"
@@ -335,7 +356,7 @@
                       <input
                         type="checkbox"
                         checked={row.use}
-                        disabled={!selectedSummary?.isActiveProject || busy || operationHeld}
+                        disabled={IS_WEB_READONLY || !selectedSummary?.isActiveProject || busy || operationHeld}
                         onchange={() =>
                           void mutateActiveRows((o) =>
                             port.toggleLumpRow(o, selectedTable, row.sppCode, !row.use).then(() => {})
@@ -343,21 +364,23 @@
                         aria-label={`Toggle ${row.sppCode}`}
                       />
                     </td>
-                    <td>
-                      {#if selectedSummary?.isActiveProject}
-                        <button type="button" class="link-btn" onclick={() => startEditRow(row)}>Edit</button>
-                        <button
-                          type="button"
-                          class="link-btn danger"
-                          onclick={() =>
-                            void mutateActiveRows((o) =>
-                              port.deleteLumpRow(o, selectedTable, row.sppCode).then(() => {})
-                            )}>Delete</button
-                        >
-                      {:else}
-                        <span>Read-only external</span>
-                      {/if}
-                    </td>
+                    {#if !IS_WEB_READONLY}
+                      <td>
+                        {#if selectedSummary?.isActiveProject}
+                          <button type="button" class="link-btn" onclick={() => startEditRow(row)}>Edit</button>
+                          <button
+                            type="button"
+                            class="link-btn danger"
+                            onclick={() =>
+                              void mutateActiveRows((o) =>
+                                port.deleteLumpRow(o, selectedTable, row.sppCode).then(() => {})
+                              )}>Delete</button
+                          >
+                        {:else}
+                          <span>Read-only external</span>
+                        {/if}
+                      </td>
+                    {/if}
                   </tr>
                 {/each}
               {/each}
@@ -495,6 +518,18 @@
     font-size: 0.82rem;
     color: var(--vpro-ink-secondary);
     padding: 0.5rem 0;
+  }
+  .lump-readonly-filter {
+    margin-bottom: 0.75rem;
+  }
+  .lump-readonly-filter input {
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--vpro-border);
+    border-radius: 4px;
+    font-size: 0.85rem;
+    background: var(--vpro-surface);
+    color: var(--vpro-ink);
   }
   @media (max-width: 960px) {
     .lump-grid {

@@ -2,6 +2,7 @@
   import { onDestroy, untrack, type Snippet } from 'svelte';
   import type { LongVegetationSettings } from '../../../bindings/github.com/boostao/vpro/app/internal/vegreport/models';
   import type { ReadRequests } from '../../shared/readRequests';
+  import { IS_WEB_READONLY } from '../../web/runtimeMode';
   import { longVegetationPreferencesSession } from '../longVegetationPreferences';
   import { longVegetationStatisticsPreferencesSession } from '../longVegetationStatisticsPreferences';
   import { longVegetationSwitchPreferencesSession } from '../longVegetationSwitchPreferences';
@@ -484,28 +485,30 @@
   }}
 />
 <LongVegetationHeaderAndScope state={holds} actions={headerActions} />
-<LongVegetationTitleStatsPreferences
-  contextId={workbookOwner.contextId}
-  {preferences}
-  {preferenceView}
-  {statistics}
-  {statisticsView}
-  {holds}
-  callbacks={titleStatsCallbacks}
-/>
-<LongVegetationSecondaryPreferences
-  contextId={workbookOwner.contextId}
-  {sessions}
-  {secState}
-  {holds}
-  onReadBusy={(k, v) => {
-    rb[k] = v;
-    reportBusy();
-  }}
-  onSelectedUnitChanged={() => {
-    selectedUnitView = sessions.selectedUnitSelection?.view() ?? null;
-    onSelectedUnitReset();
-    reportBusy();
-  }}
-/>
+{#if !IS_WEB_READONLY}
+  <LongVegetationTitleStatsPreferences
+    contextId={workbookOwner.contextId}
+    {preferences}
+    {preferenceView}
+    {statistics}
+    {statisticsView}
+    {holds}
+    callbacks={titleStatsCallbacks}
+  />
+  <LongVegetationSecondaryPreferences
+    contextId={workbookOwner.contextId}
+    {sessions}
+    {secState}
+    {holds}
+    onReadBusy={(k, v) => {
+      rb[k] = v;
+      reportBusy();
+    }}
+    onSelectedUnitChanged={() => {
+      selectedUnitView = sessions.selectedUnitSelection?.view() ?? null;
+      onSelectedUnitReset();
+      reportBusy();
+    }}
+  />
+{/if}
 {@render children(hostCtx)}

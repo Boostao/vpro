@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type { PictureReview } from './pictureRead';
 
   type PictureRow = PictureReview['records']['rows'][number];
@@ -74,12 +75,12 @@
       </dl>
       <div class="row-actions">
         <button onclick={onPreview} disabled={disabled || busy || lifecyclePending}>Preview selected picture</button>
-        {#if hasMetadataSession}
+        {#if !IS_WEB_READONLY && hasMetadataSession}
           <button onclick={onEditMetadata} disabled={disabled || busy || metadataPending || lifecyclePending}>
             Edit selected picture metadata
           </button>
         {/if}
-        {#if view === 'manager'}
+        {#if !IS_WEB_READONLY && view === 'manager'}
           <button
             data-picture-delete-review
             onclick={onReviewDeletion}

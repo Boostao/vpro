@@ -14,6 +14,7 @@
     type DatasheetSortSpec,
     type GridSelectionRange,
   } from './universalDatasheetGrid';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
 
   interface CellDraftView {
     rawText: string;
@@ -173,6 +174,7 @@
   }
 
   function handlePasteIntoCell(event: ClipboardEvent, anchorRow: number, anchorCol: number) {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!event.clipboardData) return;
     const text = event.clipboardData.getData('text/plain');
     if (!text.includes('\t') && !text.includes('\n')) return;
@@ -268,7 +270,7 @@
             {@const colMeta = colEntry.meta}
             {@const cell = row.cells[colEntry.originalIndex]}
             {@const draft = drafts[`${row.rowId}::${colMeta.name}`]}
-            {@const cellEditable = isColumnEditable(page.tableKey, colMeta, page.canEditMaster)}
+            {@const cellEditable = !IS_WEB_READONLY && isColumnEditable(page.tableKey, colMeta, page.canEditMaster)}
             {@const cellSelected = isCellInRange(rowIdx, colIdx, selectionRange)}
             {@const displayVal = draft ? draft.rawText : formatCellForEditor(cell, colMeta)}
             <td

@@ -18,6 +18,9 @@
   } from './siteUnitSummaryExtendedWorkbook';
   import { reportCellText } from './longEnvironmentReport';
   import { notifications } from '../shell/notificationService.svelte';
+  import { defaultWebExportFilename } from '../shell/webReadOnlyShell';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
+  import { formatWebDownloadFeedback } from '../web/webMeta';
 
   let {
     owner,
@@ -140,6 +143,13 @@
   }
   async function publish() {
     if (held || !review || !currentReview || !validMethod || method === null) return;
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+    if (webReadOnly && !destination.trim()) {
+      destination =
+        typeof defaultWebExportFilename === 'function'
+          ? defaultWebExportFilename(`${owned.project || 'vpro'}_site_unit_summary`, '.xlsx')
+          : `${owned.project || 'vpro'}_site_unit_summary.xlsx`;
+    }
     const configuredScope = typeof allowConfiguredScope === 'boolean' && allowConfiguredScope;
     const activeSession =
       'environment' in review && extendedSession && extendedOptions ? extendedSession : originalSession;
@@ -176,8 +186,8 @@
         };
         if (s.outcome?.status === 'published' && !s.error)
           notifications.success(
-            'Summary Environment workbook exported',
-            s.outcome.path || s.requestedDestination || destination,
+            webReadOnly ? 'Summary Environment workbook downloaded' : 'Summary Environment workbook exported',
+            webReadOnly ? destination : s.outcome.path || s.requestedDestination || destination,
             opts
           );
         else if (s.error || s.outcome)
@@ -189,7 +199,10 @@
       }
     } catch (cause) {
       if (!disposed) {
-        error = formatError(cause);
+        error =
+          webReadOnly && typeof formatWebDownloadFeedback === 'function'
+            ? formatWebDownloadFeedback(cause, 'Summary Environment workbook download')
+            : formatError(cause);
         notifications.error('Summary Environment workbook export failed', error, {
           category: 'reports',
           source: 'Summary Environment',
@@ -340,21 +353,23 @@
       {/each}
     </div>
   {/if}
-  <label class="destination"
-    >Workbook destination (.xlsx)
-    <input
-      data-site-unit-workbook-destination
-      type="text"
-      bind:value={destination}
-      disabled={held}
-      autocomplete="off"
-      spellcheck="false"
-    />
-  </label>
+  {#if !IS_WEB_READONLY}
+    <label class="destination"
+      >Workbook destination (.xlsx)
+      <input
+        data-site-unit-workbook-destination
+        type="text"
+        bind:value={destination}
+        disabled={held}
+        autocomplete="off"
+        spellcheck="false"
+      />
+    </label>
+  {/if}
   <button
     data-site-unit-workbook-export
-    disabled={held || !currentReview || !validMethod || !destination}
-    onclick={publish}>Publish reviewed workbook</button
+    disabled={held || !currentReview || !validMethod || (!IS_WEB_READONLY && !destination)}
+    onclick={publish}>{IS_WEB_READONLY ? 'Download reviewed workbook (.xlsx)' : 'Publish reviewed workbook'}</button
   >
   <p class="guidance">
     Review is read-only and can be cancelled at any time. Selecting a summary method here previews and exports without

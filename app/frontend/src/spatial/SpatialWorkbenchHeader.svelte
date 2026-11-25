@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SpatialWorkbenchPayload } from '../../bindings/github.com/boostao/vpro/app';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import {
     BC_OPENMAPS_WMS_OPTIONS,
     DEFAULT_BC_WMS_LAYER,
@@ -193,7 +194,7 @@
         onToggleGpkgPanel(buildDefaultGeoPackageExportPath(project, payload?.projectPath));
       }}
     >
-      Export .gpkg...
+      {IS_WEB_READONLY ? 'Download .gpkg' : 'Export .gpkg...'}
     </button>
   </div>
 </div>

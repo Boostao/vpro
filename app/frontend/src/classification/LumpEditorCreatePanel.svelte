@@ -1,6 +1,7 @@
 <script lang="ts">
   import { formatError } from '../shared/readRequests';
   import { notifications } from '../shell/notificationService.svelte';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import { validateLumpBaseName, type LumpEditorPort, type LumpTableSummary } from './lumpEditor';
 
   let {
@@ -50,6 +51,7 @@
   let pendingDeleteTable = $state('');
 
   async function createNewLump() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     const check = validateLumpBaseName(newTableName);
     if (!check.valid) {
       onError(check.error);
@@ -85,6 +87,7 @@
   }
 
   async function saveAsLump() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!selectedTable) {
       onError('Select a source lump table first.');
       return;
@@ -117,6 +120,7 @@
   }
 
   async function confirmDeleteSelectedTable() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!pendingDeleteTable || !selectedSummary?.isActiveProject || busy || operationHeld || !contextId) {
       return;
     }
@@ -145,19 +149,25 @@
 
 <aside class="bcgov-card">
   <h3>Discovered Lumping Tables</h3>
-  <label class="field-block">
-    <span>External .db paths (optional, comma-separated)</span>
-    <input
-      type="text"
-      bind:value={externalDbInput}
-      placeholder="/path/to/ExternalProject.db"
-      disabled={busy || operationHeld}
-    />
-  </label>
+  {#if !IS_WEB_READONLY}
+    <label class="field-block">
+      <span>External .db paths (optional, comma-separated)</span>
+      <input
+        type="text"
+        bind:value={externalDbInput}
+        placeholder="/path/to/ExternalProject.db"
+        disabled={busy || operationHeld}
+      />
+    </label>
+  {/if}
 
   <ul class="lump-table-list">
     {#if tables.length === 0}
-      <li class="empty-note">No lumping tables loaded. Click Refresh Catalog or create a new table below.</li>
+      <li class="empty-note">
+        {IS_WEB_READONLY
+          ? 'No lumping tables are included in this dataset.'
+          : 'No lumping tables loaded. Click Refresh Catalog or create a new table below.'}
+      </li>
     {/if}
     {#each tables as item (item.databasePath + '::' + item.tableName)}
       <li>
@@ -173,74 +183,76 @@
     {/each}
   </ul>
 
-  <div class="stack-actions">
-    <label class="field-block">
-      <span>Create New Lump Table</span>
-      <div class="inline-row">
-        <input type="text" bind:value={newTableName} placeholder="e.g. Regional2026" disabled={busy || operationHeld} />
-        <button
-          type="button"
-          class="bcgov-btn-primary"
-          disabled={busy || operationHeld || !contextId}
-          onclick={createNewLump}
-        >
-          Create
-        </button>
-      </div>
-    </label>
+  {#if !IS_WEB_READONLY}
+    <div class="stack-actions">
+      <label class="field-block">
+        <span>Create New Lump Table</span>
+        <div class="inline-row">
+          <input type="text" bind:value={newTableName} placeholder="e.g. Regional2026" disabled={busy || operationHeld} />
+          <button
+            type="button"
+            class="bcgov-btn-primary"
+            disabled={busy || operationHeld || !contextId}
+            onclick={createNewLump}
+          >
+            Create
+          </button>
+        </div>
+      </label>
 
-    <label class="field-block">
-      <span>Save Selected As</span>
-      <div class="inline-row">
-        <input
-          type="text"
-          bind:value={saveAsTargetName}
-          placeholder="CopyName"
-          disabled={busy || operationHeld || !selectedTable}
-        />
-        <button
-          type="button"
-          class="bcgov-btn-secondary"
-          disabled={busy || operationHeld || !selectedTable}
-          onclick={saveAsLump}
-        >
-          Save As
-        </button>
-      </div>
-    </label>
+      <label class="field-block">
+        <span>Save Selected As</span>
+        <div class="inline-row">
+          <input
+            type="text"
+            bind:value={saveAsTargetName}
+            placeholder="CopyName"
+            disabled={busy || operationHeld || !selectedTable}
+          />
+          <button
+            type="button"
+            class="bcgov-btn-secondary"
+            disabled={busy || operationHeld || !selectedTable}
+            onclick={saveAsLump}
+          >
+            Save As
+          </button>
+        </div>
+      </label>
 
-    {#if selectedSummary?.isActiveProject}
-      <div class="delete-table-box">
-        {#if pendingDeleteTable === selectedSummary.tableName}
-          <p class="delete-confirm-note">
-            Confirm permanent deletion of <strong>{selectedSummary.tableName}</strong>?
-          </p>
-          <div class="inline-row">
+      {#if selectedSummary?.isActiveProject}
+        <div class="delete-table-box">
+          {#if pendingDeleteTable === selectedSummary.tableName}
+            <p class="delete-confirm-note">
+              Confirm permanent deletion of <strong>{selectedSummary.tableName}</strong>?
+            </p>
+            <div class="inline-row">
+              <button
+                type="button"
+                class="bcgov-btn-danger"
+                disabled={busy || operationHeld}
+                onclick={confirmDeleteSelectedTable}
+              >
+                Confirm Delete Table
+              </button>
+              <button type="button" class="bcgov-btn-secondary" onclick={() => (pendingDeleteTable = '')}>
+                Cancel
+              </button>
+            </div>
+          {:else}
             <button
               type="button"
               class="bcgov-btn-danger"
-              disabled={busy || operationHeld}
-              onclick={confirmDeleteSelectedTable}
+              disabled={busy || operationHeld || !selectedTable}
+              onclick={() => (pendingDeleteTable = selectedSummary.tableName)}
             >
-              Confirm Delete Table
+              Delete {selectedSummary.tableName}
             </button>
-            <button type="button" class="bcgov-btn-secondary" onclick={() => (pendingDeleteTable = '')}>
-              Cancel
-            </button>
-          </div>
-        {:else}
-          <button
-            type="button"
-            class="bcgov-btn-danger"
-            disabled={busy || operationHeld || !selectedTable}
-            onclick={() => (pendingDeleteTable = selectedSummary.tableName)}
-          >
-            Delete {selectedSummary.tableName}
-          </button>
-        {/if}
-      </div>
-    {/if}
-  </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
 </aside>
 
 <style>

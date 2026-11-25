@@ -1,3 +1,6 @@
+import { IS_WEB_READONLY } from '../web/runtimeMode';
+import { isViewAllowedInWebReadOnly } from './webReadOnlyShell';
+
 type CommandPaletteCategory = 'plots' | 'context' | 'views' | 'help';
 
 interface CommandPalettePlotCandidate {
@@ -68,6 +71,8 @@ export interface BuildCommandPaletteInput {
   metadataAvailable?: boolean;
   siviAvailable?: boolean;
   newSiviAvailable?: boolean;
+  webReadOnly?: boolean;
+  picturesAvailable?: boolean;
   helpTopics?: readonly CommandPaletteHelpCandidate[];
 }
 
@@ -112,6 +117,8 @@ const DEFAULT_HELP_TOPICS: readonly CommandPaletteHelpCandidate[] = [
 
 export function buildCommandPaletteCatalog(input: BuildCommandPaletteInput): CommandPaletteItem[] {
   const items: CommandPaletteItem[] = [];
+  const webReadOnly = input.webReadOnly ?? IS_WEB_READONLY;
+  const picturesAvailable = input.picturesAvailable ?? true;
 
   for (const plot of input.plots ?? []) {
     const plotNo = String(plot.plotNumber ?? '').trim();
@@ -437,17 +444,47 @@ export function buildCommandPaletteCatalog(input: BuildCommandPaletteInput): Com
   ];
 
   for (const v of views) {
+    if (webReadOnly) {
+      if (v.action.kind === 'new-sivi') continue;
+      if (v.action.kind === 'navigate-view' && !isViewAllowedInWebReadOnly(v.action.view, picturesAvailable)) {
+        continue;
+      }
+    }
+    const title = webReadOnly
+      ? v.id === 'view-fs882'
+        ? 'FS882 Plot Viewer (6×4)'
+        : v.id === 'view-fs882-twopage'
+          ? 'Two-Page Plot Viewer (FS882-8x6XL)'
+          : v.id === 'view-interchange'
+            ? 'Export & Downloads Hub (TurboVeg, CSV, R .rds, GeoPackage)'
+            : v.id === 'action-metadata'
+              ? 'Project Metadata Viewer'
+              : v.title
+      : v.title;
+    const subtitle = webReadOnly
+      ? v.id === 'view-fs882'
+        ? 'Read-only Site, Soil/Terrain, Vegetation & Veg Other viewer'
+        : v.id === 'view-datasheet'
+          ? 'Filter, sort, and search across Env, Veg, Humus, Mineral & SU'
+          : v.id === 'view-map'
+            ? 'Provincial BGC v13 overlay, coordinate check & polygon filter'
+            : v.id === 'view-interchange'
+              ? 'Download TurboVeg, CSV, R .rds, and GeoPackage files'
+              : v.id === 'action-metadata'
+                ? 'Inspect project metadata for the active dataset'
+                : v.subtitle
+      : v.subtitle;
     items.push({
       id: v.id,
       category: 'views',
       categoryLabel: 'Views, Forms, Reports & Tools',
-      title: v.title,
-      subtitle: v.subtitle,
+      title,
+      subtitle,
       badge: v.badge,
       shortcut: v.shortcut,
       disabled: v.disabled,
       disabledReason: v.disabledReason,
-      searchText: `${v.title} ${v.subtitle} ${v.keywords}`.toLowerCase(),
+      searchText: `${title} ${subtitle} ${v.keywords}`.toLowerCase(),
       action: v.action,
     });
   }
@@ -507,6 +544,7 @@ export function buildCommandPaletteCatalog(input: BuildCommandPaletteInput): Com
   ];
 
   for (const h of helpActions) {
+    if (webReadOnly && h.action.kind === 'help-action' && h.action.action === 'reset-sample') continue;
     items.push({
       id: h.id,
       category: 'help',

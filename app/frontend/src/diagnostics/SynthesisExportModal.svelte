@@ -1,5 +1,6 @@
 <script lang="ts">
   import ModalDialogTrap from '../shared/ModalDialogTrap.svelte';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type { ExportDiagnosticWorkbookResult, SynthesisExportDraft } from './classificationSynthesis';
 
   interface Props {
@@ -28,20 +29,27 @@
     <ModalDialogTrap onEscape={onClose} escapeDisabled={exportingWorkbook} />
     <div class="syn-modal">
       <div class="syn-modal-hdr">
-        <h3>Publish BEC Diagnostic Synthesis Workbook (.xlsx)</h3>
+        <h3>
+          {IS_WEB_READONLY
+            ? 'Download BEC Diagnostic Synthesis Workbook (.xlsx)'
+            : 'Publish BEC Diagnostic Synthesis Workbook (.xlsx)'}
+        </h3>
         <button type="button" class="syn-dismiss" onclick={onClose}> Close </button>
       </div>
 
       <div class="syn-modal-body">
         <p class="syn-modal-desc">
-          Creates a new 4-sheet diagnostic Excel workbook (.xlsx, without overwriting existing files): BEC colour-coded
-          Diagnostic Summary, Pairwise Similarity Matrix, Leave-One-Out Outlier Queue, and 9x6 Edatopic Grids.
+          {IS_WEB_READONLY
+            ? 'Downloads a 4-sheet diagnostic Excel workbook (.xlsx): BEC colour-coded Diagnostic Summary, Pairwise Similarity Matrix, Leave-One-Out Outlier Queue, and 9x6 Edatopic Grids.'
+            : 'Creates a new 4-sheet diagnostic Excel workbook (.xlsx, without overwriting existing files): BEC colour-coded Diagnostic Summary, Pairwise Similarity Matrix, Leave-One-Out Outlier Queue, and 9x6 Edatopic Grids.'}
         </p>
 
-        <label class="syn-modal-field">
-          <span>Output .xlsx File Path (Absolute Path, No Overwrite)</span>
-          <input type="text" placeholder="/path/to/BEC_Diagnostic_Synthesis.xlsx" bind:value={draft.outputPath} />
-        </label>
+        {#if !IS_WEB_READONLY}
+          <label class="syn-modal-field">
+            <span>Output .xlsx File Path (Absolute Path, No Overwrite)</span>
+            <input type="text" placeholder="/path/to/BEC_Diagnostic_Synthesis.xlsx" bind:value={draft.outputPath} />
+          </label>
+        {/if}
 
         <label class="syn-modal-field">
           <span>Report Title (Optional)</span>
@@ -88,7 +96,8 @@
 
         {#if lastExportResult}
           <div class="syn-export-success">
-            <strong>Published:</strong> <code>{lastExportResult.path}</code>
+            <strong>{IS_WEB_READONLY ? 'Download ready:' : 'Published:'}</strong>
+            {#if !IS_WEB_READONLY}<code>{lastExportResult.path}</code>{/if}
             <div>
               SHA-256: <code>{lastExportResult.sha256.slice(0, 16)}...</code> · Sheets: {lastExportResult.sheetNames.join(
                 ', '
@@ -106,7 +115,11 @@
           disabled={exportingWorkbook || Boolean(exportValidationMessage)}
           onclick={onPublish}
         >
-          {exportingWorkbook ? 'Publishing...' : 'Publish .xlsx Workbook'}
+          {#if exportingWorkbook}
+            {IS_WEB_READONLY ? 'Preparing download...' : 'Publishing...'}
+          {:else}
+            {IS_WEB_READONLY ? 'Download .xlsx Workbook' : 'Publish .xlsx Workbook'}
+          {/if}
         </button>
       </div>
     </div>

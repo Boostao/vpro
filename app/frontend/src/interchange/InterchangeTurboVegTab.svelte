@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type {
     FileDialogFilter,
     LumpTableSummary,
@@ -83,36 +84,38 @@
           <option value="xml">TurboVeg Standard XML (&lt;Plot_package&gt; for TV2 / TV3 / JUICE / vegdata)</option>
         </select>
       </label>
-      <label>
-        <span>Destination File Path</span>
-        <div class="input-with-browse">
-          <input
-            type="text"
-            class="grow"
-            bind:value={tvExportPath}
-            placeholder="/path/to/export.sqlite or .xml"
-            disabled={busy || operationHeld}
-          />
-          <button
-            type="button"
-            class="btn-secondary"
-            data-save-tv-export
-            disabled={busy || operationHeld}
-            onclick={() =>
-              onPickFilePath(
-                'save',
-                'Save TurboVeg Export',
-                tvExportFormat === 'xml' ? 'turboveg_export.xml' : 'turboveg_export.sqlite',
-                [{ DisplayName: 'TurboVeg (*.sqlite, *.xml)', Pattern: '*.sqlite;*.xml' }],
-                (p) => {
-                  tvExportPath = p;
-                }
-              )}
-          >
-            Save As...
-          </button>
-        </div>
-      </label>
+      {#if !IS_WEB_READONLY}
+        <label>
+          <span>Destination File Path</span>
+          <div class="input-with-browse">
+            <input
+              type="text"
+              class="grow"
+              bind:value={tvExportPath}
+              placeholder="/path/to/export.sqlite or .xml"
+              disabled={busy || operationHeld}
+            />
+            <button
+              type="button"
+              class="btn-secondary"
+              data-save-tv-export
+              disabled={busy || operationHeld}
+              onclick={() =>
+                onPickFilePath(
+                  'save',
+                  'Save TurboVeg Export',
+                  tvExportFormat === 'xml' ? 'turboveg_export.xml' : 'turboveg_export.sqlite',
+                  [{ DisplayName: 'TurboVeg (*.sqlite, *.xml)', Pattern: '*.sqlite;*.xml' }],
+                  (p) => {
+                    tvExportPath = p;
+                  }
+                )}
+            >
+              Save As...
+            </button>
+          </div>
+        </label>
+      {/if}
       <label>
         <span>Optional *_Lump Table</span>
         <div class="input-with-browse">
@@ -128,15 +131,17 @@
               <option value={lumpOptionValue(item, discoveredLumpTables)}>{formatLumpOptionLabel(item)}</option>
             {/each}
           </select>
-          <button
-            type="button"
-            class="btn-secondary"
-            data-browse-lump-db="turboveg"
-            disabled={busy || operationHeld}
-            onclick={onBrowseExternalLumpDb}
-          >
-            From .db…
-          </button>
+          {#if !IS_WEB_READONLY}
+            <button
+              type="button"
+              class="btn-secondary"
+              data-browse-lump-db="turboveg"
+              disabled={busy || operationHeld}
+              onclick={onBrowseExternalLumpDb}
+            >
+              From .db…
+            </button>
+          {/if}
         </div>
       </label>
       <button
@@ -145,17 +150,23 @@
         disabled={busy || operationHeld || !contextId}
         onclick={onRunTurboVegExport}
       >
-        Export TurboVeg
+        {#if busy}
+          {IS_WEB_READONLY ? 'Preparing download...' : 'Exporting TurboVeg...'}
+        {:else}
+          {IS_WEB_READONLY ? 'Download TurboVeg' : 'Export TurboVeg'}
+        {/if}
       </button>
     </div>
 
     {#if tvExportOutcome}
       <div class="receipt-box success">
         <strong>
-          Exported {tvExportOutcome.plotCount} plots ({tvExportOutcome.observationCount} abundances,
-          {tvExportOutcome.speciesCount} taxa)
+          {IS_WEB_READONLY ? 'Downloaded' : 'Exported'} {tvExportOutcome.plotCount} plots ({tvExportOutcome.observationCount}
+          abundances, {tvExportOutcome.speciesCount} taxa)
         </strong>
-        <span>File: <code>{tvExportOutcome.path}</code></span>
+        {#if !IS_WEB_READONLY}
+          <span>File: <code>{tvExportOutcome.path}</code></span>
+        {/if}
       </div>
     {/if}
 
@@ -178,8 +189,9 @@
     </div>
   </div>
 
-  <div class="hub-card">
-    <h3>Import TurboVeg (.sqlite or &lt;Plot_package&gt; .xml) into VPro</h3>
+  {#if !IS_WEB_READONLY}
+    <div class="hub-card">
+      <h3>Import TurboVeg (.sqlite or &lt;Plot_package&gt; .xml) into VPro</h3>
     <div class="form-stack">
       <label>
         <span>Source TurboVeg File (.sqlite or .xml)</span>
@@ -301,7 +313,8 @@
         <span>Destination: <code>{tvImportOutcome.destinationPath}</code></span>
       </div>
     {/if}
-  </div>
+    </div>
+  {/if}
 </div>
 
 <style>

@@ -10,6 +10,7 @@
   import type { ProfileNavigation } from '../classification/projectPlotProfileReview';
   import type { ReadRequests } from '../shared/readRequests';
   import { projectState } from '../shared/state';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type { CloseDecision, EditorCloseState } from './closeLifecycle';
   import HomeWorkspaceHub from './HomeWorkspaceHub.svelte';
   import { notifications } from './notificationService.svelte';
@@ -397,8 +398,8 @@
       onopentwopage={() => navigate('fs882-twopage')}
       onopensivi={() => void openSIVI()}
       onopenprofiling={openPlotProfiling}
-      oncopyplot={ui.copyPlotToNewNumber}
-      onremoveplot={ui.removePlotFromProject}
+      oncopyplot={IS_WEB_READONLY ? undefined : ui.copyPlotToNewNumber}
+      onremoveplot={IS_WEB_READONLY ? undefined : ui.removePlotFromProject}
       oncollapseinspector={() => {
         ui.inspectorExpanded = false;
       }}
@@ -406,7 +407,7 @@
   {/await}
 {/if}
 
-{#if ui.newSiviModalOpen && $projectState?.contextId}
+{#if !IS_WEB_READONLY && ui.newSiviModalOpen && $projectState?.contextId}
   {#await import('../entry/SIVIParentCreateModal.svelte') then { default: SIVIParentCreateModal }}
     <SIVIParentCreateModal
       contextId={$projectState.contextId}

@@ -9,6 +9,7 @@
   import { controlLabel, wideControl } from './formPresentation';
   import type { PaperControl } from './paperLayout';
   import CoordinateHelper from './CoordinateHelper.svelte';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
 
   let {
     form,
@@ -72,6 +73,7 @@
   {@const reference = view.snapshot.Fields.find((field) => field.column === column)}
   {@const id = `complete-entry-${column}`}
   {@const unavailable =
+    IS_WEB_READONLY ||
     close.busy ||
     view.blocked ||
     (childBlocked && !draft) ||
@@ -187,7 +189,7 @@
         </datalist>
       {/if}
     {/if}
-    {#if column !== 'ProjectID'}
+    {#if !IS_WEB_READONLY && column !== 'ProjectID'}
       <div class="flex flex-wrap gap-2 text-xs">
         <button type="button" disabled={unavailable || nullBlocked} onclick={() => onstage(column, { kind: 'clear' })}
           >Clear to NULL</button

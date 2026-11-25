@@ -1,6 +1,7 @@
 <script lang="ts">
   import { formatError } from '../shared/readRequests';
   import { notifications } from '../shell/notificationService.svelte';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import {
     SpatialService,
     type AssignSpatialAOIToSURequest,
@@ -53,6 +54,8 @@
     onCommittedAOI,
     onLoadBatchAuditQA,
     onApplyStamp,
+    aoiFilterActive = false,
+    onToggleAoiFilter,
   }: {
     contextId: string;
     project: string;
@@ -85,6 +88,8 @@
     onCommittedAOI: (statusMsg: string, activated: boolean) => Promise<void>;
     onLoadBatchAuditQA: () => Promise<void> | void;
     onApplyStamp: (opts: SpatialStampOptions) => Promise<void> | void;
+    aoiFilterActive?: boolean;
+    onToggleAoiFilter?: (active: boolean) => void;
   } = $props();
 
   let aoiPreviewBusy = $state(false);
@@ -139,10 +144,12 @@
     aoiVertices = [];
     aoiPreview = null;
     lastPreviewedKey = '';
+    onToggleAoiFilter?.(false);
     onSyncAOIOverlay();
   }
 
   async function commitAOIToSU(opts: SpatialAOICommitInput) {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!contextId || mutating || loading || aoiPreviewBusy || !aoiPreview || aoiPreview.matchedCount === 0) return;
     if (!opts.siteUnit) {
       onPushError(
@@ -194,7 +201,7 @@
         activePanel = 'aoi';
       }}
     >
-      Lasso / AOI -&gt; SU
+      {IS_WEB_READONLY ? 'Filter by Polygon' : 'Lasso / AOI -> SU'}
     </button>
     <button
       type="button"
@@ -207,7 +214,7 @@
         if (!qaReport) void onLoadBatchAuditQA();
       }}
     >
-      Coordinate &amp; BGC Stamp
+      {IS_WEB_READONLY ? 'Geodetic QA Audit' : 'Coordinate & BGC Stamp'}
     </button>
   </div>
 
@@ -230,11 +237,14 @@
       bind:aoiSiteUnit
       aoiVerticesCount={aoiVertices.length}
       {aoiPreview}
+      {aoiFilterActive}
       {loading}
       {mutating}
       onSeedViewport={seedAOIFromCurrentViewport}
       onClear={clearAOIPolygon}
       onCommit={commitAOIToSU}
+      {onToggleAoiFilter}
+      {onOpenPlot}
     />
   {:else if activePanel === 'qa'}
     <SpatialAuto1QATab

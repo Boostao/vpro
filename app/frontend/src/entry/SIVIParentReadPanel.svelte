@@ -16,6 +16,7 @@
   } from './siviProjectAssignmentSession';
   import { isSIVIParentDirectColumn, type SIVIParentWriteView } from './siviParentWriteSession';
   import { siviParentDirty, siviParentOriginalCell, type SIVIParentInput } from './siviParentEditor';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   let {
     view,
     onreload,
@@ -160,7 +161,7 @@
               actionUnsaved ||
               assignmentUnsaved
             )}
-          onclick={onMetadata}>Edit metadata</button
+          onclick={onMetadata}>{IS_WEB_READONLY ? 'View metadata' : 'Edit metadata'}</button
         >
       {/if}
       {#if view.busy}
@@ -172,7 +173,7 @@
           onclick={oncancel}>Cancel parent read</button
         >
       {/if}
-      {#if actionView}
+      {#if !IS_WEB_READONLY && actionView}
         <div class="flex flex-wrap gap-2" data-sivi-action-toolbar>
           <button
             type="button"
@@ -224,7 +225,7 @@
         {#if actionView.busy}<p role="status">SIVI source-action operation: {actionView.operation}...</p>{/if}
       {/if}
     </div>
-    {#if writeView}
+    {#if !IS_WEB_READONLY && writeView}
       <div class="flex flex-wrap gap-2" data-sivi-direct-toolbar>
         <button
           type="button"
@@ -275,7 +276,7 @@
       </div>
       {#if writeView.busy}<p role="status">SIVI parent operation: {writeView.operation}...</p>{/if}
     {/if}
-    {#if assignmentView}
+    {#if !IS_WEB_READONLY && assignmentView}
       <div class="flex flex-wrap gap-2" data-sivi-assignment-toolbar>
         <button
           type="button"
@@ -343,19 +344,19 @@
                   original.Rows[0][binding.Table === original.EnvTable ? 'Env' : 'Admin'].cells[binding.Column]}
                 <div class="min-w-0 rounded border border-vpro-rail p-2" data-sivi-parent-field={binding.Binding}>
                   <dt class="text-sm font-medium">
-                    {#if assignmentView?.original && assignmentView.choices && binding.Binding === 'ProjectID'}
+                    {#if !IS_WEB_READONLY && assignmentView?.original && assignmentView.choices && binding.Binding === 'ProjectID'}
                       <label for="sivi-project-assignment"
                         >{field.caption || field.controlName || binding.Binding}</label
                       >
-                    {:else if actionView?.original && binding.Binding === 'PlotType'}
+                    {:else if !IS_WEB_READONLY && actionView?.original && binding.Binding === 'PlotType'}
                       <label for="sivi-action-PlotType">Plot Type</label>
-                    {:else if writeView?.original && isSIVIParentDirectColumn(binding.Binding)}
+                    {:else if !IS_WEB_READONLY && writeView?.original && isSIVIParentDirectColumn(binding.Binding)}
                       <label for={`sivi-direct-${binding.Binding}`}
                         >{field.caption || field.controlName || binding.Binding}</label
                       >
                     {:else}{field.caption || field.controlName}{/if}
                   </dt>
-                  {#if assignmentView?.original && assignmentView.choices && binding.Binding === 'ProjectID'}
+                  {#if !IS_WEB_READONLY && assignmentView?.original && assignmentView.choices && binding.Binding === 'ProjectID'}
                     <SIVIProjectAssignmentField
                       original={cell}
                       choices={assignmentView.choices}
@@ -366,7 +367,7 @@
                         !assignmentView.available}
                       onstage={onAssignmentStage}
                     />
-                  {:else if actionView?.original && binding.Binding === 'PlotType'}
+                  {:else if !IS_WEB_READONLY && actionView?.original && binding.Binding === 'PlotType'}
                     <SIVIParentActionField
                       column="PlotType"
                       original={siviParentOriginalCell(actionView.original, 'PlotType')}
@@ -374,7 +375,7 @@
                       disabled={actionDisabled || actionView.busy || actionView.blocked}
                       onstage={(input) => onActionStage('PlotType', input)}
                     />
-                  {:else if writeView?.original && isSIVIParentDirectColumn(binding.Binding)}
+                  {:else if !IS_WEB_READONLY && writeView?.original && isSIVIParentDirectColumn(binding.Binding)}
                     <SIVIParentDirectField
                       column={binding.Binding}
                       original={cell}
@@ -397,7 +398,7 @@
               {/if}
             {/each}
           </dl>
-          {#if group.page === 'form:frmSIVIsite/Veg' && actionView?.original}
+          {#if !IS_WEB_READONLY && group.page === 'form:frmSIVIsite/Veg' && actionView?.original}
             <dl class="rounded border border-vpro-rail p-2">
               <dt class="text-sm font-medium">
                 <label for="sivi-action-SpeciesListComplete">Spp List (species list complete)</label>

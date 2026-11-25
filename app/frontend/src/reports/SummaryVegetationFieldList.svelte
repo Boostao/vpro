@@ -26,6 +26,7 @@
     peerValidation?: string;
     onStateChange: (view: FieldListView, close: ReturnType<SummaryVegetationFieldListSession['closeState']>) => void;
   } = $props();
+  const IS_WEB_READONLY = typeof __VPRO_WEB_READONLY__ !== 'undefined' && __VPRO_WEB_READONLY__ === true;
   const ownedScope = untrack(() => fieldListOwner(scope));
   const retained = untrack(() => session);
   let view = $state.raw(untrack(() => retained.view()));
@@ -136,6 +137,7 @@
     if (canLoad()) return act(() => retained.load());
   }
   function save() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!held() && enabledFromPresentationDraft && retained.closeState().canSave) return act(() => retained.save());
   }
   function undo() {
@@ -287,11 +289,13 @@
     <button data-field-list-all disabled={!canStage()} onclick={() => bulk(true)}>Select All</button>
     <button data-field-list-none disabled={!canStage()} onclick={() => bulk(false)}>Select None</button>
     <button data-field-list-load disabled={!canLoad()} onclick={load}>Load field list</button>
-    <button
-      data-field-list-save
-      disabled={held() || !enabledFromPresentationDraft || !retained.closeState().canSave}
-      onclick={save}>Save field-list draft</button
-    >
+    {#if !IS_WEB_READONLY}
+      <button
+        data-field-list-save
+        disabled={held() || !enabledFromPresentationDraft || !retained.closeState().canSave}
+        onclick={save}>Save field-list draft</button
+      >
+    {/if}
     <button data-field-list-undo disabled={held() || !view.review} onclick={undo}>Undo field-list draft</button>
     <button
       data-field-list-correct

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { ReadRequests, formatError } from '../shared/readRequests';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import ClassificationUserSUPanel from './ClassificationUserSUPanel.svelte';
   import {
     isValidBECUnitMask,
@@ -141,7 +142,7 @@
 <section class="vpro-cls-card">
   <div class="vpro-cls-card-head">
     <h3>Plot Environment &amp; Veg Inspector</h3>
-    {#if onRequestSUSync}
+    {#if !IS_WEB_READONLY && onRequestSUSync}
       <div class="vpro-cls-sync-btns">
         <button type="button" class="vpro-btn-mini" onclick={() => onRequestSUSync('su_to_env')}>SU -&gt; Env</button>
         <button type="button" class="vpro-btn-mini" onclick={() => onRequestSUSync('env_to_su')}>Env -&gt; SU</button>
@@ -285,28 +286,30 @@
       <button type="button" class="vpro-btn-secondary" onclick={() => void refreshBECPicker()}>Search</button>
     </div>
 
-    <div class="vpro-cls-custom-assign">
-      <input
-        type="text"
-        aria-label="Custom or BEC target site unit"
-        class="mono"
-        placeholder="Custom or ZZZZsssvp/## unit..."
-        bind:value={customTargetUnit}
-      />
-      {#if customTargetUnit.trim()}
-        <span class="vpro-mask-badge" class:valid={isValidBECUnitMask(customTargetUnit)}>
-          {isValidBECUnitMask(customTargetUnit) ? 'BEC Mask OK' : 'Working Unit'}
-        </span>
-      {/if}
-      <button
-        type="button"
-        class="vpro-btn-primary vpro-cls-assign-btn"
-        disabled={selectedPlots.length === 0 || !customTargetUnit.trim() || mutating}
-        onclick={() => onAssignPlots(selectedPlots, customTargetUnit.trim())}
-      >
-        Assign ({selectedPlots.length})
-      </button>
-    </div>
+    {#if !IS_WEB_READONLY}
+      <div class="vpro-cls-custom-assign">
+        <input
+          type="text"
+          aria-label="Custom or BEC target site unit"
+          class="mono"
+          placeholder="Custom or ZZZZsssvp/## unit..."
+          bind:value={customTargetUnit}
+        />
+        {#if customTargetUnit.trim()}
+          <span class="vpro-mask-badge" class:valid={isValidBECUnitMask(customTargetUnit)}>
+            {isValidBECUnitMask(customTargetUnit) ? 'BEC Mask OK' : 'Working Unit'}
+          </span>
+        {/if}
+        <button
+          type="button"
+          class="vpro-btn-primary vpro-cls-assign-btn"
+          disabled={selectedPlots.length === 0 || !customTargetUnit.trim() || mutating}
+          onclick={() => onAssignPlots(selectedPlots, customTargetUnit.trim())}
+        >
+          Assign ({selectedPlots.length})
+        </button>
+      </div>
+    {/if}
 
     <div class="vpro-cls-bec-list">
       {#each becChoices as choice (`${choice.source}::${choice.siteSeries}`)}
@@ -315,14 +318,16 @@
             <strong class="mono">{choice.siteSeries}</strong>
             <span class="vpro-cls-sub">{choice.longName}</span>
           </div>
-          <button
-            type="button"
-            class="vpro-btn-mini vpro-cls-assign-btn"
-            disabled={selectedPlots.length === 0 || mutating}
-            onclick={() => onAssignPlots(selectedPlots, choice.siteSeries)}
-          >
-            Assign ({selectedPlots.length})
-          </button>
+          {#if !IS_WEB_READONLY}
+            <button
+              type="button"
+              class="vpro-btn-mini vpro-cls-assign-btn"
+              disabled={selectedPlots.length === 0 || mutating}
+              onclick={() => onAssignPlots(selectedPlots, choice.siteSeries)}
+            >
+              Assign ({selectedPlots.length})
+            </button>
+          {/if}
         </div>
       {/each}
       {#if becChoices.length === 0}

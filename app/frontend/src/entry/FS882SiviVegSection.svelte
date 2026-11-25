@@ -1,6 +1,7 @@
 <script lang="ts">
   import { AuditRestoreAction, type FS882Header } from '../../bindings/github.com/boostao/vpro/app';
   import { formatError } from '../shared/readRequests';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type { SiviSessionsController } from './useSiviSessions.svelte';
 
   let {
@@ -35,7 +36,7 @@
   );
 </script>
 
-{#if sivi.deletionView && sivi.deletionClose}
+{#if !IS_WEB_READONLY && sivi.deletionView && sivi.deletionClose}
   {#await import('./SIVIDeletionPanel.svelte')}
     <p role="status" class="p-2 text-xs">Loading SIVI deletion panel...</p>
   {:then { default: SIVIDeletionPanel }}
@@ -54,7 +55,7 @@
   {/await}
 {/if}
 
-{#if sivi.restorationView && sivi.restorationClose}
+{#if !IS_WEB_READONLY && sivi.restorationView && sivi.restorationClose}
   {#await import('./SIVIDeletionRestorationPanel.svelte')}
     <p role="status" class="p-2 text-xs">Loading SIVI restoration panel...</p>
   {:then { default: SIVIDeletionRestorationPanel }}
@@ -74,7 +75,7 @@
   {/await}
 {/if}
 
-{#if sivi.creationUndoView && sivi.creationUndoClose}
+{#if !IS_WEB_READONLY && sivi.creationUndoView && sivi.creationUndoClose}
   {#await import('./SIVICreationUndoPanel.svelte')}
     <p role="status" class="p-2 text-xs">Loading SIVI creation undo panel...</p>
   {:then { default: SIVICreationUndoPanel }}
@@ -95,7 +96,7 @@
   {/await}
 {/if}
 
-{#if sivi.creationSession && sivi.creationView && sivi.creationClose}
+{#if !IS_WEB_READONLY && sivi.creationSession && sivi.creationView && sivi.creationClose}
   {#await import('./SIVICreationPanel.svelte')}
     <p role="status" class="p-2 text-xs">Loading SIVI creation panel...</p>
   {:then { default: SIVICreationPanel }}

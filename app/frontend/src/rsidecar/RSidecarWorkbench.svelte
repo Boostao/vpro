@@ -35,6 +35,8 @@
   import RSidecarRuntimeTab from './RSidecarRuntimeTab.svelte';
   import RSidecarWorkbenchHeader from './RSidecarWorkbenchHeader.svelte';
 
+  const IS_WEB_READONLY = typeof __VPRO_WEB_READONLY__ !== 'undefined' && __VPRO_WEB_READONLY__ === true;
+
   let {
     contextId,
     activeProject,
@@ -93,7 +95,7 @@
   let clusterBgcFilter = $state('');
   let clusterUnitPrefix = $state('BEC');
   let clusterCandidatePrefix = $state('');
-  let clusterMaterializeCandidate = $state(true);
+  let clusterMaterializeCandidate = $state(!IS_WEB_READONLY);
   let clusterResult = $state<ClusteringResult | null>(null);
   let selectedDendroPlot = $state<string | null>(null);
 
@@ -166,7 +168,7 @@
       bgcFilter: clean(clusterBgcFilter),
       unitPrefix: clean(clusterUnitPrefix),
       candidatePrefix: clean(clusterCandidatePrefix),
-      materializeCandidate: clusterMaterializeCandidate,
+      materializeCandidate: typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY ? false : clusterMaterializeCandidate,
     };
   }
 
@@ -183,7 +185,7 @@
       useActiveSu: quartoUseSu,
       applyLump: quartoApplyLump,
       includePdf: quartoIncludePdf,
-      destinationPath: clean(quartoDestinationPath),
+      destinationPath: typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY ? undefined : clean(quartoDestinationPath),
     };
   }
 
@@ -347,6 +349,10 @@
   }
 
   async function submitPromoteCandidate() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) {
+      error = 'Promoting cluster candidates to a Site Unit table is unavailable in web read-only mode.';
+      return;
+    }
     if (busy || operationHeld) {
       error = 'Wait for the current operation or decision before promoting candidate SU.';
       notifySidecar('error', 'Candidate SU promotion held', error);
@@ -408,11 +414,19 @@
       const res = await port.renderQuartoGuide(contextId, req);
       if (gen !== generation) return;
       quartoResult = res;
-      statusMessage = `Published ${res.guideType} HTML guide via ${res.rendererUsed} to ${res.htmlPath}.`;
+      statusMessage =
+        typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY
+          ? `Prepared ${res.guideType} HTML guide via ${res.rendererUsed} for download.`
+          : `Published ${res.guideType} HTML guide via ${res.rendererUsed} to ${res.htmlPath}.`;
       notifySidecar('success', 'Quarto guide published', statusMessage);
     } catch (cause) {
       if (gen === generation) {
-        error = `Quarto guide publication failed: ${formatError(cause)}`;
+        const rawErr = formatError(cause);
+        const baseMsg = `Quarto guide publication failed: ${rawErr}`;
+        error =
+          typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY && /429|503|busy|semaphore|queue/i.test(rawErr)
+            ? 'Another download is currently being prepared on the server. Please wait a few seconds and try again.'
+            : baseMsg;
         notifySidecar('error', 'Quarto guide publication failed', error);
       }
     } finally {

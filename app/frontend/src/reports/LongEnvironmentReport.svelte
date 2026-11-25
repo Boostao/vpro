@@ -10,6 +10,9 @@
     type ValidatedEnvironmentWorkbookReview,
   } from './environmentWorkbook';
   import { notifications } from '../shell/notificationService.svelte';
+  import { defaultWebExportFilename } from '../shell/webReadOnlyShell';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
+  import { formatWebDownloadFeedback } from '../web/webMeta';
   import LongEnvironmentPreviewBody from './parts/LongEnvironmentPreviewBody.svelte';
 
   let {
@@ -235,6 +238,7 @@
     }
   }
   async function saveTitle() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!preferences || busy || preferenceView?.busy || preferenceView?.blocked || workbookBarrier) return;
     cancel();
     error = '';
@@ -308,6 +312,13 @@
   }
   async function publishWorkbook() {
     if (busy || preferenceBarrier || workbookBarrier || !workbookReview) return;
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+    if (webReadOnly && !destination.trim()) {
+      destination =
+        typeof defaultWebExportFilename === 'function'
+          ? defaultWebExportFilename(`${project || 'vpro'}_long_environment`, '.xlsx')
+          : `${project || 'vpro'}_long_environment.xlsx`;
+    }
     cancel();
     error = '';
     const ctxTag = (typeof project === 'string' && project) || undefined;
@@ -322,8 +333,8 @@
         const opts = { category: 'reports' as const, source: 'Long Environment', contextTag: ctxTag };
         if (s.outcome?.status === 'published' && !s.error) {
           notifications.success(
-            'Long Environment workbook exported',
-            s.outcome.path || s.requestedDestination || destination,
+            webReadOnly ? 'Long Environment workbook downloaded' : 'Long Environment workbook exported',
+            webReadOnly ? destination : s.outcome.path || s.requestedDestination || destination,
             opts
           );
         } else if (s.error || s.outcome) {
@@ -335,7 +346,10 @@
         }
       }
     } catch (cause) {
-      error = formatError(cause);
+      error =
+        webReadOnly && typeof formatWebDownloadFeedback === 'function'
+          ? formatWebDownloadFeedback(cause, 'Long Environment workbook download')
+          : formatError(cause);
       notifications.error('Long Environment workbook export failed', error, {
         category: 'reports',
         source: 'Long Environment',
@@ -410,18 +424,20 @@
     disabled={!!preferenceView?.busy || !!preferenceView?.blocked || workbookBarrier}
     oninput={(event) => editTitle(event.currentTarget.value)}></textarea>
   <div class="actions">
-    <button
-      data-long-environment-preferences-save
-      disabled={busy ||
-        !!preferenceView?.busy ||
-        !!preferenceView?.blocked ||
-        !!preferenceView?.draftError ||
-        !preferenceView?.saved ||
-        workbookBarrier}
-      onclick={saveTitle}
-    >
-      Save reviewed title
-    </button>
+    {#if !IS_WEB_READONLY}
+      <button
+        data-long-environment-preferences-save
+        disabled={busy ||
+          !!preferenceView?.busy ||
+          !!preferenceView?.blocked ||
+          !!preferenceView?.draftError ||
+          !preferenceView?.saved ||
+          workbookBarrier}
+        onclick={saveTitle}
+      >
+        Save reviewed title
+      </button>
+    {/if}
     <button
       data-long-environment-preferences-undo
       disabled={!!preferenceView?.busy || !!preferenceView?.blocked || !preferenceView?.saved || workbookBarrier}
@@ -453,17 +469,22 @@
         <li>Unit “{sheet.unit}” → worksheet “{sheet.name}”</li>
       {/each}
     </ul>
-    <label for="environment-workbook-destination">New XLSX output file (existing files are never replaced)</label>
-    <textarea
-      id="environment-workbook-destination"
-      rows="2"
-      disabled={busy || preferenceBarrier || workbookBarrier}
-      bind:value={destination}></textarea>
+    {#if !IS_WEB_READONLY}
+      <label for="environment-workbook-destination">New XLSX output file (existing files are never replaced)</label>
+      <textarea
+        id="environment-workbook-destination"
+        rows="2"
+        disabled={busy || preferenceBarrier || workbookBarrier}
+        bind:value={destination}></textarea>
+    {/if}
     <button
-      disabled={busy || preferenceBarrier || workbookBarrier || !destination || !/\.xlsx$/i.test(destination)}
+      disabled={busy ||
+        preferenceBarrier ||
+        workbookBarrier ||
+        (!IS_WEB_READONLY && (!destination || !/\.xlsx$/i.test(destination)))}
       onclick={publishWorkbook}
     >
-      Publish reviewed XLSX workbook
+      {IS_WEB_READONLY ? 'Download reviewed XLSX workbook' : 'Publish reviewed XLSX workbook'}
     </button>
   {/if}
   {#each preferenceView?.receipts ?? [] as receipt}

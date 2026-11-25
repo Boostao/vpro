@@ -1,5 +1,6 @@
 <script lang="ts">
   import { formatError } from '../shared/readRequests';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type {
     ClassificationBackendPort,
     UserSiteUnitEntry,
@@ -84,6 +85,7 @@
   }
 
   async function submitUserSiteUnitEntry() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!effectiveContextId || !port.saveUserSiteUnitEntry || !userSUSeries.trim() || mutating) return;
     onMutatingChange(true);
     onError('');
@@ -106,6 +108,7 @@
   }
 
   async function removeUserSiteUnitEntry(entry: UserSiteUnitEntry) {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!effectiveContextId || !port.deleteUserSiteUnitEntry || mutating) return;
     onMutatingChange(true);
     onError('');
@@ -151,6 +154,7 @@
   }
 
   async function importUserSiteUnitsCSV() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!effectiveContextId || !port.importUserSiteUnitListCSV || !userSUCSVText.trim() || mutating) return;
     onMutatingChange(true);
     onError('');
@@ -183,61 +187,69 @@
     <button type="button" class="vpro-btn-secondary" disabled={userSULoading} onclick={refreshList}>Refresh</button>
     {#if port.exportUserSiteUnitListCSV}
       <button type="button" class="vpro-btn-secondary" disabled={mutating} onclick={exportUserSiteUnitsCSV}
-        >Export CSV</button
+        >{IS_WEB_READONLY ? 'Download CSV' : 'Export CSV'}</button
       >
     {/if}
   </div>
 
-  <div class="vpro-cls-dialog-row">
-    <label
-      ><span>SiteSeries</span><input
-        type="text"
-        class="mono"
-        bind:value={userSUSeries}
-        placeholder="e.g. CWHvm1/01"
-      /></label
-    >
-    <label
-      ><span>Long Name</span><input
-        type="text"
-        bind:value={userSULongName}
-        placeholder="Descriptive unit name"
-      /></label
-    >
-    <label
-      ><span>Scientific Name</span><input
-        type="text"
-        bind:value={userSUSciName}
-        placeholder="Plant association"
-      /></label
-    >
-    <label
-      ><span>Level</span><input
-        type="number"
-        class="vpro-cls-sep-input"
-        bind:value={userSULevel}
-        min={1}
-        max={11}
-      /></label
-    >
-    <button
-      type="button"
-      class="vpro-btn-primary"
-      disabled={mutating || !userSUSeries.trim() || !port.saveUserSiteUnitEntry}
-      onclick={submitUserSiteUnitEntry}
-    >
-      {userSUFormId !== null ? 'Update Entry' : 'Add Entry'}
-    </button>
-    {#if userSUFormId !== null}
-      <button type="button" class="vpro-btn-secondary" onclick={resetUserSiteUnitForm}>Cancel Edit</button>
-    {/if}
-  </div>
+  {#if !IS_WEB_READONLY}
+    <div class="vpro-cls-dialog-row">
+      <label
+        ><span>SiteSeries</span><input
+          type="text"
+          class="mono"
+          bind:value={userSUSeries}
+          placeholder="e.g. CWHvm1/01"
+        /></label
+      >
+      <label
+        ><span>Long Name</span><input
+          type="text"
+          bind:value={userSULongName}
+          placeholder="Descriptive unit name"
+        /></label
+      >
+      <label
+        ><span>Scientific Name</span><input
+          type="text"
+          bind:value={userSUSciName}
+          placeholder="Plant association"
+        /></label
+      >
+      <label
+        ><span>Level</span><input
+          type="number"
+          class="vpro-cls-sep-input"
+          bind:value={userSULevel}
+          min={1}
+          max={11}
+        /></label
+      >
+      <button
+        type="button"
+        class="vpro-btn-primary"
+        disabled={mutating || !userSUSeries.trim() || !port.saveUserSiteUnitEntry}
+        onclick={submitUserSiteUnitEntry}
+      >
+        {userSUFormId !== null ? 'Update Entry' : 'Add Entry'}
+      </button>
+      {#if userSUFormId !== null}
+        <button type="button" class="vpro-btn-secondary" onclick={resetUserSiteUnitForm}>Cancel Edit</button>
+      {/if}
+    </div>
+  {/if}
 
   <div class="vpro-cls-bec-list">
     <div class="table-scroll">
       <table class="vpro-cls-spp-table">
         <thead>
-          <tr><th>SiteSeries</th><th>Long Name</th><th>Scientific</th><th>Lvl</th><th>Actions</th></tr>
+          <tr>
+            <th>SiteSeries</th>
+            <th>Long Name</th>
+            <th>Scientific</th>
+            <th>Lvl</th>
+            {#if !IS_WEB_READONLY}<th>Actions</th>{/if}
+          </tr>
         </thead>
         <tbody>
           {#each filteredUserSiteUnits as entry (entry.id)}
@@ -246,30 +258,32 @@
               <td>{entry.siteSeriesLongName}</td>
               <td>{entry.siteSeriesScientificName}</td>
               <td class="mono">{entry.level}</td>
-              <td class="vpro-cls-actions">
-                <button
-                  type="button"
-                  class="vpro-btn-mini"
-                  disabled={selectedPlots.length === 0 || mutating}
-                  onclick={() => onAssignPlots(selectedPlots, entry.siteSeries)}
-                >
-                  Assign ({selectedPlots.length})
-                </button>
-                <button type="button" class="vpro-btn-mini" onclick={() => editUserSiteUnitEntry(entry)}>Edit</button>
-                {#if port.deleteUserSiteUnitEntry}
+              {#if !IS_WEB_READONLY}
+                <td class="vpro-cls-actions">
                   <button
                     type="button"
                     class="vpro-btn-mini"
-                    disabled={mutating}
-                    onclick={() => removeUserSiteUnitEntry(entry)}>Delete</button
+                    disabled={selectedPlots.length === 0 || mutating}
+                    onclick={() => onAssignPlots(selectedPlots, entry.siteSeries)}
                   >
-                {/if}
-              </td>
+                    Assign ({selectedPlots.length})
+                  </button>
+                  <button type="button" class="vpro-btn-mini" onclick={() => editUserSiteUnitEntry(entry)}>Edit</button>
+                  {#if port.deleteUserSiteUnitEntry}
+                    <button
+                      type="button"
+                      class="vpro-btn-mini"
+                      disabled={mutating}
+                      onclick={() => removeUserSiteUnitEntry(entry)}>Delete</button
+                    >
+                  {/if}
+                </td>
+              {/if}
             </tr>
           {/each}
           {#if filteredUserSiteUnits.length === 0}
             <tr>
-              <td colspan="5" class="vpro-cls-empty">
+              <td colspan={IS_WEB_READONLY ? 4 : 5} class="vpro-cls-empty">
                 {userSULoading ? 'Loading UserSiteUnitList...' : 'No UserSiteUnitList entries stored yet.'}
               </td>
             </tr>
@@ -279,7 +293,7 @@
     </div>
   </div>
 
-  {#if port.importUserSiteUnitListCSV}
+  {#if !IS_WEB_READONLY && port.importUserSiteUnitListCSV}
     <div class="vpro-cls-csv-import">
       <div class="vpro-cls-subtoolbar">
         <label class="vpro-cls-check"

@@ -49,6 +49,7 @@
     onRequestSUSync,
   }: Props = $props();
 
+  const IS_WEB_READONLY = typeof __VPRO_WEB_READONLY__ !== 'undefined' && __VPRO_WEB_READONLY__ === true;
   const reads = new ReadRequests();
   const TREE_ROW_HEIGHT = 34;
 
@@ -234,6 +235,7 @@
   }
 
   async function assignPlots(plotsToMove: string[], targetUnit: string | null) {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (plotsToMove.length === 0 || mutating) return;
     mutating = true;
     errorMessage = '';
@@ -265,6 +267,7 @@
   }
 
   async function undoLastAssignment() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (mutating) return;
     mutating = true;
     errorMessage = '';
@@ -281,6 +284,7 @@
   }
 
   function handlePlotDragStart(event: DragEvent, plotNumber: string) {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     const batch = selectedPlots.includes(plotNumber) ? selectedPlots : [plotNumber];
     selectedPlots = batch;
     event.dataTransfer?.setData('application/x-vpro-plots', JSON.stringify(batch));
@@ -288,6 +292,7 @@
   }
 
   function handleBucketDrop(event: DragEvent, targetUnit: string | null) {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     event.preventDefault();
     const raw = event.dataTransfer?.getData('application/x-vpro-plots');
     let batch: string[] = [];
@@ -309,6 +314,7 @@
   }
 
   async function submitCreateSU() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!newSUName.trim() || mutating) return;
     if (newSUDestination === 'new_file' && !newSUFilePath.trim()) {
       errorMessage = 'Enter or browse an external .db file path for the new SU table.';
@@ -343,6 +349,7 @@
   }
 
   async function submitToggleBreak(nodeId: number) {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (mutating) return;
     mutating = true;
     errorMessage = '';
@@ -358,6 +365,7 @@
   }
 
   async function submitSaveFlatRows() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (mutating || flatValidationError) return;
     mutating = true;
     errorMessage = '';
@@ -489,7 +497,9 @@
     {inspectedPlot}
     {mutating}
     onLoadSUTree={loadSUTreeAndPicker}
-    onOpenDialog={(d) => (activeDialog = d)}
+    onOpenDialog={(d) => {
+      if (!IS_WEB_READONLY) activeDialog = d;
+    }}
     onUndoLast={undoLastAssignment}
     onToggleSUExpand={toggleSUExpand}
     onPlotClick={handlePlotClick}
@@ -499,7 +509,7 @@
     {onOpenPlot}
     onToggleHierarchyExpand={toggleHierarchyExpand}
     onToggleBreak={submitToggleBreak}
-    {onRequestSUSync}
+    onRequestSUSync={IS_WEB_READONLY ? undefined : onRequestSUSync}
     onMutatingChange={(v) => (mutating = v)}
     onError={(msg) => (errorMessage = formatExplorerError(msg))}
     onStatus={(msg) => (statusBanner = msg)}

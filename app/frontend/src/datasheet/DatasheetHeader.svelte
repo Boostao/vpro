@@ -6,6 +6,7 @@
     type DatasheetTableInfo,
     type DatasheetTableKey,
   } from './universalDatasheetGrid';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
 
   let {
     project = '',
@@ -97,47 +98,51 @@
       }}
     />
     <button type="button" class="vpro-btn-secondary" disabled={busy} onclick={onApplyFilter}> Apply Filter </button>
-    <button
-      type="button"
-      class="vpro-btn-secondary"
-      disabled={!page || activeTableReadOnly}
-      onclick={() => {
-        findDrawerOpen = !findDrawerOpen;
-      }}
-    >
-      {findDrawerOpen ? 'Hide Find & Replace' : 'Find & Replace'}
-    </button>
-    {#if activeChildTableEditable}
+    {#if IS_WEB_READONLY}
+      <span class="vpro-ds-context-pill" data-datasheet-readonly-badge>Read-Only</span>
+    {:else}
       <button
         type="button"
         class="vpro-btn-secondary"
-        data-add-child-row
-        disabled={busy || saving || insertBusy || deleteBusy}
-        onclick={onOpenInsert}
+        disabled={!page || activeTableReadOnly}
+        onclick={() => {
+          findDrawerOpen = !findDrawerOpen;
+        }}
       >
-        {insertDrawerOpen ? 'Close Add Row' : '+ Add Row'}
+        {findDrawerOpen ? 'Hide Find & Replace' : 'Find & Replace'}
+      </button>
+      {#if activeChildTableEditable}
+        <button
+          type="button"
+          class="vpro-btn-secondary"
+          data-add-child-row
+          disabled={busy || saving || insertBusy || deleteBusy}
+          onclick={onOpenInsert}
+        >
+          {insertDrawerOpen ? 'Close Add Row' : '+ Add Row'}
+        </button>
+        <button
+          type="button"
+          class="vpro-btn-danger-outline"
+          data-delete-child-row
+          disabled={busy || saving || insertBusy || deleteBusy || !hasActiveCell}
+          onclick={onRequestDelete}
+        >
+          Delete Selected Row
+        </button>
+      {/if}
+      <button type="button" class="vpro-btn-secondary" disabled={draftCount === 0 || saving} onclick={onDiscard}>
+        Discard ({draftCount})
       </button>
       <button
         type="button"
-        class="vpro-btn-danger-outline"
-        data-delete-child-row
-        disabled={busy || saving || insertBusy || deleteBusy || !hasActiveCell}
-        onclick={onRequestDelete}
+        class="vpro-btn-primary"
+        disabled={validEditCount === 0 || invalidDraftCount > 0 || saving || activeTableReadOnly}
+        onclick={onSave}
       >
-        Delete Selected Row
+        {saving ? 'Saving...' : `Save Edits (${validEditCount})`}
       </button>
     {/if}
-    <button type="button" class="vpro-btn-secondary" disabled={draftCount === 0 || saving} onclick={onDiscard}>
-      Discard ({draftCount})
-    </button>
-    <button
-      type="button"
-      class="vpro-btn-primary"
-      disabled={validEditCount === 0 || invalidDraftCount > 0 || saving || activeTableReadOnly}
-      onclick={onSave}
-    >
-      {saving ? 'Saving...' : `Save Edits (${validEditCount})`}
-    </button>
   </div>
 </header>
 

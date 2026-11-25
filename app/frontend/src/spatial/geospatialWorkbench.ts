@@ -398,6 +398,28 @@ function buildOfflineGraticuleGeoJSON(): {
 }
 
 /**
+ * Resolves a PMTiles source URL (`pmtiles://...`) against an optional web base URL
+ * (from `/api/meta`'s `pmtilesBaseUrl`, e.g. `/pmtiles` or a CDN origin).
+ * Desktop builds omit `pmtilesBaseUrl` and keep the local `/maps/<archive>` path.
+ */
+export function resolvePMTilesArchiveUrl(archiveName: string, pmtilesBaseUrl?: string): string {
+  const cleanArchive = archiveName.replace(/^\/+/, '');
+  const trimmedBase = (pmtilesBaseUrl ?? '').trim().replace(/\/+$/, '');
+  if (!trimmedBase) {
+    const isWeb = typeof __VPRO_WEB_READONLY__ !== 'undefined' && __VPRO_WEB_READONLY__ === true;
+    return `pmtiles://${isWeb ? '/pmtiles' : '/maps'}/${cleanArchive}`;
+  }
+  if (/^pmtiles:\/\//i.test(trimmedBase)) {
+    return `${trimmedBase}/${cleanArchive}`;
+  }
+  if (/^https?:\/\//i.test(trimmedBase)) {
+    return `pmtiles://${trimmedBase}/${cleanArchive}`;
+  }
+  const rooted = trimmedBase.startsWith('/') ? trimmedBase : `/${trimmedBase}`;
+  return `pmtiles://${rooted}/${cleanArchive}`;
+}
+
+/**
  * Builds the offline-first MapLibre GL JS v6 style specification backed by local PMTiles
  * byte-range sources, selectable basemaps, and proxied BC OpenMaps WMS overlays.
  */
@@ -409,6 +431,7 @@ export function buildMapLibreGeospatialStyle(
     basemap?: MapBasemapId;
     wmsLayer?: BCOpenMapsWMSLayerId;
     opacity?: Partial<MapLayerOpacity>;
+    pmtilesBaseUrl?: string;
   }
 ): StyleSpecification {
   const bgcArchive = manifest?.archives?.['bc-bgc-v13.pmtiles'] as PMTilesArchiveStatusExt | undefined;
@@ -456,7 +479,7 @@ export function buildMapLibreGeospatialStyle(
   if (bgcAvailable) {
     sources.bc_bgc_pmtiles = {
       type: 'vector',
-      url: 'pmtiles:///maps/bc-bgc-v13.pmtiles',
+      url: resolvePMTilesArchiveUrl('bc-bgc-v13.pmtiles', options?.pmtilesBaseUrl),
       minzoom: 3,
       maxzoom: bgcMaxZoom,
       attribution: 'BC Ministry of Forests BEC v13',
@@ -465,7 +488,7 @@ export function buildMapLibreGeospatialStyle(
   if (adminAvailable) {
     sources.bc_admin_pmtiles = {
       type: 'vector',
-      url: 'pmtiles:///maps/bc-admin-ecosections-districts.pmtiles',
+      url: resolvePMTilesArchiveUrl('bc-admin-ecosections-districts.pmtiles', options?.pmtilesBaseUrl),
       minzoom: 3,
       maxzoom: adminMaxZoom,
       attribution: 'GeoBC Ecosections & NR Districts',

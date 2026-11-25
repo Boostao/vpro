@@ -2,6 +2,7 @@
   import { ContextService, type StartupState } from '../../bindings/github.com/boostao/vpro/app';
   import type { ReadRequests } from '../shared/readRequests';
   import { projectState } from '../shared/state';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import NotificationHost from './NotificationHost.svelte';
   import { notifications } from './notificationService.svelte';
   import type { ShellViewId } from './shellPlotOps';
@@ -34,7 +35,7 @@
   let tourAutoOpenedContext = $state(false);
 </script>
 
-{#if ui.resetSampleConfirmOpen && !startupFailure}
+{#if !IS_WEB_READONLY && ui.resetSampleConfirmOpen && !startupFailure}
   {#await import('./ResetSampleModal.svelte') then { default: ResetSampleModal }}
     <ResetSampleModal
       open={ui.resetSampleConfirmOpen && !startupFailure}
@@ -143,7 +144,7 @@
   {/await}
 {/if}
 
-{#if ui.userSetupOpen && !startupFailure}
+{#if !IS_WEB_READONLY && ui.userSetupOpen && !startupFailure}
   {#await import('./UserSetupModal.svelte') then { default: UserSetupModal }}
     <UserSetupModal
       open={ui.userSetupOpen}

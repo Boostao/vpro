@@ -16,6 +16,7 @@ import {
 import { bindContextPlots } from '../shared/contextPlots';
 import { formatError, ReadRequests } from '../shared/readRequests';
 import { notifications } from '../shell/notificationService.svelte';
+import { IS_WEB_READONLY } from '../web/runtimeMode';
 import type { AvailablePlotOption } from './FS882TwoPagePlotPrompt.svelte';
 import { navigateSourceEnter } from './enterNavigation';
 import {
@@ -317,7 +318,9 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
   }
 
   const pState = $derived(deps.getProjectState());
-  const visibleTabs = $derived(siviStandalone ? SIVI_TABS : FS882_TABS);
+  const visibleTabs = $derived(
+    (siviStandalone ? SIVI_TABS : FS882_TABS).filter((tab) => !IS_WEB_READONLY || tab.id !== 'audit')
+  );
   const separateSUSelected = $derived(
     Boolean(pState?.activeSU && pState.activeSU !== 'None' && pState.suPath && pState.suPath !== pState.projectPath)
   );
@@ -394,7 +397,8 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
     activeLayerDepthRaw ?? (draft.activeLayerDepth == null ? '' : String(draft.activeLayerDepth))
   );
   const arcticInputsDisabled = $derived(
-    draft.locked ||
+    IS_WEB_READONLY ||
+      draft.locked ||
       busy ||
       sivi.sourceBarrier ||
       !capabilitiesReady ||
@@ -411,7 +415,8 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
       sivi.pictureMetadataPending
   );
   const headerInputsDisabled = $derived(
-    draft.locked ||
+    IS_WEB_READONLY ||
+      draft.locked ||
       busy ||
       sivi.sourceBarrier ||
       !capabilitiesReady ||

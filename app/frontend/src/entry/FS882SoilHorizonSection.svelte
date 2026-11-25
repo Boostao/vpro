@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Plus, Trash2 } from '@lucide/svelte';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import DrainageFields from './DrainageFields.svelte';
   import GeologyCodeFields from './GeologyCodeFields.svelte';
   import OrdinaryFields from './OrdinaryFields.svelte';
@@ -66,12 +67,14 @@
   {/if}
 {/if}
 {#if showSoilCodeReference}<SoilCodeReference disabled={busy || headerWorkflowBusy} />{/if}
-<div class="flex gap-2 mb-3 text-xs">
-  <button disabled={soilEditingDisabled || soilUnsaved} onclick={() => openNewChild('humus')}>Add Humus Layer</button>
-  <button disabled={soilEditingDisabled || soilUnsaved} onclick={() => openNewChild('mineral')}
-    >Add Mineral Layer</button
-  >
-</div>
+{#if !IS_WEB_READONLY}
+  <div class="flex gap-2 mb-3 text-xs">
+    <button disabled={soilEditingDisabled || soilUnsaved} onclick={() => openNewChild('humus')}>Add Humus Layer</button>
+    <button disabled={soilEditingDisabled || soilUnsaved} onclick={() => openNewChild('mineral')}
+      >Add Mineral Layer</button
+    >
+  </div>
+{/if}
 <OrdinaryFields
   bind:draft
   {original}
@@ -171,7 +174,7 @@
                               onsoilstage={stageSoilCell}
                               {soilDrafts}
                               {soilSuggestions}
-                              ondelete={deleteSourceChild}
+                              ondelete={IS_WEB_READONLY ? undefined : deleteSourceChild}
                             />
                           {/if}
                         {/snippet}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { FS882Header } from '../../bindings/github.com/boostao/vpro/app';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import FS882ChildCreateModal from './FS882ChildCreateModal.svelte';
   import FS882StratumSummary from './FS882StratumSummary.svelte';
   import OrdinaryFields from './OrdinaryFields.svelte';
@@ -133,8 +134,11 @@
           heightToggleDisabled={extendedShrubs || busy || headerWorkflowBusy}
           {onFindPlot}
           findPlotDisabled={busy || headerWorkflowBusy || !capabilitiesReady}
-          onSpeciesCheck={openSpeciesCodeCheck}
-          speciesCheckDisabled={childParentDisabled || childUnsaved || Object.keys(headerValidation).length > 0}
+          onSpeciesCheck={IS_WEB_READONLY ? undefined : openSpeciesCodeCheck}
+          speciesCheckDisabled={IS_WEB_READONLY ||
+            childParentDisabled ||
+            childUnsaved ||
+            Object.keys(headerValidation).length > 0}
         >
           {#snippet embedded(control)}
             {@const originalChild = embeddedForm(control.controlId)}
@@ -142,33 +146,35 @@
               ...originalChild,
               form: extendedShrubs && originalChild.form === 'SubVegAXL_BC' ? 'SubVegAXL' : originalChild.form,
             }}
-            <button
-              type="button"
-              class="mb-2 rounded border px-2 py-1 text-xs disabled:opacity-50"
-              data-create-source={child.form}
-              disabled={childParentDisabled ||
-                childUnsaved ||
-                !childCtrl.speciesReferenceReady ||
-                childCtrl.speciesReferenceBusy}
-              onclick={() => childCtrl.startVegetationCreation(child.form)}>New vegetation record - {child.form}</button
-            >
+            {#if !IS_WEB_READONLY}
+              <button
+                type="button"
+                class="mb-2 rounded border px-2 py-1 text-xs disabled:opacity-50"
+                data-create-source={child.form}
+                disabled={childParentDisabled ||
+                  childUnsaved ||
+                  !childCtrl.speciesReferenceReady ||
+                  childCtrl.speciesReferenceBusy}
+                onclick={() => childCtrl.startVegetationCreation(child.form)}>New vegetation record - {child.form}</button
+              >
+            {/if}
             <SourceChild
               name={child.form}
               rows={childCtrl.sourceRows(child.form)}
               revision={childCtrl.childRevision}
-              disabled={childCtrl.heightEditingDisabled}
+              disabled={IS_WEB_READONLY || childCtrl.heightEditingDisabled}
               drafts={childCtrl.heightDrafts}
               onstage={(id, column, raw) => childCtrl.stageHeightCell(id, column, raw, child.form)}
               collectedDrafts={childCtrl.collectedDrafts}
-              collectedDisabled={childCtrl.collectedEditingDisabled}
+              collectedDisabled={IS_WEB_READONLY || childCtrl.collectedEditingDisabled}
               oncollectedstage={childCtrl.stageCollectedCell}
               speciesDrafts={childCtrl.speciesDrafts}
               speciesLists={childCtrl.speciesLists}
-              speciesDisabled={childCtrl.speciesEditingDisabled}
+              speciesDisabled={IS_WEB_READONLY || childCtrl.speciesEditingDisabled}
               onspeciesstage={childCtrl.stageSpeciesCell}
               onedit={undefined}
-              ondelete={childCtrl.reviewVegetationDeletion}
-              deleteDisabled={childUnsaved}
+              ondelete={IS_WEB_READONLY ? undefined : childCtrl.reviewVegetationDeletion}
+              deleteDisabled={IS_WEB_READONLY || childUnsaved}
             />
           {/snippet}
         </SourcePage>

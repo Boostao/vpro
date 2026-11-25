@@ -56,6 +56,7 @@
     onOpenPlot,
   }: Props = $props();
 
+  const IS_WEB_READONLY = typeof __VPRO_WEB_READONLY__ !== 'undefined' && __VPRO_WEB_READONLY__ === true;
   const reads = new ReadRequests();
 
   let effectiveContextId = $state(untrack(() => contextId));
@@ -164,6 +165,7 @@
   const recomputeSnapshotOnly = () => runReadSnapshot(false);
 
   async function browseExternalLumpDatabase() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!effectiveContextId || loading || mutating) return;
     errorMessage = '';
     try {
@@ -185,6 +187,7 @@
   }
 
   async function browseExternalSUFile() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!effectiveContextId || loading || mutating) return;
     errorMessage = '';
     try {
@@ -260,6 +263,7 @@
   }
 
   async function handleReassignPlot(plotNumber: string, targetUnit: string): Promise<void> {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     const cleanTarget = targetUnit.trim();
     if (!effectiveContextId || !plotNumber || !cleanTarget || mutating) return;
     if (!snapshot?.suWritable) {
@@ -298,6 +302,7 @@
   }
 
   async function handleUndoReassignment(): Promise<void> {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!effectiveContextId || mutating || !snapshot?.canUndo) return;
     const gen = ++requestGeneration;
     setBusyState(loading, true);
@@ -324,7 +329,15 @@
   }
 
   async function handlePublishWorkbook(): Promise<void> {
-    const validationErr = validateWorkbookExportDraft(exportDraft);
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+    const effectiveDraft =
+      webReadOnly && !exportDraft.outputPath.trim()
+        ? {
+            ...exportDraft,
+            outputPath: `${(snapshot?.project || project || 'BEC_Diagnostic').replace(/[^A-Za-z0-9._-]+/g, '_')}_Synthesis.xlsx`,
+          }
+        : exportDraft;
+    const validationErr = validateWorkbookExportDraft(effectiveDraft);
     if (validationErr) {
       errorMessage = validationErr;
       return;
@@ -336,20 +349,28 @@
     try {
       const res = await port.exportDiagnosticWorkbook(
         effectiveContextId,
-        buildDiagnosticWorkbookPayload(exportDraft, $state.snapshot(options))
+        buildDiagnosticWorkbookPayload(effectiveDraft, $state.snapshot(options))
       );
       if (gen !== requestGeneration) return;
       lastExportResult = res;
-      statusNotice = `Published 4-sheet BEC Diagnostic workbook (${res.path}) in ${res.latencyMs.toFixed(1)} ms.`;
+      statusNotice = webReadOnly
+        ? `Downloaded 4-sheet BEC Diagnostic workbook in ${res.latencyMs.toFixed(1)} ms.`
+        : `Published 4-sheet BEC Diagnostic workbook (${res.path}) in ${res.latencyMs.toFixed(1)} ms.`;
       pushNotice(
         'success',
         'background',
-        'Published BEC Diagnostic Workbook (.xlsx)',
-        `${res.path} (${res.latencyMs.toFixed(1)} ms)`
+        webReadOnly ? 'Downloaded BEC Diagnostic Workbook (.xlsx)' : 'Published BEC Diagnostic Workbook (.xlsx)',
+        webReadOnly
+          ? `${res.sheetNames.length} sheets (${res.latencyMs.toFixed(1)} ms)`
+          : `${res.path} (${res.latencyMs.toFixed(1)} ms)`
       );
     } catch (err) {
       if (gen !== requestGeneration) return;
-      errorMessage = formatError(err);
+      const rawErr = formatError(err);
+      errorMessage =
+        webReadOnly && /429|503|busy|semaphore|queue/i.test(rawErr)
+          ? 'Another download is currently being prepared on the server. Please wait a moment and try again.'
+          : rawErr;
     } finally {
       if (gen === requestGeneration) {
         exportingWorkbook = false;
@@ -359,6 +380,7 @@
   }
 
   function onPlotDragStart(ev: DragEvent, plotNumber: string) {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!snapshot?.suWritable) return;
     draggingPlotNumber = plotNumber;
     if (ev.dataTransfer) {
@@ -373,6 +395,7 @@
   }
 
   function onUnitDragOver(ev: DragEvent, unitCode: string) {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!snapshot?.suWritable || !draggingPlotNumber) return;
     ev.preventDefault();
     dragOverUnit = unitCode;
@@ -380,6 +403,7 @@
   }
 
   function onUnitDrop(ev: DragEvent, unitCode: string) {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     ev.preventDefault();
     const plotNum = draggingPlotNumber || ev.dataTransfer?.getData('text/plain') || '';
     draggingPlotNumber = null;
@@ -415,7 +439,18 @@
     return snapshot.unitEdatopicGrids.find((g) => g.siteUnit === selectedEdatopicScope) ?? snapshot.overallEdatopicGrid;
   });
   const edatopicRows = $derived(getEdatopicCellMatrix(activeEdatopicGrid));
-  const exportValidationMessage = $derived(exportModalOpen ? validateWorkbookExportDraft(exportDraft) : '');
+  const exportValidationMessage = $derived(
+    exportModalOpen
+      ? validateWorkbookExportDraft(
+          IS_WEB_READONLY && !exportDraft.outputPath.trim()
+            ? {
+                ...exportDraft,
+                outputPath: `${(snapshot?.project || project || 'BEC_Diagnostic').replace(/[^A-Za-z0-9._-]+/g, '_')}_Synthesis.xlsx`,
+              }
+            : exportDraft
+        )
+      : ''
+  );
 </script>
 
 <section

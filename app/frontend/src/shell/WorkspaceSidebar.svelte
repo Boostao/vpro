@@ -14,7 +14,8 @@
   } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
   import type { AccessImportProgressPayload } from '../interchange/interchangeHub';
   import { formatError, ReadRequests } from '../shared/readRequests';
-  import { projectState } from '../shared/state';
+  import { projectState, webShellRuntime } from '../shared/state';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import { notifications } from './notificationService.svelte';
   import WorkspaceAccessCandidateFields from './WorkspaceAccessCandidateFields.svelte';
   import WorkspaceAccessProgressStatus from './WorkspaceAccessProgressStatus.svelte';
@@ -429,20 +430,26 @@
   onDestroy(() => cancelAccessOperation(true));
 </script>
 
-<aside id="project-context" class="sidebar" aria-label="Projects">
+<aside id="project-context" class="sidebar" aria-label={IS_WEB_READONLY ? 'Datasets' : 'Projects'}>
   <div class="sidebar-heading">
-    <span>PROJECTS</span>
-    <button
-      type="button"
-      class="icon-button"
-      title="Reveal VPro project folder in File Explorer"
-      aria-label="Reveal in File Explorer"
-      disabled={busy || transitionWorking || !$projectState?.contextId}
-      onclick={() => void revealInExplorer('projects')}
-    >
-      <FolderOpen size={16} strokeWidth={1.8} />
-    </button>
+    <span>{IS_WEB_READONLY ? 'DATASETS' : 'PROJECTS'}</span>
+    {#if !IS_WEB_READONLY}
+      <button
+        type="button"
+        class="icon-button"
+        title="Reveal VPro project folder in File Explorer"
+        aria-label="Reveal in File Explorer"
+        disabled={busy || transitionWorking || !$projectState?.contextId}
+        onclick={() => void revealInExplorer('projects')}
+      >
+        <FolderOpen size={16} strokeWidth={1.8} />
+      </button>
+    {/if}
   </div>
+  {#if IS_WEB_READONLY && $webShellRuntime?.ProvenanceBadge}
+    {@const WebSnapshotProvenance = $webShellRuntime.ProvenanceBadge}
+    <WebSnapshotProvenance variant="sidebar" activeProject={$projectState?.activeProject ?? ''} />
+  {/if}
   <nav aria-label="Project list">
     {#each $projectState?.projects ?? [] as project ((project.path ?? project.file) + project.name)}
       <button
@@ -496,80 +503,82 @@
     </select>
   </div>
 
-  <WorkspaceExternalAttachSection
-    bind:externalProject
-    bind:externalPath
-    {externalDiscoveredProjects}
-    {busy}
-    {editorBusy}
-    {companionPanelBusy}
-    {transitionWorking}
-    contextReady={Boolean($projectState?.contextId)}
-    onBrowseExternal={() => void browseExternalProjectFile()}
-    onAttachSubmit={attachExternalProject}
-    onReveal={(t) => void revealInExplorer(t)}
-  />
+  {#if !IS_WEB_READONLY}
+    <WorkspaceExternalAttachSection
+      bind:externalProject
+      bind:externalPath
+      {externalDiscoveredProjects}
+      {busy}
+      {editorBusy}
+      {companionPanelBusy}
+      {transitionWorking}
+      contextReady={Boolean($projectState?.contextId)}
+      onBrowseExternal={() => void browseExternalProjectFile()}
+      onAttachSubmit={attachExternalProject}
+      onReveal={(t) => void revealInExplorer(t)}
+    />
 
-  <details class="su-picker" id="access-import-wizard">
-    <summary>Import Access (.mdb / .accdb) wizard</summary>
-    <form onsubmit={runAccessProjectImport}>
-      <button
-        type="button"
-        id="browse-access-db"
-        disabled={busy || transitionWorking || accessWorking || !$projectState?.contextId}
-        onclick={() => void browseAccessDatabase()}>Browse Access (.mdb / .accdb)…</button
-      >
-      <label for="access-source-path">ACCESS SOURCE FILE (.mdb / .accdb)</label>
-      <input
-        id="access-source-path"
-        bind:value={accessSourcePath}
-        placeholder="C:\path\to\project.accdb"
-        disabled={busy || transitionWorking || accessWorking}
-      />
-      <button
-        type="button"
-        id="inspect-access-db"
-        disabled={busy ||
-          transitionWorking ||
-          (accessWorking && accessOperation === 'import') ||
-          !accessSourcePath ||
-          !$projectState?.contextId}
-        onclick={() => void inspectAccessSource()}
-      >
-        {accessWorking && accessOperation === 'inspect' ? 'Inspecting Access file…' : 'Inspect Access file'}
-      </button>
-      {#if accessInspection && (accessInspection.projects?.length ?? 0) > 0}
-        <WorkspaceAccessCandidateFields
-          {accessInspection}
-          {accessSelectedSourceProject}
-          {accessSelectedCandidate}
-          bind:accessTargetProject
-          bind:accessDestinationPath
-          bind:accessActivateOnSuccess
-          {busy}
-          {transitionWorking}
-          {accessWorking}
-          contextReady={Boolean($projectState?.contextId)}
-          onSelectCandidate={applyAccessCandidate}
-          onBrowseDestination={() => void browseAccessDestinationPath()}
+    <details class="su-picker" id="access-import-wizard">
+      <summary>Import Access (.mdb / .accdb) wizard</summary>
+      <form onsubmit={runAccessProjectImport}>
+        <button
+          type="button"
+          id="browse-access-db"
+          disabled={busy || transitionWorking || accessWorking || !$projectState?.contextId}
+          onclick={() => void browseAccessDatabase()}>Browse Access (.mdb / .accdb)…</button
+        >
+        <label for="access-source-path">ACCESS SOURCE FILE (.mdb / .accdb)</label>
+        <input
+          id="access-source-path"
+          bind:value={accessSourcePath}
+          placeholder="C:\path\to\project.accdb"
+          disabled={busy || transitionWorking || accessWorking}
         />
-      {/if}
-      <WorkspaceAccessProgressStatus
-        {accessWorking}
-        {accessOperation}
-        {accessElapsedSeconds}
-        {accessProgressPercent}
-        {accessProgressMessage}
-        {accessProgressRows}
-        {accessProgressExpectedRows}
-        {accessStatusNotice}
-        {accessError}
-        {accessResult}
-        onCancel={() => cancelAccessOperation(false)}
-      />
-    </form>
-  </details>
+        <button
+          type="button"
+          id="inspect-access-db"
+          disabled={busy ||
+            transitionWorking ||
+            (accessWorking && accessOperation === 'import') ||
+            !accessSourcePath ||
+            !$projectState?.contextId}
+          onclick={() => void inspectAccessSource()}
+        >
+          {accessWorking && accessOperation === 'inspect' ? 'Inspecting Access file…' : 'Inspect Access file'}
+        </button>
+        {#if accessInspection && (accessInspection.projects?.length ?? 0) > 0}
+          <WorkspaceAccessCandidateFields
+            {accessInspection}
+            {accessSelectedSourceProject}
+            {accessSelectedCandidate}
+            bind:accessTargetProject
+            bind:accessDestinationPath
+            bind:accessActivateOnSuccess
+            {busy}
+            {transitionWorking}
+            {accessWorking}
+            contextReady={Boolean($projectState?.contextId)}
+            onSelectCandidate={applyAccessCandidate}
+            onBrowseDestination={() => void browseAccessDestinationPath()}
+          />
+        {/if}
+        <WorkspaceAccessProgressStatus
+          {accessWorking}
+          {accessOperation}
+          {accessElapsedSeconds}
+          {accessProgressPercent}
+          {accessProgressMessage}
+          {accessProgressRows}
+          {accessProgressExpectedRows}
+          {accessStatusNotice}
+          {accessError}
+          {accessResult}
+          onCancel={() => cancelAccessOperation(false)}
+        />
+      </form>
+    </details>
+  {/if}
   <div class="sidebar-footer">
-    {$projectState?.projects?.length ?? 0} project{($projectState?.projects?.length ?? 0) === 1 ? '' : 's'}
+    {$projectState?.projects?.length ?? 0} {IS_WEB_READONLY ? 'dataset' : 'project'}{($projectState?.projects?.length ?? 0) === 1 ? '' : 's'}
   </div>
 </aside>

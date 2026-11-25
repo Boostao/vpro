@@ -7,6 +7,7 @@
     HierarchicalLinkage,
     PromoteCandidateSUResult,
   } from './rSidecarWorkbench';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
 
   let {
     activeProject,
@@ -196,10 +197,12 @@
           placeholder={activeProject}
         />
       </label>
-      <label>
-        Candidate Prefix
-        <input type="text" bind:value={clusterCandidatePrefix} placeholder={activeProject} />
-      </label>
+      {#if !IS_WEB_READONLY}
+        <label>
+          Candidate Prefix
+          <input type="text" bind:value={clusterCandidatePrefix} placeholder={activeProject} />
+        </label>
+      {/if}
     </div>
 
     <div class="form-row">
@@ -211,10 +214,12 @@
         <input type="checkbox" bind:checked={clusterUseSu} />
         Scope to Active SU ({activeSu})
       </label>
-      <label class="checkbox-label">
-        <input type="checkbox" bind:checked={clusterMaterializeCandidate} />
-        Save Candidate Site Unit Table (Never Overwrites Active SU)
-      </label>
+      {#if !IS_WEB_READONLY}
+        <label class="checkbox-label">
+          <input type="checkbox" bind:checked={clusterMaterializeCandidate} />
+          Save Candidate Site Unit Table (Never Overwrites Active SU)
+        </label>
+      {/if}
     </div>
 
     {#if clusteringValidationError}
@@ -357,47 +362,49 @@
     {/if}
   </div>
 
-  <div class="card">
-    <h3>Promote Staged Cluster Candidate to Site Unit Table (*_SU)</h3>
-    <div class="form-row">
-      <label>
-        Target SU Name
-        <input type="text" bind:value={promoteTargetSuName} placeholder="e.g. SubzoneRev2026" />
-      </label>
-      <label class="checkbox-label">
-        <input type="checkbox" bind:checked={promoteExcludeNoise} />
-        Exclude *_Noise Outliers
-      </label>
-      <label class="checkbox-label">
-        <input type="checkbox" bind:checked={promoteConfirmOverwrite} />
-        Confirm overwrite if target *_SU exists
-      </label>
-      <label class="checkbox-label">
-        <input type="checkbox" bind:checked={promoteActivate} />
-        Activate promoted *_SU immediately
-      </label>
-    </div>
-
-    {#if promoteValidationError}
-      <div class="inline-error">{promoteValidationError}</div>
-    {/if}
-
-    <div class="button-row">
-      <button
-        type="button"
-        class="btn-primary"
-        disabled={busy || !promoteTargetSuName.trim() || Boolean(promoteValidationError)}
-        onclick={onSubmitPromote}
-      >
-        Promote Candidate to *_SU
-      </button>
-    </div>
-
-    {#if promoteResult}
-      <div class="banner-status">
-        Promoted {promoteResult.promotedRows} plot assignments into <strong>{promoteResult.targetTableName}</strong>
-        (skipped {promoteResult.skippedNoiseRows} noise plots).
+  {#if !IS_WEB_READONLY}
+    <div class="card" data-rsidecar-promote-card>
+      <h3>Promote Staged Cluster Candidate to Site Unit Table (*_SU)</h3>
+      <div class="form-row">
+        <label>
+          Target SU Name
+          <input type="text" bind:value={promoteTargetSuName} placeholder="e.g. SubzoneRev2026" />
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" bind:checked={promoteExcludeNoise} />
+          Exclude *_Noise Outliers
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" bind:checked={promoteConfirmOverwrite} />
+          Confirm overwrite if target *_SU exists
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" bind:checked={promoteActivate} />
+          Activate promoted *_SU immediately
+        </label>
       </div>
-    {/if}
-  </div>
+
+      {#if promoteValidationError}
+        <div class="inline-error">{promoteValidationError}</div>
+      {/if}
+
+      <div class="button-row">
+        <button
+          type="button"
+          class="btn-primary"
+          disabled={busy || !promoteTargetSuName.trim() || Boolean(promoteValidationError)}
+          onclick={onSubmitPromote}
+        >
+          Promote Candidate to *_SU
+        </button>
+      </div>
+
+      {#if promoteResult}
+        <div class="banner-status">
+          Promoted {promoteResult.promotedRows} plot assignments into <strong>{promoteResult.targetTableName}</strong>
+          (skipped {promoteResult.skippedNoiseRows} noise plots).
+        </div>
+      {/if}
+    </div>
+  {/if}
 </div>

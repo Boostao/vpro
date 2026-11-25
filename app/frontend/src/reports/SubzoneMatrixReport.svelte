@@ -12,6 +12,9 @@
     type MatrixWorkbookReview,
   } from './subzoneMatrixReport';
   import { notifications } from '../shell/notificationService.svelte';
+  import { defaultWebExportFilename } from '../shell/webReadOnlyShell';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
+  import { formatWebDownloadFeedback } from '../web/webMeta';
 
   let {
     contextId,
@@ -170,11 +173,18 @@
 
   async function publishWorkbook() {
     if (busy || barrier || !workbook) return;
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+    const targetDestination =
+      webReadOnly && !destination.trim()
+        ? typeof defaultWebExportFilename === 'function'
+          ? defaultWebExportFilename(`${hierarchy || 'subzone'}_matrix`, '.xlsx')
+          : `${hierarchy || 'subzone'}_matrix.xlsx`
+        : destination;
     cancel();
     error = '';
     const ctxTag = typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined;
     try {
-      await session.publish(workbook, destination, (request) =>
+      await session.publish(workbook, targetDestination, (request) =>
         EnvironmentReportService.ExportReviewedSubzoneMatrix(contextId, JSON.stringify(request))
       );
       if (typeof syncPublicationNotifications === 'function') {
@@ -182,23 +192,30 @@
       } else {
         const settled = session.view();
         if (settled.outcome?.status === 'published' && !settled.error) {
-          const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
-          notifications.success('Subzone Matrix workbook exported', exportedPath, {
-            category: 'reports',
-            source: 'Subzone Matrix',
-            contextTag: ctxTag,
-          });
+          const exportedPath = settled.outcome.path || settled.requestedDestination || targetDestination;
+          notifications.success(
+            webReadOnly ? 'Subzone Matrix workbook downloaded' : 'Subzone Matrix workbook exported',
+            webReadOnly ? targetDestination : exportedPath,
+            {
+              category: 'reports',
+              source: 'Subzone Matrix',
+              contextTag: ctxTag,
+            }
+          );
         } else if (settled.error || settled.outcome) {
           notifications.error(
             'Subzone Matrix workbook export failed',
             settled.error ||
-              `Export ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
+              `Export ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || targetDestination}`,
             { category: 'reports', source: 'Subzone Matrix', contextTag: ctxTag }
           );
         }
       }
     } catch (cause) {
-      error = formatError(cause);
+      error =
+        webReadOnly && typeof formatWebDownloadFeedback === 'function'
+          ? formatWebDownloadFeedback(cause, 'Subzone Matrix workbook download')
+          : formatError(cause);
       notifications.error('Subzone Matrix workbook export failed', error, {
         category: 'reports',
         source: 'Subzone Matrix',
@@ -314,12 +331,19 @@
           <dd>{workbook.approvalHash}</dd>
         </div>
       </dl>
-      <label for="matrix-destination">
-        New XLSX destination
-        <input id="matrix-destination" data-matrix-destination bind:value={destination} disabled={busy || barrier} />
-      </label>
-      <button type="button" data-matrix-publish disabled={busy || barrier || !destination} onclick={publishWorkbook}>
-        Publish reviewed XLSX
+      {#if !IS_WEB_READONLY}
+        <label for="matrix-destination">
+          New XLSX destination
+          <input id="matrix-destination" data-matrix-destination bind:value={destination} disabled={busy || barrier} />
+        </label>
+      {/if}
+      <button
+        type="button"
+        data-matrix-publish
+        disabled={busy || barrier || (!IS_WEB_READONLY && !destination)}
+        onclick={publishWorkbook}
+      >
+        {IS_WEB_READONLY ? 'Download reviewed XLSX' : 'Publish reviewed XLSX'}
       </button>
     </section>
   {/if}

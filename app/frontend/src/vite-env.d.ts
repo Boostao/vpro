@@ -10,3 +10,5 @@ declare module '*.mjs?worker&url' {
   const src: string;
   export default src;
 }
+
+declare const __VPRO_WEB_READONLY__: boolean | undefined;

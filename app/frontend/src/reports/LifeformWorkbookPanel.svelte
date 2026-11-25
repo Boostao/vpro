@@ -12,6 +12,9 @@
     type ValidatedLifeformWorkbookReview,
   } from './lifeformWorkbook';
   import { notifications } from '../shell/notificationService.svelte';
+  import { defaultWebExportFilename } from '../shell/webReadOnlyShell';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
+  import { formatWebDownloadFeedback } from '../web/webMeta';
 
   let {
     owner,
@@ -99,6 +102,13 @@
 
   async function publish() {
     if (!enabled || held || !review) return;
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+    if (webReadOnly && !destination.trim()) {
+      destination =
+        typeof defaultWebExportFilename === 'function'
+          ? defaultWebExportFilename(`${owned.project || 'vpro'}_lifeform_summary`, '.xlsx')
+          : `${owned.project || 'vpro'}_lifeform_summary.xlsx`;
+    }
     error = '';
     try {
       await session.publish(review, destination, (request) =>
@@ -113,8 +123,8 @@
         };
         if (s.outcome?.status === 'published' && !s.error) {
           notifications.success(
-            'Lifeform Summary workbook exported',
-            s.outcome.path || s.requestedDestination || destination,
+            webReadOnly ? 'Lifeform Summary workbook downloaded' : 'Lifeform Summary workbook exported',
+            webReadOnly ? destination : s.outcome.path || s.requestedDestination || destination,
             opts
           );
         } else if (s.error || s.outcome) {
@@ -127,7 +137,10 @@
       }
     } catch (cause) {
       if (!disposed) {
-        error = formatError(cause);
+        error =
+          webReadOnly && typeof formatWebDownloadFeedback === 'function'
+            ? formatWebDownloadFeedback(cause, 'Lifeform Summary workbook download')
+            : formatError(cause);
         notifications.error('Lifeform Summary workbook export failed', error, {
           category: 'reports',
           source: 'Lifeform Summary',
@@ -267,15 +280,21 @@
       {/each}
     </div>
   {/if}
-  <label for="lifeform-workbook-destination"> New XLSX output file (existing files are never replaced) </label>
-  <textarea
-    id="lifeform-workbook-destination"
-    data-lifeform-workbook-destination
-    rows="2"
-    disabled={!enabled || held}
-    bind:value={destination}></textarea>
-  <button data-lifeform-workbook-export disabled={!enabled || held || !review || !destination} onclick={publish}>
-    Export reviewed summary workbook
+  {#if !IS_WEB_READONLY}
+    <label for="lifeform-workbook-destination"> New XLSX output file (existing files are never replaced) </label>
+    <textarea
+      id="lifeform-workbook-destination"
+      data-lifeform-workbook-destination
+      rows="2"
+      disabled={!enabled || held}
+      bind:value={destination}></textarea>
+  {/if}
+  <button
+    data-lifeform-workbook-export
+    disabled={!enabled || held || !review || (!IS_WEB_READONLY && !destination)}
+    onclick={publish}
+  >
+    {IS_WEB_READONLY ? 'Download reviewed summary workbook (.xlsx)' : 'Export reviewed summary workbook'}
   </button>
   <p class="guidance">
     Review prepares the workbook from your current Site Unit table without changing project data. All six attribute

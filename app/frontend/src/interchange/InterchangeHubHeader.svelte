@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
+
   export type InterchangeSection = 'venus' | 'turboveg' | 'userspecies' | 'analytics' | 'geopackage';
 
   let {
-    section = $bindable<InterchangeSection>('venus'),
+    section = $bindable<InterchangeSection>(IS_WEB_READONLY ? 'analytics' : 'venus'),
     busy = false,
     onCancel,
   }: {
@@ -14,11 +16,17 @@
 
 <header class="bcgov-banner">
   <div>
-    <p class="eyebrow-gold">STANDARDS, ANALYTICS &amp; GIS INTERCHANGE</p>
-    <h2>VENUS 5.0, TurboVeg 3 / XML, User Species, CSV / R (.rds) &amp; OGC GeoPackage (.gpkg)</h2>
+    <p class="eyebrow-gold">{IS_WEB_READONLY ? 'EXPORT & DOWNLOADS' : 'STANDARDS, ANALYTICS & GIS INTERCHANGE'}</p>
+    <h2>
+      {IS_WEB_READONLY
+        ? 'TurboVeg 3 / XML, User Species, CSV / R (.rds) & OGC GeoPackage (.gpkg)'
+        : 'VENUS 5.0, TurboVeg 3 / XML, User Species, CSV / R (.rds) & OGC GeoPackage (.gpkg)'}
+    </h2>
   </div>
   <nav class="hub-tabs" aria-label="Interchange formats">
-    <button type="button" class:active={section === 'venus'} onclick={() => (section = 'venus')}>VENUS 5.0</button>
+    {#if !IS_WEB_READONLY}
+      <button type="button" class:active={section === 'venus'} onclick={() => (section = 'venus')}>VENUS 5.0</button>
+    {/if}
     <button type="button" class:active={section === 'turboveg'} onclick={() => (section = 'turboveg')}>
       TurboVeg 3 / XML
     </button>

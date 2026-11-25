@@ -8,6 +8,8 @@
   import type { MetadataDraft } from './projectMetadataEditor';
   import type { MetadataGroup } from './projectMetadataPresentation';
 
+  const IS_WEB_READONLY = typeof __VPRO_WEB_READONLY__ !== 'undefined' && __VPRO_WEB_READONLY__ === true;
+
   export interface MetadataFieldsCatalog {
     groups: readonly MetadataGroup[];
     standardDefaults: Readonly<Record<string, string>>;
@@ -118,7 +120,7 @@
                   data-metadata-column={name}
                   rows="4"
                   value={cell.raw}
-                  disabled={!ready || busy || committedFailure || cell.nullValue}
+                  disabled={IS_WEB_READONLY || !ready || busy || committedFailure || cell.nullValue}
                   aria-invalid={cell.error !== null}
                   oninput={(event) => onstage(field, event.currentTarget.value, false)}></textarea>
               {:else if field.collection}
@@ -126,7 +128,7 @@
                   id={'metadata-' + name}
                   data-metadata-column={name}
                   value={cell.raw}
-                  disabled={!ready || busy || committedFailure || cell.nullValue}
+                  disabled={IS_WEB_READONLY || !ready || busy || committedFailure || cell.nullValue}
                   aria-invalid={cell.error !== null}
                   onchange={(event) => onstage(field, event.currentTarget.value, false)}
                 >
@@ -145,7 +147,7 @@
                   inputmode={field.kind === 'integer' ? 'numeric' : 'text'}
                   list={field.referenceList ? 'metadata-options-' + name : undefined}
                   value={cell.raw}
-                  disabled={!ready || busy || committedFailure || cell.nullValue}
+                  disabled={IS_WEB_READONLY || !ready || busy || committedFailure || cell.nullValue}
                   aria-invalid={cell.error !== null}
                   oninput={(event) => onstage(field, event.currentTarget.value, false)}
                 />
@@ -159,16 +161,18 @@
                   </datalist>
                 {/if}
               {/if}
-              <label class="null-control" for={'metadata-null-' + name}>
-                <input
-                  id={'metadata-null-' + name}
-                  type="checkbox"
-                  checked={cell.nullValue}
-                  disabled={!ready || busy || committedFailure}
-                  onchange={(event) => onstage(field, cell.raw, event.currentTarget.checked)}
-                />
-                Store NULL, not an empty value
-              </label>
+              {#if !IS_WEB_READONLY}
+                <label class="null-control" for={'metadata-null-' + name}>
+                  <input
+                    id={'metadata-null-' + name}
+                    type="checkbox"
+                    checked={cell.nullValue}
+                    disabled={!ready || busy || committedFailure}
+                    onchange={(event) => onstage(field, cell.raw, event.currentTarget.checked)}
+                  />
+                  Store NULL, not an empty value
+                </label>
+              {/if}
               {#if cell.error}<p class="failure">{cell.error}</p>{/if}
             </div>
           {/if}

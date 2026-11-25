@@ -4,8 +4,8 @@
   import { invalidateProjectIdChoices } from '../entry/entryReferenceCache';
   import { bindContextPlots } from '../shared/contextPlots';
   import { formatError, type ReadRequests } from '../shared/readRequests';
-  import { projectState } from '../shared/state';
-  import CloseConfirm from './CloseConfirm.svelte';
+  import { projectState, webMeta } from '../shared/state';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type { CloseDecision, EditorCloseState } from './closeLifecycle';
   import type { PlotProfileSelectionController } from './plotProfileOps';
   import type { DiagnosticsDraftContext, FS882EditorHandle, ShellViewId } from './shellPlotOps';
@@ -150,31 +150,33 @@
           </label>
         {/if}
       </div>
-      <button
-        type="button"
-        class="rounded border border-vpro-navy bg-white px-2.5 py-1 font-semibold text-vpro-navy hover:bg-vpro-navy-tint disabled:opacity-50"
-        disabled={localEditorBusy || Boolean(standaloneMetadataEditor?.hasUnsavedChanges?.())}
-        onclick={() => {
-          standaloneMetadataPlot = '';
-          localEditorBusy = false;
-          navigate('project-admin');
-        }}
-      >
-        Open Metadata Presets &amp; Project Admin
-      </button>
+      {#if !IS_WEB_READONLY}
+        <button
+          type="button"
+          class="rounded border border-vpro-navy bg-white px-2.5 py-1 font-semibold text-vpro-navy hover:bg-vpro-navy-tint disabled:opacity-50"
+          disabled={localEditorBusy || Boolean(standaloneMetadataEditor?.hasUnsavedChanges?.())}
+          onclick={() => {
+            standaloneMetadataPlot = '';
+            localEditorBusy = false;
+            navigate('project-admin');
+          }}
+        >
+          Open Metadata Presets &amp; Project Admin
+        </button>
+      {/if}
     </div>
     {#key `${$projectState.contextId}:${standaloneMetadataPlot}`}
       {#await import('../admin/ProjectMetadataEditor.svelte')}
-        <p role="status" class="p-4 text-sm">Loading Project Metadata Editor...</p>
+        <p role="status" class="p-4 text-sm">Loading Project Metadata {IS_WEB_READONLY ? 'Viewer' : 'Editor'}...</p>
       {:then { default: ProjectMetadataEditor }}
         <ProjectMetadataEditor
           bind:this={standaloneMetadataEditor}
           client={bindContextPlots($projectState.contextId)}
           contextId={$projectState.contextId}
           plot={standaloneMetadataPlot}
-          allowCreation={true}
-          allowTemplateCreation={true}
-          allowRestoration={true}
+          allowCreation={!IS_WEB_READONLY}
+          allowTemplateCreation={!IS_WEB_READONLY}
+          allowRestoration={!IS_WEB_READONLY}
           onbusy={(b) => {
             localEditorBusy = b;
           }}
@@ -290,9 +292,9 @@
                   error = '';
                 });
               }}
-              canUndoPlotDelete={canUndoEditorPlot}
-              onCopyPlotToNumber={copyPlotToNewNumber}
-              onRemovePlotAction={removePlotFromProject}
+              canUndoPlotDelete={IS_WEB_READONLY ? false : canUndoEditorPlot}
+              onCopyPlotToNumber={IS_WEB_READONLY ? undefined : copyPlotToNewNumber}
+              onRemovePlotAction={IS_WEB_READONLY ? undefined : removePlotFromProject}
               onSaved={async (p) => {
                 editorPlotNumber = p;
                 await refreshCatalogAfterWrite();
@@ -302,43 +304,49 @@
                 localEditorBusy = val;
               }}
               onProfileNavigation={applyProfileNavigation}
-              onProfileSUReview={reviewProfileSU}
+              onProfileSUReview={IS_WEB_READONLY ? undefined : reviewProfileSU}
               {profileSelection}
               {initialProfileReviewOpen}
               {onConsumedInitialProfileReview}
               onFindPlot={() => {
                 plotFindOpen = true;
               }}
-              onOpenPictureManager={(p) => {
-                void requestTransition(async () => {
-                  pictureManagerPlot = p || editorPlotNumber || '';
-                  view = 'picture-manager';
-                  error = '';
-                });
-              }}
+              onOpenPictureManager={IS_WEB_READONLY && $webMeta?.picturesAvailable === false
+                ? undefined
+                : (p) => {
+                    void requestTransition(async () => {
+                      pictureManagerPlot = p || editorPlotNumber || '';
+                      view = 'picture-manager';
+                      error = '';
+                    });
+                  }}
               onDiagnosticsContextChange={(ctx) => {
                 diagnosticsDraft = ctx;
               }}
             />
           {:catch loadErr}
             <p class="error" role="alert" data-entry-load-error="fs882">
-              {editorLabel} editor could not load: {formatError(loadErr)}
+              {editorLabel} {IS_WEB_READONLY ? 'viewer' : 'editor'} could not load: {formatError(loadErr)}
             </p>
           {/await}
         {/key}
       {/key}
     </fieldset>
   </div>
-  <CloseConfirm
-    requestId={closeRequest || (pendingTransition ? 'context' : '')}
-    purpose={closeRequest ? 'close' : 'context'}
-    {editorLabel}
-    working={closeWorking || transitionWorking}
-    canSave={closeState?.canSave ?? false}
-    saveReason={closeState?.saveReason ?? `Return to the ${editorLabel} editor before saving.`}
-    error={closeRequest ? closeError : transitionError}
-    onrespond={closeRequest ? respondToClose : respondToTransition}
-  />
+  {#if !IS_WEB_READONLY && (closeRequest || pendingTransition)}
+    {#await import('./CloseConfirm.svelte') then { default: CloseConfirm }}
+      <CloseConfirm
+        requestId={closeRequest || (pendingTransition ? 'context' : '')}
+        purpose={closeRequest ? 'close' : 'context'}
+        {editorLabel}
+        working={closeWorking || transitionWorking}
+        canSave={closeState?.canSave ?? false}
+        saveReason={closeState?.saveReason ?? `Return to the ${editorLabel} editor before saving.`}
+        error={closeRequest ? closeError : transitionError}
+        onrespond={closeRequest ? respondToClose : respondToTransition}
+      />
+    {/await}
+  {/if}
   {#if editorPlotNumber && $projectState?.contextId}
     {#await import('../diagnostics/LMH25DiagnosticsBar.svelte') then { default: LMH25DiagnosticsBar }}
       {@const matchingDraft = diagnosticsDraft?.plotNumber === editorPlotNumber ? diagnosticsDraft : null}
@@ -350,9 +358,9 @@
           humus={matchingDraft?.humus ?? []}
           mineral={matchingDraft?.mineral ?? []}
           waitForDraft={true}
-          onApplyHumusThickness={(v) => editor?.applyDiagnosticHumusThickness?.(v)}
-          onApplyKeyedSMR={(v) => editor?.applyDiagnosticSMR?.(v)}
-          onApplyKeyedSNR={(v) => editor?.applyDiagnosticSNR?.(v)}
+          onApplyHumusThickness={IS_WEB_READONLY ? undefined : (v) => editor?.applyDiagnosticHumusThickness?.(v)}
+          onApplyKeyedSMR={IS_WEB_READONLY ? undefined : (v) => editor?.applyDiagnosticSMR?.(v)}
+          onApplyKeyedSNR={IS_WEB_READONLY ? undefined : (v) => editor?.applyDiagnosticSNR?.(v)}
         />
       </div>
     {/await}

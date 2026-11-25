@@ -4,6 +4,7 @@
   import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
   import { formatError } from '../shared/readRequests';
   import { projectState } from '../shared/state';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
 
   let {
     region = 'main',
@@ -165,7 +166,7 @@
           class="w-full py-2 px-3 bg-vpro-forest hover:bg-vpro-forest-dark text-white rounded text-xs font-semibold"
           onclick={onopenfs882}
         >
-          Open in FS882 Editor
+          {IS_WEB_READONLY ? 'Open in FS882 Viewer' : 'Open in FS882 Editor'}
         </button>
         <button
           type="button"
@@ -174,7 +175,7 @@
           disabled={busy || editorBusy || transitionWorking || pendingTransition !== null}
           onclick={onopentwopage}
         >
-          Open Two-Page (FS882-8x6XL)
+          {IS_WEB_READONLY ? 'View Two-Page (FS882-8x6XL)' : 'Open Two-Page (FS882-8x6XL)'}
         </button>
         {#if siviAvailable}
           <button
@@ -182,11 +183,11 @@
             data-sivi-standalone-open
             class="mt-2 w-full py-2 px-3 border border-vpro-navy text-vpro-navy hover:bg-vpro-navy-tint rounded text-xs font-semibold"
             disabled={busy || editorBusy || transitionWorking || pendingTransition !== null}
-            onclick={onopensivi}>Open SIVI / FS1333</button
+            onclick={onopensivi}>{IS_WEB_READONLY ? 'View SIVI / FS1333' : 'Open SIVI / FS1333'}</button
           >
         {/if}
 
-        {#if oncopyplot || onremoveplot}
+        {#if !IS_WEB_READONLY && (oncopyplot || onremoveplot)}
           <details
             class="mt-3 rounded border border-vpro-border bg-vpro-surface-subtle p-2.5 text-xs"
             data-plot-identity-actions

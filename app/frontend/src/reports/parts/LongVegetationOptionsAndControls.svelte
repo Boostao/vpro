@@ -7,6 +7,7 @@
     SiteUnitExclusionSummary,
   } from '../../classification/siteUnitExclusionFilter';
   import { reportCellText } from '../longEnvironmentReport';
+  import { IS_WEB_READONLY } from '../../web/runtimeMode';
   import type { ValidatedProjectWorkbookReview } from '../longVegetationProjectWorkbook.svelte';
   import type { ValidatedVegetationWorkbookReview } from '../vegetationWorkbook';
 
@@ -68,16 +69,18 @@
     ? 'Explicit original whole-project scope; current SU is retained only for original quality authority when requested.'
     : 'Whole selected-SU scope; the current plot and profile navigation do not filter this report.'}
 </p>
-<dl class="scope">
-  <div>
-    <dt>Project database</dt>
-    <dd>{owner.projectPath}</dd>
-  </div>
-  <div>
-    <dt>Selected SU database</dt>
-    <dd>{owner.suPath || 'No selected SU'}</dd>
-  </div>
-</dl>
+{#if !IS_WEB_READONLY}
+  <dl class="scope">
+    <div>
+      <dt>Project database</dt>
+      <dd>{owner.projectPath}</dd>
+    </div>
+    <div>
+      <dt>Selected SU database</dt>
+      <dd>{owner.suPath || 'No selected SU'}</dd>
+    </div>
+  </dl>
+{/if}
 {#if ctrl.settings}
   {@const settings = ctrl.settings}
   <dl class="settings" aria-label="Read-only report options">
@@ -333,24 +336,31 @@
         {/each}
       </details>
     {/if}
-    <label for="vegetation-workbook-destination">New XLSX output file (existing files are never replaced)</label>
-    <textarea
-      id="vegetation-workbook-destination"
-      rows="2"
-      disabled={ctrl.busy || ctrl.operationHeld || ctrl.workbookBarrier || ctrl.preferenceBarrier}
-      bind:value={destination}></textarea>
+    {#if !IS_WEB_READONLY}
+      <label for="vegetation-workbook-destination">New XLSX output file (existing files are never replaced)</label>
+      <textarea
+        id="vegetation-workbook-destination"
+        rows="2"
+        disabled={ctrl.busy || ctrl.operationHeld || ctrl.workbookBarrier || ctrl.preferenceBarrier}
+        bind:value={destination}></textarea>
+    {/if}
     <button
       disabled={ctrl.busy ||
         ctrl.operationHeld ||
         ctrl.workbookBarrier ||
         ctrl.preferenceBarrier ||
-        !destination ||
-        !/\.xlsx$/i.test(destination)}
+        (!IS_WEB_READONLY && (!destination || !/\.xlsx$/i.test(destination)))}
       onclick={actions.onPublishWorkbook}
     >
-      {'scope' in reviewed && typeof reviewed.scope === 'string' && reviewed.scope !== 'unlumped'
-        ? `Publish reviewed ${reviewed.scope.replace(/^lump:/, '')} XLSX workbook`
-        : 'Publish reviewed unlumped XLSX workbook'}
+      {#if IS_WEB_READONLY}
+        {'scope' in reviewed && typeof reviewed.scope === 'string' && reviewed.scope !== 'unlumped'
+          ? `Download reviewed ${reviewed.scope.replace(/^lump:/, '')} XLSX workbook`
+          : 'Download reviewed unlumped XLSX workbook'}
+      {:else}
+        {'scope' in reviewed && typeof reviewed.scope === 'string' && reviewed.scope !== 'unlumped'
+          ? `Publish reviewed ${reviewed.scope.replace(/^lump:/, '')} XLSX workbook`
+          : 'Publish reviewed unlumped XLSX workbook'}
+      {/if}
     </button>
     <p class="guidance">
       Report settings and layout remain read-only during export. Exporting writes a new .xlsx file and never overwrites

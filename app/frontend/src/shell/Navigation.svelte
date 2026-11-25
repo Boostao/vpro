@@ -25,6 +25,8 @@
     Tent,
     UserCog,
   } from '@lucide/svelte';
+  import { webShellRuntime } from '../shared/state';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
 
   type View =
     | 'home'
@@ -78,6 +80,7 @@
     whatsNewUnreadCount = 0,
     resetSampleAvailable = true,
     releaseChannel = 'stable',
+    picturesAvailable = true,
   }: {
     view: View;
     onnavigate: (view: View) => void;
@@ -94,13 +97,14 @@
     whatsNewUnreadCount?: number;
     resetSampleAvailable?: boolean;
     releaseChannel?: string;
+    picturesAvailable?: boolean;
   } = $props();
   let navigation: HTMLElement;
   let openMenu = $state<string | null>(null);
 
   const showDeferredPhase2 = $derived(releaseChannel === 'experimental');
 
-  const menus: Menu[] = $derived([
+  const rawMenus: Menu[] = $derived([
     {
       label: 'Forms',
       icon: ClipboardList,
@@ -220,6 +224,10 @@
       ],
     },
   ]);
+
+  const menus: Menu[] = $derived(
+    IS_WEB_READONLY ? ($webShellRuntime ? $webShellRuntime.filterMenus(rawMenus, true, picturesAvailable) : []) : rawMenus
+  );
 
   function closeMenu(restoreFocus = false) {
     if (restoreFocus && openMenu) {
@@ -364,12 +372,20 @@
                   : undefined}
                 title={item.action === 'sivi'
                   ? itemEnabled(item)
-                    ? 'SIVI / FS1333 editor for the selected plot. Existing draft and close guards apply.'
-                    : 'Select a plot to open SIVI / FS1333 data entry.'
+                    ? IS_WEB_READONLY
+                      ? 'View SIVI / FS1333 record for the selected plot.'
+                      : 'SIVI / FS1333 editor for the selected plot. Existing draft and close guards apply.'
+                    : IS_WEB_READONLY
+                      ? 'Select a plot to view SIVI / FS1333 data.'
+                      : 'Select a plot to open SIVI / FS1333 data entry.'
                   : item.action === 'metadata'
                     ? itemEnabled(item)
-                      ? 'Project metadata for the active project (requires a clean, unlocked editor when a plot is open).'
-                      : 'Finish or Undo drafts in a clean, unlocked editor before opening Project Metadata.'
+                      ? IS_WEB_READONLY
+                        ? 'View project metadata for the active dataset.'
+                        : 'Project metadata for the active project (requires a clean, unlocked editor when a plot is open).'
+                      : IS_WEB_READONLY
+                        ? 'Open a dataset to view project metadata.'
+                        : 'Finish or Undo drafts in a clean, unlocked editor before opening Project Metadata.'
                     : item.action === 'cloud-sync'
                       ? item.name
                       : item.helpAction === 'reset-sample'
@@ -379,7 +395,9 @@
                           : item.deferredPhase2
                             ? 'Planned for a future release'
                             : item.view === 'fs882'
-                              ? 'FS882 6x4 & 2-Page plot data entry'
+                              ? IS_WEB_READONLY
+                                ? 'FS882 6x4 & 2-Page plot viewer'
+                                : 'FS882 6x4 & 2-Page plot data entry'
                               : item.view
                                 ? item.name
                                 : item.name}

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Plus, Trash2 } from '@lucide/svelte';
   import type { VegRecord } from '../../bindings/github.com/boostao/vpro/app';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
 
   let {
     vegList,
@@ -117,14 +118,16 @@
 
     <div class="flex flex-wrap justify-between items-center gap-2">
       <h3 class="font-bold text-xs uppercase tracking-wider text-vpro-navy">Vegetation Entries ({vegList.length})</h3>
-      <button
-        type="button"
-        onclick={onopenspeciesmodal}
-        disabled
-        class="px-2.5 py-1 bg-vpro-navy hover:bg-vpro-navy-dark text-white rounded text-xs flex items-center gap-1"
-      >
-        <Plus size={14} /> Add Species (BC Catalog)
-      </button>
+      {#if !IS_WEB_READONLY}
+        <button
+          type="button"
+          onclick={onopenspeciesmodal}
+          disabled
+          class="px-2.5 py-1 bg-vpro-navy hover:bg-vpro-navy-dark text-white rounded text-xs flex items-center gap-1"
+        >
+          <Plus size={14} /> Add Species (BC Catalog)
+        </button>
+      {/if}
     </div>
 
     <div class="table-scroll border border-vpro-border rounded overflow-x-auto bg-white">

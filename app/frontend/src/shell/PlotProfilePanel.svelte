@@ -20,6 +20,7 @@
   } from '../classification/projectPlotProfileReview';
   import { formatError, type ReadRequests } from '../shared/readRequests';
   import { projectState } from '../shared/state';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import {
     choosePlotProfileOp,
     createBlankProfileFileOp,
@@ -564,7 +565,7 @@
   });
 </script>
 
-{#if suReview}
+{#if !IS_WEB_READONLY && suReview}
   <PlotProfileSUSection
     {suReview}
     {suReviewContext}

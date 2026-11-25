@@ -48,6 +48,7 @@
     error: string;
   };
 
+  const IS_WEB_READONLY = typeof __VPRO_WEB_READONLY__ !== 'undefined' && __VPRO_WEB_READONLY__ === true;
   const reads = new ReadRequests();
   const draftKey = (rowId: string, column: string) => `${rowId}::${column}`;
 
@@ -93,9 +94,10 @@
   const invalidDraftCount = $derived(draftEntries.filter((d) => d.error !== '').length);
   const validEditCount = $derived(draftEntries.filter((d) => d.error === '' && d.after !== null).length);
   const activeTableReadOnly = $derived(
-    page
-      ? gridLib.isReadOnlyDatasheetTable(page.tableKey, page.readOnly)
-      : gridLib.isReadOnlyDatasheetTable(activeTableKey)
+    IS_WEB_READONLY ||
+      (page
+        ? gridLib.isReadOnlyDatasheetTable(page.tableKey, page.readOnly)
+        : gridLib.isReadOnlyDatasheetTable(activeTableKey))
   );
   const activeChildTableEditable = $derived(
     !!page && !activeTableReadOnly && gridLib.isEditableChildTable(page.tableKey)
@@ -238,6 +240,7 @@
   }
 
   function setCellDraft(rowIndex: number, displayColIndex: number, rawValue: string) {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     const row = page?.rows[rowIndex];
     const colEntry = orderedColumns[displayColIndex];
     if (!page || !row || !colEntry) return;
@@ -280,6 +283,7 @@
   }
 
   async function saveDrafts() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!page || saving || validEditCount === 0) return;
     if (invalidDraftCount > 0) {
       errorMessage = `Resolve ${invalidDraftCount} invalid cell(s) before saving.`;
@@ -345,6 +349,7 @@
   }
 
   async function applyFindReplaceValid() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!page || !findPreview || findPreview.validCount === 0) return;
     const validEdits = findPreview.items.filter((i) => !i.validationError).map((i) => $state.snapshot(i.edit));
     if (validEdits.length === 0) return;

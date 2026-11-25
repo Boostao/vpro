@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import {
     resolveAriaTreeKeyAction,
     type ExplorerMode,
@@ -185,11 +186,13 @@
         }}
       />
       <button type="button" class="vpro-btn-secondary" onclick={onLoadSUTree}>Filter</button>
-      <button type="button" class="vpro-btn-secondary" onclick={() => onOpenDialog('new_su')}>New SU</button>
-      <button type="button" class="vpro-btn-secondary" onclick={() => onOpenDialog('save_su_as')}>Save As</button>
-      <button type="button" class="vpro-btn-secondary" onclick={() => onOpenDialog('su_from_env')}>SU from Env</button>
-      {#if lastHistoryId > 0}
-        <button type="button" class="vpro-btn-secondary" disabled={mutating} onclick={onUndoLast}>Undo</button>
+      {#if !IS_WEB_READONLY}
+        <button type="button" class="vpro-btn-secondary" onclick={() => onOpenDialog('new_su')}>New SU</button>
+        <button type="button" class="vpro-btn-secondary" onclick={() => onOpenDialog('save_su_as')}>Save As</button>
+        <button type="button" class="vpro-btn-secondary" onclick={() => onOpenDialog('su_from_env')}>SU from Env</button>
+        {#if lastHistoryId > 0}
+          <button type="button" class="vpro-btn-secondary" disabled={mutating} onclick={onUndoLast}>Undo</button>
+        {/if}
       {/if}
     </div>
 
@@ -243,6 +246,7 @@
                 }
               }}
               ondragover={(e) => {
+                if (IS_WEB_READONLY) return;
                 e.preventDefault();
                 dragOverBucket = item.id;
               }}
@@ -251,7 +255,7 @@
               }}
               ondrop={(e) => {
                 dragOverBucket = null;
-                onBucketDrop(e, item.unitCode);
+                if (!IS_WEB_READONLY) onBucketDrop(e, item.unitCode);
               }}
             >
               <span class="vpro-tree-caret">{item.expandable ? (item.expanded ? '[-]' : '[+]') : '[ ]'}</span>
@@ -259,7 +263,7 @@
               <strong class="mono">{item.label}</strong>
               {#if item.subtitle}<span class="vpro-tree-sub">{item.subtitle}</span>{/if}
               <span class="vpro-tree-count">{item.count ?? 0}</span>
-              {#if selectedPlots.length > 0}
+              {#if !IS_WEB_READONLY && selectedPlots.length > 0}
                 <button
                   type="button"
                   class="vpro-btn-mini"
@@ -280,7 +284,7 @@
               data-tree-item-id={item.id}
               aria-level={2}
               aria-selected={isSelected}
-              draggable="true"
+              draggable={!IS_WEB_READONLY}
               class="vpro-tree-leaf"
               class:selected={isSelected}
               style={`height:${treeRowHeight}px;`}
@@ -320,12 +324,14 @@
     </div>
   {:else}
     <div class="vpro-cls-subtoolbar">
-      <button type="button" class="vpro-btn-secondary" onclick={() => onOpenDialog('new_hierarchy')}
-        >New Hierarchy</button
-      >
-      <button type="button" class="vpro-btn-secondary" onclick={() => onOpenDialog('save_hierarchy_as')}
-        >Save Hierarchy As</button
-      >
+      {#if !IS_WEB_READONLY}
+        <button type="button" class="vpro-btn-secondary" onclick={() => onOpenDialog('new_hierarchy')}
+          >New Hierarchy</button
+        >
+        <button type="button" class="vpro-btn-secondary" onclick={() => onOpenDialog('save_hierarchy_as')}
+          >Save Hierarchy As</button
+        >
+      {/if}
       <button
         type="button"
         class="vpro-btn-secondary"
@@ -447,19 +453,23 @@
                 Orphan
               </span>
             {/if}
-            <button
-              type="button"
-              class="vpro-tilde-btn"
-              class:active={item.isBreakpoint}
-              title="Toggle '~' Report Breakpoint"
-              disabled={mutating}
-              onclick={(e) => {
-                e.stopPropagation();
-                onToggleBreak(item.nodeId);
-              }}
-            >
-              ~ Break
-            </button>
+            {#if !IS_WEB_READONLY}
+              <button
+                type="button"
+                class="vpro-tilde-btn"
+                class:active={item.isBreakpoint}
+                title="Toggle '~' Report Breakpoint"
+                disabled={mutating}
+                onclick={(e) => {
+                  e.stopPropagation();
+                  onToggleBreak(item.nodeId);
+                }}
+              >
+                ~ Break
+              </button>
+            {:else if item.isBreakpoint}
+              <span class="vpro-tilde-btn active" title="Summary report breakpoint">~ Break</span>
+            {/if}
           </div>
         {/each}
 

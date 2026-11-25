@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type { OutlierFilterMode, OutlierPlotCandidate, SynthesisSnapshot } from './classificationSynthesis';
 
   interface Props {
@@ -94,7 +95,7 @@
           class="outlier-card"
           class:is-misplaced={cand.misplaced}
           class:is-top5={cand.top5PercentAnomaly}
-          draggable={Boolean(snapshot?.suWritable)}
+          draggable={!IS_WEB_READONLY && Boolean(snapshot?.suWritable)}
           ondragstart={(ev) => onPlotDragStart(ev, cand.plotNumber)}
           ondragend={onPlotDragEnd}
         >
@@ -140,7 +141,7 @@
             {/if}
           </div>
 
-          {#if snapshot && snapshot.units.length > 1}
+          {#if !IS_WEB_READONLY && snapshot && snapshot.units.length > 1}
             <div class="outlier-actions">
               {#if cand.nearestRivalUnit}
                 <button

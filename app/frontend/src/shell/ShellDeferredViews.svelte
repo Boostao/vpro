@@ -1,7 +1,8 @@
 <script lang="ts">
   import { ContextService } from '../../bindings/github.com/boostao/vpro/app';
   import { formatError, type ReadRequests } from '../shared/readRequests';
-  import { projectState } from '../shared/state';
+  import { projectState, webMeta } from '../shared/state';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type { ShellViewId } from './shellPlotOps';
 
   let {
@@ -77,7 +78,7 @@
       {onOpenPlot}
     />
   {/await}
-{:else if view === 'project-admin' && $projectState}
+{:else if view === 'project-admin' && $projectState && !IS_WEB_READONLY}
   <div class="p-3 space-y-4">
     {#await import('../admin/ProjectAdminWorkbench.svelte')}
       <p role="status" class="p-4 text-sm">Loading Project Admin Workbench...</p>
@@ -298,7 +299,7 @@
         }}
       />{/key}
   {:catch loadError}<p class="error" role="alert">Table CSV Review could not load: {formatError(loadError)}</p>{/await}
-{:else if view === 'user-log' && $projectState}
+{:else if view === 'user-log' && $projectState && !IS_WEB_READONLY}
   {#await import('../admin/UserLogReview.svelte')}
     <p role="status" class="p-4 text-sm">Loading User Log Review...</p>
   {:then { default: UserLogReview }}
@@ -328,7 +329,7 @@
   {:catch loadError}<p class="error" role="alert">
       Plot Label Preview could not load: {formatError(loadError)}
     </p>{/await}
-{:else if view === 'picture-manager' && $projectState}
+{:else if view === 'picture-manager' && $projectState && (!IS_WEB_READONLY || $webMeta?.picturesAvailable !== false)}
   {#await import('../pictures/PictureManager.svelte')}
     <p role="status" class="p-4 text-sm">Loading Picture Manager...</p>
   {:then { default: PictureManager }}

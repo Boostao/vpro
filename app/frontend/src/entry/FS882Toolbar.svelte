@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Columns2, FileText, Lock, RotateCcw, Save, Unlock } from '@lucide/svelte';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type { FS882Controller } from './fs882FormController.svelte';
 
   let {
@@ -50,68 +51,85 @@
 >
   <div class="flex items-center gap-3">
     <h2 data-help-id={siviStandalone ? 'sivi.plot_type' : 'site.plot_number'} class="font-bold text-vpro-ink text-base">
-      {siviStandalone ? 'SIVI / FS1333: Site Visit' : 'FS882-6x4XL: Ecosystem Field Form'}
+      {siviStandalone
+        ? IS_WEB_READONLY
+          ? 'SIVI / FS1333: Site Visit Viewer'
+          : 'SIVI / FS1333: Site Visit'
+        : IS_WEB_READONLY
+          ? 'FS882-6x4XL: Ecosystem Plot Viewer'
+          : 'FS882-6x4XL: Ecosystem Field Form'}
     </h2>
-    <span
-      class="px-2 py-0.5 rounded text-xs font-semibold {ctrl.effectiveFormDirty
-        ? 'bg-amber-100 text-amber-800'
-        : 'bg-vpro-rail text-vpro-ink-secondary'}"
-    >
-      {ctrl.effectiveFormDirty ? 'Draft Unsaved' : 'Clean'}
-    </span>
-    {#if locked}
-      <span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700 flex items-center gap-1">
-        <Lock size={12} /> Locked (Read-Only)
+    {#if IS_WEB_READONLY}
+      <span class="px-2 py-0.5 rounded text-xs font-semibold bg-vpro-rail text-vpro-navy" data-fs882-readonly-badge>
+        Read-Only
       </span>
+    {:else}
+      <span
+        class="px-2 py-0.5 rounded text-xs font-semibold {ctrl.effectiveFormDirty
+          ? 'bg-amber-100 text-amber-800'
+          : 'bg-vpro-rail text-vpro-ink-secondary'}"
+      >
+        {ctrl.effectiveFormDirty ? 'Draft Unsaved' : 'Clean'}
+      </span>
+      {#if locked}
+        <span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700 flex items-center gap-1">
+          <Lock size={12} /> Locked (Read-Only)
+        </span>
+      {/if}
     {/if}
   </div>
   <div class="fs882-actions flex flex-wrap items-center gap-2">
     {#if !siviStandalone}
-      <button
-        type="button"
-        data-two-page-review
-        class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50"
-        disabled={reviewDisabled}
-        onclick={() => ctrl.openTwoPageReview('extra')}>Two-page additional fields</button
-      >
-      <button
-        type="button"
-        data-two-page-common-review
-        class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50"
-        disabled={reviewDisabled}
-        onclick={() => ctrl.openTwoPageReview('common')}>Two-page common fields</button
-      >
+      {#if !IS_WEB_READONLY}
+        <button
+          type="button"
+          data-two-page-review
+          class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50"
+          disabled={reviewDisabled}
+          onclick={() => ctrl.openTwoPageReview('extra')}>Two-page additional fields</button
+        >
+        <button
+          type="button"
+          data-two-page-common-review
+          class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50"
+          disabled={reviewDisabled}
+          onclick={() => ctrl.openTwoPageReview('common')}>Two-page common fields</button
+        >
+      {/if}
       <button
         type="button"
         data-two-page-entry-review
         class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50"
         disabled={reviewDisabled}
-        onclick={() => ctrl.openTwoPageReview('entry')}>Complete two-page entry</button
+        onclick={() => ctrl.openTwoPageReview('entry')}
+        >{IS_WEB_READONLY ? 'Two-page plot viewer' : 'Complete two-page entry'}</button
       >
-      <button
-        type="button"
-        data-source-control="btnEnvIntoSu"
-        class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50"
-        disabled={reviewDisabled || activeSUNone}
-        onclick={() => ctrl.openEnvironmentSU()}>Env Into SU</button
-      >
-      {#if !ctrl.separateSUSelected}
+      {#if !IS_WEB_READONLY}
         <button
           type="button"
-          data-source-control="btnSuIntoEnv"
+          data-source-control="btnEnvIntoSu"
           class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50"
           disabled={reviewDisabled || activeSUNone}
-          onclick={() => ctrl.openEnvironmentSU('reverse')}>SU Into Env</button
+          onclick={() => ctrl.openEnvironmentSU()}>Env Into SU</button
         >
-      {:else if !ctrl.twoPageOpen}
-        <button
-          type="button"
-          data-source-control="btnSuIntoEnv"
-          data-external-su-environment-open
-          class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50"
-          disabled={reviewDisabled}
-          onclick={ctrl.openExternalSUEnvironment}>SU Into Env: separate file</button
-        >
+        {#if !ctrl.separateSUSelected}
+          <button
+            type="button"
+            data-source-control="btnSuIntoEnv"
+            class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50"
+            disabled={reviewDisabled || activeSUNone}
+            onclick={() => ctrl.openEnvironmentSU('reverse')}>SU Into Env</button
+          >
+        {:else if !ctrl.twoPageOpen}
+          <button
+            type="button"
+            data-source-control="btnSuIntoEnv"
+            data-external-su-environment-open
+            class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50"
+            disabled={reviewDisabled}
+            onclick={ctrl.openExternalSUEnvironment}>SU Into Env: separate file</button
+          >
+        {/if}
       {/if}
     {/if}
     {#if onFindPlot}
@@ -122,7 +140,7 @@
         onclick={onFindPlot}>Find Plot</button
       >
     {/if}
-    {#if ctrl.original !== null && !siviStandalone && canManagePlot}
+    {#if !IS_WEB_READONLY && ctrl.original !== null && !siviStandalone && canManagePlot}
       <button
         type="button"
         data-manage-plot-btn
@@ -180,42 +198,44 @@
     >
       <Columns2 size={14} /> Dock Split View
     </button>
-    <button
-      type="button"
-      onclick={onToggleLock}
-      disabled={ctrl.busy || ctrl.headerWorkflowBusy || !ctrl.capabilitiesReady || siviLockBlocked}
-      class="px-3 py-1 rounded text-xs font-medium border flex items-center gap-1 {locked
-        ? 'bg-vpro-rail hover:bg-vpro-border border-vpro-border'
-        : 'bg-vpro-canvas hover:bg-vpro-rail border-vpro-border'}"
-      title={locked ? 'Unlock Form' : 'Lock Form'}
-    >
-      {#if locked}<Unlock size={14} /> Unlock{:else}<Lock size={14} /> Lock{/if}
-    </button>
-    <button
-      type="button"
-      onclick={onUndo}
-      disabled={(!ctrl.dirty && !ctrl.childUnsaved) ||
-        locked ||
-        ctrl.busy ||
-        ctrl.headerWorkflowBusy ||
-        !ctrl.capabilitiesReady}
-      class="px-3 py-1 rounded text-xs font-medium border border-vpro-border bg-white hover:bg-vpro-surface-subtle disabled:opacity-50 flex items-center gap-1"
-    >
-      <RotateCcw size={14} /> Undo
-    </button>
-    <button
-      type="button"
-      onclick={onSave}
-      disabled={(!ctrl.dirty && !ctrl.childUnsaved) ||
-        locked ||
-        ctrl.busy ||
-        ctrl.headerWorkflowBusy ||
-        !ctrl.capabilitiesReady ||
-        siviSaveBlocked}
-      class="px-3 py-1 rounded text-xs font-medium bg-vpro-navy hover:bg-vpro-navy-dark text-white disabled:opacity-50 flex items-center gap-1"
-    >
-      <Save size={14} /> Save
-    </button>
+    {#if !IS_WEB_READONLY}
+      <button
+        type="button"
+        onclick={onToggleLock}
+        disabled={ctrl.busy || ctrl.headerWorkflowBusy || !ctrl.capabilitiesReady || siviLockBlocked}
+        class="px-3 py-1 rounded text-xs font-medium border flex items-center gap-1 {locked
+          ? 'bg-vpro-rail hover:bg-vpro-border border-vpro-border'
+          : 'bg-vpro-canvas hover:bg-vpro-rail border-vpro-border'}"
+        title={locked ? 'Unlock Form' : 'Lock Form'}
+      >
+        {#if locked}<Unlock size={14} /> Unlock{:else}<Lock size={14} /> Lock{/if}
+      </button>
+      <button
+        type="button"
+        onclick={onUndo}
+        disabled={(!ctrl.dirty && !ctrl.childUnsaved) ||
+          locked ||
+          ctrl.busy ||
+          ctrl.headerWorkflowBusy ||
+          !ctrl.capabilitiesReady}
+        class="px-3 py-1 rounded text-xs font-medium border border-vpro-border bg-white hover:bg-vpro-surface-subtle disabled:opacity-50 flex items-center gap-1"
+      >
+        <RotateCcw size={14} /> Undo
+      </button>
+      <button
+        type="button"
+        onclick={onSave}
+        disabled={(!ctrl.dirty && !ctrl.childUnsaved) ||
+          locked ||
+          ctrl.busy ||
+          ctrl.headerWorkflowBusy ||
+          !ctrl.capabilitiesReady ||
+          siviSaveBlocked}
+        class="px-3 py-1 rounded text-xs font-medium bg-vpro-navy hover:bg-vpro-navy-dark text-white disabled:opacity-50 flex items-center gap-1"
+      >
+        <Save size={14} /> Save
+      </button>
+    {/if}
     {#if onClosed}
       <button
         type="button"

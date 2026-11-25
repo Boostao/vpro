@@ -9,6 +9,9 @@
   import { plotLabelPDFPublicationSession, validatePlotLabelPDFReview } from './plotLabelPDFExport';
   import type { PublicationView } from '../shared/publicationSession';
   import { notifications } from '../shell/notificationService.svelte';
+  import { defaultWebExportFilename } from '../shell/webReadOnlyShell';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
+  import { formatWebDownloadFeedback } from '../web/webMeta';
   import PlotLabelFieldDetails from './PlotLabelFieldDetails.svelte';
   import {
     buildPdfNotificationKey,
@@ -156,25 +159,35 @@
   }
 
   async function publishPDF() {
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
     const toastOpts = { category: 'reports' as const, source: 'Plot Labels', contextTag: project || undefined };
     if (!pdfSession || !pdfReview || busy || publication.busy || publication.blocked) {
       error = 'Review a saved plot label and finish any active export first.';
       notifications.error('Label PDF export blocked', error, toastOpts);
       return;
     }
+    const targetDestination =
+      webReadOnly && !destination.trim()
+        ? typeof defaultWebExportFilename === 'function'
+          ? defaultWebExportFilename(`${project || 'vpro'}_plot_${pdfReview.preview.plotNumber}`, '.pdf')
+          : `${project || 'vpro'}_plot_${pdfReview.preview.plotNumber}.pdf`
+        : destination;
     error = '';
     try {
-      await pdfSession.publish(pdfReview, destination, (request) =>
+      await pdfSession.publish(pdfReview, targetDestination, (request) =>
         ImportExportService.ExportReviewedPlotLabelPDF(contextId, JSON.stringify(request))
       );
       const latest = pdfSession.view();
       const key = buildPdfNotificationKey(latest);
       if (typeof lastNotifiedPdfKey === 'undefined' || (key && lastNotifiedPdfKey !== key)) {
         if (typeof lastNotifiedPdfKey !== 'undefined' && key) lastNotifiedPdfKey = key;
-        emitPlotLabelPdfExportToast(notifications, latest, pdfReview.preview.plotNumber, destination, project);
+        emitPlotLabelPdfExportToast(notifications, latest, pdfReview.preview.plotNumber, targetDestination, project);
       }
     } catch (cause) {
-      error = `Label PDF export unavailable: ${formatError(cause)}`;
+      error =
+        webReadOnly && typeof formatWebDownloadFeedback === 'function'
+          ? formatWebDownloadFeedback(cause, 'Plot label PDF download')
+          : `Label PDF export unavailable: ${formatError(cause)}`;
       notifications.error('Label PDF export failed', error, toastOpts);
     }
   }
@@ -263,12 +276,19 @@
           <dd>{pdfReview.pdfSHA256}</dd>
         </div>
       </dl>
-      <label for="plot-label-pdf-destination">
-        New PDF destination
-        <input id="plot-label-pdf-destination" bind:value={destination} disabled={locked} />
-      </label>
-      <button type="button" class="btn-primary" disabled={locked || !destination} onclick={() => void publishPDF()}>
-        Export reviewed label PDF
+      {#if !IS_WEB_READONLY}
+        <label for="plot-label-pdf-destination">
+          New PDF destination
+          <input id="plot-label-pdf-destination" bind:value={destination} disabled={locked} />
+        </label>
+      {/if}
+      <button
+        type="button"
+        class="btn-primary"
+        disabled={locked || (!IS_WEB_READONLY && !destination)}
+        onclick={() => void publishPDF()}
+      >
+        {IS_WEB_READONLY ? 'Download reviewed label PDF' : 'Export reviewed label PDF'}
       </button>
     {/if}
     {#if publication.blocked && !publication.busy}

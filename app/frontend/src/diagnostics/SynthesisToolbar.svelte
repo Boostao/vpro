@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type {
     MatrixDisplayMode,
     MatrixGroupingMode,
@@ -115,26 +116,28 @@
     </select>
   </label>
 
-  <div class="syn-control-buttons">
-    <button
-      type="button"
-      class="syn-btn syn-btn-ghost-dark"
-      data-synthesis-browse-lump
-      onclick={onBrowseExternalLump}
-      disabled={loading || mutating}
-    >
-      External Lump .db...
-    </button>
-    <button
-      type="button"
-      class="syn-btn syn-btn-ghost-dark"
-      data-synthesis-browse-su
-      onclick={onBrowseExternalSU}
-      disabled={loading || mutating}
-    >
-      Inspect External SU .db...
-    </button>
-  </div>
+  {#if !IS_WEB_READONLY}
+    <div class="syn-control-buttons">
+      <button
+        type="button"
+        class="syn-btn syn-btn-ghost-dark"
+        data-synthesis-browse-lump
+        onclick={onBrowseExternalLump}
+        disabled={loading || mutating}
+      >
+        External Lump .db...
+      </button>
+      <button
+        type="button"
+        class="syn-btn syn-btn-ghost-dark"
+        data-synthesis-browse-su
+        onclick={onBrowseExternalSU}
+        disabled={loading || mutating}
+      >
+        Inspect External SU .db...
+      </button>
+    </div>
+  {/if}
 
   <label class="syn-control">
     <span>Significance Basis</span>

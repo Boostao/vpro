@@ -9,6 +9,9 @@
   import { reportCellText } from '../reports/longEnvironmentReport';
   import { ReadRequests, formatError } from '../shared/readRequests';
   import { notifications } from '../shell/notificationService.svelte';
+  import { defaultWebExportFilename } from '../shell/webReadOnlyShell';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
+  import { formatWebDownloadFeedback } from '../web/webMeta';
   import GoogleEarthKmlSection from './GoogleEarthKmlSection.svelte';
   import GoogleEarthLocationsTable from './GoogleEarthLocationsTable.svelte';
   import { googleEarthKMLPublicationSession, validateGoogleEarthKMLExportReview } from './googleEarthKMLExport';
@@ -214,6 +217,7 @@
   }
 
   async function savePreferences() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (locked || !preferenceSession) return;
     const meta = { category: 'reports' as const, source: 'Google Earth KML', contextTag: project || undefined };
     error = '';
@@ -358,15 +362,22 @@
   }
 
   async function publishKML() {
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
     const meta = { category: 'reports' as const, source: 'Google Earth KML', contextTag: project || undefined };
     if (locked || !approval) {
       error = 'Prepare an owned KML file review and acknowledge any prior outcome first.';
       notifications.error('KML export blocked', error, meta);
       return;
     }
+    const targetDestination =
+      webReadOnly && !destination.trim()
+        ? typeof defaultWebExportFilename === 'function'
+          ? defaultWebExportFilename(`${project || 'vpro'}_plots`, '.kml')
+          : `${project || 'vpro'}_plots.kml`
+        : destination;
     error = '';
     try {
-      await publicationSession.publish(approval, destination, (request) =>
+      await publicationSession.publish(approval, targetDestination, (request) =>
         SpatialService.ExportReviewedGoogleEarthKML(contextId, JSON.stringify(request))
       );
       const current = publicationSession.view();
@@ -379,8 +390,10 @@
         if (typeof lastNotifiedKmlKey !== 'undefined' && key) lastNotifiedKmlKey = key;
         if (current.outcome?.status === 'published') {
           notifications.success(
-            'Google Earth KML exported',
-            `Exported KML to ${current.outcome.path || destination}.`,
+            webReadOnly ? 'Google Earth KML downloaded' : 'Google Earth KML exported',
+            webReadOnly
+              ? `Downloaded Google Earth KML (${targetDestination}).`
+              : `Exported KML to ${current.outcome.path || targetDestination}.`,
             meta
           );
         } else {
@@ -392,7 +405,10 @@
         }
       }
     } catch (cause) {
-      error = `KML publication request unavailable: ${formatError(cause)}`;
+      error =
+        webReadOnly && typeof formatWebDownloadFeedback === 'function'
+          ? formatWebDownloadFeedback(cause, 'Google Earth KML download')
+          : `KML publication request unavailable: ${formatError(cause)}`;
       notifications.error('Google Earth KML export failed', error, meta);
     }
   }
@@ -436,23 +452,27 @@
       <button
         type="button"
         data-google-earth-kml-publish
-        disabled={locked || !approval || !destination || !wellFormedUTF16(destination) || destination.includes('\0')}
+        disabled={locked ||
+          !approval ||
+          (!IS_WEB_READONLY && (!destination || !wellFormedUTF16(destination) || destination.includes('\0')))}
         onclick={publishKML}
       >
-        Build reviewed KML file (never replace)
+        {IS_WEB_READONLY ? 'Download Google Earth KML' : 'Build reviewed KML file (never replace)'}
       </button>
       {#if busy}<button type="button" data-google-earth-cancel onclick={cancel}>Cancel preparation read</button>{/if}
     </div>
   </header>
 
-  <GoogleEarthPreferencesSection
-    {preferences}
-    {locked}
-    onLoadPreferences={loadPreferences}
-    onSavePreferences={savePreferences}
-    onUndoPreferences={undoPreferences}
-    onAcknowledgePreferences={() => preferenceSession.acknowledge()}
-  />
+  {#if !IS_WEB_READONLY}
+    <GoogleEarthPreferencesSection
+      {preferences}
+      {locked}
+      onLoadPreferences={loadPreferences}
+      onSavePreferences={savePreferences}
+      onUndoPreferences={undoPreferences}
+      onAcknowledgePreferences={() => preferenceSession.acknowledge()}
+    />
+  {/if}
 
   <GoogleEarthKmlSection
     {project}

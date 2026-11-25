@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type { SynthesisSnapshot } from './classificationSynthesis';
 
   interface Props {
@@ -41,19 +42,21 @@
     <button type="button" class="syn-btn syn-btn-ghost" disabled={loading || mutating} onclick={onRefresh}>
       Refresh
     </button>
-    <button
-      type="button"
-      class="syn-btn syn-btn-ghost"
-      disabled={!snapshot?.canUndo || mutating || loading}
-      title={snapshot?.latestUndo
-        ? `Undo move of plot ${snapshot.latestUndo.plotNumber} (${snapshot.latestUndo.afterSiteUnit} -> ${snapshot.latestUndo.beforeSiteUnit || 'Unassigned'})`
-        : 'No synthesis SU reassignment to undo'}
-      onclick={onUndo}
-    >
-      Undo Move{snapshot?.undoDepth ? ` (${snapshot.undoDepth})` : ''}
-    </button>
+    {#if !IS_WEB_READONLY}
+      <button
+        type="button"
+        class="syn-btn syn-btn-ghost"
+        disabled={!snapshot?.canUndo || mutating || loading}
+        title={snapshot?.latestUndo
+          ? `Undo move of plot ${snapshot.latestUndo.plotNumber} (${snapshot.latestUndo.afterSiteUnit} -> ${snapshot.latestUndo.beforeSiteUnit || 'Unassigned'})`
+          : 'No synthesis SU reassignment to undo'}
+        onclick={onUndo}
+      >
+        Undo Move{snapshot?.undoDepth ? ` (${snapshot.undoDepth})` : ''}
+      </button>
+    {/if}
     <button type="button" class="syn-btn syn-btn-gold" disabled={!snapshot || loading} onclick={onOpenExport}>
-      Publish Diagnostic .xlsx
+      {IS_WEB_READONLY ? 'Download Diagnostic .xlsx' : 'Publish Diagnostic .xlsx'}
     </button>
   </div>
 </header>

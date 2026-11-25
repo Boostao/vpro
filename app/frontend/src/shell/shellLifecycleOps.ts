@@ -20,7 +20,9 @@ import {
 import { classifyGlobalHelpShortcut } from '../help/helpSystem';
 import { onContextDisposed } from '../shared/contextSessionRegistry';
 import { formatError, type ReadRequests } from '../shared/readRequests';
-import { projectState } from '../shared/state';
+import { get } from 'svelte/store';
+import { projectState, webMeta, webShellRuntime } from '../shared/state';
+import { IS_WEB_READONLY } from '../web/runtimeMode';
 import { closeDisposition, type CloseDecision, type EditorCloseState } from './closeLifecycle';
 import { notifications } from './notificationService.svelte';
 import {
@@ -121,24 +123,33 @@ export function mountShellWindowLifecycle(
   onCloseReq: (id: string) => void,
   onRefresh: () => void,
   onError: (msg: string) => void,
-  onCleanup: () => void
+  onCleanup: () => void,
+  webReadOnly: boolean = IS_WEB_READONLY
 ): () => void {
   void import('../shared/dialogA11y').then(({ installGlobalAriaModalTabTrap }) => installGlobalAriaModalTabTrap());
   const stopViewport = ui.installViewportAndWhatsNew();
-  const stopCloseEvents = Events.On(VproCloseRequest, (event) => {
-    const requestId: unknown = event.data;
-    if (typeof requestId !== 'string' || !requestId) {
-      onError('Could not complete window close request; VPRO remains open.');
-      return;
-    }
-    onCloseReq(requestId);
-  });
-  void lifecycleService
-    .GetPendingCloseRequest()
-    .then((requestId) => {
-      if (requestId) onCloseReq(requestId);
-    })
-    .catch((cause) => onError(`Window close handler could not initialise: ${formatError(cause)}`));
+  let stopCloseEvents = () => {};
+  if (webReadOnly) {
+    void import('../web/webMeta').then((mod) => {
+      void mod.loadWebMeta();
+      void mod.bootstrapWebShellRuntime();
+    });
+  } else {
+    stopCloseEvents = Events.On(VproCloseRequest, (event) => {
+      const requestId: unknown = event.data;
+      if (typeof requestId !== 'string' || !requestId) {
+        onError('Could not complete window close request; VPRO remains open.');
+        return;
+      }
+      onCloseReq(requestId);
+    });
+    void lifecycleService
+      .GetPendingCloseRequest()
+      .then((requestId) => {
+        if (requestId) onCloseReq(requestId);
+      })
+      .catch((cause) => onError(`Window close handler could not initialise: ${formatError(cause)}`));
+  }
   onRefresh();
   return () => {
     onCleanup();
@@ -295,6 +306,12 @@ export function runNavigateOp(
   getRt: () => ShellRuntimeSnap,
   next: ShellViewId | 'fs882-twopage'
 ): Promise<void> | void {
+  if (
+    IS_WEB_READONLY &&
+    (next === 'project-admin' || next === 'user-log' || (next === 'picture-manager' && get(webMeta)?.picturesAvailable === false))
+  ) {
+    return;
+  }
   const s0 = getRt();
   if (!s0.standaloneMetadataPlot) {
     if (next === 'fs882-twopage' && s0.view === 'fs882' && s0.editorEntryForm === 'fs882-twopage') return;
@@ -406,6 +423,13 @@ export async function runOpenProjectMetadataOp(getRt: () => ShellRuntimeSnap): P
     }
     if (!targetPlot) {
       const latest = getRt();
+      if (IS_WEB_READONLY) {
+        latest.patch({
+          standaloneMetadataPlot: '',
+          error: 'No plots were found in the active dataset to inspect project metadata.',
+        });
+        return;
+      }
       if (latest.ui) {
         latest.ui.projectAdminTab = 'lifecycle';
         latest.ui.projectAdminTabNonce++;
@@ -508,7 +532,11 @@ export async function runRefreshWorkspaceOp(getRt: () => ShellRuntimeSnap): Prom
         : {}),
     });
     projectState.set(state);
-    await latest.loadPlots(0);
+    if (IS_WEB_READONLY) {
+      await applyInitialWebUrlStateOp(getRt, state, current);
+      if (!getRt().isCurrentStateRequest(current)) return;
+    }
+    await getRt().loadPlots(0);
     if (getRt().isCurrentStateRequest(current)) await getRt().loadHierarchy();
   } catch (cause) {
     if (getRt().isCurrentStateRequest(current)) getRt().patch({ error: formatError(cause), busy: false });
@@ -603,6 +631,61 @@ export function runGlobalHelpKeydownOp(getRt: () => ShellRuntimeSnap, event: Key
       s.ui.inspectorExpanded = false;
     }
   }
+}
+
+let initialWebUrlApplied = false;
+
+export function resetInitialWebUrlAppliedForTest(): void {
+  initialWebUrlApplied = false;
+}
+
+export async function applyInitialWebUrlStateOp(
+  getRt: () => ShellRuntimeSnap,
+  state: ProjectState,
+  stateReqId: number
+): Promise<void> {
+  if (initialWebUrlApplied || typeof window === 'undefined' || !window.location?.search) return;
+  initialWebUrlApplied = true;
+  const runtime = get(webShellRuntime) ?? (await (await import('../web/webMeta')).bootstrapWebShellRuntime());
+  const picturesAvailable = get(webMeta)?.picturesAvailable ?? true;
+  const plan = runtime.planInitialUrl(window.location.search, state, picturesAvailable);
+  if (plan.switchSelection && state.contextId) {
+    try {
+      const switched = await getRt().stateReads.track(
+        getRt().contextService.SwitchContext(state.contextId, plan.switchSelection)
+      );
+      if (!getRt().isCurrentStateRequest(stateReqId)) return;
+      projectState.set(switched);
+    } catch {
+      // Keep default server context when URL parameters refer to an unknown dataset/SU/hierarchy.
+    }
+  }
+  const patch: ShellStatePatch = {};
+  if (plan.plotNumber) {
+    patch.editorPlotNumber = plan.plotNumber;
+    patch.hasEditorPlotNumber = true;
+  }
+  if (plan.view) patch.view = plan.view as ShellViewId;
+  if (plan.editorEntryForm) patch.editorEntryForm = plan.editorEntryForm;
+  if (Object.keys(patch).length > 0) getRt().patch(patch);
+}
+
+export function syncShellWebUrlOp(params: {
+  state: ProjectState | null;
+  view: ShellViewId;
+  editorEntryForm: 'fs882' | 'sivi' | 'fs882-twopage';
+  plotNumber?: string;
+}): void {
+  if (!IS_WEB_READONLY || !params.state?.activeProject) return;
+  const urlView =
+    params.view === 'fs882' && params.editorEntryForm === 'fs882-twopage' ? 'fs882-twopage' : params.view;
+  get(webShellRuntime)?.syncUrl({
+    dataset: params.state.activeProject,
+    su: params.state.activeSU,
+    hierarchy: params.state.activeHierarchy,
+    view: urlView,
+    plot: params.plotNumber,
+  });
 }
 
 export type { HierarchyNode };

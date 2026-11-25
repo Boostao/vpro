@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type { CSVExportOutcome, FileDialogFilter, LumpTableSummary, RDSExportOutcome } from './interchangeHub';
 
   let {
@@ -72,54 +73,58 @@
             <option value={lumpOptionValue(item, discoveredLumpTables)}>{formatLumpOptionLabel(item)}</option>
           {/each}
         </select>
-        <button
-          type="button"
-          class="btn-secondary"
-          data-browse-lump-db="analytics"
-          disabled={busy || operationHeld}
-          onclick={onBrowseExternalLumpDb}
-        >
-          From .db…
-        </button>
+        {#if !IS_WEB_READONLY}
+          <button
+            type="button"
+            class="btn-secondary"
+            data-browse-lump-db="analytics"
+            disabled={busy || operationHeld}
+            onclick={onBrowseExternalLumpDb}
+          >
+            From .db…
+          </button>
+        {/if}
       </div>
     </label>
 
     <div class="sub-box">
       <h4>Long Tidy CSV (PlotNumber, SiteUnit, Layer, Species, ScientificName, Lifeform, Cover, Height, Collected)</h4>
       <div class="form-row">
-        <input
-          type="text"
-          aria-label="Long tidy CSV destination file path"
-          class="grow"
-          bind:value={longCsvDest}
-          placeholder="/path/to/veg_long.csv (optional for preview)"
-          disabled={busy || operationHeld}
-        />
-        <button
-          type="button"
-          class="btn-secondary"
-          data-save-long-csv
-          disabled={busy || operationHeld}
-          onclick={() =>
-            onPickFilePath(
-              'save',
-              'Save Long Tidy CSV',
-              'veg_long.csv',
-              [{ DisplayName: 'CSV (*.csv)', Pattern: '*.csv' }],
-              (p) => {
-                longCsvDest = p;
-              }
-            )}
-        >
-          Save As...
-        </button>
+        {#if !IS_WEB_READONLY}
+          <input
+            type="text"
+            aria-label="Long tidy CSV destination file path"
+            class="grow"
+            bind:value={longCsvDest}
+            placeholder="/path/to/veg_long.csv (optional for preview)"
+            disabled={busy || operationHeld}
+          />
+          <button
+            type="button"
+            class="btn-secondary"
+            data-save-long-csv
+            disabled={busy || operationHeld}
+            onclick={() =>
+              onPickFilePath(
+                'save',
+                'Save Long Tidy CSV',
+                'veg_long.csv',
+                [{ DisplayName: 'CSV (*.csv)', Pattern: '*.csv' }],
+                (p) => {
+                  longCsvDest = p;
+                }
+              )}
+          >
+            Save As...
+          </button>
+        {/if}
         <button
           type="button"
           class="btn-primary"
           disabled={busy || operationHeld || !contextId}
           onclick={onRunLongCsvExport}
         >
-          Export Long CSV
+          {IS_WEB_READONLY ? (busy ? 'Preparing download...' : 'Download Long CSV') : 'Export Long CSV'}
         </button>
       </div>
     </div>
@@ -145,39 +150,41 @@
         </label>
       </div>
       <div class="form-row">
-        <input
-          type="text"
-          aria-label="Wide plot by species matrix CSV destination file path"
-          class="grow"
-          bind:value={wideCsvDest}
-          placeholder="/path/to/veg_wide_matrix.csv"
-          disabled={busy || operationHeld}
-        />
-        <button
-          type="button"
-          class="btn-secondary"
-          data-save-wide-csv
-          disabled={busy || operationHeld}
-          onclick={() =>
-            onPickFilePath(
-              'save',
-              'Save Wide Matrix CSV',
-              'veg_wide_matrix.csv',
-              [{ DisplayName: 'CSV (*.csv)', Pattern: '*.csv' }],
-              (p) => {
-                wideCsvDest = p;
-              }
-            )}
-        >
-          Save As...
-        </button>
+        {#if !IS_WEB_READONLY}
+          <input
+            type="text"
+            aria-label="Wide plot by species matrix CSV destination file path"
+            class="grow"
+            bind:value={wideCsvDest}
+            placeholder="/path/to/veg_wide_matrix.csv"
+            disabled={busy || operationHeld}
+          />
+          <button
+            type="button"
+            class="btn-secondary"
+            data-save-wide-csv
+            disabled={busy || operationHeld}
+            onclick={() =>
+              onPickFilePath(
+                'save',
+                'Save Wide Matrix CSV',
+                'veg_wide_matrix.csv',
+                [{ DisplayName: 'CSV (*.csv)', Pattern: '*.csv' }],
+                (p) => {
+                  wideCsvDest = p;
+                }
+              )}
+          >
+            Save As...
+          </button>
+        {/if}
         <button
           type="button"
           class="btn-primary"
           disabled={busy || operationHeld || !contextId}
           onclick={onRunWideCsvExport}
         >
-          Export Wide Matrix CSV
+          {IS_WEB_READONLY ? (busy ? 'Preparing download...' : 'Download Wide Matrix CSV') : 'Export Wide Matrix CSV'}
         </button>
       </div>
     </div>
@@ -214,45 +221,49 @@
           {/each}
         </select>
       </label>
-      <label>
-        <span>Destination .rds Path</span>
-        <div class="input-with-browse">
-          <input
-            type="text"
-            class="grow"
-            bind:value={rdsDestPath}
-            placeholder="/path/to/project_snapshot.rds"
-            disabled={busy || operationHeld}
-          />
-          <button
-            type="button"
-            class="btn-secondary"
-            data-save-rds
-            disabled={busy || operationHeld}
-            onclick={() =>
-              onPickFilePath(
-                'save',
-                'Save Native R .rds',
-                'project_snapshot.rds',
-                [{ DisplayName: 'R Data (*.rds)', Pattern: '*.rds' }],
-                (p) => {
-                  rdsDestPath = p;
-                }
-              )}
-          >
-            Save As...
-          </button>
-        </div>
-      </label>
+      {#if !IS_WEB_READONLY}
+        <label>
+          <span>Destination .rds Path</span>
+          <div class="input-with-browse">
+            <input
+              type="text"
+              class="grow"
+              bind:value={rdsDestPath}
+              placeholder="/path/to/project_snapshot.rds"
+              disabled={busy || operationHeld}
+            />
+            <button
+              type="button"
+              class="btn-secondary"
+              data-save-rds
+              disabled={busy || operationHeld}
+              onclick={() =>
+                onPickFilePath(
+                  'save',
+                  'Save Native R .rds',
+                  'project_snapshot.rds',
+                  [{ DisplayName: 'R Data (*.rds)', Pattern: '*.rds' }],
+                  (p) => {
+                    rdsDestPath = p;
+                  }
+                )}
+            >
+              Save As...
+            </button>
+          </div>
+        </label>
+      {/if}
       <button type="button" class="btn-primary" disabled={busy || operationHeld || !contextId} onclick={onRunRdsExport}>
-        Export Native R .rds
+        {IS_WEB_READONLY ? (busy ? 'Preparing download...' : 'Download Native R .rds') : 'Export Native R .rds'}
       </button>
     </div>
 
     {#if rdsOutcome}
       <div class="receipt-box success">
         <strong>
-          Exported {rdsOutcome.plotCount} plots ({rdsOutcome.byteSize} bytes) to <code>{rdsOutcome.path}</code>
+          {IS_WEB_READONLY ? 'Downloaded' : 'Exported'} {rdsOutcome.plotCount} plots ({rdsOutcome.byteSize} bytes){#if !IS_WEB_READONLY}
+            to <code>{rdsOutcome.path}</code>
+          {/if}
         </strong>
         <div class="table-scroll">
           <table class="compact-table">

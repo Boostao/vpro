@@ -25,6 +25,7 @@
   import TwoPageEntryToolbar from './TwoPageEntryToolbar.svelte';
   import TwoPageEntryReadersHost from './TwoPageEntryReadersHost.svelte';
   import TwoPageEntryFieldInput from './TwoPageEntryFieldInput.svelte';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
 
   let {
     contextId,
@@ -134,6 +135,7 @@
     }
     if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') {
       event.preventDefault();
+      if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
       const flags = resolveTwoPageReaderFlags(typeof readers !== 'undefined' ? readers : undefined);
       if (!flags.anyOpen && !childBlocked && close.canSave && !close.busy && !close.blocked) void operation('save');
     }

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { GeoPackageExportOutcome } from '../../bindings/github.com/boostao/vpro/app/internal/interchange/models';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type { SpatialGpkgExportInput } from './geospatialWorkbench';
 
   let {
@@ -27,17 +28,19 @@
 
 <div class="wb-gpkg-panel" data-gpkg-export-panel>
   <div class="wb-gpkg-grid">
-    <label class="wb-gpkg-field">
-      <span>Destination GeoPackage (.gpkg) Path</span>
-      <input
-        type="text"
-        class="wb-input"
-        data-gpkg-dest-input
-        bind:value={gpkgDestPath}
-        placeholder="/path/to/plots.gpkg"
-        disabled={gpkgExporting}
-      />
-    </label>
+    {#if !IS_WEB_READONLY}
+      <label class="wb-gpkg-field">
+        <span>Destination GeoPackage (.gpkg) Path</span>
+        <input
+          type="text"
+          class="wb-input"
+          data-gpkg-dest-input
+          bind:value={gpkgDestPath}
+          placeholder="/path/to/plots.gpkg"
+          disabled={gpkgExporting}
+        />
+      </label>
+    {/if}
     <label class="wb-gpkg-field">
       <span>CRS</span>
       <select class="wb-input" data-gpkg-crs-select bind:value={gpkgCrs} disabled={gpkgExporting}>
@@ -59,7 +62,7 @@
       type="button"
       class="wb-btn wb-btn-primary"
       data-gpkg-export-run
-      disabled={gpkgExporting || loading || mutating || !gpkgDestPath.trim()}
+      disabled={gpkgExporting || loading || mutating || (!IS_WEB_READONLY && !gpkgDestPath.trim())}
       onclick={() =>
         void onExport({
           destinationPath: gpkgDestPath,
@@ -68,14 +71,18 @@
           includeUnlocatedPlots: gpkgIncludeUnlocated,
         })}
     >
-      {gpkgExporting ? 'Exporting .gpkg...' : 'Export GeoPackage (.gpkg)'}
+      {#if gpkgExporting}
+        {IS_WEB_READONLY ? 'Preparing download...' : 'Exporting .gpkg...'}
+      {:else}
+        {IS_WEB_READONLY ? 'Download GeoPackage (.gpkg)' : 'Export GeoPackage (.gpkg)'}
+      {/if}
     </button>
     <button type="button" class="wb-btn" onclick={onClose}>Close</button>
   </div>
   {#if gpkgOutcome}
     <div class="wb-alert wb-alert-ok">
-      Exported {gpkgOutcome.featureCount} features ({gpkgOutcome.crs}) | Flipped West Lons: {gpkgOutcome.normalizedWestLongitudes}
-      | {gpkgOutcome.path}
+      {IS_WEB_READONLY ? 'Downloaded' : 'Exported'} {gpkgOutcome.featureCount} features ({gpkgOutcome.crs}) | Flipped West
+      Lons: {gpkgOutcome.normalizedWestLongitudes}{#if !IS_WEB_READONLY} | {gpkgOutcome.path}{/if}
     </div>
   {/if}
 </div>

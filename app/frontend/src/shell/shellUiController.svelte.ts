@@ -28,7 +28,8 @@ import { invalidatePlotBundle, peekPlotBundle } from '../entry/entryReferenceCac
 import { onContextDisposed } from '../shared/contextSessionRegistry';
 import { formatError, ReadRequests } from '../shared/readRequests';
 import { plotLookupInputError, validateScopedPlotLookup } from '../shared/scopedPlotLookup';
-import { projectState } from '../shared/state';
+import { projectState, webMeta } from '../shared/state';
+import { IS_WEB_READONLY } from '../web/runtimeMode';
 import type { EditorCloseState } from './closeLifecycle';
 import type { CommandPaletteAction } from './commandPalette';
 import { notifications, type NotificationStateSnapshot } from './notificationService.svelte';
@@ -170,6 +171,7 @@ export function createShellUiController(bridge: ShellControllerBridge) {
   let notificationDrawerOpen = $state(false);
   let newSiviModalOpen = $state(false);
   let notifSnapshot = $state<NotificationStateSnapshot>(notifications.getSnapshot());
+  let webMetaPicturesAvailable = $state<boolean>(true);
   let startupInfo = $state<StartupState | null>(null);
   let projectAdminTab = $state<'lifecycle' | 'compliance' | 'optimizeveg' | 'merge' | 'cloudsync'>('lifecycle');
   let projectAdminTabNonce = $state(0);
@@ -274,21 +276,30 @@ export function createShellUiController(bridge: ShellControllerBridge) {
       snap.state?.contextId && !snap.busy && !snap.editorBusy && !snap.companionPanelBusy && !snap.transitionWorking
     );
   });
-  const commandCatalogInput = $derived(
-    buildShellCommandCatalogInput({
+  const commandCatalogInput = $derived({
+    ...buildShellCommandCatalogInput({
       allAvailablePlots,
       state: bridge.read().state,
       selectedPlotNumber: currentContextPlotNumber || null,
       metadataAvailable,
-      newSiviAvailable,
-    })
-  );
+      newSiviAvailable: IS_WEB_READONLY ? false : newSiviAvailable,
+    }),
+    webReadOnly: IS_WEB_READONLY,
+    picturesAvailable: !IS_WEB_READONLY || webMetaPicturesAvailable,
+  });
 
   $effect(() =>
     notifications.subscribe((next) => {
       notifSnapshot = next;
     })
   );
+
+  $effect(() => {
+    if (!IS_WEB_READONLY) return;
+    return webMeta.subscribe((next) => {
+      webMetaPicturesAvailable = next?.picturesAvailable ?? true;
+    });
+  });
 
   async function refreshScopedPlotCatalog(expectedContextId: string, currentPage: PlotPage | null, force = false) {
     const snap = bridge.read();
@@ -567,8 +578,9 @@ export function createShellUiController(bridge: ShellControllerBridge) {
       tourOpen = true;
     } else if (action === 'shortcuts') shortcutsModalOpen = true;
     else if (action === 'whats-new') whatsNewModalOpen = true;
-    else if (action === 'reset-sample') resetSampleConfirmOpen = true;
-    else if (action === 'about') aboutModalOpen = true;
+    else if (action === 'reset-sample') {
+      if (!IS_WEB_READONLY) resetSampleConfirmOpen = true;
+    } else if (action === 'about') aboutModalOpen = true;
   }
 
   async function acknowledgeUnreadWhatsNew() {

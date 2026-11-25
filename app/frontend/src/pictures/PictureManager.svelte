@@ -22,6 +22,7 @@
     initialPlot?: string;
     onBusyChange: (busy: boolean) => void;
   } = $props();
+  const IS_WEB_READONLY = typeof __VPRO_WEB_READONLY__ !== 'undefined' && __VPRO_WEB_READONLY__ === true;
   const startingPlot = untrack(() => initialPlot);
   let plot = $state(startingPlot);
   let selected = $state(startingPlot);
@@ -29,7 +30,9 @@
   let busy = $state(false);
 
   const lifecycleSession = $derived(
-    selected && contextId && project ? pictureLifecycleSession({ contextId, project, plotNumber: selected }) : undefined
+    !IS_WEB_READONLY && selected && contextId && project
+      ? pictureLifecycleSession({ contextId, project, plotNumber: selected })
+      : undefined
   );
   const lifecycleClose = observeSession(
     () => lifecycleSession,
@@ -41,7 +44,9 @@
   );
 
   const creationSession = $derived(
-    selected && contextId && project ? pictureCreationSession({ contextId, project, plotNumber: selected }) : undefined
+    !IS_WEB_READONLY && selected && contextId && project
+      ? pictureCreationSession({ contextId, project, plotNumber: selected })
+      : undefined
   );
   const creationClose = observeSession(
     () => creationSession,
@@ -53,7 +58,9 @@
   );
 
   const metadataSession = $derived(
-    selected && contextId && project ? pictureMetadataSession({ contextId, project, plotNumber: selected }) : undefined
+    !IS_WEB_READONLY && selected && contextId && project
+      ? pictureMetadataSession({ contextId, project, plotNumber: selected })
+      : undefined
   );
   const metadataClose = observeSession(
     () => metadataSession,
@@ -147,6 +154,7 @@
   }
 
   async function savePictureOptionsFromManager(resetDefaults = false) {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked) return;
     optionsBusy = true;
     try {
@@ -188,8 +196,10 @@
   >
     <h1>Plot Pictures</h1>
     <p>
-      Project <strong>{project}</strong>. Enter an exact plot number to view, attach, edit, or manage linked plot
-      photos.
+      Project <strong>{project}</strong>.
+      {IS_WEB_READONLY
+        ? ' Enter an exact plot number to view linked plot photos.'
+        : ' Enter an exact plot number to view, attach, edit, or manage linked plot photos.'}
     </p>
     <form
       onsubmit={(event) => {
@@ -210,74 +220,76 @@
       </button>
     </form>
   </header>
-  <details
-    class="library-options"
-    data-picture-manager-options
-    ontoggle={(event) => {
-      if (event.currentTarget.open && !optionsLoaded) void loadPictureOptions();
-    }}
-  >
-    <summary>Picture library &amp; folder settings</summary>
-    <form
-      class="options-form"
-      onsubmit={(event) => {
-        event.preventDefault();
-        void savePictureOptionsFromManager(false);
+  {#if !IS_WEB_READONLY}
+    <details
+      class="library-options"
+      data-picture-manager-options
+      ontoggle={(event) => {
+        if (event.currentTarget.open && !optionsLoaded) void loadPictureOptions();
       }}
     >
-      <label for="picture-manager-library-path">
-        Picture Library File (VPics.db)
-        <input
-          id="picture-manager-library-path"
-          bind:value={libraryPathDraft}
-          placeholder={defaultLibraryHint || 'Default workspace pics/VPics.db'}
-          disabled={optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked}
-        />
-      </label>
-      <label for="picture-manager-child-dir">
-        Plot Entry Image Folder
-        <input
-          id="picture-manager-child-dir"
-          bind:value={childDirDraft}
-          placeholder={defaultDirHint || 'Default workspace pics/images'}
-          disabled={optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked}
-        />
-      </label>
-      <label for="picture-manager-dir">
-        Plot Pictures Manager Folder
-        <input
-          id="picture-manager-dir"
-          bind:value={managerDirDraft}
-          placeholder={defaultDirHint || 'Default workspace pics/images'}
-          disabled={optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked}
-        />
-      </label>
-      <div class="options-actions">
-        <button
-          type="button"
-          disabled={optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked}
-          onclick={() => void savePictureOptionsFromManager(true)}
-        >
-          Use Workspace Defaults
-        </button>
-        <button type="submit" disabled={optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked}>
-          {optionsBusy ? 'Saving…' : 'Save Picture Paths'}
-        </button>
-      </div>
-    </form>
-    {#if activeLibraryPath}
-      <p class="guidance">
-        Active library: {activeLibraryPath}{activeManagerDir ? ` — Active folder: ${activeManagerDir}` : ''}
-      </p>
-    {/if}
-  </details>
+      <summary>Picture library &amp; folder settings</summary>
+      <form
+        class="options-form"
+        onsubmit={(event) => {
+          event.preventDefault();
+          void savePictureOptionsFromManager(false);
+        }}
+      >
+        <label for="picture-manager-library-path">
+          Picture Library File (VPics.db)
+          <input
+            id="picture-manager-library-path"
+            bind:value={libraryPathDraft}
+            placeholder={defaultLibraryHint || 'Default workspace pics/VPics.db'}
+            disabled={optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked}
+          />
+        </label>
+        <label for="picture-manager-child-dir">
+          Plot Entry Image Folder
+          <input
+            id="picture-manager-child-dir"
+            bind:value={childDirDraft}
+            placeholder={defaultDirHint || 'Default workspace pics/images'}
+            disabled={optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked}
+          />
+        </label>
+        <label for="picture-manager-dir">
+          Plot Pictures Manager Folder
+          <input
+            id="picture-manager-dir"
+            bind:value={managerDirDraft}
+            placeholder={defaultDirHint || 'Default workspace pics/images'}
+            disabled={optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked}
+          />
+        </label>
+        <div class="options-actions">
+          <button
+            type="button"
+            disabled={optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked}
+            onclick={() => void savePictureOptionsFromManager(true)}
+          >
+            Use Workspace Defaults
+          </button>
+          <button type="submit" disabled={optionsBusy || busy || metadataBlocked || creationBlocked || lifecycleBlocked}>
+            {optionsBusy ? 'Saving…' : 'Save Picture Paths'}
+          </button>
+        </div>
+      </form>
+      {#if activeLibraryPath}
+        <p class="guidance">
+          Active library: {activeLibraryPath}{activeManagerDir ? ` — Active folder: ${activeManagerDir}` : ''}
+        </p>
+      {/if}
+    </details>
+  {/if}
   {#if selected}
     <p data-picture-manager-parent>Selected plot: {JSON.stringify(selected)}</p>
     {#key selected}
-      {#if creationSession}
+      {#if !IS_WEB_READONLY && creationSession}
         <PictureCreationPanel session={creationSession} disabled={busy || metadataBlocked || lifecycleBlocked} />
       {/if}
-      {#if lifecycleSession}
+      {#if !IS_WEB_READONLY && lifecycleSession}
         <PictureLifecyclePanel session={lifecycleSession} disabled={busy || metadataBlocked || creationBlocked} />
       {/if}
       <PicturePanel
@@ -286,7 +298,8 @@
         plotNumber={selected}
         view="manager"
         onBusyChange={reading}
-        {metadataSession}
+        metadataSession={IS_WEB_READONLY ? undefined : metadataSession}
+        observeMutationReceipts={!IS_WEB_READONLY}
         disabled={creationBlocked}
       />
     {/key}

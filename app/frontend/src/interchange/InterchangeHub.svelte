@@ -1,7 +1,10 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { notifications } from '../shell/notificationService.svelte';
+  import { defaultWebExportFilename } from '../shell/webReadOnlyShell';
   import { ReadRequests } from '../shared/readRequests';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
+  import { formatWebDownloadFeedback } from '../web/webMeta';
   import * as hubOps from './interchangeHub';
   import {
     defaultInterchangeHubPort,
@@ -33,7 +36,7 @@
     onProjectActivated?: (state: Record<string, unknown>) => void;
   } = $props();
 
-  let section = $state<InterchangeSection>('venus');
+  let section = $state<InterchangeSection>(IS_WEB_READONLY ? 'analytics' : 'venus');
   let busy = $state(false);
   let error = $state('');
   let generation = 0;
@@ -105,9 +108,10 @@
 
   async function refreshDiscoveredLumpTables(ownerContextId = contextId, extraPaths: string[] = externalLumpDbPaths) {
     const reads = typeof lumpDiscoveryReads !== 'undefined' ? lumpDiscoveryReads : undefined;
+    const effectiveExtra = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY ? [] : extraPaths;
     await hubOps.refreshDiscoveredLumpTablesOp(
       ownerContextId,
-      extraPaths,
+      effectiveExtra,
       port,
       reads,
       () => ++lumpDiscoveryGen,
@@ -129,6 +133,7 @@
   }
 
   async function browseExternalLumpDatabase(target: 'tv' | 'csv' | 'gpkg') {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     const filters = [{ DisplayName: 'VPro Project Database (*.db)', Pattern: '*.db' }];
     await pickFilePath('open', 'Choose VPro Database with *_Lump Tables', '', filters, async (chosenPath) => {
       const next = externalLumpDbPaths.includes(chosenPath)
@@ -171,7 +176,11 @@
   }
 
   function pushHubError(title: string, rawMessage: unknown) {
-    error = hubOps.formatInterchangeError(rawMessage);
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+    error =
+      webReadOnly && typeof formatWebDownloadFeedback === 'function'
+        ? formatWebDownloadFeedback(rawMessage, title)
+        : hubOps.formatInterchangeError(rawMessage);
     notifications.error(title, error, { category: 'background', source: 'Interchange Hub' });
   }
 
@@ -234,6 +243,7 @@
   }
 
   async function inspectVenus() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!venusSourcePath.trim())
       return pushHubError('VENUS source path required', 'Enter a VENUS 5.0 .mdb or .xml source file path.');
     if (busy || operationHeld || !contextId) return;
@@ -261,6 +271,7 @@
   }
 
   async function runVenusImport() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     const check = validateTargetProjectName(venusTargetProject);
     if (!check.valid) return pushHubError('Invalid VENUS target project', check.error);
     if (busy || operationHeld || !contextId) return;
@@ -287,15 +298,24 @@
   }
 
   async function runTurboVegExport() {
-    if (!tvExportPath.trim())
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+    const targetPath =
+      webReadOnly && !tvExportPath.trim()
+        ? typeof defaultWebExportFilename === 'function'
+          ? defaultWebExportFilename('turboveg_export', tvExportFormat === 'xml' ? '.xml' : '.sqlite')
+          : tvExportFormat === 'xml'
+            ? 'turboveg_export.xml'
+            : 'turboveg_export.sqlite'
+        : tvExportPath.trim();
+    if (!targetPath)
       return pushHubError('TurboVeg destination required', 'Enter a destination path for TurboVeg export.');
     if (busy || operationHeld || !contextId) return;
     const reqGen = ++generation;
     const owner = contextId;
-    const lumpDb = typeof tvExportLumpDbPath === 'string' ? tvExportLumpDbPath : '';
+    const lumpDb = webReadOnly ? '' : typeof tvExportLumpDbPath === 'string' ? tvExportLumpDbPath : '';
     const req = $state.snapshot({
       format: tvExportFormat,
-      destinationPath: tvExportPath.trim(),
+      destinationPath: targetPath,
       ...hubOps.lumpExportFields(tvExportLump, lumpDb),
     });
     const r = typeof rpcRequests !== 'undefined' ? rpcRequests : undefined;
@@ -310,6 +330,7 @@
   }
 
   async function runTurboVegImport() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     const check = validateTargetProjectName(tvImportTarget);
     if (!check.valid) return pushHubError('Invalid TurboVeg target project', check.error);
     if (!tvImportPath.trim())
@@ -340,11 +361,18 @@
 
   async function runLongCsvExport() {
     if (busy || operationHeld || !contextId) return;
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
     const reqGen = ++generation;
     const owner = contextId;
-    const lumpDb = typeof csvLumpDbPath === 'string' ? csvLumpDbPath : '';
+    const lumpDb = webReadOnly ? '' : typeof csvLumpDbPath === 'string' ? csvLumpDbPath : '';
+    const targetPath =
+      webReadOnly && !longCsvDest.trim()
+        ? typeof defaultWebExportFilename === 'function'
+          ? defaultWebExportFilename('veg_long', '.csv')
+          : 'veg_long.csv'
+        : longCsvDest.trim();
     const req = $state.snapshot({
-      destinationPath: longCsvDest.trim(),
+      destinationPath: targetPath,
       ...hubOps.lumpExportFields(csvLumpTable, lumpDb),
     });
     const r = typeof rpcRequests !== 'undefined' ? rpcRequests : undefined;
@@ -360,11 +388,18 @@
 
   async function runWideCsvExport() {
     if (busy || operationHeld || !contextId) return;
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
     const reqGen = ++generation;
     const owner = contextId;
-    const lumpDb = typeof csvLumpDbPath === 'string' ? csvLumpDbPath : '';
+    const lumpDb = webReadOnly ? '' : typeof csvLumpDbPath === 'string' ? csvLumpDbPath : '';
+    const targetPath =
+      webReadOnly && !wideCsvDest.trim()
+        ? typeof defaultWebExportFilename === 'function'
+          ? defaultWebExportFilename('veg_wide_matrix', '.csv')
+          : 'veg_wide_matrix.csv'
+        : wideCsvDest;
     const req = $state.snapshot(
-      hubOps.buildWideCsvPayload(wideCsvDest, wideLayerMode, wideZeroFill, wideIncludeSiteUnit, csvLumpTable, lumpDb)
+      hubOps.buildWideCsvPayload(targetPath, wideLayerMode, wideZeroFill, wideIncludeSiteUnit, csvLumpTable, lumpDb)
     );
     const r = typeof rpcRequests !== 'undefined' ? rpcRequests : undefined;
     const [tracked, active] = hubOps.trackHubCall(port.exportWideMatrixCSV(owner, req), r);
@@ -378,13 +413,20 @@
   }
 
   async function runRdsExport() {
-    if (!rdsDestPath.trim()) return pushHubError('R .rds destination required', 'Enter a destination .rds file path.');
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+    const targetPath =
+      webReadOnly && !rdsDestPath.trim()
+        ? typeof defaultWebExportFilename === 'function'
+          ? defaultWebExportFilename('project_snapshot', '.rds')
+          : 'project_snapshot.rds'
+        : rdsDestPath.trim();
+    if (!targetPath) return pushHubError('R .rds destination required', 'Enter a destination .rds file path.');
     if (busy || operationHeld || !contextId) return;
     const reqGen = ++generation;
     const owner = contextId;
-    const lumpDb = typeof csvLumpDbPath === 'string' ? csvLumpDbPath : '';
+    const lumpDb = webReadOnly ? '' : typeof csvLumpDbPath === 'string' ? csvLumpDbPath : '';
     const req = $state.snapshot({
-      destinationPath: rdsDestPath.trim(),
+      destinationPath: targetPath,
       ...hubOps.lumpExportFields(csvLumpTable, lumpDb),
     });
     const r = typeof rpcRequests !== 'undefined' ? rpcRequests : undefined;
@@ -400,15 +442,22 @@
 
   // Enforces Western North America spatial bounds [45..85 N, -170..-100 W] with positive West longitude normalization.
   async function runGeoPackageExport() {
-    if (!gpkgDestPath.trim())
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+    const targetPath =
+      webReadOnly && !gpkgDestPath.trim()
+        ? typeof defaultWebExportFilename === 'function'
+          ? defaultWebExportFilename('bec_plots', '.gpkg')
+          : 'bec_plots.gpkg'
+        : gpkgDestPath.trim();
+    if (!targetPath)
       return pushHubError('GeoPackage destination required', 'Enter a destination .gpkg file path.');
     if (busy || operationHeld || !contextId) return;
     const reqGen = ++generation;
     const owner = contextId;
-    const lumpDb = typeof gpkgLumpDbPath === 'string' ? gpkgLumpDbPath : '';
+    const lumpDb = webReadOnly ? '' : typeof gpkgLumpDbPath === 'string' ? gpkgLumpDbPath : '';
     const req = $state.snapshot(
       hubOps.buildGeoPackagePayload(
-        gpkgDestPath,
+        targetPath,
         gpkgCrs,
         gpkgIncludeAttributes,
         gpkgIncludeUnlocated,
@@ -443,7 +492,11 @@
 >
   <InterchangeHubHeader bind:section {busy} onCancel={cancelOperation} />
 
-  {#if section === 'venus'}
+  {#if IS_WEB_READONLY && error}
+    <p class="hub-error-banner" role="alert">{error}</p>
+  {/if}
+
+  {#if section === 'venus' && !IS_WEB_READONLY}
     <InterchangeVenusTab
       {...hubShared}
       bind:venusSourcePath
@@ -523,5 +576,14 @@
     min-width: 0;
     --hub-accent-navy: var(--vpro-navy);
     --hub-accent-gold: var(--vpro-gold);
+  }
+  .hub-error-banner {
+    margin: 0;
+    padding: 0.65rem 0.9rem;
+    background: var(--vpro-error-bg);
+    border-left: 4px solid var(--vpro-error);
+    color: var(--vpro-error);
+    border-radius: 4px;
+    font-size: 0.84rem;
   }
 </style>

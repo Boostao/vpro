@@ -24,6 +24,7 @@
     projectPath: string;
     onBusyChange: (busy: boolean) => void;
   } = $props();
+  const IS_WEB_READONLY = typeof __VPRO_WEB_READONLY__ !== 'undefined' && __VPRO_WEB_READONLY__ === true;
   let suffix = $state<string>('Env');
   let busy = $state(false);
   let error = $state('');
@@ -145,7 +146,9 @@
     }
   }
   async function publish() {
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
     const table = `${project}_${suffix}`;
+    const targetDestination = webReadOnly && !destination ? `${table}.zip` : destination;
     if (
       !publicationSession ||
       !approval ||
@@ -153,7 +156,7 @@
       busy ||
       publication?.busy ||
       publication?.blocked ||
-      !validTableCSVArchiveDestination(destination)
+      !validTableCSVArchiveDestination(targetDestination)
     ) {
       return;
     }
@@ -162,7 +165,7 @@
     review = null;
     error = '';
     try {
-      await publicationSession.publish(approved, table, destination, (request) =>
+      await publicationSession.publish(approved, table, targetDestination, (request) =>
         ImportExportService.ExportReviewedTableCSVArchive(contextId, JSON.stringify(request))
       );
       const view = publicationSession.view();
@@ -173,8 +176,10 @@
           if (typeof lastNotifiedReceiptKey !== 'undefined') lastNotifiedReceiptKey = key;
           if (latest.phase === 'known' && latest.outcome?.status === 'published') {
             notifications.success(
-              'CSV archive exported',
-              `Exported ${table} CSV archive to ${latest.outcome.path || destination}.`,
+              webReadOnly ? 'CSV archive downloaded' : 'CSV archive exported',
+              webReadOnly
+                ? `Downloaded ${table} CSV archive (.zip).`
+                : `Exported ${table} CSV archive to ${latest.outcome.path || targetDestination}.`,
               { category: 'reports', source: 'CSV Export', contextTag: project || undefined }
             );
           } else {
@@ -189,7 +194,11 @@
         }
       }
     } catch (cause) {
-      error = `Archive export not invoked; review again before proceeding: ${formatError(cause)}`;
+      const rawErr = formatError(cause);
+      error =
+        webReadOnly && /429|503|busy|semaphore|queue/i.test(rawErr)
+          ? 'Another download is currently being prepared on the server. Please wait a moment and try again.'
+          : `Archive export not invoked; review again before proceeding: ${rawErr}`;
       notifications.error('CSV archive export failed', error, {
         category: 'reports',
         source: 'CSV Export',
@@ -240,14 +249,16 @@
       >
         Review core table CSV
       </button>
-      <button
-        type="button"
-        data-table-csv-archive-choose
-        disabled={busy || !!publication?.busy || !!publication?.blocked}
-        onclick={chooseDestination}
-      >
-        Choose ZIP destination...
-      </button>
+      {#if !IS_WEB_READONLY}
+        <button
+          type="button"
+          data-table-csv-archive-choose
+          disabled={busy || !!publication?.busy || !!publication?.blocked}
+          onclick={chooseDestination}
+        >
+          Choose ZIP destination...
+        </button>
+      {/if}
       <button
         type="button"
         data-table-csv-archive-publish
@@ -257,10 +268,12 @@
           !!publication?.blocked ||
           !approval ||
           approval.review.manifest.table !== `${project}_${suffix}` ||
-          !validTableCSVArchiveDestination(destination)}
+          (!IS_WEB_READONLY && !validTableCSVArchiveDestination(destination))}
         onclick={publish}
       >
-        Export reviewed {project}_{suffix} CSV archive
+        {IS_WEB_READONLY
+          ? `Download reviewed ${project}_${suffix} CSV archive (.zip)`
+          : `Export reviewed ${project}_${suffix} CSV archive`}
       </button>
       {#if busy}<button type="button" data-table-csv-cancel onclick={cancel}>Cancel table read</button>{/if}
     </div>
@@ -290,19 +303,21 @@
     {/if}
   {/if}
   <p>Project {project}. Whole physical project table; selected SU and plot/profile filters are not applied.</p>
-  <dl>
-    <div>
-      <dt>Owned project database</dt>
-      <dd>{projectPath}</dd>
-    </div>
-  </dl>
-  {#if destination && !validTableCSVArchiveDestination(destination)}
-    <p class="error" role="alert">
-      Destination contains NUL or malformed UTF-16; export is blocked, and no spelling repair is applied.
-    </p>
+  {#if !IS_WEB_READONLY}
+    <dl>
+      <div>
+        <dt>Owned project database</dt>
+        <dd>{projectPath}</dd>
+      </div>
+    </dl>
+    {#if destination && !validTableCSVArchiveDestination(destination)}
+      <p class="error" role="alert">
+        Destination contains NUL or malformed UTF-16; export is blocked, and no spelling repair is applied.
+      </p>
+    {/if}
+    <label for="table-csv-archive-destination">Project table CSV archive destination (.zip)</label>
+    <textarea id="table-csv-archive-destination" rows="3" bind:value={destination} disabled={isLocked()}></textarea>
   {/if}
-  <label for="table-csv-archive-destination">Project table CSV archive destination (.zip)</label>
-  <textarea id="table-csv-archive-destination" rows="3" bind:value={destination} disabled={isLocked()}></textarea>
   {#if approval}
     <dl>
       <div>

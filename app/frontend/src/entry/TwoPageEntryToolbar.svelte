@@ -6,6 +6,7 @@
   import type { TwoPageEntryView } from './twoPageEntrySession';
   import type { twoPageEntryProjection } from './twoPageEntryProjection';
   import type { TwoPageEntryReadersController } from './useTwoPageEntryReaders.svelte';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
 
   let {
     readers,
@@ -56,7 +57,11 @@
           ? 'FS882 (2-Page, Extended Shrubs): Ecosystem Field Form'
           : 'FS882 (2-Page): Ecosystem Field Form'}
       </h3>
-      {#if s.view.original || s.close.unsaved}
+      {#if IS_WEB_READONLY}
+        <span class="px-2 py-0.5 rounded text-xs font-semibold bg-vpro-rail text-vpro-navy" data-twopage-readonly-badge>
+          Read-Only
+        </span>
+      {:else if s.view.original || s.close.unsaved}
         <span
           class="px-2 py-0.5 rounded text-xs font-semibold {s.close.unsaved
             ? 'bg-amber-100 text-amber-800'
@@ -95,18 +100,20 @@
       class="flex flex-wrap items-center justify-between gap-2 rounded border border-vpro-border bg-vpro-surface-subtle p-2"
     >
       <div class="flex flex-wrap items-center gap-1.5">
-        <button
-          type="button"
-          class="rounded bg-vpro-navy hover:bg-vpro-navy-dark px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
-          disabled={s.childBlocked || !s.close.canSave || s.close.busy || s.close.blocked}
-          onclick={() => h.onoperation('save')}>Save</button
-        >
-        <button
-          type="button"
-          class="rounded border border-vpro-border bg-white px-2.5 py-1 text-xs font-medium text-vpro-ink hover:bg-vpro-surface-subtle disabled:opacity-50"
-          disabled={s.close.busy}
-          onclick={() => h.onoperation('undo')}>Undo</button
-        >
+        {#if !IS_WEB_READONLY}
+          <button
+            type="button"
+            class="rounded bg-vpro-navy hover:bg-vpro-navy-dark px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+            disabled={s.childBlocked || !s.close.canSave || s.close.busy || s.close.blocked}
+            onclick={() => h.onoperation('save')}>Save</button
+          >
+          <button
+            type="button"
+            class="rounded border border-vpro-border bg-white px-2.5 py-1 text-xs font-medium text-vpro-ink hover:bg-vpro-surface-subtle disabled:opacity-50"
+            disabled={s.close.busy}
+            onclick={() => h.onoperation('undo')}>Undo</button
+          >
+        {/if}
         <button
           type="button"
           class="rounded border border-vpro-border bg-white px-2.5 py-1 text-xs font-medium text-vpro-ink hover:bg-vpro-surface-subtle disabled:opacity-50"
@@ -135,7 +142,7 @@
             onclick={h.oncancel}>Cancel Read</button
           >
         {/if}
-        {#if s.view.historyId}
+        {#if !IS_WEB_READONLY && s.view.historyId}
           <button
             type="button"
             class="rounded border border-vpro-border bg-white px-2.5 py-1 text-xs font-medium text-vpro-ink hover:bg-vpro-surface-subtle disabled:opacity-50"
@@ -151,14 +158,16 @@
         {/if}
       </div>
       <div class="flex flex-wrap items-center gap-1.5">
-        <button
-          type="button"
-          class="rounded border border-vpro-border bg-white px-2.5 py-1 text-xs font-medium text-vpro-ink hover:bg-vpro-surface-subtle disabled:opacity-50"
-          data-two-page-project-metadata-edit-open
-          data-source-control={s.projection.metadataAction.controlId}
-          disabled={!s.canOpenMetadataEditor}
-          onclick={h.onopenmetadataeditor}>{s.projection.metadataAction.caption}</button
-        >
+        {#if !IS_WEB_READONLY}
+          <button
+            type="button"
+            class="rounded border border-vpro-border bg-white px-2.5 py-1 text-xs font-medium text-vpro-ink hover:bg-vpro-surface-subtle disabled:opacity-50"
+            data-two-page-project-metadata-edit-open
+            data-source-control={s.projection.metadataAction.controlId}
+            disabled={!s.canOpenMetadataEditor}
+            onclick={h.onopenmetadataeditor}>{s.projection.metadataAction.caption}</button
+          >
+        {/if}
         {#if s.availabilities.profiling}
           <button
             type="button"
@@ -225,7 +234,7 @@
             onclick={readers.openGoogleEarth}>{s.projection.googleEarthAction.caption} (KML)</button
           >
         {/if}
-        {#if s.availabilities.audit}
+        {#if !IS_WEB_READONLY && s.availabilities.audit}
           <button
             type="button"
             class="rounded border border-vpro-border bg-white px-2.5 py-1 text-xs font-medium text-vpro-ink hover:bg-vpro-surface-subtle disabled:opacity-50"
@@ -235,7 +244,7 @@
             onclick={readers.openAudit}>{s.projection.auditAction.caption}</button
           >
         {/if}
-        {#if readers.sourceScope}
+        {#if !IS_WEB_READONLY && readers.sourceScope}
           <button
             type="button"
             class="rounded border border-vpro-border bg-white px-2.5 py-1 text-xs font-medium text-vpro-ink hover:bg-vpro-surface-subtle disabled:opacity-50"

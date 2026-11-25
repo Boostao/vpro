@@ -1,6 +1,7 @@
 <script lang="ts">
   import { formatError } from '../shared/readRequests';
   import { notifications } from '../shell/notificationService.svelte';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import {
     parseGenusRollupTokens,
     validateLumpBaseName,
@@ -104,6 +105,7 @@
   }
 
   async function runMaterializeSpec() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     const check = validateLumpBaseName(materializeName);
     if (!check.valid) {
       onError(check.error);
@@ -195,31 +197,33 @@
     <div class="inline-row">
       <button
         type="button"
-        class="bcgov-btn-secondary"
+        class={IS_WEB_READONLY ? 'bcgov-btn-primary' : 'bcgov-btn-secondary'}
         disabled={busy || operationHeld || !contextId}
         onclick={runSpecPreview}
       >
         Preview Lumping Impact
       </button>
-      <input
-        type="text"
-        aria-label="Target lump table name"
-        bind:value={materializeName}
-        placeholder="Target name (e.g. BEC2026)"
-        disabled={busy || operationHeld}
-      />
-      <label class="checkbox-label">
-        <input type="checkbox" bind:checked={replaceExisting} disabled={busy || operationHeld} />
-        <span>Overwrite if exists</span>
-      </label>
-      <button
-        type="button"
-        class="bcgov-btn-primary"
-        disabled={busy || operationHeld || !contextId}
-        onclick={runMaterializeSpec}
-      >
-        Build Lumping Table
-      </button>
+      {#if !IS_WEB_READONLY}
+        <input
+          type="text"
+          aria-label="Target lump table name"
+          bind:value={materializeName}
+          placeholder="Target name (e.g. BEC2026)"
+          disabled={busy || operationHeld}
+        />
+        <label class="checkbox-label">
+          <input type="checkbox" bind:checked={replaceExisting} disabled={busy || operationHeld} />
+          <span>Overwrite if exists</span>
+        </label>
+        <button
+          type="button"
+          class="bcgov-btn-primary"
+          disabled={busy || operationHeld || !contextId}
+          onclick={runMaterializeSpec}
+        >
+          Build Lumping Table
+        </button>
+      {/if}
     </div>
   </div>
 

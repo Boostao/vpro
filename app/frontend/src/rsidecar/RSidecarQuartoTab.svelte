@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { QuartoGuideResult, QuartoGuideType } from './rSidecarWorkbench';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
 
   let {
     activeSu = 'None',
@@ -63,10 +64,12 @@
         Min Constancy (%)
         <input type="number" min="0" max="100" step="5" bind:value={quartoMinConstancy} />
       </label>
-      <label>
-        Destination .html Path (Optional)
-        <input type="text" bind:value={quartoDestinationPath} placeholder="Defaults to <ProjectDir>/exports/" />
-      </label>
+      {#if !IS_WEB_READONLY}
+        <label>
+          Destination .html Path (Optional)
+          <input type="text" bind:value={quartoDestinationPath} placeholder="Defaults to <ProjectDir>/exports/" />
+        </label>
+      {/if}
     </div>
 
     <div class="form-row">
@@ -106,7 +109,11 @@
         disabled={busy || Boolean(quartoValidationError)}
         onclick={onRenderQuarto}
       >
-        Render &amp; Publish Guide
+        {IS_WEB_READONLY
+          ? busy
+            ? 'Preparing Guide Download...'
+            : 'Render & Download Guide'
+          : 'Render & Publish Guide'}
       </button>
     </div>
 

@@ -5,6 +5,8 @@
   import ParentCodeFields from './ParentCodeFields.svelte';
   import PicturePanel from '../pictures/PicturePanel.svelte';
   import type { PictureMetadataSession } from '../pictures/pictureMetadataSession';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
+  import { webMeta } from '../shared/state';
   import type { WorkingUnitSession } from './workingUnitEditor';
 
   let {
@@ -163,20 +165,22 @@
       {/snippet}
     </OrdinaryFields>
     {#snippet linkedPictures()}
-      {#if activeProject && original}
-        <PicturePanel
-          {contextId}
-          project={activeProject}
-          plotNumber={original.plotNumber}
-          disabled={pictureDisabled}
-          metadataDisabled={pictureMetadataDisabled}
-          onBusyChange={(pending) => {
-            pictureBusy = pending;
-          }}
-          metadataSession={pictureMetadataSession}
-        />
-      {:else}
-        <p role="status">Save and reload an owned plot before reading linked pictures.</p>
+      {#if !(IS_WEB_READONLY && $webMeta?.picturesAvailable === false)}
+        {#if activeProject && original}
+          <PicturePanel
+            {contextId}
+            project={activeProject}
+            plotNumber={original.plotNumber}
+            disabled={pictureDisabled}
+            metadataDisabled={pictureMetadataDisabled}
+            onBusyChange={(pending) => {
+              pictureBusy = pending;
+            }}
+            metadataSession={pictureMetadataSession}
+          />
+        {:else}
+          <p role="status">Save and reload an owned plot before reading linked pictures.</p>
+        {/if}
       {/if}
     {/snippet}
   {/snippet}

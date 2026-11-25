@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { GoogleEarthKMLReview } from '../../bindings/github.com/boostao/vpro/app';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type { GoogleEarthKMLPublicationSession } from './googleEarthKMLExport';
   import type { ValidatedGoogleEarthFields } from './googleEarthReview';
 
@@ -58,30 +59,34 @@
   Project <strong>{project}</strong> · Site Unit <strong>{su}</strong>. Includes all plots with coordinates in the
   current project{su !== 'None' ? ' and Site Unit table' : ''}.
 </p>
-<dl>
-  <div>
-    <dt>Project file</dt>
-    <dd>{projectPath}</dd>
-  </div>
-  {#if su !== 'None'}
+{#if !IS_WEB_READONLY}
+  <dl>
     <div>
-      <dt>Site Unit file</dt>
-      <dd>{suPath}</dd>
+      <dt>Project file</dt>
+      <dd>{projectPath}</dd>
     </div>
-  {/if}
-</dl>
+    {#if su !== 'None'}
+      <div>
+        <dt>Site Unit file</dt>
+        <dd>{suPath}</dd>
+      </div>
+    {/if}
+  </dl>
+{/if}
 
 <div class="options">
-  <div class="field">
-    <label for="google-earth-kml-destination">New output file:</label>
-    <input
-      id="google-earth-kml-destination"
-      type="text"
-      placeholder="/path/to/plots.kml"
-      disabled={locked}
-      bind:value={destination}
-    />
-  </div>
+  {#if !IS_WEB_READONLY}
+    <div class="field">
+      <label for="google-earth-kml-destination">New output file:</label>
+      <input
+        id="google-earth-kml-destination"
+        type="text"
+        placeholder="/path/to/plots.kml"
+        disabled={locked}
+        bind:value={destination}
+      />
+    </div>
+  {/if}
   <div class="field" data-google-earth-kml-controls>
     <label for="google-earth-place-name">Place Name:</label>
     <input id="google-earth-place-name" type="text" disabled={locked} bind:value={title} oninput={onChangeTitle} />

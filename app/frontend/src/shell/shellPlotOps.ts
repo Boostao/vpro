@@ -10,6 +10,7 @@ import type { ReadRequests } from '../shared/readRequests';
 import type { EditorCloseState } from './closeLifecycle';
 import type { BuildCommandPaletteInput } from './commandPalette';
 import { notifications } from './notificationService.svelte';
+import { IS_WEB_READONLY } from '../web/runtimeMode';
 
 export type ShellViewId =
   | 'home'
@@ -234,7 +235,7 @@ export async function runScopedPlotCatalogRefresh(params: {
   const current = nextRequestId();
   catalogPlotReads.cancelAll();
   try {
-    if (typeof contextService.ListCreatedSIVIPlots === 'function') {
+    if (!IS_WEB_READONLY && typeof contextService.ListCreatedSIVIPlots === 'function') {
       try {
         const created = await catalogPlotReads.track(contextService.ListCreatedSIVIPlots(expectedContextId));
         if (!isCurrentRequest(current) || getState()?.contextId !== expectedContextId) return;

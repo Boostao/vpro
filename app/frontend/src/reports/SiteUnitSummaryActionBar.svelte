@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type { SiteUnitActionBarHandlers, SiteUnitActionBarModel } from './siteUnitSummaryOps';
 
   let { model, handlers }: { model: SiteUnitActionBarModel; handlers: SiteUnitActionBarHandlers } = $props();
@@ -14,7 +15,7 @@
         ? 'Field-Derived Units'
         : 'not loaded'}.
 </p>
-{#if model.hasPreferences}
+{#if model.hasPreferences && !IS_WEB_READONLY}
   <div class="actions">
     <button
       data-summary-preferences-save

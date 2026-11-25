@@ -1,5 +1,6 @@
 <script lang="ts">
   import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import SummaryVegetationQualityPreferences from './SummaryVegetationQualityPreferences.svelte';
   import SummaryVegetationPresentationPreferences from './SummaryVegetationPresentationPreferences.svelte';
   import SummaryVegetationFieldListSection from './SummaryVegetationFieldListSection.svelte';
@@ -10,7 +11,7 @@
   let { model, handlers }: { model: SummaryVegPeerModel; handlers: SummaryVegPeerHandlers } = $props();
 </script>
 
-{#if model.preferences && model.preferenceView}
+{#if !IS_WEB_READONLY && model.preferences && model.preferenceView}
   <section data-summary-preferences aria-label="Saved Summary options">
     {#each model.preferenceView.receipts as receipt}
       {#if receipt.kind !== 'known'}
@@ -85,7 +86,7 @@
     </p>
   </section>
 {/if}
-{#if model.quality}
+{#if !IS_WEB_READONLY && model.quality}
   <SummaryVegetationQualityPreferences
     contextId={model.owner.contextId}
     preferences={model.quality}
@@ -114,7 +115,7 @@
     </p>
   {/if}
 {/if}
-{#if model.presentation}
+{#if !IS_WEB_READONLY && model.presentation}
   <SummaryVegetationPresentationPreferences
     contextId={model.owner.contextId}
     preferences={model.presentation}

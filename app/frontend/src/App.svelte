@@ -10,7 +10,7 @@
   import type { ContextSelection, PlotSummary } from '../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
   import type { ProfileNavigation } from './classification/projectPlotProfileReview';
   import { formatError, ReadRequests } from './shared/readRequests';
-  import { projectState } from './shared/state';
+  import { projectState, webShellRuntime } from './shared/state';
   import { closeDisposition, type CloseDecision } from './shell/closeLifecycle';
   import { notifications } from './shell/notificationService.svelte';
   import { bindShellActivitySubscriptions, createOperationGuard } from './shell/operationGuard.svelte';
@@ -32,8 +32,10 @@
     runRespondToCloseOp,
     runRespondToTransitionOp,
     runSwitchContextOp,
+    syncShellWebUrlOp,
     type ShellRuntimeSnap,
   } from './shell/shellLifecycleOps';
+  import { IS_WEB_READONLY } from './web/runtimeMode';
   import type { FS882EditorHandle, ShellViewId } from './shell/shellPlotOps';
   import { createShellUiController, type ShellStatePatch } from './shell/shellUiController.svelte';
 
@@ -190,6 +192,16 @@
       lastPushedError = error;
       pushShellErrorNotification(error);
     }
+  });
+  $effect(() => {
+    if (!IS_WEB_READONLY || !$webShellRuntime) return;
+    const activePlot = view === 'fs882' ? editorPlotNumber : selected?.plotNumber;
+    syncShellWebUrlOp({
+      state: $projectState,
+      view,
+      editorEntryForm,
+      plotNumber: activePlot,
+    });
   });
 
   function cancelAllReads() {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { FS882Header } from '../../bindings/github.com/boostao/vpro/app';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import FS882AuditTrailSection from './FS882AuditTrailSection.svelte';
   import FS882OtherRecordsSection from './FS882OtherRecordsSection.svelte';
   import FS882SoilHorizonSection from './FS882SoilHorizonSection.svelte';
@@ -88,7 +89,7 @@
     historicalSoilUnavailable={c.historicalSoilUnavailable}
     soilReferenceBusy={c.soilReferenceBusy}
     soilReferenceError={c.soilReferenceError}
-    soilEditingDisabled={c.soilEditingDisabled}
+    soilEditingDisabled={IS_WEB_READONLY || c.soilEditingDisabled}
     soilUnsaved={c.soilUnsaved}
     {headerInputsDisabled}
     {busy}
@@ -123,7 +124,7 @@
     vegetationReadUnavailable={c.vegetationReadUnavailable}
     attributeReferenceBusy={c.attributeReferenceBusy}
     attributeReferenceError={c.attributeReferenceError}
-    attributeEditingDisabled={c.attributeEditingDisabled}
+    attributeEditingDisabled={IS_WEB_READONLY || c.attributeEditingDisabled}
     attributeDrafts={c.attributeDrafts}
     attributeSuggestions={c.attributeSuggestions}
     loadAttributeSuggestions={c.loadAttributeSuggestions}
@@ -137,7 +138,7 @@
     {busy}
     {headerWorkflowBusy}
     sourceRows={c.sourceRows}
-    otherEditingDisabled={c.otherEditingDisabled}
+    otherEditingDisabled={IS_WEB_READONLY || c.otherEditingDisabled}
     otherUnsaved={c.otherUnsaved}
     otherDrafts={c.otherDrafts}
     otherList={c.otherList}
@@ -145,7 +146,7 @@
     stageOtherCell={c.stageOtherCell}
     deleteSourceChild={c.deleteSourceChild}
   />
-{:else if activeTab === 'audit'}
+{:else if activeTab === 'audit' && !IS_WEB_READONLY}
   <FS882AuditTrailSection
     entries={c.auditList}
     project={auditProject}

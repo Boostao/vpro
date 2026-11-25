@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { OtherRecord, SoilSuggestion } from '../../bindings/github.com/boostao/vpro/app';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import SourceChild from './SourceChild.svelte';
   import SourcePage from './SourcePage.svelte';
   import { embeddedForm } from './paperLayout';
@@ -99,9 +100,11 @@
     </div>
   {/if}
 {:else}
-  <button class="mb-3 text-xs" disabled={otherEditingDisabled || otherUnsaved} onclick={() => openNewChild('other')}
-    >Add Other Data</button
-  >
+  {#if !IS_WEB_READONLY}
+    <button class="mb-3 text-xs" disabled={otherEditingDisabled || otherUnsaved} onclick={() => openNewChild('other')}
+      >Add Other Data</button
+    >
+  {/if}
   <SourcePage name="Other" values={sourceHeaderValues}>
     {#snippet embedded(control)}
       {@const child = embeddedForm(control.controlId)}
@@ -113,7 +116,7 @@
         deleteDisabled={otherUnsaved}
         onotherstage={stageOtherCell}
         {otherDrafts}
-        ondelete={deleteSourceChild}
+        ondelete={IS_WEB_READONLY ? undefined : deleteSourceChild}
       />
     {/snippet}
   </SourcePage>

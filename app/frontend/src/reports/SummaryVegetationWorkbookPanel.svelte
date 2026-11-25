@@ -41,6 +41,7 @@
     onBusyChange: (held: boolean) => void;
   } = $props();
 
+  const IS_WEB_READONLY = typeof __VPRO_WEB_READONLY__ !== 'undefined' && __VPRO_WEB_READONLY__ === true;
   const owned = untrack(() => structuredClone(owner));
   const session = summaryVegetationWorkbookSession(owned);
   const workbookReads = new ReadRequests();
@@ -244,8 +245,13 @@
   }
   async function publish() {
     if (held || modeUnavailable || viewState.draftError || !currentReview) return;
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
     error = '';
     try {
+      if (webReadOnly && !viewState.destination.trim()) {
+        const defaultName = `${(owned.project || 'vpro').replace(/[^A-Za-z0-9._-]+/g, '_')}_summary_vegetation.xlsx`;
+        session.edit('destination', defaultName);
+      }
       await session.publish(calculation, (request) =>
         VegetationReportService.ExportReviewedSummaryVegetationWorkbook(owned.contextId, JSON.stringify(request))
       );
@@ -257,8 +263,8 @@
       };
       if (s.outcome?.status === 'published' && !s.error) {
         notifications.success(
-          'Summary Vegetation workbook exported',
-          s.outcome.path || s.requestedDestination || viewState.destination,
+          webReadOnly ? 'Summary Vegetation workbook downloaded' : 'Summary Vegetation workbook exported',
+          webReadOnly ? s.requestedDestination || viewState.destination : s.outcome.path || s.requestedDestination || viewState.destination,
           opts
         );
       } else if (s.error || s.outcome) {
@@ -270,7 +276,11 @@
         );
       }
     } catch (cause) {
-      error = formatError(cause);
+      const rawErr = formatError(cause);
+      error =
+        webReadOnly && /429|503|busy|semaphore|queue/i.test(rawErr)
+          ? 'Another download is currently being prepared on the server. Please wait a moment and try again.'
+          : rawErr;
       notifications.error('Summary Vegetation workbook export failed', error, {
         category: 'reports',
         source: 'Summary Vegetation',
@@ -415,15 +425,17 @@
       />
       Use master CombinedEnglishName (also includes common names)
     </label>
-    <label>
-      New workbook destination (.xlsx)
-      <input
-        data-summary-workbook-destination
-        value={viewState.destination}
-        disabled={held}
-        oninput={(event) => edit('destination', event.currentTarget.value)}
-      />
-    </label>
+    {#if !IS_WEB_READONLY}
+      <label>
+        New workbook destination (.xlsx)
+        <input
+          data-summary-workbook-destination
+          value={viewState.destination}
+          disabled={held}
+          oninput={(event) => edit('destination', event.currentTarget.value)}
+        />
+      </label>
+    {/if}
   </div>
   {#if unanimousCommon}
     <p data-summary-workbook-unanimous-common>
@@ -456,10 +468,14 @@
     <button data-summary-workbook-undo disabled={held} onclick={undo}>Undo export options</button>
     <button
       data-summary-workbook-publish
-      disabled={held || modeUnavailable || !!viewState.draftError || !currentReview || !viewState.destination}
+      disabled={held ||
+        modeUnavailable ||
+        !!viewState.draftError ||
+        !currentReview ||
+        (!IS_WEB_READONLY && !viewState.destination)}
       onclick={publish}
     >
-      Publish reviewed workbook
+      {IS_WEB_READONLY ? 'Download reviewed workbook (.xlsx)' : 'Publish reviewed workbook'}
     </button>
   </div>
   {#if viewState.review}

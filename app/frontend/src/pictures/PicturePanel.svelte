@@ -43,6 +43,7 @@
     observeMutationReceipts?: boolean;
   } = $props();
 
+  const IS_WEB_READONLY = typeof __VPRO_WEB_READONLY__ !== 'undefined' && __VPRO_WEB_READONLY__ === true;
   const reads = new ReadRequests();
   let generation = 0;
   let busy = $state(false);
@@ -72,7 +73,7 @@
   const row = $derived(currentReview?.records.rows.find((item) => item.rowId === selected));
 
   const creationSession = $derived(
-    observeMutationReceipts && contextId && project && plotNumber
+    !IS_WEB_READONLY && observeMutationReceipts && contextId && project && plotNumber
       ? pictureCreationSession({ contextId, project, plotNumber })
       : undefined
   );
@@ -81,7 +82,7 @@
   let appliedCreationRequest = '';
 
   const lifecycleSession = $derived(
-    observeMutationReceipts && contextId && project && plotNumber
+    !IS_WEB_READONLY && observeMutationReceipts && contextId && project && plotNumber
       ? pictureLifecycleSession({ contextId, project, plotNumber })
       : undefined
   );
@@ -243,6 +244,7 @@
   });
 
   async function reviewDeletion() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!lifecycleSession || !row || view !== 'manager' || disabled || busy || metadataPending || lifecyclePending)
       return;
     try {
@@ -260,6 +262,7 @@
   }
 
   function editMetadata() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
     if (!metadataSession || !currentReview || !row || disabled || busy || metadataPending || lifecyclePending) return;
     try {
       metadataSession.select(currentReview, row.rowId);
@@ -421,14 +424,14 @@
     {busy}
     {metadataPending}
     {lifecyclePending}
-    hasMetadataSession={Boolean(metadataSession)}
+    hasMetadataSession={!IS_WEB_READONLY && Boolean(metadataSession)}
     cellLabel={pictureCellLabel}
     onSelect={select}
     onPreview={preview}
     onEditMetadata={editMetadata}
     onReviewDeletion={reviewDeletion}
   >
-    {#if metadataSession}
+    {#if !IS_WEB_READONLY && metadataSession}
       <PictureMetadataEditor
         session={metadataSession}
         disabled={(metadataDisabled ?? disabled) || busy || lifecyclePending}

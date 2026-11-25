@@ -38,6 +38,9 @@
   import LongVegetationPreviewBody from './parts/LongVegetationPreviewBody.svelte';
   import { projectReportWorkspace } from './longVegetationProjectWorkspaces';
   import { notifications } from '../shell/notificationService.svelte';
+  import { defaultWebExportFilename } from '../shell/webReadOnlyShell';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
+  import { formatWebDownloadFeedback } from '../web/webMeta';
 
   let {
     contextId,
@@ -293,6 +296,13 @@
     );
   }
   async function publishWorkbook() {
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+    const targetDestination =
+      webReadOnly && !destination.trim()
+        ? typeof defaultWebExportFilename === 'function'
+          ? defaultWebExportFilename(`${project || 'vpro'}_long_vegetation`, '.xlsx')
+          : `${project || 'vpro'}_long_vegetation.xlsx`
+        : destination;
     if (bridge.projectActive && projectWorkspace) {
       if (
         busy ||
@@ -304,10 +314,13 @@
         return;
       error = '';
       try {
-        await projectWorkspace.publishWorkbook(destination);
+        await projectWorkspace.publishWorkbook(targetDestination);
         bridge.syncProject();
       } catch (c) {
-        error = formatError(c);
+        error =
+          webReadOnly && typeof formatWebDownloadFeedback === 'function'
+            ? formatWebDownloadFeedback(c, 'Long Vegetation workbook download')
+            : formatError(c);
         toastErr('Long Vegetation workbook export failed', error);
       }
       return;
@@ -317,12 +330,15 @@
     cancel();
     error = '';
     try {
-      await workbookSession.publish(reviewed, destination, (r) =>
+      await workbookSession.publish(reviewed, targetDestination, (r) =>
         VegetationReportService.ExportReviewedVegetationWorkbook(contextId, JSON.stringify(r))
       );
       bridge.syncWorkbook();
     } catch (c) {
-      error = formatError(c);
+      error =
+        webReadOnly && typeof formatWebDownloadFeedback === 'function'
+          ? formatWebDownloadFeedback(c, 'Long Vegetation workbook download')
+          : formatError(c);
       toastErr('Long Vegetation workbook export failed', error);
     }
   }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import type { FileDialogFilter, GeoPackageExportOutcome, LumpTableSummary } from './interchangeHub';
 
   let {
@@ -53,36 +54,38 @@
     [100..170] are normalized automatically).
   </p>
   <div class="form-row">
-    <label class="grow">
-      <span>Destination .gpkg File Path</span>
-      <div class="input-with-browse">
-        <input
-          type="text"
-          class="grow"
-          bind:value={gpkgDestPath}
-          placeholder="/path/to/bec_plots.gpkg"
-          disabled={busy || operationHeld}
-        />
-        <button
-          type="button"
-          class="btn-secondary"
-          data-save-gpkg
-          disabled={busy || operationHeld}
-          onclick={() =>
-            onPickFilePath(
-              'save',
-              'Save GeoPackage (.gpkg)',
-              'bec_plots.gpkg',
-              [{ DisplayName: 'GeoPackage (*.gpkg)', Pattern: '*.gpkg' }],
-              (p) => {
-                gpkgDestPath = p;
-              }
-            )}
-        >
-          Save As...
-        </button>
-      </div>
-    </label>
+    {#if !IS_WEB_READONLY}
+      <label class="grow">
+        <span>Destination .gpkg File Path</span>
+        <div class="input-with-browse">
+          <input
+            type="text"
+            class="grow"
+            bind:value={gpkgDestPath}
+            placeholder="/path/to/bec_plots.gpkg"
+            disabled={busy || operationHeld}
+          />
+          <button
+            type="button"
+            class="btn-secondary"
+            data-save-gpkg
+            disabled={busy || operationHeld}
+            onclick={() =>
+              onPickFilePath(
+                'save',
+                'Save GeoPackage (.gpkg)',
+                'bec_plots.gpkg',
+                [{ DisplayName: 'GeoPackage (*.gpkg)', Pattern: '*.gpkg' }],
+                (p) => {
+                  gpkgDestPath = p;
+                }
+              )}
+          >
+            Save As...
+          </button>
+        </div>
+      </label>
+    {/if}
     <label>
       <span>Coordinate Reference System</span>
       <select bind:value={gpkgCrs} disabled={busy || operationHeld}>
@@ -115,15 +118,17 @@
             <option value={lumpOptionValue(item, discoveredLumpTables)}>{formatLumpOptionLabel(item)}</option>
           {/each}
         </select>
-        <button
-          type="button"
-          class="btn-secondary"
-          data-browse-lump-db="geopackage"
-          disabled={busy || operationHeld}
-          onclick={onBrowseExternalLumpDb}
-        >
-          From .db…
-        </button>
+        {#if !IS_WEB_READONLY}
+          <button
+            type="button"
+            class="btn-secondary"
+            data-browse-lump-db="geopackage"
+            disabled={busy || operationHeld}
+            onclick={onBrowseExternalLumpDb}
+          >
+            From .db…
+          </button>
+        {/if}
       </div>
     </label>
     <button
@@ -132,19 +137,28 @@
       disabled={busy || operationHeld || !contextId}
       onclick={onRunGeoPackageExport}
     >
-      Export GeoPackage (.gpkg)
+      {#if busy}
+        {IS_WEB_READONLY ? 'Preparing download...' : 'Exporting GeoPackage (.gpkg)...'}
+      {:else}
+        {IS_WEB_READONLY ? 'Download GeoPackage (.gpkg)' : 'Export GeoPackage (.gpkg)'}
+      {/if}
     </button>
   </div>
 
   {#if gpkgOutcome}
     <div class="receipt-box success">
-      <strong>Exported {gpkgOutcome.featureCount} plot features ({gpkgOutcome.crs}, SRS {gpkgOutcome.srsId})</strong>
+      <strong>
+        {IS_WEB_READONLY ? 'Downloaded' : 'Exported'} {gpkgOutcome.featureCount} plot features ({gpkgOutcome.crs}, SRS
+        {gpkgOutcome.srsId})
+      </strong>
       <span>
         Located: {gpkgOutcome.locatedPlotCount} | Skipped unlocated: {gpkgOutcome.skippedUnlocatedCount} | Flipped positive
         West longitudes: {gpkgOutcome.normalizedWestLongitudes}
       </span>
       <span>
-        Attribute tables: {gpkgOutcome.attributeTables.join(', ') || 'none'} | Path: <code>{gpkgOutcome.path}</code>
+        Attribute tables: {gpkgOutcome.attributeTables.join(', ') || 'none'}{#if !IS_WEB_READONLY}
+          | Path: <code>{gpkgOutcome.path}</code>
+        {/if}
       </span>
     </div>
   {/if}

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { Bell, ChevronLeft, ChevronRight, Database, PanelRight, Search } from '@lucide/svelte';
   import type { StartupState } from '../../bindings/github.com/boostao/vpro/app';
-  import { projectState } from '../shared/state';
+  import { projectState, webMeta, webShellRuntime } from '../shared/state';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
   import Navigation from './Navigation.svelte';
   import type { ShellViewId } from './shellPlotOps';
   import type { ShellUiController } from './shellUiController.svelte';
@@ -28,6 +29,8 @@
     onOpenMetadata: () => void;
     onOpenCloudSync: () => void;
   } = $props();
+
+  const picturesAvailable = $derived(!IS_WEB_READONLY || ($webMeta?.picturesAvailable ?? true));
 </script>
 
 <header class="topbar">
@@ -91,7 +94,7 @@
     aria-controls="project-context"
     onclick={() => ui.toggleContextSidebar()}
   >
-    Projects &amp; context
+    {IS_WEB_READONLY ? 'Datasets & context' : 'Projects & context'}
   </button>
   {#if !startupFailure}
     <Navigation
@@ -100,19 +103,22 @@
       onnavigate={onNavigate}
       {siviAvailable}
       onopensivi={onOpenSivi}
-      newSiviAvailable={ui.newSiviAvailable}
+      newSiviAvailable={IS_WEB_READONLY ? false : ui.newSiviAvailable}
       onopennewsivi={() => {
-        ui.newSiviModalOpen = true;
+        if (!IS_WEB_READONLY) ui.newSiviModalOpen = true;
       }}
       metadataAvailable={ui.metadataAvailable}
       onopenmetadata={onOpenMetadata}
-      onopencloudsync={onOpenCloudSync}
-      onopenusersetup={() => {
-        ui.userSetupOpen = true;
-      }}
+      onopencloudsync={IS_WEB_READONLY ? undefined : onOpenCloudSync}
+      onopenusersetup={IS_WEB_READONLY
+        ? undefined
+        : () => {
+            ui.userSetupOpen = true;
+          }}
       whatsNewUnreadCount={ui.whatsNewStatus?.unreadCount ?? 0}
-      resetSampleAvailable={ui.newSiviAvailable}
+      resetSampleAvailable={IS_WEB_READONLY ? false : ui.newSiviAvailable}
       releaseChannel={ui.releaseChannel}
+      {picturesAvailable}
       onhelpaction={(action) => ui.handleHelpMenuAction(action)}
     />
   {/if}
@@ -168,7 +174,7 @@
   <div class="context-strip" role="region" aria-label="Active workspace context and quick actions" data-context-strip>
     <div class="context-strip-chips">
       <span class="ctx-chip" data-context-chip="project">
-        <span class="ctx-chip-label">Project</span>
+        <span class="ctx-chip-label">{IS_WEB_READONLY ? 'Dataset' : 'Project'}</span>
         <span class="ctx-chip-value">{$projectState?.activeProject ?? 'None'}</span>
       </span>
       <span class="ctx-chip" data-context-chip="su">
@@ -209,12 +215,18 @@
     </div>
 
     <div class="context-strip-actions">
+      {#if IS_WEB_READONLY && $webShellRuntime?.ProvenanceBadge}
+        {@const WebSnapshotProvenance = $webShellRuntime.ProvenanceBadge}
+        <WebSnapshotProvenance variant="header" activeProject={$projectState?.activeProject ?? ''} />
+      {/if}
       <span
-        class="ctx-status-pill ctx-status-{ui.sessionStatusKind}"
+        class="ctx-status-pill ctx-status-{IS_WEB_READONLY && ui.sessionStatusKind !== 'busy'
+          ? 'ready'
+          : ui.sessionStatusKind}"
         role="status"
-        data-session-status={ui.sessionStatusKind}
+        data-session-status={IS_WEB_READONLY && ui.sessionStatusKind !== 'busy' ? 'readonly' : ui.sessionStatusKind}
       >
-        {ui.sessionStatusLabel}
+        {IS_WEB_READONLY && ui.sessionStatusKind !== 'busy' ? 'Read-Only' : ui.sessionStatusLabel}
       </span>
 
       {#if ui.showInspectorToggle}
