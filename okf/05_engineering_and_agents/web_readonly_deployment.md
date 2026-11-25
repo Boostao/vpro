@@ -23,7 +23,7 @@ flowchart TB
     end
 
     subgraph HostRO["Droplet Read-Only Host Volumes (/srv/vpro/)"]
-        SNAP["/srv/vpro/data/current -> releases/&lt;snapshotId&gt; (0555/0444)<br/>manifest.json + 6 Support DBs + VP08 Project DBs (DELETE mode, 0 Audit rows)"]
+        SNAP["/srv/vpro/data/current -> releases/&lt;snapshotId&gt; (0555/0444)<br/>manifest.json + 5 Core Support DBs + VP08 Project DBs (DELETE mode, 0 Audit rows)"]
         TILES["/srv/vpro/pmtiles (:ro) or CDN Base URL"]
         PICS["/srv/vpro/pictures (:ro) + optional VPics.db"]
     end
@@ -178,11 +178,11 @@ tar -C /tmp -czf /tmp/becmaster-2026-11.tar.gz becmaster-2026-11
 ```
 
 What `vpro-snapshot build` guarantees (`app/cmd/vpro-snapshot/publish.go`, `manifest.go`, `redact.go`):
-1. Stages all 6 `VP08` support databases (`VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, `VPics.db`) and project/auxiliary `.db` files into a clean sibling staging directory.
+1. Stages all 5 core `VP08` support databases (`VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`; `VPics.db` is optionally mounted separately via `VPRO_WEB_VPICS_PATH` or alongside `/srv/vpro/pictures`) and project/auxiliary `.db` files into a clean sibling staging directory.
 2. Applies fail-closed `USysSppAttributes.RedBlueList` coordinate truncation (`--redact=true` by default).
 3. Strips every `<Project>_Audit` table to **`0` rows**.
 4. Finalizes every `.db` file: `PRAGMA wal_checkpoint(TRUNCATE)` $\rightarrow$ `PRAGMA journal_mode = DELETE` $\rightarrow$ `ANALYZE` & `VACUUM` $\rightarrow$ removes any `-wal`/`-shm`/`-journal` sidecars $\rightarrow$ verifies `mode=ro&immutable=1` openability and `PRAGMA quick_check`.
-5. Writes deterministic `manifest.json` (`schemaVersion: 1`, `snapshotId`, `publishedAt`, `redacted`, `redactedPlotCount`, `standards`, `supportFiles`, `auxiliaryFiles`, `datasets`) and enforces `0444` files / `0555` directories.
+5. Writes deterministic `manifest.json` (`schemaVersion: 1`, `snapshotId`, `publishedAt`, `redacted`, `redactedPlotCount`, `standards`, `supportFiles`, `auxiliaryFiles`, `datasets`) and normalizes permissions to world-readable `0644` files / `0755` directories (`sync-snapshot.sh` then locks staged Droplet releases down to `0444`/`0555` before calling `vpro-snapshot verify`).
 
 ### 4.2 Transfer & Zero-Downtime Activation on the Droplet
 ```bash
