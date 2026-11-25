@@ -285,6 +285,9 @@ export function isExportQueueBusyError(cause: unknown): boolean {
     text.includes('export queue') ||
     text.includes('server busy') ||
     text.includes('export busy') ||
+    text.includes('worker pool is busy') ||
+    text.includes('pool is busy') ||
+    text.includes('retry shortly') ||
     text.includes('capacity')
   );
 }

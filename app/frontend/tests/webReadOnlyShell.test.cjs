@@ -277,9 +277,31 @@ test('webMeta loads /api/meta in web read-only mode, normalizes snake_case/camel
   assert.equal(failed, null);
   assert.match(get(web.webMetaMod.webMetaError), /HTTP 503/);
 
-  // Export queue busy feedback
+  // Export queue busy feedback (including exact vpro-web 503 unwrapped error strings)
   assert.equal(web.webMetaMod.isExportQueueBusyError(new Error('HTTP 503 export semaphore busy')), true);
+  assert.equal(
+    web.webMetaMod.isExportQueueBusyError(new Error('export worker pool is busy; please retry shortly')),
+    true
+  );
+  assert.equal(
+    web.webMetaMod.isExportQueueBusyError(new Error('R analytical worker pool is busy; please retry shortly')),
+    true
+  );
   assert.equal(web.webMetaMod.isExportQueueBusyError(new Error('invalid plot number')), false);
+  assert.match(
+    web.webMetaMod.formatWebDownloadFeedback(
+      new Error('export worker pool is busy; please retry shortly'),
+      'Download failed.'
+    ),
+    /wait a few seconds/i
+  );
+  assert.match(
+    web.webMetaMod.formatWebDownloadFeedback(
+      new Error('R analytical worker pool is busy; please retry shortly'),
+      'Download failed.'
+    ),
+    /wait a few seconds/i
+  );
   assert.match(
     web.webMetaMod.formatWebDownloadFeedback(new Error('429 Too Many Requests'), 'Download failed.'),
     /wait a few seconds/i
