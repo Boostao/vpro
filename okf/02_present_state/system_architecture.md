@@ -1,15 +1,16 @@
-# Present State System Architecture (`Boostao/vpro`: `app/` & `r/`)
+# Present State System Architecture (`Boostao/vpro`: `app/`, `vpro-web` & `r/`)
 
-> **Navigation:** [Master Index](../00_index.md) | **Present State:** [Domain Model](./domain_model.md) · [Core Workflows](./core_workflows.md) · `System Architecture` · [Capability Matrix](./capability_matrix.md) · [Data Dictionary](./data_dictionary.md) · [Oracles](./oracles/DIAGNOSTIC_CLASSIFICATION.md) | **Playbooks:** [Desktop Engineering](../05_engineering_and_agents/desktop_app_engineering.md) · [R SDK Engineering](../05_engineering_and_agents/r_sdk_engineering.md)
+> **Navigation:** [Master Index](../00_index.md) | **Present State:** [Domain Model](./domain_model.md) · [Core Workflows](./core_workflows.md) · `System Architecture` · [Capability Matrix](./capability_matrix.md) · [Data Dictionary](./data_dictionary.md) · [Oracles](./oracles/DIAGNOSTIC_CLASSIFICATION.md) | **Playbooks:** [Desktop Engineering](../05_engineering_and_agents/desktop_app_engineering.md) · [R SDK Engineering](../05_engineering_and_agents/r_sdk_engineering.md) · [Web Read-Only Deployment](../05_engineering_and_agents/web_readonly_deployment.md)
 
 ---
 
-## 1. Unified Monorepo Dual-Track Topology (`Boostao/vpro`)
+## 1. Unified Monorepo Multi-Surface Topology (`Boostao/vpro`)
 
-Following the October–November 2026 architectural qualification and November 2026 monorepo unification (`VproMailExchange` `0017`, `2026-10-02`; `archive/oct2026-parity-ledgers/CLIENT_SCOPE.md`; `98e214df`), VPro's production codebase lives in the unified **`Boostao/vpro`** monorepo as **two complementary, schema-compatible tracks** sharing an identical 7-database SQLite (`WAL` mode) family, `config.yml`, and PostgreSQL `BECMaster` contract:
+Following the October–November 2026 architectural qualification and November 2026 monorepo unification (`VproMailExchange` `0017`, `2026-10-02`; `archive/oct2026-parity-ledgers/CLIENT_SCOPE.md`; `98e214df`), VPro's production codebase lives in the unified **`Boostao/vpro`** monorepo as **three complementary, schema-compatible delivery surfaces** sharing an identical 7-database SQLite (`VP08`) family, `config.yml`, and PostgreSQL `BECMaster` contract:
 
 1. **Primary Interactive Desktop Track — `app/` (`github.com/boostao/vpro/app`, `v2.0.0`):** Cross-platform desktop workstation built on **Go `1.27.0`**, **Wails v3 (`v3.1.0`)**, **Svelte 5 (`^5.57.3`, Runes mode)**, **MapLibre GL JS (`^6.18.0`) + `deck.gl` (`^9.4.1`) / `luma.gl` WebGPU + `pmtiles` (`^4.5.0`)**, **Tailwind CSS v4 (`^4.3.5`)**, **CGO SQLite (`github.com/mattn/go-sqlite3` `v1.14.53`, `WAL` mode)**, **`pgx/v5` (`v5.13.0`)** (`app/internal/cloudsync`), and an embedded C amalgamation of **`mdbtools` `1.0.1` (`libmdb`)** compiled across `windows`, `linux`, and `darwin` (`app/go.mod`, `app/frontend/package.json`, `app/internal/accessreader/reader.go`).
 2. **Headless R Statistical & Companion SDK Track — `r/` (`vpro` `v2.0.0` + Wave 6 Cloud `BECMaster`):** Clean-slate companion R package (`43` `r/R/*.R` files, `R >= 4.4.0`, zero Shiny/widgets, zero-note `R CMD check`, qualified on 71,567-plot `BECMaster`) executing concurrent read-only SQLite WAL queries alongside `app/` via `RSQLite`/`data.table`/optional `duckdb`, providing community matrices, multivariate BEC clustering, `sf` GeoPackage export, `LMH25 (2023)` pedon validation, `climr` normals & Ministry `aSMR` modelling, dual edatopic grids, BEC diagnostics, guarded candidate `*_SU` write-back, PostgreSQL `BECMaster` cloud sync/staging/snapshots (`r/R/cloud_*.R`), and Quarto BEC ecosystem guides (`r/DESCRIPTION`).
+3. **Pure-HTTP Read-Only Web Server — `app/cmd/vpro-web` & `app/cmd/vpro-snapshot` (`deploy/vpro-web/`):** Stateless, hardened read-only web viewer and analytical service compiled with `-tags vpro_headless` (zero Wails v3, GTK/WebKit, or `accessreader` dependencies), serving immutable `BECMaster` / `VP08` SQLite snapshots (`mode=ro&immutable=1`, `journal_mode=DELETE`, `0`-row `<Project>_Audit`, fail-closed `RedBlueList` coordinate redaction) through a concurrent **`ReadOnlyContextPool`**, a strict **290-method read-only RPC allowlist** (`12` services), the embedded Svelte 5 web SPA (`vite.web.config.ts`), and an optional semaphore-bounded read-only R/Quarto sidecar (`climr`/`vegclust`/Quarto) behind Caddy on DigitalOcean ([Section 5](#5-pure-http-read-only-web-server-appcmdvpro-web--appcmdvpro-snapshot), [Web Read-Only Deployment Runbook](../05_engineering_and_agents/web_readonly_deployment.md)).
 
 ```mermaid
 flowchart TB
@@ -34,6 +35,12 @@ flowchart TB
         RAPI["r/ — vpro R SDK (R >= 4.4 + RSQLite WAL / DuckDB / RPostgres)<br/>climr -> aSMR, vegclust, Dual Edatopic Grids, Cloud Sync & Quarto"]
     end
 
+    subgraph WebServer["Read-Only Web Server: app/cmd/vpro-web & vpro-snapshot (-tags vpro_headless)"]
+        SNAPCLI["cmd/vpro-snapshot (build & verify)<br/>Fail-Closed RedBlueList Redaction · 0-Row Audit · DELETE/VACUUM"]
+        WHTTP["cmd/vpro-web (:8080 Public + 127.0.0.1:9090 Reload/Stats)<br/>Embedded Svelte 5 SPA · 290-Method RO Allowlist · Semaphores"]
+        WPOOL["ReadOnlyContextPool (mode=ro&immutable=1)<br/>Keyed by (Dataset, SU, Hierarchy) · In-Memory Session Prefs"]
+    end
+
     UI <-->|"JSON IPC ($state.snapshot)"| IPC
     IPC --> CTX
     IPC --> CAT
@@ -48,6 +55,10 @@ flowchart TB
     CGO -->|"Atomic os.Link VP08 .db"| PROJ
     RAPI <-->|"Concurrent WAL RO + Guarded *_SU"| PROJ
     RAPI --> FAM
+    PROJ -->|"Offline Snapshot Build"| SNAPCLI
+    SNAPCLI -->|"Immutable Bundle + manifest.json"| WPOOL
+    WHTTP --> WPOOL
+    WHTTP -->|"Bounded Semaphore (RO Guard)"| RSIDE
 ```
 
 ---
@@ -206,3 +217,17 @@ flowchart TD
 
 ### 4.3 Graduated Release-Channel Configuration (`config.yml`)
 Wave 1A (`c4cbd1a`) graduated all validated desktop workflows to **default-ON** in standard builds, replacing the historical 79 `VITE_*` / 62 `VPRO_*` demo environment flags (`archive/oct2026-parity-ledgers/`) with a clean `release_channel: stable | experimental` setting in `config.yml` and pruning client-retired `CHARS` standalone forms and `PC-ORD Break Report` menus. Offline extraction tools under `app/cmd/` (`cmd/standards2026`, `cmd/accessinventory`, `cmd/fs882layout`, `cmd/*codefixture`) compile 2026 `BECWeb` standards and Access twip geometry into deterministic embedded assets under `app/resources/`.
+
+---
+
+## 5. Pure-HTTP Read-Only Web Server (`app/cmd/vpro-web` & `app/cmd/vpro-snapshot`)
+
+To publish **`BECMaster`** and provincial `VP08` datasets for browser-based exploration, mapping, diagnostics, and read-only R analytics without duplicating backend domain logic, `app/` compiles a third delivery surface from the same 4-layer `app/internal/*` packages:
+
+* **Headless Build Tag Isolation (`-tags vpro_headless`):** Build-tag splits across `internal/vprocore`, `internal/lifecycle`, `internal/pictures`, and `internal/interchange` compile `cmd/vpro-web` and `cmd/vpro-snapshot` with `CGO_ENABLED=1` (`go-sqlite3` only) and **zero** transitive `github.com/wailsapp/wails` or `internal/accessreader` (`libmdb`) imports—mechanically enforced by `TestHeadlessZeroWailsAndAccessReaderDeps` (`app/cmd/vpro-web/deps_headless_test.go`).
+* **Concurrent `ReadOnlyContextPool` (`app/internal/vprocore/readonly_pool.go`, `sqlitecontext_readonly.go`, `desktopconfig_memory.go`):** Replaces desktop's single mutable `SqliteContext` with a bounded pool (`VPRO_WEB_POOL_SLOTS=6` slots per `(DatasetID, SU, Hierarchy)` key, `VPRO_WEB_MAX_POOLS=16` keys) opening snapshot SQLite files strictly with `mode=ro&immutable=1`. Each catalog generation issues generation-fenced `vproweb1:` context IDs (`ErrStaleWebContext` on reload), binds per-session preferences strictly in memory (`NewInMemoryDesktopConfig`), and supports atomic zero-downtime `Reload` triggered via loopback `POST /internal/reload`.
+* **Strict 290-Method Read-Only RPC Allowlist & Web SPA Transport (`app/resources/web_rpc_allowlist.json`, `app/cmd/vpro-web/rpc_router.go`, `app/frontend/vite.web.config.ts`):**
+  * Exposes exactly **290 read-only methods** across all 12 domain services (`220` `rpc`, `20` `download`, `50` `prefs`), verified both at frontend build time (`node scripts/generate-web-rpc-map.mjs --check`) and by a strict startup bijection check in `NewRPCRouter` (every allowlisted method has a handler; no unlisted handler may register).
+  * `vite.web.config.ts` swaps `@wailsio/runtime` for the HTTP transport shim (`/api/rpc/<Service>/<Method>`, `/api/downloads/*`, `/api/meta`, `/pmtiles/*`, `/maps/*`), embedding the compiled `dist-web/` SPA into `vpro-web` (`static_embed.go`). Client-supplied filesystem paths are unconditionally ignored and rewritten to server-controlled temp directories under `tmpfs` `/tmp/vpro-exports`.
+* **Read-Only R Sidecar (`climr`, `vegclust`, Quarto) with Bounded Semaphores:** `app/cmd/vpro-web/rpc_handlers_envreport.go` routes `DetectRRuntime`, `GetCachedPlotClimate`, `ComputePlotClimateAndDualEdatopic`, `RunMultivariateClustering`, and `RenderQuartoGuide` (returning HTML or HTML+PDF ZIP downloads) through `app/internal/rsidecar` with read-only SQLite write-back guards (`app/internal/rsidecar/readonly_regression_test.go`). Heavy jobs are bounded by `VPRO_WEB_R_CONCURRENCY=2` (`180s` timeout) and `VPRO_WEB_EXPORT_CONCURRENCY=3` (`120s` timeout) semaphores—returning HTTP `503 Service Unavailable` with `Retry-After: 5` when saturated—paired with a bounded in-memory LRU preview cache (`VPRO_WEB_CACHE_MAX_MB=256`).
+* **Immutable Snapshot Publisher & Deployment (`app/cmd/vpro-snapshot/`, `deploy/vpro-web/`, `.github/workflows/web-deploy.yml`):** `vpro-snapshot build` / `verify` builds SHA-256-verified immutable `VP08` bundles (`journal_mode = DELETE`, `VACUUM` + `ANALYZE`, `0`-row `<Project>_Audit`, fail-closed `RedBlueList` coordinate truncation by default, `0444`/`0555` permissions). Production and staging run via Docker Compose (`read_only: true`, UID `10001:10001`, `cap_drop: ALL`, Caddy 2 automatic HTTPS + HTTP/3, loopback-only `:9090` control listener, and `sync-snapshot.sh` atomic symlink reload). See the [Web Read-Only Deployment Runbook](../05_engineering_and_agents/web_readonly_deployment.md) and [`D-14`](../04_evidence_and_sources/decisions_and_gaps.md).
