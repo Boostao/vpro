@@ -1,3 +1,5 @@
+//go:build windows && !vpro_headless
+
 package pictures
 
 import (

@@ -1,3 +1,5 @@
+//go:build !vpro_headless
+
 package pictures
 
 import (

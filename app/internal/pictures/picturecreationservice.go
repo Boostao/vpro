@@ -8,10 +8,8 @@ import (
 	"errors"
 	"reflect"
 	"sync"
-	"unsafe"
 
 	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 type PictureCreationResult = pictureCreationResult
@@ -23,25 +21,6 @@ type PictureCreationSelection struct {
 	Project      string `json:"project"`
 	PlotNumber   string `json:"plotNumber"`
 	WindowID     uint   `json:"windowId"`
-}
-
-// Request contexts are RPC-owned and must never be retained by a capability.
-type pictureCreationNativeOwner struct {
-	app    *application.App
-	window *application.WebviewWindow
-	handle unsafe.Pointer
-}
-
-func currentPictureCreationOwner(ctx context.Context) (pictureCreationNativeOwner, error) {
-	app, window, err := vprocore.PictureNativeChooserOwner(ctx)
-	if err != nil {
-		return pictureCreationNativeOwner{}, err
-	}
-	handle := window.NativeWindow()
-	if handle == nil {
-		return pictureCreationNativeOwner{}, errors.New("picture creation native request window closed")
-	}
-	return pictureCreationNativeOwner{app, window, handle}, nil
 }
 
 type pictureCreationCapability struct {
@@ -143,9 +122,7 @@ func (s *PictureCreationService) Choose(ctx context.Context, contextID, project,
 		return nil, err
 	}
 	dto := PictureCreationSelection{ContextID: contextID, Project: project, PlotNumber: plot}
-	if owner.window != nil {
-		dto.WindowID = owner.window.ID()
-	}
+	dto.WindowID = owner.windowID()
 	source := s.pictures.currentSource()
 	if err := s.checkScope(ctx, dto, source); err != nil {
 		return nil, err

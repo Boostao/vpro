@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build !windows && !vpro_headless
 
 package vprocore
 
@@ -11,11 +11,6 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
-
-type nativeFileFilter struct {
-	DisplayName string
-	Pattern     string
-}
 
 func promptNativeOpenFileWithTitle(app *application.App, window *application.WebviewWindow, handle unsafe.Pointer, title string, filters []nativeFileFilter) (string, error) {
 	if app == nil || app.Dialog == nil || window == nil || handle == nil || window.NativeWindow() != handle {

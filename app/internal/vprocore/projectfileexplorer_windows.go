@@ -1,3 +1,5 @@
+//go:build windows && !vpro_headless
+
 package vprocore
 
 import (
@@ -34,11 +36,6 @@ const (
 type comDlgFilterSpec struct {
 	name *uint16
 	spec *uint16
-}
-
-type nativeFileFilter struct {
-	DisplayName string
-	Pattern     string
 }
 
 func promptNativeOpenFileWithTitle(_ *application.App, window *application.WebviewWindow, handle unsafe.Pointer, title string, filters []nativeFileFilter) (string, error) {

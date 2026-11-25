@@ -8,15 +8,9 @@ import (
 	"log"
 	"math"
 	"sync"
-
-	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 const CloseRequestEvent = "vpro:close-request"
-
-func init() {
-	application.RegisterEvent[string]("vpro:close-request")
-}
 
 var (
 	errNoPendingClose       = errors.New("no close request is pending")
@@ -115,15 +109,6 @@ func (s *CloseService) requestClose() error {
 		return errors.New("close-request event was cancelled; pending request remains available for retrieval")
 	}
 	return nil
-}
-
-// HandleWindowClosing — RegisterHook runs synchronously before Wails' closing listeners. Always
-// cancel this window event: ConfirmClose exits through the separate App.Quit.
-func (s *CloseService) HandleWindowClosing(event *application.WindowEvent) {
-	event.Cancel()
-	if err := s.requestClose(); err != nil {
-		log.Printf("Native close remains blocked: %v", err)
-	}
 }
 
 // ShouldQuit — Also guard application-level quit routes, not just the window's close button.

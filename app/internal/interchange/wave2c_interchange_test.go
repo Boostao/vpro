@@ -839,18 +839,6 @@ func TestVenus50XMLArchivesImportToVP08(t *testing.T) {
 	if err != nil || hierRes.PlotCount != 1 || hierRes.VegRowCount != 2 {
 		t.Fatalf("hierarchical VENUS XML import failed: %+v, err=%v", hierRes, err)
 	}
-
-	// Test real Jet .mdb VENUS 5.0 template via internal/accessreader when sibling asset is present
-	const realVenusMDB = "/home/bruno/Work/VPRO_ACCESS/VPro64/Templates/TemplateVENUS5.mdb"
-	if _, statErr := os.Stat(realVenusMDB); statErr == nil {
-		mdbInsp, mdbErr := interchange.InspectVenusSource(service, ctx, state.ContextID, realVenusMDB)
-		if mdbErr != nil {
-			t.Fatalf("InspectVenusSource on real TemplateVENUS5.mdb failed: %v", mdbErr)
-		}
-		if mdbInsp.SourceFormat != "mdb" || !strings.HasPrefix(mdbInsp.VenusVersion, "5") {
-			t.Fatalf("unexpected TemplateVENUS5.mdb inspection metadata: %+v", mdbInsp)
-		}
-	}
 }
 
 func TestGeoPackageExportEPSG3005AndEPSG4326(t *testing.T) {

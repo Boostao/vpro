@@ -59,8 +59,8 @@ RUN rm -rf /src/app/cmd/vpro-web/static
 COPY --from=frontend-builder /src/app/frontend/dist-web/ /src/app/cmd/vpro-web/static/
 
 RUN mkdir -p /out \
-    && go build -trimpath -ldflags="-s -w" -o /out/vpro-web ./cmd/vpro-web \
-    && go build -trimpath -ldflags="-s -w" -o /out/vpro-snapshot ./cmd/vpro-snapshot
+    && go build -tags vpro_headless -trimpath -ldflags="-s -w" -o /out/vpro-web ./cmd/vpro-web \
+    && go build -tags vpro_headless -trimpath -ldflags="-s -w" -o /out/vpro-snapshot ./cmd/vpro-snapshot
 
 # ------------------------------------------------------------------------------
 # Stage 3 (optional): R SDK & Ecology Package Builder (skipped if INCLUDE_R=false)

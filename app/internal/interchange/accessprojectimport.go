@@ -1,3 +1,5 @@
+//go:build !vpro_headless
+
 package interchange
 
 import (
@@ -322,31 +324,6 @@ func toFloat64(value any) (float64, bool) {
 	default:
 		return 0, false
 	}
-}
-
-func sanitizeProjectSuggestion(raw string) string {
-	var builder strings.Builder
-	for _, r := range raw {
-		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' {
-			builder.WriteRune(r)
-		} else if r == '-' || r == ' ' {
-			builder.WriteRune('_')
-		}
-	}
-	candidate := builder.String()
-	if candidate == "" || !((candidate[0] >= 'A' && candidate[0] <= 'Z') || (candidate[0] >= 'a' && candidate[0] <= 'z')) {
-		candidate = "P_" + candidate
-	}
-	if len(candidate) > 31 {
-		candidate = candidate[:31]
-	}
-	if strings.EqualFold(candidate, "Sample") || strings.EqualFold(candidate, "None") || strings.EqualFold(candidate, "Master") {
-		candidate += "_Imp"
-		if len(candidate) > 31 {
-			candidate = candidate[:31]
-		}
-	}
-	return candidate
 }
 
 const AccessImportProgressEvent = "vpro:access-import-progress"

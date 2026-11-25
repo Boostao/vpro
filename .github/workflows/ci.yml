@@ -268,25 +268,25 @@ jobs:
           rm -rf app/cmd/vpro-web/static
           mkdir -p app/cmd/vpro-web/static
           cp -R app/frontend/dist-web/. app/cmd/vpro-web/static/
-      - name: Verify zero Wails v3 and zero accessreader imports in cmd/vpro-web
+      - name: Verify zero Wails v3 and zero accessreader imports in cmd/vpro-web and cmd/vpro-snapshot
         working-directory: app
         run: |
           set -euo pipefail
-          deps="$(go list -f '{{join .Deps "\n"}}' ./cmd/vpro-web/...)"
+          deps="$(go list -tags vpro_headless -f '{{join .Deps "\n"}}' ./cmd/vpro-web/... ./cmd/vpro-snapshot/...)"
           if printf '%s\n' "${deps}" | grep -E 'github\.com/wailsapp/wails|github\.com/boostao/vpro/app/internal/accessreader'; then
-            echo "ERROR: cmd/vpro-web must not import Wails v3 or accessreader/libmdb packages" >&2
+            echo "ERROR: cmd/vpro-web and cmd/vpro-snapshot must not import Wails v3 or accessreader/libmdb packages" >&2
             exit 1
           fi
-          echo "OK: cmd/vpro-web has zero Wails v3 and zero accessreader transitive imports."
+          echo "OK: cmd/vpro-web and cmd/vpro-snapshot have zero Wails v3 and zero accessreader transitive imports."
       - name: Run race-detected tests for vpro-snapshot and vpro-web
         working-directory: app
-        run: go test -race ./cmd/vpro-snapshot/... ./cmd/vpro-web/...
+        run: go test -tags vpro_headless -race ./cmd/vpro-snapshot/... ./cmd/vpro-web/...
       - name: Verify headless Go builds for vpro-snapshot and vpro-web (no GTK/WebKit)
         working-directory: app
         run: |
           set -euo pipefail
-          go build -o /dev/null ./cmd/vpro-snapshot
-          go build -o /dev/null ./cmd/vpro-web
+          go build -tags vpro_headless -o /dev/null ./cmd/vpro-snapshot
+          go build -tags vpro_headless -o /dev/null ./cmd/vpro-web
       - name: Validate deploy/vpro-web packaging scripts and compose syntax
         run: |
           set -euo pipefail
