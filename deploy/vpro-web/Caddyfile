@@ -1,0 +1,49 @@
+{
+	# Enable HTTP/1.1, HTTP/2, and HTTP/3 (QUIC over UDP 443) alongside automatic HTTPS
+	servers {
+		protocols h1 h2 h3
+	}
+	# Optional: set an ACME contact email for Let's Encrypt certificate expiry notices
+	# email ops@example.com
+}
+
+# Reads VPRO_DOMAIN from .env / docker-compose.yml (fallback placeholder for dev)
+{$VPRO_DOMAIN:becmaster-dev.example.com} {
+	encode zstd gzip
+
+	# Strict browser security headers
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		-Server
+	}
+
+	# Immutable long-lived cache headers for hashed SPA assets and PMTiles archives
+	@immutable_assets path /assets/* /pmtiles/*
+	header @immutable_assets Cache-Control "public, max-age=31536000, immutable"
+
+	# Defense-in-depth: never expose internal control endpoints over the public ingress
+	@internal path /internal/*
+	respond @internal 404
+
+	# Optional Basic Auth gate for non-public dev / staging Droplets.
+	# Generate a bcrypt password hash with:
+	#   docker compose exec caddy caddy hash-password --plaintext 'CHANGE_ME'
+	# Then uncomment and populate the credentials below (leave healthz unauthenticated if probed externally):
+	# @protected not path /healthz /readyz
+	# basic_auth @protected {
+	# 	bec-reviewer $2a$14$REPLACE_WITH_CADDY_BCRYPT_HASH_PLACEHOLDER
+	# }
+
+	reverse_proxy vpro-web:8080 {
+		transport http {
+			dial_timeout 10s
+			read_timeout 180s
+			write_timeout 180s
+			response_header_timeout 180s
+		}
+		header_up X-Real-IP {remote_host}
+	}
+}

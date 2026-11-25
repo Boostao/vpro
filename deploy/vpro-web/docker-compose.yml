@@ -1,0 +1,97 @@
+services:
+  vpro-web:
+    image: ${VPRO_IMAGE:-ghcr.io/boostao/vpro/vpro-web:dev}
+    container_name: vpro-web
+    restart: unless-stopped
+    init: true
+    read_only: true
+    user: "10001:10001"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${VPRO_MEM_LIMIT:-2g}
+    cpus: ${VPRO_CPUS:-1.5}
+    expose:
+      - "8080"
+    ports:
+      # Internal reload & readiness listener strictly bound to host loopback
+      - "127.0.0.1:${VPRO_INTERNAL_PORT:-9090}:9090"
+    environment:
+      VPRO_WEB_ENV: ${VPRO_ENV:-dev}
+      VPRO_WEB_LISTEN_ADDR: ":8080"
+      VPRO_WEB_INTERNAL_ADDR: ":9090"
+      # Default to /srv/vpro/data/current inside the mounted parent /srv/vpro/data:ro
+      # so atomic symlink flips in sync-snapshot.sh reload live without container restart.
+      # Override to /data when pointing VPRO_DATA_DIR at a standalone single bundle directory.
+      VPRO_WEB_DATA_DIR: ${VPRO_WEB_DATA_DIR:-/srv/vpro/data/current}
+      VPRO_WEB_PMTILES_DIR: /pmtiles
+      VPRO_WEB_PICTURES_DIR: /pictures
+      VPRO_WEB_EXPORT_DIR: /tmp/vpro-exports
+      VPRO_WEB_R_CONCURRENCY: ${VPRO_WEB_R_CONCURRENCY:-2}
+      VPRO_WEB_EXPORT_CONCURRENCY: ${VPRO_WEB_EXPORT_CONCURRENCY:-3}
+      VPRO_WEB_CACHE_MAX_MB: ${VPRO_WEB_CACHE_MAX_MB:-256}
+      VPRO_WEB_PMTILES_CDN_BASE_URL: ${VPRO_WEB_PMTILES_CDN_BASE_URL:-}
+      TMPDIR: /tmp/vpro-exports
+      HOME: /tmp/vpro-exports/home
+      XDG_CACHE_HOME: /tmp/vpro-exports/cache
+      XDG_CONFIG_HOME: /tmp/vpro-exports/config
+      XDG_DATA_HOME: /tmp/vpro-exports/data
+      DENO_DIR: /tmp/vpro-exports/deno
+      R_USER_CACHE_DIR: /tmp/vpro-exports/r-cache
+    volumes:
+      - type: bind
+        source: ${VPRO_DATA_DIR:-/srv/vpro/data/current}
+        target: /data
+        read_only: true
+      - type: bind
+        source: ${VPRO_DATA_ROOT:-/srv/vpro/data}
+        target: /srv/vpro/data
+        read_only: true
+      - type: bind
+        source: ${VPRO_PMTILES_DIR:-/srv/vpro/pmtiles}
+        target: /pmtiles
+        read_only: true
+      - type: bind
+        source: ${VPRO_PICTURES_DIR:-/srv/vpro/pictures}
+        target: /pictures
+        read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,mode=1777
+      - /tmp/vpro-exports:size=512m,noexec,nosuid,uid=10001,gid=10001,mode=0750
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - vpro_net
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: vpro-caddy
+    restart: unless-stopped
+    depends_on:
+      vpro-web:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      VPRO_DOMAIN: ${VPRO_DOMAIN:-becmaster-dev.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - vpro_net
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  vpro_net:
+    driver: bridge

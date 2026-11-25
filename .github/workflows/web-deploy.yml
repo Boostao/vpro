@@ -1,0 +1,476 @@
+name: Web Read-Only Server Deploy
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'web-v*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target deployment environment (dev or prod)'
+        type: choice
+        required: true
+        default: dev
+        options:
+          - dev
+          - prod
+      image_tag:
+        description: 'Optional existing GHCR image tag to deploy (leave blank to build and push from this commit)'
+        type: string
+        required: false
+        default: ''
+      include_r:
+        description: 'Include lean R + vpro SDK + Quarto CLI in the container image (false builds ~55 MB Go-only image)'
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: >-
+    web-deploy-${{ github.event_name == 'workflow_dispatch' && inputs.environment || (startsWith(github.ref, 'refs/tags/web-v') && 'prod' || 'dev') }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan Image & Target Environment
+    runs-on: ubuntu-24.04
+    outputs:
+      target_env: ${{ steps.plan.outputs.target_env }}
+      include_r: ${{ steps.plan.outputs.include_r }}
+      should_build: ${{ steps.plan.outputs.should_build }}
+      should_deploy: ${{ steps.plan.outputs.should_deploy }}
+      image_repo: ${{ steps.plan.outputs.image_repo }}
+      image_tag: ${{ steps.plan.outputs.image_tag }}
+      channel_tag: ${{ steps.plan.outputs.channel_tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/web-v')
+        with:
+          filters: |
+            web:
+              - 'app/**'
+              - 'r/**'
+              - 'deploy/vpro-web/**'
+              - '.github/workflows/web-deploy.yml'
+      - name: Resolve deployment parameters
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          WEB_CHANGED: ${{ steps.filter.outputs.web }}
+          INPUT_ENV: ${{ inputs.environment }}
+          INPUT_IMAGE_TAG: ${{ inputs.image_tag }}
+          INPUT_INCLUDE_R: ${{ inputs.include_r }}
+        run: |
+          set -euo pipefail
+          image_repo="ghcr.io/$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')/vpro-web"
+          short_sha="${GITHUB_SHA:0:12}"
+
+          should_deploy="true"
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            target_env="${INPUT_ENV}"
+            include_r="${INPUT_INCLUDE_R}"
+          elif [[ "${GITHUB_REF}" == refs/tags/web-v* ]]; then
+            target_env="prod"
+            include_r="true"
+          else
+            target_env="dev"
+            include_r="true"
+            if [ "${WEB_CHANGED}" != "true" ]; then
+              should_deploy="false"
+            fi
+          fi
+
+          trimmed_tag="$(printf '%s' "${INPUT_IMAGE_TAG}" | tr -d '[:space:]')"
+          if [ "${should_deploy}" != "true" ]; then
+            should_build="false"
+            image_tag=""
+            channel_tag=""
+            echo "::notice::Skipping dev web build/deploy: no changes under app/**, r/**, deploy/vpro-web/**, or .github/workflows/web-deploy.yml."
+          elif [ -n "${trimmed_tag}" ]; then
+            if ! printf '%s' "${trimmed_tag}" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'; then
+              echo "ERROR: invalid image_tag '${trimmed_tag}'" >&2
+              exit 1
+            fi
+            should_build="false"
+            image_tag="${trimmed_tag}"
+            channel_tag=""
+          else
+            should_build="true"
+            if [[ "${GITHUB_REF}" == refs/tags/web-v* ]]; then
+              image_tag="${GITHUB_REF#refs/tags/}"
+              channel_tag="latest"
+            else
+              image_tag="${target_env}-${short_sha}"
+              channel_tag="${target_env}"
+            fi
+          fi
+
+          {
+            echo "target_env=${target_env}"
+            echo "include_r=${include_r}"
+            echo "should_build=${should_build}"
+            echo "should_deploy=${should_deploy}"
+            echo "image_repo=${image_repo}"
+            echo "image_tag=${image_tag}"
+            echo "channel_tag=${channel_tag}"
+          } >> "${GITHUB_OUTPUT}"
+
+  build-and-push:
+    name: Build & Push Linux amd64 Image to GHCR
+    needs: plan
+    if: needs.plan.outputs.should_build == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute image tags
+        id: tags
+        env:
+          IMAGE_REPO: ${{ needs.plan.outputs.image_repo }}
+          IMAGE_TAG: ${{ needs.plan.outputs.image_tag }}
+          CHANNEL_TAG: ${{ needs.plan.outputs.channel_tag }}
+        run: |
+          set -euo pipefail
+          {
+            echo "tags<<EOF"
+            echo "${IMAGE_REPO}:${IMAGE_TAG}"
+            if [ -n "${CHANNEL_TAG}" ]; then
+              echo "${IMAGE_REPO}:${CHANNEL_TAG}"
+            fi
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+      - name: Build and push vpro-web container (linux/amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/vpro-web/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            INCLUDE_R=${{ needs.plan.outputs.include_r }}
+          secrets: |
+            github_pat=${{ secrets.GITHUB_TOKEN }}
+          cache-from: type=gha,scope=vpro-web-r-${{ needs.plan.outputs.include_r }}
+          cache-to: type=gha,mode=max,scope=vpro-web-r-${{ needs.plan.outputs.include_r }}
+
+  deploy-dev:
+    name: Deploy to DigitalOcean (dev)
+    needs: [plan, build-and-push]
+    if: >-
+      always() &&
+      needs.plan.result == 'success' &&
+      needs.plan.outputs.should_deploy == 'true' &&
+      needs.plan.outputs.target_env == 'dev' &&
+      (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
+    runs-on: ubuntu-24.04
+    environment: dev
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check DigitalOcean dev environment secrets
+        id: gate
+        env:
+          DO_HOST: ${{ secrets.DO_HOST }}
+          DO_USER: ${{ secrets.DO_USER }}
+          DO_SSH_KEY: ${{ secrets.DO_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DO_HOST}" ] || [ -z "${DO_USER}" ] || [ -z "${DO_SSH_KEY}" ]; then
+            echo "configured=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::Skipping dev Droplet deployment: DO_HOST, DO_USER, and DO_SSH_KEY are not yet configured on GitHub Environment 'dev'."
+            {
+              echo "### Dev Deployment Skipped (Placeholder Secrets Not Yet Configured)"
+              echo "Configure the following secrets on GitHub Environment \`dev\` once the DigitalOcean Droplet is provisioned:"
+              echo "- \`DO_HOST\`"
+              echo "- \`DO_USER\`"
+              echo "- \`DO_SSH_KEY\`"
+              echo "- \`DO_DEPLOY_DIR\` (optional, defaults to \`/opt/vpro-web\`)"
+              echo "- \`VPRO_HEALTHCHECK_URL\` (optional, e.g. \`https://becmaster-dev.example.com/readyz\`)"
+              echo "- \`DO_SSH_KNOWN_HOSTS\` (optional recommended host key pinning)"
+            } >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "configured=true" >> "${GITHUB_OUTPUT}"
+          fi
+      - name: Deploy image over SSH with automatic /readyz rollback
+        if: steps.gate.outputs.configured == 'true'
+        env:
+          DO_HOST: ${{ secrets.DO_HOST }}
+          DO_USER: ${{ secrets.DO_USER }}
+          DO_SSH_KEY: ${{ secrets.DO_SSH_KEY }}
+          DO_SSH_KNOWN_HOSTS: ${{ secrets.DO_SSH_KNOWN_HOSTS }}
+          DO_DEPLOY_DIR: ${{ secrets.DO_DEPLOY_DIR }}
+          VPRO_HEALTHCHECK_URL: ${{ secrets.VPRO_HEALTHCHECK_URL }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_IMAGE: ${{ needs.plan.outputs.image_repo }}:${{ needs.plan.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="${DO_DEPLOY_DIR:-/opt/vpro-web}"
+          SSH_DIR="$(mktemp -d)"
+          trap 'rm -rf "${SSH_DIR}"' EXIT
+          chmod 700 "${SSH_DIR}"
+
+          printf '%s\n' "${DO_SSH_KEY}" > "${SSH_DIR}/id_deploy"
+          chmod 600 "${SSH_DIR}/id_deploy"
+
+          SSH_OPTS=(-i "${SSH_DIR}/id_deploy" -o BatchMode=yes -o ConnectTimeout=15)
+          if [ -n "${DO_SSH_KNOWN_HOSTS}" ]; then
+            printf '%s\n' "${DO_SSH_KNOWN_HOSTS}" > "${SSH_DIR}/known_hosts"
+            chmod 600 "${SSH_DIR}/known_hosts"
+            SSH_OPTS+=(-o StrictHostKeyChecking=yes -o "UserKnownHostsFile=${SSH_DIR}/known_hosts")
+          else
+            SSH_OPTS+=(-o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=${SSH_DIR}/known_hosts")
+          fi
+
+          REMOTE="${DO_USER}@${DO_HOST}"
+          ssh "${SSH_OPTS[@]}" "${REMOTE}" "mkdir -p '${DEPLOY_DIR}'"
+          scp "${SSH_OPTS[@]}" \
+            deploy/vpro-web/docker-compose.yml \
+            deploy/vpro-web/Caddyfile \
+            deploy/vpro-web/sync-snapshot.sh \
+            "${REMOTE}:${DEPLOY_DIR}/"
+
+          printf '%s\n' "${GHCR_TOKEN}" | ssh "${SSH_OPTS[@]}" "${REMOTE}" \
+            "docker login ghcr.io --username '${GHCR_USERNAME}' --password-stdin"
+
+          ssh "${SSH_OPTS[@]}" "${REMOTE}" \
+            bash -s -- "${DEPLOY_DIR}" "${TARGET_IMAGE}" "${VPRO_HEALTHCHECK_URL}" <<'REMOTE_SH'
+          set -euo pipefail
+          DEPLOY_DIR="$1"
+          TARGET_IMAGE="$2"
+          HEALTHCHECK_URL="$3"
+
+          cd "${DEPLOY_DIR}"
+          chmod +x sync-snapshot.sh
+          [ -f .env ] || { echo "ERROR: ${DEPLOY_DIR}/.env is missing (copy deploy/vpro-web/env.example first)" >&2; exit 1; }
+
+          PREVIOUS_IMAGE="$(grep -E '^VPRO_IMAGE=' .env | tail -n 1 | cut -d '=' -f 2- | tr -d '\r' || true)"
+          PREVIOUS_IMAGE="${PREVIOUS_IMAGE#\"}"
+          PREVIOUS_IMAGE="${PREVIOUS_IMAGE%\"}"
+          PREVIOUS_IMAGE="${PREVIOUS_IMAGE#\'}"
+          PREVIOUS_IMAGE="${PREVIOUS_IMAGE%\'}"
+
+          update_env_image() {
+            local img="$1"
+            local tmp_env
+            tmp_env="$(mktemp "${DEPLOY_DIR}/.env.tmp.XXXXXX")"
+            if grep -qE '^VPRO_IMAGE=' .env; then
+              awk -v img="${img}" 'BEGIN{FS=OFS="="} $1=="VPRO_IMAGE"{$0="VPRO_IMAGE="img} {print}' .env > "${tmp_env}"
+            else
+              cat .env > "${tmp_env}"
+              printf '\nVPRO_IMAGE=%s\n' "${img}" >> "${tmp_env}"
+            fi
+            mv -f "${tmp_env}" .env
+          }
+
+          verify_ready() {
+            for _i in $(seq 1 15); do
+              if [ -n "${HEALTHCHECK_URL}" ]; then
+                if curl -fsS --max-time 10 "${HEALTHCHECK_URL}" >/dev/null 2>&1; then
+                  return 0
+                fi
+              else
+                if docker compose exec -T vpro-web curl -fsS --max-time 10 http://127.0.0.1:8080/readyz >/dev/null 2>&1; then
+                  return 0
+                fi
+              fi
+              sleep 2
+            done
+            return 1
+          }
+
+          echo "Deploying ${TARGET_IMAGE} (previous: ${PREVIOUS_IMAGE:-<none>})..."
+          update_env_image "${TARGET_IMAGE}"
+          docker compose pull vpro-web
+          docker compose up -d --remove-orphans
+
+          if ! verify_ready; then
+            echo "ERROR: /readyz check failed for ${TARGET_IMAGE}!" >&2
+            if [ -n "${PREVIOUS_IMAGE}" ] && [ "${PREVIOUS_IMAGE}" != "${TARGET_IMAGE}" ]; then
+              echo "Rolling back to ${PREVIOUS_IMAGE}..." >&2
+              update_env_image "${PREVIOUS_IMAGE}"
+              docker compose pull vpro-web || true
+              docker compose up -d --remove-orphans
+              if verify_ready; then
+                echo "Rollback to ${PREVIOUS_IMAGE} succeeded and /readyz is healthy." >&2
+              else
+                echo "CRITICAL: Rollback to ${PREVIOUS_IMAGE} also failed /readyz!" >&2
+              fi
+            fi
+            exit 1
+          fi
+          echo "Deployment verified healthy: ${TARGET_IMAGE}"
+          REMOTE_SH
+
+  deploy-prod:
+    name: Deploy to DigitalOcean (prod)
+    needs: [plan, build-and-push]
+    if: >-
+      always() &&
+      needs.plan.result == 'success' &&
+      needs.plan.outputs.should_deploy == 'true' &&
+      needs.plan.outputs.target_env == 'prod' &&
+      (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
+    runs-on: ubuntu-24.04
+    environment: prod
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check DigitalOcean prod environment secrets
+        id: gate
+        env:
+          DO_HOST: ${{ secrets.DO_HOST }}
+          DO_USER: ${{ secrets.DO_USER }}
+          DO_SSH_KEY: ${{ secrets.DO_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DO_HOST}" ] || [ -z "${DO_USER}" ] || [ -z "${DO_SSH_KEY}" ]; then
+            echo "configured=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::Skipping prod Droplet deployment: DO_HOST, DO_USER, and DO_SSH_KEY are not yet configured on GitHub Environment 'prod'."
+            {
+              echo "### Prod Deployment Skipped (Placeholder Secrets Not Yet Configured)"
+              echo "Configure the following secrets on GitHub Environment \`prod\` once the DigitalOcean Droplet is provisioned:"
+              echo "- \`DO_HOST\`"
+              echo "- \`DO_USER\`"
+              echo "- \`DO_SSH_KEY\`"
+              echo "- \`DO_DEPLOY_DIR\` (optional, defaults to \`/opt/vpro-web\`)"
+              echo "- \`VPRO_HEALTHCHECK_URL\` (optional, e.g. \`https://becmaster.example.com/readyz\`)"
+              echo "- \`DO_SSH_KNOWN_HOSTS\` (optional recommended host key pinning)"
+            } >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "configured=true" >> "${GITHUB_OUTPUT}"
+          fi
+      - name: Deploy image over SSH with automatic /readyz rollback
+        if: steps.gate.outputs.configured == 'true'
+        env:
+          DO_HOST: ${{ secrets.DO_HOST }}
+          DO_USER: ${{ secrets.DO_USER }}
+          DO_SSH_KEY: ${{ secrets.DO_SSH_KEY }}
+          DO_SSH_KNOWN_HOSTS: ${{ secrets.DO_SSH_KNOWN_HOSTS }}
+          DO_DEPLOY_DIR: ${{ secrets.DO_DEPLOY_DIR }}
+          VPRO_HEALTHCHECK_URL: ${{ secrets.VPRO_HEALTHCHECK_URL }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_IMAGE: ${{ needs.plan.outputs.image_repo }}:${{ needs.plan.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="${DO_DEPLOY_DIR:-/opt/vpro-web}"
+          SSH_DIR="$(mktemp -d)"
+          trap 'rm -rf "${SSH_DIR}"' EXIT
+          chmod 700 "${SSH_DIR}"
+
+          printf '%s\n' "${DO_SSH_KEY}" > "${SSH_DIR}/id_deploy"
+          chmod 600 "${SSH_DIR}/id_deploy"
+
+          SSH_OPTS=(-i "${SSH_DIR}/id_deploy" -o BatchMode=yes -o ConnectTimeout=15)
+          if [ -n "${DO_SSH_KNOWN_HOSTS}" ]; then
+            printf '%s\n' "${DO_SSH_KNOWN_HOSTS}" > "${SSH_DIR}/known_hosts"
+            chmod 600 "${SSH_DIR}/known_hosts"
+            SSH_OPTS+=(-o StrictHostKeyChecking=yes -o "UserKnownHostsFile=${SSH_DIR}/known_hosts")
+          else
+            SSH_OPTS+=(-o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=${SSH_DIR}/known_hosts")
+          fi
+
+          REMOTE="${DO_USER}@${DO_HOST}"
+          ssh "${SSH_OPTS[@]}" "${REMOTE}" "mkdir -p '${DEPLOY_DIR}'"
+          scp "${SSH_OPTS[@]}" \
+            deploy/vpro-web/docker-compose.yml \
+            deploy/vpro-web/Caddyfile \
+            deploy/vpro-web/sync-snapshot.sh \
+            "${REMOTE}:${DEPLOY_DIR}/"
+
+          printf '%s\n' "${GHCR_TOKEN}" | ssh "${SSH_OPTS[@]}" "${REMOTE}" \
+            "docker login ghcr.io --username '${GHCR_USERNAME}' --password-stdin"
+
+          ssh "${SSH_OPTS[@]}" "${REMOTE}" \
+            bash -s -- "${DEPLOY_DIR}" "${TARGET_IMAGE}" "${VPRO_HEALTHCHECK_URL}" <<'REMOTE_SH'
+          set -euo pipefail
+          DEPLOY_DIR="$1"
+          TARGET_IMAGE="$2"
+          HEALTHCHECK_URL="$3"
+
+          cd "${DEPLOY_DIR}"
+          chmod +x sync-snapshot.sh
+          [ -f .env ] || { echo "ERROR: ${DEPLOY_DIR}/.env is missing (copy deploy/vpro-web/env.example first)" >&2; exit 1; }
+
+          PREVIOUS_IMAGE="$(grep -E '^VPRO_IMAGE=' .env | tail -n 1 | cut -d '=' -f 2- | tr -d '\r' || true)"
+          PREVIOUS_IMAGE="${PREVIOUS_IMAGE#\"}"
+          PREVIOUS_IMAGE="${PREVIOUS_IMAGE%\"}"
+          PREVIOUS_IMAGE="${PREVIOUS_IMAGE#\'}"
+          PREVIOUS_IMAGE="${PREVIOUS_IMAGE%\'}"
+
+          update_env_image() {
+            local img="$1"
+            local tmp_env
+            tmp_env="$(mktemp "${DEPLOY_DIR}/.env.tmp.XXXXXX")"
+            if grep -qE '^VPRO_IMAGE=' .env; then
+              awk -v img="${img}" 'BEGIN{FS=OFS="="} $1=="VPRO_IMAGE"{$0="VPRO_IMAGE="img} {print}' .env > "${tmp_env}"
+            else
+              cat .env > "${tmp_env}"
+              printf '\nVPRO_IMAGE=%s\n' "${img}" >> "${tmp_env}"
+            fi
+            mv -f "${tmp_env}" .env
+          }
+
+          verify_ready() {
+            for _i in $(seq 1 15); do
+              if [ -n "${HEALTHCHECK_URL}" ]; then
+                if curl -fsS --max-time 10 "${HEALTHCHECK_URL}" >/dev/null 2>&1; then
+                  return 0
+                fi
+              else
+                if docker compose exec -T vpro-web curl -fsS --max-time 10 http://127.0.0.1:8080/readyz >/dev/null 2>&1; then
+                  return 0
+                fi
+              fi
+              sleep 2
+            done
+            return 1
+          }
+
+          echo "Deploying ${TARGET_IMAGE} (previous: ${PREVIOUS_IMAGE:-<none>})..."
+          update_env_image "${TARGET_IMAGE}"
+          docker compose pull vpro-web
+          docker compose up -d --remove-orphans
+
+          if ! verify_ready; then
+            echo "ERROR: /readyz check failed for ${TARGET_IMAGE}!" >&2
+            if [ -n "${PREVIOUS_IMAGE}" ] && [ "${PREVIOUS_IMAGE}" != "${TARGET_IMAGE}" ]; then
+              echo "Rolling back to ${PREVIOUS_IMAGE}..." >&2
+              update_env_image "${PREVIOUS_IMAGE}"
+              docker compose pull vpro-web || true
+              docker compose up -d --remove-orphans
+              if verify_ready; then
+                echo "Rollback to ${PREVIOUS_IMAGE} succeeded and /readyz is healthy." >&2
+              else
+                echo "CRITICAL: Rollback to ${PREVIOUS_IMAGE} also failed /readyz!" >&2
+              fi
+            fi
+            exit 1
+          fi
+          echo "Deployment verified healthy: ${TARGET_IMAGE}"
+          REMOTE_SH

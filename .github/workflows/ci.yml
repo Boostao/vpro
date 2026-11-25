@@ -23,6 +23,7 @@ jobs:
     outputs:
       portal: ${{ steps.filter.outputs.portal }}
       app: ${{ steps.filter.outputs.app }}
+      web: ${{ steps.filter.outputs.web }}
       r: ${{ steps.filter.outputs.r }}
       rsidecar: ${{ steps.filter.outputs.rsidecar }}
       website: ${{ steps.filter.outputs.website }}
@@ -49,6 +50,12 @@ jobs:
               - 'app/**'
               - 'docs-src/**'
               - '.github/workflows/ci.yml'
+            web:
+              - 'app/**'
+              - 'deploy/vpro-web/**'
+              - 'scripts/generate-web-rpc-map.mjs'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/web-deploy.yml'
             r:
               - 'r/**'
               - '.github/workflows/ci.yml'
@@ -225,6 +232,66 @@ jobs:
       - name: Verify native Linux desktop binary build
         working-directory: app
         run: task linux:build
+
+  app-web:
+    name: Web Read-Only Server & Snapshot CLI (Headless Go + Svelte)
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      CGO_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: app/frontend/package-lock.json
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.4'
+          cache-dependency-path: app/go.sum
+      - name: Install frontend dependencies
+        working-directory: app/frontend
+        run: npm ci
+      - name: Verify web read-only RPC allowlist and generated map have zero drift
+        run: node scripts/generate-web-rpc-map.mjs --check
+      - name: Build read-only web frontend bundle
+        working-directory: app/frontend
+        run: |
+          set -euo pipefail
+          npm run build:web
+          test -s dist-web/index.html
+      - name: Stage web SPA bundle for cmd/vpro-web Go embed
+        run: |
+          set -euo pipefail
+          rm -rf app/cmd/vpro-web/static
+          mkdir -p app/cmd/vpro-web/static
+          cp -R app/frontend/dist-web/. app/cmd/vpro-web/static/
+      - name: Verify zero Wails v3 and zero accessreader imports in cmd/vpro-web
+        working-directory: app
+        run: |
+          set -euo pipefail
+          deps="$(go list -f '{{join .Deps "\n"}}' ./cmd/vpro-web/...)"
+          if printf '%s\n' "${deps}" | grep -E 'github\.com/wailsapp/wails|github\.com/boostao/vpro/app/internal/accessreader'; then
+            echo "ERROR: cmd/vpro-web must not import Wails v3 or accessreader/libmdb packages" >&2
+            exit 1
+          fi
+          echo "OK: cmd/vpro-web has zero Wails v3 and zero accessreader transitive imports."
+      - name: Run race-detected tests for vpro-snapshot and vpro-web
+        working-directory: app
+        run: go test -race ./cmd/vpro-snapshot/... ./cmd/vpro-web/...
+      - name: Verify headless Go builds for vpro-snapshot and vpro-web (no GTK/WebKit)
+        working-directory: app
+        run: |
+          set -euo pipefail
+          go build -o /dev/null ./cmd/vpro-snapshot
+          go build -o /dev/null ./cmd/vpro-web
+      - name: Validate deploy/vpro-web packaging scripts and compose syntax
+        run: |
+          set -euo pipefail
+          bash -n deploy/vpro-web/sync-snapshot.sh
+          python3 -c 'import yaml; yaml.safe_load(open("deploy/vpro-web/docker-compose.yml", encoding="utf-8"))'
 
   r-cmd-check-linux:
     name: R CMD check (${{ matrix.os }}, R ${{ matrix.r }}, Live PG16)
