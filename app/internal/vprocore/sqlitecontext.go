@@ -16,6 +16,9 @@ import (
 	"github.com/mattn/go-sqlite3"
 )
 
+// ErrReadOnlyContext is returned when a mutation or read-write database open is attempted on a read-only SqliteContext.
+var ErrReadOnlyContext = errors.New("database context is read-only; mutations are disabled")
+
 type SqliteContext struct {
 	mu             sync.Mutex `json:"-" yaml:"-"`
 	db             *sql.DB
@@ -23,6 +26,8 @@ type SqliteContext struct {
 	ProjectReadDB  *sql.DB                     `json:"-" yaml:"-"`
 	ProjectDB      *sql.DB                     `json:"-" yaml:"-"`
 	Selection      DesktopSelection            `json:"-" yaml:"-"`
+	ReadOnly       bool                        `json:"-" yaml:"-"`
+	Immutable      bool                        `json:"-" yaml:"-"`
 	Attachments    map[string]string           `json:"-" yaml:"-"`
 	AttachmentInfo map[string]os.FileInfo      `json:"-" yaml:"-"`
 	Descriptions   map[string][]map[string]any `json:"-" yaml:"-"`
@@ -95,7 +100,16 @@ func (c *SqliteContext) projectReadDatabaseLocked(ctx context.Context) (*sql.DB,
 	if c.ProjectReadDB != nil {
 		return c.ProjectReadDB, nil
 	}
-	db, err := sqlutil.OpenReadOnlyBusySQLite(c.Selection.ProjectPath)
+	var (
+		db  *sql.DB
+		err error
+	)
+	if c.ReadOnly || c.Immutable {
+		dsn := SqliteReadOnlyFileURI(c.Selection.ProjectPath, c.Immutable) + "&_foreign_keys=on&_busy_timeout=5000&_query_only=on"
+		db, err = sql.Open("sqlite3", dsn)
+	} else {
+		db, err = sqlutil.OpenReadOnlyBusySQLite(c.Selection.ProjectPath)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -205,6 +219,12 @@ func (c *SqliteContext) CachedChildCapabilities(db sqlutil.HeaderDB, project, ki
 }
 
 func (c *SqliteContext) ProjectDatabase(ctx context.Context) (*sql.DB, error) {
+	if c == nil {
+		return nil, errors.New("project context is closed")
+	}
+	if c.ReadOnly {
+		return nil, ErrReadOnlyContext
+	}
 	if err := sqlutil.AcquireMutexLease(ctx, &c.mu); err != nil {
 		return nil, err
 	}
@@ -213,6 +233,9 @@ func (c *SqliteContext) ProjectDatabase(ctx context.Context) (*sql.DB, error) {
 }
 
 func (c *SqliteContext) projectDatabaseLocked(ctx context.Context) (*sql.DB, error) {
+	if c.ReadOnly {
+		return nil, ErrReadOnlyContext
+	}
 	if c.conn == nil {
 		return nil, errors.New("project context is closed")
 	}
@@ -254,7 +277,14 @@ func ExistingDatabasePath(path string) (string, error) {
 	return absolute, nil
 }
 
-func NewSQLiteContext(ctx context.Context, selection DesktopSelection, support map[string]string, profile ...*PlotProfileSource) (_ *SqliteContext, resultErr error) {
+func NewSQLiteContext(ctx context.Context, selection DesktopSelection, support map[string]string, profile ...*PlotProfileSource) (*SqliteContext, error) {
+	return newSQLiteContext(ctx, selection, support, profile, false, false)
+}
+
+func newSQLiteContext(ctx context.Context, selection DesktopSelection, support map[string]string, profile []*PlotProfileSource, readOnly, immutable bool) (_ *SqliteContext, resultErr error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if len(profile) > 1 {
 		return nil, errors.New("one explicit plot-profile source may be selected")
 	}
@@ -272,7 +302,7 @@ func NewSQLiteContext(ctx context.Context, selection DesktopSelection, support m
 		db.Close()
 		return nil, err
 	}
-	candidate := &SqliteContext{db: db, conn: conn, Selection: selection,
+	candidate := &SqliteContext{db: db, conn: conn, Selection: selection, ReadOnly: readOnly, Immutable: immutable,
 		Attachments: map[string]string{}, AttachmentInfo: map[string]os.FileInfo{}, Descriptions: map[string][]map[string]any{}}
 	defer func() {
 		if resultErr != nil {
@@ -304,6 +334,12 @@ func NewSQLiteContext(ctx context.Context, selection DesktopSelection, support m
 	if err := candidate.validateProject(ctx); err != nil {
 		return nil, err
 	}
+	openValidationRO := func(path string) (*sql.DB, error) {
+		if readOnly || immutable {
+			return OpenReadOnlySQLite(ctx, path, immutable)
+		}
+		return sqlutil.OpenReadOnly(path)
+	}
 	if selection.SU != "None" {
 		path, err := candidate.Attach(ctx, "su", selection.SUPath)
 		if err != nil {
@@ -316,7 +352,7 @@ func NewSQLiteContext(ctx context.Context, selection DesktopSelection, support m
 		if err := candidate.RequireColumns(ctx, "su", selection.SU+"_SU", []string{"PlotNumber", "SiteUnit"}); err != nil {
 			return nil, err
 		}
-		database, err := sqlutil.OpenReadOnly(path)
+		database, err := openValidationRO(path)
 		if err != nil {
 			return nil, err
 		}
@@ -339,7 +375,7 @@ func NewSQLiteContext(ctx context.Context, selection DesktopSelection, support m
 		if err := candidate.RequireColumns(ctx, "hierarchy", selection.Hierarchy+"_Hierarchy", []string{"ID", "Name", "Parent", "Level"}); err != nil {
 			return nil, err
 		}
-		database, err := sqlutil.OpenReadOnly(path)
+		database, err := openValidationRO(path)
 		if err != nil {
 			return nil, err
 		}
@@ -357,7 +393,7 @@ func NewSQLiteContext(ctx context.Context, selection DesktopSelection, support m
 	if err := candidate.createViews(ctx); err != nil {
 		return nil, err
 	}
-	if len(profile) == 1 {
+	if len(profile) == 1 && profile[0] != nil {
 		if err := candidate.attachProfile(ctx, profile[0]); err != nil {
 			return nil, err
 		}
@@ -381,7 +417,7 @@ func (c *SqliteContext) Attach(ctx context.Context, alias, path string) (string,
 	if err := errors.Join(statErr, file.Close()); err != nil {
 		return "", fmt.Errorf("capture attachment %s identity: %w", alias, err)
 	}
-	if _, err := c.conn.ExecContext(ctx, "ATTACH DATABASE ? AS "+QuoteHeaderIdentifier(alias), sqlutil.SqliteFileURI(path, "ro")); err != nil {
+	if _, err := c.conn.ExecContext(ctx, "ATTACH DATABASE ? AS "+QuoteHeaderIdentifier(alias), SqliteReadOnlyFileURI(path, c.Immutable)); err != nil {
 		return "", fmt.Errorf("attach %s: %w", alias, err)
 	}
 	current, err := os.Stat(path)
@@ -725,7 +761,7 @@ func openWritableVPro64LogDB(ctx context.Context, path string) (*sql.DB, error) 
 // StartUserLogSession appends an InTime entry to VPro64.USysUserLog for the active session,
 // cleanly skipping writes when VPro64.db is read-only or lacks the USysUserLog table.
 func (c *SqliteContext) StartUserLogSession(ctx context.Context, user string) error {
-	if c == nil {
+	if c == nil || c.ReadOnly {
 		return nil
 	}
 	if ctx == nil {
@@ -737,7 +773,7 @@ func (c *SqliteContext) StartUserLogSession(ctx context.Context, user string) er
 }
 
 func (c *SqliteContext) startUserLogSessionLocked(ctx context.Context, user string) error {
-	if c.userLogRowID > 0 {
+	if c.ReadOnly || c.userLogRowID > 0 {
 		return nil
 	}
 	vpro64Path := c.Attachments["VPro64"]
@@ -791,7 +827,7 @@ func (c *SqliteContext) startUserLogSessionLocked(ctx context.Context, user stri
 
 // EndUserLogSession closes the tracked USysUserLog row by recording OutTime on close.
 func (c *SqliteContext) EndUserLogSession() error {
-	if c == nil {
+	if c == nil || c.ReadOnly {
 		return nil
 	}
 	c.mu.Lock()
@@ -800,7 +836,7 @@ func (c *SqliteContext) EndUserLogSession() error {
 }
 
 func (c *SqliteContext) endUserLogSessionLocked() error {
-	if c.userLogRowID == 0 || c.userLogPath == "" {
+	if c.ReadOnly || c.userLogRowID == 0 || c.userLogPath == "" {
 		return nil
 	}
 	rowID := c.userLogRowID
@@ -844,7 +880,7 @@ func (c *SqliteContext) endUserLogSessionLocked() error {
 
 // RotateUserLogSession closes any active session row only if user actually changed and opens a new one.
 func (c *SqliteContext) RotateUserLogSession(ctx context.Context, user string) {
-	if c == nil {
+	if c == nil || c.ReadOnly {
 		return
 	}
 	if ctx == nil {
@@ -852,7 +888,7 @@ func (c *SqliteContext) RotateUserLogSession(ctx context.Context, user string) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.userLogRowID == 0 {
+	if c.ReadOnly || c.userLogRowID == 0 {
 		return
 	}
 	trimmed := sqlutil.TruncateUTF16(strings.TrimSpace(user), 50)
@@ -865,7 +901,7 @@ func (c *SqliteContext) RotateUserLogSession(ctx context.Context, user string) {
 
 // TransferUserLogSession moves active USysUserLog session tracking from old context to target on context switch.
 func (c *SqliteContext) TransferUserLogSession(target *SqliteContext) {
-	if c == nil || target == nil || c == target {
+	if c == nil || target == nil || c == target || c.ReadOnly || target.ReadOnly {
 		return
 	}
 	c.mu.Lock()

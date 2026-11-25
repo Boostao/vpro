@@ -302,9 +302,15 @@ func readExistingPlotClimateCacheReadOnly(ctx context.Context, owner *vprocore.S
 		return nil, err
 	}
 	projectPath := owner.Selection.ProjectPath
+	immutable := owner.Immutable
 	unlock()
 
-	roDB, err := sqlutil.OpenReadOnlyContext(ctx, projectPath)
+	var roDB *sql.DB
+	if immutable {
+		roDB, err = vprocore.OpenReadOnlySQLite(ctx, projectPath, true)
+	} else {
+		roDB, err = sqlutil.OpenReadOnlyContext(ctx, projectPath)
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -111,6 +111,12 @@ func (c *SqliteContext) WithMetadataWriter(ctx context.Context, operation func(*
 
 func (c *SqliteContext) WithSelectedFileWriter(ctx context.Context, role string, validate func() error,
 	operation func(*sql.Conn) error) (resultErr error) {
+	if c == nil {
+		return errors.New("metadata context is closed")
+	}
+	if c.ReadOnly {
+		return ErrReadOnlyContext
+	}
 	if err := sqlutil.AcquireMutexLease(ctx, &c.mu); err != nil {
 		return err
 	}

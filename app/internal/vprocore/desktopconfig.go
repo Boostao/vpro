@@ -32,9 +32,11 @@ const (
 )
 
 type DesktopConfig struct {
-	Mu      sync.Mutex                 `json:"-" yaml:"-"`
-	Path    string                     `json:"-" yaml:"-"`
-	Replace func(string, string) error `json:"-" yaml:"-"`
+	Mu          sync.Mutex                 `json:"-" yaml:"-"`
+	Path        string                     `json:"-" yaml:"-"`
+	Replace     func(string, string) error `json:"-" yaml:"-"`
+	memoryOnly  bool
+	memoryBytes []byte
 }
 
 type DesktopSelection struct {
@@ -675,9 +677,17 @@ func decodeLegacySelection(data []byte, dataDir string) (map[string]any, error) 
 }
 
 func (s *DesktopConfig) ReadLocked() (ConfigValues, error) {
-	data, err := os.ReadFile(s.Path)
-	if err != nil {
-		return nil, fmt.Errorf("read runtime YAML: %w", err)
+	var (
+		data []byte
+		err  error
+	)
+	if s.memoryOnly {
+		data = s.memoryBytes
+	} else {
+		data, err = os.ReadFile(s.Path)
+		if err != nil {
+			return nil, fmt.Errorf("read runtime YAML: %w", err)
+		}
 	}
 	values, err := DecodeConfig(data)
 	if err != nil {
@@ -766,6 +776,12 @@ func (s *DesktopConfig) commitWithContext(ctx context.Context, data []byte) (com
 	}
 	if err := ctx.Err(); err != nil {
 		return false, err
+	}
+	if s.memoryOnly {
+		cloned := make([]byte, len(data))
+		copy(cloned, data)
+		s.memoryBytes = cloned
+		return true, nil
 	}
 	file, err := os.CreateTemp(filepath.Dir(s.Path), ".config-*.yml")
 	if err != nil {
