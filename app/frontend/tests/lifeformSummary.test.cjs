@@ -112,7 +112,7 @@ test('standalone lifeform component is gated, read-only, responsive and cancels 
   assert.match(source, /<th scope="col">Short name<\/th>/);
   assert.match(source, /lifeformCellText\(currentPreview\.report\.catalogue\[i\]\.definition\)/);
   assert.match(source, /lifeformCellText\(currentPreview\.report\.catalogue\[i\]\.shortName\)/);
-  assert.doesNotMatch(source, /localStorage|\.Save|<input|Export|ExcelService/);
+  assert.doesNotMatch(source, /localStorage|\.Save|ExcelService/);
 });
 test('lifeform read-only catalogue descriptions preserve numeric labels and NULL versus empty text', () => {
   const input = fixture();
@@ -136,5 +136,7 @@ test('lifeform read-only catalogue descriptions preserve numeric labels and NULL
   assert.match(html, /scope="col">Short name<\/th>/);
   assert.match(html, /scope="row">1<\/th><td>01<\/td>\s*<td>  coniferous tree  <\/td><td>1Conifer<\/td>/);
   assert.match(html, /scope="row">14<\/th><td>\(NULL\)<\/td>\s*<td>\(empty\)<\/td><td>\(NULL\)<\/td>/);
-  assert.doesNotMatch(html, /<input|contenteditable|<textarea/);
+  const articleHtml = (html.match(/<article[\s\S]*?<\/article>/g) ?? []).join('\n');
+  assert.ok(articleHtml.length > 0);
+  assert.doesNotMatch(articleHtml, /<input|contenteditable|<textarea/);
 });

@@ -21,6 +21,7 @@
     type ClusteringResult,
     type EcologicalDistance,
     type EdatopicGridCell,
+    type HTMLReportResult,
     type HierarchicalLinkage,
     type PlotClimateRow,
     type PromoteCandidateSUResult,
@@ -29,6 +30,7 @@
     type RRuntimeStatus,
     type RSidecarBackendPort,
   } from './rSidecarWorkbench';
+  import HTMLReportPreviewModal from '../reports/HTMLReportPreviewModal.svelte';
   import RSidecarClusteringTab from './RSidecarClusteringTab.svelte';
   import RSidecarEdatopicTab from './RSidecarEdatopicTab.svelte';
   import RSidecarQuartoTab from './RSidecarQuartoTab.svelte';
@@ -37,10 +39,14 @@
 
   const IS_WEB_READONLY = typeof __VPRO_WEB_READONLY__ !== 'undefined' && __VPRO_WEB_READONLY__ === true;
 
+  type SidecarTab = 'runtime' | 'edatopic' | 'clustering' | 'quarto';
+
   let {
     contextId,
     activeProject,
     activeSu = 'None',
+    initialTab,
+    standaloneQuartoMode = false,
     operationHeld = false,
     port = defaultRSidecarPort,
     onBusyChange,
@@ -49,14 +55,19 @@
     contextId: string;
     activeProject: string;
     activeSu?: string;
+    initialTab?: SidecarTab;
+    standaloneQuartoMode?: boolean;
     operationHeld?: boolean;
     port?: RSidecarBackendPort;
     onBusyChange?: (busy: boolean) => void;
     oncontextswitched?: (state: unknown) => void;
   } = $props();
 
-  type SidecarTab = 'runtime' | 'edatopic' | 'clustering' | 'quarto';
   let activeTab = $state<SidecarTab>('runtime');
+  let tabOverridden = $state(false);
+  let lastInitialTab: SidecarTab | undefined = undefined;
+  const effectiveTab = $derived<SidecarTab>(tabOverridden ? activeTab : (initialTab ?? activeTab));
+  let instantHtmlReport = $state.raw<HTMLReportResult | null>(null);
   let busy = $state(false);
   let error = $state<string | null>(null);
   let statusMessage = $state<string | null>(null);
@@ -118,6 +129,16 @@
   let quartoResult = $state<QuartoGuideResult | null>(null);
 
   $effect(() => {
+    if (initialTab !== lastInitialTab) {
+      lastInitialTab = initialTab;
+      if (initialTab) {
+        activeTab = initialTab;
+        tabOverridden = false;
+      }
+    }
+  });
+
+  $effect(() => {
     if (trackedContextId !== '' && trackedContextId !== contextId) {
       generation++;
       setBusy(false);
@@ -164,7 +185,7 @@
       cutHeight: clusterCutHeight > 0 ? Number(clusterCutHeight) : undefined,
       applyLump: clusterApplyLump,
       lumpName: clean(clusterLumpName),
-      useActiveSu: clusterUseSu,
+      useActiveSu: Boolean(activeSu && activeSu !== 'None') && clusterUseSu,
       bgcFilter: clean(clusterBgcFilter),
       unitPrefix: clean(clusterUnitPrefix),
       candidatePrefix: clean(clusterCandidatePrefix),
@@ -182,7 +203,7 @@
       conceptNotes: quartoConceptNotes || undefined,
       refPeriod,
       minConstancyPct: Number(quartoMinConstancy),
-      useActiveSu: quartoUseSu,
+      useActiveSu: Boolean(activeSu && activeSu !== 'None') && quartoUseSu,
       applyLump: quartoApplyLump,
       includePdf: quartoIncludePdf,
       destinationPath: typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY ? undefined : clean(quartoDestinationPath),
@@ -285,7 +306,7 @@
       refPeriod,
       groupBy: climateGroupBy,
       bgcFilter: climateBgcFilter.trim() || undefined,
-      useActiveSu: climateUseSu,
+      useActiveSu: activeSu && activeSu !== 'None' ? climateUseSu : false,
       forceRefresh: climateForceRefresh,
     });
     const gen = ++generation;
@@ -433,6 +454,30 @@
       if (gen === generation) setBusy(false);
     }
   }
+
+  async function runInstantHTMLReportFallback() {
+    if (busy || operationHeld || !contextId || typeof port.renderInstantHTMLReport !== 'function') return;
+    const gen = ++generation;
+    setBusy(true);
+    error = null;
+    statusMessage = null;
+    try {
+      const rendered = await port.renderInstantHTMLReport(contextId, quartoTitle);
+      if (gen !== generation) return;
+      if (!rendered || !rendered.html) {
+        throw new Error('The built-in HTML report returned no content.');
+      }
+      instantHtmlReport = rendered;
+      statusMessage = `Opened instant HTML report (${rendered.unitCount} units, ${rendered.plotCount} plots).`;
+    } catch (cause) {
+      if (gen === generation) {
+        error = `Instant HTML report failed: ${formatError(cause)}`;
+        notifySidecar('error', 'Instant HTML report failed', error);
+      }
+    } finally {
+      if (gen === generation) setBusy(false);
+    }
+  }
 </script>
 
 <section class="rsidecar-workbench" data-tour="r-sidecar-root" aria-label="R Companion Climate Clustering and Guides">
@@ -440,12 +485,17 @@
     {activeProject}
     {activeSu}
     {busy}
-    bind:activeTab
+    activeTab={effectiveTab}
+    {standaloneQuartoMode}
     {error}
+    onSelectTab={(next) => {
+      activeTab = next;
+      tabOverridden = true;
+    }}
     onRefreshRuntime={() => void refreshRRuntime()}
   />
 
-  {#if activeTab === 'runtime'}
+  {#if effectiveTab === 'runtime'}
     <RSidecarRuntimeTab
       {activeSu}
       {busy}
@@ -461,9 +511,16 @@
       onRunClimate={runClimateAndDualEdatopic}
       onLoadCached={loadCachedPlotClimate}
     />
-  {:else if activeTab === 'edatopic'}
-    <RSidecarEdatopicTab {climateResult} {activeEdatopicView} bind:selectedUnitGroup bind:selectedCellDetail />
-  {:else if activeTab === 'clustering'}
+  {:else if effectiveTab === 'edatopic'}
+    <RSidecarEdatopicTab
+      {climateResult}
+      {activeEdatopicView}
+      {busy}
+      bind:selectedUnitGroup
+      bind:selectedCellDetail
+      onRunClimate={runClimateAndDualEdatopic}
+    />
+  {:else if effectiveTab === 'clustering'}
     <RSidecarClusteringTab
       {activeProject}
       {activeSu}
@@ -501,10 +558,12 @@
       onSubmitClustering={submitClustering}
       onSubmitPromote={submitPromoteCandidate}
     />
-  {:else if activeTab === 'quarto'}
+  {:else if effectiveTab === 'quarto'}
     <RSidecarQuartoTab
       {activeSu}
       {busy}
+      {runtimeStatus}
+      {standaloneQuartoMode}
       bind:quartoGuideType
       bind:quartoTitle
       bind:quartoTargetUnit
@@ -518,8 +577,16 @@
       {quartoValidationError}
       {quartoResult}
       onRenderQuarto={submitRenderQuartoGuide}
+      onRefreshRuntime={() => void refreshRRuntime()}
+      onInstantHTMLReport={runInstantHTMLReportFallback}
     />
   {/if}
+
+  <HTMLReportPreviewModal
+    open={Boolean(instantHtmlReport)}
+    report={instantHtmlReport}
+    onClose={() => (instantHtmlReport = null)}
+  />
 </section>
 
 <style>

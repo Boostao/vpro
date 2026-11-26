@@ -19,13 +19,17 @@
   let {
     climateResult = null,
     activeEdatopicView = null,
+    busy = false,
     selectedUnitGroup = $bindable('__overall__'),
     selectedCellDetail = $bindable<{ gridKind: string; cell: EdatopicGridCell } | null>(null),
+    onRunClimate,
   }: {
     climateResult?: ClimateEdatopicResult | null;
     activeEdatopicView?: ActiveEdatopicView | null;
+    busy?: boolean;
     selectedUnitGroup?: string;
     selectedCellDetail?: { gridKind: string; cell: EdatopicGridCell } | null;
+    onRunClimate?: () => Promise<void> | void;
   } = $props();
 
   const relIndexed = $derived(indexEdatopicCells(activeEdatopicView?.relativeGrid));
@@ -37,8 +41,15 @@
     <h3>Ministry CMD to aSMR Dual Edatopic Grids</h3>
     {#if !climateResult || !activeEdatopicView}
       <p class="muted">
-        Run "Compute Climate &amp; CMD to aSMR" on Tab 1 first to populate Dual Relative and Actual Edatopic Grids.
+        Compute plot climate normals to populate the Dual Relative (rSMR) and Actual (aSMR) Edatopic Grids.
       </p>
+      {#if onRunClimate}
+        <div class="button-row">
+          <button type="button" class="btn-primary" data-edatopic-compute-now disabled={busy} onclick={onRunClimate}>
+            {busy ? 'Computing Climate & aSMR...' : 'Compute Climate & aSMR Now'}
+          </button>
+        </div>
+      {/if}
     {:else}
       <div class="form-row">
         <label>

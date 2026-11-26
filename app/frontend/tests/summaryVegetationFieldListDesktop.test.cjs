@@ -65,7 +65,7 @@ function scriptHandlers(filename, appended, dependencies, props) {
   } }).outputText;
   const compiled = compiler.compileModule(stripped, { filename: filename + '.js', generate: 'client' });
   const exports = execute(compiled.js.code, { ...dependencies, 'svelte/internal/client': runtime,
-    svelte: { untrack: runtime.untrack, onDestroy: callback => { destroy = callback; } } }, { __props: props });
+    svelte: { untrack: runtime.untrack, onMount: () => {}, onDestroy: callback => { destroy = callback; } } }, { __props: props });
   return { ...exports.handlers, destroy: () => destroy() };
 }
 function pane(state, enabled = true, disabled = false, validation = '') {
@@ -109,6 +109,15 @@ function report(value, { presentation = null, preferences = null, quality = null
     './summaryVegetationFieldListDesktop': { summaryVegetationFieldListDesktop: value },
     './summaryVegetationEnvironmentalDesktop': { summaryEnvironmentalEnabled: false, summaryEnvironmentalDesktop: {}, summaryEnvironmentalPort: {} },
     './summaryVegetationReportOps': require('./svelteTestHelpers.cjs').loadTypeScript('reports/summaryVegetationReportOps.ts'),
+    './compactReportRunners': {
+      DEFAULT_SUMMARY_VEG_QUICK: { title: 'Summary Vegetation Report', unitScope: 'auto', unitField: '', groupBy: 1, display: 1, showClass: 10, average: 1, showCommon: false, includeEnv: false, combineVariants: false, lumpTable: '' },
+      loadInitialQuickDraft: (_k, d) => ({ ...d }),
+      persistQuickDraft: () => {},
+      hydrateSummaryVegQuickDraft: async (_c, d) => d,
+      buildSummaryVegQuickRequest: () => ({}),
+      runQuickSpreadsheetExport: async () => ({ summary: null, error: '' }),
+      runQuickHTMLDisplay: async () => ({ report: null, error: '' }),
+    },
   };
   return { ...scriptHandlers('SummaryVegetationReport.svelte', `
     export const handlers = { loadFieldList, dismissInitialFieldListReadError, loadPreferences, savePreferences, editPreference,

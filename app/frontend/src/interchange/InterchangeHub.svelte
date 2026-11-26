@@ -18,7 +18,7 @@
   import InterchangeHubHeader, { type InterchangeSection } from './InterchangeHubHeader.svelte';
   import InterchangeTurboVegTab from './InterchangeTurboVegTab.svelte';
   import InterchangeUserSpeciesTab from './InterchangeUserSpeciesTab.svelte';
-  import InterchangeVenusTab from './InterchangeVenusTab.svelte';
+  import InterchangeVPro64Tab from './InterchangeVPro64Tab.svelte';
 
   let {
     contextId,
@@ -36,7 +36,7 @@
     onProjectActivated?: (state: Record<string, unknown>) => void;
   } = $props();
 
-  let section = $state<InterchangeSection>(IS_WEB_READONLY ? 'analytics' : 'venus');
+  let section = $state<InterchangeSection>(IS_WEB_READONLY ? 'analytics' : 'vpro64');
   let busy = $state(false);
   let error = $state('');
   let generation = 0;
@@ -47,13 +47,13 @@
   let discoveredLumpTables = $state.raw<LumpTableSummary[]>([]);
   let externalLumpDbPaths = $state<string[]>([]);
 
-  let venusSourcePath = $state('');
-  let venusInspection = $state.raw<hubOps.VenusSourceInspection | null>(null);
-  let venusSelectedProject = $state('');
-  let venusTargetProject = $state('');
-  let venusDestinationPath = $state('');
-  let venusActivate = $state(false);
-  let venusResult = $state.raw<hubOps.VenusImportResult | null>(null);
+  let vpro64DestPath = $state('');
+  let vpro64TargetProject = $state('');
+  let vpro64IncludeActiveSU = $state(true);
+  let vpro64IncludeHierarchy = $state(true);
+  let vpro64IncludeMensuration = $state(true);
+  let vpro64IncludeCompanions = $state(true);
+  let vpro64Outcome = $state.raw<hubOps.VPro64ExportOutcome | null>(null);
 
   let tvExportFormat = $state<'xml' | 'sqlite'>('sqlite');
   let tvExportPath = $state('');
@@ -242,59 +242,59 @@
     else if (!out.cancelled && out.res !== undefined) onSuccess(out.res);
   }
 
-  async function inspectVenus() {
+  async function chooseVPro64Dest() {
     if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
-    if (!venusSourcePath.trim())
-      return pushHubError('VENUS source path required', 'Enter a VENUS 5.0 .mdb or .xml source file path.');
-    if (busy || operationHeld || !contextId) return;
-    const reqGen = ++generation;
-    const owner = contextId;
-    venusInspection = null;
-    const r = typeof rpcRequests !== 'undefined' ? rpcRequests : undefined;
-    const [tracked, active] = hubOps.trackHubCall(port.inspectVenusSource(owner, venusSourcePath.trim()), r);
+    if (busy || operationHeld) return;
     error = '';
-    setBusy(true, active);
-    const out = await hubOps.awaitHubCall(tracked);
-    if (reqGen === generation && busy) setBusy(false);
-    if (reqGen !== generation || owner !== contextId) return;
-    if (out.err) pushHubError('VENUS inspection failed', out.err);
-    else if (out.res) {
-      venusInspection = out.res;
-      const p0 = out.res.projects[0];
-      if (p0)
-        ({
-          projectName: venusSelectedProject,
-          suggestedTarget: venusTargetProject,
-          suggestedDestPath: venusDestinationPath,
-        } = p0);
+    const owner = contextId;
+    try {
+      const chooser = port.chooseVPro64ExportFile ?? defaultInterchangeHubPort.chooseVPro64ExportFile;
+      const chosen = chooser ? await chooser() : '';
+      if (owner === contextId && typeof chosen === 'string' && chosen.trim()) {
+        vpro64DestPath = chosen.trim();
+      }
+    } catch (cause) {
+      pushHubError('VPro64 file picker failed', cause);
     }
   }
 
-  async function runVenusImport() {
-    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
-    const check = validateTargetProjectName(venusTargetProject);
-    if (!check.valid) return pushHubError('Invalid VENUS target project', check.error);
+  async function runVPro64Export() {
+    const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+    const targetName = vpro64TargetProject.trim();
+    if (targetName) {
+      const check = validateTargetProjectName(targetName);
+      if (!check.valid) return pushHubError('Invalid VPro64 target project', check.error);
+    }
+    const targetPath =
+      webReadOnly && !vpro64DestPath.trim()
+        ? typeof defaultWebExportFilename === 'function'
+          ? defaultWebExportFilename(targetName || 'vpro64_export', '.db')
+          : `${targetName || 'vpro64_export'}.db`
+        : vpro64DestPath.trim();
+    if (!targetPath)
+      return pushHubError('VPro64 destination required', 'Enter a destination .db file path for VPro64 export.');
     if (busy || operationHeld || !contextId) return;
     const reqGen = ++generation;
     const owner = contextId;
     const req = $state.snapshot(
-      hubOps.buildVenusImportPayload(
-        venusSourcePath,
-        venusSelectedProject,
-        check.normalized,
-        venusDestinationPath,
-        venusActivate
+      hubOps.buildVPro64ExportPayload(
+        targetPath,
+        targetName,
+        vpro64IncludeActiveSU,
+        vpro64IncludeHierarchy,
+        vpro64IncludeMensuration,
+        vpro64IncludeCompanions
       )
     );
     const r = typeof rpcRequests !== 'undefined' ? rpcRequests : undefined;
-    const [tracked, active] = hubOps.trackHubCall(port.importVenusProject(owner, req), r);
+    const [tracked, active] = hubOps.trackHubCall(port.exportVPro64Database(owner, req), r);
     error = '';
     setBusy(true, active);
     const out = await hubOps.awaitHubCall(tracked);
     if (reqGen === generation && busy) setBusy(false);
     if (reqGen !== generation || owner !== contextId) return;
-    if (out.err) pushHubError('VENUS import failed', out.err);
-    else if (out.res) venusResult = hubOps.onVenusImported(notifications, out.res, onProjectActivated);
+    if (out.err) pushHubError('VPro64 export failed', out.err);
+    else if (out.res) vpro64Outcome = hubOps.onVPro64Exported(notifications, out.res);
   }
 
   async function runTurboVegExport() {
@@ -496,18 +496,20 @@
     <p class="hub-error-banner" role="alert">{error}</p>
   {/if}
 
-  {#if section === 'venus' && !IS_WEB_READONLY}
-    <InterchangeVenusTab
-      {...hubShared}
-      bind:venusSourcePath
-      {venusInspection}
-      bind:venusSelectedProject
-      bind:venusTargetProject
-      bind:venusDestinationPath
-      bind:venusActivate
-      {venusResult}
-      onInspectVenus={inspectVenus}
-      onRunVenusImport={runVenusImport}
+  {#if section === 'vpro64'}
+    <InterchangeVPro64Tab
+      {contextId}
+      {busy}
+      {operationHeld}
+      bind:vpro64DestPath
+      bind:vpro64TargetProject
+      bind:vpro64IncludeActiveSU
+      bind:vpro64IncludeHierarchy
+      bind:vpro64IncludeMensuration
+      bind:vpro64IncludeCompanions
+      {vpro64Outcome}
+      onChooseVPro64Dest={chooseVPro64Dest}
+      onRunVPro64Export={runVPro64Export}
     />
   {:else if section === 'turboveg'}
     <InterchangeTurboVegTab

@@ -33,47 +33,34 @@ export interface FileDialogFilter {
   Pattern: string;
 }
 
-interface VenusProjectCandidate {
-  projectId: string;
-  projectName: string;
-  suggestedTarget: string;
-  suggestedDestPath: string;
-  plotCount: number;
-  vegObsCount: number;
-  humusRowCount: number;
-  mineralRowCount: number;
+export interface VPro64ExportTableSummary {
+  sourceTable: string;
+  targetTable: string;
+  rowCount: number;
 }
 
-export interface VenusSourceInspection {
-  sourcePath: string;
-  sourceFormat: string;
-  venusVersion: string;
-  sourceSha256: string;
-  projects: VenusProjectCandidate[];
+export interface VPro64ExportRequest {
+  destinationPath: string;
+  targetProjectName?: string;
+  includeActiveSU: boolean;
+  includeHierarchy: boolean;
+  includeMensuration: boolean;
+  includeCompanions: boolean;
+  plotNumbers?: string[] | null;
 }
 
-interface VenusImportRequest {
-  sourcePath: string;
-  sourceProject?: string;
-  targetProject: string;
-  destinationPath?: string;
-  activateOnSuccess: boolean;
-}
-
-export interface VenusImportResult {
-  sourcePath: string;
-  sourceFormat: string;
-  venusVersion: string;
+export interface VPro64ExportOutcome {
   sourceProject: string;
   targetProject: string;
   destinationPath: string;
-  destinationSha256: string;
+  sha256: string;
+  bytes: number;
+  journalMode: string;
   plotCount: number;
-  vegRowCount: number;
-  humusRowCount: number;
-  mineralRowCount: number;
-  activated: boolean;
-  state?: Record<string, unknown> | null;
+  includedSU?: string;
+  includedHierarchy?: string;
+  includedMensuration: boolean;
+  tables: VPro64ExportTableSummary[] | null;
 }
 
 interface TurboVegExportRequest {
@@ -252,8 +239,8 @@ export interface LumpTableSummary {
 }
 
 export interface InterchangeHubPort {
-  inspectVenusSource(contextID: string, sourcePath: string): Promise<VenusSourceInspection>;
-  importVenusProject(contextID: string, request: VenusImportRequest): Promise<VenusImportResult>;
+  chooseVPro64ExportFile?(): Promise<string>;
+  exportVPro64Database(contextID: string, request: VPro64ExportRequest): Promise<VPro64ExportOutcome>;
   exportTurboVeg(contextID: string, request: TurboVegExportRequest): Promise<TurboVegExportOutcome>;
   importTurboVeg(contextID: string, request: TurboVegImportRequest): Promise<TurboVegImportOutcome>;
   exportUserSpeciesList(contextID: string, request: UserSpeciesExportRequest): Promise<UserSpeciesExportResult>;
@@ -269,8 +256,8 @@ export interface InterchangeHubPort {
 }
 
 export const defaultInterchangeHubPort: InterchangeHubPort = {
-  inspectVenusSource: (contextID, sourcePath) => ImportExportService.InspectVenusSource(contextID, sourcePath) as never,
-  importVenusProject: (contextID, request) => ImportExportService.ImportVenusProject(contextID, request) as never,
+  chooseVPro64ExportFile: () => ImportExportService.ChooseVPro64ExportFile(),
+  exportVPro64Database: (contextID, request) => ImportExportService.ExportVPro64Database(contextID, request),
   exportTurboVeg: (contextID, request) => ImportExportService.ExportTurboVeg(contextID, request) as never,
   importTurboVeg: (contextID, request) => ImportExportService.ImportTurboVeg(contextID, request) as never,
   exportUserSpeciesList: (contextID, request) => ImportExportService.ExportUserSpeciesList(contextID, request) as never,
@@ -645,19 +632,22 @@ export function lumpExportFields(
   return { lumpTable: (lumpTable ?? '').trim(), ...(db ? { lumpDbPath: db } : {}) };
 }
 
-export function buildVenusImportPayload(
-  sourcePath: string,
-  sourceProject: string,
-  targetProject: string,
+export function buildVPro64ExportPayload(
   destinationPath: string,
-  activateOnSuccess: boolean
-): VenusImportRequest {
+  targetProjectName: string,
+  includeActiveSU: boolean,
+  includeHierarchy: boolean,
+  includeMensuration: boolean,
+  includeCompanions: boolean
+): VPro64ExportRequest {
+  const target = (targetProjectName ?? '').trim();
   return {
-    sourcePath: sourcePath.trim(),
-    sourceProject: sourceProject.trim(),
-    targetProject,
     destinationPath: destinationPath.trim(),
-    activateOnSuccess,
+    ...(target ? { targetProjectName: target } : {}),
+    includeActiveSU: Boolean(includeActiveSU),
+    includeHierarchy: Boolean(includeHierarchy),
+    includeMensuration: Boolean(includeMensuration),
+    includeCompanions: Boolean(includeCompanions),
   };
 }
 
@@ -713,16 +703,14 @@ export async function awaitHubCall<T>(
   }
 }
 
-export function onVenusImported(
+export function onVPro64Exported(
   notify: { success: (title: string, msg: string, opts: { category: 'background'; source: string }) => unknown },
-  res: VenusImportResult,
-  onActivated: (state: Record<string, unknown>) => void
-): VenusImportResult {
-  notify.success(`Imported ${res.plotCount} plots into ${res.targetProject}`, `Saved to ${res.destinationPath}`, {
+  res: VPro64ExportOutcome
+): VPro64ExportOutcome {
+  notify.success(`Exported VPro64 database (${res.plotCount} plots)`, res.destinationPath, {
     category: 'background',
-    source: 'Interchange · VENUS 5.0',
+    source: 'Interchange · VPro64 Export',
   });
-  if (res.activated && res.state) onActivated(res.state);
   return res;
 }
 

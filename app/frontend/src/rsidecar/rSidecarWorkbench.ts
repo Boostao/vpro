@@ -1,9 +1,13 @@
 import { wellFormedUTF16 } from '../entry/qualityEditor';
-import { EnvironmentReportService } from '../../bindings/github.com/boostao/vpro/app';
+import {
+  EnvironmentReportService,
+  VegetationReportService,
+  type HTMLReportResult,
+} from '../../bindings/github.com/boostao/vpro/app';
 import { formatError } from '../shared/readRequests';
 import { notifications } from '../shell/notificationService.svelte';
 
-export { formatError, notifications };
+export { formatError, notifications, type HTMLReportResult };
 
 const CANDIDATE_PREFIX_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,13}$/;
 const SU_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
@@ -322,6 +326,7 @@ export interface RSidecarBackendPort {
   runMultivariateClustering(contextId: string, request: ClusteringRequest): Promise<ClusteringResult>;
   promoteClusterCandidateToSU(contextId: string, request: PromoteCandidateSURequest): Promise<PromoteCandidateSUResult>;
   renderQuartoGuide(contextId: string, request: QuartoGuideRequest): Promise<QuartoGuideResult>;
+  renderInstantHTMLReport?(contextId: string, title?: string): Promise<HTMLReportResult | null>;
 }
 
 export const defaultRSidecarPort: RSidecarBackendPort = {
@@ -342,6 +347,14 @@ export const defaultRSidecarPort: RSidecarBackendPort = {
   },
   renderQuartoGuide(contextId: string, request: QuartoGuideRequest) {
     return EnvironmentReportService.RenderQuartoGuide(contextId, request as never) as never;
+  },
+  renderInstantHTMLReport(contextId: string, title?: string) {
+    return VegetationReportService.RenderSummaryVegetationHTMLReport(contextId, {
+      title: (title ?? '').trim() || 'Quarto-Style Unit Report',
+      unitScope: 'auto',
+      includeEnv: true,
+      savePreferences: false,
+    });
   },
 };
 

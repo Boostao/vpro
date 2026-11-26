@@ -103,7 +103,14 @@ test('validateXMLSnippetChunked yields cooperatively across chunks and aborts wh
 
 test('defaultInterchangeHubPort invokes all expected ImportExportService methods via Call.ByName', async () => {
   calls.length = 0;
-  await hub.defaultInterchangeHubPort.inspectVenusSource('ctx-1', '/a/venus.mdb');
+  await hub.defaultInterchangeHubPort.chooseVPro64ExportFile();
+  await hub.defaultInterchangeHubPort.exportVPro64Database('ctx-1', {
+    destinationPath: '/a/vpro64.db',
+    includeActiveSU: true,
+    includeHierarchy: true,
+    includeMensuration: true,
+    includeCompanions: true,
+  });
   await hub.defaultInterchangeHubPort.exportTurboVeg('ctx-1', { format: 'sqlite', destinationPath: '/a/tv.sqlite' });
   await hub.defaultInterchangeHubPort.exportUserSpeciesList('ctx-1', { format: 'json' });
   await hub.defaultInterchangeHubPort.exportLongTidyCSV('ctx-1', {});
@@ -119,7 +126,8 @@ test('defaultInterchangeHubPort invokes all expected ImportExportService methods
   assert.deepEqual(
     calls.map((c) => c[0]),
     [
-      'main.ImportExportService.InspectVenusSource',
+      'main.ImportExportService.ChooseVPro64ExportFile',
+      'main.ImportExportService.ExportVPro64Database',
       'main.ImportExportService.ExportTurboVeg',
       'main.ImportExportService.ExportUserSpeciesList',
       'main.ImportExportService.ExportLongTidyCSV',
@@ -143,7 +151,8 @@ test('InterchangeHub.svelte compiles cleanly, contains zero emojis, and renders 
   });
   const rendered = render(Component, { props: { contextId: 'ctx-hub' } });
   assert.match(rendered.body, /data-tour="interchange-hub-root"/);
-  assert.match(rendered.body, /VENUS 5\.0/);
+  assert.match(rendered.body, /VPro64 Export \(\.db\)/);
+  assert.doesNotMatch(rendered.body, /VENUS 5\.0/);
   assert.match(rendered.body, /TurboVeg 3 \/ XML/);
   assert.match(rendered.body, /User Species List/);
   assert.match(rendered.body, /GeoPackage \(\.gpkg\)/);
@@ -178,19 +187,21 @@ test('InterchangeHub routes all validation and RPC error paths to background not
   const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
   const host = componentFunctions(
     'InterchangeHub.svelte',
-    ['pushHubError', 'setBusy', 'inspectVenus', 'runVenusImport', 'runTurboVegExport', 'runTurboVegImport', 'runRdsExport', 'runGeoPackageExport'],
+    ['pushHubError', 'setBusy', 'runVPro64Export', 'runTurboVegExport', 'runTurboVegImport', 'runRdsExport', 'runGeoPackageExport'],
     {
+      $state: { snapshot: (v) => structuredClone(v) },
       contextId: 'ctx-hub',
       busy: false,
       operationHeld: false,
       error: '',
       generation: 0,
-      venusSourcePath: '',
-      venusInspection: null,
-      venusSelectedProject: '',
-      venusTargetProject: 'Sample',
-      venusDestinationPath: '',
-      venusActivate: false,
+      vpro64DestPath: '',
+      vpro64TargetProject: '',
+      vpro64IncludeActiveSU: true,
+      vpro64IncludeHierarchy: true,
+      vpro64IncludeMensuration: true,
+      vpro64IncludeCompanions: true,
+      vpro64Outcome: null,
       tvExportFormat: 'sqlite',
       tvExportPath: '',
       tvExportLump: '',
@@ -206,17 +217,20 @@ test('InterchangeHub routes all validation and RPC error paths to background not
       onBusyChange() {},
       notifications,
       port: {
-        inspectVenusSource: async () => { throw new Error('bad mdb header'); },
+        exportVPro64Database: async () => { throw new Error('disk full'); },
       },
     },
   );
 
-  await host.actions.inspectVenus();
-  assert.match(host.error, /Enter a VENUS 5\.0/);
-  host.venusSourcePath = '/tmp/broken.mdb';
-  await host.actions.inspectVenus();
-  assert.match(host.error, /bad mdb header/);
-  await host.actions.runVenusImport();
+  await host.actions.runVPro64Export();
+  assert.match(host.error, /destination \.db file path/i);
+  host.vpro64TargetProject = 'Sample';
+  await host.actions.runVPro64Export();
+  assert.match(host.error, /cannot be None, Sample, or contain master/i);
+  host.vpro64TargetProject = 'SkeenaExport';
+  host.vpro64DestPath = '/tmp/out.db';
+  await host.actions.runVPro64Export();
+  assert.match(host.error, /disk full/);
   await host.actions.runTurboVegExport();
   await host.actions.runTurboVegImport();
   await host.actions.runRdsExport();

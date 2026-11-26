@@ -102,10 +102,19 @@
   let errorMessage = $state('');
 
   let requestGeneration = 0;
+  let lastSu = untrack(() => su);
 
   $effect(() => {
-    if (contextId && contextId !== effectiveContextId) {
-      effectiveContextId = contextId;
+    const contextChanged = Boolean(contextId && contextId !== effectiveContextId);
+    const suChanged = su !== lastSu;
+    if (contextChanged) effectiveContextId = contextId;
+    if (suChanged) {
+      lastSu = su;
+      if ((!su || su === 'None') && options.unitSource === 'su') {
+        options.unitSource = 'auto';
+      }
+    }
+    if ((contextChanged || suChanged) && effectiveContextId) {
       void refreshAll();
     }
   });
@@ -133,9 +142,13 @@
     errorMessage = '';
     try {
       const plainOpts = $state.snapshot(options);
+      if ((!su || su === 'None') && plainOpts.unitSource === 'su') {
+        plainOpts.unitSource = 'auto';
+        options.unitSource = 'auto';
+      }
       if (withLumps) {
         const [lumps, snap] = await Promise.all([
-          reads.track(port.listSynthesisLumpTables(effectiveContextId)),
+          reads.track(port.listSynthesisLumpTables(effectiveContextId)).catch(() => []),
           reads.track(port.computeSynthesisSnapshot(effectiveContextId, plainOpts)),
         ]);
         if (gen !== requestGeneration) return;

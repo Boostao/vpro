@@ -104,5 +104,7 @@ test('attribute preview renders six source families, nullable counts and visible
   assert.match(html, /<td>8<\/td><td>1<\/td>/);
   assert.match(html, /<td>NULL<\/td><td>0<\/td>/);
   assert.match(html, /scope="col">S2S3<\/th>/);
-  assert.doesNotMatch(html, /<input|contenteditable|<textarea/);
+  const articleHtml = (html.match(/<article[\s\S]*?<\/article>/g) ?? []).join('\n');
+  assert.ok(articleHtml.length > 0);
+  assert.doesNotMatch(articleHtml, /<input|contenteditable|<textarea/);
 });

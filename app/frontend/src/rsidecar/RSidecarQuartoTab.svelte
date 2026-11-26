@@ -1,10 +1,12 @@
 <script lang="ts">
-  import type { QuartoGuideResult, QuartoGuideType } from './rSidecarWorkbench';
+  import type { QuartoGuideResult, QuartoGuideType, RRuntimeStatus } from './rSidecarWorkbench';
   import { IS_WEB_READONLY } from '../web/runtimeMode';
 
   let {
     activeSu = 'None',
     busy = false,
+    runtimeStatus = null,
+    standaloneQuartoMode = false,
     quartoGuideType = $bindable<QuartoGuideType>('single_unit'),
     quartoTitle = $bindable(''),
     quartoTargetUnit = $bindable(''),
@@ -18,9 +20,13 @@
     quartoValidationError = null,
     quartoResult = null,
     onRenderQuarto,
+    onRefreshRuntime,
+    onInstantHTMLReport,
   }: {
     activeSu?: string;
     busy?: boolean;
+    runtimeStatus?: RRuntimeStatus | null;
+    standaloneQuartoMode?: boolean;
     quartoGuideType?: QuartoGuideType;
     quartoTitle?: string;
     quartoTargetUnit?: string;
@@ -34,12 +40,43 @@
     quartoValidationError?: string | null;
     quartoResult?: QuartoGuideResult | null;
     onRenderQuarto: () => Promise<void> | void;
+    onRefreshRuntime?: () => Promise<void> | void;
+    onInstantHTMLReport?: () => Promise<void> | void;
   } = $props();
+
+  const hasActiveSu = $derived(Boolean(activeSu && activeSu !== 'None'));
 </script>
 
-<div class="panel">
+<div class="panel" data-quarto-unit-report-panel>
   <div class="card">
-    <h3>Automated Quarto Single-Unit &amp; BGC Guide Publisher</h3>
+    <h3>{standaloneQuartoMode ? 'Quarto Unit & BGC Ecosystem Report' : 'Automated Quarto Single-Unit & BGC Guide Publisher'}</h3>
+
+    <div class="readiness-strip" data-quarto-readiness-strip>
+      {#if runtimeStatus}
+        <span class="badge" class:ok={runtimeStatus.available} class:warn={!runtimeStatus.available}>
+          R: {runtimeStatus.available ? `Ready (${runtimeStatus.rVersion})` : 'Not Installed'}
+        </span>
+        <span class="badge" class:ok={runtimeStatus.quartoAvailable} class:warn={!runtimeStatus.quartoAvailable}>
+          Quarto: {runtimeStatus.quartoAvailable ? `Ready (${runtimeStatus.quartoVersion})` : 'Not Installed'}
+        </span>
+        {#if !runtimeStatus.available || !runtimeStatus.quartoAvailable}
+          <span class="readiness-note">
+            Quarto or R is not detected on this workstation. You can still generate an instant Quarto-style HTML report
+            directly in VPro below.
+          </span>
+        {/if}
+      {:else}
+        <span class="readiness-note">
+          Use Quarto / R for full ecosystem guides, or open an instant Quarto-style HTML report right away without R.
+        </span>
+        {#if onRefreshRuntime}
+          <button type="button" class="btn-secondary" disabled={busy} onclick={onRefreshRuntime}>
+            Check R &amp; Quarto Status
+          </button>
+        {/if}
+      {/if}
+    </div>
+
     <div class="form-row">
       <label>
         Guide Template
@@ -85,8 +122,8 @@
 
     <div class="form-row">
       <label class="checkbox-label">
-        <input type="checkbox" bind:checked={quartoUseSu} />
-        Scope to Active SU ({activeSu})
+        <input type="checkbox" bind:checked={quartoUseSu} disabled={!hasActiveSu} />
+        {hasActiveSu ? `Scope to Active SU (${activeSu})` : 'Scope to Active SU (None attached — using all project plots)'}
       </label>
       <label class="checkbox-label">
         <input type="checkbox" bind:checked={quartoApplyLump} />
@@ -106,6 +143,7 @@
       <button
         type="button"
         class="btn-primary"
+        data-quarto-render-guide
         disabled={busy || Boolean(quartoValidationError)}
         onclick={onRenderQuarto}
       >
@@ -115,6 +153,17 @@
             : 'Render & Download Guide'
           : 'Render & Publish Guide'}
       </button>
+      {#if onInstantHTMLReport}
+        <button
+          type="button"
+          class="btn-secondary"
+          data-quarto-instant-html-fallback
+          disabled={busy}
+          onclick={onInstantHTMLReport}
+        >
+          Display Instant HTML Report (No R Required)
+        </button>
+      {/if}
     </div>
 
     {#if quartoResult}
@@ -144,3 +193,22 @@
     {/if}
   </div>
 </div>
+
+<style>
+  .readiness-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.75rem;
+    margin-bottom: 0.75rem;
+    background: var(--vpro-canvas);
+    border: 1px solid var(--vpro-border);
+    border-left: 4px solid var(--vpro-gold);
+    border-radius: 4px;
+    font-size: 0.82rem;
+  }
+  .readiness-note {
+    color: var(--vpro-ink-secondary);
+  }
+</style>

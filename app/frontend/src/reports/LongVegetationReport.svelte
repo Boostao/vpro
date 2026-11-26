@@ -16,7 +16,11 @@
 
 <script lang="ts">
   import { onMount, onDestroy, untrack } from 'svelte';
-  import { ImportExportService, VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
+  import {
+    ImportExportService,
+    VegetationReportService,
+    type HTMLReportResult,
+  } from '../../bindings/github.com/boostao/vpro/app';
   import type { LongVegetationSettings } from '../../bindings/github.com/boostao/vpro/app/internal/vegreport/models';
   import { projectState } from '../shared/state';
   import { ReadRequests, formatError } from '../shared/readRequests';
@@ -33,6 +37,8 @@
     type ValidatedLongVegetationPreview,
   } from './longVegetationReport';
   import { vegetationWorkbookPublicationSession, type ValidatedVegetationWorkbookReview } from './vegetationWorkbook';
+  import CompactReportShell from './CompactReportShell.svelte';
+  import LongVegetationQuickOptions from './LongVegetationQuickOptions.svelte';
   import LongVegetationStateHost, { type LongVegHostContext } from './parts/LongVegetationStateHost.svelte';
   import LongVegetationOptionsAndControls from './parts/LongVegetationOptionsAndControls.svelte';
   import LongVegetationPreviewBody from './parts/LongVegetationPreviewBody.svelte';
@@ -41,6 +47,8 @@
   import { defaultWebExportFilename } from '../shell/webReadOnlyShell';
   import { IS_WEB_READONLY } from '../web/runtimeMode';
   import { formatWebDownloadFeedback } from '../web/webMeta';
+  import type { QuickExportSummary } from './compactReport';
+  import * as quick from './compactReportRunners';
 
   let {
     contextId,
@@ -85,6 +93,12 @@
   let useHierarchyBreakpoints = $state(false);
   let breakpointOptions = $state<HierarchyBreakpointOptions>(createDefaultBreakpointOptions());
   let exclusionSummary = $state.raw<SiteUnitExclusionSummary | null>(null);
+  let quickDraft = $state<quick.LongVegQuickDraft>(quick.loadInitialQuickDraft('long_veg', quick.DEFAULT_LONG_VEG_QUICK));
+  let quickExporting = $state(false);
+  let quickRendering = $state(false);
+  let quickError = $state('');
+  let quickExportResult = $state.raw<QuickExportSummary | null>(null);
+  let quickHtmlReport = $state.raw<HTMLReportResult | null>(null);
   const reads = new ReadRequests();
   let generation = 0;
   let disposed = false;
@@ -351,49 +365,33 @@
     settings?.grouping === 'lifeform' ? 'Lifeform' : settings?.grouping === 'strata' ? 'Strata' : 'Layer'
   );
   const registries = {
-    groupingSession,
-    namingSession,
-    selectedFieldSession,
-    enforcementSession,
-    unitSession,
-    selectedUnitSession,
+    groupingSession, namingSession, selectedFieldSession, enforcementSession, unitSession, selectedUnitSession,
   };
   const headerActions = {
-    onShow: show,
-    onOptions: options,
-    onReviewWorkbook: reviewWorkbook,
-    onCancel: cancel,
-    onAcknowledgeWorkbook: acknowledgeWorkbook,
-    onProjectChanged: projectChanged,
+    onShow: show, onOptions: options, onReviewWorkbook: reviewWorkbook,
+    onCancel: cancel, onAcknowledgeWorkbook: acknowledgeWorkbook, onProjectChanged: projectChanged,
   };
   const controlsOwner = $derived({ contextId, project, projectPath, su, suPath, effectiveHierarchy });
   const controlsActions = {
     onSelectWorkbookScope: (s: string) => {
-      selectedScopeOverridden = true;
-      selectedWorkbookScope = s;
+      [selectedScopeOverridden, selectedWorkbookScope] = [true, s];
       invalidateReports();
     },
     onRefreshLumpTables: loadLumpTables,
-    onToggleUseSppCodesOnly: (c: boolean) => {
-      useSppCodesOnlyOverridden = true;
-      useSppCodesOnly = c;
-    },
+    onToggleUseSppCodesOnly: (c: boolean) => ([useSppCodesOnlyOverridden, useSppCodesOnly] = [true, c]),
     onToggleApplyExclusions: (c: boolean) => {
       applyExclusionsToReport = c;
       invalidateReports();
     },
     onRulesChange: (r: SiteUnitExclusionRule[], bp: boolean, o: HierarchyBreakpointOptions) => {
-      exclusionRules = r.map((x) => ({ ...x }));
-      useHierarchyBreakpoints = bp;
-      breakpointOptions = { ...o };
+      [exclusionRules, useHierarchyBreakpoints, breakpointOptions] = [r.map((x) => ({ ...x })), bp, { ...o }];
       if (bp || applyExclusionsToReport) invalidateReports();
     },
     onLongPreview: (res: { preview?: unknown; exclusions?: SiteUnitExclusionSummary } | null | undefined) => {
       if (!res?.preview) return;
       try {
         acceptValidatedPreview(res.preview);
-        exclusionSummary = res.exclusions ?? null;
-        error = '';
+        [exclusionSummary, error] = [res.exclusions ?? null, ''];
       } catch (c) {
         error = `Exclusion preview unavailable: ${formatError(c)}`;
         toastErr('Long Vegetation exclusion preview failed', error);
@@ -401,6 +399,31 @@
     },
     onPublishWorkbook: publishWorkbook,
   };
+
+  async function quickExportSpreadsheet() {
+    if (!contextId || quickExporting || quickRendering) return;
+    [quickExporting, quickError] = [true, ''];
+    const snap = $state.snapshot(quickDraft);
+    quick.persistQuickDraft('long_veg', snap);
+    const req = quick.buildLongVegQuickRequest(snap, project, true);
+    const out = await quick.runQuickSpreadsheetExport({
+      source: 'Long Vegetation', project, kind: 'veg',
+      invoke: () => VegetationReportService.QuickRunLongVegetationWorkbook(contextId, req),
+    });
+    [quickExportResult, quickError, quickExporting] = [out.summary, out.error, false];
+  }
+  async function quickDisplayReport() {
+    if (!contextId || quickExporting || quickRendering) return;
+    [quickRendering, quickError] = [true, ''];
+    const snap = $state.snapshot(quickDraft);
+    quick.persistQuickDraft('long_veg', snap);
+    const req = quick.buildLongVegQuickRequest(snap, project, false);
+    const out = await quick.runQuickHTMLDisplay({
+      source: 'Long Vegetation', project,
+      invoke: () => VegetationReportService.RenderLongVegetationHTMLReport(contextId, req),
+    });
+    [quickHtmlReport, quickError, quickRendering] = [out.report, out.error, false];
+  }
 
   onMount(() => {
     void loadLumpTables();
@@ -432,84 +455,112 @@
 </script>
 
 <section class="report" data-long-vegetation-report aria-label="Long Vegetation report">
-  <LongVegetationStateHost
-    {workbookOwner}
-    {registries}
-    {projectWorkspace}
-    {projectView}
-    {publication}
-    {settings}
-    {busy}
-    {operationHeld}
-    {selectedWorkbookScope}
-    {destination}
-    {reads}
-    {resolveContextTag}
-    {headerActions}
-    {onBusyChange}
-    onInvalidate={(inv) => {
-      invalidateReports();
-      if (settings && inv?.(settings)) settings = null;
-    }}
-    onSelectedUnitReset={() => {
-      generation++;
-      reads.cancelAll();
-      busy = false;
-      preview = null;
-      workbookReview = null;
-      settings = null;
-    }}
-    onBridgeReady={(ctx) => {
-      bridge = ctx;
-    }}
-    onBeginTitleStatsRead={() => {
-      cancel();
-      error = '';
-      busy = true;
-      return generation;
-    }}
-    onEndTitleStatsRead={(req) => {
-      if (req === generation) busy = false;
-    }}
-    onCancelTitleStatsParent={() => {
-      cancel();
-      error = '';
-      return generation;
-    }}
-    onTitleStatsError={(t, msg) => {
-      error = msg;
-      toastErr(t, msg);
-    }}
+  <CompactReportShell
+    title="Long Vegetation"
+    subtitle="Plot-by-species vegetation table grouped by layer, strata, or lifeform."
+    {contextId}
+    {project}
+    {su}
+    hierarchy={effectiveHierarchy}
+    busy={busy || operationHeld}
+    exporting={quickExporting}
+    rendering={quickRendering}
+    exportResult={quickExportResult}
+    htmlReport={quickHtmlReport}
+    errorMessage={quickError || error}
+    onExportSpreadsheet={quickExportSpreadsheet}
+    onDisplayReport={quickDisplayReport}
+    onCloseHtmlReport={() => (quickHtmlReport = null)}
   >
-    {#snippet children(ctx)}
-      <LongVegetationOptionsAndControls
-        owner={controlsOwner}
-        state={{
-          projectActive: ctx.projectActive,
-          settings,
-          groupLabel,
-          busy,
-          operationHeld,
-          workbookBarrier: ctx.workbookBarrier,
-          preferenceBarrier: ctx.preferenceBarrier,
-          selectedWorkbookScope,
-          lumpTables,
-          useSppCodesOnly,
-          applyExclusionsToReport,
-          exclusionSummary,
-          activeWorkbookReview: ctx.projectActive ? (projectView?.workbookReview ?? null) : workbookReview,
-        }}
-        bind:destination
-        actions={controlsActions}
+    {#snippet headerExtra()}
+      <button
+        type="button"
+        class="btn-secondary"
+        data-source-control="btnViewReport"
+        disabled={busy ||
+          operationHeld ||
+          bridge.workbookBarrier ||
+          bridge.preferenceBarrier ||
+          (bridge.projectActive ? !projectView?.outputReady : !settings || su === 'None')}
+        onclick={show}
+      >View Report</button>
+    {/snippet}
+    {#snippet quickOptions()}
+      <LongVegetationQuickOptions
+        draft={quickDraft}
+        {lumpTables}
+        disabled={quickExporting || quickRendering}
+        onChange={(next) => (quickDraft = next)}
       />
+    {/snippet}
+    {#snippet advanced()}
+      <LongVegetationStateHost
+        {workbookOwner}
+        {registries}
+        {projectWorkspace}
+        {projectView}
+        {publication}
+        {settings}
+        {busy}
+        {operationHeld}
+        {selectedWorkbookScope}
+        {destination}
+        {reads}
+        {resolveContextTag}
+        {headerActions}
+        {onBusyChange}
+        onInvalidate={(inv) => {
+          invalidateReports();
+          if (settings && inv?.(settings)) settings = null;
+        }}
+        onSelectedUnitReset={() => {
+          generation++;
+          reads.cancelAll();
+          busy = false;
+          preview = null;
+          workbookReview = null;
+          settings = null;
+        }}
+        onBridgeReady={(ctx) => (bridge = ctx)}
+        onBeginTitleStatsRead={() => {
+          cancel();
+          error = '';
+          busy = true;
+          return generation;
+        }}
+        onEndTitleStatsRead={(req) => {
+          if (req === generation) busy = false;
+        }}
+        onCancelTitleStatsParent={() => {
+          cancel();
+          error = '';
+          return generation;
+        }}
+        onTitleStatsError={(t, msg) => {
+          error = msg;
+          toastErr(t, msg);
+        }}
+      >
+        {#snippet children(ctx)}
+          <LongVegetationOptionsAndControls
+            owner={controlsOwner}
+            state={{
+              projectActive: ctx.projectActive, settings, groupLabel, busy, operationHeld,
+              workbookBarrier: ctx.workbookBarrier, preferenceBarrier: ctx.preferenceBarrier,
+              selectedWorkbookScope, lumpTables, useSppCodesOnly, applyExclusionsToReport, exclusionSummary,
+              activeWorkbookReview: ctx.projectActive ? (projectView?.workbookReview ?? null) : workbookReview,
+            }}
+            bind:destination
+            actions={controlsActions}
+          />
+        {/snippet}
+      </LongVegetationStateHost>
+    {/snippet}
+    {#snippet results()}
       <LongVegetationPreviewBody {settings} {preview} {groupLabel} {useSppCodesOnly} />
     {/snippet}
-  </LongVegetationStateHost>
-  <p class="guidance">
-    Long Vegetation report preview. Report options load from saved configuration; NULL, empty text, zero, and absent
-    statistics remain distinct. Unit-name candidates preserve original reference rows, and workbook export writes to a
-    new .xlsx file without overwriting existing destinations.
-  </p>
+  </CompactReportShell>
+  <p class="guidance">Report options load from saved configuration; NULL, empty text, zero, and absent statistics remain distinct.</p>
 </section>
 
 <style>
@@ -521,14 +572,25 @@
     overflow-wrap: anywhere;
     color: var(--vpro-ink);
   }
+  .btn-secondary {
+    min-height: 2.35rem;
+    padding: 0.42rem 0.75rem;
+    border: 1px solid var(--vpro-navy);
+    border-radius: 0.25rem;
+    background: var(--vpro-surface);
+    color: var(--vpro-navy);
+    font-weight: 600;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .btn-secondary:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
   .report :global(.table-scroll) {
     max-width: 100%;
   }
   .report :global(.scope) {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
-  }
-  .guidance {
-    color: var(--vpro-ink-secondary);
-    font-size: 0.875rem;
   }
 </style>

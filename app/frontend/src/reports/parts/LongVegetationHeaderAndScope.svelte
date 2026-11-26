@@ -38,14 +38,10 @@
   let { state: hs, actions }: { state: LongVegHeaderState; actions: LongVegHeaderActions } = $props();
 </script>
 
-<header
-  class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border report-sticky-bar"
-  data-report-sticky-bar
->
-  <h1>Long Vegetation</h1>
+<div class="legacy-report-bar">
+  <h2>Detailed Long Vegetation Controls</h2>
   <div class="actions">
     <button
-      data-source-control="btnViewReport"
       disabled={hs.busy ||
         hs.operationHeld ||
         hs.workbookBarrier ||
@@ -53,7 +49,7 @@
         (hs.projectActive ? !hs.projectView?.outputReady : !hs.settingsReady || hs.su === 'None')}
       onclick={actions.onShow}
     >
-      View Report
+      View Inline Preview
     </button>
     <button
       disabled={hs.busy ||
@@ -86,7 +82,7 @@
       </button>
     {/if}
   </div>
-</header>
+</div>
 
 {#if hs.su === 'None' && !hs.projectActive}
   <p class="scope-guidance" role="status">
@@ -153,16 +149,16 @@
 {/if}
 
 <style>
-  .report-sticky-bar {
+  .legacy-report-bar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
   }
-  .report-sticky-bar h1 {
+  .legacy-report-bar h2 {
     margin: 0;
-    font-size: 1.5rem;
+    font-size: 1.05rem;
     color: var(--vpro-navy);
   }
   .actions {

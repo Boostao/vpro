@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onDestroy, untrack } from 'svelte';
-  import { ImportExportService, VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
+  import { onMount, onDestroy, untrack } from 'svelte';
+  import { ImportExportService, VegetationReportService, type HTMLReportResult } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests, formatError } from '../shared/readRequests';
   import { projectState } from '../shared/state';
   import { notifications } from '../shell/notificationService.svelte';
@@ -9,12 +9,16 @@
   import { summaryVegetationPreferenceSession } from './summaryVegetationPreferences';
   import { summaryVegetationQualityPreferenceSession } from './summaryVegetationQualityPreferences';
   import { summaryVegetationPresentationPreferenceSession } from './summaryVegetationPresentationPreferences';
+  import CompactReportShell from './CompactReportShell.svelte';
+  import SummaryVegetationQuickOptions from './SummaryVegetationQuickOptions.svelte';
   import SummaryVegetationOptionsBar from './SummaryVegetationOptionsBar.svelte';
   import SummaryVegetationPeerPanels from './SummaryVegetationPeerPanels.svelte';
   import SummaryVegetationResultPanel from './SummaryVegetationResultPanel.svelte';
   import { summaryVegetationFieldListDesktop } from './summaryVegetationFieldListDesktop';
   import * as envDesk from './summaryVegetationEnvironmentalDesktop';
   import * as ops from './summaryVegetationReportOps';
+  import type { QuickExportSummary } from './compactReport';
+  import * as quick from './compactReportRunners';
 
   interface Props {
     contextId: string;
@@ -84,6 +88,12 @@
   let includeGoldstreamMetadata = $state(false);
   let exclusionSummaryText = $state('');
   let viewState = $state.raw(session.view());
+  let quickDraft = $state<quick.SummaryVegQuickDraft>(quick.loadInitialQuickDraft('summary_veg', quick.DEFAULT_SUMMARY_VEG_QUICK));
+  let quickExporting = $state(false);
+  let quickRendering = $state(false);
+  let quickError = $state('');
+  let quickExportResult = $state.raw<QuickExportSummary | null>(null);
+  let quickHtmlReport = $state.raw<HTMLReportResult | null>(null);
   const toastTracker = ops.createSummaryVegNotificationTracker();
 
   const reportContextTag = () => ops.resolveSummaryVegContextTag(project, () => effectiveHierarchy);
@@ -190,43 +200,13 @@
   );
   const vm = $derived(
     ops.deriveSummaryVegVm({
-      owner: ownedContext(),
-      editHeld,
-      unitScope,
-      unitField,
-      breakpointPolicy,
-      combineVariants,
-      lumpTable,
-      lumpTables,
-      includeGoldstreamMetadata,
-      viewState,
-      operationHeldProp,
-      operationHeld,
-      workbookHeld,
-      environmentalHeld,
-      fieldListHeld,
-      fieldListBusy,
-      preferences,
-      preferenceView,
-      preferenceReadBusy,
-      preferenceHeld,
-      preferenceInvalid,
-      quality,
-      qualityView,
-      qualityMutationHeld,
-      qualityInvalid,
-      presentation,
-      presentationView,
-      presentationMutationHeld,
-      presentationInvalid,
-      fieldListEnabled: Boolean(fieldList?.enabled),
-      fieldListScopeAvailable,
-      fieldListState,
-      fieldListPeerDisabled,
-      fieldListPeerValidation,
-      fieldListEnabledFromPresentation,
-      environmentalSession,
-      envDesk,
+      owner: ownedContext(), editHeld, unitScope, unitField, breakpointPolicy, combineVariants, lumpTable, lumpTables,
+      includeGoldstreamMetadata, viewState, operationHeldProp, operationHeld, workbookHeld, environmentalHeld,
+      fieldListHeld, fieldListBusy, preferences, preferenceView, preferenceReadBusy, preferenceHeld, preferenceInvalid,
+      quality, qualityView, qualityMutationHeld, qualityInvalid, presentation, presentationView,
+      presentationMutationHeld, presentationInvalid, fieldListEnabled: Boolean(fieldList?.enabled),
+      fieldListScopeAvailable, fieldListState, fieldListPeerDisabled, fieldListPeerValidation,
+      fieldListEnabledFromPresentation, environmentalSession, envDesk,
     })
   );
   function cancelPreferenceRead() {
@@ -385,42 +365,55 @@
   }
 
   const optionsHandlers: ops.SummaryVegOptionsHandlers = {
-    onUnitScopeChange: (n) => (unitScope = n),
-    onUnitFieldInput: (n) => (unitField = n),
-    onBreakpointPolicyChange: (n) => (breakpointPolicy = n),
-    onLumpTableChange: (n) => (lumpTable = n),
-    onRefreshLumpTables: refreshLumpTables,
-    onGroupChange: changeGroup,
-    onDisplayChange: changeDisplay,
-    onShowClassChange: changeShowClass,
-    onAverageChange: changeAverage,
-    onCombineVariantsChange: (c) => (combineVariants = c),
-    onIncludeGoldstreamChange: (c) => (includeGoldstreamMetadata = c),
+    onUnitScopeChange: (n) => (unitScope = n), onUnitFieldInput: (n) => (unitField = n),
+    onBreakpointPolicyChange: (n) => (breakpointPolicy = n), onLumpTableChange: (n) => (lumpTable = n),
+    onRefreshLumpTables: refreshLumpTables, onGroupChange: changeGroup, onDisplayChange: changeDisplay,
+    onShowClassChange: changeShowClass, onAverageChange: changeAverage,
+    onCombineVariantsChange: (c) => (combineVariants = c), onIncludeGoldstreamChange: (c) => (includeGoldstreamMetadata = c),
   };
   const setQualBusy = (v: boolean) => (([qualityReadBusy] = [v]), reportBusy());
   const setPresBusy = (v: boolean) => (([presentationReadBusy] = [v]), reportBusy());
-  const setEnvBusy = () => (
-    ([environmentalHeld] = [envDesk.summaryEnvironmentalDesktop.activity().busy]),
-    reportBusy()
-  );
+  const setEnvBusy = () => (([environmentalHeld] = [envDesk.summaryEnvironmentalDesktop.activity().busy]), reportBusy());
   const setWbBusy = (h: boolean) => (([workbookHeld] = [h]), reportBusy());
   const undoSummaryPref = () => (cancelPreferenceRead(), preferences?.undo());
   const peerHandlers: ops.SummaryVegPeerHandlers = {
-    onLoadPreferences: loadPreferences,
-    onSavePreferences: savePreferences,
-    onUndoPreferences: undoSummaryPref,
-    onAcknowledgePreferences: () => preferences?.acknowledge(),
-    onCancelPreferenceRead: cancelPreferenceRead,
-    onQualityReadBusyChange: setQualBusy,
-    onPresentationReadBusyChange: setPresBusy,
-    onDismissInitialFieldListReadError: dismissInitialFieldListReadError,
-    onLoadFieldList: loadFieldList,
-    onCancelFieldListRead: () => fieldList.cancel(ownedContext()),
-    onFieldListStateChange: reportBusy,
-    onEnvironmentalBusyChange: setEnvBusy,
-    onWorkbookPreferencesLoaded: applyWorkbookLoadedScope,
-    onWorkbookBusyChange: setWbBusy,
+    onLoadPreferences: loadPreferences, onSavePreferences: savePreferences, onUndoPreferences: undoSummaryPref,
+    onAcknowledgePreferences: () => preferences?.acknowledge(), onCancelPreferenceRead: cancelPreferenceRead,
+    onQualityReadBusyChange: setQualBusy, onPresentationReadBusyChange: setPresBusy,
+    onDismissInitialFieldListReadError: dismissInitialFieldListReadError, onLoadFieldList: loadFieldList,
+    onCancelFieldListRead: () => fieldList.cancel(ownedContext()), onFieldListStateChange: reportBusy,
+    onEnvironmentalBusyChange: setEnvBusy, onWorkbookPreferencesLoaded: applyWorkbookLoadedScope, onWorkbookBusyChange: setWbBusy,
   };
+
+  async function quickExportSpreadsheet() {
+    if (!contextId || quickExporting || quickRendering) return;
+    [quickExporting, quickError] = [true, ''];
+    const snap = $state.snapshot(quickDraft);
+    quick.persistQuickDraft('summary_veg', snap);
+    const req = quick.buildSummaryVegQuickRequest(snap, project, true);
+    const out = await quick.runQuickSpreadsheetExport({
+      source: 'Summary Vegetation', project, kind: 'veg',
+      invoke: () => VegetationReportService.QuickRunSummaryVegetationWorkbook(contextId, req),
+    });
+    [quickExportResult, quickError, quickExporting] = [out.summary, out.error, false];
+  }
+  async function quickDisplayReport() {
+    if (!contextId || quickExporting || quickRendering) return;
+    [quickRendering, quickError] = [true, ''];
+    const snap = $state.snapshot(quickDraft);
+    quick.persistQuickDraft('summary_veg', snap);
+    const req = quick.buildSummaryVegQuickRequest(snap, project, false);
+    const out = await quick.runQuickHTMLDisplay({
+      source: 'Summary Vegetation', project,
+      invoke: () => VegetationReportService.RenderSummaryVegetationHTMLReport(contextId, req),
+    });
+    [quickHtmlReport, quickError, quickRendering] = [out.report, out.error, false];
+  }
+
+  onMount(() => {
+    void refreshLumpTables();
+    void quick.hydrateSummaryVegQuickDraft(contextId, $state.snapshot(quickDraft)).then((next) => (quickDraft = next));
+  });
 
   onDestroy(() => {
     session.cancel(port);
@@ -437,51 +430,73 @@
 </script>
 
 <section data-summary-vegetation aria-label="Summary Vegetation" class="summary-vegetation">
-  <header
-    class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border report-sticky-bar"
-    data-report-sticky-bar
+  <CompactReportShell
+    title="Summary Vegetation"
+    subtitle="Compact VPro64 summary of species presence and mean cover by unit."
+    {contextId}
+    {project}
+    {su}
+    hierarchy={effectiveHierarchy}
+    busy={viewState.busy || operationHeld}
+    exporting={quickExporting}
+    rendering={quickRendering}
+    exportResult={quickExportResult}
+    htmlReport={quickHtmlReport}
+    errorMessage={quickError || viewState.draftError || preferenceView?.draftError || ''}
+    onExportSpreadsheet={quickExportSpreadsheet}
+    onDisplayReport={quickDisplayReport}
+    onCloseHtmlReport={() => (quickHtmlReport = null)}
   >
-    <h1>Summary Vegetation</h1>
-    <div class="actions">
-      <button onclick={previewReport} disabled={vm.previewDisabled} data-summary-preview
-        >Preview Summary Vegetation</button
-      >
-      <button
-        type="button"
-        onclick={previewWithPreferences}
-        disabled={vm.savedPreviewDisabled}
-        data-summary-preview-preferences>Preview with Saved Preferences</button
-      >
-      {#if viewState.busy}<button onclick={() => session.cancel(port)} data-summary-cancel>Cancel preview</button>{/if}
-    </div>
-  </header>
-  {#if viewState.draftError}<p role="alert" class="error">{viewState.draftError}</p>{/if}
-  {#if preferenceView?.draftError}<p role="alert" class="error">{preferenceView.draftError}</p>{/if}
-  <SummaryVegetationOptionsBar model={vm.optionsModel} handlers={optionsHandlers} />
-  <SummaryVegetationPeerPanels model={vm.peerModel} handlers={peerHandlers} />
-  <div class="exclusion-section table-scroll">
-    <SiteUnitExclusionFilter
-      {contextId}
-      {su}
-      hierarchy={effectiveHierarchy}
-      reportMode="summary"
-      average={viewState.average}
-      display={viewState.display}
-      showClass={viewState.display === 4 || viewState.display === 5 ? viewState.showClass || 1 : 0}
-      groupAndOrder={viewState.groupAndOrder}
-      onBusyChange={onExclusionBusyChange}
-      onSummaryPreview={(result) => {
-        exclusionSummaryText = `${result.exclusions.retainedUnits?.length ?? 0} units retained (${result.exclusions.excludedUnits?.length ?? 0} excluded; ${result.exclusions.retainedPlots}/${result.exclusions.totalPlotsBefore} plots)`;
-        void session.applyExternalPreview(normalizeExclusionSummaryPreview(result.preview), port);
-      }}
-    />
-    {#if exclusionSummaryText}<p role="status" data-summary-exclusion-status>{exclusionSummaryText}</p>{/if}
-  </div>
-  {#if viewState.preview && !qualityInvalid}<SummaryVegetationResultPanel
-      {project}
-      {su}
-      preview={viewState.preview}
-    />{/if}
+    {#snippet headerExtra()}
+      <button type="button" class="btn-secondary" onclick={previewReport} disabled={vm.previewDisabled} data-summary-preview>
+        Inline Preview
+      </button>
+      {#if viewState.busy}<button type="button" class="btn-secondary" onclick={() => session.cancel(port)} data-summary-cancel>Cancel</button>{/if}
+    {/snippet}
+    {#snippet quickOptions()}
+      <SummaryVegetationQuickOptions
+        draft={quickDraft}
+        {lumpTables}
+        disabled={quickExporting || quickRendering}
+        onChange={(next) => (quickDraft = next)}
+      />
+    {/snippet}
+    {#snippet advanced()}
+      <div class="actions">
+        <button
+          type="button"
+          onclick={previewWithPreferences}
+          disabled={vm.savedPreviewDisabled}
+          data-summary-preview-preferences>Preview with Saved Preferences</button
+        >
+      </div>
+      <SummaryVegetationOptionsBar model={vm.optionsModel} handlers={optionsHandlers} />
+      <SummaryVegetationPeerPanels model={vm.peerModel} handlers={peerHandlers} />
+      <div class="exclusion-section table-scroll">
+        <SiteUnitExclusionFilter
+          {contextId}
+          {su}
+          hierarchy={effectiveHierarchy}
+          reportMode="summary"
+          average={viewState.average}
+          display={viewState.display}
+          showClass={viewState.display === 4 || viewState.display === 5 ? viewState.showClass || 1 : 0}
+          groupAndOrder={viewState.groupAndOrder}
+          onBusyChange={onExclusionBusyChange}
+          onSummaryPreview={(result) => {
+            exclusionSummaryText = `${result.exclusions.retainedUnits?.length ?? 0} units retained (${result.exclusions.excludedUnits?.length ?? 0} excluded; ${result.exclusions.retainedPlots}/${result.exclusions.totalPlotsBefore} plots)`;
+            void session.applyExternalPreview(normalizeExclusionSummaryPreview(result.preview), port);
+          }}
+        />
+        {#if exclusionSummaryText}<p role="status" data-summary-exclusion-status>{exclusionSummaryText}</p>{/if}
+      </div>
+    {/snippet}
+    {#snippet results()}
+      {#if viewState.preview && !qualityInvalid}
+        <SummaryVegetationResultPanel {project} {su} preview={viewState.preview} />
+      {/if}
+    {/snippet}
+  </CompactReportShell>
 </section>
 
 <style>
@@ -493,19 +508,6 @@
     background: var(--vpro-canvas);
     color: var(--vpro-ink);
     min-width: 0;
-  }
-  .report-sticky-bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding-inline: 0.75rem;
-    border-radius: 0.35rem;
-  }
-  .summary-vegetation h1 {
-    margin: 0;
-    color: var(--vpro-navy);
   }
   .exclusion-section {
     display: grid;
@@ -520,27 +522,22 @@
     gap: 0.75rem;
     align-items: center;
   }
-  button {
-    min-height: 2.5rem;
-    padding: 0.5rem 0.85rem;
+  .btn-secondary,
+  .actions button {
+    min-height: 2.35rem;
+    padding: 0.42rem 0.75rem;
     border: 1px solid var(--vpro-navy);
     border-radius: 0.25rem;
-    background: var(--vpro-navy);
-    color: var(--vpro-surface);
+    background: var(--vpro-surface);
+    color: var(--vpro-navy);
     font-weight: 600;
+    font-size: 0.82rem;
     cursor: pointer;
   }
-  button:hover:not(:disabled) {
-    background: var(--vpro-navy-dark);
-    border-color: var(--vpro-navy-dark);
-  }
-  button:disabled {
+  .btn-secondary:disabled,
+  .actions button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-  }
-  .error {
-    color: var(--vpro-error);
-    font-weight: 600;
   }
   .table-scroll {
     overflow-x: auto;

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack } from 'svelte';
-  import { EnvironmentReportService } from '../../bindings/github.com/boostao/vpro/app';
+  import { EnvironmentReportService, type HTMLReportResult } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
   import {
     validateSiteUnitSummary,
@@ -13,21 +13,18 @@
     siteUnitSummaryFullPreferencesSession,
     type SummaryFullPreferenceValues,
   } from './siteUnitSummaryPreferences';
+  import CompactReportShell from './CompactReportShell.svelte';
+  import SiteUnitSummaryQuickOptions from './SiteUnitSummaryQuickOptions.svelte';
   import SiteUnitSummaryFieldsets from './SiteUnitSummaryFieldsets.svelte';
   import SiteUnitSummaryWorkbookPanel from './SiteUnitSummaryWorkbookPanel.svelte';
   import SiteUnitSummaryActionBar from './SiteUnitSummaryActionBar.svelte';
   import SiteUnitSummaryResults from './SiteUnitSummaryResults.svelte';
-  import {
-    summarySpeciesCriteria,
-    validateSummarySpecies,
-    type ValidatedSummarySpecies,
-  } from './siteUnitSummarySpecies';
-  import {
-    extendedSummaryWorkbookPublicationSession,
-    type ExtendedSummaryWorkbookOptions,
-  } from './siteUnitSummaryExtendedWorkbook';
+  import { summarySpeciesCriteria, validateSummarySpecies, type ValidatedSummarySpecies } from './siteUnitSummarySpecies';
+  import { extendedSummaryWorkbookPublicationSession, type ExtendedSummaryWorkbookOptions } from './siteUnitSummaryExtendedWorkbook';
   import { notifications } from '../shell/notificationService.svelte';
   import * as ops from './siteUnitSummaryOps';
+  import type { QuickExportSummary } from './compactReport';
+  import * as quick from './compactReportRunners';
 
   interface Props {
     contextId: string;
@@ -46,6 +43,14 @@
   let workbookBusy = $state(false);
   let error = $state('');
   let preview = $state<ValidatedSiteUnitSummary | null>(null);
+  let quickDraft = $state<quick.SummaryEnvQuickDraft>(
+    quick.loadInitialQuickDraft('summary_env', quick.DEFAULT_SUMMARY_ENV_QUICK)
+  );
+  let quickExporting = $state(false);
+  let quickRendering = $state(false);
+  let quickError = $state('');
+  let quickExportResult = $state.raw<QuickExportSummary | null>(null);
+  let quickHtmlReport = $state.raw<HTMLReportResult | null>(null);
   const ownerScope = () => ({ contextId, project, projectPath, su, suPath });
   const extendedAuthority = untrack(() =>
     typeof extendedSummaryWorkbookPublicationSession === 'function'
@@ -386,31 +391,48 @@
     ops.packFieldsetsModel(su, mode, siteUnitType, method, barFlags, preferenceView, speciesView)
   );
   const fieldsetsHandlers = {
-    editMode,
-    editSiteUnitType,
-    editMethod,
-    editSpeciesEnabled,
-    editSpeciesChoice,
-    editSpeciesText,
-    resetSpeciesCriteria,
+    editMode, editSiteUnitType, editMethod, editSpeciesEnabled, editSpeciesChoice, editSpeciesText, resetSpeciesCriteria,
   };
   const prefsPair = $derived([preferences, fullPreferences, preferenceView, fullPreferenceView] as const);
   const actionBarModel = $derived(ops.packActionBarModel(su, siteUnitType, barFlags, prefsPair));
   const undoShortPrefs = () => !workbookBusy && (cancel(), preferences?.undo());
   const selectNormalShortPrefs = () => !workbookBusy && (cancel(), preferences?.selectNormalSU(), editSiteUnitType(1));
   const actionBarHandlers = {
-    onSavePreferences: savePreferences,
-    onUndoPreferences: undoShortPrefs,
-    onSelectNormalSU: selectNormalShortPrefs,
+    onSavePreferences: savePreferences, onUndoPreferences: undoShortPrefs, onSelectNormalSU: selectNormalShortPrefs,
     onAcknowledgePreferences: () => !workbookBusy && preferences?.acknowledge(),
-    onLoadFullPreferences: loadFullPreferences,
-    onSaveFullPreferences: saveFullPreferences,
+    onLoadFullPreferences: loadFullPreferences, onSaveFullPreferences: saveFullPreferences,
     onAcknowledgeFullPreferences: () => !workbookBusy && fullPreferences?.acknowledge(),
   };
+
+  async function quickExportSpreadsheet() {
+    if (!contextId || quickExporting || quickRendering) return;
+    [quickExporting, quickError] = [true, ''];
+    const snap = $state.snapshot(quickDraft);
+    quick.persistQuickDraft('summary_env', snap);
+    const req = quick.buildSummaryEnvQuickRequest(snap, project, true);
+    const out = await quick.runQuickSpreadsheetExport({
+      source: 'Summary Environment', project, kind: 'env',
+      invoke: () => EnvironmentReportService.QuickRunSummaryEnvironmentWorkbook(contextId, req),
+    });
+    [quickExportResult, quickError, quickExporting] = [out.summary, out.error, false];
+  }
+  async function quickDisplayReport() {
+    if (!contextId || quickExporting || quickRendering) return;
+    [quickRendering, quickError] = [true, ''];
+    const snap = $state.snapshot(quickDraft);
+    quick.persistQuickDraft('summary_env', snap);
+    const req = quick.buildSummaryEnvQuickRequest(snap, project, false);
+    const out = await quick.runQuickHTMLDisplay({
+      source: 'Summary Environment', project,
+      invoke: () => EnvironmentReportService.RenderSummaryEnvironmentHTMLReport(contextId, req),
+    });
+    [quickHtmlReport, quickError, quickRendering] = [out.report, out.error, false];
+  }
 
   onMount(() => {
     if (!preferences) void options();
     else if (!preferenceView?.draft && !preferenceBarrier) void loadPreferences();
+    void quick.hydrateSummaryEnvQuickDraft(contextId, $state.snapshot(quickDraft)).then((next) => (quickDraft = next));
   });
   onDestroy(() => {
     unsubscribe?.();
@@ -421,63 +443,74 @@
 </script>
 
 <section class="summary" data-site-unit-summary aria-label="Summary Environment">
-  <header
-    class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border report-sticky-bar"
-    data-report-sticky-bar
+  <CompactReportShell
+    title="Summary Environment"
+    subtitle="Site, soil, and vegetation cover summary statistics by unit."
+    {contextId}
+    {project}
+    {su}
+    busy={busy || workbookBusy}
+    exporting={quickExporting}
+    rendering={quickRendering}
+    exportResult={quickExportResult}
+    htmlReport={quickHtmlReport}
+    errorMessage={quickError || preferenceView?.draftError || fullPreferenceView?.draftError || error}
+    onExportSpreadsheet={quickExportSpreadsheet}
+    onDisplayReport={quickDisplayReport}
+    onCloseHtmlReport={() => (quickHtmlReport = null)}
   >
-    <h1>Summary Environment</h1>
-    <div class="sticky-actions">
+    {#snippet headerExtra()}
       <button
+        type="button"
+        class="btn-secondary"
         data-source-control="btnCreateReport"
         disabled={busy || workbookBusy || preferenceBarrier || speciesBarrier || !ready || !scopeAllowed}
-        onclick={show}>Create Report</button
+        onclick={show}>Inline Preview</button
       >
-      {#if preferences}
-        <button
-          data-summary-preferences-load
-          disabled={workbookBusy || !!preferenceView?.busy || !!preferenceView?.blocked}
-          onclick={loadPreferences}>Load saved summary options</button
-        >
-      {:else}
-        <button data-summary-options-reload disabled={busy || workbookBusy} onclick={options}
-          >Reload summary options</button
-        >
+      {#if busy}<button type="button" class="btn-secondary" data-summary-cancel onclick={cancel}>Cancel</button>{/if}
+    {/snippet}
+    {#snippet quickOptions()}
+      <SiteUnitSummaryQuickOptions
+        draft={quickDraft}
+        {su}
+        disabled={quickExporting || quickRendering}
+        onChange={(next) => (quickDraft = next)}
+      />
+    {/snippet}
+    {#snippet advanced()}
+      <div class="sticky-actions">
+        {#if preferences}
+          <button
+            data-summary-preferences-load
+            disabled={workbookBusy || !!preferenceView?.busy || !!preferenceView?.blocked}
+            onclick={loadPreferences}>Load saved summary options</button
+          >
+        {:else}
+          <button data-summary-options-reload disabled={busy || workbookBusy} onclick={options}
+            >Reload summary options</button
+          >
+        {/if}
+      </div>
+      <SiteUnitSummaryFieldsets model={fieldsetsModel} handlers={fieldsetsHandlers} />
+      <SiteUnitSummaryActionBar model={actionBarModel} handlers={actionBarHandlers} />
+      {#if mode === 'layer' && !speciesView?.enabled}
+        <SiteUnitSummaryWorkbookPanel
+          owner={{ contextId, project, projectPath, su, suPath }} {method} {siteUnitType} allowConfiguredScope={true}
+          disabled={busy || preferenceBarrier || speciesBarrier || !ready || !scopeAllowed}
+          onBusyChange={(held) => { workbookBusy = held; reportBusy(); }}
+        />
+      {:else if mode === 'lifeform' || mode === 'strata' || speciesView?.enabled}
+        <SiteUnitSummaryWorkbookPanel
+          owner={{ contextId, project, projectPath, su, suPath }} {method} {siteUnitType} allowConfiguredScope={true}
+          {extendedOptions} disabled={busy || preferenceBarrier || speciesBarrier || !ready || !scopeAllowed}
+          onBusyChange={(held) => { workbookBusy = held; reportBusy(); }}
+        />
       {/if}
-      {#if busy}<button data-summary-cancel onclick={cancel}>Cancel report read</button>{/if}
-    </div>
-  </header>
-  {#if preferenceView?.draftError}<p role="alert" class="error">{preferenceView.draftError}</p>{/if}
-  {#if fullPreferenceView?.draftError}<p role="alert" class="error">{fullPreferenceView.draftError}</p>{/if}
-  <p>Project {project}; active Site Unit table: {su}.</p>
-  <SiteUnitSummaryFieldsets model={fieldsetsModel} handlers={fieldsetsHandlers} />
-  <SiteUnitSummaryActionBar model={actionBarModel} handlers={actionBarHandlers} />
-  {#if mode === 'layer' && !speciesView?.enabled}
-    <SiteUnitSummaryWorkbookPanel
-      owner={{ contextId, project, projectPath, su, suPath }}
-      {method}
-      {siteUnitType}
-      allowConfiguredScope={true}
-      disabled={busy || preferenceBarrier || speciesBarrier || !ready || !scopeAllowed}
-      onBusyChange={(held) => {
-        workbookBusy = held;
-        reportBusy();
-      }}
-    />
-  {:else if mode === 'lifeform' || mode === 'strata' || speciesView?.enabled}
-    <SiteUnitSummaryWorkbookPanel
-      owner={{ contextId, project, projectPath, su, suPath }}
-      {method}
-      {siteUnitType}
-      allowConfiguredScope={true}
-      {extendedOptions}
-      disabled={busy || preferenceBarrier || speciesBarrier || !ready || !scopeAllowed}
-      onBusyChange={(held) => {
-        workbookBusy = held;
-        reportBusy();
-      }}
-    />
-  {/if}
-  {#if preview}<SiteUnitSummaryResults {preview} {speciesPreview} />{/if}
+    {/snippet}
+    {#snippet results()}
+      {#if preview}<SiteUnitSummaryResults {preview} {speciesPreview} />{/if}
+    {/snippet}
+  </CompactReportShell>
 </section>
 
 <style>
@@ -492,49 +525,28 @@
     color: var(--vpro-ink);
     min-width: 0;
   }
-  .report-sticky-bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding-inline: 0.75rem;
-    border-radius: 0.35rem;
-  }
-  .report-sticky-bar h1 {
-    margin: 0;
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: var(--vpro-navy);
-  }
   .sticky-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
     align-items: center;
   }
-  button {
-    min-height: 2.5rem;
+  .btn-secondary,
+  .sticky-actions button {
+    min-height: 2.35rem;
     border: 1px solid var(--vpro-navy);
     border-radius: 0.25rem;
-    padding: 0.5rem 0.85rem;
-    background: var(--vpro-navy);
-    color: var(--vpro-surface);
+    padding: 0.42rem 0.75rem;
+    background: var(--vpro-surface);
+    color: var(--vpro-navy);
     font-weight: 600;
+    font-size: 0.82rem;
     cursor: pointer;
   }
-  button:hover:not(:disabled) {
-    background: var(--vpro-navy-dark);
-    border-color: var(--vpro-navy-dark);
-  }
-  button:disabled {
+  .btn-secondary:disabled,
+  .sticky-actions button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-  }
-  .error {
-    color: var(--vpro-error);
-    white-space: pre-wrap;
-    font-weight: 600;
   }
   @media (max-width: 640px) {
     .summary {

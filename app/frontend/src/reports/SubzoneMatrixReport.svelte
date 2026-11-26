@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import { EnvironmentReportService } from '../../bindings/github.com/boostao/vpro/app';
+  import { EnvironmentReportService, type HTMLReportResult } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests, formatError } from '../shared/readRequests';
   import {
     matrixPageFromWire,
@@ -11,10 +11,13 @@
     type MatrixPage,
     type MatrixWorkbookReview,
   } from './subzoneMatrixReport';
+  import CompactReportShell from './CompactReportShell.svelte';
   import { notifications } from '../shell/notificationService.svelte';
   import { defaultWebExportFilename } from '../shell/webReadOnlyShell';
   import { IS_WEB_READONLY } from '../web/runtimeMode';
   import { formatWebDownloadFeedback } from '../web/webMeta';
+  import type { QuickExportSummary } from './compactReport';
+  import * as quick from './compactReportRunners';
 
   let {
     contextId,
@@ -36,6 +39,11 @@
   let busy = $state(false);
   let error = $state('');
   let destination = $state('');
+  let quickExporting = $state(false);
+  let quickRendering = $state(false);
+  let quickError = $state('');
+  let quickExportResult = $state.raw<QuickExportSummary | null>(null);
+  let quickHtmlReport = $state.raw<HTMLReportResult | null>(null);
   const barrier = $derived(publication.busy || publication.blocked);
   const available = $derived(!!contextId && hierarchy !== 'None' && !!hierarchyPath);
   const reads = new ReadRequests();
@@ -229,6 +237,27 @@
     workbook = null;
   }
 
+  async function quickExportSpreadsheet() {
+    if (!contextId || !available || quickExporting || quickRendering) return;
+    [quickExporting, quickError] = [true, ''];
+    const req = quick.buildSubzoneMatrixQuickRequest(hierarchy);
+    const out = await quick.runQuickSpreadsheetExport({
+      source: 'Subzone Matrix', project: hierarchy, kind: 'env',
+      invoke: () => EnvironmentReportService.QuickRunSubzoneMatrixWorkbook(contextId, req),
+    });
+    [quickExportResult, quickError, quickExporting] = [out.summary, out.error, false];
+  }
+
+  async function quickDisplayReport() {
+    if (!contextId || !available || quickExporting || quickRendering) return;
+    [quickRendering, quickError] = [true, ''];
+    const out = await quick.runQuickHTMLDisplay({
+      source: 'Subzone Matrix', project: hierarchy,
+      invoke: () => EnvironmentReportService.RenderSubzoneMatrixHTMLReport(contextId),
+    });
+    [quickHtmlReport, quickError, quickRendering] = [out.report, out.error, false];
+  }
+
   onDestroy(() => {
     unsubscribe();
     cancel();
@@ -236,131 +265,134 @@
 </script>
 
 <section class="matrix" data-subzone-matrix-report aria-label="Subzone Matrix of Units">
-  <header
-    class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border report-sticky-bar"
-    data-report-sticky-bar
+  <CompactReportShell
+    title="Subzone Matrix of Units"
+    subtitle="Association-by-subzone matrix generated from the active hierarchy."
+    {contextId}
+    {hierarchy}
+    requiresHierarchy={true}
+    busy={busy || barrier}
+    actionDisabled={!available}
+    exporting={quickExporting}
+    rendering={quickRendering}
+    exportResult={quickExportResult}
+    htmlReport={quickHtmlReport}
+    errorMessage={quickError || error}
+    onExportSpreadsheet={quickExportSpreadsheet}
+    onDisplayReport={quickDisplayReport}
+    onCloseHtmlReport={() => (quickHtmlReport = null)}
   >
-    <h1>Subzone Matrix of Units</h1>
-    <div class="actions">
-      <button type="button" data-matrix-read disabled={busy || barrier || !available} onclick={() => show()}>
+    {#snippet headerExtra()}
+      <button type="button" class="btn-secondary" data-matrix-read disabled={busy || barrier || !available} onclick={() => show()}>
         Review matrix
       </button>
-      <button
-        type="button"
-        data-matrix-workbook-review
-        disabled={busy || barrier || !available}
-        onclick={reviewWorkbook}
-      >
-        Review XLSX workbook
-      </button>
       {#if busy}
-        <button type="button" data-matrix-cancel onclick={cancel}>Cancel matrix read</button>
+        <button type="button" class="btn-secondary" data-matrix-cancel onclick={cancel}>Cancel</button>
       {/if}
-    </div>
-  </header>
-  {#if !available}<p role="status">Select a hierarchy in the sidebar to view this report.</p>{/if}
-  <dl class="provenance">
-    <div>
-      <dt>Selected hierarchy</dt>
-      <dd>{hierarchy}</dd>
-    </div>
-    <div>
-      <dt>Hierarchy file</dt>
-      <dd>{hierarchyPath}</dd>
-    </div>
-    {#if preview}<div>
-        <dt>Reference labels file</dt>
-        <dd>{preview.labelsPath}</dd>
-      </div>{/if}
-  </dl>
-  {#if preview}
-    <p data-matrix-count>
-      {preview.total} association rows; showing {preview.rows.length ? preview.offset + 1 : 0}
-      through {preview.rows.length ? preview.offset + preview.rows.length : 0}.
-    </p>
-    {#if preview.total === 0}<p role="status">No matrix rows found for the selected hierarchy.</p>{/if}
-    <div class="table-scroll">
-      <table data-matrix-table>
-        <caption>Subzone/Association Matrix: {hierarchy}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            {#each preview.columns as column}<th scope="col">{column}</th>{/each}
-          </tr>
-        </thead>
-        <tbody>
-          {#each preview.rows as row, index}
-            <tr aria-label={`Association row ${preview.offset + index + 1}`}>
-              <th scope="row">{matrixCellText(row.name)}</th>
-              {#each row.values as value}<td>{matrixCellText(value)}</td>{/each}
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
-    <div class="actions">
-      <button
-        type="button"
-        data-matrix-previous
-        disabled={busy || barrier || preview.offset === 0}
-        onclick={() => show(Math.max(0, preview!.offset - limit))}
-      >
-        Previous matrix rows
-      </button>
-      <button
-        type="button"
-        data-matrix-next
-        disabled={busy || barrier || preview.offset + limit >= preview.total}
-        onclick={() => show(preview!.offset + limit)}
-      >
-        Next matrix rows
-      </button>
-    </div>
-  {/if}
-  {#if workbook}
-    <section class="workbook" data-matrix-workbook aria-label="Reviewed XLSX publication">
-      <h2>Excel workbook preview</h2>
-      <p>Estimated size: {workbook.bytes} bytes (1 worksheet).</p>
-      <dl>
-        <div>
-          <dt>Workbook checksum (SHA-256)</dt>
-          <dd>{workbook.workbookSHA256}</dd>
-        </div>
-        <div>
-          <dt>Review snapshot ID</dt>
-          <dd>{workbook.approvalHash}</dd>
-        </div>
+    {/snippet}
+    {#snippet quickOptions()}
+      <dl class="provenance-inline" data-subzone-matrix-quick-options>
+        <div><dt>Selected hierarchy</dt><dd>{hierarchy}</dd></div>
+        <div><dt>Hierarchy file</dt><dd>{hierarchyPath || 'None'}</dd></div>
+        {#if preview}<div><dt>Reference labels file</dt><dd>{preview.labelsPath}</dd></div>{/if}
       </dl>
-      {#if !IS_WEB_READONLY}
-        <label for="matrix-destination">
-          New XLSX destination
-          <input id="matrix-destination" data-matrix-destination bind:value={destination} disabled={busy || barrier} />
-        </label>
+    {/snippet}
+    {#snippet advanced()}
+      <div class="actions">
+        <button
+          type="button"
+          data-matrix-workbook-review
+          disabled={busy || barrier || !available}
+          onclick={reviewWorkbook}
+        >
+          Review XLSX workbook
+        </button>
+      </div>
+      {#if workbook}
+        <section class="workbook" data-matrix-workbook aria-label="Reviewed XLSX publication">
+          <h2>Excel workbook preview</h2>
+          <p>Estimated size: {workbook.bytes} bytes (1 worksheet).</p>
+          <dl>
+            <div><dt>Workbook checksum (SHA-256)</dt><dd>{workbook.workbookSHA256}</dd></div>
+            <div><dt>Review snapshot ID</dt><dd>{workbook.approvalHash}</dd></div>
+          </dl>
+          {#if !IS_WEB_READONLY}
+            <label for="matrix-destination">
+              New XLSX destination
+              <input id="matrix-destination" data-matrix-destination bind:value={destination} disabled={busy || barrier} />
+            </label>
+          {/if}
+          <button
+            type="button"
+            data-matrix-publish
+            disabled={busy || barrier || (!IS_WEB_READONLY && !destination)}
+            onclick={publishWorkbook}
+          >
+            {IS_WEB_READONLY ? 'Download reviewed XLSX' : 'Publish reviewed XLSX'}
+          </button>
+        </section>
       {/if}
-      <button
-        type="button"
-        data-matrix-publish
-        disabled={busy || barrier || (!IS_WEB_READONLY && !destination)}
-        onclick={publishWorkbook}
-      >
-        {IS_WEB_READONLY ? 'Download reviewed XLSX' : 'Publish reviewed XLSX'}
-      </button>
-    </section>
-  {/if}
-  {#if !publication.outcome && publication.blocked && !publication.busy}
-    <p data-matrix-unknown role="alert">
-      Workbook export status is unknown. Inspect {publication.requestedDestination || 'the destination file'} before exporting
-      again.
-    </p>
-  {/if}
-  {#if publication.blocked && !publication.busy}
-    <button type="button" data-matrix-acknowledge onclick={acknowledge}>Acknowledge workbook outcome</button>
-  {/if}
-  <p class="guidance">
-    Uses the selected hierarchy and standard BEC unit labels, not the current project or site-unit table. Previewing and
-    exporting leave your hierarchy and saved settings unchanged. Exported Excel workbooks use rotated column headings
-    and estimated column widths (not native Excel AutoFit), and export never overwrites an existing file.
-  </p>
+      {#if !publication.outcome && publication.blocked && !publication.busy}
+        <p data-matrix-unknown role="alert">
+          Workbook export status is unknown. Inspect {publication.requestedDestination || 'the destination file'} before
+          exporting again.
+        </p>
+      {/if}
+      {#if publication.blocked && !publication.busy}
+        <button type="button" data-matrix-acknowledge onclick={acknowledge}>Acknowledge workbook outcome</button>
+      {/if}
+      <p class="guidance">
+        Uses the selected hierarchy and standard BEC unit labels, not the current project or site-unit table. Exported
+        Excel workbooks use estimated column widths (not native Excel AutoFit) and never overwrites an existing file.
+      </p>
+    {/snippet}
+    {#snippet results()}
+      {#if preview}
+        <p data-matrix-count>
+          {preview.total} association rows; showing {preview.rows.length ? preview.offset + 1 : 0}
+          through {preview.rows.length ? preview.offset + preview.rows.length : 0}.
+        </p>
+        {#if preview.total === 0}<p role="status">No matrix rows found for the selected hierarchy.</p>{/if}
+        <div class="table-scroll">
+          <table data-matrix-table>
+            <caption>Subzone/Association Matrix: {hierarchy}</caption>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                {#each preview.columns as column}<th scope="col">{column}</th>{/each}
+              </tr>
+            </thead>
+            <tbody>
+              {#each preview.rows as row, index}
+                <tr aria-label={`Association row ${preview.offset + index + 1}`}>
+                  <th scope="row">{matrixCellText(row.name)}</th>
+                  {#each row.values as value}<td>{matrixCellText(value)}</td>{/each}
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+        <div class="actions">
+          <button
+            type="button"
+            data-matrix-previous
+            disabled={busy || barrier || preview.offset === 0}
+            onclick={() => show(Math.max(0, preview!.offset - limit))}
+          >
+            Previous matrix rows
+          </button>
+          <button
+            type="button"
+            data-matrix-next
+            disabled={busy || barrier || preview.offset + limit >= preview.total}
+            onclick={() => show(preview!.offset + limit)}
+          >
+            Next matrix rows
+          </button>
+        </div>
+      {/if}
+    {/snippet}
+  </CompactReportShell>
 </section>
 
 <style>
@@ -370,52 +402,48 @@
     background: var(--vpro-canvas);
     color: var(--vpro-ink);
   }
-  .report-sticky-bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding-inline: 0.75rem;
-    border-radius: 0.35rem;
-  }
-  .report-sticky-bar h1 {
+  .provenance-inline {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: 0.65rem;
     margin: 0;
-    color: var(--vpro-navy);
+    font-size: 0.82rem;
   }
-  .report-sticky-bar .actions {
-    margin-block: 0;
+  .provenance-inline dt {
+    font-weight: 600;
+    color: var(--vpro-navy);
   }
   .actions {
     display: flex;
     flex-wrap: wrap;
     align-items: end;
     gap: 0.75rem;
-    margin-block: 1rem;
+    margin-block: 0.5rem;
   }
+  .btn-secondary,
   button {
-    min-height: 2.5rem;
-    padding: 0.5rem 0.85rem;
+    min-height: 2.35rem;
+    padding: 0.42rem 0.75rem;
     border: 1px solid var(--vpro-navy);
     border-radius: 0.25rem;
-    background: var(--vpro-navy);
-    color: var(--vpro-surface);
+    background: var(--vpro-surface);
+    color: var(--vpro-navy);
     font-weight: 600;
+    font-size: 0.82rem;
     cursor: pointer;
-  }
-  button:hover:not(:disabled) {
-    background: var(--vpro-navy-dark);
-    border-color: var(--vpro-navy-dark);
   }
   button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
   }
-  .provenance,
   .workbook {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 0.5rem;
+    padding: 0.85rem;
+    background: var(--vpro-surface);
+    border: 1px solid var(--vpro-border);
+    border-radius: 0.4rem;
   }
   dd {
     margin: 0;
@@ -459,19 +487,7 @@
     font-weight: 600;
     color: var(--vpro-navy);
   }
-  .workbook {
-    margin-block: 1rem;
-    padding: 1rem;
-    background: var(--vpro-surface);
-    border: 1px solid var(--vpro-border);
-    border-radius: 0.5rem;
-  }
   .workbook button {
     justify-self: start;
-  }
-  .guidance {
-    margin-block-start: 1rem;
-    font-size: 0.9rem;
-    color: var(--vpro-ink-secondary);
   }
 </style>
