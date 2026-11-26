@@ -600,6 +600,9 @@ func (c *SqliteContext) createViews(ctx context.Context) error {
 			return err
 		}
 	}
+	if err := c.ensureOptionalMensurationViewsLocked(ctx); err != nil {
+		return err
+	}
 	for _, entry := range []struct {
 		view            string
 		fields, filters []string

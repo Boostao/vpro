@@ -148,8 +148,15 @@ func checkDatasheetColumnEditPermission(tableKey string, colMeta DatasheetColumn
 
 func isRequiredNonNullDatasheetColumn(tableKey, colName string) bool {
 	switch tableKey {
-	case "Env", "Humus", "Mineral", "Other":
+	case "Env", "Humus", "Mineral", "Other", "Trees":
 		return colName == "PlotNumber"
+	case "TreePlot":
+		switch colName {
+		case "PlotNumber", "SubPlot", "MeasurementID", "CruisePlot", "CWDPlot", "WildlifePlot", "InformalPlot", "SiteIndexPlot":
+			return true
+		default:
+			return false
+		}
 	case "Admin":
 		return colName == "Plot"
 	case "Veg":
@@ -248,6 +255,7 @@ func validateDatasheetTextConstraints(tableKey string, colMeta DatasheetColumnMe
 func isRequiredNonBlankDatasheetText(tableKey, colName string) bool {
 	return colName == "PlotNumber" || colName == "Plot" ||
 		(tableKey == "Veg" && colName == "Species") ||
+		(tableKey == "TreePlot" && colName == "SubPlot") ||
 		(tableKey == "Hierarchy" && colName == "Name")
 }
 
@@ -298,6 +306,9 @@ func validateDatasheetIntegerBounds(tableKey string, colMeta DatasheetColumnMeta
 	}
 	if tableKey == "Hierarchy" && colMeta.Name == "Level" && (num < 1 || num > 11) {
 		return fmt.Errorf("Hierarchy.Level must be between 1 and 11, got %d", num)
+	}
+	if tableKey == "Trees" && vprocore.TreesByteColumns[colMeta.Name] && (num < 0 || num > 255) {
+		return fmt.Errorf("Trees.%s must be between 0 and 255, got %d", colMeta.Name, num)
 	}
 	if vprocore.SoilChildIntegerColumns[tableKey][colMeta.Name] {
 		if err := vprocore.ValidateSoilChildField(tableKey, colMeta.Name, int(num)); err != nil {

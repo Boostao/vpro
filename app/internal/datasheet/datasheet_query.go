@@ -102,6 +102,41 @@ func listDatasheetTablesFiltered(ctx context.Context, contexts *vprocore.Context
 				}
 				out = append(out, info)
 			}
+			for _, opt := range resolveOptionalMensurationDatasheetTargets(owner) {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				exists, err := tableExistsInSnapshot(ctx, tx, opt.role, opt.tableName)
+				if err != nil {
+					return nil, err
+				}
+				if !exists {
+					continue
+				}
+				rawCols, err := vprocore.ReadSQLiteStorageColumns(ctx, tx, opt.role, opt.tableName)
+				if err != nil {
+					return nil, err
+				}
+				info := DatasheetTableInfo{
+					Key:          opt.key,
+					Label:        opt.label,
+					Role:         opt.role,
+					TableName:    opt.tableName,
+					PinnedColumn: opt.pinnedColumn,
+					Available:    true,
+					Editable:     !owner.ReadOnly && !opt.readOnly,
+					ReadOnly:     owner.ReadOnly || opt.readOnly,
+					Columns:      make([]DatasheetColumnMeta, 0, len(rawCols)),
+				}
+				for _, col := range rawCols {
+					info.Columns = append(info.Columns, classifyColumnMeta(opt.key, col, opt.pinnedColumn, canEditMaster))
+				}
+				relation := vprocore.QuoteHeaderIdentifier(opt.role) + "." + vprocore.QuoteHeaderIdentifier(opt.tableName)
+				if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+relation).Scan(&info.RowCount); err != nil {
+					return nil, err
+				}
+				out = append(out, info)
+			}
 			if err := vprocore.ProfileOwnedFiles(owner); err != nil {
 				return nil, err
 			}
@@ -168,7 +203,7 @@ func buildDatasheetWhereAndOrder(
 	if scopeToActiveSU && owner.Selection.SU != "None" && owner.Selection.SU != "" {
 		var plotCol string
 		switch target.key {
-		case "Env", "Veg", "Humus", "Mineral", "Other":
+		case "Env", "Veg", "Humus", "Mineral", "Other", "TreePlot", "Trees":
 			plotCol = "PlotNumber"
 		case "Admin":
 			plotCol = "Plot"
@@ -327,7 +362,7 @@ func buildDatasheetWhereAndOrder(
 		for _, colMeta := range columns {
 			qCol := `__t.` + vprocore.QuoteHeaderIdentifier(colMeta.Name)
 			if colMeta.Kind == "text" {
-				if colMeta.Name == "Species" || colMeta.Name == "PlotNumber" || colMeta.Name == "Plot" {
+				if colMeta.Name == "Species" || colMeta.Name == "TreeSpp" || colMeta.Name == "PlotNumber" || colMeta.Name == "Plot" {
 					priorityTextParts = append(priorityTextParts, qCol+likeExpr)
 				} else {
 					textOrParts = append(textOrParts, qCol+likeExpr)
@@ -414,6 +449,21 @@ func buildDatasheetWhereAndOrder(
 		} else if target.key == "Mineral" {
 			if _, ok := colLookup["upperdepth"]; ok {
 				orderParts = append(orderParts, `CASE WHEN __t."UpperDepth" IS NULL THEN 1 ELSE 0 END ASC`, `__t."UpperDepth" ASC`)
+			}
+		} else if target.key == "TreePlot" || target.key == "Trees" {
+			if _, ok := colLookup["subplot"]; ok {
+				qSub := orderPrefix + `__t."SubPlot"`
+				orderParts = append(orderParts, `CASE WHEN `+qSub+` IS NULL THEN 1 ELSE 0 END ASC`, qSub+` COLLATE NOCASE ASC`, qSub+` COLLATE BINARY ASC`)
+			}
+			if _, ok := colLookup["measurementid"]; ok {
+				qMid := orderPrefix + `__t."MeasurementID"`
+				orderParts = append(orderParts, `CASE WHEN `+qMid+` IS NULL THEN 1 ELSE 0 END ASC`, qMid+` ASC`)
+			}
+			if target.key == "Trees" {
+				if _, ok := colLookup["treenum"]; ok {
+					qTN := orderPrefix + `__t."TreeNum"`
+					orderParts = append(orderParts, `CASE WHEN `+qTN+` IS NULL THEN 1 ELSE 0 END ASC`, qTN+` ASC`)
+				}
 			}
 		}
 	}

@@ -232,7 +232,7 @@ func recordDatasheetRowAudits(
 		return 0, nil
 	}
 	canAudit := isProjectPlotFindReplaceTable(target.key)
-	if target.key == "SU" {
+	if target.key == "SU" || target.key == "TreePlot" || target.key == "Trees" {
 		var envMatch int
 		if err := wtx.QueryRowContext(ctx,
 			`SELECT COUNT(*) FROM main.`+vprocore.QuoteHeaderIdentifier(wtx.Project+"_Env")+
@@ -458,7 +458,7 @@ func ApplyDatasheetEdits(ctx context.Context, contexts *vprocore.ContextService,
 
 func plotColNameForDatasheetKey(tableKey string) string {
 	switch tableKey {
-	case "Env", "Veg", "Humus", "Mineral", "Other", "SU":
+	case "Env", "Veg", "Humus", "Mineral", "Other", "SU", "TreePlot", "Trees":
 		return "PlotNumber"
 	case "Admin":
 		return "Plot"

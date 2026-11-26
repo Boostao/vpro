@@ -235,6 +235,14 @@ func hierLabel(h string) string {
 	return h + "_Hierarchy (Classification Hierarchy)"
 }
 
+func resolveOptionalMensurationDatasheetTargets(owner *vprocore.SqliteContext) []resolvedDatasheetTarget {
+	p := owner.Selection.Project
+	return []resolvedDatasheetTarget{
+		{key: "TreePlot", label: p + "_TreePlot (Mensuration Plot)", role: "project", tableName: p + "_TreePlot", pinnedColumn: "PlotNumber", available: true},
+		{key: "Trees", label: p + "_Trees (Mensuration Trees)", role: "project", tableName: p + "_Trees", pinnedColumn: "PlotNumber", available: true},
+	}
+}
+
 func resolveExtendedDatasheetTargets(owner *vprocore.SqliteContext) []resolvedDatasheetTarget {
 	p := owner.Selection.Project
 	targets := resolveDatasheetTargets(owner)
@@ -246,12 +254,13 @@ func resolveExtendedDatasheetTargets(owner *vprocore.SqliteContext) []resolvedDa
 
 func findDatasheetTarget(owner *vprocore.SqliteContext, tableKey string) (resolvedDatasheetTarget, error) {
 	trimmed := strings.TrimPrefix(strings.TrimSpace(tableKey), "_")
-	for _, target := range resolveExtendedDatasheetTargets(owner) {
+	allTargets := append(resolveExtendedDatasheetTargets(owner), resolveOptionalMensurationDatasheetTargets(owner)...)
+	for _, target := range allTargets {
 		if strings.EqualFold(target.key, trimmed) {
 			return target, nil
 		}
 	}
-	return resolvedDatasheetTarget{}, fmt.Errorf("unsupported datasheet table key %q; expected one of %s, Audit, Metadata", tableKey, strings.Join(canonicalDatasheetKeys, ", "))
+	return resolvedDatasheetTarget{}, fmt.Errorf("unsupported datasheet table key %q; expected one of %s, Audit, Metadata, TreePlot, Trees", tableKey, strings.Join(canonicalDatasheetKeys, ", "))
 }
 
 // Known Access VP08 UTF-16 text field widths across all 9 canonical tables.
@@ -309,6 +318,17 @@ var datasheetUTF16Limits = map[string]map[string]int{
 	"Hierarchy": {
 		"Name": 255, "Tag": 255, "MyOrder": 255,
 	},
+	"TreePlot": {
+		"PlotNumber": 7, "SubPlot": 30, "MensurationID": 255,
+		"Zone": 10, "SubZone": 15, "FIZ": 2, "TreeSurveyor": 30,
+		"SeralStage": 255, "FSRegionDistrict": 7, "Location": 255,
+		"BECSiteUnit": 100, "SiteSeries": 5, "DataSource": 255,
+	},
+	"Trees": {
+		"PlotNumber": 7, "SubPlot": 30, "TreeSpp": 3, "AgeNote": 255,
+		"TreeOrigin": 1, "DamageType": 3, "DamageSeverity": 1,
+		"CrownClass": 1, "WildLifeUse": 17, "LiveDead": 255,
+	},
 }
 
 // Cover columns subject to IEEE-754 SINGLE (float32) narrowing before `< 100 Or Is Null`.
@@ -336,11 +356,13 @@ var datasheetBooleanColumns = map[string]map[string]bool{
 	"Other":     {"UserFlag1": true, "UserFlag2": true, "UserFlag3": true, "Flag": true},
 	"Lump":      {"Use": true},
 	"Hierarchy": {"Flag": true},
+	"TreePlot":  {"CruisePlot": true, "CWDPlot": true, "WildlifePlot": true, "InformalPlot": true, "SiteIndexPlot": true},
 }
 
 // Double-precision columns (not narrowed to float32).
 var datasheetDoubleColumns = map[string]map[string]bool{
-	"Env": {"Latitude": true, "Longitude": true},
+	"Env":   {"Latitude": true, "Longitude": true},
+	"Trees": {"CuVolume": true, "SPH": true, "BasalArea": true, "SiteIndex24": true, "SI50": true},
 }
 
 // 32-bit integer columns (default integer columns are INT16 unless listed here or declared INTEGER).
@@ -350,6 +372,8 @@ var datasheetInt32Columns = map[string]map[string]bool{
 	"Mineral":   {"ID": true},
 	"Other":     {"ID": true},
 	"Hierarchy": {"ID": true, "Parent": true},
+	"TreePlot":  {"MeasurementID": true, "StandAge": true, "StandAgeVPro": true},
+	"Trees":     {"SiteIndexID": true},
 }
 
 func classifyColumnMeta(tableKey string, col vprocore.ProjectMetadataColumn, pinnedColumn string, canEditMaster bool) DatasheetColumnMeta {
@@ -380,7 +404,8 @@ func classifyColumnMeta(tableKey string, col vprocore.ProjectMetadataColumn, pin
 		editable = false
 		protected = true
 	}
-	if (col.Name == "PlotNumber" && (tableKey == "Env" || tableKey == "Veg" || tableKey == "Humus" || tableKey == "Mineral" || tableKey == "Other" || tableKey == "SU")) ||
+	if (col.Name == "PlotNumber" && (tableKey == "Env" || tableKey == "Veg" || tableKey == "Humus" || tableKey == "Mineral" || tableKey == "Other" || tableKey == "SU" || tableKey == "TreePlot" || tableKey == "Trees")) ||
+		(tableKey == "TreePlot" && (col.Name == "SubPlot" || col.Name == "MeasurementID")) ||
 		(col.Name == "Plot" && tableKey == "Admin") ||
 		(col.Name == "SppCode" && tableKey == "Lump") {
 		editable = false

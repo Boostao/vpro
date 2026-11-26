@@ -98,7 +98,7 @@ func loadLockedPlotsForFindReplace(ctx context.Context, tx *sql.Tx, project stri
 
 func isProjectPlotFindReplaceTable(key string) bool {
 	switch key {
-	case "Env", "Admin", "Veg", "Humus", "Mineral", "Other":
+	case "Env", "Admin", "Veg", "Humus", "Mineral", "Other", "TreePlot", "Trees":
 		return true
 	default:
 		return false

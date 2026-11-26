@@ -21,6 +21,10 @@ type DeleteTwoPageVegetationResult = twopagepkg.DeleteTwoPageVegetationResult
 type DeletedTwoPageVegetationEntry = twopagepkg.DeletedTwoPageVegetationEntry
 type RestoreTwoPageVegetationRequest = twopagepkg.RestoreTwoPageVegetationRequest
 type RestoreTwoPageVegetationResult = twopagepkg.RestoreTwoPageVegetationResult
+type TreePlotRecord = vprocorepkg.TreePlotRecord
+type TreeRowRecord = vprocorepkg.TreeRowRecord
+type PlotMensurationData = vprocorepkg.PlotMensurationData
+type EnsureMensurationTablesResult = vprocorepkg.EnsureMensurationTablesResult
 
 type referenceCatalogBundle struct {
 	references     *referencespkg.ReferenceService
@@ -123,6 +127,7 @@ type PlotEntryService struct {
 	twoPageVegetationSpeciesList *twopagepkg.TwoPageVegetationSpeciesListService
 	twoPageSourceAudit           *twopagepkg.TwoPageSourceAuditService
 	twoPageProjectMetadata       *classificationpkg.TwoPageProjectMetadataService
+	mensuration                  *plotentry.MensurationService
 	references                   *referencespkg.ReferenceService
 	siteCodes                    *referencespkg.SiteCodeService
 	soilCodes                    *referencespkg.SoilCodeService
@@ -251,6 +256,10 @@ func buildPlotEntryService(contexts *ContextService, plots *vprocorepkg.PlotServ
 	if err != nil {
 		return PlotEntryService{}, err
 	}
+	mensuration, err := plotentry.NewMensurationService(core)
+	if err != nil {
+		return PlotEntryService{}, err
+	}
 
 	return PlotEntryService{
 		contexts:                     contexts,
@@ -272,6 +281,7 @@ func buildPlotEntryService(contexts *ContextService, plots *vprocorepkg.PlotServ
 		twoPageVegetationSpeciesList: twoPageVegetationSpeciesList,
 		twoPageSourceAudit:           twoPageSourceAudit,
 		twoPageProjectMetadata:       twoPageProjectMetadata,
+		mensuration:                  mensuration,
 		references:                   refBundle.references,
 		siteCodes:                    refBundle.siteCodes,
 		soilCodes:                    refBundle.soilCodes,
@@ -662,4 +672,60 @@ func (s *PlotEntryService) UpdateVegetationSpecies(ctx context.Context, plot str
 		return err
 	}
 	return plots.UpdateVegetationSpecies(plot, updates)
+}
+
+// Mensuration 4th FS882 Card delegates (_TreePlot & _Trees)
+
+func (s *PlotEntryService) GetPlotMensuration(ctx context.Context, contextID, plot string) (*PlotMensurationData, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.mensuration == nil {
+		return nil, errors.New("mensuration service is unavailable")
+	}
+	return s.mensuration.GetPlotMensuration(ctx, contextID, plot)
+}
+
+func (s *PlotEntryService) EnsureMensurationTables(ctx context.Context, contextID string) (*EnsureMensurationTablesResult, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.mensuration == nil {
+		return nil, errors.New("mensuration service is unavailable")
+	}
+	return s.mensuration.EnsureMensurationTables(ctx, contextID)
+}
+
+func (s *PlotEntryService) SaveTreePlot(ctx context.Context, contextID string, record TreePlotRecord) (*TreePlotRecord, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.mensuration == nil {
+		return nil, errors.New("mensuration service is unavailable")
+	}
+	return s.mensuration.SaveTreePlot(ctx, contextID, record)
+}
+
+func (s *PlotEntryService) DeleteTreePlot(ctx context.Context, contextID, plot, subPlot string, measurementID int) error {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.mensuration == nil {
+		return errors.New("mensuration service is unavailable")
+	}
+	return s.mensuration.DeleteTreePlot(ctx, contextID, plot, subPlot, measurementID)
+}
+
+func (s *PlotEntryService) SaveTreeRow(ctx context.Context, contextID string, record TreeRowRecord) (*TreeRowRecord, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.mensuration == nil {
+		return nil, errors.New("mensuration service is unavailable")
+	}
+	return s.mensuration.SaveTreeRow(ctx, contextID, record)
+}
+
+func (s *PlotEntryService) DeleteTreeRow(ctx context.Context, contextID, plot, subPlot string, measurementID, treeNum int) error {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.mensuration == nil {
+		return errors.New("mensuration service is unavailable")
+	}
+	return s.mensuration.DeleteTreeRow(ctx, contextID, plot, subPlot, measurementID, treeNum)
 }
