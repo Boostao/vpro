@@ -536,6 +536,9 @@ func (s *ContextService) AttachWorkspaceResource(ctx context.Context, contextID 
 		resolved  string
 	)
 	if _, err := WithContextPlotRequest(ctx, s, contextID, func(plots *PlotService) (struct{}, error) {
+		if plots.Projects.Sqlite.ReadOnly {
+			return struct{}{}, ErrReadOnlyContext
+		}
 		root = plots.Projects.Root
 		prefs = plots.Projects.Preferences
 		curSel = plots.Projects.Sqlite.Selection
@@ -704,6 +707,9 @@ func (s *ContextService) UnattachWorkspaceResource(ctx context.Context, contextI
 		state  ProjectState
 	)
 	if _, err := WithContextPlotRequest(ctx, s, contextID, func(plots *PlotService) (struct{}, error) {
+		if plots.Projects.Sqlite.ReadOnly {
+			return struct{}{}, ErrReadOnlyContext
+		}
 		root = plots.Projects.Root
 		prefs = plots.Projects.Preferences
 		curSel = plots.Projects.Sqlite.Selection
@@ -925,6 +931,9 @@ func (s *ContextService) CreateWorkspaceResource(ctx context.Context, contextID 
 		curSel DesktopSelection
 	)
 	if _, err := WithContextPlotRequest(ctx, s, contextID, func(plots *PlotService) (struct{}, error) {
+		if plots.Projects.Sqlite.ReadOnly {
+			return struct{}{}, ErrReadOnlyContext
+		}
 		root = plots.Projects.Root
 		prefs = plots.Projects.Preferences
 		curSel = plots.Projects.Sqlite.Selection

@@ -272,3 +272,39 @@ func (s *ContextService) CreateWorkspaceResource(ctx context.Context, contextID 
 	}
 	return s.core.CreateWorkspaceResource(ctx, contextID, req)
 }
+
+func (s *ContextService) GetSpreadsheetAppPreference(ctx context.Context, contextID string) (SpreadsheetAppPreference, error) {
+	if err := requireContextArg(ctx); err != nil {
+		return SpreadsheetAppPreference{}, err
+	}
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.core == nil {
+		return SpreadsheetAppPreference{}, errors.New("project context is unavailable")
+	}
+	return s.core.GetSpreadsheetAppPreference(ctx, contextID)
+}
+
+func (s *ContextService) SetSpreadsheetAppPreference(ctx context.Context, contextID string, pref SpreadsheetAppPreference) (SpreadsheetAppPreference, error) {
+	if err := requireContextArg(ctx); err != nil {
+		return SpreadsheetAppPreference{}, err
+	}
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.core == nil {
+		return SpreadsheetAppPreference{}, errors.New("project context is unavailable")
+	}
+	return s.core.SetSpreadsheetAppPreference(ctx, contextID, pref)
+}
+
+func (s *ContextService) OpenReportInSpreadsheet(ctx context.Context, contextID, filePath string) error {
+	if err := requireContextArg(ctx); err != nil {
+		return err
+	}
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.core == nil {
+		return errors.New("project context is unavailable")
+	}
+	return s.core.OpenReportInSpreadsheet(ctx, contextID, filePath)
+}

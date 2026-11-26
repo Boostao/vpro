@@ -2,6 +2,7 @@ package vprocore
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -216,5 +217,31 @@ func TestWorkspaceResourcesCreateAttachUnattachPreservesDiskFiles(t *testing.T) 
 		return e.Kind == WorkspaceResourceProject && e.Name == "Sample" && e.Active && e.Managed
 	}) {
 		t.Fatalf("expected active managed Sample project in ListWorkspaceResources, got %+v", entries)
+	}
+}
+
+func TestWorkspaceResourcesFailClosedWhenReadOnly(t *testing.T) {
+	ctx := context.Background()
+	svc, state := openWorkspaceTestContext(t)
+	svc.Projects.Sqlite.ReadOnly = true
+
+	if _, err := svc.AttachWorkspaceResource(ctx, state.ContextID, AttachWorkspaceResourceRequest{
+		Kind: WorkspaceResourceProject,
+		Path: state.ProjectPath,
+	}); !errors.Is(err, ErrReadOnlyContext) {
+		t.Fatalf("expected AttachWorkspaceResource to fail with ErrReadOnlyContext, got %v", err)
+	}
+	if _, err := svc.UnattachWorkspaceResource(ctx, state.ContextID, UnattachWorkspaceResourceRequest{
+		Kind: WorkspaceResourceProject,
+		Name: "Sample",
+		Path: state.ProjectPath,
+	}); !errors.Is(err, ErrReadOnlyContext) {
+		t.Fatalf("expected UnattachWorkspaceResource to fail with ErrReadOnlyContext, got %v", err)
+	}
+	if _, err := svc.CreateWorkspaceResource(ctx, state.ContextID, CreateWorkspaceResourceRequest{
+		Kind: WorkspaceResourceSU,
+		Name: "ReadOnlySU",
+	}); !errors.Is(err, ErrReadOnlyContext) {
+		t.Fatalf("expected CreateWorkspaceResource to fail with ErrReadOnlyContext, got %v", err)
 	}
 }
