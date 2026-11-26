@@ -432,3 +432,179 @@ test('FS882Form preserves FS882EditorHandle exports and FieldCardPreviewModal / 
     0
   );
 });
+
+test('FS882CardMensuration avoids DataCloneError on Svelte 5 $state proxies and wires dirty/busy guards through FS882Controller, FS882WorkspaceBody, and ShellEntryHost', async () => {
+  const mensSrc = read('FS882CardMensuration.svelte');
+  const bodySrc = read('FS882WorkspaceBody.svelte');
+  const formSrc = read('FS882Form.svelte');
+  const hostSrc = readFileSync(srcPath('shell/ShellEntryHost.svelte'), 'utf8');
+
+  // 1. P1 #4: $state.raw for data + $state.snapshot before every structuredClone
+  assert.match(mensSrc, /let data = \$state\.raw<PlotMensurationData \| null>\(null\)/);
+  const bareCloneMatches = mensSrc.match(/structuredClone\((?!\$state\.snapshot\()/g);
+  assert.equal(bareCloneMatches, null, 'FS882CardMensuration must wrap $state.snapshot(...) before every structuredClone');
+
+  // Exercise hydrateFromPayload and selectHeaderByKey against non-cloneable Proxy objects
+  const mDraft = loadTypeScript('entry/mensurationDraft.ts');
+  const { componentFunctions } = require('./svelteTestHelpers.cjs');
+  const unwrapTag = Symbol('unwrap');
+  const wrapProxy = (obj) =>
+    new Proxy(obj, {
+      get(target, prop, receiver) {
+        if (prop === unwrapTag) return target;
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+  const headerA = wrapProxy({ plotNumber: '00337', subPlot: 'A', measurementId: 1, cruisePlot: true, cwdPlot: false, wildlifePlot: false, informalPlot: false, siteIndexPlot: false });
+  const headerB = wrapProxy({ plotNumber: '00337', subPlot: 'B', measurementId: 1, cruisePlot: false, cwdPlot: true, wildlifePlot: false, informalPlot: false, siteIndexPlot: false });
+  const tree1 = wrapProxy({ rowId: 10, plotNumber: '00337', subPlot: 'A', measurementId: 1, treeNum: 1, treeSpp: 'Fd' });
+
+  const mensCtx = componentFunctions('FS882CardMensuration.svelte', ['hydrateFromPayload', 'selectHeaderByKey'], {
+    structuredClone,
+    $state: {
+      snapshot: (v) => (v && typeof v === 'object' && v[unwrapTag] ? v[unwrapTag] : v),
+    },
+    plotNumber: '00337',
+    headerDraft: null,
+    data: null,
+    selectedHeaderKey: '',
+    headerEdit: null,
+    headerDirty: false,
+    treeDrafts: [],
+    dirtyTreeKeys: {},
+    expandedPathology: {},
+    errorMsg: null,
+    sortedHeaders: [headerA, headerB],
+    sortTreePlots: mDraft.sortTreePlots,
+    sortTreeRows: mDraft.sortTreeRows,
+    treePlotKey: mDraft.treePlotKey,
+    newEmptyTreePlotRecord: mDraft.newEmptyTreePlotRecord,
+  });
+
+  // Direct structuredClone(headerA) throws DataCloneError in Node; hydrateFromPayload and selectHeaderByKey must succeed
+  assert.throws(() => structuredClone(headerA));
+  mensCtx.actions.hydrateFromPayload({ plotNumber: '00337', hasTables: true, hasTreePlot: true, hasTrees: true, treePlots: [headerA, headerB], trees: [tree1], readOnly: false });
+  assert.equal(mensCtx.headerEdit.subPlot, 'A');
+  assert.equal(mensCtx.treeDrafts.length, 1);
+  mensCtx.actions.selectHeaderByKey('B::1');
+  assert.equal(mensCtx.headerEdit.subPlot, 'B');
+
+  // 2. P1 #5: ShellEntryHost wires onSelectPlot and onNewPlot into FS882Form updating editorPlotNumber & selected via requestTransition
+  assert.match(hostSrc, /<FS882Form[\s\S]*onSelectPlot=\{\(p\)\s*=>/);
+  assert.match(hostSrc, /<FS882Form[\s\S]*onNewPlot=\{\(\)\s*=>/);
+  assert.match(hostSrc, /onSelectPlot=\{\(p\)\s*=>[\s\S]*requestTransition[\s\S]*editorPlotNumber = p/);
+  assert.match(hostSrc, /onNewPlot=\{\(\)\s*=>[\s\S]*requestTransition[\s\S]*editorPlotNumber = undefined/);
+
+  // 3. P1 #6: FS882CardMensuration exposes onDirtyChange/onBusyChange, FS882WorkspaceBody wires them to ctrl,
+  //    FS882Form blocks tab/layout switch when Card 4 is dirty, and controller propagates mensurationDirty/Busy to effectiveFormDirty/busy/getCloseState
+  assert.match(mensSrc, /onDirtyChange\?:\s*\(dirty:\s*boolean\)\s*=>\s*void/);
+  assert.match(mensSrc, /onBusyChange\?:\s*\(busy:\s*boolean\)\s*=>\s*void/);
+  assert.match(bodySrc, /onDirtyChange=\{\(dirty\)\s*=>\s*\{\s*ctrl\.mensurationDirty = dirty;\s*\}\}/);
+  assert.match(bodySrc, /onBusyChange=\{\(busy\)\s*=>\s*\{\s*ctrl\.mensurationBusy = busy;\s*\}\}/);
+  assert.match(formSrc, /guardMensurationUnmount/);
+
+  const runtime = require('svelte/internal/client');
+  const busyEvents = [];
+  const mod = loadReactiveRuneModule('entry/fs882FormController.svelte.ts', {
+    './paperLayout': {
+      paperPage: () => ({ sections: [], controls: [] }),
+      paperChild: () => ({ sections: [], controls: [] }),
+      accessCaption: (s) => s ?? '',
+    },
+    './twoPageEntrySession': {
+      TwoPageEntrySession: class {},
+      twoPageEntryForms: ['FS882-8x6XL', 'FS882-8x6XL-CHARS'],
+    },
+    '../../bindings/github.com/boostao/vpro/app': {
+      ContextService: {
+        GetEditLockStatus: async () => ({
+          locked: false,
+          reason: '',
+          signedIn: true,
+          userId: 'u1',
+          displayName: 'User',
+          role: 'contributor',
+          identityProvider: 'dev',
+          canEditCurrentProject: true,
+          isBecMasterProject: false,
+          oidcConfigured: false,
+          devFallbackAvailable: true,
+        }),
+        GetPlotBundle: async () => ({
+          header: { plotNumber: '00337', generalLocation: 'Coast', locked: false },
+          headerCapabilities: { plotNumber: true, generalLocation: true, locked: true },
+          canEditMasterBEC: false,
+          childCapabilities: { Veg: {}, Humus: {}, Mineral: {}, Other: {} },
+          vegetation: { available: true, reason: '', records: [] },
+          humus: [],
+          mineral: [],
+          other: [],
+        }),
+      },
+      PlotEntryService: { GetListItems: async () => [] },
+    },
+  });
+
+  let ctrl;
+  const projectStateBox = runtime.state({
+    contextId: 'ctx-mens-1',
+    activeProject: 'Sample',
+    projectPath: 'Sample.db',
+    activeSU: 'None',
+    suPath: '',
+  });
+  const dispose = runtime.effect_root(() => {
+    ctrl = mod.createFS882Controller({
+      contextId: 'ctx-mens-1',
+      getEntryForm: () => 'fs882',
+      getPlotNumber: () => '00337',
+      getNeighborPlots: () => [],
+      getProjectState: () => runtime.get(projectStateBox),
+      setSuccess: () => {},
+      onBusyChange: (b) => busyEvents.push(b),
+    });
+  });
+
+  try {
+    runtime.flush();
+    await flushMicrotasks();
+    runtime.flush();
+
+    assert.equal(ctrl.effectiveFormDirty, false);
+    assert.equal(ctrl.getCloseState().unsaved, false);
+    assert.equal(ctrl.busy, false);
+
+    // Unsaved Card 4 edit marks effectiveFormDirty & getCloseState().unsaved, disables auto-save-on-close, and blocks toggleLock
+    ctrl.mensurationDirty = true;
+    runtime.flush();
+    assert.equal(ctrl.effectiveFormDirty, true);
+    const dirtyClose = ctrl.getCloseState();
+    assert.equal(dirtyClose.unsaved, true);
+    assert.equal(dirtyClose.canSave, false);
+    assert.match(dirtyClose.saveReason, /mensuration/i);
+
+    await ctrl.toggleLock();
+    assert.equal(ctrl.draft.locked, false, 'toggleLock must be blocked while Card 4 mensuration is dirty');
+    assert.match(ctrl.error ?? '', /mensuration/i);
+
+    // Card 4 saving/loading marks ctrl.busy, headerWorkflowBusy, tabWorkflowBusy, getCloseState().busy, and onBusyChange(true)
+    ctrl.mensurationBusy = true;
+    runtime.flush();
+    assert.equal(ctrl.busy, true);
+    assert.equal(ctrl.headerWorkflowBusy, true);
+    assert.equal(ctrl.tabWorkflowBusy, true);
+    assert.equal(ctrl.getCloseState().busy, true);
+    assert.equal(busyEvents.at(-1), true);
+
+    // Clearing both restores clean/idle state
+    ctrl.mensurationDirty = false;
+    ctrl.mensurationBusy = false;
+    runtime.flush();
+    assert.equal(ctrl.effectiveFormDirty, false);
+    assert.equal(ctrl.busy, false);
+    assert.equal(ctrl.getCloseState().unsaved, false);
+    assert.equal(ctrl.getCloseState().busy, false);
+  } finally {
+    dispose();
+  }
+});

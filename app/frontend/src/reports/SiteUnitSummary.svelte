@@ -244,6 +244,7 @@
     [error, busy] = ['', true];
     reportBusy();
     const hasFullRpc =
+      Boolean(su && su !== 'None') &&
       typeof EnvironmentReportService.GetFullSiteUnitSummaryPreferences === 'function' &&
       !!fullPreferences &&
       fullToken !== null;
@@ -268,7 +269,7 @@
     });
   }
   async function loadFullPreferences() {
-    if (workbookBusy || !fullPreferences || fullPreferenceView?.busy || fullPreferenceView?.blocked) return;
+    if (!su || su === 'None' || workbookBusy || !fullPreferences || fullPreferenceView?.busy || fullPreferenceView?.blocked) return;
     cancel();
     const [request, token] = [generation, fullPreferences.beginLoad()];
     [error, busy] = ['', true];
@@ -427,8 +428,10 @@
 
   onMount(() => {
     if (!preferences) void options();
-    else if (!preferenceView?.draft && !preferenceBarrier) void loadPreferences();
-    void quick.hydrateSummaryEnvQuickDraft(contextId, $state.snapshot(quickDraft)).then((next) => (quickDraft = next));
+    else if (!preferenceView?.draft && !preferenceBarrier && su && su !== 'None') void loadPreferences();
+    if (su && su !== 'None') {
+      void quick.hydrateSummaryEnvQuickDraft(contextId, $state.snapshot(quickDraft), su).then((next) => (quickDraft = next));
+    }
   });
   onDestroy(() => {
     unsubscribe?.();

@@ -274,6 +274,24 @@
               contextId={$projectState?.contextId ?? ''}
               entryForm={editorEntryForm}
               availablePlots={allAvailablePlots}
+              onSelectPlot={(p) => {
+                void requestTransition(async () => {
+                  const found = allAvailablePlots.find((item) => item.plotNumber === p) ?? null;
+                  selected = found;
+                  editorPlotNumber = p;
+                  view = 'fs882';
+                  error = '';
+                });
+              }}
+              onNewPlot={() => {
+                void requestTransition(async () => {
+                  selected = null;
+                  editorPlotNumber = undefined;
+                  editorEntryForm = 'fs882';
+                  view = 'fs882';
+                  error = '';
+                });
+              }}
               onSelectPlotForTwoPage={(p) => {
                 void requestTransition(async () => {
                   const found = allAvailablePlots.find((item) => item.plotNumber === p) ?? null;

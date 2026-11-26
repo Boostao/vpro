@@ -75,6 +75,7 @@
   let autoOpenedTwoPageKey = $state<string | null>(null);
   let navPlotOverride = $state<string | undefined | null>(null);
   let jumpedRecordIndex = $state<number | null>(null);
+  let pendingJump: { plotNumber: string; index: number } | null = null;
   let remoteTotalCount = $state<number | null>(null);
   let recordSearchFeedback = $state<string | null>(null);
   let lastPropPlotNumber: string | undefined = untrack(() => plotNumber);
@@ -84,7 +85,12 @@
     if (incoming !== lastPropPlotNumber) {
       lastPropPlotNumber = incoming;
       navPlotOverride = null;
-      jumpedRecordIndex = null;
+      if (pendingJump && incoming === pendingJump.plotNumber) {
+        jumpedRecordIndex = pendingJump.index;
+      } else {
+        jumpedRecordIndex = null;
+      }
+      pendingJump = null;
       recordSearchFeedback = null;
     }
   });
@@ -217,10 +223,18 @@
   function guardRecordSwitch(): boolean {
     if (ctrl.busy || ctrl.headerWorkflowBusy) return false;
     if (ctrl.effectiveFormDirty) {
-      ctrl.error = 'Save or Undo unsaved edits before switching records.';
+      ctrl.error = ctrl.mensurationDirty
+        ? 'Save or discard unsaved Card 4 mensuration edits before switching records.'
+        : 'Save or Undo unsaved edits before switching records.';
       return false;
     }
     return true;
+  }
+
+  function guardMensurationUnmount(nextWillShowMensuration: boolean, reason: string): boolean {
+    if (!ctrl.mensurationDirty || nextWillShowMensuration) return true;
+    ctrl.error = reason;
+    return false;
   }
 
   function navigateToPlot(targetPlot: string, knownIndex?: number) {
@@ -228,9 +242,11 @@
     recordSearchFeedback = null;
     ctrl.error = null;
     if (onSelectPlot) {
+      pendingJump = knownIndex != null ? { plotNumber: targetPlot, index: knownIndex } : null;
       jumpedRecordIndex = knownIndex ?? null;
       onSelectPlot(targetPlot);
     } else {
+      pendingJump = null;
       jumpedRecordIndex = knownIndex ?? null;
       navPlotOverride = targetPlot;
       if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
@@ -412,12 +428,28 @@
         onNewPlot={handleNewPlotRecord}
         onSearchPlot={(q) => void searchPlotByNumber(q)}
         onLayoutModeChange={(mode) => {
+          const showsMensuration =
+            mode === 'top-down' ||
+            mode === 'grid' ||
+            (mode === 'single' && ctrl.activeTab === 'mensuration') ||
+            (mode === 'side-by-side' && (ctrl.splitLeftCard === 'mensuration' || ctrl.splitRightCard === 'mensuration'));
+          if (!guardMensurationUnmount(showsMensuration, 'Save or discard unsaved Card 4 mensuration edits before changing layout.')) {
+            return;
+          }
           ctrl.layoutMode = mode;
         }}
         onLeftCardChange={(card) => {
+          const showsMensuration = card === 'mensuration' || ctrl.splitRightCard === 'mensuration';
+          if (!guardMensurationUnmount(showsMensuration, 'Save or discard unsaved Card 4 mensuration edits before hiding Card 4.')) {
+            return;
+          }
           ctrl.splitLeftCard = card;
         }}
         onRightCardChange={(card) => {
+          const showsMensuration = ctrl.splitLeftCard === 'mensuration' || card === 'mensuration';
+          if (!guardMensurationUnmount(showsMensuration, 'Save or discard unsaved Card 4 mensuration edits before hiding Card 4.')) {
+            return;
+          }
           ctrl.splitRightCard = card;
         }}
       />
@@ -534,6 +566,14 @@
             ? 'border-vpro-navy bg-vpro-navy text-white font-semibold'
             : 'border-vpro-border bg-white text-vpro-ink-secondary hover:text-vpro-ink hover:bg-vpro-canvas'}"
           onclick={() => {
+            if (
+              ctrl.layoutMode === 'single' &&
+              ctrl.activeTab === 'mensuration' &&
+              tab.id !== 'mensuration' &&
+              !guardMensurationUnmount(false, 'Save or discard unsaved Card 4 mensuration edits before switching tabs.')
+            ) {
+              return;
+            }
             ctrl.activeTab = tab.id;
             if (tab.sivi) ctrl.sivi.parentOpen = true;
           }}>{tab.label}</button

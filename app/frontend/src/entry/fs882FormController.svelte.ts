@@ -209,6 +209,8 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
   let metadataEditor = $state<{ getCloseState(): EditorCloseState; undo(): void }>();
   let error = $state<string | null>(null),
     dirty = $state(false),
+    mensurationDirty = $state(false),
+    mensurationBusy = $state(false),
     headerValidation = $state<Record<string, string>>({});
   let capabilities = $state<Record<string, boolean | undefined>>({}),
     capabilitiesReady = $state(false),
@@ -370,7 +372,8 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
       environmentSUOpen ||
       externalSUEnvironmentBusy ||
       externalSUEnvironmentBlocked ||
-      sivi.anyBusy
+      sivi.anyBusy ||
+      mensurationBusy
   );
   const otherHeaderWorkflowBusy = $derived(independentHeaderWorkflowBusy || twoPageOpen || twoPageBusy);
   const headerWorkflowBusy = $derived(
@@ -418,7 +421,8 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
       twoPageSoilBusy ||
       twoPageSoilBlocked ||
       twoPageVegetationBusy ||
-      twoPageVegetationBlocked
+      twoPageVegetationBlocked ||
+      mensurationDirty
   );
   const sourceHeaderValues = $derived(new Map(Object.entries(draft).map(([key, value]) => [key.toLowerCase(), value])));
   const snowCoverRegimeInput = $derived(draft.snowCoverRegime ?? '');
@@ -565,9 +569,10 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
           twoPageEditor?.getDraftState?.().unsaved ||
           twoPageSoilBlocked ||
           twoPageVegetationBlocked ||
-          sivi.pictureMetadataPending
+          sivi.pictureMetadataPending ||
+          mensurationDirty
         )
-      : dirty || childUnsaved;
+      : dirty || childUnsaved || mensurationDirty;
   });
   const isHeaderConflict = $derived(
     Boolean(
@@ -1105,6 +1110,8 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
     deps.setSuccess(null);
     activeLayerDepthRaw = null;
     dirty = false;
+    mensurationDirty = false;
+    mensurationBusy = false;
     headerValidation = {};
     if (!standaloneTwoPage || !p) {
       twoPageOpen = false;
@@ -1454,8 +1461,8 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
     if (override) return override;
     const invalid = Object.keys(headerValidation).length > 0 || children.hasInvalidDrafts();
     const invalidChild = Boolean(container?.querySelector('.source-child input:invalid'));
-    const saveReason = computeSaveReason({
-      busy,
+    const baseSaveReason = computeSaveReason({
+      busy: busy || mensurationBusy,
       headerWorkflowBusy,
       capabilitiesReady,
       locked: authEditLocked || draft.locked,
@@ -1465,6 +1472,9 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
       invalid,
       plotNumber: draft.plotNumber,
     });
+    const saveReason =
+      baseSaveReason ||
+      (mensurationDirty ? 'Save or discard unsaved Card 4 mensuration edits before closing.' : '');
     return {
       unsaved: dirty || childUnsaved || invalid || children.newChild !== null || invalidChild,
       busy: busy || headerWorkflowBusy,
@@ -1534,6 +1544,7 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
         [() => codeCheckOpen, 'Finish or close species-code review before changing the plot lock.'],
         [() => metadataOpen, 'Finish or close metadata review before changing the plot lock.'],
         [() => profileReviewBlocked, 'Finish profile drafts before changing the plot lock.'],
+        [() => mensurationDirty, 'Save or discard unsaved Card 4 mensuration edits before changing the plot lock.'],
       ]) ??
       sivi.lockBlockedReason() ??
       children.lockBlockedReason();
@@ -1613,10 +1624,22 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
       managePlotOpen = v;
     },
     get busy() {
-      return busy;
+      return busy || mensurationBusy;
     },
     set busy(v: boolean) {
       busy = v;
+    },
+    get mensurationDirty() {
+      return mensurationDirty;
+    },
+    set mensurationDirty(v: boolean) {
+      mensurationDirty = v;
+    },
+    get mensurationBusy() {
+      return mensurationBusy;
+    },
+    set mensurationBusy(v: boolean) {
+      mensurationBusy = v;
     },
     get coordinateBusy() {
       return coordinateBusy;

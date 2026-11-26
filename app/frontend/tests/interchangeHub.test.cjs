@@ -462,6 +462,27 @@ test('InterchangeHub plain-language error formatting strips RuntimeError, lstat 
   assert.doesNotMatch(host.error, /RuntimeError|unexpected EOF/);
   assert.match(host.error, /invalid XML formatting on line 1/);
   assert.equal(notifications.getSnapshot().entries[0].message, host.error);
+
+  // In IS_WEB_READONLY mode, non-busy errors preserve the real formatted server error instead of bare title,
+  // while 503 queue-busy errors still surface the friendly retry message.
+  const { writable } = require('svelte/store');
+  const webMetaMod = loadTypeScript('web/webMeta.ts', {
+    'svelte/store': { writable },
+    '../shared/state': { projectState: writable(null), webMeta: writable(null), webShellRuntime: writable(null) },
+    './runtimeMode': { IS_WEB_READONLY: true },
+  });
+  const webHost = componentFunctions('InterchangeHub.svelte', ['pushHubError'], {
+    IS_WEB_READONLY: true,
+    formatWebDownloadFeedback: webMetaMod.formatWebDownloadFeedback,
+    error: '',
+    notifications,
+  });
+  webHost.actions.pushHubError('GeoPackage export failed', new Error('No located plots found in active scope.'));
+  assert.match(webHost.error, /No located plots found in active scope\./);
+  assert.notEqual(webHost.error, 'GeoPackage export failed');
+
+  webHost.actions.pushHubError('GeoPackage export failed', new Error('HTTP 503 export worker pool is busy'));
+  assert.match(webHost.error, /wait a few seconds/i);
 });
 
 test('InterchangeHub replaces free-text lump inputs with discovered *_Lump selectors and passes cross-DB lumpDbPath (UX-IMPORT-004)', async () => {

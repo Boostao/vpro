@@ -126,10 +126,11 @@ test('Exact 8-menu architecture: Work Space toggle + Forms, Reports, Analysis, P
   assert.match(pmBlock, /Sign In &amp; Access/);
   assert.match(pmBlock, /User Log/);
 
-  // ShellDeferredViews routes 'quarto-unit-report' to RSidecarWorkbench with initialTab="quarto"
+  // ShellDeferredViews routes 'quarto-unit-report' to RSidecarWorkbench with initialTab="quarto" and standaloneQuartoMode={true}
   assert.match(deferredSrc, /view === 'quarto-unit-report'/);
   assert.match(deferredSrc, /import\('\.\.\/rsidecar\/RSidecarWorkbench\.svelte'\)/);
   assert.match(deferredSrc, /initialTab="quarto"/);
+  assert.match(deferredSrc, /standaloneQuartoMode=\{true\}/);
 });
 
 test('Work Space sidebar renders identical Project/SU/Hierarchy dropdown boxes with Attach/Remove/New, Access auto-convert confirmation, VPro64 export, and Auth status card', async () => {

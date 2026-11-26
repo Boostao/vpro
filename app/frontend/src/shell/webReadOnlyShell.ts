@@ -49,7 +49,7 @@ const WEB_ITEM_LABELS: Readonly<Record<string, string>> = {
   'View/Edit SIVI Data': 'View SIVI Data',
   'Enter/Edit SIVI Data': 'View SIVI Data',
   'Export to VPro64 & Interchange Hub': 'Export & Downloads Hub',
-  'Interchange Hub (VENUS 5, TurboVeg, RDS, GeoPackage)': 'Export & Downloads Hub (TurboVeg, CSV, R .rds, GeoPackage)',
+  'Interchange Hub (VPro64, TurboVeg, RDS, GeoPackage)': 'Export & Downloads Hub (TurboVeg, CSV, R .rds, GeoPackage)',
   'Combine Species': 'Combine Species (Read-Only)',
 };
 

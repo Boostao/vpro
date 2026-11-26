@@ -176,11 +176,12 @@
   }
 
   function pushHubError(title: string, rawMessage: unknown) {
+    const detail = hubOps.formatInterchangeError(rawMessage);
     const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
     error =
       webReadOnly && typeof formatWebDownloadFeedback === 'function'
-        ? formatWebDownloadFeedback(rawMessage, title)
-        : hubOps.formatInterchangeError(rawMessage);
+        ? formatWebDownloadFeedback(rawMessage, detail || title)
+        : detail;
     notifications.error(title, error, { category: 'background', source: 'Interchange Hub' });
   }
 

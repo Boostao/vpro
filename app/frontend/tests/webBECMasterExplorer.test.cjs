@@ -570,6 +570,7 @@ test('all Track 2E Svelte components compile cleanly with zero warnings and rend
     '../datasheet/UniversalDatasheetGrid.svelte',
     '../reports/SummaryVegetationReport.svelte',
     '../reports/LongVegetationReport.svelte',
+    '../reports/LifeformSummary.svelte',
     '../reports/SiteUnitSummary.svelte',
     '../reports/LongEnvironmentReport.svelte',
     '../reports/SubzoneMatrixReport.svelte',
@@ -578,6 +579,13 @@ test('all Track 2E Svelte components compile cleanly with zero warnings and rend
   ]) {
     assert.ok(explorerSrc.includes(`import('${lazyComp}')`), `Expected lazy import of ${lazyComp}`);
   }
+  // Verify all 6 compact reports + Quarto Unit Report are exposed and Quarto opens on tab 4 standalone mode
+  assert.match(explorerSrc, /id:\s*'lifeform-summary',\s*label:\s*'Lifeform & Species Attributes'/);
+  const quartoBranch = explorerSrc.match(/reportTab === 'quarto-unit'[\s\S]*?\{:else if activeTab === 'analysis'\}/)?.[0] ?? '';
+  assert.match(quartoBranch, /initialTab="quarto"/);
+  assert.match(quartoBranch, /standaloneQuartoMode=\{true\}/);
+  const analysisBranch = explorerSrc.slice(explorerSrc.indexOf("{:else if activeTab === 'analysis'}"));
+  assert.doesNotMatch(analysisBranch, /standaloneQuartoMode=\{true\}/);
   const drawerSrc = readSrc('web/WebPlotCardDrawer.svelte');
   assert.match(drawerSrc, /GetPlotBundle\(ctxId,\s*plot,\s*false\)/);
   assert.match(drawerSrc, /FieldCardPreviewModal/);

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { ChevronDown, ChevronRight, Database, Plus, Save, Trash2 } from '@lucide/svelte';
   import { PlotEntryService } from '../../bindings/github.com/boostao/vpro/app';
   import type {
@@ -30,17 +31,21 @@
     plotNumber,
     headerDraft = null,
     locked = false,
+    onDirtyChange,
+    onBusyChange,
   }: {
     contextId: string;
     plotNumber: string;
     headerDraft?: Partial<FS882Header> | null;
     locked?: boolean;
+    onDirtyChange?: (dirty: boolean) => void;
+    onBusyChange?: (busy: boolean) => void;
   } = $props();
 
   let loading = $state(false);
   let saving = $state(false);
   let errorMsg = $state<string | null>(null);
-  let data = $state<PlotMensurationData | null>(null);
+  let data = $state.raw<PlotMensurationData | null>(null);
   let selectedHeaderKey = $state<string>('');
   let headerEdit = $state<TreePlotRecord | null>(null);
   let headerDirty = $state(false);
@@ -50,9 +55,26 @@
   let loadGeneration = 0;
 
   const isReadOnly = $derived(IS_WEB_READONLY || locked || Boolean(data?.readOnly));
+  const hasUnsavedChanges = $derived(
+    !isReadOnly && (headerDirty || Object.values(dirtyTreeKeys).some(Boolean))
+  );
+  const isBusy = $derived(loading || saving);
   const sortedHeaders = $derived(sortTreePlots(data?.treePlots ?? []));
   const activeSubPlot = $derived(headerEdit?.subPlot ?? sortedHeaders[0]?.subPlot ?? 'A');
   const activeMeasurementId = $derived(headerEdit?.measurementId ?? sortedHeaders[0]?.measurementId ?? 1);
+
+  $effect(() => {
+    onDirtyChange?.(hasUnsavedChanges);
+  });
+
+  $effect(() => {
+    onBusyChange?.(isBusy);
+  });
+
+  onDestroy(() => {
+    onDirtyChange?.(false);
+    onBusyChange?.(false);
+  });
 
   const visibleTrees = $derived.by(() => {
     if (!headerEdit) return treeDrafts;
@@ -70,7 +92,7 @@
     const chosen = existingSelection ?? headers[0] ?? null;
     if (chosen) {
       selectedHeaderKey = treePlotKey(chosen);
-      headerEdit = structuredClone(chosen);
+      headerEdit = structuredClone($state.snapshot(chosen));
     } else if (payload?.hasTables && plotNumber.trim()) {
       const fresh = newEmptyTreePlotRecord(plotNumber.trim(), headerDraft, []);
       selectedHeaderKey = treePlotKey(fresh);
@@ -80,7 +102,7 @@
       headerEdit = null;
     }
     headerDirty = false;
-    treeDrafts = sortTreeRows(payload?.trees ?? []).map((r) => structuredClone(r));
+    treeDrafts = sortTreeRows(payload?.trees ?? []).map((r) => structuredClone($state.snapshot(r)));
     dirtyTreeKeys = {};
     expandedPathology = {};
   }
@@ -149,7 +171,7 @@
     const found = sortedHeaders.find((h) => treePlotKey(h) === key);
     if (!found) return;
     selectedHeaderKey = key;
-    headerEdit = structuredClone(found);
+    headerEdit = structuredClone($state.snapshot(found));
     headerDirty = false;
     errorMsg = null;
   }
@@ -271,7 +293,17 @@
     const row = treeDrafts[indexInDrafts];
     if (!row) return;
     if (!row.rowId) {
-      treeDrafts = treeDrafts.filter((_, i) => i !== indexInDrafts);
+      const nextDrafts = treeDrafts.filter((_, i) => i !== indexInDrafts);
+      const nextDirty: Record<string, boolean> = {};
+      for (let i = 0; i < nextDrafts.length; i++) {
+        const candidate = nextDrafts[i];
+        const nextKey = treeRowKey(candidate, i);
+        if (!candidate.rowId || dirtyTreeKeys[nextKey]) {
+          nextDirty[nextKey] = true;
+        }
+      }
+      treeDrafts = nextDrafts;
+      dirtyTreeKeys = nextDirty;
       return;
     }
     saving = true;

@@ -172,6 +172,7 @@
         activeProject: string;
         activeSu?: string;
         initialTab?: 'runtime' | 'edatopic' | 'clustering' | 'quarto';
+        standaloneQuartoMode?: boolean;
         operationHeld?: boolean;
         onBusyChange?: (busy: boolean) => void;
         oncontextswitched?: (state: unknown) => void;
@@ -181,6 +182,7 @@
         activeProject={$projectState.activeProject}
         activeSu={$projectState.activeSU}
         initialTab="quarto"
+        standaloneQuartoMode={true}
         operationHeld={panelHold}
         onBusyChange={(value) => {
           localEditorBusy = value;

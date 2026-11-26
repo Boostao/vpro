@@ -481,7 +481,7 @@ test('web read-only navigation & command palette exclude write/admin/audit/sync,
         {
           label: 'Import & Export',
           items: [
-            { name: 'Interchange Hub (VENUS 5, TurboVeg, RDS, GeoPackage)', view: 'interchange-hub' },
+            { name: 'Interchange Hub (VPro64, TurboVeg, RDS, GeoPackage)', view: 'interchange-hub' },
             { name: 'Cloud BECMaster Sync', action: 'cloud-sync' },
             { name: 'Project Table CSV Archive', view: 'table-csv' },
           ],
@@ -558,6 +558,15 @@ test('web read-only navigation & command palette exclude write/admin/audit/sync,
   assert.equal(viewsInPalette.has('geospatial-map'), true);
   assert.equal(viewsInPalette.has('diagnostic-synthesis'), true);
   assert.equal(viewsInPalette.has('interchange-hub'), true);
+
+  // Desktop command palette and webReadOnlyShell must use VPro64 instead of legacy VENUS 5 labels
+  assert.doesNotMatch(readSrc('shell/commandPalette.ts'), /VENUS 5/i);
+  assert.doesNotMatch(readSrc('shell/webReadOnlyShell.ts'), /VENUS 5/i);
+  const desktopPalette = commandPalette.buildCommandPaletteCatalog({ webReadOnly: false });
+  const interchangeItem = desktopPalette.find((i) => i.id === 'view-interchange');
+  assert.ok(interchangeItem);
+  assert.match(interchangeItem.title, /VPro64/);
+  assert.doesNotMatch(interchangeItem.title, /VENUS 5/i);
 });
 
 test('WebSnapshotProvenance compiles and renders snapshot ID, date, plot count, and 10 km rare-plant redaction notice', () => {

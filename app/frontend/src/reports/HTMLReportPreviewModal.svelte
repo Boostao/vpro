@@ -111,12 +111,13 @@
     background: var(--vpro-surface);
     border: 1px solid var(--vpro-border);
     border-radius: 6px;
-    display: grid;
-    grid-template-rows: auto auto 1fr;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
   }
   .html-modal-header {
+    flex: 0 0 auto;
     background: var(--vpro-navy);
     color: var(--vpro-surface);
     border-bottom: 4px solid var(--vpro-gold);
@@ -181,6 +182,7 @@
     background: rgba(255, 255, 255, 0.24);
   }
   .html-modal-notice {
+    flex: 0 0 auto;
     padding: 0.5rem 1.15rem;
     background: var(--vpro-canvas);
     border-bottom: 1px solid var(--vpro-border);
@@ -188,13 +190,15 @@
     font-size: 0.82rem;
   }
   .html-modal-body {
+    flex: 1 1 auto;
     min-height: 0;
-    height: 100%;
+    display: flex;
     background: var(--vpro-surface);
   }
   .html-report-iframe {
     width: 100%;
     height: 100%;
+    flex: 1 1 auto;
     border: 0;
     display: block;
     background: var(--vpro-surface);

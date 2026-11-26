@@ -163,8 +163,7 @@ test('CompactReportShell renders primary Export/Display actions, Auto Scope fall
   assert.match(webHtml, /Display Report/);
 });
 
-test('all 6 primary reports wire QuickRun*Workbook on desktop, allowlisted ExportReviewed* downloads in IS_WEB_READONLY, and Render*HTMLReport', async () => {
-  const path = require('node:path');
+test('all 6 primary reports wire QuickRun*Workbook on desktop and IS_WEB_READONLY (including SU=None and Quick Options), and Render*HTMLReport', async () => {
   const expectedWiring = [
     ['reports/SummaryVegetationReport.svelte', /exportSummaryVegSpreadsheet/, /RenderSummaryVegetationHTMLReport/],
     ['reports/LongVegetationReport.svelte', /exportLongVegSpreadsheet/, /RenderLongVegetationHTMLReport/],
@@ -180,7 +179,7 @@ test('all 6 primary reports wire QuickRun*Workbook on desktop, allowlisted Expor
     assert.match(src, htmlRe, `${rel} must call ${htmlRe}`);
   }
 
-  // 1. Desktop mode (!IS_WEB_READONLY) invokes all 6 QuickRun*Workbook RPCs
+  // 1. Desktop mode (!IS_WEB_READONLY) invokes all 6 QuickRun*Workbook RPCs with savePreferences=true, openInSpreadsheet=true
   const desktopCalls = [];
   const quickVegResult = {
     reportKind: 'veg', title: 'Veg', project: 'Sample', su: 'None', scopeLabel: 'All Plots',
@@ -195,19 +194,18 @@ test('all 6 primary reports wire QuickRun*Workbook on desktop, allowlisted Expor
   const desktopCompact = loadTypeScript('reports/compactReport.ts', {
     '../../bindings/github.com/boostao/vpro/app': { ContextService: {} },
     '../web/runtimeMode': { IS_WEB_READONLY: false },
-    '../web/webMeta': { formatWebDownloadFeedback: (e) => String(e) },
+    '../web/webMeta': { formatWebDownloadFeedback: (_c, fallback) => fallback },
   });
   const desktopRunners = loadTypeScript('reports/compactReportRunners.ts', {
     '../../bindings/github.com/boostao/vpro/app': {
       VegetationReportService: new Proxy({}, {
-        get: (_, m) => async (...args) => { desktopCalls.push(`VegetationReportService.${String(m)}`); return quickVegResult; },
+        get: (_, m) => async (_cid, req) => { desktopCalls.push([`VegetationReportService.${String(m)}`, req]); return quickVegResult; },
       }),
       EnvironmentReportService: new Proxy({}, {
-        get: (_, m) => async (...args) => { desktopCalls.push(`EnvironmentReportService.${String(m)}`); return quickEnvResult; },
+        get: (_, m) => async (_cid, req) => { desktopCalls.push([`EnvironmentReportService.${String(m)}`, req]); return quickEnvResult; },
       }),
     },
     '../shell/notificationService.svelte': { notifications: { success() {}, error() {} } },
-    '../shell/webReadOnlyShell': { defaultWebExportFilename: (s, ext) => `${s}${ext}` },
     '../web/runtimeMode': { IS_WEB_READONLY: false },
     './compactReport': desktopCompact,
   });
@@ -219,7 +217,7 @@ test('all 6 primary reports wire QuickRun*Workbook on desktop, allowlisted Expor
   await desktopRunners.exportSummaryEnvSpreadsheet('ctx-d', desktopRunners.DEFAULT_SUMMARY_ENV_QUICK, 'Sample', 'None');
   await desktopRunners.exportSubzoneMatrixSpreadsheet('ctx-d', 'CoastHier');
 
-  assert.deepEqual(desktopCalls, [
+  assert.deepEqual(desktopCalls.map(([m]) => m), [
     'VegetationReportService.QuickRunSummaryVegetationWorkbook',
     'VegetationReportService.QuickRunLongVegetationWorkbook',
     'VegetationReportService.QuickRunLifeformWorkbook',
@@ -227,67 +225,49 @@ test('all 6 primary reports wire QuickRun*Workbook on desktop, allowlisted Expor
     'EnvironmentReportService.QuickRunSummaryEnvironmentWorkbook',
     'EnvironmentReportService.QuickRunSubzoneMatrixWorkbook',
   ]);
+  for (const [, req] of desktopCalls) {
+    assert.equal(req.openInSpreadsheet, true);
+    assert.equal(req.destinationPath, undefined);
+    if ('savePreferences' in req) assert.equal(req.savePreferences, true);
+  }
 
-  // 2. Web read-only mode (IS_WEB_READONLY) NEVER invokes QuickRun*Workbook and strictly calls allowlisted RPCs
-  const allowlist = JSON.parse(
-    readFileSync(path.resolve(__dirname, '..', '..', 'resources', 'web_rpc_allowlist.json'), 'utf8')
-  );
+  // 2. Web read-only mode (IS_WEB_READONLY) invokes all 6 QuickRun*Workbook download RPCs with
+  //    savePreferences=false, openInSpreadsheet=false, destinationPath='', honoring Quick Options & ActiveSU="None"
   const webCalls = [];
-  const fakeHash = 'c'.repeat(64);
   const webCompact = loadTypeScript('reports/compactReport.ts', {
     '../../bindings/github.com/boostao/vpro/app': { ContextService: {} },
     '../web/runtimeMode': { IS_WEB_READONLY: true },
-    '../web/webMeta': { formatWebDownloadFeedback: (e) => String(e) },
+    '../web/webMeta': { formatWebDownloadFeedback: (_c, fallback) => fallback },
   });
   const webRunners = loadTypeScript('reports/compactReportRunners.ts', {
     '../../bindings/github.com/boostao/vpro/app': {
       VegetationReportService: new Proxy({}, {
-        get: (_, m) => async () => {
-          const name = String(m);
-          webCalls.push(['VegetationReportService', name]);
-          if (name.startsWith('QuickRun')) throw new Error(`HTTP 403 forbidden on vpro-web: ${name}`);
-          if (name.startsWith('ExportReviewed')) return { status: 'published', path: 'dl.xlsx', errorMessage: '' };
-          return {
-            approvalHash: fakeHash,
-            bytes: 2048,
-            scope: 'unlumped',
-            createdDate: '2026-11-26',
-            options: { title: 'SumVeg' },
-            details: [true, true, true, true, true, true],
-            preview: { units: [{}], memberships: [{}, {}], report: { units: [{ plots: [{}] }] } },
-            lifeform: { report: { units: [{ nPlots: 3 }] } },
-          };
+        get: (_, m) => async (_cid, req) => {
+          webCalls.push([`VegetationReportService.${String(m)}`, req]);
+          return { ...quickVegResult, preferencesSaved: false, openedInSpreadsheet: false };
         },
       }),
       EnvironmentReportService: new Proxy({}, {
-        get: (_, m) => async () => {
-          const name = String(m);
-          webCalls.push(['EnvironmentReportService', name]);
-          if (name.startsWith('QuickRun')) throw new Error(`HTTP 403 forbidden on vpro-web: ${name}`);
-          if (name.startsWith('ExportReviewed')) return { status: 'published', path: 'dl.xlsx', errorMessage: '' };
-          return {
-            approvalHash: fakeHash,
-            bytes: 2048,
-            options: { method: 1, orderBy: 2, includeSpecies: true, coverCalculation: 1, andOr: 1, presenceGreaterThan: 20, coverGreaterThan: 0 },
-            preview: { columns: ['CWH'], total: 4, report: { title: 'Long Env', units: [{ nPlots: 2, plots: [{}, {}] }] } },
-            environment: { report: { units: [{ nPlots: 2 }] } },
-          };
+        get: (_, m) => async (_cid, req) => {
+          webCalls.push([`EnvironmentReportService.${String(m)}`, req]);
+          return { ...quickEnvResult, preferencesSaved: false, openedInSpreadsheet: false };
         },
       }),
     },
     '../shell/notificationService.svelte': { notifications: { success() {}, error() {} } },
-    '../shell/webReadOnlyShell': { defaultWebExportFilename: (s, ext) => `${s}${ext}` },
     '../web/runtimeMode': { IS_WEB_READONLY: true },
     './compactReport': webCompact,
   });
 
+  const customSumVeg = { ...webRunners.DEFAULT_SUMMARY_VEG_QUICK, title: 'Custom Web Veg', showCommon: true, includeEnv: true };
+  const customLongVeg = { ...webRunners.DEFAULT_LONG_VEG_QUICK, grouping: 'strata', scopeMode: 'all-plots' };
+  const customSumEnv = { ...webRunners.DEFAULT_SUMMARY_ENV_QUICK, method: 2, orderBy: 2, includeSpecies: 1 };
   const webResults = [
-    await webRunners.exportSummaryVegSpreadsheet('ctx-w', webRunners.DEFAULT_SUMMARY_VEG_QUICK, 'BECMaster', 'Working'),
-    await webRunners.exportLongVegSpreadsheet('ctx-w', webRunners.DEFAULT_LONG_VEG_QUICK, 'BECMaster', 'Working'),
-    await webRunners.exportLifeformSpreadsheet('ctx-w', webRunners.DEFAULT_LIFEFORM_QUICK, 'BECMaster', 'Working'),
-    await webRunners.exportLongEnvSpreadsheet('ctx-w', webRunners.DEFAULT_LONG_ENV_QUICK, 'BECMaster', 'Working'),
-    await webRunners.exportSummaryEnvSpreadsheet('ctx-w', webRunners.DEFAULT_SUMMARY_ENV_QUICK, 'BECMaster', 'Working'),
-    await webRunners.exportSummaryEnvSpreadsheet('ctx-w', { ...webRunners.DEFAULT_SUMMARY_ENV_QUICK, orderBy: 2, includeSpecies: 1 }, 'BECMaster', 'Working'),
+    await webRunners.exportSummaryVegSpreadsheet('ctx-w', customSumVeg, 'Sample', 'None'),
+    await webRunners.exportLongVegSpreadsheet('ctx-w', customLongVeg, 'Sample', 'None'),
+    await webRunners.exportLifeformSpreadsheet('ctx-w', webRunners.DEFAULT_LIFEFORM_QUICK, 'Sample', 'None'),
+    await webRunners.exportLongEnvSpreadsheet('ctx-w', webRunners.DEFAULT_LONG_ENV_QUICK, 'Sample', 'None'),
+    await webRunners.exportSummaryEnvSpreadsheet('ctx-w', customSumEnv, 'Sample', 'None'),
     await webRunners.exportSubzoneMatrixSpreadsheet('ctx-w', 'CoastHier'),
   ];
 
@@ -295,25 +275,92 @@ test('all 6 primary reports wire QuickRun*Workbook on desktop, allowlisted Expor
     assert.equal(out.error, '');
     assert.ok(out.summary, 'web export should produce summary');
   }
-  assert.equal(webCalls.some(([, m]) => m.startsWith('QuickRun')), false, 'web mode must never call QuickRun*Workbook');
-  for (const [svc, method] of webCalls) {
-    assert.ok(
-      allowlist.services[svc] && allowlist.services[svc][method],
-      `${svc}.${method} must be present in web_rpc_allowlist.json`
-    );
+  assert.deepEqual(webCalls.map(([m]) => m), [
+    'VegetationReportService.QuickRunSummaryVegetationWorkbook',
+    'VegetationReportService.QuickRunLongVegetationWorkbook',
+    'VegetationReportService.QuickRunLifeformWorkbook',
+    'EnvironmentReportService.QuickRunLongEnvironmentWorkbook',
+    'EnvironmentReportService.QuickRunSummaryEnvironmentWorkbook',
+    'EnvironmentReportService.QuickRunSubzoneMatrixWorkbook',
+  ]);
+  for (const [method, req] of webCalls) {
+    assert.equal(req.openInSpreadsheet, false, `${method} must pass openInSpreadsheet: false in web mode`);
+    assert.equal(req.destinationPath, '', `${method} must pass destinationPath: '' in web mode`);
+    if ('savePreferences' in req) {
+      assert.equal(req.savePreferences, false, `${method} must pass savePreferences: false in web mode`);
+    }
   }
-  const calledMethods = webCalls.map(([svc, m]) => `${svc}.${m}`);
-  for (const expectedDownload of [
-    'VegetationReportService.ExportReviewedSummaryVegetationWorkbook',
-    'VegetationReportService.ExportReviewedVegetationWorkbook',
-    'VegetationReportService.ExportReviewedLifeformWorkbook',
-    'EnvironmentReportService.ExportReviewedEnvironmentWorkbook',
-    'EnvironmentReportService.ExportReviewedSiteUnitSummaryWorkbook',
-    'EnvironmentReportService.ExportReviewedSiteUnitSummaryExtendedWorkbook',
-    'EnvironmentReportService.ExportReviewedSubzoneMatrix',
-  ]) {
-    assert.ok(calledMethods.includes(expectedDownload), `expected web download call ${expectedDownload}`);
-  }
+  assert.equal(webCalls[0][1].title, 'Custom Web Veg');
+  assert.equal(webCalls[0][1].showCommon, true);
+  assert.equal(webCalls[1][1].grouping, 'strata');
+  assert.equal(webCalls[4][1].method, 2);
+  assert.equal(webCalls[4][1].includeSpecies, 1);
+});
+
+test('formatCompactReportError preserves real server errors in IS_WEB_READONLY while keeping 503 queue-busy messaging, and hydrateSummaryEnvQuickDraft skips SU=None', async () => {
+  const { writable } = require('svelte/store');
+  const webMetaMod = loadTypeScript('web/webMeta.ts', {
+    'svelte/store': { writable },
+    '../shared/state': { projectState: writable(null), webMeta: writable(null), webShellRuntime: writable(null) },
+    './runtimeMode': { IS_WEB_READONLY: true },
+  });
+  const webCompact = loadTypeScript('reports/compactReport.ts', {
+    '../../bindings/github.com/boostao/vpro/app': { ContextService: {} },
+    '../web/runtimeMode': { IS_WEB_READONLY: true },
+    '../web/webMeta': webMetaMod,
+  });
+
+  const realErr = webCompact.formatCompactReportError(
+    new Error('No plots matched the active Site Unit filter.'),
+    'Long Vegetation spreadsheet export'
+  );
+  assert.match(realErr, /No plots matched the active Site Unit filter\./);
+  assert.match(realErr, /Long Vegetation spreadsheet export/);
+
+  const busyErr = webCompact.formatCompactReportError(
+    new Error('HTTP 503 export worker pool is busy; please retry shortly'),
+    'Long Vegetation spreadsheet export'
+  );
+  assert.match(busyErr, /wait a few seconds/i);
+
+  // HTMLReportPreviewModal uses flex-column layout so iframe never collapses to 150px with 0/1/2 notices
+  const modalSrc = readFileSync(srcPath('reports/HTMLReportPreviewModal.svelte'), 'utf8');
+  assert.doesNotMatch(modalSrc, /grid-template-rows:\s*auto\s+auto\s+1fr/);
+  assert.match(modalSrc, /\.html-modal-dialog\s*\{[^}]*display:\s*flex;\s*flex-direction:\s*column;/);
+  assert.match(modalSrc, /\.html-modal-body\s*\{[^}]*flex:\s*1\s+1\s+auto;\s*min-height:\s*0;/);
+
+  // hydrateSummaryEnvQuickDraft skips GetFullSiteUnitSummaryPreferences when su is 'None' or empty
+  let prefCalls = 0;
+  const runners = loadTypeScript('reports/compactReportRunners.ts', {
+    '../../bindings/github.com/boostao/vpro/app': {
+      VegetationReportService: {},
+      EnvironmentReportService: {
+        GetFullSiteUnitSummaryPreferences: async () => {
+          prefCalls++;
+          return {
+            values: { method: 2, siteUnitType: 1, orderBy: 2, includeSpecies: 1, presenceGreaterThan: 40, coverGreaterThan: 5 },
+          };
+        },
+      },
+    },
+    '../shell/notificationService.svelte': { notifications: { success() {}, error() {} } },
+    '../web/runtimeMode': { IS_WEB_READONLY: true },
+    './compactReport': webCompact,
+  });
+
+  const noneRes = await runners.hydrateSummaryEnvQuickDraft('ctx-1', runners.DEFAULT_SUMMARY_ENV_QUICK, 'None');
+  assert.equal(prefCalls, 0);
+  assert.equal(noneRes.method, 1);
+
+  const emptyRes = await runners.hydrateSummaryEnvQuickDraft('ctx-1', runners.DEFAULT_SUMMARY_ENV_QUICK, '');
+  assert.equal(prefCalls, 0);
+  assert.equal(emptyRes.method, 1);
+
+  const activeRes = await runners.hydrateSummaryEnvQuickDraft('ctx-1', runners.DEFAULT_SUMMARY_ENV_QUICK, 'Sample');
+  assert.equal(prefCalls, 1);
+  assert.equal(activeRes.method, 2);
+  assert.equal(activeRes.orderBy, 2);
+  assert.equal(activeRes.includeSpecies, 1);
 });
 
 test('RSidecarWorkbench supports initialTab="quarto" and standaloneQuartoMode with instant HTML fallback', async () => {

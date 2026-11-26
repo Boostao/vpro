@@ -73,6 +73,12 @@
         plotNumber={currentPlotForCard4}
         headerDraft={ctrl.draft}
         locked={effectiveLocked}
+        onDirtyChange={(dirty) => {
+          ctrl.mensurationDirty = dirty;
+        }}
+        onBusyChange={(busy) => {
+          ctrl.mensurationBusy = busy;
+        }}
       />
     {/await}
   {/if}

@@ -46,6 +46,7 @@
   type ReportSubTab =
     | 'summary-veg'
     | 'long-veg'
+    | 'lifeform-summary'
     | 'summary-env'
     | 'long-env'
     | 'subzone-matrix'
@@ -632,6 +633,7 @@
           {#each [
             { id: 'summary-veg', label: 'Summary Vegetation' },
             { id: 'long-veg', label: 'Long Vegetation' },
+            { id: 'lifeform-summary', label: 'Lifeform & Species Attributes' },
             { id: 'summary-env', label: 'Site Unit Summary (Env)' },
             { id: 'long-env', label: 'Long Environment' },
             { id: 'subzone-matrix', label: 'Subzone Matrix' },
@@ -691,6 +693,23 @@
                 {:catch loadError}
                   <p role="alert" class="web-deferred-error">
                     Long Vegetation Report could not load: {formatError(loadError)}
+                  </p>
+                {/await}
+              {:else if reportTab === 'lifeform-summary'}
+                {#await import('../reports/LifeformSummary.svelte')}
+                  <p role="status" class="web-deferred-status">Loading Lifeform &amp; Species Attributes...</p>
+                {:then { default: LifeformSummary }}
+                  <LifeformSummary
+                    contextId={ctxState.contextId ?? ''}
+                    project={ctxState.activeProject}
+                    projectPath={ctxState.projectPath ?? ''}
+                    su={ctxState.activeSU}
+                    suPath={ctxState.suPath ?? ''}
+                    onBusyChange={noopBusy}
+                  />
+                {:catch loadError}
+                  <p role="alert" class="web-deferred-error">
+                    Lifeform &amp; Species Attributes could not load: {formatError(loadError)}
                   </p>
                 {/await}
               {:else if reportTab === 'summary-env'}
@@ -755,6 +774,8 @@
                       contextId={ctxState.contextId ?? ''}
                       activeProject={ctxState.activeProject}
                       activeSu={ctxState.activeSU}
+                      initialTab="quarto"
+                      standaloneQuartoMode={true}
                     />
                   {:catch loadError}
                     <p role="alert" class="web-deferred-error">

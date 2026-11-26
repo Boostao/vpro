@@ -210,11 +210,17 @@ export function triggerBrowserHTMLDownload(report: HTMLReportResult): boolean {
 }
 
 export function formatCompactReportError(cause: unknown, actionLabel: string): string {
+  const detail = formatError(cause);
   const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
   if (webReadOnly && typeof formatWebDownloadFeedback === 'function') {
-    return formatWebDownloadFeedback(cause, actionLabel);
+    const fallback = detail
+      ? actionLabel
+        ? `${actionLabel} failed: ${detail}`
+        : detail
+      : `${actionLabel || 'Report request'} failed.`;
+    return formatWebDownloadFeedback(cause, fallback);
   }
-  return formatError(cause);
+  return detail;
 }
 
 export function formatBytesCompact(bytes: number): string {

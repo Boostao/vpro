@@ -110,3 +110,37 @@ test('saved summary options reject stale, missing, malformed or guessed values',
     v=>v.siteUnitType=null,v=>v.siteUnitType='1',v=>v.siteUnitType=4
   ]) { const invalid=structuredClone(value);mutate(invalid);assert.throws(()=>check(invalid)); }
 });
+test('SiteUnitSummary guards GetFullSiteUnitSummaryPreferences when ActiveSU is None', async () => {
+  let fullPrefCalls = 0;
+  let shortPrefCalls = 0;
+  const ctx = componentFunctions('SiteUnitSummary.svelte', ['loadPreferences', 'loadFullPreferences'], {
+    su: 'None',
+    contextId: 'ctx-none',
+    project: 'Sample',
+    workbookBusy: false,
+    busy: false,
+    error: '',
+    generation: 0,
+    method: null,
+    siteUnitType: null,
+    ready: false,
+    preferenceView: { busy: false, blocked: false, draft: null },
+    fullPreferenceView: { busy: false, blocked: false, draft: null },
+    preferences: { beginLoad: () => 1, cancelLoad() {}, applyLoaded: () => true },
+    fullPreferences: { beginLoad: () => 1, cancelLoad() {}, applyLoaded: () => true },
+    reads: { track: (v) => v, cancelAll() {} },
+    cancel() { ctx.generation++; },
+    reportBusy() {},
+    applyFullPreferencesToUI() {},
+    EnvironmentReportService: {
+      GetFullSiteUnitSummaryPreferences: async () => { fullPrefCalls++; return null; },
+      GetSiteUnitSummaryPreferences: async () => { shortPrefCalls++; return null; },
+    },
+  });
+  await ctx.actions.loadPreferences();
+  await ctx.actions.loadFullPreferences();
+  assert.equal(fullPrefCalls, 0, 'must not call GetFullSiteUnitSummaryPreferences when su === None');
+  assert.equal(shortPrefCalls, 0, 'must not call GetSiteUnitSummaryPreferences when su === None');
+  const src = readFileSync(srcPath('SiteUnitSummary.svelte'), 'utf8');
+  assert.match(src, /hydrateSummaryEnvQuickDraft\(contextId,\s*\$state\.snapshot\(quickDraft\),\s*su\)/);
+});

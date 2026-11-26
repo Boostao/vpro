@@ -338,10 +338,10 @@ export function buildCommandPaletteCatalog(input: BuildCommandPaletteInput): Com
     },
     {
       id: 'view-interchange',
-      title: 'Interchange Hub (VENUS 5, TurboVeg, RDS, GeoPackage)',
+      title: 'Interchange Hub (VPro64, TurboVeg, RDS, GeoPackage)',
       subtitle: 'External ecological & GIS format import/export',
       badge: 'Export',
-      keywords: 'interchange import export venus turboveg rds geopackage gpkg csv',
+      keywords: 'interchange import export vpro64 turboveg rds geopackage gpkg csv',
       action: { kind: 'navigate-view', view: 'interchange-hub' },
     },
     {
