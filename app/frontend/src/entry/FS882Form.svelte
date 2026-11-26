@@ -1,15 +1,19 @@
 <script lang="ts">
-  import { AlertTriangle } from '@lucide/svelte';
+  import { AlertTriangle, Lock, LogIn } from '@lucide/svelte';
   import { untrack, type Snippet } from 'svelte';
+  import { ContextService } from '../../bindings/github.com/boostao/vpro/app';
   import { projectState } from '../shared/state';
   import { notifications } from '../shell/notificationService.svelte';
   import type { PlotProfileSelectionController } from '../shell/plotProfileOps';
+  import { IS_WEB_READONLY } from '../web/runtimeMode';
+  import FS882AccessRecordBar from './FS882AccessRecordBar.svelte';
   import FormValidationSummary from './FormValidationSummary.svelte';
   import FS882ManagePlotBar from './FS882ManagePlotBar.svelte';
   import type { FS882SubEditorLoaders } from './FS882Modals.svelte';
   import FS882Toolbar from './FS882Toolbar.svelte';
   import FS882TwoPagePlotPrompt from './FS882TwoPagePlotPrompt.svelte';
   import FS882WorkspaceBody from './FS882WorkspaceBody.svelte';
+  import './classicFS882.css';
   import type { FormValidationItem } from './formValidationSummary';
   import {
     createFS882Controller,
@@ -31,6 +35,8 @@
     initialProfileReviewOpen = false,
     onConsumedInitialProfileReview,
     onFindPlot,
+    onSelectPlot,
+    onNewPlot,
     onOpenPictureManager,
     onDiagnosticsContextChange,
     entryForm = 'fs882',
@@ -67,11 +73,28 @@
 
   let successMsg = $state<string | null>(null);
   let autoOpenedTwoPageKey = $state<string | null>(null);
+  let navPlotOverride = $state<string | undefined | null>(null);
+  let jumpedRecordIndex = $state<number | null>(null);
+  let remoteTotalCount = $state<number | null>(null);
+  let recordSearchFeedback = $state<string | null>(null);
+  let lastPropPlotNumber: string | undefined = untrack(() => plotNumber);
+
+  $effect(() => {
+    const incoming = plotNumber;
+    if (incoming !== lastPropPlotNumber) {
+      lastPropPlotNumber = incoming;
+      navPlotOverride = null;
+      jumpedRecordIndex = null;
+      recordSearchFeedback = null;
+    }
+  });
+
+  const effectivePlotNumber = $derived(navPlotOverride === null ? plotNumber : navPlotOverride);
 
   const ctrl = createFS882Controller({
     contextId: untrack(() => contextId),
     getEntryForm: () => entryForm,
-    getPlotNumber: () => plotNumber,
+    getPlotNumber: () => effectivePlotNumber,
     getNeighborPlots: () => neighborPlots,
     getProjectState: () => $projectState,
     setSuccess: (msg, markNotified = false) => {
@@ -94,6 +117,41 @@
   const nonParentChildUnsaved = $derived(ctrl.nonParentChildUnsaved);
   const childUnsaved = $derived(ctrl.childUnsaved);
   const nonArcticHeaderDirty = $derived(ctrl.nonArcticHeaderDirty);
+
+  const totalRecordCount = $derived(Math.max(availablePlots.length, remoteTotalCount ?? 0));
+  const currentRecordIndex = $derived.by(() => {
+    if (!effectivePlotNumber) return 0;
+    const idx = availablePlots.findIndex((p) => p.plotNumber === effectivePlotNumber);
+    if (idx >= 0) return idx + 1;
+    if (jumpedRecordIndex !== null) return jumpedRecordIndex;
+    return totalRecordCount > 0 ? 1 : 0;
+  });
+
+  $effect(() => {
+    const ctx = contextId;
+    const availLen = availablePlots.length;
+    if (!ctx || typeof ContextService?.ListPlots !== 'function') {
+      remoteTotalCount = null;
+      return;
+    }
+    if (availLen > 0 && availLen < 2000) {
+      remoteTotalCount = availLen;
+      return;
+    }
+    let cancelled = false;
+    void ContextService.ListPlots(0, 1)
+      .then((page) => {
+        if (!cancelled && page && typeof page.total === 'number') {
+          remoteTotalCount = page.total;
+        }
+      })
+      .catch(() => {
+        // Keep availablePlots.length fallback
+      });
+    return () => {
+      cancelled = true;
+    };
+  });
 
   $effect(() => {
     if (entryForm !== 'fs882-twopage') {
@@ -155,6 +213,114 @@
       contextTag: plot ? `Plot ${plot}` : undefined,
     });
   });
+
+  function guardRecordSwitch(): boolean {
+    if (ctrl.busy || ctrl.headerWorkflowBusy) return false;
+    if (ctrl.effectiveFormDirty) {
+      ctrl.error = 'Save or Undo unsaved edits before switching records.';
+      return false;
+    }
+    return true;
+  }
+
+  function navigateToPlot(targetPlot: string, knownIndex?: number) {
+    if (!guardRecordSwitch()) return;
+    recordSearchFeedback = null;
+    ctrl.error = null;
+    if (onSelectPlot) {
+      jumpedRecordIndex = knownIndex ?? null;
+      onSelectPlot(targetPlot);
+    } else {
+      jumpedRecordIndex = knownIndex ?? null;
+      navPlotOverride = targetPlot;
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('vpro:select-plot', { detail: { plotNumber: targetPlot } }));
+      }
+    }
+  }
+
+  async function jumpToRecordIndex(oneBasedIndex: number) {
+    if (!guardRecordSwitch()) return;
+    if (oneBasedIndex < 1 || (totalRecordCount > 0 && oneBasedIndex > totalRecordCount)) {
+      recordSearchFeedback = `Record must be between 1 and ${totalRecordCount.toLocaleString()}.`;
+      return;
+    }
+    if (oneBasedIndex <= availablePlots.length) {
+      const target = availablePlots[oneBasedIndex - 1];
+      if (target?.plotNumber) {
+        navigateToPlot(target.plotNumber, oneBasedIndex);
+        return;
+      }
+    }
+    if (typeof ContextService?.ListPlots === 'function') {
+      try {
+        const page = await ContextService.ListPlots(oneBasedIndex - 1, 1);
+        const target = page?.plots?.[0]?.plotNumber;
+        if (target) {
+          navigateToPlot(target, oneBasedIndex);
+          return;
+        }
+      } catch {
+        // Handled below
+      }
+    }
+    recordSearchFeedback = `Record #${oneBasedIndex} could not be loaded.`;
+  }
+
+  async function searchPlotByNumber(rawQuery: string) {
+    if (!guardRecordSwitch()) return;
+    const trimmed = rawQuery.trim();
+    if (!trimmed) return;
+    // Preserve exact literal PlotNumber including leading zeroes (e.g. '00337')
+    const exactRaw = availablePlots.find((p) => p.plotNumber === rawQuery);
+    if (exactRaw) {
+      navigateToPlot(exactRaw.plotNumber);
+      return;
+    }
+    const exactTrim = availablePlots.find((p) => p.plotNumber === trimmed);
+    if (exactTrim) {
+      navigateToPlot(exactTrim.plotNumber);
+      return;
+    }
+    const lower = trimmed.toLowerCase();
+    const ciMatch = availablePlots.find((p) => p.plotNumber.toLowerCase() === lower);
+    if (ciMatch) {
+      navigateToPlot(ciMatch.plotNumber);
+      return;
+    }
+    const prefixMatch = availablePlots.find((p) => p.plotNumber.startsWith(trimmed));
+    if (prefixMatch) {
+      navigateToPlot(prefixMatch.plotNumber);
+      return;
+    }
+    if (contextId && typeof ContextService?.LookupScopedPlot === 'function') {
+      try {
+        const res = await ContextService.LookupScopedPlot(contextId, { plotNumber: rawQuery });
+        if (res?.plot?.plotNumber) {
+          navigateToPlot(res.plot.plotNumber);
+          return;
+        }
+      } catch {
+        // Fall through to not found message
+      }
+    }
+    recordSearchFeedback = `Plot "${rawQuery}" not found.`;
+  }
+
+  function handleNewPlotRecord() {
+    if (IS_WEB_READONLY || ctrl.authEditLocked) return;
+    if (!guardRecordSwitch()) return;
+    recordSearchFeedback = null;
+    ctrl.error = null;
+    if (onNewPlot) {
+      onNewPlot();
+    } else if (onSwitchTo6x4NewPlot) {
+      onSwitchTo6x4NewPlot();
+    } else {
+      jumpedRecordIndex = null;
+      navPlotOverride = undefined;
+    }
+  }
 
   function loadSubEditor<T>(loader: () => Promise<T>, label: string, onFailed: () => void): Promise<T> {
     return ctrl.loadSubEditor(loader, label, onFailed);
@@ -222,9 +388,41 @@
   data-tour="fs882-form-root"
   class="fs882-container bg-white rounded-lg shadow border border-vpro-border flex flex-col h-full text-vpro-ink text-sm"
 >
-  {#if ctrl.standaloneTwoPage && !plotNumber && ctrl.original === null}
+  {#if ctrl.standaloneTwoPage && !effectivePlotNumber && ctrl.original === null}
     <FS882TwoPagePlotPrompt {availablePlots} {onClosed} {onSwitchTo6x4NewPlot} {onSelectPlotForTwoPage} />
   {:else}
+    {#if !siviStandalone}
+      <FS882AccessRecordBar
+        currentIndex={currentRecordIndex}
+        totalCount={totalRecordCount}
+        isNewPlot={!effectivePlotNumber && ctrl.original === null}
+        locked={ctrl.authEditLocked}
+        busy={ctrl.busy || headerWorkflowBusy}
+        unsaved={ctrl.effectiveFormDirty}
+        layoutMode={ctrl.layoutMode}
+        leftCard={ctrl.splitLeftCard}
+        rightCard={ctrl.splitRightCard}
+        showLayoutSwitcher={!ctrl.standaloneTwoPage}
+        searchFeedback={recordSearchFeedback}
+        onFirst={() => void jumpToRecordIndex(1)}
+        onPrev={() => void jumpToRecordIndex(Math.max(1, currentRecordIndex - 1))}
+        onNext={() => void jumpToRecordIndex(Math.min(totalRecordCount, currentRecordIndex + 1))}
+        onLast={() => void jumpToRecordIndex(totalRecordCount)}
+        onJumpToRecord={(idx) => void jumpToRecordIndex(idx)}
+        onNewPlot={handleNewPlotRecord}
+        onSearchPlot={(q) => void searchPlotByNumber(q)}
+        onLayoutModeChange={(mode) => {
+          ctrl.layoutMode = mode;
+        }}
+        onLeftCardChange={(card) => {
+          ctrl.splitLeftCard = card;
+        }}
+        onRightCardChange={(card) => {
+          ctrl.splitRightCard = card;
+        }}
+      />
+    {/if}
+
     <FS882Toolbar
       {ctrl}
       canManagePlot={Boolean(onCopyPlotToNumber || onRemovePlotAction)}
@@ -234,6 +432,32 @@
       onUndo={undo}
       onSave={() => void save()}
     />
+
+    {#if !IS_WEB_READONLY && ctrl.authEditLocked}
+      <div
+        role="status"
+        data-edit-lock-banner
+        class="classic-lock-banner px-3 py-1.5 bg-amber-50 border-b border-amber-300 text-amber-950 text-xs flex flex-wrap items-center justify-between gap-2"
+      >
+        <div class="flex items-center gap-1.5">
+          <Lock size={13} class="text-amber-800 shrink-0" aria-hidden="true" />
+          <span>
+            <strong>Data is locked (read-only).</strong>
+            {ctrl.editLock?.reason || 'Sign in from Work Space to edit.'}
+          </span>
+        </div>
+        <button
+          type="button"
+          data-open-signin-btn
+          class="inline-flex items-center gap-1 rounded bg-vpro-navy px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-vpro-navy-dark"
+          onclick={() => ctrl.requestSignIn()}
+        >
+          <LogIn size={12} aria-hidden="true" />
+          {ctrl.editLock?.signedIn ? 'Switch Account' : 'Sign In'}
+        </button>
+      </div>
+    {/if}
+
     <FS882ManagePlotBar
       bind:open={ctrl.managePlotOpen}
       originalPlotNumber={ctrl.original?.plotNumber}
@@ -246,6 +470,7 @@
         ctrl.error = msg;
       }}
     />
+
     {#if ctrl.error}
       <div
         role="alert"
@@ -283,27 +508,31 @@
         {/if}
       </div>
     {/if}
+
     {#if ctrl.children.vegetationReadUnavailable}
       <p role="alert" class="p-2 bg-amber-50 text-amber-900 text-sm" data-vegetation-unavailable>
         Ordinary ID-keyed vegetation is unavailable: {ctrl.children.vegetationReadUnavailable} Use independently enabled physical-row
         source views. Ordinary vegetation rows, totals and actions are not presented as an empty result.
       </p>
     {/if}
+
     <nav
       aria-label={siviStandalone ? 'SIVI sections' : 'FS882 sections'}
-      hidden={ctrl.standaloneTwoPage && twoPageOpen && twoPageScope === 'entry'}
-      class="fs882-tabs flex flex-wrap border-b border-vpro-border bg-vpro-surface-subtle px-3 text-xs font-medium"
+      hidden={(ctrl.standaloneTwoPage && twoPageOpen && twoPageScope === 'entry') ||
+        (!siviStandalone && ctrl.layoutMode !== 'single')}
+      class="fs882-tabs flex flex-wrap items-center gap-1 border-b border-vpro-border bg-vpro-surface-subtle px-2.5 py-1 text-xs font-medium"
     >
       {#each ctrl.visibleTabs as tab (tab.id)}
         <button
           type="button"
           data-sivi-site-tab={tab.sivi ? '' : undefined}
+          data-fs882-card-tab={tab.id}
           data-help-id={tab.helpId}
           aria-current={ctrl.activeTab === tab.id ? 'page' : undefined}
           disabled={tabWorkflowBusy}
-          class="px-4 py-2 border-b-2 {ctrl.activeTab === tab.id
-            ? 'border-vpro-navy text-vpro-navy font-bold bg-white'
-            : 'border-transparent text-vpro-ink-secondary hover:text-vpro-ink'}"
+          class="px-3 py-1 rounded border text-xs {ctrl.activeTab === tab.id
+            ? 'border-vpro-navy bg-vpro-navy text-white font-semibold'
+            : 'border-vpro-border bg-white text-vpro-ink-secondary hover:text-vpro-ink hover:bg-vpro-canvas'}"
           onclick={() => {
             ctrl.activeTab = tab.id;
             if (tab.sivi) ctrl.sivi.parentOpen = true;
@@ -311,16 +540,19 @@
         >
       {/each}
     </nav>
+
     <FormValidationSummary items={ctrl.validationSummaryItems} onjump={(item) => void handleValidationJump(item)} />
+
     {#snippet ordinaryHost(tabPanels: Snippet)}
       <div hidden={twoPageOpen} data-two-page-ordinary-host>{@render tabPanels()}</div>
     {/snippet}
+
     <FS882WorkspaceBody
       {ctrl}
       loaders={subEditorLoaders}
       {loadSubEditor}
       extendedShrubsNotice={EXTENDED_SHRUB_NOTICE}
-      expectedPlotNumber={plotNumber}
+      expectedPlotNumber={effectivePlotNumber}
       {onFindPlot}
       {onClosed}
       {onOpenPictureManager}

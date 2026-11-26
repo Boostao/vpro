@@ -4,8 +4,13 @@ import {
   type FS882Header,
   type ProjectPlotProfileFilterRequest,
 } from '../../bindings/github.com/boostao/vpro/app';
-import type { PlotBundle } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
+import type { EditLockState, PlotBundle } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
 import type { projectState } from '../shared/state';
+import {
+  resolveVisibleCards,
+  type ClassicCardId,
+  type ClassicLayoutMode,
+} from './classicFS882Helpers';
 
 type ProjectStateValue = Parameters<Parameters<typeof projectState.subscribe>[0]>[0];
 import { onDestroy, tick, untrack } from 'svelte';
@@ -63,7 +68,7 @@ import { createFS882ChildWorkflows } from './useFS882ChildWorkflows.svelte';
 import { createSiviSessions } from './useSiviSessions.svelte';
 import type { WorkingUnitSession } from './workingUnitEditor';
 
-export type FS882TabId = 'site' | 'veg' | 'vegOther' | 'soils' | 'other' | 'audit' | 'siviParent';
+export type FS882TabId = 'site' | 'soils' | 'veg' | 'mensuration' | 'vegOther' | 'other' | 'audit' | 'siviParent';
 
 export interface FS882DiagnosticsState {
   plotNumber: string;
@@ -80,6 +85,8 @@ export interface FS882FormBaseProps {
   onClosed?: () => void;
   onBusyChange?: (busy: boolean) => void;
   onFindPlot?: () => void;
+  onSelectPlot?: (plotNumber: string) => void;
+  onNewPlot?: () => void;
   onProfileNavigation?: (proposal: ProjectPlotProfileFilterRequest, contextId: string) => Promise<void>;
   onProfileSUReview?: (proposal: ProjectPlotProfileFilterRequest, contextId: string) => Promise<void>;
   availablePlots?: AvailablePlotOption[];
@@ -102,11 +109,12 @@ export interface FS882ControllerDeps {
   onDiagnosticsContextChange?: (state: FS882DiagnosticsState) => void;
 }
 
-const FS882_TABS: readonly { id: FS882TabId; label: string; helpId?: string; sivi?: boolean }[] = [
-  { id: 'site', label: 'Site & Location', helpId: 'site.moisture_regime' },
-  { id: 'veg', label: 'Vegetation', helpId: 'veg.covers' },
+const FS882_TABS: readonly { id: FS882TabId; label: string; helpId?: string; sivi?: boolean; card?: boolean }[] = [
+  { id: 'site', label: 'Card 1: Site', helpId: 'site.moisture_regime', card: true },
+  { id: 'soils', label: 'Card 2: Soil', helpId: 'humus.upper_lower_depth', card: true },
+  { id: 'veg', label: 'Card 3: Vegetation', helpId: 'veg.covers', card: true },
+  { id: 'mensuration', label: 'Card 4: Mensuration', card: true },
   { id: 'vegOther', label: 'Veg Other', helpId: 'veg.species' },
-  { id: 'soils', label: 'Soils (Humus & Mineral)', helpId: 'humus.upper_lower_depth' },
   { id: 'other', label: 'Other Data' },
   { id: 'audit', label: 'Audit Trail' },
 ];
@@ -125,6 +133,27 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
   const workingUnitSession: WorkingUnitSession & { plot: string } = { mode: null, plot: '' };
 
   let activeTab = $state<FS882TabId>('site');
+  let layoutMode = $state<ClassicLayoutMode>('single');
+  let splitLeftCard = $state<ClassicCardId>('site');
+  let splitRightCard = $state<ClassicCardId>('soils');
+  let editLock = $state<EditLockState | null>(
+    IS_WEB_READONLY
+      ? {
+          locked: true,
+          reason: 'Web viewer is read-only.',
+          signedIn: false,
+          userId: '',
+          displayName: '',
+          role: '',
+          identityProvider: '',
+          canEditCurrentProject: false,
+          isBecMasterProject: false,
+          oidcConfigured: false,
+          devFallbackAvailable: false,
+        }
+      : null
+  );
+  let editLockRequest = 0;
   let fieldCardModalOpen = $state(false),
     fieldCardSplitOpen = $state(false);
   let vegetationMode = $state<VegetationMode>('initial');
@@ -396,8 +425,11 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
   const activeLayerDepthInput = $derived(
     activeLayerDepthRaw ?? (draft.activeLayerDepth == null ? '' : String(draft.activeLayerDepth))
   );
+  const authEditLocked = $derived(IS_WEB_READONLY || Boolean(editLock?.locked));
+  const visibleCards = $derived(resolveVisibleCards(layoutMode, activeTab, splitLeftCard, splitRightCard));
   const arcticInputsDisabled = $derived(
     IS_WEB_READONLY ||
+      authEditLocked ||
       draft.locked ||
       busy ||
       sivi.sourceBarrier ||
@@ -416,6 +448,7 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
   );
   const headerInputsDisabled = $derived(
     IS_WEB_READONLY ||
+      authEditLocked ||
       draft.locked ||
       busy ||
       sivi.sourceBarrier ||
@@ -435,6 +468,7 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
       parent.unsaved ||
       parent.busy ||
       Boolean(parent.blocked) ||
+      authEditLocked ||
       draft.locked ||
       busy ||
       dirty ||
@@ -455,6 +489,7 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
   const twoPageVegetationParentBlocked = $derived(twoPageLinkedParentBlocked || twoPageSoilBusy || twoPageSoilBlocked);
   const childParentDisabled = $derived(
     !capabilitiesReady ||
+      authEditLocked ||
       draft.locked ||
       busy ||
       headerWorkflowBusy ||
@@ -473,8 +508,10 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
   const auditGateReason = $derived(
     busy || headerWorkflowBusy || !capabilitiesReady
       ? 'Wait for the plot to finish loading or header workflow.'
-      : draft.locked
-        ? 'Unlock the plot before restoring fields.'
+      : authEditLocked
+        ? (editLock?.reason || 'Data is locked (read-only). Sign in from Work Space to edit.')
+        : draft.locked
+          ? 'Unlock the plot before restoring fields.'
         : dirty || Object.keys(headerValidation).length > 0
           ? 'Save valid header changes or Undo before restoring fields.'
           : 'Save the plot before restoring fields.'
@@ -629,6 +666,69 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
         : [],
     });
   });
+  async function refreshEditLock(ctxId = siviContextId): Promise<void> {
+    if (IS_WEB_READONLY) {
+      editLock = {
+        locked: true,
+        reason: 'Web viewer is read-only.',
+        signedIn: false,
+        userId: '',
+        displayName: '',
+        role: '',
+        identityProvider: '',
+        canEditCurrentProject: false,
+        isBecMasterProject: false,
+        oidcConfigured: false,
+        devFallbackAvailable: false,
+      };
+      return;
+    }
+    if (typeof ContextService?.GetEditLockStatus !== 'function') return;
+    const req = ++editLockRequest;
+    try {
+      const status = await ContextService.GetEditLockStatus(ctxId);
+      if (req !== editLockRequest) return;
+      if (status && typeof status === 'object' && typeof status.locked === 'boolean') {
+        editLock = status;
+      }
+    } catch {
+      if (req !== editLockRequest) return;
+      editLock = {
+        locked: true,
+        reason: 'Data is locked (read-only). Sign in from Work Space to edit.',
+        signedIn: false,
+        userId: '',
+        displayName: '',
+        role: '',
+        identityProvider: '',
+        canEditCurrentProject: false,
+        isBecMasterProject: false,
+        oidcConfigured: false,
+        devFallbackAvailable: false,
+      };
+    }
+  }
+
+  function requestSignIn() {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('vpro:open-signin'));
+    }
+  }
+
+  $effect(() => {
+    const activeCtx = pState?.contextId ?? siviContextId;
+    untrack(() => void refreshEditLock(activeCtx));
+    if (IS_WEB_READONLY || typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+      return;
+    }
+    const handleAuthChanged = () => {
+      void refreshEditLock(pState?.contextId ?? siviContextId);
+    };
+    window.addEventListener('vpro:auth-changed', handleAuthChanged);
+    return () => {
+      window.removeEventListener('vpro:auth-changed', handleAuthChanged);
+    };
+  });
   $effect(() => {
     const plot = deps.getPlotNumber();
     untrack(() => void load(plot));
@@ -639,18 +739,22 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
   });
   $effect(() => {
     const tab = activeTab;
+    const cards = visibleCards;
     const loadedPlot = original?.plotNumber ?? null;
     const isBusy = busy;
     if (standaloneTwoPage) return;
     untrack(() => {
-      if (tab === 'veg') {
+      if (tab === 'veg' || cards.has('veg')) {
         void children.ensureSpeciesReferencesLoaded();
         void children.ensureAttributeSuggestionsLoaded();
-      } else if (tab === 'vegOther') {
+      }
+      if (tab === 'vegOther') {
         void children.ensureAttributeSuggestionsLoaded();
-      } else if (tab === 'soils') {
+      }
+      if (tab === 'soils' || cards.has('soils')) {
         void children.ensureSoilSuggestionsLoaded();
-      } else if (tab === 'audit' && loadedPlot && !isBusy) {
+      }
+      if (tab === 'audit' && loadedPlot && !isBusy) {
         void children.loadAuditEntries(loadedPlot);
       }
     });
@@ -695,7 +799,7 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
     if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') {
       if (metadataOpen) return;
       event.preventDefault();
-      if (!draft.locked && !busy && !headerWorkflowBusy && capabilitiesReady && (dirty || childUnsaved)) void save();
+      if (!authEditLocked && !draft.locked && !busy && !headerWorkflowBusy && capabilitiesReady && (dirty || childUnsaved)) void save();
       return;
     }
     if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'p') {
@@ -1210,6 +1314,10 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
   }
 
   async function save() {
+    if (authEditLocked) {
+      error = editLock?.reason || 'Data is locked (read-only). Sign in from Work Space to edit.';
+      return;
+    }
     const blocked = firstMatch<string>([
       [
         () => sivi.sourceAuthorityUnknown,
@@ -1350,7 +1458,7 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
       busy,
       headerWorkflowBusy,
       capabilitiesReady,
-      locked: draft.locked,
+      locked: authEditLocked || draft.locked,
       ...sivi.saveReasonFields(),
       ...children.saveReasonFields(),
       invalidChild,
@@ -1416,6 +1524,10 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
   }
 
   async function toggleLock() {
+    if (authEditLocked) {
+      error = editLock?.reason || 'Data is locked (read-only). Sign in from Work Space to edit.';
+      return;
+    }
     const blocked =
       firstMatch<string>([
         [() => busy || headerWorkflowBusy, 'Wait for the current operation to finish before changing the plot lock.'],
@@ -1803,6 +1915,35 @@ export function createFS882Controller(deps: FS882ControllerDeps) {
     get isHeaderConflict() {
       return isHeaderConflict;
     },
+    get editLock() {
+      return editLock;
+    },
+    get authEditLocked() {
+      return authEditLocked;
+    },
+    get layoutMode() {
+      return layoutMode;
+    },
+    set layoutMode(v: ClassicLayoutMode) {
+      layoutMode = v;
+    },
+    get splitLeftCard() {
+      return splitLeftCard;
+    },
+    set splitLeftCard(v: ClassicCardId) {
+      splitLeftCard = v;
+    },
+    get splitRightCard() {
+      return splitRightCard;
+    },
+    set splitRightCard(v: ClassicCardId) {
+      splitRightCard = v;
+    },
+    get visibleCards() {
+      return visibleCards;
+    },
+    refreshEditLock,
+    requestSignIn,
     setExtendedShrubs,
     loadSubEditor,
     vegetationNotesTab,

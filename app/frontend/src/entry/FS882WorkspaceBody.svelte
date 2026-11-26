@@ -2,11 +2,12 @@
   import type { Snippet } from 'svelte';
   import type { ProjectPlotProfileFilterRequest } from '../../bindings/github.com/boostao/vpro/app';
   import type { PlotProfileSelectionController } from '../shell/plotProfileOps';
+  import FS882CardSite from './FS882CardSite.svelte';
+  import FS882CardSoil from './FS882CardSoil.svelte';
+  import FS882CardVeg from './FS882CardVeg.svelte';
   import FS882ChildCreateModal from './FS882ChildCreateModal.svelte';
   import FS882Modals, { type FS882SubEditorLoaders } from './FS882Modals.svelte';
-  import FS882SiteTab from './FS882SiteTab.svelte';
-  import FS882SoilTab from './FS882SoilTab.svelte';
-  import FS882VegTab from './FS882VegTab.svelte';
+  import type { ClassicCardId } from './classicFS882Helpers';
   import type { FS882Controller } from './fs882FormController.svelte';
 
   let {
@@ -40,169 +41,172 @@
     onAuditSuccess: (msg: string | null) => void;
     ordinaryHost: Snippet<[Snippet]>;
   } = $props();
+
+  const effectiveLocked = $derived(ctrl.authEditLocked || ctrl.draft.locked);
+  const currentPlotForCard4 = $derived(ctrl.original?.plotNumber ?? expectedPlotNumber ?? '');
 </script>
 
-{#snippet tabPanels()}
-  {#if ctrl.activeTab === 'site' && !ctrl.siviStandalone}
-    {#if ctrl.standaloneTwoPage && expectedPlotNumber}
-      <p role="status" class="p-4 text-xs text-vpro-ink-secondary" data-entry-loading="twopage-plot">
-        Loading plot {expectedPlotNumber}...
-      </p>
-    {:else if expectedPlotNumber && ctrl.original === null && ctrl.busy}
-      <p role="status" class="p-4 text-xs text-vpro-ink-secondary" data-entry-loading="site-plot">
-        Loading plot {expectedPlotNumber}...
-      </p>
-    {:else}
-      <FS882SiteTab
-        bind:draft={ctrl.draft}
-        original={ctrl.original}
-        capabilities={ctrl.capabilities}
-        headerInputsDisabled={ctrl.headerInputsDisabled}
-        bind:parentCodeBusy={ctrl.parentCodeBusy}
-        bind:coordinateBusy={ctrl.coordinateBusy}
-        bind:workingUnitBusy={ctrl.workingUnitBusy}
-        bind:qualityBusy={ctrl.qualityBusy}
-        bind:siteCodeBusy={ctrl.siteCodeBusy}
-        bind:regionCodeBusy={ctrl.regionCodeBusy}
-        bind:pictureBusy={ctrl.pictureBusy}
-        openProjectMetadata={ctrl.openProjectMetadata}
-        canOpenProjectMetadata={ctrl.canOpenProjectMetadata}
-        {onOpenPictureManager}
-        projectIds={ctrl.projectIdDatalist}
-        masterAllowed={ctrl.masterAllowed}
-        extendedShrubs={ctrl.extendedShrubs}
-        snowCoverRegime={ctrl.snowCoverRegimeInput}
-        activeLayerDepth={ctrl.activeLayerDepthInput}
-        snowCoverRegimeDisabled={ctrl.arcticInputsDisabled}
-        activeLayerDepthDisabled={ctrl.arcticInputsDisabled}
-        snowCoverRegimeError={ctrl.headerValidation.snowCoverRegime ?? null}
-        activeLayerDepthError={ctrl.headerValidation.activeLayerDepth ?? null}
-        onSnowCoverRegimeChange={ctrl.stageSnowCoverRegime}
-        onActiveLayerDepthChange={ctrl.stageActiveLayerDepth}
-        lists={ctrl.children.lists}
-        workingUnitSession={ctrl.workingUnitSession}
-        markDirty={ctrl.markDirty}
-        validateHeader={ctrl.validateHeader}
-        onError={(message) => {
-          ctrl.error = message;
-        }}
-        twoPageOpen={ctrl.twoPageOpen}
+{#snippet renderClassicCard(cardId: ClassicCardId)}
+  {#if cardId === 'site'}
+    <FS882CardSite
+      {ctrl}
+      {onOpenPictureManager}
+      pictureDisabled={ctrl.busy ||
+        ctrl.otherHeaderWorkflowBusy ||
+        !ctrl.capabilitiesReady ||
+        ctrl.dirty ||
+        ctrl.childUnsaved}
+      pictureMetadataDisabled={ctrl.busy ||
+        ctrl.otherHeaderWorkflowBusy ||
+        !ctrl.capabilitiesReady ||
+        (!ctrl.sivi.pictureMetadataPending && (ctrl.dirty || ctrl.childUnsaved))}
+      pictureMetadataSession={ctrl.sivi.pictureMetadataSession}
+    />
+  {:else if cardId === 'soils'}
+    <FS882CardSoil {ctrl} />
+  {:else if cardId === 'veg'}
+    <FS882CardVeg {ctrl} {extendedShrubsNotice} />
+  {:else if cardId === 'mensuration'}
+    {#await import('./FS882CardMensuration.svelte') then { default: FS882CardMensuration }}
+      <FS882CardMensuration
         contextId={ctrl.siviContextId}
-        headerRevision={ctrl.headerRevision}
-        activeProject={ctrl.pState?.activeProject ?? null}
-        pictureDisabled={ctrl.busy ||
-          ctrl.otherHeaderWorkflowBusy ||
-          !ctrl.capabilitiesReady ||
-          ctrl.dirty ||
-          ctrl.childUnsaved}
-        pictureMetadataDisabled={ctrl.busy ||
-          ctrl.otherHeaderWorkflowBusy ||
-          !ctrl.capabilitiesReady ||
-          (!ctrl.sivi.pictureMetadataPending && (ctrl.dirty || ctrl.childUnsaved))}
-        pictureMetadataSession={ctrl.sivi.pictureMetadataSession}
+        plotNumber={currentPlotForCard4}
+        headerDraft={ctrl.draft}
+        locked={effectiveLocked}
       />
-    {/if}
-  {:else if ctrl.activeTab === 'veg'}
-    <FS882VegTab
-      sivi={ctrl.sivi}
-      children={ctrl.children}
-      bind:draft={ctrl.draft}
-      original={ctrl.original}
-      capabilities={ctrl.capabilities}
-      bind:vegetationMode={ctrl.vegetationMode}
-      busy={ctrl.busy}
-      headerWorkflowBusy={ctrl.headerWorkflowBusy}
-      headerInputsDisabled={ctrl.headerInputsDisabled}
-      capabilitiesReady={ctrl.capabilitiesReady}
-      siviStandalone={ctrl.siviStandalone}
-      extendedShrubs={ctrl.extendedShrubs}
-      {extendedShrubsNotice}
-      siviContextId={ctrl.siviContextId}
-      activeProject={ctrl.pState?.activeProject ?? ''}
-      sourceHeaderValues={ctrl.sourceHeaderValues}
-      headerValidation={ctrl.headerValidation}
-      childParentDisabled={ctrl.childParentDisabled}
-      childUnsaved={ctrl.childUnsaved}
-      {onFindPlot}
-      markDirty={ctrl.markDirty}
-      validateHeader={ctrl.validateHeader}
-      vegetationNotesTab={ctrl.vegetationNotesTab}
-      openSpeciesCodeCheck={ctrl.openSpeciesCodeCheck}
-    />
-  {:else if ctrl.activeTab === 'soils' || ctrl.activeTab === 'vegOther' || ctrl.activeTab === 'other' || ctrl.activeTab === 'audit'}
-    <FS882SoilTab
-      activeTab={ctrl.activeTab}
-      children={ctrl.children}
-      bind:draft={ctrl.draft}
-      original={ctrl.original}
-      capabilities={ctrl.capabilities}
-      bind:soilCodeBusy={ctrl.soilCodeBusy}
-      bind:geologyCodeBusy={ctrl.geologyCodeBusy}
-      bind:parentCodeBusy={ctrl.parentCodeBusy}
-      bind:drainageBusy={ctrl.drainageBusy}
-      headerRevision={ctrl.headerRevision}
-      sourceHeaderValues={ctrl.sourceHeaderValues}
-      headerInputsDisabled={ctrl.headerInputsDisabled}
-      busy={ctrl.busy}
-      headerWorkflowBusy={ctrl.headerWorkflowBusy}
-      coordinateBusy={ctrl.coordinateBusy}
-      workingUnitBusy={ctrl.workingUnitBusy}
-      qualityBusy={ctrl.qualityBusy}
-      siteCodeBusy={ctrl.siteCodeBusy}
-      regionCodeBusy={ctrl.regionCodeBusy}
-      auditProject={ctrl.pState?.activeProject ?? ''}
-      {expectedPlotNumber}
-      auditBlocked={ctrl.childParentDisabled || ctrl.childUnsaved || Object.keys(ctrl.headerValidation).length > 0}
-      auditGateReason={ctrl.auditGateReason}
-      getLoadRequest={() => ctrl.loadRequest}
-      PlotService={ctrl.PlotService}
-      markDirty={ctrl.markDirty}
-      validateHeader={ctrl.validateHeader}
-      onAuditBusyChange={(val) => {
-        ctrl.busy = val;
-      }}
-      onAuditFeedback={(err, msg) => {
-        ctrl.error = err;
-        if (msg !== null || err === null) onAuditSuccess(msg);
-      }}
-      onRefreshAfterRestore={ctrl.refreshAfterRestore}
-      onRefreshFailure={(msg) => {
-        ctrl.capabilitiesReady = false;
-        ctrl.children.childRevision += 1;
-        ctrl.error = msg;
-      }}
-    />
+    {/await}
   {/if}
 {/snippet}
 
-{#if !ctrl.twoPageOpen || (!ctrl.siviStandalone && !(ctrl.standaloneTwoPage && ctrl.twoPageOpen && ctrl.twoPageScope === 'entry'))}
-  <div class="border-b border-vpro-border px-4 py-2 flex flex-wrap items-center gap-4">
-    {#if !ctrl.twoPageOpen}
-      <label class="inline-flex items-center gap-2 text-xs font-medium cursor-pointer" data-help-id="veg.covers">
-        <input
-          type="checkbox"
-          data-extended-shrubs
-          checked={ctrl.extendedShrubs}
-          disabled={ctrl.busy || ctrl.headerWorkflowBusy}
-          onchange={(event) => ctrl.setExtendedShrubs(event.currentTarget.checked)}
+{#snippet tabPanels()}
+  {#if ctrl.siviStandalone}
+    {#if ctrl.activeTab === 'veg'}
+      {#await import('./FS882VegTab.svelte') then { default: FS882VegTab }}
+        <FS882VegTab
+          sivi={ctrl.sivi}
+          children={ctrl.children}
+          bind:draft={ctrl.draft}
+          original={ctrl.original}
+          capabilities={ctrl.capabilities}
+          bind:vegetationMode={ctrl.vegetationMode}
+          busy={ctrl.busy}
+          headerWorkflowBusy={ctrl.headerWorkflowBusy}
+          headerInputsDisabled={ctrl.headerInputsDisabled}
+          capabilitiesReady={ctrl.capabilitiesReady}
+          siviStandalone={ctrl.siviStandalone}
+          extendedShrubs={ctrl.extendedShrubs}
+          {extendedShrubsNotice}
+          siviContextId={ctrl.siviContextId}
+          activeProject={ctrl.pState?.activeProject ?? ''}
+          sourceHeaderValues={ctrl.sourceHeaderValues}
+          headerValidation={ctrl.headerValidation}
+          childParentDisabled={ctrl.childParentDisabled}
+          childUnsaved={ctrl.childUnsaved}
+          {onFindPlot}
+          markDirty={ctrl.markDirty}
+          validateHeader={ctrl.validateHeader}
+          vegetationNotesTab={ctrl.vegetationNotesTab}
+          openSpeciesCodeCheck={ctrl.openSpeciesCodeCheck}
         />
-        Show extended shrub layers
-      </label>
+      {/await}
     {/if}
-    {#if !ctrl.siviStandalone}
-      <button
-        type="button"
-        data-sivi-parent-open
-        aria-pressed={ctrl.activeTab === 'siviParent'}
-        class="rounded border px-3 py-1 text-sm disabled:opacity-50"
-        disabled={ctrl.busy ||
-          ctrl.headerWorkflowBusy ||
-          ctrl.dirty ||
-          ctrl.nonParentChildUnsaved ||
-          !ctrl.sivi.parentSession}
-        onclick={() => void ctrl.sivi.showParentPanel()}>SIVI parent (read-only)</button
-      >
-    {/if}
+  {:else if ctrl.standaloneTwoPage && expectedPlotNumber}
+    <p role="status" class="p-4 text-xs text-vpro-ink-secondary" data-entry-loading="twopage-plot">
+      Loading plot {expectedPlotNumber}...
+    </p>
+  {:else if expectedPlotNumber && ctrl.original === null && ctrl.busy}
+    <p role="status" class="p-4 text-xs text-vpro-ink-secondary" data-entry-loading="site-plot">
+      Loading plot {expectedPlotNumber}...
+    </p>
+  {:else if ctrl.layoutMode === 'single' && (ctrl.activeTab === 'vegOther' || ctrl.activeTab === 'other' || ctrl.activeTab === 'audit')}
+    <div class="p-3">
+      {#await import('./FS882SoilTab.svelte') then { default: FS882SoilTab }}
+        <FS882SoilTab
+          activeTab={ctrl.activeTab}
+          children={ctrl.children}
+          bind:draft={ctrl.draft}
+          original={ctrl.original}
+          capabilities={ctrl.capabilities}
+          bind:soilCodeBusy={ctrl.soilCodeBusy}
+          bind:geologyCodeBusy={ctrl.geologyCodeBusy}
+          bind:parentCodeBusy={ctrl.parentCodeBusy}
+          bind:drainageBusy={ctrl.drainageBusy}
+          headerRevision={ctrl.headerRevision}
+          sourceHeaderValues={ctrl.sourceHeaderValues}
+          headerInputsDisabled={ctrl.headerInputsDisabled}
+          busy={ctrl.busy}
+          headerWorkflowBusy={ctrl.headerWorkflowBusy}
+          coordinateBusy={ctrl.coordinateBusy}
+          workingUnitBusy={ctrl.workingUnitBusy}
+          qualityBusy={ctrl.qualityBusy}
+          siteCodeBusy={ctrl.siteCodeBusy}
+          regionCodeBusy={ctrl.regionCodeBusy}
+          auditProject={ctrl.pState?.activeProject ?? ''}
+          {expectedPlotNumber}
+          auditBlocked={ctrl.childParentDisabled || ctrl.childUnsaved || Object.keys(ctrl.headerValidation).length > 0}
+          auditGateReason={ctrl.auditGateReason}
+          getLoadRequest={() => ctrl.loadRequest}
+          PlotService={ctrl.PlotService}
+          markDirty={ctrl.markDirty}
+          validateHeader={ctrl.validateHeader}
+          onAuditBusyChange={(val) => {
+            ctrl.busy = val;
+          }}
+          onAuditFeedback={(err, msg) => {
+            ctrl.error = err;
+            if (msg !== null || err === null) onAuditSuccess(msg);
+          }}
+          onRefreshAfterRestore={ctrl.refreshAfterRestore}
+          onRefreshFailure={(msg) => {
+            ctrl.capabilitiesReady = false;
+            ctrl.children.childRevision += 1;
+            ctrl.error = msg;
+          }}
+        />
+      {/await}
+    </div>
+  {:else}
+    <div class="classic-fs882-stage">
+      <div class="classic-fs882-layout" data-classic-layout={ctrl.layoutMode}>
+        {#if ctrl.layoutMode === 'single'}
+          {#if ctrl.activeTab === 'site' && !ctrl.siviStandalone}
+            {@render renderClassicCard('site')}
+          {:else if ctrl.activeTab === 'soils'}
+            {@render renderClassicCard('soils')}
+          {:else if ctrl.activeTab === 'veg'}
+            {@render renderClassicCard('veg')}
+          {:else if ctrl.activeTab === 'mensuration'}
+            {@render renderClassicCard('mensuration')}
+          {:else if !ctrl.siviStandalone}
+            {@render renderClassicCard('site')}
+          {/if}
+        {:else if ctrl.layoutMode === 'side-by-side'}
+          {@render renderClassicCard(ctrl.splitLeftCard)}
+          {@render renderClassicCard(ctrl.splitRightCard)}
+        {:else}
+          <!-- Top-Down and 2x2 Grid show all 4 FS882 Classic cards simultaneously -->
+          {@render renderClassicCard('site')}
+          {@render renderClassicCard('soils')}
+          {@render renderClassicCard('veg')}
+          {@render renderClassicCard('mensuration')}
+        {/if}
+      </div>
+    </div>
+  {/if}
+{/snippet}
+
+{#if ctrl.siviStandalone && !ctrl.twoPageOpen}
+  <div class="border-b border-vpro-border px-4 py-1.5 flex flex-wrap items-center gap-4">
+    <label class="inline-flex items-center gap-2 text-xs font-medium cursor-pointer" data-help-id="veg.covers">
+      <input
+        type="checkbox"
+        data-extended-shrubs
+        checked={ctrl.extendedShrubs}
+        disabled={ctrl.busy || ctrl.headerWorkflowBusy}
+        onchange={(event) => ctrl.setExtendedShrubs(event.currentTarget.checked)}
+      />
+      Show extended shrub layers
+    </label>
   </div>
 {/if}
 
@@ -234,6 +238,7 @@
     />
     {@render ordinaryHost(tabPanels)}
     <FS882ChildCreateModal region="newChild" children={ctrl.children} busy={ctrl.busy} error={ctrl.error} />
+    <FS882ChildCreateModal region="speciesModal" children={ctrl.children} />
   </div>
   {#if ctrl.fieldCardSplitOpen && ctrl.fieldCardViewModel}
     {#await import('./FieldCardPreviewModal.svelte') then { default: FieldCardPreviewModal }}
