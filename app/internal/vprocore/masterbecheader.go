@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"unicode/utf8"
 
@@ -24,6 +25,21 @@ func MasterBECAllowed(user string) bool {
 }
 
 func (s *PlotService) CanEditMasterBEC() bool {
+	if s == nil {
+		return false
+	}
+	enforced, provider := s.resolveEditLockPolicy()
+	if provider != nil {
+		snap := provider()
+		if snap.SignedIn && normalizeAuthRole(snap.Role) == AuthRoleCustodian {
+			return true
+		}
+		if enforced {
+			return false
+		}
+	} else if enforced {
+		return false
+	}
 	s.Mu.RLock()
 	defer s.Mu.RUnlock()
 	return MasterBECAllowed(s.CurrentUser)
@@ -94,16 +110,35 @@ func (s *PlotService) UserAccreditationStatus(ctx context.Context) (UserAccredit
 		sqliteCtx = projects.Sqlite
 		projects.Mu.RUnlock()
 	}
+	var status UserAccreditation
 	if sqliteCtx == nil {
 		master := MasterBECAllowed(user)
-		return UserAccreditation{
+		status = UserAccreditation{
 			UserName:           user,
 			Accredited:         master,
 			MasterBECAllowed:   master,
 			CanEditBECSiteUnit: master,
-		}, nil
+		}
+	} else {
+		var err error
+		status, err = sqliteCtx.LookupUserAccreditation(ctx, user)
+		if err != nil {
+			return UserAccreditation{}, err
+		}
 	}
-	return sqliteCtx.LookupUserAccreditation(ctx, user)
+	enforced, provider := s.resolveEditLockPolicy()
+	if enforced || provider != nil {
+		canMaster := s.CanEditMasterBEC()
+		if canMaster {
+			status.MasterBECAllowed = true
+			status.CanEditBECSiteUnit = true
+			status.Accredited = true
+		} else if enforced {
+			status.MasterBECAllowed = false
+			status.CanEditBECSiteUnit = false
+		}
+	}
+	return status, nil
 }
 
 var _ = sql.ErrNoRows
@@ -120,7 +155,7 @@ func validateMasterBECHeaderValues(h FS882Header, old *FS882Header, allowed bool
 		return nil
 	}
 	if !allowed {
-		return errors.New("BEC Master editing is restricted to the source-authorized user; use Working Unit instead")
+		return fmt.Errorf("%w: BEC Master editing is restricted to the source-authorized user; use Working Unit instead", ErrBECMasterPermissionRequired)
 	}
 	return sqlutil.ValidateSiteCodeText("BECSiteUnit", h.BECSiteUnit, 100)
 }
@@ -130,7 +165,7 @@ func (s *PlotService) validateMasterBECRestoreValue(table, column string, value 
 		return nil
 	}
 	if !s.CanEditMasterBEC() {
-		return errors.New("BEC Master restoration is restricted to the source-authorized user")
+		return fmt.Errorf("%w: BEC Master restoration is restricted to the source-authorized user", ErrBECMasterPermissionRequired)
 	}
 	return validateCodeRestoreValue(table, column, value, []BecHeaderField{masterBECHeaderField(FS882Header{})})
 }

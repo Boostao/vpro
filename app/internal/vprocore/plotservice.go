@@ -249,19 +249,21 @@ type PlotService struct {
 	ParentCodes      *references.ParentCodeService `json:"-" yaml:"-"`
 	ParentCodesError error                         `json:"-" yaml:"-"`
 	ContextScoped    bool                          `json:"-" yaml:"-"`
+	EnforceAuthLock  bool                          `json:"-" yaml:"-"`
+	editLockProvider EditLockProvider
 	requestContext   context.Context
 }
 
 func (s *PlotService) RequireContextEdit() error {
-	if s.ContextScoped {
-		return nil
+	if !s.ContextScoped && s.Projects != nil {
+		s.Projects.Mu.RLock()
+		hasSqlite := s.Projects.Sqlite != nil
+		s.Projects.Mu.RUnlock()
+		if hasSqlite {
+			return errors.New("plot mutations require the editor's current context identity")
+		}
 	}
-	s.Projects.Mu.RLock()
-	defer s.Projects.Mu.RUnlock()
-	if s.Projects.Sqlite != nil {
-		return errors.New("plot mutations require the editor's current context identity")
-	}
-	return nil
+	return s.CheckEditLock()
 }
 
 func NewPlotService(projects *ProjectService) *PlotService {
@@ -585,6 +587,8 @@ func (s *PlotService) WithRequestContext(ctx context.Context) (*PlotService, err
 		ParentCodes:      s.ParentCodes,
 		ParentCodesError: s.ParentCodesError,
 		ContextScoped:    s.ContextScoped,
+		EnforceAuthLock:  s.EnforceAuthLock,
+		editLockProvider: s.editLockProvider,
 		requestContext:   ctx,
 	}
 	s.Mu.RUnlock()
