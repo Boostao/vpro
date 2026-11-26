@@ -406,6 +406,9 @@ func (s *WebServer) PublicHandler() http.Handler {
 	mux.HandleFunc("/healthz", s.handleHealthz)
 	mux.HandleFunc("/readyz", s.handleReadyz)
 	mux.HandleFunc("/api/meta", s.handleMeta)
+	mux.HandleFunc("/api/becmaster/filter-options", s.handleBECMasterFilterOptions)
+	mux.HandleFunc("/api/becmaster/filter", s.handleBECMasterFilter)
+	mux.HandleFunc("/api/becmaster/download", s.handleBECMasterDownload)
 	mux.HandleFunc("/api/rpc/", s.router.ServeHTTP)
 	mux.HandleFunc("/api/downloads/", s.handleDownloads)
 	mux.HandleFunc("/pmtiles/", s.handlePMTiles)
@@ -477,6 +480,10 @@ type MetaResponse struct {
 	PicturesAvailable bool                   `json:"picturesAvailable"`
 	PMTilesBaseURL    string                 `json:"pmtilesBaseUrl"`
 	RAvailable        bool                   `json:"rAvailable"`
+	ExternalLinks     []ExternalLink         `json:"externalLinks"`
+	LicenceName       string                 `json:"licenceName"`
+	LicenceURL        string                 `json:"licenceUrl"`
+	Citation          string                 `json:"citation"`
 }
 
 type MetaDatasetSummary struct {
@@ -532,6 +539,12 @@ func (s *WebServer) handleMeta(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, _, picAvail := s.pictureAvailability()
+	externalLinks := s.cfg.ExternalLinks
+	if externalLinks == nil {
+		externalLinks = defaultExternalLinks()
+	} else {
+		externalLinks = append([]ExternalLink(nil), externalLinks...)
+	}
 	resp := MetaResponse{
 		Env:               s.cfg.Env,
 		ReadOnly:          true,
@@ -545,6 +558,10 @@ func (s *WebServer) handleMeta(w http.ResponseWriter, r *http.Request) {
 		PicturesAvailable: picAvail,
 		PMTilesBaseURL:    s.pmtilesBaseURL(),
 		RAvailable:        s.isRAvailable(),
+		ExternalLinks:     externalLinks,
+		LicenceName:       defaultLicenceName,
+		LicenceURL:        defaultLicenceURL,
+		Citation:          defaultBECMasterCitation,
 	}
 	w.Header().Set("Cache-Control", "no-cache")
 	writeJSON(w, http.StatusOK, resp)

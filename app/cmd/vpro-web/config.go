@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -23,7 +24,58 @@ const (
 	defaultPoolSlots         = 6
 	defaultMaxPools          = 16
 	defaultCacheMaxMB        = 256
+
+	defaultLicenceName       = "Open Government Licence – British Columbia"
+	defaultLicenceURL        = "https://www2.gov.bc.ca/gov/content/data/open-data/open-government-licence-bc"
+	defaultBECMasterCitation = "British Columbia Ministry of Forests, Research Branch, Ecology Section. BECMaster Biogeoclimatic Ecosystem Classification Plot Database. Licensed under the Open Government Licence – British Columbia (https://www2.gov.bc.ca/gov/content/data/open-data/open-government-licence-bc)."
 )
+
+// ExternalLink describes a curated external BEC resource link surfaced in GET /api/meta.
+type ExternalLink struct {
+	Label       string `json:"label"`
+	URL         string `json:"url"`
+	Description string `json:"description,omitempty"`
+}
+
+func defaultExternalLinks() []ExternalLink {
+	return []ExternalLink{
+		{
+			Label:       "BECweb",
+			URL:         "https://www.for.gov.bc.ca/hre/becweb/",
+			Description: "BC Ministry of Forests Biogeoclimatic Ecosystem Classification (BEC) Program",
+		},
+		{
+			Label:       "byBEC",
+			URL:         "https://thebeczone.ca/shiny/bybecmap/",
+			Description: "Interactive BEC map and biogeoclimatic unit explorer",
+		},
+	}
+}
+
+func parseExternalLinksJSON(raw string) ([]ExternalLink, error) {
+	dec := json.NewDecoder(strings.NewReader(raw))
+	dec.DisallowUnknownFields()
+	var links []ExternalLink
+	if err := dec.Decode(&links); err != nil {
+		return nil, fmt.Errorf("VPRO_WEB_EXTERNAL_LINKS_JSON invalid JSON: %w", err)
+	}
+	if links == nil {
+		links = []ExternalLink{}
+	}
+	for i := range links {
+		links[i].Label = strings.TrimSpace(links[i].Label)
+		links[i].URL = strings.TrimSpace(links[i].URL)
+		links[i].Description = strings.TrimSpace(links[i].Description)
+		if links[i].Label == "" {
+			return nil, fmt.Errorf("VPRO_WEB_EXTERNAL_LINKS_JSON[%d] requires a non-empty label", i)
+		}
+		parsed, err := url.Parse(links[i].URL)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			return nil, fmt.Errorf("VPRO_WEB_EXTERNAL_LINKS_JSON[%d] url must be an http(s) URL (got %q)", i, links[i].URL)
+		}
+	}
+	return links, nil
+}
 
 // WebConfig captures the complete VPRO_WEB_* environment and flag contract.
 type WebConfig struct {
@@ -45,6 +97,7 @@ type WebConfig struct {
 	MaxPools          int
 	CacheMaxMB        int
 	StaticDir         string
+	ExternalLinks     []ExternalLink
 }
 
 // LoadWebConfig reads configuration from lookupEnv (defaulting to os.LookupEnv)
@@ -139,6 +192,15 @@ func LoadWebConfig(lookupEnv func(string) (string, bool), devSample bool) (WebCo
 		return WebConfig{}, fmt.Errorf("resolve VPRO_WEB_EXPORT_DIR: %w", err)
 	}
 
+	externalLinks := defaultExternalLinks()
+	if rawLinks, ok := lookupEnv("VPRO_WEB_EXTERNAL_LINKS_JSON"); ok && strings.TrimSpace(rawLinks) != "" {
+		parsedLinks, err := parseExternalLinksJSON(rawLinks)
+		if err != nil {
+			return WebConfig{}, err
+		}
+		externalLinks = parsedLinks
+	}
+
 	cfg := WebConfig{
 		Env:               env,
 		ListenAddr:        getStr("VPRO_WEB_LISTEN_ADDR", defaultListenAddr),
@@ -158,6 +220,7 @@ func LoadWebConfig(lookupEnv func(string) (string, bool), devSample bool) (WebCo
 		MaxPools:          maxPools,
 		CacheMaxMB:        cacheMaxMB,
 		StaticDir:         getStr("VPRO_WEB_STATIC_DIR", ""),
+		ExternalLinks:     externalLinks,
 	}
 
 	if cfg.DataDir == "" && !cfg.DevSample {

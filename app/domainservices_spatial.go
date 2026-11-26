@@ -27,6 +27,15 @@ type SpatialAOIMatchedPlot = spatialpkg.SpatialAOIMatchedPlot
 type SpatialAOISelectionResult = spatialpkg.SpatialAOISelectionResult
 type AssignSpatialAOIToSURequest = spatialpkg.AssignSpatialAOIToSURequest
 type AssignSpatialAOIToSUResult = spatialpkg.AssignSpatialAOIToSUResult
+type BECMasterCodedOption = spatialpkg.BECMasterCodedOption
+type BECMasterProjectOption = spatialpkg.BECMasterProjectOption
+type BECMasterPublicationOption = spatialpkg.BECMasterPublicationOption
+type BECMasterFilterOptions = spatialpkg.BECMasterFilterOptions
+type BECMasterFilterRequest = spatialpkg.BECMasterFilterRequest
+type BECMasterMapPoint = spatialpkg.BECMasterMapPoint
+type BECMasterFilterResult = spatialpkg.BECMasterFilterResult
+type BGCMapSyncStatus = spatialpkg.BGCMapSyncStatus
+type BGCMapSyncResult = spatialpkg.BGCMapSyncResult
 
 var ResolveSpatialExtraDirs = spatialpkg.ResolveSpatialExtraDirs
 var NewPMTilesAssetHandler = spatialpkg.NewPMTilesAssetHandler
@@ -351,4 +360,52 @@ func (s *SpatialService) AssignSpatialAOIToSU(ctx context.Context, contextID str
 		return nil, errors.New("spatial context is unavailable")
 	}
 	return spatialpkg.AssignSpatialAOIToSU(ctx, unwrapContextService(s.contexts), contextID, request, s.attributor)
+}
+
+func (s *SpatialService) GetBECMasterFilterOptions(ctx context.Context, contextID string) (*BECMasterFilterOptions, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("spatial context is unavailable")
+	}
+	return spatialpkg.GetBECMasterFilterOptions(ctx, unwrapContextService(s.contexts), contextID)
+}
+
+func (s *SpatialService) FilterBECMasterPlots(ctx context.Context, contextID string, request BECMasterFilterRequest) (*BECMasterFilterResult, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("spatial context is unavailable")
+	}
+	return spatialpkg.FilterBECMasterPlots(ctx, unwrapContextService(s.contexts), contextID, request)
+}
+
+func (s *SpatialService) GetBGCMapSyncStatus(ctx context.Context) (BGCMapSyncStatus, error) {
+	s, release := s.acquire()
+	defer release()
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return BGCMapSyncStatus{}, err
+		}
+	}
+	if s == nil {
+		return spatialpkg.GetBGCMapSyncStatus("", spatialpkg.ResolveSpatialExtraDirs(), ""), nil
+	}
+	return spatialpkg.GetBGCMapSyncStatus(s.dataDir, s.extraDirs, ""), nil
+}
+
+func (s *SpatialService) SyncLatestBGCMap(ctx context.Context, sourceURL, expectedSHA256 string) (*BGCMapSyncResult, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil {
+		return nil, errors.New("spatial service is unavailable")
+	}
+	res, err := spatialpkg.SyncLatestBGCMap(ctx, s.dataDir, sourceURL, expectedSHA256)
+	if err != nil {
+		return nil, err
+	}
+	if s.attributor != nil {
+		_ = s.attributor.Close()
+	}
+	return res, nil
 }
