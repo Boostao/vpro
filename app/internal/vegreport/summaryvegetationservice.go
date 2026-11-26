@@ -588,22 +588,34 @@ func (s *SummaryVegetationService) readSnapshotConfigured(ctx context.Context, c
 		descriptions, references = &table, &plan
 	}
 
+	effectiveSUName := owner.Selection.SU
+	if (effectiveSUName == "" || effectiveSUName == "None") && pres.scope != "su" {
+		switch pres.scope {
+		case "hierarchy":
+			effectiveSUName = "USysSuTableDynamic"
+		case "field":
+			effectiveSUName = "Field_" + pres.unitField
+		default:
+			effectiveSUName = "All_Plots"
+		}
+	}
+
 	var report summaryVegetationLayerReport
 	var grouped summaryVegetationGroupedReport
 	switch {
 	case groupAndOrder == 11:
-		report, err = prepareSummaryVegetationLayerReferences(ctx, owner.Selection.Project, owner.Selection.SU,
+		report, err = prepareSummaryVegetationLayerReferences(ctx, owner.Selection.Project, effectiveSUName,
 			tables[0], tables[1], tables[2], tables[3], tables[4], average, display, showClass, references)
 	case mode == summaryVegetationGroupedConstancy:
-		grouped, err = prepareSummaryVegetationConstancyReferences(ctx, owner.Selection.Project, owner.Selection.SU,
+		grouped, err = prepareSummaryVegetationConstancyReferences(ctx, owner.Selection.Project, effectiveSUName,
 			tables[0], tables[1], tables[2], tables[3], tables[4], average, references)
 		report = grouped.Report
 	case mode == summaryVegetationGroupedUnanimousCommon:
-		grouped, err = prepareSummaryVegetationUnanimousCommonReferences(ctx, owner.Selection.Project, owner.Selection.SU,
+		grouped, err = prepareSummaryVegetationUnanimousCommonReferences(ctx, owner.Selection.Project, effectiveSUName,
 			tables[0], tables[1], tables[2], tables[3], tables[4], average, groupAndOrder, references)
 		report = grouped.Report
 	default:
-		grouped, err = prepareSummaryVegetationGroupedReferences(ctx, owner.Selection.Project, owner.Selection.SU,
+		grouped, err = prepareSummaryVegetationGroupedReferences(ctx, owner.Selection.Project, effectiveSUName,
 			tables[0], tables[1], tables[2], tables[3], tables[4], average, groupAndOrder, display, showClass, references)
 		report = grouped.Report
 	}
@@ -614,6 +626,12 @@ func (s *SummaryVegetationService) readSnapshotConfigured(ctx context.Context, c
 	result, err := buildSummaryPreviewTransport(ctx, contextID, owner, average, display, showClass, groupAndOrder, mode, report, grouped, references, tables[1])
 	if err != nil {
 		return fail(err)
+	}
+	if pres.scope != "su" && (result.SU == "" || result.SU == "None") {
+		result.SU = effectiveSUName
+		if result.SUPath == "" {
+			result.SUPath = owner.Selection.ProjectPath
+		}
 	}
 	if valueLimit > 0 {
 		result.Rows = filterSummaryRowsByValueLimit(result.Rows, valueLimit)

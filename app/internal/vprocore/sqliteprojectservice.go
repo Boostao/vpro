@@ -343,6 +343,7 @@ func (service *ProjectService) SqliteStateContextLocked(ctx context.Context) (Pr
 			}
 		}
 	}
+	service.mergeWorkspaceResourcesLocked(ctx, selection, &projects, &sus, &hierarchies)
 	hierarchyFile := ""
 	if selection.Hierarchy != "None" {
 		hierarchyFile = filepath.Base(selection.HierarchyPath)

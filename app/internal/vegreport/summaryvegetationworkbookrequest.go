@@ -302,6 +302,10 @@ func readSummaryVegetationWorkbookSource(ctx context.Context, service *SummaryVe
 		Paths: []summaryVegetationWorkbookSourcePath{}}
 	for _, role := range []string{"project", "su", "VLists", "VUser", "VPro64"} {
 		path, ok := owner.Attachments[role]
+		if (!ok || path == "") && role == "su" && raw.Preview.UnitScope != "" && raw.Preview.UnitScope != "su" {
+			path = owner.Attachments["project"]
+			ok = path != ""
+		}
 		if !ok || path == "" {
 			return fail(errors.New("Summary workbook source is missing a required owned attachment path"))
 		}

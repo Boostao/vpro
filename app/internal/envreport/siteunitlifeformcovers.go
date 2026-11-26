@@ -314,10 +314,19 @@ func readSiteUnitQuickVegetationSourceWithScope(ctx context.Context, owner *vpro
 	if err != nil {
 		return siteUnitQuickVegetationInput{}, err
 	}
-	quick, err := reportcore.PrepareSiteUnitQuickVegetation(ctx, owner.Selection.Project, owner.Selection.SU, 2, tables[4], tables[2])
+	quickSUName := owner.Selection.SU
+	if (quickSUName == "" || quickSUName == "None") && unitType != 1 {
+		if unitType == 2 {
+			quickSUName = "Hierarchy_Breakpoints"
+		} else {
+			quickSUName = "Field_ZoneSubZone"
+		}
+	}
+	quick, err := reportcore.PrepareSiteUnitQuickVegetation(ctx, owner.Selection.Project, quickSUName, 2, tables[4], tables[2])
 	if err != nil {
 		return siteUnitQuickVegetationInput{}, err
 	}
+	quick.SU = environment.Preview.Report.SU
 	references, err := reportcore.PrepareVegetationLifeformReferences(ctx, tables[5], tables[6])
 	if err != nil {
 		return siteUnitQuickVegetationInput{}, err

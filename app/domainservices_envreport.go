@@ -8,6 +8,11 @@ import (
 	rsidecarpkg "github.com/boostao/vpro/app/internal/rsidecar"
 )
 
+type QuickEnvReportExportResult = envreportpkg.QuickEnvReportExportResult
+type QuickLongEnvironmentRequest = envreportpkg.QuickLongEnvironmentRequest
+type QuickSummaryEnvironmentRequest = envreportpkg.QuickSummaryEnvironmentRequest
+type QuickSubzoneMatrixRequest = envreportpkg.QuickSubzoneMatrixRequest
+
 type RPackageStatus = rsidecarpkg.RPackageStatus
 type RRuntimeStatus = rsidecarpkg.RRuntimeStatus
 type PlotClimateRow = rsidecarpkg.PlotClimateRow
@@ -331,4 +336,87 @@ func (s *EnvironmentReportService) RenderQuartoGuide(ctx context.Context, contex
 		return nil, errors.New("environment report context is unavailable")
 	}
 	return rsidecarpkg.RenderQuartoGuide(ctx, unwrapContextService(s.contexts), contextID, request, s.rRuntimeOptions()...)
+}
+
+// Streamlined one-step QuickRun, Quarto-style HTML display & Spreadsheet Launcher delegates
+
+func (s *EnvironmentReportService) QuickRunLongEnvironmentWorkbook(ctx context.Context, contextID string, request QuickLongEnvironmentRequest) (*QuickEnvReportExportResult, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("environment report context is unavailable")
+	}
+	return envreportpkg.QuickExportLongEnvironmentWorkbook(unwrapContextService(s.contexts), ctx, contextID, request)
+}
+
+func (s *EnvironmentReportService) RenderLongEnvironmentHTMLReport(ctx context.Context, contextID string, request QuickLongEnvironmentRequest) (*HTMLReportResult, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("environment report context is unavailable")
+	}
+	return envreportpkg.RenderLongEnvironmentHTMLReport(unwrapContextService(s.contexts), ctx, contextID, request)
+}
+
+func (s *EnvironmentReportService) QuickRunSummaryEnvironmentWorkbook(ctx context.Context, contextID string, request QuickSummaryEnvironmentRequest) (*QuickEnvReportExportResult, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("environment report context is unavailable")
+	}
+	return envreportpkg.QuickExportSummaryEnvironmentWorkbook(unwrapContextService(s.contexts), ctx, contextID, request)
+}
+
+func (s *EnvironmentReportService) RenderSummaryEnvironmentHTMLReport(ctx context.Context, contextID string, request QuickSummaryEnvironmentRequest) (*HTMLReportResult, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("environment report context is unavailable")
+	}
+	return envreportpkg.RenderSummaryEnvironmentHTMLReport(unwrapContextService(s.contexts), ctx, contextID, request)
+}
+
+func (s *EnvironmentReportService) QuickRunSubzoneMatrixWorkbook(ctx context.Context, contextID string, request QuickSubzoneMatrixRequest) (*QuickEnvReportExportResult, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("environment report context is unavailable")
+	}
+	return envreportpkg.QuickExportSubzoneMatrixWorkbook(unwrapContextService(s.contexts), ctx, contextID, request)
+}
+
+func (s *EnvironmentReportService) RenderSubzoneMatrixHTMLReport(ctx context.Context, contextID string) (*HTMLReportResult, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("environment report context is unavailable")
+	}
+	return envreportpkg.RenderSubzoneMatrixHTMLReport(unwrapContextService(s.contexts), ctx, contextID)
+}
+
+func (s *EnvironmentReportService) GetSpreadsheetAppPreference(ctx context.Context, contextID string) (SpreadsheetAppPreference, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || unwrapContextService(s.contexts) == nil {
+		return SpreadsheetAppPreference{}, errors.New("environment report context is unavailable")
+	}
+	return unwrapContextService(s.contexts).GetSpreadsheetAppPreference(ctx, contextID)
+}
+
+func (s *EnvironmentReportService) SetSpreadsheetAppPreference(ctx context.Context, contextID string, pref SpreadsheetAppPreference) (SpreadsheetAppPreference, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || unwrapContextService(s.contexts) == nil {
+		return SpreadsheetAppPreference{}, errors.New("environment report context is unavailable")
+	}
+	return unwrapContextService(s.contexts).SetSpreadsheetAppPreference(ctx, contextID, pref)
+}
+
+func (s *EnvironmentReportService) OpenReportInSpreadsheet(ctx context.Context, contextID, filePath string) error {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || unwrapContextService(s.contexts) == nil {
+		return errors.New("environment report context is unavailable")
+	}
+	return unwrapContextService(s.contexts).OpenReportInSpreadsheet(ctx, contextID, filePath)
 }

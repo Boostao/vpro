@@ -4,8 +4,17 @@ import (
 	"context"
 	"errors"
 
+	reportcorepkg "github.com/boostao/vpro/app/internal/reports/reportcore"
 	vegreportpkg "github.com/boostao/vpro/app/internal/vegreport"
+	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
 )
+
+type QuickVegReportExportResult = vegreportpkg.QuickVegReportExportResult
+type QuickSummaryVegetationRequest = vegreportpkg.QuickSummaryVegetationRequest
+type QuickLongVegetationRequest = vegreportpkg.QuickLongVegetationRequest
+type QuickLifeformReportRequest = vegreportpkg.QuickLifeformReportRequest
+type HTMLReportResult = reportcorepkg.HTMLReportResult
+type SpreadsheetAppPreference = vprocorepkg.SpreadsheetAppPreference
 
 type SiteUnitExclusionRule = vegreportpkg.SiteUnitExclusionRule
 type ExcludedSiteUnitInfo = vegreportpkg.ExcludedSiteUnitInfo
@@ -837,4 +846,87 @@ func (s *VegetationReportService) PreviewLongVegetationWithExclusions(ctx contex
 		return nil, errors.New("vegetation report context is unavailable")
 	}
 	return vegreportpkg.PreviewLongVegetationWithExclusions(ctx, unwrapContextService(s.contexts), contextID, request)
+}
+
+// Streamlined one-step QuickRun, Quarto-style HTML display & Spreadsheet Launcher delegates
+
+func (s *VegetationReportService) QuickRunSummaryVegetationWorkbook(ctx context.Context, contextID string, request QuickSummaryVegetationRequest) (*QuickVegReportExportResult, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.summaryWorkbook == nil {
+		return nil, errors.New("summary vegetation workbook service is unavailable")
+	}
+	return s.summaryWorkbook.QuickExportWorkbook(ctx, contextID, request)
+}
+
+func (s *VegetationReportService) RenderSummaryVegetationHTMLReport(ctx context.Context, contextID string, request QuickSummaryVegetationRequest) (*HTMLReportResult, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.summary == nil {
+		return nil, errors.New("summary vegetation service is unavailable")
+	}
+	return s.summary.RenderHTMLReport(ctx, contextID, request)
+}
+
+func (s *VegetationReportService) QuickRunLongVegetationWorkbook(ctx context.Context, contextID string, request QuickLongVegetationRequest) (*QuickVegReportExportResult, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("vegetation report context is unavailable")
+	}
+	return vegreportpkg.QuickExportLongVegetationWorkbook(unwrapContextService(s.contexts), ctx, contextID, request)
+}
+
+func (s *VegetationReportService) RenderLongVegetationHTMLReport(ctx context.Context, contextID string, request QuickLongVegetationRequest) (*HTMLReportResult, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("vegetation report context is unavailable")
+	}
+	return vegreportpkg.RenderLongVegetationHTMLReport(unwrapContextService(s.contexts), ctx, contextID, request)
+}
+
+func (s *VegetationReportService) QuickRunLifeformWorkbook(ctx context.Context, contextID string, request QuickLifeformReportRequest) (*QuickVegReportExportResult, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("vegetation report context is unavailable")
+	}
+	return vegreportpkg.QuickExportLifeformWorkbook(unwrapContextService(s.contexts), ctx, contextID, request)
+}
+
+func (s *VegetationReportService) RenderLifeformHTMLReport(ctx context.Context, contextID string, request QuickLifeformReportRequest) (*HTMLReportResult, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("vegetation report context is unavailable")
+	}
+	return vegreportpkg.RenderLifeformHTMLReport(unwrapContextService(s.contexts), ctx, contextID, request)
+}
+
+func (s *VegetationReportService) GetSpreadsheetAppPreference(ctx context.Context, contextID string) (SpreadsheetAppPreference, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || unwrapContextService(s.contexts) == nil {
+		return SpreadsheetAppPreference{}, errors.New("vegetation report context is unavailable")
+	}
+	return unwrapContextService(s.contexts).GetSpreadsheetAppPreference(ctx, contextID)
+}
+
+func (s *VegetationReportService) SetSpreadsheetAppPreference(ctx context.Context, contextID string, pref SpreadsheetAppPreference) (SpreadsheetAppPreference, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || unwrapContextService(s.contexts) == nil {
+		return SpreadsheetAppPreference{}, errors.New("vegetation report context is unavailable")
+	}
+	return unwrapContextService(s.contexts).SetSpreadsheetAppPreference(ctx, contextID, pref)
+}
+
+func (s *VegetationReportService) OpenReportInSpreadsheet(ctx context.Context, contextID, filePath string) error {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || unwrapContextService(s.contexts) == nil {
+		return errors.New("vegetation report context is unavailable")
+	}
+	return unwrapContextService(s.contexts).OpenReportInSpreadsheet(ctx, contextID, filePath)
 }

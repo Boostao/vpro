@@ -193,7 +193,13 @@ func readSummarySavedPresentationState(
 				case 4:
 					out.UnitScope = "none"
 				default:
-					out.UnitScope = "su"
+					if selectionSU == "" || selectionSU == "None" {
+						out.UnitScope = "none"
+					} else if selectionSU == "USysSuTableDynamic" {
+						out.UnitScope = "hierarchy"
+					} else {
+						out.UnitScope = "su"
+					}
 				}
 			}
 		}

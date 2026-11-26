@@ -493,3 +493,27 @@ func (s *ImportExportService) ExportGeoPackage(ctx context.Context, contextID st
 	res, err := interchange.ExportGeoPackage(unwrapContextService(s.contexts), ctx, contextID, request)
 	return res, sanitizeImportExportError(err)
 }
+
+// Export to VPro64 (clean journal_mode=DELETE + VACUUM SQLite .db for VPro64's VBA SQLite-ODBC importer)
+
+func (s *ImportExportService) ChooseVPro64ExportFile(ctx context.Context) (string, error) {
+	chosen, err := vprocorepkg.ChooseNativeSaveFile(
+		ctx,
+		"Select VPro64 SQLite export destination",
+		"VPro64Export.db",
+		"db",
+		"VPro64 SQLite Database (.db)",
+		"*.db",
+	)
+	return chosen, sanitizeImportExportError(err)
+}
+
+func (s *ImportExportService) ExportVPro64Database(ctx context.Context, contextID string, request interchange.VPro64ExportRequest) (interchange.VPro64ExportOutcome, error) {
+	s, release := s.acquire()
+	defer release()
+	if s == nil || unwrapContextService(s.contexts) == nil {
+		return interchange.VPro64ExportOutcome{}, errors.New("import/export context is unavailable")
+	}
+	res, err := interchange.ExportVPro64Database(unwrapContextService(s.contexts), ctx, contextID, request)
+	return res, sanitizeImportExportError(err)
+}
