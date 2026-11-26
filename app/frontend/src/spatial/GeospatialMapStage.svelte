@@ -8,6 +8,7 @@
     INITIAL_LAYER_OPACITY,
     isAbsoluteFilesystemPath,
     type BCOpenMapsWMSLayerId,
+    type GoogleHybridConfig,
     type MapBasemapId,
     type MapLayerOpacity,
     type MapLayerVisibility,
@@ -31,6 +32,7 @@
     basemap = $bindable<MapBasemapId>(DEFAULT_MAP_BASEMAP),
     wmsLayer = $bindable<BCOpenMapsWMSLayerId>(DEFAULT_BC_WMS_LAYER),
     layerOpacity = $bindable<MapLayerOpacity>({ ...INITIAL_LAYER_OPACITY }),
+    googleHybridConfig = { tileUrlTemplate: '', apiKey: '' },
     zoneFilter = $bindable(''),
     plotSearch = $bindable(''),
     pmtilesArchiveWarning = '',
@@ -50,6 +52,7 @@
     onFitBounds,
     onRefreshStream,
     onExportGpkg,
+    onOpenLayersSyncTab,
     children,
   }: {
     contextId: string;
@@ -64,6 +67,7 @@
     basemap?: MapBasemapId;
     wmsLayer?: BCOpenMapsWMSLayerId;
     layerOpacity?: MapLayerOpacity;
+    googleHybridConfig?: GoogleHybridConfig;
     zoneFilter?: string;
     plotSearch?: string;
     pmtilesArchiveWarning?: string;
@@ -83,6 +87,7 @@
     onFitBounds: () => void;
     onRefreshStream: () => void;
     onExportGpkg: (opts: SpatialGpkgExportInput) => Promise<void> | void;
+    onOpenLayersSyncTab?: () => void;
     children: Snippet;
   } = $props();
 </script>
@@ -100,6 +105,7 @@
   bind:basemap
   bind:wmsLayer
   bind:layerOpacity
+  {googleHybridConfig}
   bind:zoneFilter
   bind:plotSearch
   {loading}
@@ -110,6 +116,7 @@
   {onRefreshDeck}
   {onFitBounds}
   {onRefreshStream}
+  {onOpenLayersSyncTab}
   onToggleGpkgPanel={(defaultPath) => {
     if (defaultPath && (!gpkgDestPath.trim() || !isAbsoluteFilesystemPath(gpkgDestPath))) {
       gpkgDestPath = defaultPath;
@@ -150,6 +157,8 @@
       {aoiMatchedCount}
       {viewportMatchedCount}
       {basemap}
+      {googleHybridConfig}
+      forestRegions={Boolean(visibility.forestRegions)}
       bcOpenMapsWMS={visibility.bcOpenMapsWMS}
       {wmsLayer}
     />

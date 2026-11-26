@@ -7,9 +7,13 @@
     DEFAULT_MAP_BASEMAP,
     INITIAL_LAYER_OPACITY,
     MAP_BASEMAP_OPTIONS,
+    QUICK_BASEMAP_IDS,
     buildDefaultGeoPackageExportPath,
+    getMapBasemapOption,
+    resolveGoogleHybridBasemap,
     summarizeArchiveResolution,
     type BCOpenMapsWMSLayerId,
+    type GoogleHybridConfig,
     type MapBasemapId,
     type MapLayerOpacity,
     type MapLayerVisibility,
@@ -29,6 +33,7 @@
     basemap = $bindable<MapBasemapId>(DEFAULT_MAP_BASEMAP),
     wmsLayer = $bindable<BCOpenMapsWMSLayerId>(DEFAULT_BC_WMS_LAYER),
     layerOpacity = $bindable<MapLayerOpacity>({ ...INITIAL_LAYER_OPACITY }),
+    googleHybridConfig = { tileUrlTemplate: '', apiKey: '' },
     zoneFilter = $bindable(''),
     plotSearch = $bindable(''),
     loading = false,
@@ -40,6 +45,7 @@
     onFitBounds,
     onRefreshStream,
     onToggleGpkgPanel,
+    onOpenLayersSyncTab,
   }: {
     contextId: string;
     project: string;
@@ -53,6 +59,7 @@
     basemap?: MapBasemapId;
     wmsLayer?: BCOpenMapsWMSLayerId;
     layerOpacity?: MapLayerOpacity;
+    googleHybridConfig?: GoogleHybridConfig;
     zoneFilter?: string;
     plotSearch?: string;
     loading?: boolean;
@@ -64,11 +71,22 @@
     onFitBounds: () => void;
     onRefreshStream: () => void;
     onToggleGpkgPanel: (defaultPath: string) => void;
+    onOpenLayersSyncTab?: () => void;
   } = $props();
 
   const bgcPct = $derived(Math.round((layerOpacity?.bgc ?? INITIAL_LAYER_OPACITY.bgc) * 100));
   const adminPct = $derived(Math.round((layerOpacity?.admin ?? INITIAL_LAYER_OPACITY.admin) * 100));
   const wmsPct = $derived(Math.round((layerOpacity?.wms ?? INITIAL_LAYER_OPACITY.wms) * 100));
+  const quickBasemaps = $derived(QUICK_BASEMAP_IDS.map((id) => getMapBasemapOption(id)));
+  const googleHybridFallback = $derived(
+    basemap === 'google-hybrid' && resolveGoogleHybridBasemap(googleHybridConfig).fallbackActive
+  );
+
+  function selectQuickBasemap(id: MapBasemapId) {
+    if (basemap === id) return;
+    basemap = id;
+    onApplyLayers();
+  }
 
   function updateOpacity(key: keyof MapLayerOpacity, rawPct: string) {
     const pct = Math.max(0, Math.min(100, Number(rawPct)));
@@ -121,9 +139,33 @@
       </select>
     </div>
 
+    <div class="wb-quick-basemaps" role="group" aria-label="Quick basemap switcher" data-quick-basemap-bar>
+      {#each quickBasemaps as opt (opt.id)}
+        <button
+          type="button"
+          class="wb-pill-btn"
+          class:active={basemap === opt.id}
+          aria-pressed={basemap === opt.id}
+          data-quick-basemap={opt.id}
+          onclick={() => selectQuickBasemap(opt.id)}
+        >
+          {opt.shortLabel ?? opt.label}
+        </button>
+      {/each}
+    </div>
+
     <label class="wb-toggle">
       <input type="checkbox" bind:checked={visibility.bgcFill} onchange={onApplyLayers} />
       <span>BGC v13 Polygons</span>
+    </label>
+    <label class="wb-toggle">
+      <input
+        type="checkbox"
+        bind:checked={visibility.forestRegions}
+        onchange={onApplyLayers}
+        data-toolbar-forest-regions
+      />
+      <span>BC Forest Regions</span>
     </label>
     <label class="wb-toggle">
       <input type="checkbox" bind:checked={visibility.ecosections} onchange={onApplyLayers} />
@@ -219,8 +261,13 @@
     <span class="wb-opacity-value">{bgcPct}%</span>
   </div>
 
-  <div class="wb-opacity-item" class:wb-opacity-muted={!visibility.ecosections && !visibility.nrDistricts}>
-    <label for="wb-opacity-admin" title="Opacity for Ecosections and NR Districts boundaries">Boundaries</label>
+  <div
+    class="wb-opacity-item"
+    class:wb-opacity-muted={!visibility.ecosections && !visibility.nrDistricts && !visibility.forestRegions}
+  >
+    <label for="wb-opacity-admin" title="Opacity for Ecosections, BC Forest Regions, and NR Districts boundaries"
+      >Boundaries</label
+    >
     <input
       id="wb-opacity-admin"
       class="wb-opacity-slider"
@@ -252,4 +299,60 @@
     />
     <span class="wb-opacity-value">{wmsPct}%</span>
   </div>
+
+  {#if googleHybridFallback}
+    <div class="wb-google-fallback-note" role="status" data-toolbar-google-fallback>
+      <span>Google Hybrid: showing Satellite Hybrid until a Google Maps tile URL is configured.</span>
+      {#if !IS_WEB_READONLY && onOpenLayersSyncTab}
+        <button type="button" class="wb-inline-link" onclick={onOpenLayersSyncTab}>Configure in Map &amp; Sync</button>
+      {/if}
+    </div>
+  {/if}
 </div>
+
+<style>
+  .wb-quick-basemaps {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .wb-pill-btn {
+    border: 1px solid var(--vpro-border);
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: var(--vpro-canvas);
+    color: var(--vpro-navy);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .wb-pill-btn:hover {
+    border-color: var(--vpro-navy);
+  }
+  .wb-pill-btn.active {
+    background: var(--vpro-navy);
+    border-color: var(--vpro-navy);
+    color: var(--vpro-gold);
+  }
+  .wb-google-fallback-note {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-left: auto;
+    font-size: 0.72rem;
+    color: var(--vpro-navy);
+  }
+  .wb-inline-link {
+    border: none;
+    background: transparent;
+    padding: 0;
+    color: var(--vpro-navy);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+</style>

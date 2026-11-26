@@ -5,19 +5,27 @@
   import {
     SpatialService,
     type AssignSpatialAOIToSURequest,
+    type BGCMapSyncResult,
+    type BGCMapSyncStatus,
     type SpatialAOISelectionResult,
     type SpatialAttributeSuggestion,
     type SpatialBatchAuditReport,
   } from '../../bindings/github.com/boostao/vpro/app';
   import {
+    DEFAULT_MAP_BASEMAP,
+    INITIAL_LAYER_VISIBILITY,
     computeViewportAOIRectangle,
     fetchAOIPolygonPreview,
+    type GoogleHybridConfig,
+    type MapBasemapId,
+    type MapLayerVisibility,
     type SpatialAOICommitInput,
     type SpatialStampOptions,
     type WorkbenchPlotPoint,
   } from './geospatialWorkbench';
   import SpatialAOILassoTab from './SpatialAOILassoTab.svelte';
   import SpatialAuto1QATab from './SpatialAuto1QATab.svelte';
+  import SpatialMapLayersSyncTab from './SpatialMapLayersSyncTab.svelte';
   import SpatialPlotInspectorTab from './SpatialPlotInspectorTab.svelte';
 
   type SpatialDiagRow = NonNullable<SpatialBatchAuditReport['rows']>[number];
@@ -29,7 +37,17 @@
     zoneFilter = '',
     boundingBox = null,
     plotPoints = [],
-    activePanel = $bindable<'inspector' | 'aoi' | 'qa'>('inspector'),
+    activePanel = $bindable<'inspector' | 'aoi' | 'qa' | 'layers'>('inspector'),
+    basemap = $bindable<MapBasemapId>(DEFAULT_MAP_BASEMAP),
+    visibility = $bindable<MapLayerVisibility>({ ...INITIAL_LAYER_VISIBILITY }),
+    googleHybridConfig = { tileUrlTemplate: '', apiKey: '' },
+    bgcSyncStatus = null,
+    bgcSyncLoading = false,
+    bgcSyncBusy = false,
+    bgcSyncUrl = $bindable(''),
+    bgcSyncSha256 = $bindable(''),
+    bgcSyncError = '',
+    bgcLastSyncResult = null,
     aoiDrawMode = $bindable(false),
     aoiTargetMode = $bindable<'update_active' | 'create_project_su' | 'create_su_file'>('create_project_su'),
     aoiSUName = $bindable(''),
@@ -54,6 +72,10 @@
     onCommittedAOI,
     onLoadBatchAuditQA,
     onApplyStamp,
+    onApplyLayers,
+    onSaveGoogleHybridConfig,
+    onRefreshBgcSyncStatus,
+    onSyncLatestBgcMap,
     aoiFilterActive = false,
     onToggleAoiFilter,
   }: {
@@ -63,7 +85,17 @@
     zoneFilter?: string;
     boundingBox?: readonly number[] | null;
     plotPoints?: WorkbenchPlotPoint[];
-    activePanel?: 'inspector' | 'aoi' | 'qa';
+    activePanel?: 'inspector' | 'aoi' | 'qa' | 'layers';
+    basemap?: MapBasemapId;
+    visibility?: MapLayerVisibility;
+    googleHybridConfig?: GoogleHybridConfig;
+    bgcSyncStatus?: BGCMapSyncStatus | null;
+    bgcSyncLoading?: boolean;
+    bgcSyncBusy?: boolean;
+    bgcSyncUrl?: string;
+    bgcSyncSha256?: string;
+    bgcSyncError?: string;
+    bgcLastSyncResult?: BGCMapSyncResult | null;
     aoiDrawMode?: boolean;
     aoiTargetMode?: 'update_active' | 'create_project_su' | 'create_su_file';
     aoiSUName?: string;
@@ -88,6 +120,10 @@
     onCommittedAOI: (statusMsg: string, activated: boolean) => Promise<void>;
     onLoadBatchAuditQA: () => Promise<void> | void;
     onApplyStamp: (opts: SpatialStampOptions) => Promise<void> | void;
+    onApplyLayers?: () => void;
+    onSaveGoogleHybridConfig?: (next: GoogleHybridConfig) => void;
+    onRefreshBgcSyncStatus?: () => Promise<void> | void;
+    onSyncLatestBgcMap?: (sourceUrl: string, expectedSha256: string) => Promise<void> | void;
     aoiFilterActive?: boolean;
     onToggleAoiFilter?: (active: boolean) => void;
   } = $props();
@@ -178,8 +214,8 @@
   }
 </script>
 
-<aside class="wb-drawer" aria-label="Spatial Inspector, AOI and QA Tools">
-  <div class="wb-tabs" role="tablist">
+<aside class="wb-drawer" aria-label="Spatial Inspector, AOI, QA, and Map Sync Tools">
+  <div class="wb-tabs wb-tabs-quad" role="tablist">
     <button
       type="button"
       role="tab"
@@ -215,6 +251,22 @@
       }}
     >
       {IS_WEB_READONLY ? 'Geodetic QA Audit' : 'Coordinate & BGC Stamp'}
+    </button>
+    <button
+      type="button"
+      role="tab"
+      aria-selected={activePanel === 'layers'}
+      class:active={activePanel === 'layers'}
+      data-drawer-layers-sync-tab
+      onclick={() => {
+        aoiDrawMode = false;
+        activePanel = 'layers';
+        if (!IS_WEB_READONLY && !bgcSyncStatus && !bgcSyncLoading) {
+          void onRefreshBgcSyncStatus?.();
+        }
+      }}
+    >
+      {IS_WEB_READONLY ? 'Basemaps' : 'Map & Sync'}
     </button>
   </div>
 
@@ -273,10 +325,34 @@
         </div>
       </div>
     {/if}
+  {:else if activePanel === 'layers'}
+    <SpatialMapLayersSyncTab
+      bind:basemap
+      bind:visibility
+      {googleHybridConfig}
+      {bgcSyncStatus}
+      {bgcSyncLoading}
+      {bgcSyncBusy}
+      bind:bgcSyncUrl
+      bind:bgcSyncSha256
+      {bgcSyncError}
+      {bgcLastSyncResult}
+      onApplyLayers={() => onApplyLayers?.()}
+      onSaveGoogleHybridConfig={(next) => onSaveGoogleHybridConfig?.(next)}
+      {onRefreshBgcSyncStatus}
+      {onSyncLatestBgcMap}
+    />
   {/if}
 </aside>
 
 <style>
+  .wb-tabs-quad {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .wb-tabs-quad button {
+    font-size: 0.71rem;
+    padding: 0.48rem 0.25rem;
+  }
   .wb-coord-diag-wrap {
     padding-top: 0;
   }

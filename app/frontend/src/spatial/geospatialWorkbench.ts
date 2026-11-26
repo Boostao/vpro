@@ -1,5 +1,10 @@
 import type { ExpressionSpecification, LayerSpecification, SourceSpecification, StyleSpecification } from 'maplibre-gl';
-import type { PMTilesManifest, SpatialWorkbenchPayload } from '../../bindings/github.com/boostao/vpro/app';
+import type {
+  BGCMapSyncResult,
+  BGCMapSyncStatus,
+  PMTilesManifest,
+  SpatialWorkbenchPayload,
+} from '../../bindings/github.com/boostao/vpro/app';
 import type { SpatialComputeBackendInfo } from './spatialCompute';
 import { pointInPolygonRing } from './spatialFlatGeobuf';
 
@@ -52,24 +57,52 @@ export interface MapLayerVisibility {
   bgcLabels: boolean;
   ecosections: boolean;
   nrDistricts: boolean;
+  forestRegions?: boolean;
   hillshade3D: boolean;
   bcOpenMapsWMS: boolean;
   discrepancyVectors: boolean;
 }
 
-export type MapBasemapId = 'offline-neutral' | 'positron-light' | 'positron-dark' | 'bc-gov-topo' | 'satellite';
+export type MapBasemapId =
+  | 'offline-neutral'
+  | 'esri-hybrid'
+  | 'google-hybrid'
+  | 'osm-standard'
+  | 'bc-gov-topo'
+  | 'satellite'
+  | 'positron-light'
+  | 'positron-dark';
 
 export type BCOpenMapsWMSLayerId = 'bc-parks' | 'bc-painted-relief' | 'bc-ortho-10m' | 'bc-hillshade-bw';
 
 export interface MapBasemapOption {
   id: MapBasemapId;
   label: string;
+  shortLabel?: string;
+  description?: string;
   online: boolean;
   darkTheme: boolean;
+  requiresConfig?: boolean;
   attribution: string;
   baseTiles?: string[];
   referenceTiles?: string[];
   maxZoom?: number;
+}
+
+export interface GoogleHybridConfig {
+  tileUrlTemplate?: string;
+  apiKey?: string;
+}
+
+export interface ResolvedGoogleHybridBasemap {
+  configured: boolean;
+  fallbackActive: boolean;
+  baseTiles: string[];
+  referenceTiles?: string[];
+  attribution: string;
+  maxZoom: number;
+  statusNote: string;
+  validationError: string | null;
 }
 
 export interface BCOpenMapsWMSOption {
@@ -87,17 +120,97 @@ export interface MapLayerOpacity {
 
 export const DEFAULT_MAP_BASEMAP: MapBasemapId = 'offline-neutral';
 
+export const GOOGLE_HYBRID_STORAGE_KEY = 'vpro.map.googleHybridConfig';
+
+export const ESRI_IMAGERY_TILE_URL =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
+export const ESRI_BOUNDARIES_LABELS_TILE_URL =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
+
+const ESRI_IMAGERY_ATTRIBUTION = 'Esri, Maxar, Earthstar Geographics, GIS User Community';
+
+export const QUICK_BASEMAP_IDS: readonly MapBasemapId[] = [
+  'esri-hybrid',
+  'google-hybrid',
+  'osm-standard',
+  'bc-gov-topo',
+  'offline-neutral',
+];
+
 export const MAP_BASEMAP_OPTIONS: readonly MapBasemapOption[] = [
   {
     id: 'offline-neutral',
     label: 'Offline Neutral',
+    shortLabel: 'Offline',
+    description: 'Works without internet using built-in BGC and boundary layers.',
     online: false,
     darkTheme: false,
     attribution: '',
   },
   {
+    id: 'esri-hybrid',
+    label: 'Satellite Hybrid (Imagery + Labels)',
+    shortLabel: 'Satellite Hybrid',
+    description: 'High-resolution satellite imagery with place names and boundaries.',
+    online: true,
+    darkTheme: true,
+    attribution: ESRI_IMAGERY_ATTRIBUTION,
+    baseTiles: [ESRI_IMAGERY_TILE_URL],
+    referenceTiles: [ESRI_BOUNDARIES_LABELS_TILE_URL],
+    maxZoom: 18,
+  },
+  {
+    id: 'google-hybrid',
+    label: 'Google Hybrid',
+    shortLabel: 'Google Hybrid',
+    description: 'Uses your Google Maps tile URL or API key; falls back to Satellite Hybrid when unconfigured.',
+    online: true,
+    darkTheme: true,
+    requiresConfig: true,
+    attribution: ESRI_IMAGERY_ATTRIBUTION,
+    baseTiles: [ESRI_IMAGERY_TILE_URL],
+    referenceTiles: [ESRI_BOUNDARIES_LABELS_TILE_URL],
+    maxZoom: 19,
+  },
+  {
+    id: 'osm-standard',
+    label: 'OpenStreetMap',
+    shortLabel: 'OpenStreetMap',
+    description: 'Community street, road, trail, and place-name base map.',
+    online: true,
+    darkTheme: false,
+    attribution: '(c) OpenStreetMap contributors',
+    baseTiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+    maxZoom: 19,
+  },
+  {
+    id: 'bc-gov-topo',
+    label: 'BC Gov Topographic',
+    shortLabel: 'BC Gov Topo',
+    description: 'Official British Columbia topographic base map from DataBC.',
+    online: true,
+    darkTheme: false,
+    attribution: 'Government of British Columbia, DataBC',
+    baseTiles: ['/maps/bc-proxy/basemap/{z}/{y}/{x}'],
+    maxZoom: 17,
+  },
+  {
+    id: 'satellite',
+    label: 'Satellite Imagery',
+    shortLabel: 'Satellite',
+    description: 'Clean satellite imagery without road or place labels.',
+    online: true,
+    darkTheme: true,
+    attribution: ESRI_IMAGERY_ATTRIBUTION,
+    baseTiles: [ESRI_IMAGERY_TILE_URL],
+    maxZoom: 18,
+  },
+  {
     id: 'positron-light',
     label: 'Light Gray (Positron-style)',
+    shortLabel: 'Light Gray',
+    description: 'Subtle light canvas that keeps BGC zone colours prominent.',
     online: true,
     darkTheme: false,
     attribution: 'Esri, HERE, Garmin, (c) OpenStreetMap contributors, GIS user community',
@@ -112,6 +225,8 @@ export const MAP_BASEMAP_OPTIONS: readonly MapBasemapOption[] = [
   {
     id: 'positron-dark',
     label: 'Dark Gray (Positron Dark-style)',
+    shortLabel: 'Dark Gray',
+    description: 'Low-glare dark canvas for high-contrast plot and vector review.',
     online: true,
     darkTheme: true,
     attribution: 'Esri, HERE, Garmin, (c) OpenStreetMap contributors, GIS user community',
@@ -123,27 +238,203 @@ export const MAP_BASEMAP_OPTIONS: readonly MapBasemapOption[] = [
     ],
     maxZoom: 16,
   },
-  {
-    id: 'bc-gov-topo',
-    label: 'BC Gov Topographic',
-    online: true,
-    darkTheme: false,
-    attribution: 'Government of British Columbia, DataBC',
-    baseTiles: ['/maps/bc-proxy/basemap/{z}/{y}/{x}'],
-    maxZoom: 17,
-  },
-  {
-    id: 'satellite',
-    label: 'Satellite Imagery',
-    online: true,
-    darkTheme: true,
-    attribution: 'Esri, Maxar, Earthstar Geographics, GIS User Community',
-    baseTiles: [
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    ],
-    maxZoom: 18,
-  },
 ];
+
+export const BC_FOREST_REGIONS: ReadonlyArray<{ code: string; name: string; color: string }> = [
+  { code: 'RCB', name: 'Cariboo-Chilcotin', color: '#FCBA19' },
+  { code: 'RKB', name: 'Kootenay-Boundary', color: '#D8292F' },
+  { code: 'RNO', name: 'Northeast', color: '#1A5A96' },
+  { code: 'ROM', name: 'Omineca', color: '#003366' },
+  { code: 'RSC', name: 'South Coast', color: '#2E8540' },
+  { code: 'RSK', name: 'Skeena', color: '#1E5128' },
+  { code: 'RTO', name: 'Thompson-Okanagan', color: '#474543' },
+  { code: 'RWC', name: 'West Coast', color: '#002244' },
+];
+
+export function validateCustomTileTemplate(rawTemplate: string): { valid: boolean; error: string | null } {
+  const trimmed = rawTemplate.trim();
+  if (!trimmed) {
+    return { valid: false, error: null };
+  }
+  const hasPlaceholders =
+    trimmed.includes('{z}') && trimmed.includes('{x}') && trimmed.includes('{y}');
+  if (!hasPlaceholders) {
+    return {
+      valid: false,
+      error: 'Tile URL template must include {z}, {x}, and {y} coordinate placeholders.',
+    };
+  }
+  const probeUrl = trimmed
+    .replaceAll('{z}', '5')
+    .replaceAll('{x}', '8')
+    .replaceAll('{y}', '10')
+    .replaceAll('{key}', 'probe')
+    .replaceAll('{apiKey}', 'probe');
+  let protocol = '';
+  let host = '';
+  if (typeof URL === 'function') {
+    try {
+      const parsed = new URL(probeUrl);
+      protocol = parsed.protocol.toLowerCase();
+      host = parsed.hostname.toLowerCase();
+    } catch {
+      return {
+        valid: false,
+        error: 'Enter a valid HTTPS tile URL template (for example https://.../tiles/{z}/{x}/{y}).',
+      };
+    }
+  } else {
+    const match = probeUrl.match(/^([a-zA-Z][a-zA-Z0-9+.-]*:)\/\/(\[[^\]]+\]|[^/?#:\s]+)(?::\d+)?(?:[/?#]|$)/);
+    if (!match) {
+      return {
+        valid: false,
+        error: 'Enter a valid HTTPS tile URL template (for example https://.../tiles/{z}/{x}/{y}).',
+      };
+    }
+    protocol = match[1].toLowerCase();
+    host = match[2].toLowerCase();
+  }
+  const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+  if (protocol !== 'https:' && !(protocol === 'http:' && isLoopback)) {
+    return {
+      valid: false,
+      error: 'Custom tile URLs must use HTTPS (plain HTTP is only allowed for localhost).',
+    };
+  }
+  return { valid: true, error: null };
+}
+
+export function resolveGoogleHybridBasemap(config?: GoogleHybridConfig | null): ResolvedGoogleHybridBasemap {
+  const template = (config?.tileUrlTemplate ?? '').trim();
+  const apiKey = (config?.apiKey ?? '').trim();
+  const fallbackNote =
+    'No Google Maps tile URL is configured yet, so Google Hybrid is showing Satellite Hybrid (Imagery + Labels). Add a Google Maps tile URL template (and optional API key) in Map & Sync to switch to Google Hybrid tiles.';
+
+  if (!template) {
+    const keyOnlyNote = apiKey
+      ? 'An API key is saved, but Google Map Tiles also needs a tile URL template with {z}, {x}, and {y} (including your session token or proxy endpoint). Showing Satellite Hybrid (Imagery + Labels) until a tile URL template is added.'
+      : fallbackNote;
+    return {
+      configured: false,
+      fallbackActive: true,
+      baseTiles: [ESRI_IMAGERY_TILE_URL],
+      referenceTiles: [ESRI_BOUNDARIES_LABELS_TILE_URL],
+      attribution: ESRI_IMAGERY_ATTRIBUTION,
+      maxZoom: 18,
+      statusNote: keyOnlyNote,
+      validationError: null,
+    };
+  }
+
+  const check = validateCustomTileTemplate(template);
+  if (!check.valid) {
+    return {
+      configured: false,
+      fallbackActive: true,
+      baseTiles: [ESRI_IMAGERY_TILE_URL],
+      referenceTiles: [ESRI_BOUNDARIES_LABELS_TILE_URL],
+      attribution: ESRI_IMAGERY_ATTRIBUTION,
+      maxZoom: 18,
+      statusNote: `${check.error ?? 'Tile URL template is incomplete.'} Showing Satellite Hybrid (Imagery + Labels) in the meantime.`,
+      validationError: check.error,
+    };
+  }
+
+  const needsKey = template.includes('{key}') || template.includes('{apiKey}');
+  if (needsKey && !apiKey) {
+    return {
+      configured: false,
+      fallbackActive: true,
+      baseTiles: [ESRI_IMAGERY_TILE_URL],
+      referenceTiles: [ESRI_BOUNDARIES_LABELS_TILE_URL],
+      attribution: ESRI_IMAGERY_ATTRIBUTION,
+      maxZoom: 18,
+      statusNote:
+        'Your Google Hybrid tile URL expects an API key ({key}). Enter your Google Maps API key to activate it; showing Satellite Hybrid (Imagery + Labels) until then.',
+      validationError: 'API key is required for the {key} placeholder in your tile URL template.',
+    };
+  }
+
+  let resolvedUrl = template;
+  if (needsKey) {
+    const encodedKey = encodeURIComponent(apiKey);
+    resolvedUrl = resolvedUrl.replaceAll('{key}', encodedKey).replaceAll('{apiKey}', encodedKey);
+  } else if (apiKey && !/[?&]key=/i.test(resolvedUrl)) {
+    resolvedUrl = `${resolvedUrl}${resolvedUrl.includes('?') ? '&' : '?'}key=${encodeURIComponent(apiKey)}`;
+  }
+
+  const isGoogleHost = /google(?:apis)?\.com/i.test(resolvedUrl);
+  return {
+    configured: true,
+    fallbackActive: false,
+    baseTiles: [resolvedUrl],
+    attribution: isGoogleHost ? 'Google Maps' : 'Custom Hybrid Tile Service',
+    maxZoom: 19,
+    statusNote: isGoogleHost
+      ? 'Using your configured Google Hybrid tile service.'
+      : 'Using your configured custom hybrid tile service.',
+    validationError: null,
+  };
+}
+
+export function loadGoogleHybridConfig(
+  storage?: Pick<Storage, 'getItem'> | null
+): GoogleHybridConfig {
+  const hostCfg =
+    typeof globalThis !== 'undefined'
+      ? (globalThis as { __vproMapConfig?: { googleHybrid?: GoogleHybridConfig } }).__vproMapConfig?.googleHybrid
+      : undefined;
+  const store =
+    storage !== undefined
+      ? storage
+      : typeof window !== 'undefined' && window.localStorage
+        ? window.localStorage
+        : null;
+  if (store) {
+    try {
+      const raw = store.getItem(GOOGLE_HYBRID_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<GoogleHybridConfig>;
+        return {
+          tileUrlTemplate: typeof parsed.tileUrlTemplate === 'string' ? parsed.tileUrlTemplate : '',
+          apiKey: typeof parsed.apiKey === 'string' ? parsed.apiKey : '',
+        };
+      }
+    } catch {
+      // Ignore storage read errors in restricted WebViews
+    }
+  }
+  return {
+    tileUrlTemplate: typeof hostCfg?.tileUrlTemplate === 'string' ? hostCfg.tileUrlTemplate : '',
+    apiKey: typeof hostCfg?.apiKey === 'string' ? hostCfg.apiKey : '',
+  };
+}
+
+export function saveGoogleHybridConfig(
+  config: GoogleHybridConfig,
+  storage?: Pick<Storage, 'setItem' | 'removeItem'> | null
+): void {
+  const store =
+    storage !== undefined
+      ? storage
+      : typeof window !== 'undefined' && window.localStorage
+        ? window.localStorage
+        : null;
+  if (!store) return;
+  const normalized: GoogleHybridConfig = {
+    tileUrlTemplate: (config.tileUrlTemplate ?? '').trim(),
+    apiKey: (config.apiKey ?? '').trim(),
+  };
+  try {
+    if (!normalized.tileUrlTemplate && !normalized.apiKey) {
+      store.removeItem(GOOGLE_HYBRID_STORAGE_KEY);
+    } else {
+      store.setItem(GOOGLE_HYBRID_STORAGE_KEY, JSON.stringify(normalized));
+    }
+  } catch {
+    // Ignore storage quota or privacy-mode errors
+  }
+}
 
 export const DEFAULT_BC_WMS_LAYER: BCOpenMapsWMSLayerId = 'bc-parks';
 
@@ -202,6 +493,11 @@ function computeBgcOutlineOpacity(bgcOpacity: number): number {
   return Math.min(1, Math.round(Math.min(1, bgcOpacity * 1.15) * 100) / 100);
 }
 
+function computeForestRegionFillOpacity(adminOpacity: number): number {
+  if (adminOpacity <= 0) return 0;
+  return Math.min(1, Math.round(adminOpacity * 0.28 * 100) / 100);
+}
+
 export interface MapPaintHost {
   getLayer(id: string): unknown;
   setPaintProperty(layerId: string, name: string, value: unknown): unknown;
@@ -215,12 +511,15 @@ export function applyMapLayerOpacity(
   const bgc = clampLayerOpacity(opacity?.bgc, INITIAL_LAYER_OPACITY.bgc);
   const bgcOutline = computeBgcOutlineOpacity(bgc);
   const admin = clampLayerOpacity(opacity?.admin, INITIAL_LAYER_OPACITY.admin);
+  const forestRegionFill = computeForestRegionFillOpacity(admin);
   const wms = clampLayerOpacity(opacity?.wms, INITIAL_LAYER_OPACITY.wms);
   const updates: Array<[string, string, number]> = [
     ['bgc-zones-fill', 'fill-opacity', bgc],
     ['bgc-subzone-outline', 'line-opacity', bgcOutline],
     ['ecosections-outline', 'line-opacity', admin],
     ['nr-districts-outline', 'line-opacity', admin],
+    ['forest-regions-fill', 'fill-opacity', forestRegionFill],
+    ['forest-regions-outline', 'line-opacity', admin],
     ['bc-openmaps-wms-layer', 'raster-opacity', wms],
   ];
   const applied: string[] = [];
@@ -274,6 +573,7 @@ export const INITIAL_LAYER_VISIBILITY: MapLayerVisibility = {
   bgcLabels: true,
   ecosections: false,
   nrDistricts: false,
+  forestRegions: false,
   hillshade3D: false,
   bcOpenMapsWMS: false,
   discrepancyVectors: true,
@@ -351,6 +651,14 @@ function buildBECZoneMatchExpression(): ExpressionSpecification {
   return ['match', ['get', 'ZONE'], ...stops, '#474543'] as unknown as ExpressionSpecification;
 }
 
+function buildForestRegionMatchExpression(): ExpressionSpecification {
+  const stops: string[] = [];
+  for (const reg of BC_FOREST_REGIONS) {
+    stops.push(reg.code, reg.color);
+  }
+  return ['match', ['get', 'REGION_ORG_UNIT'], ...stops, '#1A5A96'] as unknown as ExpressionSpecification;
+}
+
 type PMTilesArchiveStatusExt = NonNullable<PMTilesManifest['archives']>[string] & {
   warning?: string;
 };
@@ -402,21 +710,46 @@ function buildOfflineGraticuleGeoJSON(): {
  * (from `/api/meta`'s `pmtilesBaseUrl`, e.g. `/pmtiles` or a CDN origin).
  * Desktop builds omit `pmtilesBaseUrl` and keep the local `/maps/<archive>` path.
  */
-export function resolvePMTilesArchiveUrl(archiveName: string, pmtilesBaseUrl?: string): string {
+export function resolvePMTilesArchiveUrl(
+  archiveName: string,
+  pmtilesBaseUrl?: string,
+  cacheVersion?: string
+): string {
   const cleanArchive = archiveName.replace(/^\/+/, '');
   const trimmedBase = (pmtilesBaseUrl ?? '').trim().replace(/\/+$/, '');
+  const trimmedVer = (cacheVersion ?? '').trim();
+  const suffix = trimmedVer ? `?v=${encodeURIComponent(trimmedVer)}` : '';
   if (!trimmedBase) {
     const isWeb = typeof __VPRO_WEB_READONLY__ !== 'undefined' && __VPRO_WEB_READONLY__ === true;
-    return `pmtiles://${isWeb ? '/pmtiles' : '/maps'}/${cleanArchive}`;
+    return `pmtiles://${isWeb ? '/pmtiles' : '/maps'}/${cleanArchive}${suffix}`;
   }
   if (/^pmtiles:\/\//i.test(trimmedBase)) {
-    return `${trimmedBase}/${cleanArchive}`;
+    return `${trimmedBase}/${cleanArchive}${suffix}`;
   }
   if (/^https?:\/\//i.test(trimmedBase)) {
-    return `pmtiles://${trimmedBase}/${cleanArchive}`;
+    return `pmtiles://${trimmedBase}/${cleanArchive}${suffix}`;
   }
   const rooted = trimmedBase.startsWith('/') ? trimmedBase : `/${trimmedBase}`;
-  return `pmtiles://${rooted}/${cleanArchive}`;
+  return `pmtiles://${rooted}/${cleanArchive}${suffix}`;
+}
+
+export function resolveActiveBasemap(
+  basemap?: MapBasemapId | null,
+  googleHybrid?: GoogleHybridConfig | null
+): MapBasemapOption & { googleHybridResolution?: ResolvedGoogleHybridBasemap } {
+  const baseOpt = getMapBasemapOption(basemap);
+  if (baseOpt.id !== 'google-hybrid') {
+    return baseOpt;
+  }
+  const resolved = resolveGoogleHybridBasemap(googleHybrid);
+  return {
+    ...baseOpt,
+    baseTiles: resolved.baseTiles,
+    referenceTiles: resolved.referenceTiles,
+    attribution: resolved.attribution,
+    maxZoom: resolved.maxZoom,
+    googleHybridResolution: resolved,
+  };
 }
 
 /**
@@ -432,6 +765,8 @@ export function buildMapLibreGeospatialStyle(
     wmsLayer?: BCOpenMapsWMSLayerId;
     opacity?: Partial<MapLayerOpacity>;
     pmtilesBaseUrl?: string;
+    bgcCacheVersion?: string;
+    googleHybrid?: GoogleHybridConfig | null;
   }
 ): StyleSpecification {
   const bgcArchive = manifest?.archives?.['bc-bgc-v13.pmtiles'] as PMTilesArchiveStatusExt | undefined;
@@ -442,12 +777,13 @@ export function buildMapLibreGeospatialStyle(
   const bgcMaxZoom = bgcArchive?.maxZoom && bgcArchive.maxZoom > 0 ? bgcArchive.maxZoom : 6;
   const adminMaxZoom = adminArchive?.maxZoom && adminArchive.maxZoom > 0 ? adminArchive.maxZoom : 6;
 
-  const basemapOpt = getMapBasemapOption(options?.basemap);
+  const basemapOpt = resolveActiveBasemap(options?.basemap, options?.googleHybrid);
   const wmsOpt = getBCOpenMapsWMSOption(options?.wmsLayer);
   const darkSurface = visibility.hillshade3D || basemapOpt.darkTheme;
   const bgcOpacity = clampLayerOpacity(options?.opacity?.bgc, visibility.hillshade3D ? 0.62 : INITIAL_LAYER_OPACITY.bgc);
   const bgcOutlineOpacity = computeBgcOutlineOpacity(bgcOpacity);
   const adminOpacity = clampLayerOpacity(options?.opacity?.admin, INITIAL_LAYER_OPACITY.admin);
+  const forestRegionFillOpacity = computeForestRegionFillOpacity(adminOpacity);
   const wmsOpacity = clampLayerOpacity(options?.opacity?.wms, INITIAL_LAYER_OPACITY.wms);
 
   const sources: Record<string, SourceSpecification> = {
@@ -479,7 +815,7 @@ export function buildMapLibreGeospatialStyle(
   if (bgcAvailable) {
     sources.bc_bgc_pmtiles = {
       type: 'vector',
-      url: resolvePMTilesArchiveUrl('bc-bgc-v13.pmtiles', options?.pmtilesBaseUrl),
+      url: resolvePMTilesArchiveUrl('bc-bgc-v13.pmtiles', options?.pmtilesBaseUrl, options?.bgcCacheVersion),
       minzoom: 3,
       maxzoom: bgcMaxZoom,
       attribution: 'BC Ministry of Forests BEC v13',
@@ -491,7 +827,7 @@ export function buildMapLibreGeospatialStyle(
       url: resolvePMTilesArchiveUrl('bc-admin-ecosections-districts.pmtiles', options?.pmtilesBaseUrl),
       minzoom: 3,
       maxzoom: adminMaxZoom,
-      attribution: 'GeoBC Ecosections & NR Districts',
+      attribution: 'GeoBC Ecosections, Forest Regions & NR Districts',
     };
   }
 
@@ -570,6 +906,33 @@ export function buildMapLibreGeospatialStyle(
 
   if (adminAvailable) {
     layers.push(
+      {
+        id: 'forest-regions-fill',
+        type: 'fill',
+        source: 'bc_admin_pmtiles',
+        'source-layer': 'nr_districts',
+        layout: {
+          visibility: visibility.forestRegions ? 'visible' : 'none',
+        },
+        paint: {
+          'fill-color': buildForestRegionMatchExpression(),
+          'fill-opacity': forestRegionFillOpacity,
+        },
+      },
+      {
+        id: 'forest-regions-outline',
+        type: 'line',
+        source: 'bc_admin_pmtiles',
+        'source-layer': 'nr_districts',
+        layout: {
+          visibility: visibility.forestRegions ? 'visible' : 'none',
+        },
+        paint: {
+          'line-color': darkSurface ? '#FFFFFF' : '#1E5128',
+          'line-width': 2.2,
+          'line-opacity': adminOpacity,
+        },
+      },
       {
         id: 'ecosections-outline',
         type: 'line',
@@ -732,8 +1095,12 @@ export function classifyBasemapError(
     sourceId === 'vpro_basemap_base' ||
     sourceId === 'vpro_basemap_reference' ||
     lowerUrl.includes('server.arcgisonline.com') ||
+    lowerUrl.includes('tile.openstreetmap.org') ||
+    lowerUrl.includes('googleapis.com') ||
     lowerUrl.includes('/maps/bc-proxy/basemap') ||
     lowerMsg.includes('server.arcgisonline.com') ||
+    lowerMsg.includes('tile.openstreetmap.org') ||
+    lowerMsg.includes('googleapis.com') ||
     lowerMsg.includes('/maps/bc-proxy/basemap')
   ) {
     return `${basemapOpt.label} basemap tiles could not be loaded (offline or remote service unreachable). Offline map layers and plots remain active.`;
@@ -1354,12 +1721,13 @@ function bindGeospatialMapListeners(opts: {
 
 let maplibreWorkerInitialized = false;
 let pmtilesProtocolInitialized = false;
+let pmtilesProtocolInstance: { tiles?: Map<string, unknown> } | null = null;
 
 export function ensureMapLibrePMTilesProtocol<THandler>(
   setWorkerUrlFn: ((url: string) => void) | undefined,
   workerUrl: string,
   addProtocolFn: (scheme: string, handler: THandler) => void,
-  ProtocolCtor: new () => { tile: THandler }
+  ProtocolCtor: new () => { tile: THandler; tiles?: Map<string, unknown> }
 ): void {
   if (!maplibreWorkerInitialized) {
     if (typeof setWorkerUrlFn === 'function' && workerUrl) setWorkerUrlFn(workerUrl);
@@ -1368,11 +1736,105 @@ export function ensureMapLibrePMTilesProtocol<THandler>(
   if (pmtilesProtocolInitialized) return;
   try {
     const protocol = new ProtocolCtor();
+    pmtilesProtocolInstance = protocol;
     addProtocolFn('pmtiles', protocol.tile);
   } catch {
     // Ignore duplicate protocol registration
   }
   pmtilesProtocolInitialized = true;
+}
+
+/**
+ * Evicts cached PMTiles reader instances inside the active MapLibre protocol handler
+ * so hot-reloading a newly synced bc-bgc-v13.pmtiles archive reads fresh header & tile bytes.
+ */
+export function invalidatePMTilesProtocolCache(archiveName?: string): number {
+  const map = pmtilesProtocolInstance?.tiles;
+  if (!map || typeof map.keys !== 'function') return 0;
+  const target = (archiveName ?? '').trim().toLowerCase();
+  let removed = 0;
+  for (const key of [...map.keys()]) {
+    if (!target || key.toLowerCase().includes(target)) {
+      map.delete(key);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
+export function formatMapByteSize(bytes: number | null | undefined): string {
+  if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes <= 0) {
+    return '0 B';
+  }
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(kb >= 100 ? 0 : 1)} KB`;
+  const mb = kb / 1024;
+  if (mb < 1024) return `${mb.toFixed(mb >= 100 ? 1 : 2)} MB`;
+  return `${(mb / 1024).toFixed(2)} GB`;
+}
+
+export function describeBGCMapSource(status: BGCMapSyncStatus | null | undefined): string {
+  if (!status || !status.available || status.activeSource === 'missing') {
+    return 'Not installed locally';
+  }
+  switch (status.activeSource) {
+    case 'dataDir':
+      return status.fullResolution
+        ? 'Local synced provincial map'
+        : 'Local synced map';
+    case 'extraDir':
+      return status.fullResolution
+        ? 'Shared local provincial map'
+        : 'Shared local map folder';
+    case 'embedded-overview':
+      return 'Built-in BC overview map';
+    default:
+      return status.activeSource;
+  }
+}
+
+export function formatSyncTimestamp(iso: string | null | undefined): string {
+  const trimmed = (iso ?? '').trim();
+  if (!trimmed) return 'Not available';
+  const parsed = Date.parse(trimmed);
+  if (!Number.isFinite(parsed)) return trimmed;
+  const d = new Date(parsed);
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const min = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${min} UTC`;
+}
+
+export function buildUpdatedManifestAfterBGCSync(
+  prevManifest: PMTilesManifest | null | undefined,
+  syncResult: BGCMapSyncResult
+): PMTilesManifest {
+  const archiveName = syncResult.archiveName || 'bc-bgc-v13.pmtiles';
+  const prevArchives = prevManifest?.archives ?? {};
+  const nextStatus = {
+    name: archiveName,
+    url: `/maps/${archiveName}`,
+    source: syncResult.status?.activeSource || 'dataDir',
+    available: syncResult.status?.available ?? true,
+    fullResolution: syncResult.status?.fullResolution ?? syncResult.maxZoom > 6,
+    fallbackOverview: syncResult.status?.fallbackOverview ?? false,
+    minZoom: syncResult.minZoom || syncResult.status?.minZoom || 3,
+    maxZoom: syncResult.maxZoom || syncResult.status?.maxZoom || 10,
+    sizeBytes: syncResult.sizeBytes || syncResult.status?.sizeBytes || 0,
+    ...(syncResult.status?.warning ? { warning: syncResult.status.warning } : {}),
+  };
+  const archives = { ...prevArchives, [archiveName]: nextStatus };
+  const ordered = Object.values(archives)
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return {
+    schemaVersion: prevManifest?.schemaVersion ?? 1,
+    archives,
+    ordered,
+  };
 }
 
 function handleGeospatialMapError(opts: {
@@ -1385,6 +1847,7 @@ function handleGeospatialMapError(opts: {
   wmsLayer: BCOpenMapsWMSLayerId;
   opacity: MapLayerOpacity;
   basemapOfflineWarning: string;
+  googleHybrid?: GoogleHybridConfig | null;
   project: string;
   manifest: PMTilesManifest | null | undefined;
   visibility: MapLayerVisibility;
@@ -1418,6 +1881,7 @@ function handleGeospatialMapError(opts: {
         basemap: opts.basemap,
         wmsLayer: opts.wmsLayer,
         opacity: opts.opacity,
+        googleHybrid: opts.googleHybrid,
       })
     );
   }
@@ -1464,7 +1928,17 @@ export function createGeospatialMapInstance<TMap, TOverlay>(
 
 export function routeGeospatialMapError(
   evt: unknown,
-  state: [boolean, string, string, boolean, MapBasemapId?, BCOpenMapsWMSLayerId?, MapLayerOpacity?, string?],
+  state: [
+    boolean,
+    string,
+    string,
+    boolean,
+    MapBasemapId?,
+    BCOpenMapsWMSLayerId?,
+    MapLayerOpacity?,
+    string?,
+    (GoogleHybridConfig | null)?,
+  ],
   manifest: PMTilesManifest | null | undefined,
   visibility: MapLayerVisibility,
   apply: (
@@ -1484,6 +1958,7 @@ export function routeGeospatialMapError(
     wmsLayer = DEFAULT_BC_WMS_LAYER,
     opacity = INITIAL_LAYER_OPACITY,
     basemapOfflineWarning = '',
+    googleHybrid = null,
   ] = state;
   handleGeospatialMapError({
     evt,
@@ -1495,6 +1970,7 @@ export function routeGeospatialMapError(
     wmsLayer,
     opacity,
     basemapOfflineWarning,
+    googleHybrid,
     project: '',
     manifest,
     visibility,

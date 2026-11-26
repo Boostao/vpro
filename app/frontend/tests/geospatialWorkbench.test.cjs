@@ -583,7 +583,7 @@ test('GeospatialWorkbench applyLayerOpacity never calls setStyle and online base
   // Slider drag only calls setPaintProperty, never setStyle
   host.actions.applyLayerOpacity();
   assert.equal(setStyleCalls, 0);
-  assert.equal(paintCalls.length, 5);
+  assert.equal(paintCalls.length, 7);
   assert.deepEqual(paintCalls[0], ['bgc-zones-fill', 'fill-opacity', 0.4]);
 
   // Switching to online basemap while offline triggers a non-blocking warning and still rebuilds style cleanly

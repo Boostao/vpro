@@ -4,8 +4,9 @@
     DEFAULT_BC_WMS_LAYER,
     DEFAULT_MAP_BASEMAP,
     getBCOpenMapsWMSOption,
-    getMapBasemapOption,
+    resolveActiveBasemap,
     type BCOpenMapsWMSLayerId,
+    type GoogleHybridConfig,
     type MapBasemapId,
   } from './geospatialWorkbench';
 
@@ -13,21 +14,28 @@
     aoiMatchedCount = 0,
     viewportMatchedCount = 0,
     basemap = DEFAULT_MAP_BASEMAP,
+    googleHybridConfig = null,
+    forestRegions = false,
     bcOpenMapsWMS = false,
     wmsLayer = DEFAULT_BC_WMS_LAYER,
   }: {
     aoiMatchedCount?: number;
     viewportMatchedCount?: number;
     basemap?: MapBasemapId;
+    googleHybridConfig?: GoogleHybridConfig | null;
+    forestRegions?: boolean;
     bcOpenMapsWMS?: boolean;
     wmsLayer?: BCOpenMapsWMSLayerId;
   } = $props();
 
   const attributionText = $derived.by(() => {
     const parts: string[] = [];
-    const baseOpt = getMapBasemapOption(basemap);
+    const baseOpt = resolveActiveBasemap(basemap, googleHybridConfig);
     if (baseOpt.online && baseOpt.attribution) {
       parts.push(`Basemap: ${baseOpt.attribution}`);
+    }
+    if (forestRegions) {
+      parts.push('Boundaries: BC Forest Regions (GeoBC)');
     }
     if (bcOpenMapsWMS) {
       const wmsOpt = getBCOpenMapsWMSOption(wmsLayer);

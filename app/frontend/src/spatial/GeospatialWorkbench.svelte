@@ -14,7 +14,12 @@
   import { Protocol } from 'pmtiles';
   import { MapboxOverlay } from '@deck.gl/mapbox';
   import { LineLayer, ScatterplotLayer } from '@deck.gl/layers';
-  import { ImportExportService, SpatialService } from '../../bindings/github.com/boostao/vpro/app';
+  import {
+    ImportExportService,
+    SpatialService,
+    type BGCMapSyncResult,
+    type BGCMapSyncStatus,
+  } from '../../bindings/github.com/boostao/vpro/app';
   import type { GeoPackageExportOutcome } from '../../bindings/github.com/boostao/vpro/app/internal/interchange/models';
   import * as geoOps from './geospatialWorkbench';
   import {
@@ -50,7 +55,7 @@
   let mapContainer: HTMLDivElement | undefined = $state();
   let [mapInstance, deckOverlay]: [MapLibreMap | null, MapboxOverlay | null] = [null, null];
   let alive = true;
-  let [loadGeneration, qaGeneration, inspectorGeneration] = [0, 0, 0];
+  let [loadGeneration, qaGeneration, inspectorGeneration, syncStatusGeneration] = [0, 0, 0, 0];
   let removeWindowListeners: (() => void) | null = null;
 
   let loading = $state(false);
@@ -74,9 +79,18 @@
   let basemap = $state<geoOps.MapBasemapId>(geoOps.DEFAULT_MAP_BASEMAP);
   let wmsLayer = $state<geoOps.BCOpenMapsWMSLayerId>(geoOps.DEFAULT_BC_WMS_LAYER);
   let layerOpacity = $state<geoOps.MapLayerOpacity>({ ...geoOps.INITIAL_LAYER_OPACITY });
+  let googleHybridConfig = $state<geoOps.GoogleHybridConfig>({ tileUrlTemplate: '', apiKey: '' });
+  let bgcTileRevision = $state('');
+  let bgcSyncStatus = $state<BGCMapSyncStatus | null>(null);
+  let bgcSyncLoading = $state(false);
+  let bgcSyncBusy = $state(false);
+  let bgcSyncUrl = $state('');
+  let bgcSyncSha256 = $state('');
+  let bgcSyncError = $state('');
+  let bgcLastSyncResult = $state<BGCMapSyncResult | null>(null);
   let zoneFilter = $state('');
   let plotSearch = $state('');
-  let activePanel = $state<'inspector' | 'aoi' | 'qa'>('inspector');
+  let activePanel = $state<'inspector' | 'aoi' | 'qa' | 'layers'>('inspector');
 
   let selectedPlot = $state<geoOps.WorkbenchPlotPoint | null>(null);
   let selectedSuggestion = $state<Awaited<ReturnType<typeof SpatialService.SuggestSpatialAttributes>> | null>(null);
@@ -155,6 +169,9 @@
     const curBasemap = typeof basemap !== 'undefined' ? basemap : 'offline-neutral';
     const curWmsLayer = typeof wmsLayer !== 'undefined' ? wmsLayer : 'bc-parks';
     const curOpacity = typeof layerOpacity !== 'undefined' ? $state.snapshot(layerOpacity) : undefined;
+    const curGoogleCfg =
+      typeof googleHybridConfig !== 'undefined' ? $state.snapshot(googleHybridConfig) : undefined;
+    const curBgcRev = typeof bgcTileRevision !== 'undefined' ? bgcTileRevision : '';
     if (!visibility.bcOpenMapsWMS) wmsOfflineWarning = '';
     else if (isOffline) {
       const nextWarn =
@@ -187,6 +204,8 @@
         basemap: curBasemap,
         wmsLayer: curWmsLayer,
         opacity: curOpacity,
+        ...(curGoogleCfg ? { googleHybrid: curGoogleCfg } : {}),
+        ...(curBgcRev ? { bgcCacheVersion: curBgcRev } : {}),
         ...(webPmtilesBase ? { pmtilesBaseUrl: webPmtilesBase } : {}),
       })
     );
@@ -219,6 +238,7 @@
       geoOps.BCOpenMapsWMSLayerId,
       geoOps.MapLayerOpacity,
       string,
+      geoOps.GoogleHybridConfig,
     ] = [
       visibility.bcOpenMapsWMS,
       wmsOfflineWarning,
@@ -228,6 +248,7 @@
       wmsLayer,
       $state.snapshot(layerOpacity),
       basemapOfflineWarning,
+      $state.snapshot(googleHybridConfig),
     ];
     geoOps.routeGeospatialMapError(
       evt,
@@ -262,6 +283,9 @@
       const curBasemap = typeof basemap !== 'undefined' ? basemap : 'offline-neutral';
       const curWmsLayer = typeof wmsLayer !== 'undefined' ? wmsLayer : 'bc-parks';
       const curOpacity = typeof layerOpacity !== 'undefined' ? $state.snapshot(layerOpacity) : undefined;
+      const curGoogleCfg =
+        typeof googleHybridConfig !== 'undefined' ? $state.snapshot(googleHybridConfig) : undefined;
+      const curBgcRev = typeof bgcTileRevision !== 'undefined' ? bgcTileRevision : '';
       const webPmtilesBase =
         typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY && typeof resolveWebPMTilesBaseUrl === 'function'
           ? resolveWebPMTilesBaseUrl(typeof getCachedWebMeta === 'function' ? getCachedWebMeta() : null)
@@ -270,6 +294,8 @@
         basemap: curBasemap,
         wmsLayer: curWmsLayer,
         opacity: curOpacity,
+        ...(curGoogleCfg ? { googleHybrid: curGoogleCfg } : {}),
+        ...(curBgcRev ? { bgcCacheVersion: curBgcRev } : {}),
         ...(webPmtilesBase ? { pmtilesBaseUrl: webPmtilesBase } : {}),
       });
       const onLoad = () => {
@@ -551,22 +577,128 @@
     }
   };
 
+  function saveGoogleHybridSettings(next: geoOps.GoogleHybridConfig) {
+    const normalized: geoOps.GoogleHybridConfig = {
+      tileUrlTemplate: (next.tileUrlTemplate ?? '').trim(),
+      apiKey: (next.apiKey ?? '').trim(),
+    };
+    googleHybridConfig = normalized;
+    geoOps.saveGoogleHybridConfig(normalized);
+    applyLayerVisibilities();
+  }
+
+  function openLayersSyncTab() {
+    aoiDrawMode = false;
+    activePanel = 'layers';
+    if (!IS_WEB_READONLY && !bgcSyncStatus && !bgcSyncLoading) {
+      void loadBgcMapSyncStatus();
+    }
+  }
+
+  async function loadBgcMapSyncStatus() {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
+    if (typeof SpatialService?.GetBGCMapSyncStatus !== 'function') return;
+    const gen = ++syncStatusGeneration;
+    bgcSyncLoading = true;
+    bgcSyncError = '';
+    try {
+      const status = await SpatialService.GetBGCMapSyncStatus();
+      if (!alive || gen !== syncStatusGeneration) return;
+      bgcSyncStatus = status;
+      if (!bgcSyncUrl.trim() && status?.defaultSourceUrl) {
+        bgcSyncUrl = status.defaultSourceUrl;
+      }
+    } catch (cause) {
+      if (alive && gen === syncStatusGeneration) {
+        bgcSyncError = `Could not check BGC base map status: ${formatError(cause)}`;
+      }
+    } finally {
+      if (alive && gen === syncStatusGeneration) {
+        bgcSyncLoading = false;
+      }
+    }
+  }
+
+  async function syncLatestBgcMap(sourceUrl: string, expectedSha256: string) {
+    if (typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY) return;
+    if (bgcSyncBusy || typeof SpatialService?.SyncLatestBGCMap !== 'function') return;
+    const trimmedUrl = sourceUrl.trim();
+    const trimmedSha = expectedSha256.trim();
+    const meta = { category: 'entry' as const, source: '3D Map', contextTag: project || undefined };
+    if (!trimmedUrl) {
+      bgcSyncError = 'Enter an HTTPS source URL for the provincial BGC v13 map before syncing.';
+      notifications.error('BGC map URL required', bgcSyncError, meta);
+      return;
+    }
+    [bgcSyncBusy, bgcSyncError, errorMsg, statusMsg] = [true, '', '', ''];
+    setBusyState(true);
+    try {
+      const res = await SpatialService.SyncLatestBGCMap(trimmedUrl, trimmedSha);
+      if (!alive || !res) return;
+      bgcLastSyncResult = res;
+      if (res.status) {
+        bgcSyncStatus = res.status;
+      }
+      if (res.sourceUrl) {
+        bgcSyncUrl = res.sourceUrl;
+      }
+      geoOps.invalidatePMTilesProtocolCache(res.archiveName || 'bc-bgc-v13.pmtiles');
+      bgcTileRevision = res.sha256 ? res.sha256.slice(0, 12) : String(Date.now());
+      let nextManifest = geoOps.buildUpdatedManifestAfterBGCSync(payload?.manifest, res);
+      if (typeof SpatialService.GetPMTilesManifest === 'function') {
+        try {
+          const freshManifest = await SpatialService.GetPMTilesManifest();
+          if (alive && freshManifest?.archives) {
+            nextManifest = freshManifest;
+          }
+        } catch {
+          // Keep locally derived manifest from sync result
+        }
+      }
+      if (!alive) return;
+      if (payload) {
+        payload = { ...payload, manifest: nextManifest };
+      }
+      pmtilesGraticuleFallback = false;
+      pmtilesArchiveWarning = summarizePMTilesManifestWarnings(nextManifest) ?? '';
+      applyLayerVisibilities();
+      statusMsg = `Synced BGC base map (${geoOps.formatMapByteSize(res.sizeBytes)}, z${res.minZoom}..${res.maxZoom}) and reloaded the map live.`;
+      notifications.success('BGC base map updated', statusMsg, meta);
+    } catch (cause) {
+      if (alive) {
+        const msg = `BGC base map sync failed: ${formatError(cause)}`;
+        [bgcSyncError, errorMsg] = [msg, msg];
+        notifications.error('BGC base map sync failed', msg, meta);
+      }
+    } finally {
+      if (alive) {
+        bgcSyncBusy = false;
+        setBusyState(loading || mutating || gpkgExporting);
+      }
+    }
+  }
+
   onMount(() => {
+    googleHybridConfig = geoOps.loadGoogleHybridConfig();
     void geoOps.detectSpatialComputeBackend().then((info) => {
       if (alive) computeInfo = info;
     });
     removeWindowListeners = geoOps.bindWindowConnectivityListeners(handleBrowserOffline, handleBrowserOnline);
     initializeMapCanvas();
     void loadWorkbenchData();
+    if (!IS_WEB_READONLY) {
+      void loadBgcMapSyncStatus();
+    }
   });
 
   onDestroy(() => {
     alive = false;
     removeWindowListeners?.();
-    [loadGeneration, qaGeneration, inspectorGeneration] = [
+    [loadGeneration, qaGeneration, inspectorGeneration, syncStatusGeneration] = [
       loadGeneration + 1,
       qaGeneration + 1,
       inspectorGeneration + 1,
+      syncStatusGeneration + 1,
     ];
     setBusyState(false);
     geoOps.disposeGeospatialMap(mapInstance, deckOverlay);
@@ -587,8 +719,10 @@
   const stgC = $derived({ gpkgExporting, gpkgOutcome, loading, mutating, aoiDrawMode, viewportMatchedCount });
   const stgD = $derived({
     aoiMatchedCount: aoiPreview?.matchedCount ?? 0,
+    googleHybridConfig,
     onFitBounds: fitBounds,
     onRefreshStream: refreshStream,
+    onOpenLayersSyncTab: openLayersSyncTab,
   });
   const stgE = {
     onApplyLayers: applyLayerVisibilities,
@@ -600,13 +734,30 @@
   const drwB = $derived({ selectedPlot, selectedSuggestion, suggestionBusy, filteredPoints, qaReport });
   const drwC = $derived({ qaCoordinateDiagnosticRows, loading, mutating, onOpenPlot, onInspectPlot: inspectPlotPin });
   const drwD = { getViewportBounds: getBounds, onSyncAOIOverlay: syncAOIOverlay, onRunMutation: runMutation };
-  const drwE = { onPushError: pushGeoError, onCommittedAOI: handleCommittedAOI, onLoadBatchAuditQA: loadBatchAuditQA };
+  const drwE = {
+    onPushError: pushGeoError,
+    onCommittedAOI: handleCommittedAOI,
+    onLoadBatchAuditQA: loadBatchAuditQA,
+    onApplyLayers: applyLayerVisibilities,
+    onSaveGoogleHybridConfig: saveGoogleHybridSettings,
+    onRefreshBgcSyncStatus: loadBgcMapSyncStatus,
+    onSyncLatestBgcMap: syncLatestBgcMap,
+  };
+  const drwSync = $derived({
+    googleHybridConfig,
+    bgcSyncStatus,
+    bgcSyncLoading,
+    bgcSyncBusy,
+    bgcSyncError,
+    bgcLastSyncResult,
+  });
   const drwAll = $derived({
     ...drwA,
     ...drwB,
     ...drwC,
     ...drwD,
     ...drwE,
+    ...drwSync,
     onApplyStamp: applyAuto1SpatialStamp,
     aoiFilterActive,
     onToggleAoiFilter: (active: boolean) => {
@@ -632,6 +783,10 @@
     <GeospatialSidebarDrawer
       {...drwAll}
       bind:activePanel
+      bind:basemap
+      bind:visibility
+      bind:bgcSyncUrl
+      bind:bgcSyncSha256
       bind:aoiDrawMode
       bind:aoiTargetMode
       bind:aoiSUName
