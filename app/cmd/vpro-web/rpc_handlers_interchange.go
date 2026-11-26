@@ -660,4 +660,50 @@ func (r *RPCRouter) registerImportExportHandlers() {
 			}, nil
 		})
 	})
+
+	r.register(svc, "ExportVPro64Database", "download", false, func(c *rpcCall) (any, error) {
+		if err := c.requireArgCount(2); err != nil {
+			return nil, err
+		}
+		contextID, err := decodeArg[string](c, 0)
+		if err != nil {
+			return nil, err
+		}
+		req, err := decodeArg[interchange.VPro64ExportRequest](c, 1)
+		if err != nil {
+			return nil, err
+		}
+		return c.withExportSlot(func(ctx context.Context) (*downloadResult, error) {
+			lease, err := c.server.pool.AcquireByContextID(ctx, contextID, c.session.Prefs)
+			if err != nil {
+				return nil, err
+			}
+			defer lease.Release()
+
+			filename := sanitizeDownloadFilename(lease.Dataset.Project + "-vpro64.db")
+			filePath, dirPath, cleanup, err := c.server.downloads.MintTempPath(filename)
+			if err != nil {
+				return nil, err
+			}
+			// Strictly ignore client-supplied destinationPath and write inside VPRO_WEB_EXPORT_DIR/downloads.
+			req.DestinationPath = filePath
+
+			outcome, err := interchange.ExportVPro64Database(lease.Context, ctx, contextID, req)
+			if err != nil {
+				cleanup()
+				return nil, err
+			}
+			_, dlURL, safeName, err := c.server.downloads.Register(outcome.DestinationPath, dirPath, filename)
+			if err != nil {
+				cleanup()
+				return nil, err
+			}
+			outcome.DestinationPath = safeName
+			return &downloadResult{
+				Outcome:     outcome,
+				DownloadURL: dlURL,
+				Filename:    safeName,
+			}, nil
+		})
+	})
 }

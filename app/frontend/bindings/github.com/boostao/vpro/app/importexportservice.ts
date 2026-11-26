@@ -27,6 +27,10 @@ export function ChooseTableCSVArchiveFile(): $CancellablePromise<string> {
     return $Call.ByID(859535005);
 }
 
+export function ChooseVPro64ExportFile(): $CancellablePromise<string> {
+    return $Call.ByID(2726305144);
+}
+
 export function CreateLumpTable(contextID: string, name: string): $CancellablePromise<lumping$0.LumpTableSummary> {
     return $Call.ByID(3850841348, contextID, name);
 }
@@ -69,6 +73,10 @@ export function ExportTurboVeg(contextID: string, request: interchange$0.TurboVe
 
 export function ExportUserSpeciesList(contextID: string, request: interchange$0.UserSpeciesExportRequest): $CancellablePromise<interchange$0.UserSpeciesExportResult> {
     return $Call.ByID(102245419, contextID, request);
+}
+
+export function ExportVPro64Database(contextID: string, request: interchange$0.VPro64ExportRequest): $CancellablePromise<interchange$0.VPro64ExportOutcome> {
+    return $Call.ByID(2021159186, contextID, request);
 }
 
 export function ExportWideMatrixCSV(contextID: string, request: interchange$0.WideMatrixCSVRequest): $CancellablePromise<interchange$0.CSVExportOutcome> {

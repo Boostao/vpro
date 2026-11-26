@@ -30,6 +30,9 @@ import * as plotentry$0 from "./internal/plotentry/models.js";
 import * as references$0 from "./internal/references/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as reportcore$0 from "./internal/reports/reportcore/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as rsidecar$0 from "./internal/rsidecar/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -73,6 +76,28 @@ export type AssignSpatialAOIToSURequest = spatial$0.AssignSpatialAOIToSURequest;
 
 export type AssignSpatialAOIToSUResult = spatial$0.AssignSpatialAOIToSUResult;
 
+export type AttachWorkspaceResourceRequest = vprocore$0.AttachWorkspaceResourceRequest;
+
+export type AttachWorkspaceResourceResult = vprocore$0.AttachWorkspaceResourceResult;
+
+/**
+ * AttachableFileInspection unifies SQLite (.db/.sqlite/.sqlite3) and Microsoft Access
+ * (.accdb/.mdb) inspection for the unified Work Space Attach dialog.
+ */
+export interface AttachableFileInspection {
+    "selectedPath": string;
+
+    /**
+     * "sqlite" | "access"
+     */
+    "fileKind": string;
+    "requiresConvert": boolean;
+    "projects": vprocore$0.ProjectInfo[] | null;
+    "sus": vprocore$0.SUInfo[] | null;
+    "hierarchies": vprocore$0.HierarchyInfo[] | null;
+    "accessInspection"?: interchange$0.AccessDatabaseInspection | null;
+}
+
 export type AuditEntry = vprocore$0.AuditEntry;
 
 export enum AuditRestoreAction {
@@ -90,6 +115,12 @@ export type AuditRestoreResult = vprocore$0.AuditRestoreResult;
 
 export type BECCatalogueStatus = references$0.BECCatalogueStatus;
 
+export type BECMasterFilterOptions = spatial$0.BECMasterFilterOptions;
+
+export type BECMasterFilterRequest = spatial$0.BECMasterFilterRequest;
+
+export type BECMasterFilterResult = spatial$0.BECMasterFilterResult;
+
 export type BECSiteSeries = references$0.BECSiteSeries;
 
 export type BECSubZone = references$0.BECSubZone;
@@ -99,6 +130,10 @@ export type BECUnitPickerChoice = classification$0.BECUnitPickerChoice;
 export type BECUnitPickerRequest = classification$0.BECUnitPickerRequest;
 
 export type BECZone = references$0.BECZone;
+
+export type BGCMapSyncResult = spatial$0.BGCMapSyncResult;
+
+export type BGCMapSyncStatus = spatial$0.BGCMapSyncStatus;
 
 export type ClimateEdatopicRequest = rsidecar$0.ClimateEdatopicRequest;
 
@@ -135,6 +170,10 @@ export type CreateTwoPageVegetationRequest = twopage$0.CreateTwoPageVegetationRe
 
 export type CreateTwoPageVegetationResult = twopage$0.CreateTwoPageVegetationResult;
 
+export type CreateWorkspaceResourceRequest = vprocore$0.CreateWorkspaceResourceRequest;
+
+export type CreateWorkspaceResourceResult = vprocore$0.CreateWorkspaceResourceResult;
+
 export type DatasheetDeleteChildRowRequest = datasheet$0.DatasheetDeleteChildRowRequest;
 
 export type DatasheetDeleteChildRowResult = datasheet$0.DatasheetDeleteChildRowResult;
@@ -164,6 +203,8 @@ export type DeleteTwoPageVegetationResult = twopage$0.DeleteTwoPageVegetationRes
 export type DeleteUserSiteUnitRequest = classification$0.DeleteUserSiteUnitRequest;
 
 export type DeletedTwoPageVegetationEntry = twopage$0.DeletedTwoPageVegetationEntry;
+
+export type EnsureMensurationTablesResult = vprocore$0.EnsureMensurationTablesResult;
 
 export type EnvironmentSiteUnitResult = classification$0.EnvironmentSiteUnitResult;
 
@@ -202,6 +243,8 @@ export type GoogleEarthPreferencesOutcome = spatial$0.GoogleEarthPreferencesOutc
 export type GoogleEarthPreferencesReview = spatial$0.GoogleEarthPreferencesReview;
 
 export type GoogleEarthReview = spatial$0.GoogleEarthReview;
+
+export type HTMLReportResult = reportcore$0.HTMLReportResult;
 
 export type HeightRecordUpdate = vprocore$0.HeightRecordUpdate;
 
@@ -397,6 +440,8 @@ export type PlotLabelRegionalPreview = interchange$0.PlotLabelRegionalPreview;
 
 export type PlotLocationReview = vprocore$0.PlotLocationReview;
 
+export type PlotMensurationData = vprocore$0.PlotMensurationData;
+
 export type PlotPage = vprocore$0.PlotPage;
 
 export type PlotProfileFileCreated = classification$0.PlotProfileFileCreated;
@@ -478,6 +523,22 @@ export type PromoteCandidateSUResult = rsidecar$0.PromoteCandidateSUResult;
 export type QuartoGuideRequest = rsidecar$0.QuartoGuideRequest;
 
 export type QuartoGuideResult = rsidecar$0.QuartoGuideResult;
+
+export type QuickEnvReportExportResult = envreport$0.QuickEnvReportExportResult;
+
+export type QuickLifeformReportRequest = vegreport$0.QuickLifeformReportRequest;
+
+export type QuickLongEnvironmentRequest = envreport$0.QuickLongEnvironmentRequest;
+
+export type QuickLongVegetationRequest = vegreport$0.QuickLongVegetationRequest;
+
+export type QuickSubzoneMatrixRequest = envreport$0.QuickSubzoneMatrixRequest;
+
+export type QuickSummaryEnvironmentRequest = envreport$0.QuickSummaryEnvironmentRequest;
+
+export type QuickSummaryVegetationRequest = vegreport$0.QuickSummaryVegetationRequest;
+
+export type QuickVegReportExportResult = vegreport$0.QuickVegReportExportResult;
 
 export type RRuntimeStatus = rsidecar$0.RRuntimeStatus;
 
@@ -613,6 +674,8 @@ export type SpeciesCodeCheckUpdate = validation$0.SpeciesCodeCheckUpdate;
 
 export type SpeciesItem = references$0.SpeciesItem;
 
+export type SpreadsheetAppPreference = vprocore$0.SpreadsheetAppPreference;
+
 export type StartupRecoveryRequest = lifecycle$0.StartupRecoveryRequest;
 
 export type StartupState = lifecycle$0.StartupState;
@@ -667,6 +730,10 @@ export type TableCSVArchiveOutcome = interchange$0.TableCSVArchiveOutcome;
 
 export type TableCSVArchiveReview = interchange$0.TableCSVArchiveReview;
 
+export type TreePlotRecord = vprocore$0.TreePlotRecord;
+
+export type TreeRowRecord = vprocore$0.TreeRowRecord;
+
 export type TwoPageEntryReferenceFilters = twopage$0.TwoPageEntryReferenceFilters;
 
 export type TwoPageEntryReferenceSnapshot = twopage$0.TwoPageEntryReferenceSnapshot;
@@ -707,6 +774,10 @@ export type TwoPageVegetationTableReview = datasheet$0.TwoPageVegetationTableRev
 
 export type TwoPageVegetationWriteResult = twopage$0.TwoPageVegetationWriteResult;
 
+export type UnattachWorkspaceResourceRequest = vprocore$0.UnattachWorkspaceResourceRequest;
+
+export type UnattachWorkspaceResourceResult = vprocore$0.UnattachWorkspaceResourceResult;
+
 export type UndoSynthesisReassignmentRequest = diagnostics$0.UndoSynthesisReassignmentRequest;
 
 export type UpsertUserSiteUnitRequest = classification$0.UpsertUserSiteUnitRequest;
@@ -746,3 +817,5 @@ export type WhatsNewStatus = lifecycle$0.WhatsNewStatus;
 export type WorkingUnitChoice = vprocore$0.WorkingUnitChoice;
 
 export type WorkingUnitModeState = vprocore$0.WorkingUnitModeState;
+
+export type WorkspaceResourceEntry = vprocore$0.WorkspaceResourceEntry;

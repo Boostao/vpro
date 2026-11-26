@@ -698,6 +698,106 @@ export interface LongVegetationUnitPreferencesReview {
     "availability": LongVegetationUnitAvailability;
 }
 
+/**
+ * QuickLifeformReportRequest configures one-step Lifeform & Species Attribute HTML or XLSX generation.
+ */
+export interface QuickLifeformReportRequest {
+    /**
+     * "auto" | "su" | "zone-subzone" | "all-plots"
+     */
+    "scopeMode"?: string;
+    "details"?: boolean[] | null;
+    "destinationPath"?: string;
+    "openInSpreadsheet"?: boolean;
+}
+
+/**
+ * QuickLongVegetationRequest configures one-step Long Vegetation HTML or XLSX generation.
+ */
+export interface QuickLongVegetationRequest {
+    "title"?: string | null;
+
+    /**
+     * "layer" | "strata" | "lifeform" | "none"
+     */
+    "grouping"?: string;
+
+    /**
+     * "all-plots" | "non-zero"
+     */
+    "average"?: string;
+
+    /**
+     * "presence" | "mean-cover" | "species"
+     */
+    "order"?: string;
+    "showEnglishName"?: boolean | null;
+    "showSpeciesCode"?: boolean | null;
+    "constantSpeciesList"?: boolean | null;
+    "presenceGreaterThan"?: number | null;
+    "meanCoverGreaterThan"?: number | null;
+    "combineVariants"?: boolean | null;
+    "lumpTable"?: string | null;
+
+    /**
+     * "auto" | "su" | "zone-subzone" | "all-plots"
+     */
+    "scopeMode"?: string;
+    "savePreferences"?: boolean | null;
+    "destinationPath"?: string;
+    "openInSpreadsheet"?: boolean;
+}
+
+/**
+ * QuickSummaryVegetationRequest configures one-step Summary Vegetation HTML or XLSX generation.
+ */
+export interface QuickSummaryVegetationRequest {
+    "title"?: string | null;
+    "average"?: number | null;
+    "display"?: number | null;
+    "showClass"?: number | null;
+    "groupBy"?: number | null;
+
+    /**
+     * "auto" | "su" | "none" | "field" | "hierarchy"
+     */
+    "unitScope"?: string;
+    "unitField"?: string;
+    "showCommon"?: boolean | null;
+    "showGuide"?: boolean | null;
+    "includeEnv"?: boolean | null;
+    "createSummary"?: boolean | null;
+    "combineVariants"?: boolean | null;
+    "constancy"?: boolean | null;
+    "hierarchyHeader"?: boolean | null;
+    "lumpTable"?: string | null;
+    "valueLimit"?: number | null;
+    "savePreferences"?: boolean | null;
+    "destinationPath"?: string;
+    "openInSpreadsheet"?: boolean;
+}
+
+/**
+ * QuickVegReportExportResult summarizes a streamlined one-step vegetation workbook export.
+ */
+export interface QuickVegReportExportResult {
+    "reportKind": string;
+    "title": string;
+    "project": string;
+    "su": string;
+    "scopeLabel": string;
+    "fallbackNotice"?: string;
+    "unitCount": number;
+    "plotCount": number;
+    "rowCount": number;
+    "path": string;
+    "sha256": string;
+    "bytes": number;
+    "preferencesSaved": boolean;
+    "openedInSpreadsheet": boolean;
+    "spreadsheetNotice"?: string;
+}
+
 export interface RetainedSiteUnitInfo {
     "siteUnit": string;
     "plotCount": number;

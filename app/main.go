@@ -90,6 +90,17 @@ func newWailsServiceGraph(
 	closeService *lifecyclepkg.CloseService,
 	lookupEnv func(string) (string, bool),
 ) wailsServiceGraph {
+	return newWailsServiceGraphWithAuthLock(dataDir, configDir, refs, cloudSyncManager, closeService, lookupEnv, false)
+}
+
+func newWailsServiceGraphWithAuthLock(
+	dataDir, configDir string,
+	refs *referenceCatalogBundle,
+	cloudSyncManager *cloudsyncpkg.Manager,
+	closeService *lifecyclepkg.CloseService,
+	lookupEnv func(string) (string, bool),
+	enforceAuthLock bool,
+) wailsServiceGraph {
 	if lookupEnv == nil {
 		lookupEnv = os.LookupEnv
 	}
@@ -130,6 +141,13 @@ func newWailsServiceGraph(
 		}
 		plots := active.plots
 		contextService := active.contextSvc
+		if enforceAuthLock {
+			if mgr, core, authErr := contextService.authManager(); authErr != nil {
+				log.Printf("Warning: failed to initialize desktop auth edit-lock: %v", authErr)
+			} else if mgr != nil {
+				syncAuthActorToPlots(core, mgr.CachedSessionSummary())
+			}
+		}
 
 		var workingUnits *vprocorepkg.WorkingUnitService
 		abort := func(cause error) (StartupState, error) {
@@ -238,7 +256,18 @@ func buildDesktopServices(
 	closeService *lifecyclepkg.CloseService,
 	lookupEnv func(string) (string, bool),
 ) ([]application.Service, wailsServiceGraph) {
-	wailsGraph := newWailsServiceGraph(dataDir, configDir, refs, cloudSyncManager, closeService, lookupEnv)
+	return buildDesktopServicesWithAuthLock(dataDir, configDir, refs, cloudSyncManager, closeService, lookupEnv, false)
+}
+
+func buildDesktopServicesWithAuthLock(
+	dataDir, configDir string,
+	refs *referenceCatalogBundle,
+	cloudSyncManager *cloudsyncpkg.Manager,
+	closeService *lifecyclepkg.CloseService,
+	lookupEnv func(string) (string, bool),
+	enforceAuthLock bool,
+) ([]application.Service, wailsServiceGraph) {
+	wailsGraph := newWailsServiceGraphWithAuthLock(dataDir, configDir, refs, cloudSyncManager, closeService, lookupEnv, enforceAuthLock)
 	services := []application.Service{
 		application.NewService(wailsGraph.lifecycle),
 		application.NewService(wailsGraph.context),
@@ -273,7 +302,7 @@ func main() {
 	}
 
 	cloudSyncManager := NewCloudSyncManager(configDir)
-	services, wailsGraph := buildDesktopServices(dataDir, configDir, refs, cloudSyncManager, closeService, os.LookupEnv)
+	services, wailsGraph := buildDesktopServicesWithAuthLock(dataDir, configDir, refs, cloudSyncManager, closeService, os.LookupEnv, true)
 	runtimeTracker := wailsGraph.tracker
 
 	var window *application.WebviewWindow

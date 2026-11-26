@@ -42,13 +42,18 @@ export const ALLOWED_KINDS = new Set(['rpc', 'prefs', 'download']);
  * in-memory preference or read-only query exception.
  */
 export const FORBIDDEN_METHOD_PREFIX_RE =
-  /^(?:Add|Apply|Assign|Bootstrap|Cancel|Choose|Close|Compare|Confirm|Configure|Create|Delete|Execute|Import|Insert|Inspect|Materialize|Merge|Promote|Publish|Pull|Quarantine|Reassign|Recover|Reject|Release|Reload|Rename|Reparent|Reset|Restore|Reveal|Seed|Splinter|Submit|TestCloud|Toggle|Transfer|Undo|Update|Upsert|VerifyBECMaster)/;
+  /^(?:Add|Apply|Assign|Attach|Begin|Bootstrap|Cancel|Choose|Close|Compare|Complete|Confirm|Configure|Create|Delete|Ensure|Execute|Import|Insert|Inspect|Materialize|Merge|Open|Promote|Publish|Pull|Quarantine|QuickRun|Reassign|Record|Recover|Reject|Release|Reload|Rename|Reparent|Reset|Restore|Reveal|Seed|SignOut|Splinter|Submit|Sync|TestCloud|Toggle|Transfer|Unattach|Undo|Update|Upsert|VerifyBECMaster)/;
 
 export const FORBIDDEN_METHOD_SUBSTRING_RE =
   /(?:UserLog|UserSetup|UserAccreditation|Cloud|Staging|BECMaster|DeletionHistory|DeletedRow|DeletedHorizon|UndoHistory|Receipt|Splinter|ThreeWayMerge|PendingClose|CreationImage|CreationSelection|PictureOptions$|MetadataRestore|PlotProfileFileCreation|PlotProfileTableCreation|SpeciesCodeCheck|VegetationDeletion)/i;
 
 const AUDIT_SUBSTRING_RE = /Audit/i;
 const ALLOWED_AUDIT_EXCEPTIONS = new Set(['SpatialService.BatchAuditSpatialQA']);
+
+const ALLOWED_BECMASTER_READ_EXCEPTIONS = new Set([
+  'SpatialService.GetBECMasterFilterOptions',
+  'SpatialService.FilterBECMasterPlots',
+]);
 
 const ALLOWED_SAVE_PREFS_RE =
   /^Save(?:LongVegetation(?:[A-Za-z]*Preferences|ProjectUnits)|SummaryVegetation(?:Presentation|Quality)?Preferences|FullSiteUnitSummaryPreferences|SiteUnitSummaryPreferences|LongEnvironmentPreferences|GoogleEarthPreferences)$/;
@@ -77,6 +82,7 @@ export function checkDenylist(service, method, kind) {
 
   if (
     qualified !== ALLOWED_GET_PICTURE_OPTIONS_EXCEPTION &&
+    !ALLOWED_BECMASTER_READ_EXCEPTIONS.has(qualified) &&
     FORBIDDEN_METHOD_SUBSTRING_RE.test(method)
   ) {
     return `${qualified}: matches forbidden audit/cloud/user-setup/receipt/recovery substring`;

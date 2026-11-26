@@ -7,6 +7,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as auth$0 from "./internal/auth/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as cloudsync$0 from "./internal/cloudsync/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -36,6 +39,22 @@ export function ApplyProjectMetadataAutomation(contextID: string, req: projectop
     return $Call.ByID(2850448861, contextID, req);
 }
 
+/**
+ * AttachWorkspaceResource attaches a SQLite Project, SU, or Hierarchy into the workspace.
+ * When given a Microsoft Access (.accdb/.mdb) database, it automatically converts the
+ * Access database to a clean VP08 SQLite .db file via interchange before attaching.
+ */
+export function AttachWorkspaceResource(contextID: string, req: $models.AttachWorkspaceResourceRequest): $CancellablePromise<$models.AttachWorkspaceResourceResult> {
+    return $Call.ByID(2157072200, contextID, req);
+}
+
+/**
+ * BeginOIDCSignIn initiates the BC Gov OIDC Authorization Code + PKCE browser flow on 127.0.0.1:0.
+ */
+export function BeginOIDCSignIn(providerHint: string): $CancellablePromise<auth$0.SignInResult> {
+    return $Call.ByID(593376544, providerHint);
+}
+
 export function BootstrapCloudSchemas(): $CancellablePromise<cloudsync$0.SchemaBootstrapResult> {
     return $Call.ByID(1062558199);
 }
@@ -48,6 +67,13 @@ export function ChooseAccessDatabaseFile(contextID: string): $CancellablePromise
     return $Call.ByID(2171308614, contextID);
 }
 
+/**
+ * ChooseAttachableFile opens a native OS file picker accepting VPro SQLite and Access databases.
+ */
+export function ChooseAttachableFile(contextID: string, kind: string): $CancellablePromise<string> {
+    return $Call.ByID(166675928, contextID, kind);
+}
+
 export function ChooseExternalSQLiteFile(contextID: string): $CancellablePromise<vprocore$0.ExternalSQLiteFileInspection> {
     return $Call.ByID(2647311902, contextID);
 }
@@ -58,6 +84,13 @@ export function ChooseNewSQLiteProjectFile(contextID: string, suggestedProject: 
 
 export function CompareProjects(contextID: string, req: projectops$0.CompareProjectsRequest): $CancellablePromise<projectops$0.CompareProjectsResult> {
     return $Call.ByID(1284711039, contextID, req);
+}
+
+/**
+ * CompleteDevEvaluationSignIn signs in using a local evaluation identity (strictly gated to dev builds without OIDC configured).
+ */
+export function CompleteDevEvaluationSignIn(userID: string, displayName: string, role: string): $CancellablePromise<auth$0.SessionSummary> {
+    return $Call.ByID(3632489576, userID, displayName, role);
 }
 
 export function ConfigureCloudSyncSession(req: cloudsync$0.SessionConfigRequest): $CancellablePromise<cloudsync$0.CloudConfigStatus> {
@@ -108,6 +141,14 @@ export function CreateSourceVegetation(contextID: string, plot: string, request:
     return $Call.ByID(2288682951, contextID, plot, request);
 }
 
+/**
+ * CreateWorkspaceResource creates a new standalone Project / SU / Hierarchy .db file
+ * or adds a new SU / Hierarchy table inside an existing multi-SU SQLite database.
+ */
+export function CreateWorkspaceResource(contextID: string, req: $models.CreateWorkspaceResourceRequest): $CancellablePromise<$models.CreateWorkspaceResourceResult> {
+    return $Call.ByID(2659794911, contextID, req);
+}
+
 export function DeleteHumusRecord(contextID: string, plot: string, id: number): $CancellablePromise<void> {
     return $Call.ByID(1969994408, contextID, plot, id);
 }
@@ -152,12 +193,26 @@ export function ExportSplinterProject(contextID: string, req: projectops$0.Expor
     return $Call.ByID(2515306062, contextID, req);
 }
 
+/**
+ * GetAuthSession returns the current cached/refreshed BC Gov OIDC (or dev evaluation) session summary.
+ */
+export function GetAuthSession(): $CancellablePromise<auth$0.SessionSummary> {
+    return $Call.ByID(3925232228);
+}
+
 export function GetChildCapabilities(contextID: string, kind: string): $CancellablePromise<{ [_ in string]?: boolean } | null> {
     return $Call.ByID(888099326, contextID, kind);
 }
 
 export function GetCloudSyncConfigStatus(): $CancellablePromise<cloudsync$0.CloudConfigStatus> {
     return $Call.ByID(529381712);
+}
+
+/**
+ * GetEditLockStatus reports whether data editing is locked for the active project and why.
+ */
+export function GetEditLockStatus(contextID: string): $CancellablePromise<vprocore$0.EditLockState> {
+    return $Call.ByID(2915473563, contextID);
 }
 
 export function GetHeaderCapabilities(contextID: string): $CancellablePromise<{ [_ in string]?: boolean } | null> {
@@ -224,6 +279,10 @@ export function GetSiteUnitSummaryOptions(p1: string): $CancellablePromise<$mode
     return $Call.ByID(1799826469, p1);
 }
 
+export function GetSpreadsheetAppPreference(contextID: string): $CancellablePromise<$models.SpreadsheetAppPreference> {
+    return $Call.ByID(4114612594, contextID);
+}
+
 export function GetStagingSubmissionDetail(submissionID: string): $CancellablePromise<cloudsync$0.StagingSubmissionDetail> {
     return $Call.ByID(4148128418, submissionID);
 }
@@ -246,6 +305,14 @@ export function ImportAccessProject(p1: string, p2: $models.AccessProjectImportR
 
 export function InspectAccessDatabase(p1: string, p2: string): $CancellablePromise<$models.AccessDatabaseInspection> {
     return $Call.ByID(4149486817, p1, p2);
+}
+
+/**
+ * InspectAttachableFile inspects a SQLite (.db/.sqlite/.sqlite3) or Microsoft Access
+ * (.accdb/.mdb) file to list attachable Projects, SUs, and Hierarchies without mutating disk files.
+ */
+export function InspectAttachableFile(contextID: string, path: string): $CancellablePromise<$models.AttachableFileInspection> {
+    return $Call.ByID(998702561, contextID, path);
 }
 
 export function InspectExternalSQLiteFile(contextID: string, path: string): $CancellablePromise<vprocore$0.ExternalSQLiteFileInspection> {
@@ -340,12 +407,23 @@ export function ListVegetationSpeciesUsers(contextID: string, lookup: vprocore$0
     return $Call.ByID(3585380524, contextID, lookup);
 }
 
+/**
+ * ListWorkspaceResources returns all managed and attached Projects, SUs, and Hierarchies.
+ */
+export function ListWorkspaceResources(contextID: string): $CancellablePromise<$models.WorkspaceResourceEntry[] | null> {
+    return $Call.ByID(3676377108, contextID);
+}
+
 export function LookupScopedPlot(contextID: string, request: vprocore$0.ScopedPlotLookup): $CancellablePromise<vprocore$0.ScopedPlotLookupResult> {
     return $Call.ByID(25132359, contextID, request);
 }
 
 export function LookupSpeciesCodeCheckTarget(p1: string, p2: $models.VegetationSpeciesLookup): $CancellablePromise<$models.SpeciesCodeCheckOption[] | null> {
     return $Call.ByID(1738673856, p1, p2);
+}
+
+export function OpenReportInSpreadsheet(contextID: string, filePath: string): $CancellablePromise<void> {
+    return $Call.ByID(2093595727, contextID, filePath);
 }
 
 export function PreviewBECMasterSubset(filter: cloudsync$0.SubsetFilter): $CancellablePromise<cloudsync$0.SubsetPreview> {
@@ -410,6 +488,13 @@ export function ReadNewProjectTemplates(contextID: string): $CancellablePromise<
 
 export function ReadPlotLocations(contextID: string): $CancellablePromise<vprocore$0.PlotLocationReview | null> {
     return $Call.ByID(4098818915, contextID);
+}
+
+/**
+ * RecordAppActivity records a non-blocking, offline-tolerant app download/enrollment or dataset upload event.
+ */
+export function RecordAppActivity(eventKind: string, datasetName: string, plotCount: number): $CancellablePromise<auth$0.ActivityRecordResult> {
+    return $Call.ByID(241871643, eventKind, datasetName, plotCount);
 }
 
 export function RejectStagingSubmission(req: cloudsync$0.RejectSubmissionRequest): $CancellablePromise<cloudsync$0.StagingSubmissionSummary> {
@@ -600,8 +685,19 @@ export function SetSIVIProjectIDSource(p1: string, p2: number, p3: number): $Can
     return $Call.ByID(3729314756, p1, p2, p3);
 }
 
+export function SetSpreadsheetAppPreference(contextID: string, pref: $models.SpreadsheetAppPreference): $CancellablePromise<$models.SpreadsheetAppPreference> {
+    return $Call.ByID(2465848214, contextID, pref);
+}
+
 export function SetUserName(contextID: string, user: string): $CancellablePromise<$models.UserAccreditation> {
     return $Call.ByID(3552813818, contextID, user);
+}
+
+/**
+ * SignOut clears persisted machine tokens and re-locks data editing until the user signs in again.
+ */
+export function SignOut(): $CancellablePromise<auth$0.SessionSummary> {
+    return $Call.ByID(1800377525);
 }
 
 export function SubmitProjectToStaging(contextID: string, req: cloudsync$0.SubmitStagingRequest): $CancellablePromise<cloudsync$0.SubmitStagingResult> {
@@ -622,6 +718,14 @@ export function TransferEnvironmentSiteUnits(p1: string, p2: $models.Environment
 
 export function TransferSiteUnitEnvironment(p1: string, p2: $models.SiteUnitEnvironmentTransfer): $CancellablePromise<$models.SiteUnitEnvironmentResult | null> {
     return $Call.ByID(2917528945, p1, p2);
+}
+
+/**
+ * UnattachWorkspaceResource removes a Project, SU, or Hierarchy from the workspace list
+ * without deleting its SQLite file on disk.
+ */
+export function UnattachWorkspaceResource(contextID: string, req: $models.UnattachWorkspaceResourceRequest): $CancellablePromise<$models.UnattachWorkspaceResourceResult> {
+    return $Call.ByID(4166323233, contextID, req);
 }
 
 export function UndoCreateSIVIPlot(contextID: string, req: sivi$0.UndoCreateSIVIPlotRequest): $CancellablePromise<sivi$0.UndoCreateSIVIPlotResult> {

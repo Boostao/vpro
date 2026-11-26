@@ -57,12 +57,24 @@ export function DeleteSIVIVegetation(contextID: string, requestJSON: string): $C
     return $Call.ByID(3953627302, contextID, requestJSON);
 }
 
+export function DeleteTreePlot(contextID: string, plot: string, subPlot: string, measurementID: number): $CancellablePromise<void> {
+    return $Call.ByID(3479309136, contextID, plot, subPlot, measurementID);
+}
+
+export function DeleteTreeRow(contextID: string, plot: string, subPlot: string, measurementID: number, treeNum: number): $CancellablePromise<void> {
+    return $Call.ByID(1326345165, contextID, plot, subPlot, measurementID, treeNum);
+}
+
 export function DeleteTwoPageVegetationRow(contextID: string, request: $models.DeleteTwoPageVegetationRequest): $CancellablePromise<$models.DeleteTwoPageVegetationResult> {
     return $Call.ByID(3322965976, contextID, request);
 }
 
 export function DeleteVegRecord(plotNumber: string, id: number): $CancellablePromise<void> {
     return $Call.ByID(4046311226, plotNumber, id);
+}
+
+export function EnsureMensurationTables(contextID: string): $CancellablePromise<$models.EnsureMensurationTablesResult | null> {
+    return $Call.ByID(79630384, contextID);
 }
 
 export function EvaluatePlotDiagnostics(header: $models.FS882Header, humus: $models.HumusRecord[] | null, mineral: $models.MineralRecord[] | null): $CancellablePromise<lmh25rules$0.PlotDiagnosticsResult> {
@@ -91,6 +103,10 @@ export function GetListItems(listName: string): $CancellablePromise<$models.List
 
 export function GetPlot(plotNumber: string): $CancellablePromise<$models.FS882Header | null> {
     return $Call.ByID(3030423899, plotNumber);
+}
+
+export function GetPlotMensuration(contextID: string, plot: string): $CancellablePromise<$models.PlotMensurationData | null> {
+    return $Call.ByID(4152000394, contextID, plot);
 }
 
 export function GetSIVICollectedOriginal(contextID: string, plot: string, extended: boolean): $CancellablePromise<$models.SIVIVegetationProjection[] | null> {
@@ -399,6 +415,14 @@ export function SaveSIVIParentShared(contextID: string, plot: string, request: $
 
 export function SaveSIVISpeciesReviewed(contextID: string, plot: string, extended: boolean, requestJSON: string): $CancellablePromise<$models.SIVIHeightWriteResult | null> {
     return $Call.ByID(1863943075, contextID, plot, extended, requestJSON);
+}
+
+export function SaveTreePlot(contextID: string, record: $models.TreePlotRecord): $CancellablePromise<$models.TreePlotRecord | null> {
+    return $Call.ByID(1888941058, contextID, record);
+}
+
+export function SaveTreeRow(contextID: string, record: $models.TreeRowRecord): $CancellablePromise<$models.TreeRowRecord | null> {
+    return $Call.ByID(818289243, contextID, record);
 }
 
 export function SaveTwoPageParentCommon(contextID: string, plot: string, form: string, request: $models.TwoPageParentCommonWrite): $CancellablePromise<$models.SIVIParentWriteResult | null> {

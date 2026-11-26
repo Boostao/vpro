@@ -735,6 +735,76 @@ func (r *RPCRouter) registerEnvReportHandlers() {
 			}, nil
 		})
 	})
+
+	// --- Read-Only Quarto-Style HTML Reports ---
+
+	r.register(svc, "RenderLongEnvironmentHTMLReport", "rpc", false, func(c *rpcCall) (any, error) {
+		if err := c.requireArgCount(2); err != nil {
+			return nil, err
+		}
+		contextID, err := decodeArg[string](c, 0)
+		if err != nil {
+			return nil, err
+		}
+		req, err := decodeArg[envreport.QuickLongEnvironmentRequest](c, 1)
+		if err != nil {
+			return nil, err
+		}
+		// Pure read-only HTML render: never persist preferences, write disk paths, or launch desktop apps.
+		savePrefs := false
+		req.SavePreferences = &savePrefs
+		req.DestinationPath = ""
+		req.OpenInSpreadsheet = false
+
+		lease, err := c.acquireByContextID(contextID)
+		if err != nil {
+			return nil, err
+		}
+		defer lease.Release()
+		return envreport.RenderLongEnvironmentHTMLReport(lease.Context, c.ctx, contextID, req)
+	})
+
+	r.register(svc, "RenderSummaryEnvironmentHTMLReport", "rpc", false, func(c *rpcCall) (any, error) {
+		if err := c.requireArgCount(2); err != nil {
+			return nil, err
+		}
+		contextID, err := decodeArg[string](c, 0)
+		if err != nil {
+			return nil, err
+		}
+		req, err := decodeArg[envreport.QuickSummaryEnvironmentRequest](c, 1)
+		if err != nil {
+			return nil, err
+		}
+		// Pure read-only HTML render: never persist preferences, write disk paths, or launch desktop apps.
+		savePrefs := false
+		req.SavePreferences = &savePrefs
+		req.DestinationPath = ""
+		req.OpenInSpreadsheet = false
+
+		lease, err := c.acquireByContextID(contextID)
+		if err != nil {
+			return nil, err
+		}
+		defer lease.Release()
+		return envreport.RenderSummaryEnvironmentHTMLReport(lease.Context, c.ctx, contextID, req)
+	})
+
+	r.register(svc, "RenderSubzoneMatrixHTMLReport", "rpc", true, func(c *rpcCall) (any, error) {
+		if err := c.requireArgCount(1); err != nil {
+			return nil, err
+		}
+		contextID, err := decodeArg[string](c, 0)
+		if err != nil {
+			return nil, err
+		}
+		lease, err := c.acquireByContextID(contextID)
+		if err != nil {
+			return nil, err
+		}
+		defer lease.Release()
+		return envreport.RenderSubzoneMatrixHTMLReport(lease.Context, c.ctx, contextID)
+	})
 }
 
 func packageGuideBundleZIP(zipPath string, files ...string) error {

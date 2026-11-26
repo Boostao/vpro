@@ -6,11 +6,17 @@ export {
 } from "./models.js";
 
 export type {
+    AttachWorkspaceResourceRequest,
+    AttachWorkspaceResourceResult,
     AuditEntry,
     AuditRestoreResult,
     CollectedRecordUpdate,
     ContextSelection,
     CoordinateParts,
+    CreateWorkspaceResourceRequest,
+    CreateWorkspaceResourceResult,
+    EditLockState,
+    EnsureMensurationTablesResult,
     EnvironmentReportField,
     EnvironmentReportName,
     ExternalSQLiteFileInspection,
@@ -34,6 +40,7 @@ export type {
     PlotLocationReport,
     PlotLocationReview,
     PlotLocationRow,
+    PlotMensurationData,
     PlotPage,
     PlotProfileSource,
     PlotProfileSourceInfo,
@@ -56,7 +63,12 @@ export type {
     SoilNumberUpdate,
     SoilRecordUpdate,
     SoilTextUpdate,
+    SpreadsheetAppPreference,
     SqliteSchemaObject,
+    TreePlotRecord,
+    TreeRowRecord,
+    UnattachWorkspaceResourceRequest,
+    UnattachWorkspaceResourceResult,
     UserAccreditation,
     VegRecord,
     VegetationCreationRequest,
@@ -67,5 +79,6 @@ export type {
     VegetationSpeciesOption,
     VegetationSpeciesUpdate,
     WorkingUnitChoice,
-    WorkingUnitModeState
+    WorkingUnitModeState,
+    WorkspaceResourceEntry
 } from "./models.js";

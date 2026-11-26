@@ -365,6 +365,40 @@ export interface UserSpeciesRecord {
     "codetype"?: string | null;
 }
 
+export interface VPro64ExportOutcome {
+    "sourceProject": string;
+    "targetProject": string;
+    "destinationPath": string;
+    "sha256": string;
+    "bytes": number;
+    "journalMode": string;
+    "plotCount": number;
+    "includedSU"?: string;
+    "includedHierarchy"?: string;
+    "includedMensuration": boolean;
+    "tables": VPro64ExportTableSummary[] | null;
+}
+
+/**
+ * VPro64ExportRequest configures a clean SQLite export targeting VPro64's
+ * VBA SQLite-ODBC importer (V7mdlImportSQLite.bas).
+ */
+export interface VPro64ExportRequest {
+    "destinationPath": string;
+    "targetProjectName"?: string;
+    "includeActiveSU": boolean;
+    "includeHierarchy": boolean;
+    "includeMensuration": boolean;
+    "includeCompanions": boolean;
+    "plotNumbers"?: string[] | null;
+}
+
+export interface VPro64ExportTableSummary {
+    "sourceTable": string;
+    "targetTable": string;
+    "rowCount": number;
+}
+
 export interface VenusImportRequest {
     "sourcePath": string;
     "sourceProject"?: string;

@@ -148,7 +148,8 @@ test('actual preview build halves initial transitive JS without removing entry l
   t.diagnostic(JSON.stringify({ baselineBytes, entryBytes, initialBytes, totalBytes,
     initialChunks: [...initial], deferredChunks: chunks.size - initial.size }));
   assert.ok(entryBytes < 500_000, `Initial entry chunk JS ${entryBytes} exceeds 500 KB ceiling`);
-  assert.ok(initialBytes < 600_000, `Initial transitive startup JS ${initialBytes} exceeds 600 KB ceiling`);
+  // 650 KB ceiling accommodates the Wave 1 Mensuration/OIDC/Workspace/VPro64/Report/BECMaster Wails RPC bindings.
+  assert.ok(initialBytes < 650_000, `Initial transitive startup JS ${initialBytes} exceeds 650 KB ceiling`);
   assert.ok(totalBytes <= baselineBytes * 3.0, `Total JS across deferred feature chunks ${totalBytes} exceeds budget`);
   const modules = names => new Set([...names].flatMap(name =>
     Object.keys(chunks.get(name).modules).map(id => id.replaceAll('\\', '/'))));

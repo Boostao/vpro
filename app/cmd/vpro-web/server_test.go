@@ -199,13 +199,13 @@ func TestAllowlist100PercentCoverageAnd403Rejection(t *testing.T) {
 			}
 		}
 	}
-	if total != 290 {
-		t.Fatalf("expected 290 allowlisted methods, got %d", total)
+	if total != 300 {
+		t.Fatalf("expected 300 allowlisted methods, got %d", total)
 	}
 	if srv.router.RegisteredCount() != total {
 		t.Fatalf("registered count %d != allowlist total %d", srv.router.RegisteredCount(), total)
 	}
-	if counts["rpc"] != 220 || counts["prefs"] != 50 || counts["download"] != 20 {
+	if counts["rpc"] != 229 || counts["prefs"] != 50 || counts["download"] != 21 {
 		t.Fatalf("unexpected kind breakdown: %+v", counts)
 	}
 
@@ -253,6 +253,34 @@ func TestAllowlist100PercentCoverageAnd403Rejection(t *testing.T) {
 		{"ValidationService", "QuarantineOrphanRecords"},
 		{"HelpService", "ResetWorkspaceToSample"},
 		{"CloseService", "ConfirmClose"},
+		// Newly landed Wave 1 mutating, auth, workspace, spreadsheet-launch & dialog RPCs (strictly excluded)
+		{"PlotEntryService", "EnsureMensurationTables"},
+		{"PlotEntryService", "SaveTreePlot"},
+		{"PlotEntryService", "DeleteTreePlot"},
+		{"PlotEntryService", "SaveTreeRow"},
+		{"PlotEntryService", "DeleteTreeRow"},
+		{"ContextService", "AttachWorkspaceResource"},
+		{"ContextService", "UnattachWorkspaceResource"},
+		{"ContextService", "CreateWorkspaceResource"},
+		{"ContextService", "ChooseAttachableFile"},
+		{"ContextService", "BeginOIDCSignIn"},
+		{"ContextService", "CompleteDevEvaluationSignIn"},
+		{"ContextService", "SignOut"},
+		{"ContextService", "RecordAppActivity"},
+		{"ContextService", "SetSpreadsheetAppPreference"},
+		{"ContextService", "OpenReportInSpreadsheet"},
+		{"ImportExportService", "ChooseVPro64ExportFile"},
+		{"SpatialService", "SyncLatestBGCMap"},
+		{"VegetationReportService", "SetSpreadsheetAppPreference"},
+		{"VegetationReportService", "OpenReportInSpreadsheet"},
+		{"VegetationReportService", "QuickRunSummaryVegetationWorkbook"},
+		{"VegetationReportService", "QuickRunLongVegetationWorkbook"},
+		{"VegetationReportService", "QuickRunLifeformWorkbook"},
+		{"EnvironmentReportService", "SetSpreadsheetAppPreference"},
+		{"EnvironmentReportService", "OpenReportInSpreadsheet"},
+		{"EnvironmentReportService", "QuickRunLongEnvironmentWorkbook"},
+		{"EnvironmentReportService", "QuickRunSummaryEnvironmentWorkbook"},
+		{"EnvironmentReportService", "QuickRunSubzoneMatrixWorkbook"},
 	}
 
 	for _, pair := range forbiddenRPCs {
@@ -357,6 +385,55 @@ func TestExternalPathTraversalGuardsAndExportDestinationOverride(t *testing.T) {
 	pub.ServeHTTP(gpkgDL, httptest.NewRequest(http.MethodGet, gpkgURL, nil))
 	if gpkgDL.Code != http.StatusOK || !bytes.HasPrefix(gpkgDL.Body.Bytes(), []byte("SQLite format 3\x00")) {
 		t.Fatalf("expected valid SQLite GeoPackage download, got status=%d len=%d", gpkgDL.Code, gpkgDL.Body.Len())
+	}
+
+	// Verify VPro64 SQLite export also ignores malicious destinationPath & produces valid SQLite database.
+	evilVPro64 := filepath.Join(forbiddenTargetDir, "must-not-exist-vpro64.db")
+	vpro64Rec := doRPC(t, pub, "guard-sess", "ImportExportService", "ExportVPro64Database",
+		state.ContextID,
+		map[string]any{"destinationPath": evilVPro64, "includeActiveSU": true},
+	)
+	_, vpro64URL, vpro64Filename := decodeDownloadResponse(t, vpro64Rec)
+	if !strings.HasSuffix(vpro64Filename, ".db") {
+		t.Fatalf("expected .db filename, got %q", vpro64Filename)
+	}
+	if _, err := os.Stat(evilVPro64); !os.IsNotExist(err) {
+		t.Fatalf("SECURITY FAILURE: client-supplied VPro64 export path %q was created!", evilVPro64)
+	}
+	vpro64DL := httptest.NewRecorder()
+	pub.ServeHTTP(vpro64DL, httptest.NewRequest(http.MethodGet, vpro64URL, nil))
+	if vpro64DL.Code != http.StatusOK || !bytes.HasPrefix(vpro64DL.Body.Bytes(), []byte("SQLite format 3\x00")) {
+		t.Fatalf("expected valid SQLite VPro64 download, got status=%d len=%d", vpro64DL.Code, vpro64DL.Body.Len())
+	}
+
+	// Verify newly allowlisted read-only Wave 1 RPCs execute cleanly on dev-sample snapshot.
+	mensRec := doRPC(t, pub, "guard-sess", "PlotEntryService", "GetPlotMensuration", state.ContextID, "108050")
+	if mensRec.Code != http.StatusOK {
+		t.Fatalf("PlotEntryService.GetPlotMensuration failed: %d %s", mensRec.Code, mensRec.Body.String())
+	}
+	filterOptsRec := doRPC(t, pub, "guard-sess", "SpatialService", "GetBECMasterFilterOptions", state.ContextID)
+	if filterOptsRec.Code != http.StatusOK {
+		t.Fatalf("SpatialService.GetBECMasterFilterOptions failed: %d %s", filterOptsRec.Code, filterOptsRec.Body.String())
+	}
+	filterPlotsRec := doRPC(t, pub, "guard-sess", "SpatialService", "FilterBECMasterPlots", state.ContextID, map[string]any{})
+	if filterPlotsRec.Code != http.StatusOK {
+		t.Fatalf("SpatialService.FilterBECMasterPlots failed: %d %s", filterPlotsRec.Code, filterPlotsRec.Body.String())
+	}
+	for _, htmlCall := range []struct {
+		service string
+		method  string
+		args    []any
+	}{
+		{"VegetationReportService", "RenderSummaryVegetationHTMLReport", []any{state.ContextID, map[string]any{}}},
+		{"VegetationReportService", "RenderLongVegetationHTMLReport", []any{state.ContextID, map[string]any{}}},
+		{"VegetationReportService", "RenderLifeformHTMLReport", []any{state.ContextID, map[string]any{}}},
+		{"EnvironmentReportService", "RenderLongEnvironmentHTMLReport", []any{state.ContextID, map[string]any{}}},
+		{"EnvironmentReportService", "RenderSummaryEnvironmentHTMLReport", []any{state.ContextID, map[string]any{}}},
+	} {
+		rec := doRPC(t, pub, "guard-sess", htmlCall.service, htmlCall.method, htmlCall.args...)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s.%s failed: %d %s", htmlCall.service, htmlCall.method, rec.Code, rec.Body.String())
+		}
 	}
 }
 

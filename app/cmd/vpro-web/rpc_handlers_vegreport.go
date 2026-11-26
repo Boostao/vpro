@@ -1557,4 +1557,85 @@ func (r *RPCRouter) registerVegReportHandlers() {
 		defer lease.Release()
 		return vegreport.PreviewLongVegetationWithExclusions(c.ctx, lease.Context, contextID, req)
 	})
+
+	// --- Read-Only Quarto-Style HTML Reports ---
+
+	r.register(svc, "RenderSummaryVegetationHTMLReport", "rpc", false, func(c *rpcCall) (any, error) {
+		if err := c.requireArgCount(2); err != nil {
+			return nil, err
+		}
+		contextID, err := decodeArg[string](c, 0)
+		if err != nil {
+			return nil, err
+		}
+		req, err := decodeArg[vegreport.QuickSummaryVegetationRequest](c, 1)
+		if err != nil {
+			return nil, err
+		}
+		// Pure read-only HTML render: never persist preferences, write disk paths, or launch desktop apps.
+		savePrefs := false
+		req.SavePreferences = &savePrefs
+		req.DestinationPath = ""
+		req.OpenInSpreadsheet = false
+
+		lease, err := c.acquireByContextID(contextID)
+		if err != nil {
+			return nil, err
+		}
+		defer lease.Release()
+		s, err := vegreport.NewSummaryVegetationService(lease.Context)
+		if err != nil {
+			return nil, err
+		}
+		return s.RenderHTMLReport(c.ctx, contextID, req)
+	})
+
+	r.register(svc, "RenderLongVegetationHTMLReport", "rpc", false, func(c *rpcCall) (any, error) {
+		if err := c.requireArgCount(2); err != nil {
+			return nil, err
+		}
+		contextID, err := decodeArg[string](c, 0)
+		if err != nil {
+			return nil, err
+		}
+		req, err := decodeArg[vegreport.QuickLongVegetationRequest](c, 1)
+		if err != nil {
+			return nil, err
+		}
+		// Pure read-only HTML render: never persist preferences, write disk paths, or launch desktop apps.
+		savePrefs := false
+		req.SavePreferences = &savePrefs
+		req.DestinationPath = ""
+		req.OpenInSpreadsheet = false
+
+		lease, err := c.acquireByContextID(contextID)
+		if err != nil {
+			return nil, err
+		}
+		defer lease.Release()
+		return vegreport.RenderLongVegetationHTMLReport(lease.Context, c.ctx, contextID, req)
+	})
+
+	r.register(svc, "RenderLifeformHTMLReport", "rpc", false, func(c *rpcCall) (any, error) {
+		if err := c.requireArgCount(2); err != nil {
+			return nil, err
+		}
+		contextID, err := decodeArg[string](c, 0)
+		if err != nil {
+			return nil, err
+		}
+		req, err := decodeArg[vegreport.QuickLifeformReportRequest](c, 1)
+		if err != nil {
+			return nil, err
+		}
+		req.DestinationPath = ""
+		req.OpenInSpreadsheet = false
+
+		lease, err := c.acquireByContextID(contextID)
+		if err != nil {
+			return nil, err
+		}
+		defer lease.Release()
+		return vegreport.RenderLifeformHTMLReport(lease.Context, c.ctx, contextID, req)
+	})
 }

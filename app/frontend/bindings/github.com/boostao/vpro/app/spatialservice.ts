@@ -41,6 +41,18 @@ export function ExportReviewedGoogleEarthKML(contextID: string, requestJSON: str
     return $Call.ByID(106514473, contextID, requestJSON);
 }
 
+export function FilterBECMasterPlots(contextID: string, request: $models.BECMasterFilterRequest): $CancellablePromise<$models.BECMasterFilterResult | null> {
+    return $Call.ByID(1743006707, contextID, request);
+}
+
+export function GetBECMasterFilterOptions(contextID: string): $CancellablePromise<$models.BECMasterFilterOptions | null> {
+    return $Call.ByID(4276793635, contextID);
+}
+
+export function GetBGCMapSyncStatus(): $CancellablePromise<$models.BGCMapSyncStatus> {
+    return $Call.ByID(3231464468);
+}
+
 export function GetCoordinateMode(): $CancellablePromise<$models.CoordinateMode> {
     return $Call.ByID(930937838);
 }
@@ -111,4 +123,8 @@ export function SetCoordinateMode(mode: $models.CoordinateMode): $CancellablePro
 
 export function SuggestSpatialAttributes(lat: number, lon: number): $CancellablePromise<$models.SpatialAttributeSuggestion | null> {
     return $Call.ByID(1817188758, lat, lon);
+}
+
+export function SyncLatestBGCMap(sourceURL: string, expectedSHA256: string): $CancellablePromise<$models.BGCMapSyncResult | null> {
+    return $Call.ByID(3487027475, sourceURL, expectedSHA256);
 }

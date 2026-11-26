@@ -57,6 +57,153 @@ export interface AssignSpatialAOIToSUResult {
     "newState"?: vprocore$0.ProjectState | null;
 }
 
+/**
+ * BECMasterCodedOption represents a code + human-readable label pair for BECMaster filter dropdowns.
+ */
+export interface BECMasterCodedOption {
+    "code": string;
+    "label": string;
+}
+
+/**
+ * BECMasterFilterOptions provides all BEC_plots_Shiny-parity filter choices for the active project context.
+ */
+export interface BECMasterFilterOptions {
+    "contextId": string;
+    "project": string;
+    "totalPlots": number;
+    "regions": BECMasterCodedOption[] | null;
+    "projects": BECMasterProjectOption[] | null;
+    "projectIds": string[] | null;
+    "publications": BECMasterPublicationOption[] | null;
+    "hasPublicationLinks": boolean;
+    "zones": string[] | null;
+    "subzonesByZone": { [_ in string]?: string[] | null } | null;
+    "minYear": number;
+    "maxYear": number;
+    "successionalStatuses": BECMasterCodedOption[] | null;
+    "structuralStages": BECMasterCodedOption[] | null;
+    "sitePlotQualities": BECMasterCodedOption[] | null;
+    "vegPlotQualities": BECMasterCodedOption[] | null;
+    "soilPlotQualities": BECMasterCodedOption[] | null;
+    "locationAccuracies": BECMasterCodedOption[] | null;
+}
+
+/**
+ * BECMasterFilterRequest mirrors MoF-Skeena-Research/BEC_plots_Shiny primary + attribute + quality filters.
+ */
+export interface BECMasterFilterRequest {
+    /**
+     * "all" | "region" | "project" | "bbox"
+     */
+    "mode": string;
+    "regions"?: string[] | null;
+    "projectIds"?: string[] | null;
+    "publicationIds"?: string[] | null;
+    "nwLat"?: number | null;
+    "nwLon"?: number | null;
+    "seLat"?: number | null;
+    "seLon"?: number | null;
+    "zones"?: string[] | null;
+    "subzones"?: string[] | null;
+    "minYear"?: number | null;
+    "maxYear"?: number | null;
+    "successionalStatuses"?: string[] | null;
+    "structuralStages"?: string[] | null;
+    "inPublicationsOnly"?: boolean;
+    "sitePlotQualities"?: string[] | null;
+    "vegPlotQualities"?: string[] | null;
+    "soilPlotQualities"?: string[] | null;
+    "locationAccuracy"?: string;
+}
+
+/**
+ * BECMasterFilterResult returns matched plot numbers and compact plottable map points.
+ */
+export interface BECMasterFilterResult {
+    "contextId": string;
+    "project": string;
+    "totalPlots": number;
+    "matchedCount": number;
+    "plotNumbers": string[] | null;
+    "points": BECMasterMapPoint[] | null;
+}
+
+/**
+ * BECMasterMapPoint is the compact coordinate/attribute payload returned for filtered BECMaster map rendering.
+ */
+export interface BECMasterMapPoint {
+    "plotNumber": string;
+    "lat": number;
+    "lon": number;
+    "zone": string;
+    "subZone": string;
+    "siteSeries": string;
+    "projectId": string;
+    "region": string;
+}
+
+/**
+ * BECMasterProjectOption summarizes a distinct ProjectID discovered in Metadata/Env tables.
+ */
+export interface BECMasterProjectOption {
+    "projectId": string;
+    "title"?: string;
+    "plotCount"?: number;
+}
+
+/**
+ * BECMasterPublicationOption represents an optional BEC publication reference when linked in the database.
+ */
+export interface BECMasterPublicationOption {
+    "id": string;
+    "title": string;
+}
+
+/**
+ * BGCMapSyncResult summarizes an atomic bc-bgc-v13.pmtiles sync outcome.
+ */
+export interface BGCMapSyncResult {
+    "archiveName": string;
+    "targetPath": string;
+    "sourceUrl": string;
+    "sizeBytes": number;
+    "sha256": string;
+
+    /**
+     * "explicit" | "companion" | "none"
+     */
+    "checksumSource": string;
+    "minZoom": number;
+    "maxZoom": number;
+    "syncedAt": string;
+    "status": BGCMapSyncStatus;
+}
+
+/**
+ * BGCMapSyncStatus reports the active resolution state and local target for bc-bgc-v13.pmtiles.
+ */
+export interface BGCMapSyncStatus {
+    "archiveName": string;
+    "targetPath": string;
+
+    /**
+     * "dataDir" | "extraDir" | "embedded-overview" | "missing"
+     */
+    "activeSource": string;
+    "activePath"?: string;
+    "available": boolean;
+    "fullResolution": boolean;
+    "fallbackOverview": boolean;
+    "minZoom": number;
+    "maxZoom": number;
+    "sizeBytes": number;
+    "modTime"?: string;
+    "sha256"?: string;
+    "defaultSourceUrl"?: string;
+    "warning"?: string;
+}
+
 export interface GoogleEarthDescriptionFields {
     "contextId": string;
     "project": string;

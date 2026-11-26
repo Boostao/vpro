@@ -69,12 +69,20 @@ export function GetSiteUnitSummaryWorkbookReview(contextID: string, requestJSON:
     return $Call.ByID(1584147229, contextID, requestJSON);
 }
 
+export function GetSpreadsheetAppPreference(contextID: string): $CancellablePromise<$models.SpreadsheetAppPreference> {
+    return $Call.ByID(636164814, contextID);
+}
+
 export function GetSubzoneMatrixPreview(contextID: string, requestJSON: string): $CancellablePromise<$models.SubzoneMatrixPreview | null> {
     return $Call.ByID(3630445689, contextID, requestJSON);
 }
 
 export function GetSubzoneMatrixReview(contextID: string): $CancellablePromise<$models.SubzoneMatrixWorkbookReview | null> {
     return $Call.ByID(2922672695, contextID);
+}
+
+export function OpenReportInSpreadsheet(contextID: string, filePath: string): $CancellablePromise<void> {
+    return $Call.ByID(3343092987, contextID, filePath);
 }
 
 export function PreviewLongEnvironment(contextID: string, request: $models.LongEnvironmentRequest): $CancellablePromise<$models.LongEnvironmentPreview> {
@@ -97,8 +105,32 @@ export function PromoteClusterCandidateToSU(contextID: string, request: $models.
     return $Call.ByID(1462471488, contextID, request);
 }
 
+export function QuickRunLongEnvironmentWorkbook(contextID: string, request: $models.QuickLongEnvironmentRequest): $CancellablePromise<$models.QuickEnvReportExportResult | null> {
+    return $Call.ByID(172297917, contextID, request);
+}
+
+export function QuickRunSubzoneMatrixWorkbook(contextID: string, request: $models.QuickSubzoneMatrixRequest): $CancellablePromise<$models.QuickEnvReportExportResult | null> {
+    return $Call.ByID(987164531, contextID, request);
+}
+
+export function QuickRunSummaryEnvironmentWorkbook(contextID: string, request: $models.QuickSummaryEnvironmentRequest): $CancellablePromise<$models.QuickEnvReportExportResult | null> {
+    return $Call.ByID(2021471931, contextID, request);
+}
+
+export function RenderLongEnvironmentHTMLReport(contextID: string, request: $models.QuickLongEnvironmentRequest): $CancellablePromise<$models.HTMLReportResult | null> {
+    return $Call.ByID(3017041406, contextID, request);
+}
+
 export function RenderQuartoGuide(contextID: string, request: $models.QuartoGuideRequest): $CancellablePromise<$models.QuartoGuideResult | null> {
     return $Call.ByID(1500506254, contextID, request);
+}
+
+export function RenderSubzoneMatrixHTMLReport(contextID: string): $CancellablePromise<$models.HTMLReportResult | null> {
+    return $Call.ByID(4276071312, contextID);
+}
+
+export function RenderSummaryEnvironmentHTMLReport(contextID: string, request: $models.QuickSummaryEnvironmentRequest): $CancellablePromise<$models.HTMLReportResult | null> {
+    return $Call.ByID(2320929280, contextID, request);
 }
 
 export function RunMultivariateClustering(contextID: string, request: $models.ClusteringRequest): $CancellablePromise<$models.ClusteringResult | null> {
@@ -115,4 +147,8 @@ export function SaveLongEnvironmentPreferences(contextID: string, requestJSON: s
 
 export function SaveSiteUnitSummaryPreferences(contextID: string, requestJSON: string): $CancellablePromise<$models.SiteUnitSummaryPreferencesOutcome | null> {
     return $Call.ByID(1635631860, contextID, requestJSON);
+}
+
+export function SetSpreadsheetAppPreference(contextID: string, pref: $models.SpreadsheetAppPreference): $CancellablePromise<$models.SpreadsheetAppPreference> {
+    return $Call.ByID(2146696938, contextID, pref);
 }

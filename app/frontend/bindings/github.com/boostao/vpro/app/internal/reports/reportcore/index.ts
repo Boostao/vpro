@@ -6,6 +6,7 @@ export type {
     EnvironmentReportDiagnostic,
     EnvironmentReportPlot,
     EnvironmentReportUnit,
+    HTMLReportResult,
     VegetationReportMembership,
     VegetationWorkbookSheet
 } from "./models.js";

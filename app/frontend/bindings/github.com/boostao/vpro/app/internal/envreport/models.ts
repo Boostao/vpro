@@ -65,6 +65,77 @@ export interface LongEnvironmentRequest {
     "title": string;
 }
 
+/**
+ * QuickEnvReportExportResult summarizes a streamlined one-step environment workbook export.
+ */
+export interface QuickEnvReportExportResult {
+    "reportKind": string;
+    "title": string;
+    "project": string;
+    "su": string;
+    "scopeLabel": string;
+    "fallbackNotice"?: string;
+    "unitCount": number;
+    "plotCount": number;
+    "path": string;
+    "sha256": string;
+    "bytes": number;
+    "preferencesSaved": boolean;
+    "openedInSpreadsheet": boolean;
+    "spreadsheetNotice"?: string;
+}
+
+/**
+ * QuickLongEnvironmentRequest configures one-step Long Environment HTML or XLSX generation.
+ */
+export interface QuickLongEnvironmentRequest {
+    "title"?: string | null;
+
+    /**
+     * "auto" | "su" | "zone-subzone" | "all-plots"
+     */
+    "scopeMode"?: string;
+    "savePreferences"?: boolean | null;
+    "destinationPath"?: string;
+    "openInSpreadsheet"?: boolean;
+}
+
+/**
+ * QuickSubzoneMatrixRequest configures one-step Subzone Matrix XLSX generation.
+ */
+export interface QuickSubzoneMatrixRequest {
+    "destinationPath"?: string;
+    "openInSpreadsheet"?: boolean;
+}
+
+/**
+ * QuickSummaryEnvironmentRequest configures one-step Summary Environment (Site Unit Summary) generation.
+ */
+export interface QuickSummaryEnvironmentRequest {
+    /**
+     * 1 = Mean, 2 = Interquartile
+     */
+    "method"?: number | null;
+
+    /**
+     * 1 = Normal SU, 2 = Hierarchy Breakpoints, 3 = Field-Derived
+     */
+    "siteUnitType"?: number | null;
+
+    /**
+     * 1 = Layer, 2 = Lifeform
+     */
+    "orderBy"?: number | null;
+    "includeSpecies"?: number | null;
+    "coverCalculation"?: number | null;
+    "andOr"?: number | null;
+    "presenceGreaterThan"?: number | null;
+    "coverGreaterThan"?: number | null;
+    "savePreferences"?: boolean | null;
+    "destinationPath"?: string;
+    "openInSpreadsheet"?: boolean;
+}
+
 export interface SiteUnitSpeciesListGroup {
     "index": number;
     "caption": string;

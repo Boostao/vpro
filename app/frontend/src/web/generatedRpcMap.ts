@@ -217,6 +217,12 @@ export const WEB_RPC_BY_ID: Readonly<Record<number, WebRpcEntry>> = Object.freez
     kind: 'prefs',
   }),
   791070671: Object.freeze({ id: 791070671, service: 'SpatialService', method: 'GetPlotLocationReview', kind: 'rpc' }),
+  791263694: Object.freeze({
+    id: 791263694,
+    service: 'VegetationReportService',
+    method: 'RenderLongVegetationHTMLReport',
+    kind: 'rpc',
+  }),
   834069591: Object.freeze({ id: 834069591, service: 'PlotEntryService', method: 'GetSIVICoverOriginal', kind: 'rpc' }),
   841696151: Object.freeze({
     id: 841696151,
@@ -529,6 +535,12 @@ export const WEB_RPC_BY_ID: Readonly<Record<number, WebRpcEntry>> = Object.freez
     kind: 'download',
   }),
   1509671463: Object.freeze({ id: 1509671463, service: 'HelpService', method: 'GetAboutInfo', kind: 'rpc' }),
+  1510386696: Object.freeze({
+    id: 1510386696,
+    service: 'VegetationReportService',
+    method: 'RenderLifeformHTMLReport',
+    kind: 'rpc',
+  }),
   1519650298: Object.freeze({ id: 1519650298, service: 'SpatialService', method: 'SetCoordinateMode', kind: 'prefs' }),
   1521810772: Object.freeze({
     id: 1521810772,
@@ -623,6 +635,7 @@ export const WEB_RPC_BY_ID: Readonly<Record<number, WebRpcEntry>> = Object.freez
     method: 'GetWorkingUnitMode',
     kind: 'prefs',
   }),
+  1743006707: Object.freeze({ id: 1743006707, service: 'SpatialService', method: 'FilterBECMasterPlots', kind: 'rpc' }),
   1799826469: Object.freeze({
     id: 1799826469,
     service: 'ContextService',
@@ -684,6 +697,12 @@ export const WEB_RPC_BY_ID: Readonly<Record<number, WebRpcEntry>> = Object.freez
     kind: 'rpc',
   }),
   2010561944: Object.freeze({ id: 2010561944, service: 'ClassificationService', method: 'ListBECZones', kind: 'rpc' }),
+  2021159186: Object.freeze({
+    id: 2021159186,
+    service: 'ImportExportService',
+    method: 'ExportVPro64Database',
+    kind: 'download',
+  }),
   2030172111: Object.freeze({
     id: 2030172111,
     service: 'VegetationReportService',
@@ -707,6 +726,12 @@ export const WEB_RPC_BY_ID: Readonly<Record<number, WebRpcEntry>> = Object.freez
     id: 2115295500,
     service: 'ContextService',
     method: 'RunProjectPlotProfile',
+    kind: 'rpc',
+  }),
+  2127802606: Object.freeze({
+    id: 2127802606,
+    service: 'VegetationReportService',
+    method: 'RenderSummaryVegetationHTMLReport',
     kind: 'rpc',
   }),
   2154012130: Object.freeze({
@@ -789,6 +814,12 @@ export const WEB_RPC_BY_ID: Readonly<Record<number, WebRpcEntry>> = Object.freez
     id: 2309313070,
     service: 'ClassificationService',
     method: 'ResolveProjectPlotProfileNavigation',
+    kind: 'rpc',
+  }),
+  2320929280: Object.freeze({
+    id: 2320929280,
+    service: 'EnvironmentReportService',
+    method: 'RenderSummaryEnvironmentHTMLReport',
     kind: 'rpc',
   }),
   2329949244: Object.freeze({
@@ -1026,6 +1057,12 @@ export const WEB_RPC_BY_ID: Readonly<Record<number, WebRpcEntry>> = Object.freez
     service: 'ImportExportService',
     method: 'ExportReviewedPlotLabelPDF',
     kind: 'download',
+  }),
+  3017041406: Object.freeze({
+    id: 3017041406,
+    service: 'EnvironmentReportService',
+    method: 'RenderLongEnvironmentHTMLReport',
+    kind: 'rpc',
   }),
   3024940207: Object.freeze({
     id: 3024940207,
@@ -1360,6 +1397,7 @@ export const WEB_RPC_BY_ID: Readonly<Record<number, WebRpcEntry>> = Object.freez
     method: 'GetPlotLocationReview',
     kind: 'rpc',
   }),
+  4152000394: Object.freeze({ id: 4152000394, service: 'PlotEntryService', method: 'GetPlotMensuration', kind: 'rpc' }),
   4152512754: Object.freeze({
     id: 4152512754,
     service: 'EnvironmentReportService',
@@ -1407,6 +1445,18 @@ export const WEB_RPC_BY_ID: Readonly<Record<number, WebRpcEntry>> = Object.freez
     service: 'VegetationReportService',
     method: 'SaveLongVegetationUnitPreferences',
     kind: 'prefs',
+  }),
+  4276071312: Object.freeze({
+    id: 4276071312,
+    service: 'EnvironmentReportService',
+    method: 'RenderSubzoneMatrixHTMLReport',
+    kind: 'rpc',
+  }),
+  4276793635: Object.freeze({
+    id: 4276793635,
+    service: 'SpatialService',
+    method: 'GetBECMasterFilterOptions',
+    kind: 'rpc',
   }),
   4282519119: Object.freeze({
     id: 4282519119,
@@ -1539,7 +1589,10 @@ export const WEB_RPC_BY_NAME: Readonly<Record<string, WebRpcEntry>> = Object.fre
   'EnvironmentReportService.PreviewSiteUnitSummary': WEB_RPC_BY_ID[1580457137],
   'EnvironmentReportService.PreviewSiteUnitSummaryLifeforms': WEB_RPC_BY_ID[2277418166],
   'EnvironmentReportService.PreviewSiteUnitSummarySpecies': WEB_RPC_BY_ID[2806244493],
+  'EnvironmentReportService.RenderLongEnvironmentHTMLReport': WEB_RPC_BY_ID[3017041406],
   'EnvironmentReportService.RenderQuartoGuide': WEB_RPC_BY_ID[1500506254],
+  'EnvironmentReportService.RenderSubzoneMatrixHTMLReport': WEB_RPC_BY_ID[4276071312],
+  'EnvironmentReportService.RenderSummaryEnvironmentHTMLReport': WEB_RPC_BY_ID[2320929280],
   'EnvironmentReportService.RunMultivariateClustering': WEB_RPC_BY_ID[81138482],
   'EnvironmentReportService.SaveFullSiteUnitSummaryPreferences': WEB_RPC_BY_ID[1101129053],
   'EnvironmentReportService.SaveLongEnvironmentPreferences': WEB_RPC_BY_ID[3339537052],
@@ -1560,6 +1613,7 @@ export const WEB_RPC_BY_NAME: Readonly<Record<string, WebRpcEntry>> = Object.fre
   'ImportExportService.ExportReviewedTableCSVArchive': WEB_RPC_BY_ID[692682453],
   'ImportExportService.ExportTurboVeg': WEB_RPC_BY_ID[690582766],
   'ImportExportService.ExportUserSpeciesList': WEB_RPC_BY_ID[102245419],
+  'ImportExportService.ExportVPro64Database': WEB_RPC_BY_ID[2021159186],
   'ImportExportService.ExportWideMatrixCSV': WEB_RPC_BY_ID[418293510],
   'ImportExportService.GetLumpTableRows': WEB_RPC_BY_ID[237698377],
   'ImportExportService.GetPlotLabelPDFReview': WEB_RPC_BY_ID[3206902937],
@@ -1581,6 +1635,7 @@ export const WEB_RPC_BY_NAME: Readonly<Record<string, WebRpcEntry>> = Object.fre
   'PlotEntryService.GetHeaderCapabilities': WEB_RPC_BY_ID[2155967571],
   'PlotEntryService.GetListItems': WEB_RPC_BY_ID[3324583728],
   'PlotEntryService.GetPlot': WEB_RPC_BY_ID[3030423899],
+  'PlotEntryService.GetPlotMensuration': WEB_RPC_BY_ID[4152000394],
   'PlotEntryService.GetSIVICollectedOriginal': WEB_RPC_BY_ID[1736235119],
   'PlotEntryService.GetSIVICombinedOriginal': WEB_RPC_BY_ID[1480933833],
   'PlotEntryService.GetSIVICoverOriginal': WEB_RPC_BY_ID[834069591],
@@ -1620,6 +1675,8 @@ export const WEB_RPC_BY_NAME: Readonly<Record<string, WebRpcEntry>> = Object.fre
   'SpatialService.DecomposeCoordinate': WEB_RPC_BY_ID[2173045060],
   'SpatialService.EvaluatePlotGeodesy': WEB_RPC_BY_ID[3775635969],
   'SpatialService.ExportReviewedGoogleEarthKML': WEB_RPC_BY_ID[106514473],
+  'SpatialService.FilterBECMasterPlots': WEB_RPC_BY_ID[1743006707],
+  'SpatialService.GetBECMasterFilterOptions': WEB_RPC_BY_ID[4276793635],
   'SpatialService.GetCoordinateMode': WEB_RPC_BY_ID[930937838],
   'SpatialService.GetGoogleEarthDescriptionFields': WEB_RPC_BY_ID[2009301595],
   'SpatialService.GetGoogleEarthKMLExportReview': WEB_RPC_BY_ID[3553735306],
@@ -1693,6 +1750,9 @@ export const WEB_RPC_BY_NAME: Readonly<Record<string, WebRpcEntry>> = Object.fre
   'VegetationReportService.PreviewSummaryVegetationGroupedDisplay': WEB_RPC_BY_ID[2114124515],
   'VegetationReportService.PreviewSummaryVegetationWithExclusions': WEB_RPC_BY_ID[1022565410],
   'VegetationReportService.PreviewSummaryVegetationWithPreferences': WEB_RPC_BY_ID[3499409663],
+  'VegetationReportService.RenderLifeformHTMLReport': WEB_RPC_BY_ID[1510386696],
+  'VegetationReportService.RenderLongVegetationHTMLReport': WEB_RPC_BY_ID[791263694],
+  'VegetationReportService.RenderSummaryVegetationHTMLReport': WEB_RPC_BY_ID[2127802606],
   'VegetationReportService.ResolveHierarchyBreakpointUnits': WEB_RPC_BY_ID[1130310882],
   'VegetationReportService.SaveLongVegetationEnforcementPreferences': WEB_RPC_BY_ID[2077564096],
   'VegetationReportService.SaveLongVegetationGroupPreferences': WEB_RPC_BY_ID[299827675],

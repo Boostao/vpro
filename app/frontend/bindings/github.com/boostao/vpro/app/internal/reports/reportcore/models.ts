@@ -35,6 +35,22 @@ export interface EnvironmentReportUnit {
     "plots": EnvironmentReportPlot[] | null;
 }
 
+/**
+ * HTMLReportResult is the wire payload returned by Render*HTMLReport RPCs.
+ */
+export interface HTMLReportResult {
+    "title": string;
+    "reportKind": string;
+    "project": string;
+    "su": string;
+    "scopeLabel": string;
+    "unitCount": number;
+    "plotCount": number;
+    "tableCount": number;
+    "notice"?: string;
+    "html": string;
+}
+
 export interface VegetationReportMembership {
     "rowId": string;
     "plotNumber": vprocore$0.ProjectMetadataCell;

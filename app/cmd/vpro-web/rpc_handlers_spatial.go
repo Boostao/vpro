@@ -528,4 +528,40 @@ func (r *RPCRouter) registerSpatialHandlers() {
 		defer lease.Release()
 		return spatial.SelectPlotsInPolygonAOI(c.ctx, lease.Context, contextID, req, c.server.attributor)
 	})
+
+	r.register(svc, "GetBECMasterFilterOptions", "rpc", true, func(c *rpcCall) (any, error) {
+		if err := c.requireArgCount(1); err != nil {
+			return nil, err
+		}
+		contextID, err := decodeArg[string](c, 0)
+		if err != nil {
+			return nil, err
+		}
+		lease, err := c.acquireByContextID(contextID)
+		if err != nil {
+			return nil, err
+		}
+		defer lease.Release()
+		return spatial.GetBECMasterFilterOptions(c.ctx, lease.Context, contextID)
+	})
+
+	r.register(svc, "FilterBECMasterPlots", "rpc", true, func(c *rpcCall) (any, error) {
+		if err := c.requireArgCount(2); err != nil {
+			return nil, err
+		}
+		contextID, err := decodeArg[string](c, 0)
+		if err != nil {
+			return nil, err
+		}
+		req, err := decodeArg[spatial.BECMasterFilterRequest](c, 1)
+		if err != nil {
+			return nil, err
+		}
+		lease, err := c.acquireByContextID(contextID)
+		if err != nil {
+			return nil, err
+		}
+		defer lease.Release()
+		return spatial.FilterBECMasterPlots(c.ctx, lease.Context, contextID, req)
+	})
 }

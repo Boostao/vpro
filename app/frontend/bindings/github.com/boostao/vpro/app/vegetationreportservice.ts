@@ -117,6 +117,10 @@ export function GetLongVegetationUnitPreferences(contextID: string): $Cancellabl
     return $Call.ByID(2837516633, contextID);
 }
 
+export function GetSpreadsheetAppPreference(contextID: string): $CancellablePromise<$models.SpreadsheetAppPreference> {
+    return $Call.ByID(2145237405, contextID);
+}
+
 export function GetSummaryVegetationFieldList(contextID: string): $CancellablePromise<$models.SummaryVegetationFieldListReview | null> {
     return $Call.ByID(2538332681, contextID);
 }
@@ -147,6 +151,10 @@ export function GetSummaryVegetationWorkbookReviewFromPreferences(contextID: str
 
 export function GetVegetationWorkbookReview(contextID: string, requestJSON: string): $CancellablePromise<$models.VegetationWorkbookReview | null> {
     return $Call.ByID(269359313, contextID, requestJSON);
+}
+
+export function OpenReportInSpreadsheet(contextID: string, filePath: string): $CancellablePromise<void> {
+    return $Call.ByID(1467121548, contextID, filePath);
 }
 
 export function PreviewLifeformSummary(contextID: string): $CancellablePromise<$models.LifeformSummaryPreview> {
@@ -219,6 +227,30 @@ export function PreviewSummaryVegetationWithExclusions(contextID: string, reques
 
 export function PreviewSummaryVegetationWithPreferences(contextID: string): $CancellablePromise<$models.SummaryVegetationPreview> {
     return $Call.ByID(3499409663, contextID);
+}
+
+export function QuickRunLifeformWorkbook(contextID: string, request: $models.QuickLifeformReportRequest): $CancellablePromise<$models.QuickVegReportExportResult | null> {
+    return $Call.ByID(2561947735, contextID, request);
+}
+
+export function QuickRunLongVegetationWorkbook(contextID: string, request: $models.QuickLongVegetationRequest): $CancellablePromise<$models.QuickVegReportExportResult | null> {
+    return $Call.ByID(225914065, contextID, request);
+}
+
+export function QuickRunSummaryVegetationWorkbook(contextID: string, request: $models.QuickSummaryVegetationRequest): $CancellablePromise<$models.QuickVegReportExportResult | null> {
+    return $Call.ByID(1740897729, contextID, request);
+}
+
+export function RenderLifeformHTMLReport(contextID: string, request: $models.QuickLifeformReportRequest): $CancellablePromise<$models.HTMLReportResult | null> {
+    return $Call.ByID(1510386696, contextID, request);
+}
+
+export function RenderLongVegetationHTMLReport(contextID: string, request: $models.QuickLongVegetationRequest): $CancellablePromise<$models.HTMLReportResult | null> {
+    return $Call.ByID(791263694, contextID, request);
+}
+
+export function RenderSummaryVegetationHTMLReport(contextID: string, request: $models.QuickSummaryVegetationRequest): $CancellablePromise<$models.HTMLReportResult | null> {
+    return $Call.ByID(2127802606, contextID, request);
 }
 
 export function ResolveHierarchyBreakpointUnits(contextID: string, request: $models.HierarchyBreakpointRequest): $CancellablePromise<$models.HierarchyBreakpointResolution | null> {
@@ -303,4 +335,8 @@ export function SetLongVegetationReportScope(contextID: string, request: $models
 
 export function SetLongVegetationSelectedUnitFields(contextID: string, requestJSON: string): $CancellablePromise<$models.LongVegetationSelectedUnitSelection | null> {
     return $Call.ByID(2414082029, contextID, requestJSON);
+}
+
+export function SetSpreadsheetAppPreference(contextID: string, pref: $models.SpreadsheetAppPreference): $CancellablePromise<$models.SpreadsheetAppPreference> {
+    return $Call.ByID(2841069929, contextID, pref);
 }

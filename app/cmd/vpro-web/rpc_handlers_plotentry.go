@@ -5,6 +5,7 @@ import (
 
 	"github.com/boostao/vpro/app/internal/classification"
 	"github.com/boostao/vpro/app/internal/lmh25rules"
+	"github.com/boostao/vpro/app/internal/plotentry"
 	"github.com/boostao/vpro/app/internal/sivi"
 	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/twopage"
@@ -900,5 +901,29 @@ func (r *RPCRouter) registerPlotEntryHandlers() {
 		}
 		defer lease.Release()
 		return lmh25rules.EvaluateStoredPlotDiagnostics(lease.Context, c.ctx, contextID, plotNumber)
+	})
+
+	r.register(svc, "GetPlotMensuration", "rpc", true, func(c *rpcCall) (any, error) {
+		if err := c.requireArgCount(2); err != nil {
+			return nil, err
+		}
+		contextID, err := decodeArg[string](c, 0)
+		if err != nil {
+			return nil, err
+		}
+		plotNumber, err := decodeArg[string](c, 1)
+		if err != nil {
+			return nil, err
+		}
+		lease, err := c.acquireByContextID(contextID)
+		if err != nil {
+			return nil, err
+		}
+		defer lease.Release()
+		mens, err := plotentry.NewMensurationService(lease.Context)
+		if err != nil {
+			return nil, err
+		}
+		return mens.GetPlotMensuration(c.ctx, contextID, plotNumber)
 	})
 }
