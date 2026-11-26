@@ -33,6 +33,12 @@ export interface WebMetaStandards {
   redBlueSpeciesCount: number;
 }
 
+export interface WebExternalLink {
+  label: string;
+  url: string;
+  description?: string;
+}
+
 export interface WebMetaResponse {
   mode: string;
   snapshotId: string;
@@ -42,9 +48,14 @@ export interface WebMetaResponse {
   totalPlotCount: number;
   redactionNotice: string;
   picturesAvailable: boolean;
+  rAvailable: boolean;
   pmtilesBaseUrl: string;
   standards: WebMetaStandards;
   datasets: WebMetaDataset[];
+  externalLinks: WebExternalLink[];
+  licenceName: string;
+  licenceUrl: string;
+  citation: string;
 }
 
 export interface WebUrlState {
@@ -57,6 +68,24 @@ export interface WebUrlState {
 
 const DEFAULT_REDACTION_NOTICE =
   'Coordinates for plots with conservation-listed species are generalized to 10 km for rare-plant protection.';
+
+export const DEFAULT_EXTERNAL_LINKS: readonly WebExternalLink[] = Object.freeze([
+  Object.freeze({
+    label: 'BECweb',
+    url: 'https://www.for.gov.bc.ca/hre/becweb/',
+    description: 'BC Ministry of Forests Biogeoclimatic Ecosystem Classification (BEC) Program',
+  }),
+  Object.freeze({
+    label: 'byBEC',
+    url: 'https://thebeczone.ca/shiny/bybecmap/',
+    description: 'Interactive BEC map and biogeoclimatic unit explorer',
+  }),
+]);
+
+export const DEFAULT_LICENCE_NAME = 'Open Government Licence – British Columbia';
+export const DEFAULT_LICENCE_URL = 'https://www2.gov.bc.ca/gov/content/data/open-data/open-government-licence-bc';
+export const DEFAULT_BECMASTER_CITATION =
+  'British Columbia Ministry of Forests, Research Branch, Ecology Section. BECMaster Biogeoclimatic Ecosystem Classification Plot Database. Licensed under the Open Government Licence – British Columbia (https://www2.gov.bc.ca/gov/content/data/open-data/open-government-licence-bc).';
 
 export { webMeta };
 export const webMetaError: Writable<string> = writable('');
@@ -109,6 +138,33 @@ function normalizeDataset(raw: unknown): WebMetaDataset | null {
   };
 }
 
+function isSafeHttpUrl(raw: string): boolean {
+  if (!raw) return false;
+  try {
+    const parsed = new URL(raw);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && Boolean(parsed.host);
+  } catch {
+    return false;
+  }
+}
+
+function normalizeExternalLinks(raw: unknown): WebExternalLink[] {
+  if (!Array.isArray(raw)) {
+    return DEFAULT_EXTERNAL_LINKS.map((link) => ({ ...link }));
+  }
+  const out: WebExternalLink[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const obj = entry as Record<string, unknown>;
+    const label = asString(obj.label);
+    const url = asString(obj.url);
+    const description = asString(obj.description);
+    if (!label || !isSafeHttpUrl(url)) continue;
+    out.push(description ? { label, url, description } : { label, url });
+  }
+  return out;
+}
+
 export function normalizeWebMeta(raw: unknown): WebMetaResponse {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const datasetsRaw = Array.isArray(obj.datasets) ? obj.datasets : [];
@@ -122,10 +178,17 @@ export function normalizeWebMeta(raw: unknown): WebMetaResponse {
   const redactionNotice = explicitNotice || (redacted ? DEFAULT_REDACTION_NOTICE : '');
   const picturesAvailableRaw = obj.picturesAvailable ?? obj.pictures_available;
   const picturesAvailable = picturesAvailableRaw === false ? false : true;
+  const rAvailableRaw = obj.rAvailable ?? obj.r_available;
+  const rAvailable = rAvailableRaw === false ? false : true;
   const rawBaseUrl = asString(obj.pmtilesBaseUrl ?? obj.pmtiles_base_url, '/pmtiles');
   const pmtilesBaseUrl = rawBaseUrl ? rawBaseUrl.replace(/\/+$/, '') : '/pmtiles';
   const stdRaw =
     obj.standards && typeof obj.standards === 'object' ? (obj.standards as Record<string, unknown>) : {};
+  const externalLinks = normalizeExternalLinks(obj.externalLinks ?? obj.external_links);
+  const licenceName = asString(obj.licenceName ?? obj.licence_name, DEFAULT_LICENCE_NAME) || DEFAULT_LICENCE_NAME;
+  const rawLicenceUrl = asString(obj.licenceUrl ?? obj.licence_url);
+  const licenceUrl = isSafeHttpUrl(rawLicenceUrl) ? rawLicenceUrl : DEFAULT_LICENCE_URL;
+  const citation = asString(obj.citation, DEFAULT_BECMASTER_CITATION) || DEFAULT_BECMASTER_CITATION;
 
   return {
     mode: asString(obj.mode, 'readonly') || 'readonly',
@@ -136,6 +199,7 @@ export function normalizeWebMeta(raw: unknown): WebMetaResponse {
     totalPlotCount,
     redactionNotice,
     picturesAvailable,
+    rAvailable,
     pmtilesBaseUrl,
     standards: {
       becVersion: asString(stdRaw.becVersion ?? stdRaw.bec_version, 'BECdb v13'),
@@ -144,6 +208,10 @@ export function normalizeWebMeta(raw: unknown): WebMetaResponse {
       redBlueSpeciesCount: asNonNegInt(stdRaw.redBlueSpeciesCount ?? stdRaw.red_blue_species_count, 0),
     },
     datasets,
+    externalLinks,
+    licenceName,
+    licenceUrl,
+    citation,
   };
 }
 
@@ -447,6 +515,15 @@ export function planInitialWebUrlNavigation(
 }
 
 let webShellBootstrapPromise: Promise<WebShellRuntimeBundle> | null = null;
+
+export function mountWeb(
+  mountFn: (cmp: unknown, opts: { target: Element }) => unknown,
+  target: Element | null = document.getElementById('app')
+): Promise<void> {
+  return import('./WebBECMasterExplorer.svelte').then(({ default: Explorer }) => {
+    if (target) mountFn(Explorer, { target });
+  });
+}
 
 export function bootstrapWebShellRuntime(): Promise<WebShellRuntimeBundle> {
   if (!webShellBootstrapPromise) {
