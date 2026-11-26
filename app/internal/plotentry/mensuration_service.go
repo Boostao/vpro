@@ -65,6 +65,9 @@ func (s *MensurationService) EnsureMensurationTables(ctx context.Context, contex
 		return nil, err
 	}
 	return vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (*vprocore.EnsureMensurationTablesResult, error) {
+		if err := plots.RequireContextEdit(); err != nil {
+			return nil, err
+		}
 		owner := plots.Projects.Sqlite
 		if owner.ReadOnly {
 			return nil, vprocore.ErrReadOnlyContext
@@ -132,6 +135,9 @@ func (s *MensurationService) SaveTreePlot(ctx context.Context, contextID string,
 		return nil, err
 	}
 	return vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (*vprocore.TreePlotRecord, error) {
+		if err := plots.RequireContextEdit(); err != nil {
+			return nil, err
+		}
 		owner := plots.Projects.Sqlite
 		if owner.ReadOnly {
 			return nil, vprocore.ErrReadOnlyContext
@@ -155,6 +161,9 @@ func (s *MensurationService) DeleteTreePlot(ctx context.Context, contextID, plot
 		return err
 	}
 	_, err := vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (struct{}, error) {
+		if err := plots.RequireContextEdit(); err != nil {
+			return struct{}{}, err
+		}
 		owner := plots.Projects.Sqlite
 		if owner.ReadOnly {
 			return struct{}{}, vprocore.ErrReadOnlyContext
@@ -173,6 +182,9 @@ func (s *MensurationService) SaveTreeRow(ctx context.Context, contextID string, 
 		return nil, err
 	}
 	return vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (*vprocore.TreeRowRecord, error) {
+		if err := plots.RequireContextEdit(); err != nil {
+			return nil, err
+		}
 		owner := plots.Projects.Sqlite
 		if owner.ReadOnly {
 			return nil, vprocore.ErrReadOnlyContext
@@ -196,6 +208,9 @@ func (s *MensurationService) DeleteTreeRow(ctx context.Context, contextID, plot,
 		return err
 	}
 	_, err := vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (struct{}, error) {
+		if err := plots.RequireContextEdit(); err != nil {
+			return struct{}{}, err
+		}
 		owner := plots.Projects.Sqlite
 		if owner.ReadOnly {
 			return struct{}{}, vprocore.ErrReadOnlyContext
