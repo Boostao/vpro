@@ -983,7 +983,7 @@
       "slug": "standards-and-interchange",
       "category": "Standards & Open Interchange",
       "title": "2026 BC BEC Standards & Open Data Exchange",
-      "summary": "Built-in BECdb v13 (2026) and BCPlantTaxonomy v19 (2026) reference lists plus clean exchange with VENUS 5.0 XML, TurboVeg 3, GeoPackage, CSV, and R .rds.",
+      "summary": "Built-in BECdb v13 (2026) and BCPlantTaxonomy v19 (2026) reference lists plus clean exchange with VPro64, TurboVeg 3, GeoPackage, CSV, and R .rds.",
       "sections": [
         {
           "heading": "Pinned 2026 Provincial Standards",
@@ -991,7 +991,7 @@
         },
         {
           "heading": "Open Ecosystem Interchange",
-          "body": "Import and export VENUS 5.0 XML, TurboVeg 3 archives, OGC GeoPackage (.gpkg in BC Albers EPSG:3005 or WGS84 EPSG:4326), Long and Wide CSV matrices, and native R (.rds) project snapshots."
+          "body": "Export clean VPro64 project files (.db) for Access VPro 64, and exchange TurboVeg 3 archives, OGC GeoPackage (.gpkg in BC Albers EPSG:3005 or WGS84 EPSG:4326), Long and Wide CSV matrices, and native R (.rds) project snapshots."
         }
       ]
     },
@@ -1036,7 +1036,7 @@
           "target": "[data-tour=\"interchange-hub-root\"]",
           "view": "interchange-hub",
           "title": "Open Scientific Interchange Hub",
-          "body": "Exchange data cleanly with VENUS 5.0 XML, TurboVeg 3, GeoPackage (BC Albers EPSG:3005), CSV matrices, and R .rds."
+          "body": "Exchange data cleanly with VPro64, TurboVeg 3, GeoPackage (BC Albers EPSG:3005), CSV matrices, and R .rds."
         }
       ]
     },
@@ -1156,6 +1156,19 @@
   ],
   "whatsNew": [
     {
+      "version": "2.1.0",
+      "date": "2026-11-26",
+      "channel": "preview",
+      "highlights": [
+        "Classic 4-Card FS882 data entry with Mensuration Card 4—edit Site, Soil, Vegetation, and Tree Mensuration cards in Single, Side-by-Side, Top-Down, or Grid layouts, and move through plots with a sticky Access-style Record Selector and PlotNumber search.",
+        "Streamlined 8-menu Work Space and VPro64 exchange—work across Work Space, Forms, Reports, Analysis, Project Management, Map, Interchange, and Help menus, manage Projects, Site Units, and Hierarchies from unified Attach, Remove, and New sidebar controls, attach legacy Access .accdb/.mdb files directly, and export clean VPro64 project files (.db) for VPro 64.",
+        "BC Government sign-in and default edit lock—sign in once per computer with your BC Government IDIR or BCeID account to unlock working project edits by role while keeping BECMaster protected for custodians and continuing seamlessly offline in the field.",
+        "VPro64-style Reports, HTML preview, and Analysis menu—all six Vegetation and Environment reports use compact VPro64-style options with automatic defaults, one-click Export to Spreadsheet and Display Report previews, an elevated Quarto Unit Report entry under Reports, and a dedicated Analysis menu for BEC Diagnostics and R Climate and Clustering.",
+        "Map hybrid basemaps, BC Forest Regions, and BGC Map Sync—switch between Esri World Imagery Hybrid, Google Hybrid, OpenStreetMap, and BC Gov Topo basemaps, toggle BC Forest Regions boundaries, and refresh the local provincial BGC v13 map with one-click BGC Map Sync.",
+        "Map-First Web BECMaster Explorer—browse published BECMaster snapshots directly on an interactive BC map with Region, Project, Bounding Box, BGC, and plot-quality filters, inspect read-only FS882 plot cards, run reports, and download filtered subsets in VPro64, CSV, GeoPackage, R, TurboVeg, or KML formats."
+      ]
+    },
+    {
       "version": "2.0.1",
       "date": "2026-11-19",
       "channel": "stable",
@@ -1178,7 +1191,7 @@
         "Interactive 3D Map that works offline in the field for BGC v13 and Ecosection checks and selecting plots directly into Site Units.",
         "Live BEC Differential and Pairwise Synthesis that updates immediately as plots move between Site Units and exports a 4-sheet Diagnostic Excel workbook (.xlsx).",
         "Optional R Companion tools for climr climate normals, rSMR/aSMR edatopic grids, candidate plot clustering, and Quarto Site Unit and BGC guides.",
-        "Built-in offline F1 LMH25 (2023) field reference, 4 interactive guided tours on the Sample project, and open data exchange (VENUS 5.0, TurboVeg 3, GeoPackage, CSV, and R .rds)."
+        "Built-in offline F1 LMH25 (2023) field reference, 4 interactive guided tours on the Sample project, and open data exchange (VPro64, TurboVeg 3, GeoPackage, CSV, and R .rds)."
       ]
     },
     {
@@ -1202,7 +1215,7 @@
       "4. Sensitive Rare Species & Plot Location Stewardship: Exact coordinates of plots containing Conservation Data Centre (CDC) masked/red-listed taxa or confidential research installations must not be redistributed publicly without written authorization.",
       "5. Distinction Between Working Classifications & Official BEC Units: Project Site Unit tables, candidate Site Unit tables, and personal species entries created in VPro represent working project classifications and do not constitute official provincial BEC site series until ratified in BECdb.",
       "6. Data Quality & Historical Plot Tolerance: Legacy plots span multiple decades of sampling standards (DEIF, FS882, LMH25 1998/2010/2015/2023); users are responsible for screening plot quality, coordinate precision, and taxonomic lumping appropriate to their analytical objective.",
-      "7. Contribution of Field Plots to Provincial Archive: Ecologists collecting public-land FS882 / SIVI plots under Ministry contracts or research permits are encouraged to submit quality-checked VPro project (.db) or VENUS 5.0 archives to the provincial BEC custodian.",
+      "7. Contribution of Field Plots to Provincial Archive: Ecologists collecting public-land FS882 / SIVI plots under Ministry contracts or research permits are encouraged to submit quality-checked VPro project (.db) or VPro64 archives to the provincial BEC custodian.",
       "8. Software Integrity & Checksum Verification: Initial VPro 2.0 desktop packages are distributed as unsigned builds accompanied by SHA-256 checksums in SHA256SUMS.txt; verify package checksums before installing on workplace computers.",
       "9. No Warranty & Limitation of Liability: Software and reference datasets are provided \"as is\" without warranty of fitness for a particular regulatory determination; consult regional Ministry Research Ecologists and published Land Management Handbooks for authoritative field interpretation."
     ]

@@ -21,7 +21,7 @@
         "target": "[data-tour=\"interchange-hub-root\"]",
         "view": "interchange-hub",
         "title": "Open Scientific Interchange Hub",
-        "body": "Exchange data cleanly with VENUS 5.0 XML, TurboVeg 3, GeoPackage (BC Albers EPSG:3005), CSV matrices, and R .rds."
+        "body": "Exchange data cleanly with VPro64, TurboVeg 3, GeoPackage (BC Albers EPSG:3005), CSV matrices, and R .rds."
       }
     ]
   },

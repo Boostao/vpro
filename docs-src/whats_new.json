@@ -1,5 +1,18 @@
 [
   {
+    "version": "2.1.0",
+    "date": "2026-11-26",
+    "channel": "preview",
+    "highlights": [
+      "Classic 4-Card FS882 data entry with Mensuration Card 4—edit Site, Soil, Vegetation, and Tree Mensuration cards in Single, Side-by-Side, Top-Down, or Grid layouts, and move through plots with a sticky Access-style Record Selector and PlotNumber search.",
+      "Streamlined 8-menu Work Space and VPro64 exchange—work across Work Space, Forms, Reports, Analysis, Project Management, Map, Interchange, and Help menus, manage Projects, Site Units, and Hierarchies from unified Attach, Remove, and New sidebar controls, attach legacy Access .accdb/.mdb files directly, and export clean VPro64 project files (.db) for VPro 64.",
+      "BC Government sign-in and default edit lock—sign in once per computer with your BC Government IDIR or BCeID account to unlock working project edits by role while keeping BECMaster protected for custodians and continuing seamlessly offline in the field.",
+      "VPro64-style Reports, HTML preview, and Analysis menu—all six Vegetation and Environment reports use compact VPro64-style options with automatic defaults, one-click Export to Spreadsheet and Display Report previews, an elevated Quarto Unit Report entry under Reports, and a dedicated Analysis menu for BEC Diagnostics and R Climate and Clustering.",
+      "Map hybrid basemaps, BC Forest Regions, and BGC Map Sync—switch between Esri World Imagery Hybrid, Google Hybrid, OpenStreetMap, and BC Gov Topo basemaps, toggle BC Forest Regions boundaries, and refresh the local provincial BGC v13 map with one-click BGC Map Sync.",
+      "Map-First Web BECMaster Explorer—browse published BECMaster snapshots directly on an interactive BC map with Region, Project, Bounding Box, BGC, and plot-quality filters, inspect read-only FS882 plot cards, run reports, and download filtered subsets in VPro64, CSV, GeoPackage, R, TurboVeg, or KML formats."
+    ]
+  },
+  {
     "version": "2.0.1",
     "date": "2026-11-19",
     "channel": "stable",
@@ -22,7 +35,7 @@
       "Interactive 3D Map that works offline in the field for BGC v13 and Ecosection checks and selecting plots directly into Site Units.",
       "Live BEC Differential and Pairwise Synthesis that updates immediately as plots move between Site Units and exports a 4-sheet Diagnostic Excel workbook (.xlsx).",
       "Optional R Companion tools for climr climate normals, rSMR/aSMR edatopic grids, candidate plot clustering, and Quarto Site Unit and BGC guides.",
-      "Built-in offline F1 LMH25 (2023) field reference, 4 interactive guided tours on the Sample project, and open data exchange (VENUS 5.0, TurboVeg 3, GeoPackage, CSV, and R .rds)."
+      "Built-in offline F1 LMH25 (2023) field reference, 4 interactive guided tours on the Sample project, and open data exchange (VPro64, TurboVeg 3, GeoPackage, CSV, and R .rds)."
     ]
   },
   {

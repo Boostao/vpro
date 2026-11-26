@@ -80,7 +80,7 @@
     "slug": "standards-and-interchange",
     "category": "Standards & Open Interchange",
     "title": "2026 BC BEC Standards & Open Data Exchange",
-    "summary": "Built-in BECdb v13 (2026) and BCPlantTaxonomy v19 (2026) reference lists plus clean exchange with VENUS 5.0 XML, TurboVeg 3, GeoPackage, CSV, and R .rds.",
+    "summary": "Built-in BECdb v13 (2026) and BCPlantTaxonomy v19 (2026) reference lists plus clean exchange with VPro64, TurboVeg 3, GeoPackage, CSV, and R .rds.",
     "sections": [
       {
         "heading": "Pinned 2026 Provincial Standards",
@@ -88,7 +88,7 @@
       },
       {
         "heading": "Open Ecosystem Interchange",
-        "body": "Import and export VENUS 5.0 XML, TurboVeg 3 archives, OGC GeoPackage (.gpkg in BC Albers EPSG:3005 or WGS84 EPSG:4326), Long and Wide CSV matrices, and native R (.rds) project snapshots."
+        "body": "Export clean VPro64 project files (.db) for Access VPro 64, and exchange TurboVeg 3 archives, OGC GeoPackage (.gpkg in BC Albers EPSG:3005 or WGS84 EPSG:4326), Long and Wide CSV matrices, and native R (.rds) project snapshots."
       }
     ]
   },

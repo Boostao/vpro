@@ -1,12 +1,12 @@
 # Read-Only Web Server & Snapshot Deployment Runbook (`vpro-web` & `vpro-snapshot`)
 
-> **Navigation:** [Master Index](../00_index.md) | **Engineering & Agents:** [Desktop App Engineering](./desktop_app_engineering.md) · [R SDK Engineering](./r_sdk_engineering.md) · `Web Read-Only Deployment` | **Related:** [System Architecture](../02_present_state/system_architecture.md) · [Decisions & Gaps (`D-14`)](../04_evidence_and_sources/decisions_and_gaps.md)
+> **Navigation:** [Master Index](../00_index.md) | **Engineering & Agents:** [Desktop App Engineering](./desktop_app_engineering.md) · [R SDK Engineering](./r_sdk_engineering.md) · `Web Read-Only Deployment` | **Related:** [System Architecture](../02_present_state/system_architecture.md) · [Decisions & Gaps (`D-14` · `D-15`)](../04_evidence_and_sources/decisions_and_gaps.md)
 
 ---
 
 ## 1. Architecture Overview
 
-**`vpro-web`** is VPro 2.0's third delivery surface: a pure-HTTP, stateless, read-only web viewer and analytical server for immutable **`BECMaster`** / `VP08` SQLite snapshots, sized for **~4–5 peak concurrent (~20 weekly) BEC ecologists** on a single DigitalOcean Droplet.
+**`vpro-web`** is VPro 2.0's third delivery surface: a pure-HTTP, stateless, read-only web viewer and **Map-First `BECMaster` Explorer** (mirroring `MoF-Skeena-Research/BEC_plots_Shiny`) for immutable **`BECMaster`** / `VP08` SQLite snapshots, sized for **~4–5 peak concurrent (~20 weekly) BEC ecologists** on a single DigitalOcean Droplet.
 
 ```mermaid
 flowchart TB
@@ -14,7 +14,7 @@ flowchart TB
     Caddy["Caddy 2 Reverse Proxy (vpro-caddy)<br/>Ports 80, 443 TCP+UDP (HTTP/1.1, H2, H3 QUIC)<br/>Auto Let's Encrypt TLS · zstd/gzip · /internal/* -> 404"]
 
     subgraph Web["vpro-web Container (UID 10001:10001 · read_only rootfs · cap_drop ALL)"]
-        HTTP["Public HTTP :8080<br/>Embedded Svelte 5 SPA · /api/meta · /api/rpc/* (290 RO methods)<br/>/api/downloads/* · /pmtiles/* · /maps/* · /healthz · /readyz"]
+        HTTP["Public HTTP :8080<br/>Map-First Embedded Svelte 5 SPA · /api/meta · /api/becmaster/*<br/>/api/rpc/* (306 RO methods) · /api/downloads/* · /pmtiles/* · /maps/* · /healthz · /readyz"]
         INT["Loopback Control 127.0.0.1:9090<br/>POST /internal/reload · GET /internal/stats"]
         POOL["ReadOnlyContextPool (mode=ro&immutable=1)<br/>Keyed by (DatasetID, SU, Hierarchy) · Bounded LRU Cache"]
         SEM["Worker Semaphores (503 + Retry-After: 5)<br/>Exports (default 3, 120s) · R Sidecar (default 2, 180s)"]
@@ -44,7 +44,12 @@ flowchart TB
 
 ### Key Hardening & Build Properties
 - **Headless Go Binaries (`-tags vpro_headless`):** Built in [`deploy/vpro-web/Dockerfile`](../../deploy/vpro-web/Dockerfile) with `CGO_ENABLED=1` (`go-sqlite3` only) and **zero** Wails v3, GTK/WebKit, or `accessreader` (`libmdb`) transitive dependencies (enforced by [`app/cmd/vpro-web/deps_headless_test.go`](../../app/cmd/vpro-web/deps_headless_test.go)). Both `/usr/local/bin/vpro-web` and `/usr/local/bin/vpro-snapshot` ship in the container image.
-- **Strict 290-Method Read-Only RPC Allowlist:** Every `/api/rpc/<Service>/<Method>` call is gated against [`app/resources/web_rpc_allowlist.json`](../../app/resources/web_rpc_allowlist.json) (`290` methods across `12` services: `220` `rpc`, `20` `download`, `50` `prefs`). Build-time verification (`node scripts/generate-web-rpc-map.mjs --check`) and startup bijection checks in [`app/cmd/vpro-web/rpc_router.go`](../../app/cmd/vpro-web/rpc_router.go) guarantee that zero mutation endpoints exist.
+- **Map-First `BECMaster` Explorer Endpoints (`app/cmd/vpro-web/becmaster_http.go` & `WebBECMasterExplorer.svelte`):**
+  - `GET /api/becmaster/filter-options` — returns distinct BGC Zones/Subzones, Forest Regions, ProjectIDs, publication flags, quality tiers, and survey year bounds for the active snapshot.
+  - `POST /api/becmaster/filter` — evaluates Region / Project / Bounding Box / All modes plus BGC, year, successional status, structural stage, publication, Site/Veg/Soil quality, and location accuracy filters, returning live selected plot counts and map markers.
+  - `POST /api/becmaster/download` — runs behind the export semaphore (`VPRO_WEB_EXPORT_CONCURRENCY`) to stream filtered subsets in 6 formats: **`vpro64`** (clean `journal_mode=DELETE` + `VACUUM` single-file `VP08` SQLite `.db` compatible with VPro 2.0 and VPro64 ODBC import), **`csv`** (ZIP), **`gpkg`** (OGC GeoPackage), **`rds`** (RData), **`turboveg`** (`XML` or `SQLite`), and **`kml`**.
+  - `GET /api/meta` — surfaces published snapshot provenance, standards stamps, Open Government Licence – British Columbia (`OGL-BC`) licence & citation text, and curated external BEC links (`BECweb`, `byBEC`, overridable via **`VPRO_WEB_EXTERNAL_LINKS_JSON`**).
+- **Strict 306-Method Read-Only RPC Allowlist:** Every `/api/rpc/<Service>/<Method>` call is gated against [`app/resources/web_rpc_allowlist.json`](../../app/resources/web_rpc_allowlist.json) (`306` methods across `12` services: `229` `rpc`, `50` `prefs`, `27` `download` — including all 6 `QuickRun*Workbook` web download handlers forcing `SavePreferences=false`, `OpenInSpreadsheet=false`, server-minted `DestinationPath`, and scrubbed response paths). Build-time verification (`node scripts/generate-web-rpc-map.mjs --check`) and startup bijection checks in [`app/cmd/vpro-web/rpc_router.go`](../../app/cmd/vpro-web/rpc_router.go) guarantee that zero mutation endpoints exist.
 - **Zero-Write / Zero-Audit Container Posture:** Container runs as non-root `10001:10001` with `read_only: true`, `cap_drop: [ALL]`, `no-new-privileges:true`, and `tmpfs` mounts for `/tmp` (`64 MiB`) and `/tmp/vpro-exports` (`512 MiB`, `noexec,nosuid`). Published SQLite databases have `0` rows in `<Project>_Audit` and open strictly with `mode=ro&immutable=1`. Session preferences stay in memory (`NewInMemoryDesktopConfig`) with zero server-side persistence.
 - **Two Container Image Flavors (`INCLUDE_R` Build Arg):**
 
@@ -249,13 +254,22 @@ Consistent with `app/internal/cloudsync` and [`D-12` / `D-14`](../04_evidence_an
 | `VPRO_WEB_POOL_SLOTS` / `VPRO_WEB_MAX_POOLS` | `6` / `16` | Read-only SQLite connection slots per `(Dataset, SU, Hierarchy)` key & max pooled keys |
 | `VPRO_WEB_CACHE_MAX_MB` | `256` | Bounded in-memory LRU preview/summary response cache budget (MiB) |
 | `VPRO_WEB_PMTILES_DIR` / `VPRO_WEB_PMTILES_CDN_BASE_URL` | `/pmtiles` / *(empty)* | Local read-only `PMTiles` directory or external CDN/Spaces base URL |
+| `VPRO_WEB_EXTERNAL_LINKS_JSON` | `BECweb` + `byBEC` | Optional JSON array `[{"label","url","description"}]` overriding curated external BEC links returned in `GET /api/meta` (strict `http`/`https` validation, unknown fields rejected) |
 
-### 6.2 Health, Readiness & Loopback Inspection Commands
+### 6.2 Placeholder Handoff Summary (Values to Replace at Provisioning)
+All checked-in deployment files use safe placeholder values so no real IP, domain, or secret is committed to Git. Before going live on DigitalOcean, replace:
+1. **Droplet `.env` (from [`deploy/vpro-web/env.example`](../../deploy/vpro-web/env.example)):** `VPRO_ENV` (`dev` | `prod`), `VPRO_DOMAIN` (`becmaster-dev.<domain>` / `becmaster.<domain>`), `VPRO_IMAGE` (pin immutable `web-v*` tag in `prod`), `VPRO_MEM_LIMIT` / `VPRO_CPUS`, and optional `VPRO_WEB_PMTILES_CDN_BASE_URL` / `VPRO_WEB_EXTERNAL_LINKS_JSON`.
+2. **DNS Records:** `A` (and optional `AAAA`) pointing `VPRO_DOMAIN` to the Droplet public IP before first Caddy start.
+3. **GitHub Environment Secrets (`dev` and `prod`):** `DO_HOST`, `DO_USER`, `DO_SSH_KEY`, plus optional `DO_DEPLOY_DIR` (`/srv/vpro/deploy`), `VPRO_HEALTHCHECK_URL`, and `DO_SSH_KNOWN_HOSTS`.
+4. **Initial Snapshot:** Build, verify (`vpro-snapshot verify`), transfer, and activate at least one bundle via `sync-snapshot.sh` so `/srv/vpro/data/current` exists before first `docker compose up -d`.
+
+### 6.3 Health, Readiness & Loopback Inspection Commands
 ```bash
-# Public liveness, readiness, and published snapshot/standards metadata
+# Public liveness, readiness, snapshot/standards/external-links metadata & BECMaster filter options
 curl -fsS https://<VPRO_DOMAIN>/healthz
 curl -fsS https://<VPRO_DOMAIN>/readyz
 curl -fsS https://<VPRO_DOMAIN>/api/meta
+curl -fsS https://<VPRO_DOMAIN>/api/becmaster/filter-options
 
 # Loopback-only operational stats (pool slots, reload count, cache usage, in-flight export/R counts)
 curl -fsS http://127.0.0.1:9090/internal/stats

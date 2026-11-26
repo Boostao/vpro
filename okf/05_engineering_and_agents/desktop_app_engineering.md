@@ -21,7 +21,7 @@ This playbook preserves the complete engineering invariants, 4-layer Go architec
 - **Product Identity & Packaging Boundaries:**
   - Official product identity is **`VPro`** (*VENUS — Vegetation and Environment NexUS — Professional*, **B.C. Ministry of Forests, Research Branch — Biogeoclimatic Ecosystem Classification (BEC) Program**; macOS bundle `VPro.app`) — never `"My Company"`, `"My Product"`, `"Wails Edition"`, or `vpro-wails.app`.
   - Release packages are **unsigned for Phase 1** (`"unsignedNotice": true`), relying on static `site/release-manifest.json` + `SHA256SUMS.txt` verification (zero runtime `api.github.com` browser rate-limiting).
-  - `VTrees` / standalone Mensuration, CWD, and WHA remain **out of scope** for Phase 1 (`D-09`).
+  - Core FS882 Card 4 Mensuration (`<Project>_TreePlot` [26 cols] & `<Project>_Trees` [43 cols]) is shipped (`D-15`); standalone `VTrees` Kozak taper/SiteTools, CWD (`FS882-7`), and WHA (`FS882-5/6`) remain **out of scope** for Phase 1 (`D-09`).
 
 ---
 
@@ -61,32 +61,33 @@ The Go backend in `app/` (`module github.com/boostao/vpro/app`) enforces a stric
    - `app/internal/sqlutil` (`UserDataDir`, `UserConfigDir`, `ValidateRawJSONWire`, `DecodeStrictJSON`),
    - `app/internal/accessreader` (vendored `mdbtools` `1.0.1` C `libmdb` across `linux || windows || darwin`, compiled with `-fvisibility=hidden` on Linux CGO so vendored `fakeglib` never interposes on GTK4/WebKitGTK, and `-static` on Windows MinGW with zero non-inbox PE DLL imports; sticky `GO_MDB_ERROR_*` error guards),
    - `app/internal/accessimport`, `app/internal/accessinventory`, `app/internal/accesslayout`, `app/internal/accesscompare`, `app/internal/fs882layout`, `app/internal/listcatalog`, `app/internal/reports/subzonematrix`.
-2. **Layer 1 — Core Context, Reference Catalogues & Shared Engines:**
+2. **Layer 1 — Core Context, Reference Catalogues, Auth & Shared Engines:**
+   - `app/internal/auth` (BC Gov CSS OIDC Authorization Code + PKCE over `127.0.0.1:0`, `<configDir>/auth_session.json` `0600` persistent one-time machine identity, offline role verification across `viewer`/`contributor`/`regional_ecologist`/`custodian`, `activity_queue.json` telemetry sink, and dev-only evaluation fallback compiled out of production builds via `buildmode_production.go`),
    - `app/internal/references` (`BECService`, `ReferenceService`, `Site/Soil/Parent/Geology/Region/Quality` code services),
-   - `app/internal/vprocore` (`SQLiteContext`, `DesktopConfig`, `DatabaseFamily`, `ProjectService`, `ContextService`, `PlotService` + `app/internal/vprocore/vprotest`),
+   - `app/internal/vprocore` (`SQLiteContext`, `edit_lock.go` central edit-lock & `BECMaster` Custodian gate, `mensuration.go` optional `_TreePlot`/`_Trees` DDL/IO, `DesktopConfig`, `DatabaseFamily`, `ProjectService`, `ContextService`, `PlotService` + `app/internal/vprocore/vprotest`),
    - `app/internal/sourceform` (+ `app/internal/sourceform/sftest`),
    - `app/internal/reports/reportcore`.
 3. **Layer 2 — Independent Parallel Domain Packages (strictly zero sibling Layer-2 imports):**
-   - `app/internal/lifecycle`, `app/internal/plotentry`, `app/internal/sivi`, `app/internal/twopage`, `app/internal/datasheet`, `app/internal/classification`, `app/internal/validation`, `app/internal/vegreport`, `app/internal/envreport`, `app/internal/spatial`, `app/internal/pictures`, `app/internal/interchange`, `app/internal/cloudsync`, `app/internal/projectops`, `app/internal/diagnostics`, `app/internal/lumping`, `app/internal/lmh25rules`, `app/internal/rsidecar`
-   - Cross-domain integration tests reside solely in `app/internal/integration/*_test.go`; offline extraction CLIs reside in `app/cmd/*`.
+   - `app/internal/lifecycle`, `app/internal/plotentry` (incl. `mensuration_service.go`), `app/internal/sivi`, `app/internal/twopage`, `app/internal/datasheet`, `app/internal/classification`, `app/internal/validation`, `app/internal/vegreport`, `app/internal/envreport`, `app/internal/spatial` (incl. `bgc_sync.go` & BECMaster filter engine), `app/internal/pictures`, `app/internal/interchange` (incl. `vpro64_export.go`), `app/internal/cloudsync`, `app/internal/projectops`, `app/internal/diagnostics`, `app/internal/lumping`, `app/internal/lmh25rules`, `app/internal/rsidecar`
+   - Cross-domain integration tests reside solely in `app/internal/integration/*_test.go`; offline extraction & headless server CLIs reside in `app/cmd/*`.
 4. **Layer 3 — Thin Wails Host (`package main` in `app/`):**
    - `app/main.go`, `app/native_options.go`, `app/aliases.go`, and `app/domainservices_*.go` register **strictly 12 cohesive Wails domain services**:
      1. `LifecycleService` — startup/recovery hints, cryptographic close nonce (`CloseService`), `USysUserLog` review.
-     2. `ContextService` — active `Project`/`SU`/`Hierarchy` switching, 128-bit `contextID` fencing, `New/SaveAs/Splinter/Compare/Merge`, scoped plot lookup & single-snapshot `GetPlotBundle(ctx, contextID, plot, includeCapabilities)` (Header + Veg + Humus + Mineral + Other; Audit omitted for lazy loading), and 19 `cloudsync` RPCs (preserving the 12-service ceiling).
-     3. `PlotEntryService` — 6-tab FS882, Two-Page (`twopage`), FS1333 SIVI (`sivi`), inline CHARS shrub-layer toggle, live `LMH25 (2023)` rules (`lmh25rules`), `ProjectMetadata` presets & auto-derivation.
-     4. `DatasheetService` — universal spreadsheet grid (`_Env`, `_Admin`, `_Veg`, `_Humus`, `_Mineral`, `_Other`, `_SU`), global search, TSV paste (`datasheet`).
-     5. `ClassificationService` — dual-pane `SU`/`Hierarchy` tree explorer, `Env <-> SU` sync, Plot Profiling, `Combine Species` (`*_Lump` + `LumpSpec`), reactive BEC Diagnostics (`diagnostics`), R Sidecar (`rsidecar`).
+     2. `ContextService` — active `Project`/`SU`/`Hierarchy` switching, 128-bit `contextID` fencing, unified Work Space `Attach`/`Remove`/`New` & `.accdb`/`.mdb` attach-convert (`domainservices_context_workspace.go`), `New/SaveAs/Splinter/Compare/Merge`, scoped plot lookup & single-snapshot `GetPlotBundle(ctx, contextID, plot, includeCapabilities)` (Header + Veg + Humus + Mineral + Other; Audit omitted for lazy loading), BC Gov OIDC sign-in/out & `GetEditLockStatus` (`domainservices_context_auth.go`), and 19 `cloudsync` RPCs (preserving the 12-service ceiling).
+     3. `PlotEntryService` — Editable 4-Card Classic FS882 + Mensuration Card 4 (`_TreePlot` [26 cols] / `_Trees` [43 cols] CRUD & `EnsureMensurationTables`), Two-Page (`twopage`), FS1333 SIVI (`sivi`), inline CHARS shrub-layer toggle, live `LMH25 (2023)` rules (`lmh25rules`), `ProjectMetadata` presets & auto-derivation.
+     4. `DatasheetService` — universal spreadsheet grid (`_Env`, `_Admin`, `_Veg`, `_Humus`, `_Mineral`, `_Other`, `_SU`, plus optional `_TreePlot` & `_Trees`), global search, TSV paste (`datasheet`).
+     5. `ClassificationService` — dual-pane `SU`/`Hierarchy` tree explorer, `Env <-> SU` sync, Plot Profiling, `Combine Species` (`*_Lump` + `LumpSpec`), reactive BEC Diagnostics (`diagnostics`), R Sidecar (`rsidecar` incl. Quarto HTML/PDF & instant HTML fallback).
      6. `ValidationService` — batch `USysTableOfLists` picklist & numeric bounds compliance gate, 1:N FK integrity, `SpeciesCodeCheck`, transactional `OptimizeVeg`.
-     7. `ImportExportService` — Access `VP05`–`VP08` (`545 MB` `BECMaster` streaming + orphan quarantine), `VENUS 5.0`, official `TurboVeg 3` 31-table SQLite & `Plot_package` XML, `.gpkg`, `.rds`, Long/Wide CSV & Store `.zip`, `User Species`, Label PDF.
-     8. `VegetationReportService` — Summary & Long Vegetation previews and `.xlsx` workbooks, SiteUnit suffix exclusions, Lifeform & Species Attributes summaries.
-     9. `EnvironmentReportService` — Long Environment, Site Unit Summary (mean/quartiles + qualitative), and Subzone Matrix previews & `.xlsx` workbooks.
-     10. `SpatialService` — MapLibre v6 + `PMTiles` byte-range streaming, NAD83 `UTM <-> DD` geodetic QA, FlatGeobuf BGC/Ecosection/District auto-stamp, AOI $\rightarrow$ `*_SU`, KML 2.1.
+     7. `ImportExportService` — Access `VP05`–`VP08` (`545 MB` `BECMaster` streaming + orphan quarantine + `_TreePlot`/`_Trees` import), **VPro64 SQLite-for-ODBC export (`vpro64_export.go`, replacing user-facing VENUS 5)**, official `TurboVeg 3` 31-table SQLite & `Plot_package` XML, `.gpkg`, `.rds`, Long/Wide CSV & Store `.zip`, `User Species`, Label PDF, legacy `VENUS 5.0` backend importer.
+     8. `VegetationReportService` — compact VPro64-style Summary & Long Vegetation + Lifeform & Species Attributes previews, `QuickRun*Workbook` (`.xlsx` + desktop spreadsheet launch / web download), `Render*HTMLReport`, SiteUnit suffix exclusions.
+     9. `EnvironmentReportService` — compact VPro64-style Long Environment, Site Unit Summary (mean/quartiles + qualitative), and Subzone Matrix previews, `QuickRun*Workbook` (`.xlsx` + desktop spreadsheet launch / web download), `Render*HTMLReport`.
+     10. `SpatialService` — MapLibre v6 + `PMTiles` byte-range streaming, hybrid basemaps & BC Forest Regions, atomic SHA-256 `SyncLatestBGCMap` / `GetBGCMapSyncStatus`, `FilterBECMasterPlots` / `GetBECMasterFilterOptions`, NAD83 `UTM <-> DD` geodetic QA, FlatGeobuf BGC/Ecosection/District auto-stamp, AOI $\rightarrow$ `*_SU`, KML 2.1.
      11. `PictureService` — cold-boot `VPics.db` seeding, plot photo browser, metadata editing, native OS file dialogs, add/delete/restore.
      12. `HelpService` — offline `F1` `LMH25 (2023)` contextual help (`app/resources/help_bundle.json`), 4 spotlight tours, keyboard shortcuts, `What's New`, lock-safe `Reset Workspace to Sample`, `About & Standards Stamps`.
 
 ### Frontend Svelte 5 Domain Organization (`app/frontend/`)
 
-- Preserve the 13-domain directory layout under `app/frontend/src/{shell,entry,datasheet,classification,reports,spatial,diagnostics,rsidecar,interchange,admin,pictures,help,shared}/` and the single-pass Node test suite under `app/frontend/tests/` (`app/frontend/scripts/run-tests.mjs` + shared wire round-trip `fixtures/`).
+- Preserve the 14-domain directory layout under `app/frontend/src/{shell,entry,datasheet,classification,reports,spatial,diagnostics,rsidecar,interchange,admin,pictures,help,shared,web}/` (8-menu desktop shell, Editable 4-Card Classic FS882 + 4 card layouts + sticky Access Record Selector, sandboxed `HTMLReportPreviewModal`, `InterchangeVPro64Tab`, and Map-First `web/WebBECMasterExplorer.svelte`) and the single-pass Node test suite under `app/frontend/tests/` (`app/frontend/scripts/run-tests.mjs` + shared wire round-trip `fixtures/`).
 
 ---
 
@@ -94,8 +95,9 @@ The Go backend in `app/` (`module github.com/boostao/vpro/app`) enforces a stric
 
 ### 4.1 Canonical SQLite Family, Cross-OS Directories & `SQLiteContext` Isolation (`app/internal/vprocore/sqlitecontext.go`)
 
-1. **7-Database SQLite Family & `config.yml`:**
-   - Preserve `<Project>.db` (`VP08` 8 core tables: `_Env`, `_Admin`, `_Veg`, `_Humus`, `_Mineral`, `_Other`, `_Audit`, `_Metadata`), `VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, `VPics.db`, `_table_metadata` (`'VP08'`), and `config.yml` (with lossless legacy JSON migration).
+1. **7-Database SQLite Family, Optional Mensuration Tables & Central Edit Lock:**
+   - Preserve `<Project>.db` (`VP08` 8 core tables: `_Env`, `_Admin`, `_Veg`, `_Humus`, `_Mineral`, `_Other`, `_Audit`, `_Metadata`, plus optional Card 4 mensuration tables `_TreePlot` [26 cols] and `_Trees` [43 cols] initialized on demand via `EnsureMensurationTables`), `VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, `VPics.db`, `_table_metadata` (`'VP08'`), and `config.yml` (with lossless legacy JSON migration) + `<configDir>/auth_session.json` (`0600`).
+   - Desktop mutations are gated centrally through `vprocore/edit_lock.go` (`CheckEditLock()` + `RequireContextEdit` across all Layer-2 mutating services): data editing is locked by default until BC Gov OIDC sign-in (or dev-only evaluation sign-in in non-production builds when `VPRO_OIDC_CLIENT_ID` is unset), and `BECMaster` writes require the `custodian` role (`TestDesktopEditLockEnforcedAcrossAllMutatingServicesAndBECMaster`).
    - Embedded reference `.db` files in `app/resources/` are read-models, **never** replacements for `VLists.db` / `VUser.db`; `ReferenceService` provisions its 2-table (`Lists`, `Species`) lookup read-model at `<dataDir>/readmodels/vlists-lookup.db` so it never collides with `<dataDir>/VLists.db` or `<dataDir>/database-family/VLists.db` on case-insensitive filesystems (Windows NTFS / macOS APFS).
    - `app/internal/sqlutil/sqlutil_foundation.go` (`UserDataDir()` and `UserConfigDir()`) defines the shared workspace contract consumed identically by `r/R/workspace.R` (`VPRO_DATA_DIR` / `VPRO_CONFIG_DIR` overrides first; Windows `%LOCALAPPDATA%\vpro` & `%APPDATA%\vpro`; macOS `~/Library/Application Support/vpro`; Linux `${XDG_DATA_HOME:-~/.local/share}/vpro` & `${XDG_CONFIG_HOME:-~/.config}/vpro`).
 2. **URI Escaping & TOCTOU Protection:**

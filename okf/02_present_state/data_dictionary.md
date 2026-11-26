@@ -10,7 +10,7 @@ Both legacy **VPro 64** (`VPro64.accdb` + `.accda` add-ins) and the modernized *
 
 | Logical Database | Legacy Access Artifact | Canonical SQLite Artifact (`r/` / `app/`) | Core Tables Contained | Ownership & Mutability |
 |---|---|---|---|---|
-| **Active Project** | `<File>.accdb` (`<P>_*` 8 tables + optional tables) | `<Project>.db` (e.g., `projects/Sample.db`, `503,808 B`) | `<P>_Env`, `<P>_Admin`, `<P>_Veg`, `<P>_Humus`, `<P>_Mineral`, `<P>_Other`, `<P>_Audit`, `<P>_Metadata` (+ optional `_SU`, `_Hierarchy`, `_Lump`, `_Profile`, `_Herbarium`, `_Theme`, `_table_metadata`, `__VPRO_*`) | **Read/Write** (`c.projectDB` in `app/` `sqlitecontext.go:56-75`) |
+| **Active Project** | `<File>.accdb` (`<P>_*` 8 tables + optional tables) | `<Project>.db` (e.g., `projects/Sample.db`, `503,808 B`) | `<P>_Env`, `<P>_Admin`, `<P>_Veg`, `<P>_Humus`, `<P>_Mineral`, `<P>_Other`, `<P>_Audit`, `<P>_Metadata` (+ optional `_TreePlot` [26 cols], `_Trees` [43 cols], `_SU`, `_Hierarchy`, `_Lump`, `_Profile`, `_Herbarium`, `_Theme`, `_table_metadata`, `__VPRO_*`) | **Read/Write** (`c.projectDB` in `app/` `sqlitecontext.go:56-75`, guarded by `edit_lock.go`) |
 | **Program / System Templates** | `VPro64.accdb` (`29,396,992 B`, `BuildDate = 02/23/23`) | `database-family/VPro64.db` | `USys*Table` DDL templates, `LayerCode`, `LifeformCodes`, `UnitLevelCodes`, `USysShortVegSummaryFieldList`, `USysSubzoneMatrixLabels`, `USysBreakTable`, `USysUserLog`, `tblWhatsNew` | **Read-Only** seed (except `USysUserLog` / receipt tables) |
 | **Provincial Standards Library** | `VLists.accda` (`8,818,688 B`, `01 Feb. 2023`) | `database-family/VLists.db` (`2026` refresh via `cmd/standards2026`; `VLists.db.gz` in `r/inst/extdata/`; embedded `resources/vlists.db` 2-table read-model extracted to `<dataDir>/readmodels/vlists-lookup.db`) | `USysAllSpecs` (`16,728` rows, `BCPlantTaxonomy v19`), `USysTableOfLists` (`1,566` rows, `LMH25 2023`), `MasterSiteUnitList` (`6,067` rows), `USysSiteSeriesNames` (`8,900` rows, `BECdb v13`), `USysZoneList` (`331` rows), `USysSppAttributes` (`8,262` rows) | **Read-Only** for standard users; governed via `BECMaster` / `BECdb` |
 | **User Workspace Library** | `VUser.accda` (`696,320 B`) | `database-family/VUser.db` (`VUser.db.gz` in `r/inst/extdata/`) | `USysUserSpp` (personal provisional species), `UserSiteUnitList`, `USysSiteUnitAll`, `USysPrefs` | **Read/Write** per local user |
@@ -30,6 +30,8 @@ erDiagram
     PROJECT_ENV ||--o{ PROJECT_MINERAL : "PlotNumber (1:N CASCADE)"
     PROJECT_ENV ||--o{ PROJECT_OTHER : "PlotNumber (1:N CASCADE)"
     PROJECT_ENV ||--o{ PROJECT_AUDIT : "PlotNumber (1:N CASCADE)"
+    PROJECT_ENV ||--o{ PROJECT_TREEPLOT : "PlotNumber (optional 1:N)"
+    PROJECT_TREEPLOT ||--o{ PROJECT_TREES : "PlotNumber, SubPlot, MeasurementID (1:N)"
     PROJECT_METADATA ||--o{ PROJECT_ENV : "ProjectID (logical 1:N)"
     PROJECT_ENV ||--o| SITE_UNIT_SU : "PlotNumber (0..1 active filter)"
     HIERARCHY_NODE ||--o{ HIERARCHY_NODE : "ID = Parent (Adjacency Tree)"
@@ -182,6 +184,29 @@ erDiagram
         varchar_255 PicDir "Directory path"
         varchar_255 PicName "Image filename"
     }
+
+    PROJECT_TREEPLOT {
+        varchar_7 PlotNumber PK,FK "Parent plot (composite PK)"
+        varchar_30 SubPlot PK "Subplot identifier"
+        int32 MeasurementID PK "Measurement cycle"
+        boolean CruisePlot "Access -1/0 (+ 4 plot flags)"
+        double BAF "Basal area factor"
+        double DBHLimit "Minimum DBH cm"
+        int16 StandAge "Stand age years"
+        varchar_100 BECSiteUnit "BEC site unit"
+    }
+
+    PROJECT_TREES {
+        varchar_7 PlotNumber FK "Parent plot"
+        varchar_30 SubPlot "Subplot identifier"
+        int32 MeasurementID "Measurement cycle"
+        int32 TreeNum "Tree number"
+        varchar_3 TreeSpp "3-char tree species code"
+        double DBH "Diameter at breast height cm"
+        double TotalHtCalc "Total tree height m"
+        double BasalArea "Basal area (m2/ha)"
+        double SI50 "Site Index at age 50"
+    }
 ```
 
 ---
@@ -261,6 +286,20 @@ Stores vertical canopy cover, height, voucher status, and cultural/forage attrib
 * **`<Project>_Audit` (`Sample_Audit.sql:2-19`):** `Project (Text 100)`, `User (Text 100)`, `PlotNumber (Text 7, FK CASCADE)`, `Table (Text 50)`, `EditField (Text 100)`, `EditWhen (Timestamp, indexed)`, `BeforeEdit (Text)`, `AfterEdit (Text)`, `Restore (Boolean)`, `Flag (Boolean)`, `ID (Int32, target child row ID — `NULL` for header/table-level events; NOT an AutoNumber PK!)`. Default session `AuditStrength` in `app/` is `3` (`Edit, Add & Delete`).
 * **`<Project>_Metadata` (`Sample_Metadata.sql:2-85`, Tag `VP07` / `VP08`):** `ID (PK)`, `ProjectID (Text 20 — note width mismatch vs Env.ProjectID Text 30!)`, `StartDate (Int16, 1900–2500)`, `EndDate (Int16)`, agency/leader/study-area text fields, methodology codes (`ProjectType`, `EcosysCollectionStandard`, `VegCoverMethod`, `PlotMethod`, `MensurationMethod`, `GeoRefMethod`, `Datum`, `CoordinateSystem`), 9 `Collected* (Int16: 1=complete, 2=partial, 3=none)` + `DataQuality*` pairs (`Site, Veg, Soil, Terrain, Mens, CWD, WildTree, SoilChem, WildlifeHabitatAssessment`), library stamps (`AllSpecs`, `TableOfLists`), 15 `Cover*Description` fields (`A1..Cover10`), `BAPID (Int32 <= 99999)`, `DateLastEdited`, `Notes`.
 
+### 3.6 Optional Mensuration Tables: `<Project>_TreePlot` (`26 Columns`) & `<Project>_Trees` (`43 Columns`)
+Powering **FS882 Card 4 (Mensuration)** (`app/internal/vprocore/mensuration.go`, `app/internal/plotentry/mensuration_service.go`, `app/internal/datasheet/datasheet_schema.go`, `app/internal/accessimport/mensuration.go`, `app/frontend/src/entry/FS882CardMensuration.svelte`), these two optional project tables are created lazily on demand (`EnsureMensurationTables`) or auto-imported from legacy `VP05` / `VTrees` Access databases while keeping the 8 core `VP08` tables backward-compatible:
+
+* **`<Project>_TreePlot` (`26 Columns`, Composite PK `(PlotNumber, SubPlot, MeasurementID)`):**
+  * **Identity & Classification (`Cols 0–8`):** `PlotNumber (Text 7, literal text)`, `SubPlot (Text 30)`, `MeasurementID (Int32)`, `MensurationID (Text 255)`, `Zone (Text 10)`, `SubZone (Text 15)`, `FIZ (Text 2)`, `TreeSurveyor (Text 30)`, `Date (Text/DateTime)`.
+  * **Plot Type Flags (`Cols 9–13`, Access BOOLEAN `-1`/`0`):** `CruisePlot`, `CWDPlot`, `WildlifePlot`, `InformalPlot`, `SiteIndexPlot`.
+  * **Mensuration Design & Context (`Cols 14–25`):** `BAF`, `DBHLimit`, `StandAge`, `PlotSize`, `SeralStage (Text 255)`, `FSRegionDistrict (Text 7)`, `Location (Text 255)`, `BECSiteUnit (Text 100)`, `StandAgeVPro`, `SiteSeries (Text 5)`, `Comment (Memo)`, `DataSource (Text 255)`.
+* **`<Project>_Trees` (`43 Columns` + SQLite `rowid`):**
+  * **Tree Identification & Dimensions (`Cols 0–12`):** `PlotNumber (Text 7)`, `SubPlot (Text 30)`, `MeasurementID (Int32)`, `TreeNum (Int32)`, `TreeSpp (Text 3)`, `DBH`, `DBHClass`, `TotalHtCalc`, `HeightClass`, `CountAge`, `CountHT`, `TotalAge`, `AgeNote (Text 255)`.
+  * **Health, Pathology & Damage (`Cols 13–24`, Byte `0..255` indicators on `TreeHealth` & 8 pathology cols):** `TreeHealth`, `TreeOrigin (Text 1)`, `Conks`, `BlindConks`, `Scars`, `ForkOrCrook`, `FrostCrack`, `Mistletoe`, `RottenBranch`, `DeadOrBrokenTop`, `DamageType (Text 3)`, `DamageSeverity (Text 1)`.
+  * **Crown, Wildlife & Condition (`Cols 25–35`, Byte `0..255` on 6 wildlife/condition cols):** `CrownClass (Text 1)`, `Ht2LiveCrown`, `Appearance`, `CrownCondition`, `BarkRetention`, `WoodCondition`, `LichenLoading`, `MossLoading`, `WildLifeUse (Text 17)`, `TreeNotes (Memo)`, `LiveDead (Text 255)`.
+  * **Stand & Site Index Metrics (`Cols 36–42`, Double on `CuVolume`, `SPH`, `BasalArea`, `SiteIndex24`, `SI50`):** `CuVolume`, `SPH`, `BasalArea`, `SiteIndexID (Int64)`, `SiteIndex`, `SiteIndex24`, `SI50`.
+* **Invariants:** Literal text `PlotNumber` (`typeof='text'`), UTF-16 code-unit limits enforced on all text columns, Access `-1`/`0` booleans preserved in SQLite and `<Project>_Audit` (`Table = '_TreePlot'` / `'_Trees'`), atomic `BEGIN IMMEDIATE` mutations gated by `CheckEditLock()`, and full inclusion in `UniversalDatasheetGrid`, `ExportProjectToVPro64`, and `vpro-web` filtered `vpro64` subset downloads.
+
 ---
 
 ## 4. Classification, Profiling, Lumping & Reference Entities
@@ -320,4 +359,4 @@ Additionally, `app/` and `r/` persist **strict-schema `__VPRO_*` technical table
 | **`VP06`** | VPro 07 / 13 (`TemplateVPro13.accdb`) | ACE `.accdb`; `Env` (105 cols, decimal degrees `Single`), `Veg` (36 cols, composite PK `PlotNumber+Species`); Mensuration moved to `VTrees.accdb`. **Auto-converted to `VP08`** in `app/` (`ImportVPro06` parity). |
 | **`VP07`** | VPro 15 (`TemplateVPro15.accdb`) | `Env` expanded to 131 cols (SIVI + CHARS fields); `Veg` expanded to 44 cols (CHARS `Cover5a..5c` + `Veg Other`, PK dropped); added 75-col `Metadata`. **Auto-converted to `VP08`** in `app/` (`ImportVPro07` parity). |
 | **`VP08`** | VPro 19 / 64 (`VPro64.accdb`) | **Canonical 8-table schema:** Split 20 admin/QA/BEC columns into `<P>_Admin`; widened `Latitude`/`Longitude` to `Double`; renamed 14 SIVI columns to `SV_*`. **Direct lossless import** in both `r/` and `app/`. |
-| **`VTrees Ver03`** | `VTrees.accdb` (`VPRO_ACCESS_1\VTrees\`) | Companion Mensuration DB: `<P>_TreePlot` (26 cols, composite PK `PlotNumber, SubPlot, MeasurementID`), `<P>_Trees` (41 cols), `tblTaperCoefficients` (74 Kozak rows), `tblTaperGVAF` (189 rows). Not yet in `app/`. |
+| **`VTrees Ver03`** | `VTrees.accdb` (`VPRO_ACCESS_1\VTrees\`) | Companion Mensuration DB: `<P>_TreePlot` (`26` cols, composite PK `PlotNumber, SubPlot, MeasurementID`) and `<P>_Trees` (`43` cols incl. `SiteIndex24`/`SI50`) **now supported natively in `app/`** (FS882 Card 4 Mensuration, Datasheet, Access import & VPro64 export); Kozak taper tables (`tblTaperCoefficients` 74 rows, `tblTaperGVAF` 189 rows) remain Phase 2 (`D-09`). |
