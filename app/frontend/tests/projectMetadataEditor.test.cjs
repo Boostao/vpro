@@ -63,16 +63,16 @@ test('compiled Metadata menu requires current availability and callback, without
     const html = render(component, { props: {
       view: 'fs882', onnavigate() {}, metadataAvailable: available, onopenmetadata: callback, releaseChannel: 'experimental',
     } }).body;
-    for (const label of ['Metadata', 'Herbarium \\(Planned\\)', 'Colour-theme \\(Planned\\)', 'User setup(?: \\(Planned\\))?', 'Enter/Edit SIVI Data']) {
+    for (const label of ['Project Metadata', 'Herbarium \\(Planned\\)', 'Colour-theme \\(Planned\\)', 'Sign In &amp; Access', 'View/Edit SIVI Data']) {
       const match = html.match(new RegExp(`<button\\b[^>]*>[\\s\\S]*?<span>${label}<\\/span>\\s*<\\/button>`));
       assert.ok(match, `actual compiled ${label} button must exist`);
       const button = match[0].slice(match[0].lastIndexOf('<button'));
-      if (/User setup/.test(label)) {
-        if (/Planned/.test(match[0])) assert.equal(/\bdisabled(?:\s|=|>)/.test(button), true);
+      if (/Sign In/.test(label)) {
+        assert.equal(/\bdisabled(?:\s|=|>)/.test(button), false);
       } else {
-        assert.equal(/\bdisabled(?:\s|=|>)/.test(button), label !== 'Metadata' || !(available && callback));
+        assert.equal(/\bdisabled(?:\s|=|>)/.test(button), label !== 'Project Metadata' || !(available && callback));
       }
-      if (label === 'Metadata') assert.match(button, /clean, unlocked editor/);
+      if (label === 'Project Metadata') assert.match(button, /clean, unlocked editor/);
     }
   }
 });

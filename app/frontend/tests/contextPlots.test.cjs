@@ -56,23 +56,24 @@ test('context transitions reuse native close validation and preserve drafts unti
   assert.match(form, /loadRequest \+= 1[\s\S]*?reads\.cancelAll\(\)/);
 });
 
-test('verified external attachment defaults on and project choices visibly identify their files', () => {
+test('Work Space dropdowns visibly identify files and wire unified Attach/Remove/New, Access auto-convert, and VPro64 export', () => {
   const { readShellComposite, readSidebarComposite } = require('./svelteTestHelpers.cjs');
   const root = readShellComposite();
   const sidebar = readSidebarComposite();
   assert.match(root, /<WorkspaceSidebar/);
-  assert.match(sidebar, /class="project-location"/);
+  assert.match(sidebar, /id="active-project"/);
+  assert.match(sidebar, /id="active-su"/);
+  assert.match(sidebar, /id="active-hierarchy"/);
   assert.match(sidebar, /item\.name === project\.name/);
-  assert.match(sidebar, /\? project\.file\s*:\s*project\.path/);
-  assert.match(sidebar, /id="browse-external-sqlite"/);
-  assert.match(sidebar, /(?:contextService|ContextService)\.ChooseExternalSQLiteFile/);
-  assert.match(sidebar, /id="reveal-explorer-btn"/);
-  assert.match(sidebar, /id="reveal-root-explorer-btn"/);
+  assert.match(sidebar, /project\.file/);
+  assert.match(sidebar, /(?:contextService|ContextService)\.ChooseAttachableFile/);
+  assert.match(sidebar, /(?:contextService|ContextService)\.InspectAttachableFile/);
+  assert.match(sidebar, /(?:contextService|ContextService)\.AttachWorkspaceResource/);
+  assert.match(sidebar, /(?:contextService|ContextService)\.UnattachWorkspaceResource/);
+  assert.match(sidebar, /(?:contextService|ContextService)\.CreateWorkspaceResource/);
   assert.match(sidebar, /(?:contextService|ContextService)\.RevealInFileExplorer/);
-  assert.match(sidebar, /id="access-import-wizard"/);
-  assert.match(sidebar, /(?:importExportService|ImportExportService)\.ChooseAccessDatabaseFile/);
-  assert.match(sidebar, /(?:importExportService|ImportExportService)\.InspectAccessDatabase/);
-  assert.match(sidebar, /(?:importExportService|ImportExportService)\.ImportAccessProject/);
+  assert.match(sidebar, /(?:importExportService|ImportExportService)\.ChooseVPro64ExportFile/);
+  assert.match(sidebar, /(?:importExportService|ImportExportService)\.ExportVPro64Database/);
 });
 
 test('actual editor service merge scopes nullable Audit and rejects a delayed read after context switching', async () => {

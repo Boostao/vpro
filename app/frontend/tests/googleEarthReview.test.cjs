@@ -117,7 +117,7 @@ test('Earth UI independently gates only preparation, shares context/close barrie
   const deferredViews = readFileSync(srcPath('ShellDeferredViews.svelte'), 'utf8');
   const navigation = readFileSync(srcPath('Navigation.svelte'), 'utf8');
   assert.equal(compile(rootComponent, { filename: 'GoogleEarthReview.svelte', generate: 'client' }).warnings.length, 0);
-  assert.match(navigation, /name: 'Google Earth \(KML\)', icon: Globe, view: 'google-earth-review'/);
+  assert.match(navigation, /name: 'Google Earth KML', icon: Globe, view: 'google-earth-review'/);
   assert.match(deferredViews, /view === 'google-earth-review' && \$projectState/);
   assert.match(component, /onDestroy\(cancel\)/); assert.match(component, /reads\.cancelAll\(\)/);
   assert.match(component, /label for="google-earth-description"/);

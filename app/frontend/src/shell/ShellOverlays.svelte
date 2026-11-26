@@ -16,6 +16,7 @@
     companionPanelBusy,
     transitionWorking,
     workbenchDirty,
+    plotCount = 0,
     stateReads,
     onNavigate,
     onRefresh,
@@ -27,6 +28,7 @@
     companionPanelBusy: boolean;
     transitionWorking: boolean;
     workbenchDirty: boolean;
+    plotCount?: number;
     stateReads: ReadRequests;
     onNavigate: (next: ShellViewId) => void;
     onRefresh: () => Promise<void>;
@@ -139,6 +141,20 @@
       open={ui.aboutModalOpen}
       onclose={() => {
         ui.aboutModalOpen = false;
+      }}
+    />
+  {/await}
+{/if}
+
+{#if !IS_WEB_READONLY && ui.authSignInOpen && !startupFailure}
+  {#await import('./AuthSignInModal.svelte') then { default: AuthSignInModal }}
+    <AuthSignInModal
+      open={ui.authSignInOpen}
+      contextId={$projectState?.contextId ?? ''}
+      activeProject={$projectState?.activeProject ?? ''}
+      {plotCount}
+      onclose={() => {
+        ui.authSignInOpen = false;
       }}
     />
   {/await}

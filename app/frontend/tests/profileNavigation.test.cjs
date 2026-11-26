@@ -86,7 +86,7 @@ test('Apply/Clear/Previous/Next reuse transition ownership and revalidation befo
 test('Independent profile write authorization is default-off and shared-transition owned, not inferred from selection',()=>{
   const { readShellComposite, readPlotProfileComposite } = require('./svelteTestHelpers.cjs');
   const app=readPlotProfileComposite();
-  assert.match(readShellComposite(),/<PlotProfilePanel/);
+  assert.doesNotMatch(readShellComposite(),/<PlotProfilePanel/);
   assert.match(app,/aria-label="Reviewed profile write ownership"/);
   assert.match(app,/Context changes or\s+restart clear it/);
   assert.match(app,/profileWriteContext !== \$projectState\.contextId|profileWriteContext !== host\.getCurrentContextId\(\)/);
@@ -735,9 +735,8 @@ test('Relocated Plot Profile selector wiring compiles warning-free and is reacha
   }
 
   const routerSrc = read('shell/ShellWorkspaceRouter.svelte');
-  assert.match(routerSrc, /bind:selectionController=\{profileSelection\}/);
-  assert.match(routerSrc, /bind:reopenProfileReview/);
-  assert.match(routerSrc, /onopenprofiling=\{openPlotProfiling\}/);
+  assert.doesNotMatch(routerSrc, /<PlotProfilePanel/);
+  assert.doesNotMatch(routerSrc, /showInspectorRail/);
 
   const fs882Src = read('entry/FS882Form.svelte');
   assert.match(fs882Src, /ctrl\.profileReviewOpen \|\|\s*initialProfileReviewOpen/);

@@ -1,142 +1,80 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import { CheckCircle2, Newspaper, ShieldCheck } from '@lucide/svelte';
   import {
-    ArrowRight,
-    BookOpen,
-    ChartColumn,
-    ClipboardList,
-    Compass,
-    Database,
-    Globe,
-    Network,
-    ShieldCheck,
-    TableProperties,
-  } from '@lucide/svelte';
-  import { formatShortCommit, type BuildMode } from '../help/helpSystem';
-  import { webShellRuntime } from '../shared/state';
+    defaultHelpPort,
+    formatShortCommit,
+    type BuildMode,
+    type HelpBackendPort,
+    type WhatsNewStatus,
+  } from '../help/helpSystem';
   import { IS_WEB_READONLY } from '../web/runtimeMode';
 
-  type HubView =
-    | 'plots'
-    | 'fs882'
-    | 'datasheet'
-    | 'classification-explorer'
-    | 'geospatial-map'
-    | 'diagnostic-synthesis'
-    | 'r-sidecar'
-    | 'interchange-hub'
-    | 'project-admin';
-
   let {
-    activeProject = 'None',
-    projectPath = '',
-    activeSU = 'None',
-    activeHierarchy = 'None',
-    plotCount = 0,
+    whatsNewStatus = null,
     buildMode = '' as BuildMode,
     appVersion = '',
     gitCommit = '',
     releaseChannel = 'stable',
-    onnavigate,
+    helpPort = defaultHelpPort,
+    onacknowledgewhatsnew,
     onhelpaction,
   }: {
-    activeProject?: string;
-    projectPath?: string;
-    activeSU?: string;
-    activeHierarchy?: string;
-    plotCount?: number;
+    whatsNewStatus?: WhatsNewStatus | null;
     buildMode?: BuildMode;
     appVersion?: string;
     gitCommit?: string;
     releaseChannel?: string;
-    onnavigate: (view: HubView) => void;
+    helpPort?: HelpBackendPort;
+    onacknowledgewhatsnew?: () => void | Promise<void>;
     onhelpaction?: (action: 'guide' | 'tours' | 'about') => void;
   } = $props();
 
+  let loadedStatus = $state.raw<WhatsNewStatus | null>(null);
+  let loading = $state(false);
+  let acknowledging = $state(false);
+
   const shortCommit = $derived(formatShortCommit(gitCommit));
+  const status = $derived(whatsNewStatus ?? loadedStatus);
 
-  const baseWorkflows: {
-    id: string;
-    title: string;
-    subtitle: string;
-    description: string;
-    icon: typeof ClipboardList;
-    cta: string;
-    view?: HubView;
-    helpAction?: 'guide' | 'tours';
-  }[] = [
-    {
-      id: 'entry',
-      title: 'Plots & FS882 / SIVI Entry',
-      subtitle: 'LMH25 (2023) Field Cards',
-      description:
-        'Browse project plots and edit FS882 (6x4), 2-Page, and FS1333 SIVI records with inline CHARS extended-shrub layers and live pedon/rSMR/rSNR rules.',
-      icon: ClipboardList,
-      cta: 'Open Plots',
-      view: 'plots',
-    },
-    {
-      id: 'datasheet',
-      title: 'Universal Datasheet Grid',
-      subtitle: 'Multi-Plot Tabular Editing',
-      description:
-        'Filter, sort, and batch-edit Environment and Vegetation columns across scoped plots with automatic audit history.',
-      icon: TableProperties,
-      cta: 'Open Datasheet',
-      view: 'datasheet',
-    },
-    {
-      id: 'classification',
-      title: 'SU & Hierarchy Explorer',
-      subtitle: 'BEC Classification Hypothesis',
-      description:
-        'Organize working Site Unit assignments, manage tilde (~) hierarchy breakpoints, and refine candidate units.',
-      icon: Network,
-      cta: 'Open Explorer',
-      view: 'classification-explorer',
-    },
-    {
-      id: 'spatial',
-      title: '3D Geospatial Workbench',
-      subtitle: 'Offline 3D Map & Coordinate Check',
-      description:
-        'Inspect plot coordinates over BGC v13, Ecosections, and Natural Resource Districts with spatial attribute verification and AOI filtering.',
-      icon: Globe,
-      cta: 'Open 3D Map',
-      view: 'geospatial-map',
-    },
-    {
-      id: 'synthesis',
-      title: 'BEC Diagnostic Synthesis',
-      subtitle: 'Presence, Fidelity & R Companion',
-      description:
-        'Compute Presence (I–V), Domin-Krajina Significance, and differential species classes (d, dd, cd, c, ic) alongside climr aSMR & Quarto guides.',
-      icon: ChartColumn,
-      cta: 'Open Diagnostics',
-      view: 'diagnostic-synthesis',
-    },
-    {
-      id: 'interchange',
-      title: 'Interchange Hub & Admin',
-      subtitle: 'Access, VENUS 5, TurboVeg 3, GeoPackage',
-      description:
-        'Promote Access (.accdb/.mdb) projects, run 3-way merges & QA checks, and exchange VENUS 5.0 XML, TurboVeg 3 databases/XML, .gpkg, and R .rds archives.',
-      icon: Database,
-      cta: 'Open Interchange Hub',
-      view: 'interchange-hub',
-    },
-  ];
-
-  const workflows = $derived(
-    IS_WEB_READONLY && $webShellRuntime?.hubOverrides
-      ? baseWorkflows.map((item) => {
-          const ov = $webShellRuntime?.hubOverrides[item.id];
-          return ov ? { ...item, ...ov } : item;
+  $effect(() => {
+    if (whatsNewStatus || typeof helpPort?.getWhatsNewStatus !== 'function') return;
+    untrack(() => {
+      if (loadedStatus || loading) return;
+      loading = true;
+      void helpPort
+        .getWhatsNewStatus()
+        .then((fresh) => {
+          loadedStatus = fresh;
         })
-      : baseWorkflows
-  );
+        .catch(() => {})
+        .finally(() => {
+          loading = false;
+        });
+    });
+  });
+
+  async function markLatestAsRead() {
+    if (!status?.latestVersion || acknowledging) return;
+    acknowledging = true;
+    try {
+      if (onacknowledgewhatsnew) {
+        await onacknowledgewhatsnew();
+      } else if (typeof helpPort?.acknowledgeWhatsNew === 'function') {
+        loadedStatus = await helpPort.acknowledgeWhatsNew(status.latestVersion);
+      }
+    } finally {
+      acknowledging = false;
+    }
+  }
+
+  function isEntryUnread(index: number): boolean {
+    if (!status) return false;
+    return index < status.unreadCount;
+  }
 </script>
 
-<div class="space-y-4" data-home-workspace-hub>
+<div class="mx-auto max-w-3xl space-y-4 py-2" data-home-workspace-hub data-opening-whats-new>
   {#if !IS_WEB_READONLY && buildMode === 'alpha'}
     <section
       data-home-tier-banner="alpha"
@@ -160,7 +98,7 @@
         </a>
       </div>
       <p class="mt-1.5 leading-relaxed text-vpro-ink">
-        Keep backup copies of archival databases before running bulk Access imports or multi-project merges. Preview
+        Keep backup copies of archival databases before running bulk Access conversions or multi-project merges. Preview
         packages are unsigned — verify installer checksums against <code class="font-mono text-vpro-navy"
           >SHA256SUMS.txt</code
         >.
@@ -188,128 +126,96 @@
   {/if}
 
   <section
-    data-home-context-card
-    aria-label="Active BEC Session Context"
-    class="rounded border border-vpro-border border-t-[3px] border-t-vpro-navy bg-white p-4 shadow-xs"
+    aria-labelledby="opening-whats-new-title"
+    data-whats-new-opening
+    class="overflow-hidden rounded border border-vpro-border bg-white shadow-xs"
   >
-    <div class="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <div class="font-mono text-[11px] font-semibold uppercase tracking-wider text-vpro-navy">
-          {IS_WEB_READONLY ? 'Active Read-Only BEC Dataset' : 'Active BEC Workspace Context'}
-        </div>
-        <h2 class="mt-0.5 text-lg font-bold text-vpro-ink">
-          {activeProject || (IS_WEB_READONLY ? 'No dataset selected' : 'No project selected')}
-        </h2>
-        {#if projectPath && !IS_WEB_READONLY}
-          <div class="mt-0.5 break-all font-mono text-[11px] text-vpro-ink-muted">{projectPath}</div>
-        {/if}
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          data-home-open-plots
-          class="inline-flex items-center gap-1.5 rounded bg-vpro-navy px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-vpro-navy-dark"
-          onclick={() => onnavigate('plots')}
-        >
-          <span>View Plots ({plotCount})</span>
-          <ArrowRight size={14} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          data-home-open-fs882
-          class="inline-flex items-center gap-1.5 rounded border border-vpro-navy bg-white px-3 py-1.5 text-xs font-semibold text-vpro-navy hover:bg-vpro-surface-subtle"
-          onclick={() => onnavigate('fs882')}
-        >
-          <span>{IS_WEB_READONLY ? 'FS882 Viewer' : 'FS882 Editor'}</span>
-        </button>
-      </div>
-    </div>
-
-    <dl class="mt-3.5 grid grid-cols-2 gap-2.5 border-t border-vpro-border pt-3 text-xs sm:grid-cols-4">
-      <div class="rounded bg-vpro-canvas px-2.5 py-2">
-        <dt class="font-mono text-[10px] uppercase text-vpro-ink-secondary">Plots in Scope</dt>
-        <dd class="mt-0.5 text-sm font-bold text-vpro-navy">{plotCount}</dd>
-      </div>
-      <div class="rounded bg-vpro-canvas px-2.5 py-2">
-        <dt class="font-mono text-[10px] uppercase text-vpro-ink-secondary">Site Unit</dt>
-        <dd class="mt-0.5 truncate font-semibold text-vpro-ink" title={activeSU}>{activeSU || 'None'}</dd>
-      </div>
-      <div class="rounded bg-vpro-canvas px-2.5 py-2">
-        <dt class="font-mono text-[10px] uppercase text-vpro-ink-secondary">Hierarchy</dt>
-        <dd class="mt-0.5 truncate font-semibold text-vpro-ink" title={activeHierarchy}>{activeHierarchy || 'None'}</dd>
-      </div>
-      <div class="rounded bg-vpro-canvas px-2.5 py-2">
-        <dt class="font-mono text-[10px] uppercase text-vpro-ink-secondary">2026 Master Standards</dt>
-        <dd class="mt-0.5 font-mono text-[11px] font-semibold text-vpro-success">BECdb v13 · Taxa v19 · LMH25</dd>
-      </div>
-    </dl>
-  </section>
-
-  <section aria-label="Core BEC Workflows" data-home-workflow-grid>
-    <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {#each workflows as item (item.id)}
-        <article
-          data-home-workflow={item.id}
-          class="flex flex-col justify-between rounded border border-vpro-border bg-white p-3.5 transition-colors hover:border-vpro-navy"
-        >
-          <div>
-            <div class="flex items-center gap-2 text-vpro-navy">
-              <item.icon size={16} aria-hidden="true" />
-              <span class="font-mono text-[10px] font-semibold uppercase tracking-wider text-vpro-ink-secondary">
-                {item.subtitle}
-              </span>
-            </div>
-            <h3 class="mt-1 text-sm font-bold text-vpro-navy">{item.title}</h3>
-            <p class="mt-1 text-xs leading-relaxed text-vpro-ink">{item.description}</p>
-          </div>
-          <div class="mt-3 pt-2 border-t border-vpro-rail">
-            <button
-              type="button"
-              class="inline-flex items-center gap-1 text-xs font-semibold text-vpro-navy hover:underline"
-              onclick={() => {
-                if (item.view) onnavigate(item.view);
-              }}
-            >
-              <span>{item.cta}</span>
-              <ArrowRight size={13} aria-hidden="true" />
-            </button>
-          </div>
-        </article>
-      {/each}
-    </div>
-  </section>
-
-  {#if onhelpaction}
-    <section
-      data-home-help-bar
-      class="flex flex-wrap items-center justify-between gap-2 rounded border border-vpro-border bg-vpro-canvas px-3.5 py-2.5 text-xs text-vpro-ink"
+    <header
+      class="flex flex-wrap items-center justify-between gap-3 border-b-[3px] border-b-vpro-gold bg-vpro-navy px-5 py-3.5 text-white"
     >
-      <div class="flex items-center gap-2">
-        <BookOpen size={15} class="text-vpro-navy" aria-hidden="true" />
-        <span>
-          <strong>Offline Field Manual &amp; Guided Onboarding:</strong> Press
-          <kbd class="rounded border border-vpro-border bg-white px-1.5 py-0.5 font-mono text-[11px]">F1</kbd> on any field
-          for LMH25 (2023) rules, rSMR/rSNR keys, and visual % cover plates.
+      <div class="flex items-center gap-2.5">
+        <Newspaper size={18} class="text-vpro-gold" aria-hidden="true" />
+        <div>
+          <div class="font-mono text-[11px] uppercase tracking-wider text-vpro-gold">
+            B.C. Biogeoclimatic Ecosystem Classification
+          </div>
+          <h1 id="opening-whats-new-title" class="text-base font-semibold text-white">What's New in VPro</h1>
+        </div>
+      </div>
+
+      {#if status?.hasUnread}
+        <button
+          type="button"
+          data-whats-new-acknowledge
+          disabled={acknowledging}
+          class="inline-flex items-center gap-1.5 rounded bg-vpro-gold px-3 py-1.5 text-xs font-bold text-vpro-navy hover:brightness-95 disabled:opacity-50"
+          onclick={() => void markLatestAsRead()}
+        >
+          <CheckCircle2 size={14} aria-hidden="true" />
+          <span>{acknowledging ? 'Saving…' : `Mark v${status.latestVersion} as Read`}</span>
+        </button>
+      {:else if status?.latestVersion}
+        <span class="inline-flex items-center gap-1.5 font-mono text-[11px] text-white/90">
+          <CheckCircle2 size={14} class="text-vpro-gold" aria-hidden="true" />
+          <span>v{status.latestVersion}</span>
         </span>
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          class="inline-flex items-center gap-1 rounded border border-vpro-navy bg-white px-2.5 py-1 font-semibold text-vpro-navy hover:bg-vpro-surface-subtle"
-          onclick={() => onhelpaction('guide')}
-        >
-          <BookOpen size={13} aria-hidden="true" />
-          <span>LMH25 Reference (F1)</span>
-        </button>
-        <button
-          type="button"
-          class="inline-flex items-center gap-1 rounded bg-vpro-navy px-2.5 py-1 font-semibold text-white hover:bg-vpro-navy-dark"
-          onclick={() => onhelpaction('tours')}
-        >
-          <Compass size={13} aria-hidden="true" />
-          <span>Guided Tours</span>
-        </button>
-      </div>
-    </section>
-  {/if}
+      {/if}
+    </header>
+
+    <div class="space-y-3 p-5 text-xs">
+      {#if status && status.entries.length > 0}
+        {#if status.hasUnread}
+          <p
+            data-whats-new-banner
+            class="rounded border border-vpro-navy/25 border-l-[4px] border-l-vpro-gold bg-vpro-warning-bg px-3.5 py-2 text-xs text-vpro-ink"
+          >
+            <strong class="font-semibold text-vpro-navy">What's New in VPro v{status.latestVersion}:</strong>
+            <span>
+              {status.unreadCount} unread release update{status.unreadCount === 1 ? '' : 's'} available.
+            </span>
+          </p>
+        {/if}
+
+        {#each status.entries as entry, index (entry.version)}
+          <article
+            data-whats-new-version={entry.version}
+            class="space-y-2 rounded border p-3.5 {isEntryUnread(index)
+              ? 'border-vpro-navy border-l-[4px] border-l-vpro-gold bg-vpro-warning-bg/60'
+              : 'border-vpro-border bg-white'}"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <h2 class="font-mono text-sm font-bold text-vpro-navy">Version {entry.version}</h2>
+                <span
+                  class="rounded border border-vpro-border bg-vpro-canvas px-2 py-0.5 font-mono text-[10px] uppercase text-vpro-ink-secondary"
+                >
+                  {entry.channel}
+                </span>
+                {#if isEntryUnread(index)}
+                  <span class="rounded bg-vpro-gold px-2 py-0.5 font-mono text-[10px] font-bold uppercase text-vpro-navy">
+                    New
+                  </span>
+                {/if}
+              </div>
+              <span class="font-mono text-[11px] text-vpro-ink-secondary">{entry.date}</span>
+            </div>
+
+            <ul class="list-disc space-y-1.5 pl-4 text-xs leading-relaxed text-vpro-ink">
+              {#each entry.highlights as item}
+                <li>{item}</li>
+              {/each}
+            </ul>
+          </article>
+        {/each}
+      {:else if loading}
+        <p role="status" class="text-vpro-ink-secondary">Loading VPro release notes…</p>
+      {:else}
+        <p class="leading-relaxed text-vpro-ink-secondary">
+          Select a Project, Site Unit, or Hierarchy in the <strong>Work Space</strong> panel on the left, then choose a
+          workflow from <strong>Forms</strong>, <strong>Reports</strong>, <strong>Analysis</strong>,
+          <strong>Project Management</strong>, <strong>Map</strong>, or <strong>Interchange</strong> above.
+        </p>
+      {/if}
+    </div>
+  </section>
 </div>

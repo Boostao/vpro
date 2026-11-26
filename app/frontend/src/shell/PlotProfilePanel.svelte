@@ -164,29 +164,6 @@
     requestTransition: (run: (contextId: string) => Promise<void>) => requestTransition(run),
   };
 
-  export function clearCachedSources() {
-    profileSources = [];
-    profileSourceContext = '';
-  }
-
-  export function resetAllReviews() {
-    profileSources = [];
-    profileSourceContext = '';
-    profileWriteReview = null;
-    profileWriteContext = '';
-    profileWriteError = '';
-    suReview = null;
-    suReviewContext = '';
-    suError = '';
-    suSuccess = '';
-    suCommitted = false;
-    suProjectReview = null;
-    suProjectContext = '';
-    suProjectError = '';
-    suProjectSuccess = '';
-    suProjectCommitted = false;
-  }
-
   async function inspectProfileSources() {
     const contextId = $projectState?.contextId;
     if (

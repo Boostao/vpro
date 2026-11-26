@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Bell, ChevronLeft, ChevronRight, Database, PanelRight, Search } from '@lucide/svelte';
+  import { Bell, Database, Search } from '@lucide/svelte';
   import type { StartupState } from '../../bindings/github.com/boostao/vpro/app';
-  import { projectState, webMeta, webShellRuntime } from '../shared/state';
+  import { projectState, webMeta } from '../shared/state';
   import { IS_WEB_READONLY } from '../web/runtimeMode';
   import Navigation from './Navigation.svelte';
   import type { ShellViewId } from './shellPlotOps';
@@ -18,6 +18,7 @@
     onOpenSivi,
     onOpenMetadata,
     onOpenCloudSync,
+    onOpenAuthSignIn,
   }: {
     ui: ShellUiController;
     view: ShellViewId;
@@ -28,6 +29,7 @@
     onOpenSivi: () => void;
     onOpenMetadata: () => void;
     onOpenCloudSync: () => void;
+    onOpenAuthSignIn?: () => void;
   } = $props();
 
   const picturesAvailable = $derived(!IS_WEB_READONLY || ($webMeta?.picturesAvailable ?? true));
@@ -89,12 +91,13 @@
   <button
     class="context-toggle"
     type="button"
+    data-workspace-toggle
     disabled={startupFailure !== null}
     aria-expanded={ui.contextExpanded}
     aria-controls="project-context"
     onclick={() => ui.toggleContextSidebar()}
   >
-    {IS_WEB_READONLY ? 'Datasets & context' : 'Projects & context'}
+    {IS_WEB_READONLY ? 'Datasets' : 'Work Space'}
   </button>
   {#if !startupFailure}
     <Navigation
@@ -110,6 +113,12 @@
       metadataAvailable={ui.metadataAvailable}
       onopenmetadata={onOpenMetadata}
       onopencloudsync={IS_WEB_READONLY ? undefined : onOpenCloudSync}
+      onopenauthsignin={IS_WEB_READONLY
+        ? undefined
+        : () => {
+            if (onOpenAuthSignIn) onOpenAuthSignIn();
+            else ui.authSignInOpen = true;
+          }}
       onopenusersetup={IS_WEB_READONLY
         ? undefined
         : () => {
@@ -169,80 +178,3 @@
     </div>
   </div>
 </header>
-
-{#if !startupFailure}
-  <div class="context-strip" role="region" aria-label="Active workspace context and quick actions" data-context-strip>
-    <div class="context-strip-chips">
-      <span class="ctx-chip" data-context-chip="project">
-        <span class="ctx-chip-label">{IS_WEB_READONLY ? 'Dataset' : 'Project'}</span>
-        <span class="ctx-chip-value">{$projectState?.activeProject ?? 'None'}</span>
-      </span>
-      <span class="ctx-chip" data-context-chip="su">
-        <span class="ctx-chip-label">SU</span>
-        <span class="ctx-chip-value">{$projectState?.activeSU ?? 'None'}</span>
-      </span>
-      <span class="ctx-chip" data-context-chip="hierarchy">
-        <span class="ctx-chip-label">Hierarchy</span>
-        <span class="ctx-chip-value">{$projectState?.activeHierarchy ?? 'None'}</span>
-      </span>
-
-      <div class="ctx-plot-stepper" role="group" aria-label="Plot navigation">
-        <span class="ctx-chip-label">Plot</span>
-        <span class="ctx-plot-badge tabular-nums" data-context-plot-badge>
-          {ui.currentContextPlotNumber || 'None'}
-        </span>
-        <button
-          type="button"
-          class="ctx-step-btn"
-          title="Previous plot in loaded page"
-          aria-label="Previous plot"
-          disabled={!ui.canStepPrevPlot}
-          onclick={() => ui.stepContextPlot(-1)}
-        >
-          <ChevronLeft size={14} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          class="ctx-step-btn"
-          title="Next plot in loaded page"
-          aria-label="Next plot"
-          disabled={!ui.canStepNextPlot}
-          onclick={() => ui.stepContextPlot(1)}
-        >
-          <ChevronRight size={14} aria-hidden="true" />
-        </button>
-      </div>
-    </div>
-
-    <div class="context-strip-actions">
-      {#if IS_WEB_READONLY && $webShellRuntime?.ProvenanceBadge}
-        {@const WebSnapshotProvenance = $webShellRuntime.ProvenanceBadge}
-        <WebSnapshotProvenance variant="header" activeProject={$projectState?.activeProject ?? ''} />
-      {/if}
-      <span
-        class="ctx-status-pill ctx-status-{IS_WEB_READONLY && ui.sessionStatusKind !== 'busy'
-          ? 'ready'
-          : ui.sessionStatusKind}"
-        role="status"
-        data-session-status={IS_WEB_READONLY && ui.sessionStatusKind !== 'busy' ? 'readonly' : ui.sessionStatusKind}
-      >
-        {IS_WEB_READONLY && ui.sessionStatusKind !== 'busy' ? 'Read-Only' : ui.sessionStatusLabel}
-      </span>
-
-      {#if ui.showInspectorToggle}
-        <button
-          type="button"
-          class="ctx-inspector-toggle"
-          aria-expanded={ui.inspectorExpanded}
-          data-inspector-toggle
-          onclick={() => {
-            ui.inspectorExpanded = !ui.inspectorExpanded;
-          }}
-        >
-          <PanelRight size={14} aria-hidden="true" />
-          <span>Inspector</span>
-        </button>
-      {/if}
-    </div>
-  </div>
-{/if}

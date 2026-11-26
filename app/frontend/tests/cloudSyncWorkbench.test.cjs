@@ -1280,7 +1280,7 @@ test('ProjectAdminWorkbench, Navigation, and App wire Cloud BECMaster Sync clean
   const Nav = serverComponent(navSrc, 'Navigation.svelte', { '@lucide/svelte': icons });
   const navHtml = render(Nav, { props: { view: 'home', onnavigate: () => {} } }).body;
   const syncButtons = [...navHtml.matchAll(/<button\b([^>]*)>[\s\S]*?<span>Cloud BECMaster Sync<\/span>\s*<\/button>/g)];
-  assert.equal(syncButtons.length, 2, 'Cloud BECMaster Sync must appear in both Forms and Interchange menus');
+  assert.equal(syncButtons.length, 1, 'Cloud BECMaster Sync must appear in Project Management menu');
   for (const btn of syncButtons) {
     assert.equal(/\bdisabled(?:\s|=|$)/.test(btn[1]), false, 'Cloud BECMaster Sync menu buttons must be enabled');
   }

@@ -236,8 +236,8 @@ test('GeospatialWorkbench, Navigation, App, and CoordinateFields compile cleanly
   // Lazy route in ShellDeferredViews.svelte, Spatial entry in Navigation.svelte, Auto-1 button in CoordinateFields.svelte
   const { readShellComposite } = require('./svelteTestHelpers.cjs');
   assert.match(readShellComposite(), /import\('\.\.?\/spatial\/GeospatialWorkbench\.svelte'\)/);
-  assert.match(navSource, /3D Map \(BGC, Coordinate Check & Site Units\)/);
-  assert.match(navSource, /3D Map/);
+  assert.match(navSource, /data-nav-top="Map"/);
+  assert.match(navSource, /navigate\('geospatial-map'\)/);
   assert.match(coordSource, /data-auto1-spatial-stamp/);
 
   // SSR render smoke check of GeospatialWorkbench.svelte

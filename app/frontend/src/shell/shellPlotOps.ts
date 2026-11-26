@@ -18,6 +18,7 @@ export type ShellViewId =
   | 'geospatial-map'
   | 'diagnostic-synthesis'
   | 'r-sidecar'
+  | 'quarto-unit-report'
   | 'hierarchy'
   | 'fs882'
   | 'datasheet'

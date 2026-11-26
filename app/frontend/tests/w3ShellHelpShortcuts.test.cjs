@@ -489,8 +489,6 @@ test('UX-SHELL-003 + UX-SHELL-005: responsive topbar wrap, narrow-viewport Esc d
     helpDrawerOpen: false,
     isNarrowViewport: true,
     contextExpanded: true,
-    inspectorExpanded: true,
-    showInspectorRail: true,
     classifyGlobalHelpShortcut: () => null,
     openContextualHelp: () => {},
   });
@@ -503,7 +501,6 @@ test('UX-SHELL-003 + UX-SHELL-005: responsive topbar wrap, narrow-viewport Esc d
   });
   assert.equal(escPrevented, true);
   assert.equal(appKeyCtx.contextExpanded, false);
-  assert.equal(appKeyCtx.inspectorExpanded, false);
 
   // UX-SHELL-005 (2): OnboardingTour calls onrestorecontext on dismiss, finish, and returnToCatalog
   let restored = 0;

@@ -114,8 +114,10 @@ test('companionPanelBusy isolates secondary panels and modals from clobbering lo
   // Sidebar project/SU/hierarchy controls respect editorBusy || companionPanelBusy
   const sidebar = readSidebarComposite();
   assert.match(app, /<WorkspaceSidebar/);
-  assert.match(sidebar, /id="active-su"[\s\S]{0,160}editorBusy \|\| companionPanelBusy/);
-  assert.match(sidebar, /id="active-hierarchy"[\s\S]{0,160}editorBusy \|\| companionPanelBusy/);
+  assert.match(sidebar, /const controlsDisabled = \$derived\(\s*busy \|\| editorBusy \|\| companionPanelBusy/);
+  assert.match(sidebar, /id="active-project"[\s\S]{0,160}disabled=\{controlsDisabled/);
+  assert.match(sidebar, /id="active-su"[\s\S]{0,160}disabled=\{controlsDisabled/);
+  assert.match(sidebar, /id="active-hierarchy"[\s\S]{0,160}disabled=\{controlsDisabled/);
 
   const cancelled = [];
   const confirmed = [];

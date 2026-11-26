@@ -45,6 +45,7 @@ export type CommandPaletteAction =
   | { kind: 'navigate-view'; view: string }
   | { kind: 'new-sivi' }
   | { kind: 'open-metadata' }
+  | { kind: 'open-auth-signin' }
   | { kind: 'help-topic'; topicId: string; tab?: 'inspector' | 'keys' | 'guides' }
   | { kind: 'help-action'; action: 'guide' | 'tours' | 'shortcuts' | 'whats-new' | 'reset-sample' | 'about' };
 
@@ -273,11 +274,27 @@ export function buildCommandPaletteCatalog(input: BuildCommandPaletteInput): Com
     },
     {
       id: 'view-map',
-      title: '3D Map (BGC, Coordinate Check & Site Units)',
+      title: 'Map (BGC, Coordinate Check & Site Units)',
       subtitle: 'Provincial BGC v13 overlay, coordinate check & polygon AOI -> SU',
-      badge: 'GIS',
-      keywords: 'map 3d geospatial gis bgc pmtiles aoi coordinates',
+      badge: 'Map',
+      keywords: 'map 3d geospatial gis bgc aoi coordinates',
       action: { kind: 'navigate-view', view: 'geospatial-map' },
+    },
+    {
+      id: 'view-quarto-unit-report',
+      title: 'Quarto Unit Report',
+      subtitle: 'Generate HTML or publication Site Unit and Subzone reports',
+      badge: 'Report',
+      keywords: 'quarto unit report guide html publication',
+      action: { kind: 'navigate-view', view: 'quarto-unit-report' },
+    },
+    {
+      id: 'action-auth-signin',
+      title: 'Sign In & Access (BC Gov ID)',
+      subtitle: 'Unlock editing with BC Gov IDIR / BCeID or manage session access',
+      badge: 'Access',
+      keywords: 'sign in login auth idir bceid lock unlock access',
+      action: { kind: 'open-auth-signin' },
     },
     {
       id: 'view-synthesis',
@@ -445,7 +462,7 @@ export function buildCommandPaletteCatalog(input: BuildCommandPaletteInput): Com
 
   for (const v of views) {
     if (webReadOnly) {
-      if (v.action.kind === 'new-sivi') continue;
+      if (v.action.kind === 'new-sivi' || v.action.kind === 'open-auth-signin') continue;
       if (v.action.kind === 'navigate-view' && !isViewAllowedInWebReadOnly(v.action.view, picturesAvailable)) {
         continue;
       }

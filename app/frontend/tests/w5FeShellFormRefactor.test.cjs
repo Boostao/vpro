@@ -885,7 +885,7 @@ test('ENG-FE-007 & UX-ENV-008: formatError strips RuntimeError prefixes, transla
     }
   }
 
-  // Verify WorkspaceSidebar inspectAccessSource cancels prior in-flight ReadRequests on re-invocation
+  // Verify WorkspaceSidebar inspectAttachFile cancels prior in-flight ReadRequests on re-invocation
   let cancelledCount = 0;
   let resolveFirst;
   let markFirstStarted;
@@ -895,18 +895,30 @@ test('ENG-FE-007 & UX-ENV-008: formatError strips RuntimeError prefixes, transla
     { cancel() { cancelledCount++; } }
   );
   const secondPromise = Object.assign(
-    Promise.resolve({ sourcePath: '/tmp/Legacy.mdb', format: 'MDB', projects: [] }),
+    Promise.resolve({ selectedPath: '/tmp/Legacy.mdb', fileKind: 'access', requiresConvert: true, projects: [], sus: [], hierarchies: [] }),
     { cancel() {} }
   );
   let callNum = 0;
   const realReads = new readsMod.ReadRequests();
-  const sidebarCtx = componentFunctions('WorkspaceSidebar.svelte', ['inspectAccessSource'], {
-    accessSourcePath: '/tmp/Legacy.mdb',
-    accessRequests: realReads,
-    subscribeAccessProgress: () => () => {},
+  const sidebarOps = loadTypeScript('shell/workspaceSidebarOps.ts', {
+    '../shared/readRequests': readsMod,
+    './notificationService.svelte': { notifications: { push() {} } },
+  });
+  const sidebarCtx = componentFunctions('WorkspaceSidebar.svelte', ['inspectAttachFile'], {
+    attachGeneration: 0,
+    attachRequests: realReads,
+    workspaceWorking: false,
+    pendingAttach: null,
+    sidebarError: '',
+    sidebarNotice: '',
+    extractAttachCandidates: sidebarOps.extractAttachCandidates,
+    requiresAccessConversion: sidebarOps.requiresAccessConversion,
+    isCancelledAccessErrorOp: sidebarOps.isCancelledAccessErrorOp,
+    formatSidebarErrorOp: sidebarOps.formatSidebarErrorOp,
+    workspaceKindLabel: sidebarOps.workspaceKindLabel,
     $projectState: { contextId: 'ctx-sb' },
-    ImportExportService: {
-      InspectAccessDatabase: () => {
+    ContextService: {
+      InspectAttachableFile: () => {
         if (++callNum === 1) {
           queueMicrotask(markFirstStarted);
           return firstPromise;
@@ -916,13 +928,13 @@ test('ENG-FE-007 & UX-ENV-008: formatError strips RuntimeError prefixes, transla
     },
   });
 
-  const p1 = sidebarCtx.actions.inspectAccessSource('/tmp/Old.mdb');
+  const p1 = sidebarCtx.actions.inspectAttachFile('project', '/tmp/Old.mdb');
   await firstStarted;
-  const p2 = sidebarCtx.actions.inspectAccessSource('/tmp/Legacy.mdb');
-  resolveFirst({ sourcePath: '/tmp/Old.mdb', format: 'MDB', projects: [] });
+  const p2 = sidebarCtx.actions.inspectAttachFile('project', '/tmp/Legacy.mdb');
+  resolveFirst({ selectedPath: '/tmp/Old.mdb', fileKind: 'access', requiresConvert: true, projects: [], sus: [], hierarchies: [] });
   await Promise.all([p1, p2]);
-  assert.equal(cancelledCount >= 1, true, 'Re-invoking inspectAccessSource must cancel in-flight request');
-  assert.equal(sidebarCtx.accessInspection.sourcePath, '/tmp/Legacy.mdb');
+  assert.equal(cancelledCount >= 1, true, 'Re-invoking inspectAttachFile must cancel in-flight request');
+  assert.equal(sidebarCtx.pendingAttach.inspection.selectedPath, '/tmp/Legacy.mdb');
 });
 
 test('UX-SHELL-008: shell modals/hubs/guides eliminate internal DB/schema/route tokens and deduplicate switchContext error toast', async () => {

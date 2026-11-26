@@ -40,7 +40,6 @@
     editorLabel,
     editorBusy,
     companionPanelBusy,
-    operationHeld,
     transitionWorking,
     pendingTransition,
     closeRequest,
@@ -63,7 +62,6 @@
     loadPlots,
     refresh,
     switchContext,
-    cancelAllReads,
     onAccessActivated,
   }: {
     ui: ShellUiController;
@@ -85,7 +83,6 @@
     editorLabel: 'FS882' | 'FS882 (2-Page)' | 'SIVI / FS1333';
     editorBusy: boolean;
     companionPanelBusy: boolean;
-    operationHeld: boolean;
     transitionWorking: boolean;
     pendingTransition: unknown;
     closeRequest: string;
@@ -108,7 +105,6 @@
     loadPlots: (nextOffset: number) => Promise<void>;
     refresh: () => Promise<void>;
     switchContext: (contextId: string, selection: ContextSelection, next: 'plots' | 'hierarchy') => Promise<void>;
-    cancelAllReads: () => void;
     onAccessActivated: () => Promise<void>;
   } = $props();
 </script>
@@ -132,13 +128,15 @@
         error = '';
       });
     }}
+    onOpenAuthSignIn={() => {
+      ui.authSignInOpen = true;
+    }}
   />
   <div
-    class="workspace"
+    class="workspace inspector-collapsed"
     class:context-collapsed={!ui.contextExpanded || startupFailure !== null}
-    class:inspector-collapsed={!ui.showInspectorRail}
   >
-    {#if !startupFailure && ui.isNarrowViewport && (ui.contextExpanded || ui.showInspectorRail)}
+    {#if !startupFailure && ui.isNarrowViewport && ui.contextExpanded}
       <button
         type="button"
         class="drawer-backdrop"
@@ -146,7 +144,6 @@
         data-drawer-backdrop
         onclick={() => {
           ui.contextExpanded = false;
-          ui.inspectorExpanded = false;
         }}
       ></button>
     {/if}
@@ -158,6 +155,9 @@
       {requestTransition}
       {switchContext}
       {onAccessActivated}
+      onOpenAuthSignIn={() => {
+        ui.authSignInOpen = true;
+      }}
     />
     <ShellWorkspaceRouter
       {ui}
@@ -202,12 +202,6 @@
           ui.fs882ModuleLoaded = v;
         }
       }
-      bind:plotProfilePanel={
-        () => ui.plotProfilePanel,
-        (v) => {
-          ui.plotProfilePanel = v;
-        }
-      }
       bind:plotFindOpen={
         () => ui.plotFindOpen,
         (v) => {
@@ -221,7 +215,6 @@
       {editorLabel}
       {editorBusy}
       {companionPanelBusy}
-      {operationHeld}
       {transitionWorking}
       {pendingTransition}
       {closeRequest}
@@ -237,11 +230,9 @@
       {respondToClose}
       {respondToTransition}
       {navigate}
-      {openSIVI}
       {findScopedPlot}
       {loadPlots}
       {refresh}
-      {cancelAllReads}
     />
   </div>
   <ShellOverlays
@@ -252,6 +243,7 @@
     {companionPanelBusy}
     {transitionWorking}
     {workbenchDirty}
+    plotCount={page?.total ?? 0}
     {stateReads}
     onNavigate={(nextView) => navigate(nextView)}
     onRefresh={refresh}

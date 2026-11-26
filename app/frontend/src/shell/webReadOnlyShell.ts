@@ -2,7 +2,12 @@ import { IS_WEB_READONLY } from '../web/runtimeMode';
 import type { WebMetaResponse } from '../web/webMeta';
 
 export const WEB_READONLY_BLOCKED_VIEWS: ReadonlySet<string> = new Set(['project-admin', 'user-log']);
-export const WEB_READONLY_BLOCKED_ACTIONS: ReadonlySet<string> = new Set(['new-sivi', 'cloud-sync', 'user-setup']);
+export const WEB_READONLY_BLOCKED_ACTIONS: ReadonlySet<string> = new Set([
+  'new-sivi',
+  'cloud-sync',
+  'user-setup',
+  'auth-signin',
+]);
 export const WEB_READONLY_BLOCKED_HELP_ACTIONS: ReadonlySet<string> = new Set(['reset-sample']);
 
 export interface NavMenuItemShape {
@@ -38,9 +43,12 @@ const WEB_GROUP_LABELS: Readonly<Record<string, string>> = {
 };
 
 const WEB_ITEM_LABELS: Readonly<Record<string, string>> = {
+  'FS882 Classic Form': 'FS882 Plot Viewer',
   'FS882 Data Forms (6x4)': 'FS882 Plot Viewer (6x4)',
   'Two-Page Entry (FS882-8x6XL)': 'Two-Page Plot Viewer (FS882-8x6XL)',
+  'View/Edit SIVI Data': 'View SIVI Data',
   'Enter/Edit SIVI Data': 'View SIVI Data',
+  'Export to VPro64 & Interchange Hub': 'Export & Downloads Hub',
   'Interchange Hub (VENUS 5, TurboVeg, RDS, GeoPackage)': 'Export & Downloads Hub (TurboVeg, CSV, R .rds, GeoPackage)',
   'Combine Species': 'Combine Species (Read-Only)',
 };

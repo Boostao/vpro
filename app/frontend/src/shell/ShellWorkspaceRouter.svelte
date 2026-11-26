@@ -3,7 +3,6 @@
     ContextService,
     HierarchyNode,
     PlotPage,
-    ProjectPlotProfileFilterRequest,
     StartupState,
   } from '../../bindings/github.com/boostao/vpro/app';
   import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
@@ -14,8 +13,6 @@
   import type { CloseDecision, EditorCloseState } from './closeLifecycle';
   import HomeWorkspaceHub from './HomeWorkspaceHub.svelte';
   import { notifications } from './notificationService.svelte';
-  import type { PlotProfileSelectionController } from './plotProfileOps';
-  import PlotProfilePanel from './PlotProfilePanel.svelte';
   import ShellDeferredViews from './ShellDeferredViews.svelte';
   import ShellEntryHost from './ShellEntryHost.svelte';
   import type { FS882EditorHandle, ShellViewId } from './shellPlotOps';
@@ -29,6 +26,7 @@
     'lump-editor',
     'diagnostic-synthesis',
     'r-sidecar',
+    'quarto-unit-report',
     'geospatial-map',
     'interchange-hub',
     'summary-environment',
@@ -65,14 +63,6 @@
     workbenchDirtyLabel = $bindable(''),
     editor = $bindable<FS882EditorHandle | undefined>(undefined),
     fs882ModuleLoaded = $bindable(false),
-    plotProfilePanel = $bindable<
-      | {
-          reviewProfileSU: (proposal: ProjectPlotProfileFilterRequest, origin: string) => Promise<void>;
-          clearCachedSources: () => void;
-          resetAllReviews: () => void;
-        }
-      | undefined
-    >(undefined),
     plotFindOpen = $bindable(false),
     plotFindQuery = $bindable(''),
     plotFindError = $bindable(''),
@@ -81,7 +71,6 @@
     editorLabel,
     editorBusy,
     companionPanelBusy,
-    operationHeld,
     transitionWorking,
     pendingTransition,
     closeRequest,
@@ -97,11 +86,9 @@
     respondToClose,
     respondToTransition,
     navigate,
-    openSIVI,
     findScopedPlot,
     loadPlots,
     refresh,
-    cancelAllReads,
   }: {
     ui: ShellUiController;
     view: ShellViewId;
@@ -121,13 +108,6 @@
     workbenchDirtyLabel: string;
     editor: FS882EditorHandle | undefined;
     fs882ModuleLoaded: boolean;
-    plotProfilePanel:
-      | {
-          reviewProfileSU: (proposal: ProjectPlotProfileFilterRequest, origin: string) => Promise<void>;
-          clearCachedSources: () => void;
-          resetAllReviews: () => void;
-        }
-      | undefined;
     plotFindOpen: boolean;
     plotFindQuery: string;
     plotFindError: string;
@@ -136,7 +116,6 @@
     editorLabel: 'FS882' | 'FS882 (2-Page)' | 'SIVI / FS1333';
     editorBusy: boolean;
     companionPanelBusy: boolean;
-    operationHeld: boolean;
     transitionWorking: boolean;
     pendingTransition: unknown;
     closeRequest: string;
@@ -152,16 +131,12 @@
     respondToClose: (decision: CloseDecision) => Promise<void>;
     respondToTransition: (decision: CloseDecision) => Promise<void>;
     navigate: (next: ShellViewId | 'fs882-twopage') => void;
-    openSIVI: () => Promise<void>;
     findScopedPlot: () => Promise<void>;
     loadPlots: (nextOffset: number) => Promise<void>;
     refresh: () => Promise<void>;
-    cancelAllReads: () => void;
   } = $props();
 
   const panelHold = $derived(busy || transitionWorking || pendingTransition !== null || !!closeRequest);
-  let profileSelection = $state<PlotProfileSelectionController | undefined>(undefined);
-  let reopenProfileReview = $state(false);
   let pictureManagerPlotProxy = $state('');
   let diagnosticsDraftProxy = $state<typeof ui.diagnosticsDraft>(null);
   $effect(() => {
@@ -170,62 +145,9 @@
   $effect(() => {
     diagnosticsDraftProxy = ui.diagnosticsDraft;
   });
-  $effect(() => {
-    if (view !== 'fs882' && reopenProfileReview) {
-      reopenProfileReview = false;
-    }
-  });
-
-  function openPlotProfiling() {
-    void requestTransition(async () => {
-      const targetPlot = selected?.plotNumber ?? ui.allAvailablePlots[0]?.plotNumber ?? editorPlotNumber;
-      editorPlotNumber = targetPlot;
-      editorEntryForm = 'fs882';
-      reopenProfileReview = true;
-      view = 'fs882';
-      error = '';
-    });
-  }
 </script>
 
 <main class="content">
-  <WorkspaceStatusBanners
-    region="banners"
-    startupFailed={startupFailure !== null}
-    whatsNewStatus={ui.whatsNewStatus}
-    whatsNewPromptDismissed={ui.whatsNewPromptDismissed}
-    onopenwhatsnew={() => {
-      ui.whatsNewModalOpen = true;
-    }}
-    onacknowledgewhatsnew={() => void ui.acknowledgeUnreadWhatsNew()}
-    ondismisswhatsnew={() => {
-      ui.whatsNewPromptDismissed = true;
-    }}
-  />
-  <PlotProfilePanel
-    bind:this={plotProfilePanel}
-    bind:view
-    bind:busy
-    bind:error
-    bind:editorPlotNumber
-    bind:profileNavigation
-    bind:selected
-    bind:page
-    bind:selectionController={profileSelection}
-    bind:reopenProfileReview
-    {operationHeld}
-    {editorBusy}
-    {transitionWorking}
-    {pendingTransition}
-    {closeRequest}
-    profileIndex={ui.profileIndex}
-    {stateReads}
-    {requestTransition}
-    {loadPlots}
-    navigateProfilePlot={ui.navigateProfilePlot}
-    clearProfileNavigation={ui.clearProfileNavigation}
-    {cancelAllReads}
-  />
   <WorkspaceStatusBanners region="banners" startupFailed={true} diagnostics={$projectState?.diagnostics ?? []} />
   {#if startupFailure}
     {#await import('./StartupRecoveryPanel.svelte') then { default: StartupRecoveryPanel }}
@@ -300,37 +222,18 @@
           },
         })}
       applyProfileNavigation={ui.applyProfileNavigation}
-      {profileSelection}
-      initialProfileReviewOpen={reopenProfileReview}
-      onConsumedInitialProfileReview={() => {
-        reopenProfileReview = false;
-      }}
-      reviewProfileSU={async (proposal, origin) => {
-        if (!plotProfilePanel) throw new Error('Plot profile panel is not ready.');
-        await plotProfilePanel.reviewProfileSU(proposal, origin);
-      }}
       copyPlotToNewNumber={ui.copyPlotToNewNumber}
       removePlotFromProject={ui.removePlotFromProject}
       refreshCatalogAfterWrite={ui.refreshCatalogAfterWrite}
     />
   {:else if view === 'home'}
-    <div class="content-heading">
-      <div>
-        <div class="eyebrow">VPro</div>
-        <h1>Home</h1>
-      </div>
-    </div>
     <HomeWorkspaceHub
-      activeProject={$projectState?.activeProject ?? 'No project selected'}
-      projectPath={$projectState?.projectPath ?? ''}
-      activeSU={$projectState?.activeSU ?? 'None'}
-      activeHierarchy={$projectState?.activeHierarchy ?? 'None'}
-      plotCount={page?.total ?? 0}
+      whatsNewStatus={ui.whatsNewStatus}
       buildMode={ui.buildMode}
       appVersion={ui.appVersion}
       gitCommit={ui.startupInfo?.gitCommit ?? ''}
       releaseChannel={ui.releaseChannel}
-      onnavigate={(nextView) => navigate(nextView)}
+      onacknowledgewhatsnew={() => void ui.acknowledgeUnreadWhatsNew()}
       onhelpaction={(action) => ui.handleHelpMenuAction(action)}
     />
   {:else if DEFERRED_VIEW_SET.has(view) && $projectState}
@@ -372,40 +275,20 @@
         onrefresh={refresh}
         onloadpage={loadPlots}
         onopenexplorer={() => navigate('classification-explorer')}
-        onopenprofiling={openPlotProfiling}
         onselectplot={() => {
-          ui.inspectorExpanded = true;
+          if (selected?.plotNumber) {
+            void requestTransition(async () => {
+              editorPlotNumber = selected?.plotNumber;
+              editorEntryForm = 'fs882';
+              view = 'fs882';
+              error = '';
+            });
+          }
         }}
       />
     {/await}
   {/if}
 </main>
-
-{#if ui.showInspectorRail}
-  {#await import('./PlotsBrowserPanel.svelte') then { default: PlotsBrowserPanel }}
-    <PlotsBrowserPanel
-      region="detail"
-      {view}
-      {busy}
-      {page}
-      allPlots={ui.allAvailablePlots}
-      bind:selected
-      canUndoSelectedPlot={ui.canUndoSelectedPlot}
-      {editorBusy}
-      {transitionWorking}
-      {pendingTransition}
-      onopenfs882={() => navigate('fs882')}
-      onopentwopage={() => navigate('fs882-twopage')}
-      onopensivi={() => void openSIVI()}
-      onopenprofiling={openPlotProfiling}
-      oncopyplot={IS_WEB_READONLY ? undefined : ui.copyPlotToNewNumber}
-      onremoveplot={IS_WEB_READONLY ? undefined : ui.removePlotFromProject}
-      oncollapseinspector={() => {
-        ui.inspectorExpanded = false;
-      }}
-    />
-  {/await}
-{/if}
 
 {#if !IS_WEB_READONLY && ui.newSiviModalOpen && $projectState?.contextId}
   {#await import('../entry/SIVIParentCreateModal.svelte') then { default: SIVIParentCreateModal }}

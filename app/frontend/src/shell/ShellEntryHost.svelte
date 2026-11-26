@@ -99,7 +99,7 @@
     profileSelection?: PlotProfileSelectionController;
     initialProfileReviewOpen?: boolean;
     onConsumedInitialProfileReview?: () => void;
-    reviewProfileSU: (proposal: ProjectPlotProfileFilterRequest, origin: string) => Promise<void>;
+    reviewProfileSU?: (proposal: ProjectPlotProfileFilterRequest, origin: string) => Promise<void>;
     copyPlotToNewNumber: (sourcePlot: string, targetPlot: string) => Promise<void>;
     removePlotFromProject: (sourcePlot: string, cleanProjectName: string) => Promise<void>;
     refreshCatalogAfterWrite: () => Promise<void>;

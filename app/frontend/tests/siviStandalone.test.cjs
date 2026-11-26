@@ -59,17 +59,17 @@ test('compiled Forms menu requires an available owned entry and callback without
       const html = render(component, { props: {
         view: 'plots', onnavigate: () => {}, siviAvailable: available, onopensivi: callback, releaseChannel: 'experimental',
       } }).body;
-      const button = html.match(/<button\b([^>]*)>[\s\S]*?<span>Enter\/Edit SIVI Data<\/span>\s*<\/button>/)?.[0];
+      const button = html.match(/<button\b([^>]*)>[\s\S]*?<span>View\/Edit SIVI Data<\/span>\s*<\/button>/)?.[0];
       assert.ok(button, 'the actual compiled menu must render its SIVI action');
       const ownButton = button.slice(button.lastIndexOf('<button'));
       assert.equal(/\bdisabled(?:\s|=|>)/.test(ownButton), !(available && callback));
       assert.match(ownButton, available && callback ? /Existing draft and close guards apply/ : /Select a plot to open SIVI/);
-      for (const label of ['Metadata', 'Herbarium \\(Planned\\)', 'Colour-theme \\(Planned\\)', 'User setup(?: \\(Planned\\))?']) {
+      for (const label of ['Project Metadata', 'Herbarium \\(Planned\\)', 'Colour-theme \\(Planned\\)', 'Sign In &amp; Access']) {
         const menuButton = html.match(new RegExp(`<button\\b[^>]*>[\\s\\S]*?<span>${label}<\\/span>\\s*<\\/button>`))?.[0];
         assert.ok(menuButton);
         const targetButton = menuButton.slice(menuButton.lastIndexOf('<button'));
-        if (/User setup/.test(label)) {
-          if (/Planned/.test(targetButton)) assert.match(targetButton, /\bdisabled(?:\s|=|>)/);
+        if (/Sign In/.test(label)) {
+          assert.doesNotMatch(targetButton, /\bdisabled(?:\s|=|>)/);
         } else {
           assert.match(targetButton, /\bdisabled(?:\s|=|>)/);
         }

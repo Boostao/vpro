@@ -259,12 +259,12 @@ test('Navigation Help menu exposes all 6 active items, unread badge, Tour target
   }).body;
 
   for (const label of [
-    'VPro User Guide &amp; LMH25 Reference (F1)',
-    'Interactive Walkthroughs (4 Tours)',
-    'Keyboard Shortcuts (?)',
-    "What's New / Release Notes (2 new)",
-    'Reset Workspace to Sample',
-    'About VPro &amp; Standards Libraries',
+    'F1 LMH25 Guide',
+    'Tours',
+    'Shortcuts',
+    "What's New (2 new)",
+    'Reset to Sample',
+    'About',
   ]) {
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const match = html.match(new RegExp(`<button\\b([^>]*)>[\\s\\S]*?<span>${escaped}<\\/span>\\s*<\\/button>`));
@@ -273,8 +273,8 @@ test('Navigation Help menu exposes all 6 active items, unread badge, Tour target
     assert.equal(/\bdisabled(?:\s|=|$)/.test(buttonAttrs), false, `"${label}" must be enabled`);
   }
   assert.match(html, /data-nav-whats-new-badge[^>]*>2</);
-  assert.match(html, /What's New \/ Release Notes \(2 new\)/);
-  assert.match(html, /data-nav-group="Project"/);
+  assert.match(html, /What's New \(2 new\)/);
+  assert.match(html, /data-nav-group="Project Management"/);
   assert.match(html, /data-nav-group="Interchange"/);
 
   const dispatched = [];

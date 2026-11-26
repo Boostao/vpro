@@ -366,38 +366,39 @@ test('UserSetupModal (S6.12), Navigation graduation, PlotsBrowserPanel (S1.1/S3.
   assert.match(modalHtml, /VPro User Setup/);
   assert.match(modalHtml, /data-user-setup-save/);
 
-  // 3. Navigation.svelte compiles cleanly, graduates User setup in stable+experimental, exposes Two-Page & S5.11 label
+  // 3. Navigation.svelte compiles cleanly with the 8-menu architecture (Forms, Reports, Analysis, Project Management, Map, Interchange, Help)
   const navSrc = readFileSync(srcPath('shell/Navigation.svelte'), 'utf8');
   assert.deepEqual(compile(navSrc, { filename: 'Navigation.svelte', generate: 'client' }).warnings, []);
   assert.doesNotMatch(navSrc, /User setup \(Phase 2 Deferred\)/);
-  assert.match(navSrc, /Lifeform & Species Attribute Summaries/);
+  assert.match(navSrc, /Lifeform & Species Attributes/);
 
   const NavSSR = serverComponent(navSrc, 'Navigation.svelte', { '@lucide/svelte': iconsProxy });
   for (const channel of ['stable', 'experimental']) {
     const html = render(NavSSR, {
       props: { view: 'home', releaseChannel: channel, onnavigate: () => {} },
     }).body;
-    const setupMatch = html.match(/<button\b([^>]*)>[\s\S]*?<span>User setup<\/span>\s*<\/button>/);
-    assert.ok(setupMatch, `Navigation (${channel}) must expose active User setup menu item`);
-    assert.equal(/\bdisabled(?:\s|=|$)/.test(setupMatch[1]), false, `User setup must be enabled in ${channel}`);
+    const authMatch = html.match(/<button\b([^>]*)>[\s\S]*?<span>Sign In &amp; Access<\/span>\s*<\/button>/);
+    assert.ok(authMatch, `Navigation (${channel}) must expose active Sign In & Access menu item`);
+    assert.equal(/\bdisabled(?:\s|=|$)/.test(authMatch[1]), false, `Sign In & Access must be enabled in ${channel}`);
 
-    const twoPageMatch = html.match(/<button\b([^>]*)>[\s\S]*?<span>Two-Page Entry \(FS882-8x6XL\)<\/span>\s*<\/button>/);
-    assert.ok(twoPageMatch, `Navigation (${channel}) must expose Two-Page Entry (FS882-8x6XL)`);
-    assert.equal(/\bdisabled(?:\s|=|$)/.test(twoPageMatch[1]), false);
+    const fs882Match = html.match(/<button\b([^>]*)>[\s\S]*?<span>FS882 Classic Form<\/span>\s*<\/button>/);
+    assert.ok(fs882Match, `Navigation (${channel}) must expose FS882 Classic Form`);
+    assert.equal(/\bdisabled(?:\s|=|$)/.test(fs882Match[1]), false);
+    assert.doesNotMatch(html, /Two-Page Entry \(FS882-8x6XL\)/);
   }
 
-  let setupClicked = 0;
+  let authClicked = 0;
   let navigatedView = '';
   const navCtx = componentFunctions('shell/Navigation.svelte', ['itemEnabled', 'activate', 'closeMenu', 'navigate'], {
-    openMenu: 'Forms',
+    openMenu: 'Project Management',
     navigation: { querySelector: () => ({ querySelector: () => ({ focus: () => {} }) }) },
-    onopenusersetup: () => { setupClicked++; },
+    onopenauthsignin: () => { authClicked++; },
     onnavigate: (v) => { navigatedView = v; },
   });
-  navCtx.actions.activate({ action: 'user-setup' });
-  assert.equal(setupClicked, 1);
-  navCtx.actions.activate({ view: 'fs882-twopage' });
-  assert.equal(navigatedView, 'fs882-twopage');
+  navCtx.actions.activate({ action: 'auth-signin' });
+  assert.equal(authClicked, 1);
+  navCtx.actions.activate({ view: 'quarto-unit-report' });
+  assert.equal(navigatedView, 'quarto-unit-report');
 
   // 4. PlotsBrowserPanel.svelte S1.1 + S3.9 controls
   const browserSrc = readFileSync(srcPath('shell/PlotsBrowserPanel.svelte'), 'utf8');
@@ -461,11 +462,12 @@ test('UserSetupModal (S6.12), Navigation graduation, PlotsBrowserPanel (S1.1/S3.
       },
     }
   );
-  assert.match(sidebarComposite, /data-access-quarantine-summary/);
-  assert.match(sidebarComposite, /quarantinedMalformedRows/);
-  assert.match(sidebarComposite, /quarantinedOrphanRows/);
-  assert.match(sidebarComposite, /quarantinedOverflowRows/);
-  assert.ok(sidebarHtml.body.includes('PROJECTS'));
+  assert.ok(sidebarHtml.body.includes('WORK SPACE'));
+  assert.match(sidebarHtml.body, /id="active-project"/);
+  assert.match(sidebarHtml.body, /id="active-su"/);
+  assert.match(sidebarHtml.body, /id="active-hierarchy"/);
+  assert.match(sidebarHtml.body, /Export to VPro64/);
+  assert.match(sidebarHtml.body, /data-ws-auth-card/);
 
   // 6. App.svelte compiles cleanly with 0 warnings and integrates S1.1, S1.10, S4.3, S5.9, S6.12
   const rawAppSrc = readFileSync(srcPath('App.svelte'), 'utf8');

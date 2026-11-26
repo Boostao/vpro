@@ -1,13 +1,25 @@
 import type {
-  AccessDatabaseInspection,
-  AccessProjectImportResult,
+  AttachableFileInspection,
   ContextService,
   ImportExportService,
 } from '../../bindings/github.com/boostao/vpro/app';
-import type { AccessProjectCandidate } from '../../bindings/github.com/boostao/vpro/app/internal/interchange/models';
-import type { ProjectInfo } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
-import { formatError, type CancellableRead, type ReadRequests } from '../shared/readRequests';
+import type {
+  AttachWorkspaceResourceResult,
+  CreateWorkspaceResourceRequest,
+  CreateWorkspaceResourceResult,
+  UnattachWorkspaceResourceResult,
+} from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
+import type { VPro64ExportOutcome } from '../../bindings/github.com/boostao/vpro/app/internal/interchange/models';
+import { formatError } from '../shared/readRequests';
 import { notifications } from './notificationService.svelte';
+
+export type WorkspaceResourceKind = 'project' | 'su' | 'hierarchy';
+
+export interface AttachCandidateItem {
+  name: string;
+  label: string;
+  compatible: boolean;
+}
 
 export async function formatSidebarErrorOp(cause: unknown): Promise<string> {
   try {
@@ -50,183 +62,138 @@ export function computeAccessProgressPercent(
   return null;
 }
 
-function isCancellableRpc<T>(value: PromiseLike<T>): value is CancellableRead<T> {
-  return value !== null && typeof value === 'object' && typeof (value as { cancel?: unknown }).cancel === 'function';
+export function workspaceKindLabel(kind: WorkspaceResourceKind): string {
+  if (kind === 'project') return 'Project';
+  if (kind === 'su') return 'Site Unit';
+  return 'Hierarchy';
 }
 
-function trackSidebarAccessRpc<T>(
-  rawRpc: PromiseLike<T>,
-  accessRequests: ReadRequests | undefined,
-  setActiveRpc: (rpc: { cancel: () => unknown } | null) => void
-): PromiseLike<T> {
-  if (isCancellableRpc(rawRpc)) {
-    if (accessRequests) {
-      setActiveRpc(null);
-      return accessRequests.track(rawRpc);
-    }
-    setActiveRpc(rawRpc);
-    return rawRpc;
+export function extractAttachCandidates(
+  kind: WorkspaceResourceKind,
+  inspection: AttachableFileInspection
+): AttachCandidateItem[] {
+  if (kind === 'project') {
+    return (inspection.projects ?? []).map((p) => ({
+      name: p.name,
+      label: p.compatible ? p.name : `${p.name} (${p.version || 'incompatible'})`,
+      compatible: Boolean(p.compatible),
+    }));
   }
-  setActiveRpc(null);
-  return rawRpc;
-}
-
-export async function browseExternalProjectFileOp(params: {
-  contextId: string | undefined;
-  contextService: Pick<typeof ContextService, 'ChooseExternalSQLiteFile'>;
-  onDiscovered: (selectedPath: string, discovered: ProjectInfo[], firstProjectName: string | null) => void;
-  notify?: typeof notifications;
-}): Promise<void> {
-  const { contextId, contextService, onDiscovered, notify = notifications } = params;
-  if (!contextId) return;
-  try {
-    const inspection = await contextService.ChooseExternalSQLiteFile(contextId);
-    if (!inspection.selectedPath) return;
-    const projects = inspection.projects ?? [];
-    const first = projects.find((p) => p.compatible) ?? projects[0] ?? null;
-    onDiscovered(inspection.selectedPath, projects, first?.name ?? null);
-    if (first) {
-      notify.push({
-        severity: 'info',
-        category: 'general',
-        source: 'Attach Project',
-        title: `Found ${projects.length} project(s)`,
-        message: first.file,
-        toast: true,
-      });
-    } else {
-      notify.push({
-        severity: 'warning',
-        category: 'general',
-        source: 'Attach Project',
-        title: 'No project table found',
-        message: 'Selected file contains no VPro project tables.',
-        toast: true,
-      });
-    }
-  } catch (cause) {
-    notify.push({
-      severity: 'error',
-      category: 'general',
-      source: 'Attach Project',
-      title: 'Could not inspect project file',
-      message: await formatSidebarErrorOp(cause),
-      toast: true,
-    });
+  if (kind === 'su') {
+    return (inspection.sus ?? []).map((s) => ({
+      name: s.name,
+      label: s.kind === 'master' ? `${s.name} (master)` : s.name,
+      compatible: Boolean(s.compatible),
+    }));
   }
+  return (inspection.hierarchies ?? []).map((h) => ({
+    name: h.name,
+    label: h.name,
+    compatible: Boolean(h.compatible),
+  }));
 }
 
-export async function runInspectAccessSourceOp(params: {
+export function requiresAccessConversion(inspection: AttachableFileInspection | null | undefined): boolean {
+  if (!inspection) return false;
+  return Boolean(inspection.requiresConvert || inspection.fileKind === 'access');
+}
+
+export async function runAttachWorkspaceResourceOp(params: {
   contextId: string;
-  pathToInspect: string;
-  reqGen: number;
-  isCurrentGen: () => boolean;
-  attachProgress: () => Promise<void>;
-  importExportService: Pick<typeof ImportExportService, 'InspectAccessDatabase'>;
-  accessRequests: ReadRequests | undefined;
-  setActiveRpc: (rpc: { cancel: () => unknown } | null) => void;
-  onResolved: (inspection: AccessDatabaseInspection, first: AccessProjectCandidate | null) => void;
-  onFailed: (msg: string) => void;
-  onSettledCurrent: () => void;
+  kind: WorkspaceResourceKind;
+  path: string;
+  name?: string;
+  activate?: boolean;
+  contextService: Pick<typeof ContextService, 'AttachWorkspaceResource'>;
   notify?: typeof notifications;
-}): Promise<void> {
-  const {
-    contextId,
-    pathToInspect,
-    isCurrentGen,
-    attachProgress,
-    importExportService,
-    accessRequests,
-    setActiveRpc,
-    onResolved,
-    onFailed,
-    onSettledCurrent,
-    notify = notifications,
-  } = params;
-  try {
-    await attachProgress();
-    if (!isCurrentGen()) return;
-    const rawRpc = importExportService.InspectAccessDatabase(contextId, pathToInspect);
-    const inspection = await trackSidebarAccessRpc(rawRpc, accessRequests, setActiveRpc);
-    if (!isCurrentGen()) return;
-    const first = (inspection.projects ?? []).find((p) => p.compatible) ?? (inspection.projects ?? [])[0] ?? null;
-    onResolved(inspection, first);
-  } catch (cause) {
-    if (!isCurrentGen() || isCancelledAccessErrorOp(cause)) return;
-    const msg = await formatSidebarErrorOp(cause);
-    if (!isCurrentGen()) return;
-    onFailed(msg);
-    notify.push({
-      severity: 'error',
-      category: 'background',
-      source: 'Access Import',
-      title: 'Access inspection failed',
-      message: msg,
-    });
-  } finally {
-    if (isCurrentGen()) onSettledCurrent();
-  }
+}): Promise<AttachWorkspaceResourceResult> {
+  const { contextId, kind, path, name = '', activate = true, contextService, notify = notifications } = params;
+  const result = await contextService.AttachWorkspaceResource(contextId, {
+    kind,
+    path,
+    name,
+    activate,
+  });
+  const label = workspaceKindLabel(kind);
+  const attachedName = name || result.attached?.[0]?.name || label;
+  notify.push({
+    severity: 'success',
+    category: 'general',
+    source: 'Work Space',
+    title: result.converted ? `Converted and attached ${attachedName}` : `Attached ${label}: ${attachedName}`,
+    message: result.converted
+      ? 'Converted from Microsoft Access into a VPro database (.db) and added to your Work Space.'
+      : `Added to your Work Space.`,
+    toast: true,
+  });
+  return result;
 }
 
-export async function runImportAccessProjectOp(params: {
+export async function runUnattachWorkspaceResourceOp(params: {
   contextId: string;
-  payload: {
-    sourcePath: string;
-    sourceProject: string;
-    targetProject: string;
-    destinationPath: string;
-    activateOnSuccess: boolean;
-  };
-  isCurrentGen: () => boolean;
-  attachProgress: () => Promise<void>;
-  importExportService: Pick<typeof ImportExportService, 'ImportAccessProject'>;
-  accessRequests: ReadRequests | undefined;
-  setActiveRpc: (rpc: { cancel: () => unknown } | null) => void;
-  onSucceeded: (result: AccessProjectImportResult) => Promise<void>;
-  onFailed: (msg: string) => void;
-  onSettledCurrent: () => void;
+  kind: WorkspaceResourceKind;
+  name: string;
+  path?: string;
+  contextService: Pick<typeof ContextService, 'UnattachWorkspaceResource'>;
   notify?: typeof notifications;
-}): Promise<void> {
-  const {
-    contextId,
-    payload,
-    isCurrentGen,
-    attachProgress,
-    importExportService,
-    accessRequests,
-    setActiveRpc,
-    onSucceeded,
-    onFailed,
-    onSettledCurrent,
-    notify = notifications,
-  } = params;
-  try {
-    await attachProgress();
-    if (!isCurrentGen()) return;
-    const rawRpc = importExportService.ImportAccessProject(contextId, payload);
-    const result = await trackSidebarAccessRpc(rawRpc, accessRequests, setActiveRpc);
-    if (!isCurrentGen()) return;
-    notify.push({
-      severity: 'success',
-      category: 'background',
-      source: 'Access Import',
-      title: `Imported ${result.targetProject} (${result.plotCount} plots)`,
-      message: `Saved to ${result.destinationPath}`,
-    });
-    await onSucceeded(result);
-  } catch (cause) {
-    if (!isCurrentGen() || isCancelledAccessErrorOp(cause)) return;
-    const msg = await formatSidebarErrorOp(cause);
-    if (!isCurrentGen()) return;
-    onFailed(msg);
-    notify.push({
-      severity: 'error',
-      category: 'background',
-      source: 'Access Import',
-      title: 'Access project import failed',
-      message: msg,
-    });
-  } finally {
-    if (isCurrentGen()) onSettledCurrent();
-  }
+}): Promise<UnattachWorkspaceResourceResult> {
+  const { contextId, kind, name, path = '', contextService, notify = notifications } = params;
+  const result = await contextService.UnattachWorkspaceResource(contextId, { kind, name, path });
+  notify.push({
+    severity: 'info',
+    category: 'general',
+    source: 'Work Space',
+    title: `Removed ${workspaceKindLabel(kind)}: ${name}`,
+    message: 'Unattached from your Work Space. The database file on disk was not deleted.',
+    toast: true,
+  });
+  return result;
+}
+
+export async function runCreateWorkspaceResourceOp(params: {
+  contextId: string;
+  request: CreateWorkspaceResourceRequest;
+  contextService: Pick<typeof ContextService, 'CreateWorkspaceResource'>;
+  notify?: typeof notifications;
+}): Promise<CreateWorkspaceResourceResult> {
+  const { contextId, request, contextService, notify = notifications } = params;
+  const result = await contextService.CreateWorkspaceResource(contextId, request);
+  const kind = (request.kind as WorkspaceResourceKind) || 'project';
+  notify.push({
+    severity: 'success',
+    category: 'general',
+    source: 'Work Space',
+    title: `Created ${workspaceKindLabel(kind)}: ${result.name}`,
+    message: result.path ? `Saved in ${result.path}` : 'Added to your Work Space.',
+    toast: true,
+  });
+  return result;
+}
+
+export async function runExportVPro64Op(params: {
+  contextId: string;
+  includeActiveSU: boolean;
+  includeHierarchy: boolean;
+  importExportService: Pick<typeof ImportExportService, 'ChooseVPro64ExportFile' | 'ExportVPro64Database'>;
+  notify?: typeof notifications;
+}): Promise<VPro64ExportOutcome | null> {
+  const { contextId, includeActiveSU, includeHierarchy, importExportService, notify = notifications } = params;
+  const destinationPath = await importExportService.ChooseVPro64ExportFile();
+  if (!destinationPath) return null;
+  const outcome = await importExportService.ExportVPro64Database(contextId, {
+    destinationPath,
+    includeActiveSU,
+    includeHierarchy,
+    includeMensuration: true,
+    includeCompanions: true,
+  });
+  notify.push({
+    severity: 'success',
+    category: 'background',
+    source: 'Export to VPro64',
+    title: `Exported ${outcome.targetProject} (${outcome.plotCount} plots)`,
+    message: `Saved VPro64 package to ${outcome.destinationPath}`,
+    toast: true,
+  });
+  return outcome;
 }

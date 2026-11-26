@@ -1,7 +1,6 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
-const path = require('node:path');
 const { compile } = require('svelte/compiler');
 const { render } = require('svelte/server');
 const { serverComponent, loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
@@ -11,7 +10,22 @@ const help = loadTypeScript('helpSystem.ts', {
   '@wailsio/runtime': { Call: { ByName: () => Promise.resolve({}) } },
 });
 
-test('HomeWorkspaceHub compiles cleanly with BC Gov styling, zero emojis, and strict buildMode tier gating', () => {
+const sampleWhatsNew = {
+  latestVersion: '2.1.0',
+  lastSeenVersion: '2.0.0',
+  hasUnread: true,
+  unreadCount: 1,
+  entries: [
+    {
+      version: '2.1.0',
+      date: '2026-11-26',
+      channel: 'stable',
+      highlights: ['Unified Work Space sidebar with dropdowns for Project, Site Unit, and Hierarchy.'],
+    },
+  ],
+};
+
+test('HomeWorkspaceHub compiles cleanly with BC Gov styling, zero emojis, minimal What\'s New opening screen, and buildMode tier gating', () => {
   const source = readFileSync(srcPath('HomeWorkspaceHub.svelte'), 'utf8');
   assert.doesNotMatch(source, /[\u{1F300}-\u{1FAFF}]/u, 'must contain zero emojis');
   assert.doesNotMatch(source, /disposable|during migration|Not yet a complete Access replacement/i);
@@ -23,36 +37,32 @@ test('HomeWorkspaceHub compiles cleanly with BC Gov styling, zero emojis, and st
 
   const Hub = serverComponent(source, 'HomeWorkspaceHub.svelte', {
     '@lucide/svelte': iconsProxy,
-    './helpSystem': help,
+    '../help/helpSystem': help,
+    '../web/runtimeMode': { IS_WEB_READONLY: false },
   });
 
-  // 1. Release mode: clean workspace hub with zero dev or alpha banner
+  // 1. Release mode: minimal opening screen showing only What's New, zero dev/alpha tier banner, zero cluttered workflow cards
   const releaseHtml = render(Hub, {
     props: {
-      activeProject: 'Sample',
-      activeSU: 'Sample_SU',
-      activeHierarchy: 'Sample_Hierarchy',
-      plotCount: 42,
+      whatsNewStatus: sampleWhatsNew,
       buildMode: 'release',
       appVersion: '2.1.0',
-      onnavigate: () => {},
       onhelpaction: () => {},
     },
   }).body;
   assert.doesNotMatch(releaseHtml, /data-home-tier-banner/);
-  assert.match(releaseHtml, /Sample/);
-  assert.match(releaseHtml, /Sample_SU/);
-  assert.match(releaseHtml, /BECdb v13 · Taxa v19 · LMH25/);
-  assert.equal((releaseHtml.match(/data-home-workflow=/g) ?? []).length, 6);
+  assert.doesNotMatch(releaseHtml, /data-home-workflow=/);
+  assert.match(releaseHtml, /data-opening-whats-new/);
+  assert.match(releaseHtml, /What's New in VPro/);
+  assert.match(releaseHtml, /Version 2\.1\.0/);
+  assert.match(releaseHtml, /Mark v2\.1\.0 as Read/);
 
   // 2. Alpha mode: client evaluation banner + SHA256SUMS notice, zero dev path clutter
   const alphaHtml = render(Hub, {
     props: {
-      activeProject: 'Sample',
-      plotCount: 42,
+      whatsNewStatus: sampleWhatsNew,
       buildMode: 'alpha',
       appVersion: '2.1.0-alpha.1',
-      onnavigate: () => {},
     },
   }).body;
   assert.match(alphaHtml, /data-home-tier-banner="alpha"/);
@@ -63,13 +73,11 @@ test('HomeWorkspaceHub compiles cleanly with BC Gov styling, zero emojis, and st
   // 3. Dev mode: compact dev banner with version and short commit
   const devHtml = render(Hub, {
     props: {
-      activeProject: 'Sample',
-      plotCount: 42,
+      whatsNewStatus: sampleWhatsNew,
       buildMode: 'dev',
       appVersion: '2.0.0-dev',
       gitCommit: '30e86f6abcdef',
       releaseChannel: 'stable',
-      onnavigate: () => {},
       onhelpaction: () => {},
     },
   }).body;
@@ -77,7 +85,7 @@ test('HomeWorkspaceHub compiles cleanly with BC Gov styling, zero emojis, and st
   assert.match(devHtml, /DEV BUILD · v2\.0\.0-dev · 30e86f6/);
 });
 
-test('App and Navigation embed HomeWorkspaceHub and clean BEC workflow terminology', () => {
+test('App and Navigation embed minimal opening HomeWorkspaceHub and clean BEC workflow terminology', () => {
   const { readShellComposite } = require('./svelteTestHelpers.cjs');
   const app = readShellComposite();
   const navigation = readFileSync(srcPath('Navigation.svelte'), 'utf8');

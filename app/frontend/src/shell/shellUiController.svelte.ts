@@ -160,12 +160,12 @@ export function createShellUiController(bridge: ShellControllerBridge) {
   let shortcutsModalOpen = $state(false);
   let whatsNewModalOpen = $state(false);
   let aboutModalOpen = $state(false);
+  let authSignInOpen = $state(false);
   let userSetupOpen = $state(false);
   let resetSampleConfirmOpen = $state(false);
   let whatsNewStatus = $state.raw<WhatsNewStatus | null>(null);
   let whatsNewPromptDismissed = $state(false);
   let contextExpanded = $state(false);
-  let inspectorExpanded = $state(false);
   let isNarrowViewport = $state(false);
   let commandPaletteOpen = $state(false);
   let notificationDrawerOpen = $state(false);
@@ -185,14 +185,6 @@ export function createShellUiController(bridge: ShellControllerBridge) {
   let secondaryPanelBusy = $state(false);
   let siviModalBusy = $state(false);
   let fs882ModuleLoaded = $state(false);
-  let plotProfilePanel = $state<
-    | {
-        reviewProfileSU: (proposal: ProjectPlotProfileFilterRequest, origin: string) => Promise<void>;
-        clearCachedSources: () => void;
-        resetAllReviews: () => void;
-      }
-    | undefined
-  >(undefined);
   let plotFindOpen = $state(false);
 
   let catalogPlotRequest = 0;
@@ -260,8 +252,6 @@ export function createShellUiController(bridge: ShellControllerBridge) {
   const sessionStatusLabel = $derived(
     sessionStatusKind === 'busy' ? 'Busy' : sessionStatusKind === 'dirty' ? 'Unsaved Draft' : 'Ready'
   );
-  const showInspectorToggle = $derived(bridge.read().view === 'home' || bridge.read().view === 'plots');
-  const showInspectorRail = $derived(!bridge.read().startupFailure && showInspectorToggle && inspectorExpanded);
   const metadataAvailable = $derived.by(() => {
     const snap = bridge.read();
     if (!snap.state?.contextId) return false;
@@ -684,7 +674,6 @@ export function createShellUiController(bridge: ShellControllerBridge) {
       return;
     }
     bridge.patch({ selected: target });
-    if (!isNarrowViewport && bridge.read().view === 'plots') inspectorExpanded = true;
   }
 
   function handleCommandPaletteSelect(action: CommandPaletteAction) {
@@ -743,6 +732,7 @@ export function createShellUiController(bridge: ShellControllerBridge) {
     } else if (action.kind === 'navigate-view') bridge.navigate(action.view as ShellViewId | 'fs882-twopage');
     else if (action.kind === 'new-sivi' && newSiviAvailable) newSiviModalOpen = true;
     else if (action.kind === 'open-metadata') void bridge.openProjectMetadata();
+    else if (action.kind === 'open-auth-signin' && !IS_WEB_READONLY) authSignInOpen = true;
     else if (action.kind === 'help-topic') openContextualHelp(action.topicId, action.tab ?? 'inspector');
     else if (action.kind === 'help-action') handleHelpMenuAction(action.action);
   }
@@ -762,14 +752,12 @@ export function createShellUiController(bridge: ShellControllerBridge) {
       const narrow = window.innerWidth < 1200;
       if (narrow && !isNarrowViewport) {
         contextExpanded = false;
-        inspectorExpanded = false;
       } else if (!narrow && isNarrowViewport) contextExpanded = readSaved(true);
       isNarrowViewport = narrow;
     };
     if (typeof window !== 'undefined') {
       isNarrowViewport = window.innerWidth < 1200;
       contextExpanded = isNarrowViewport ? false : readSaved(true);
-      inspectorExpanded = !isNarrowViewport;
       window.addEventListener('resize', syncViewport);
     }
     void defaultHelpPort
@@ -792,6 +780,7 @@ export function createShellUiController(bridge: ShellControllerBridge) {
       aboutModalOpen ||
       tourOpen ||
       resetSampleConfirmOpen ||
+      authSignInOpen ||
       userSetupOpen
     );
   }
@@ -839,6 +828,12 @@ export function createShellUiController(bridge: ShellControllerBridge) {
     set aboutModalOpen(v: boolean) {
       aboutModalOpen = v;
     },
+    get authSignInOpen() {
+      return authSignInOpen;
+    },
+    set authSignInOpen(v: boolean) {
+      authSignInOpen = v;
+    },
     get userSetupOpen() {
       return userSetupOpen;
     },
@@ -868,12 +863,6 @@ export function createShellUiController(bridge: ShellControllerBridge) {
     },
     set contextExpanded(v: boolean) {
       contextExpanded = v;
-    },
-    get inspectorExpanded() {
-      return inspectorExpanded;
-    },
-    set inspectorExpanded(v: boolean) {
-      inspectorExpanded = v;
     },
     get isNarrowViewport() {
       return isNarrowViewport;
@@ -965,12 +954,6 @@ export function createShellUiController(bridge: ShellControllerBridge) {
     set fs882ModuleLoaded(v: boolean) {
       fs882ModuleLoaded = v;
     },
-    get plotProfilePanel() {
-      return plotProfilePanel;
-    },
-    set plotProfilePanel(v) {
-      plotProfilePanel = v;
-    },
     get plotFindOpen() {
       return plotFindOpen;
     },
@@ -1018,12 +1001,6 @@ export function createShellUiController(bridge: ShellControllerBridge) {
     },
     get sessionStatusLabel() {
       return sessionStatusLabel;
-    },
-    get showInspectorToggle() {
-      return showInspectorToggle;
-    },
-    get showInspectorRail() {
-      return showInspectorRail;
     },
     get metadataAvailable() {
       return metadataAvailable;

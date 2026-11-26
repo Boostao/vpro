@@ -162,10 +162,39 @@
       />
     {/await}
   {/key}
+{:else if view === 'quarto-unit-report' && $projectState}
+  {#key `${$projectState.contextId}:quarto-unit-report`}
+    {#await import('../rsidecar/RSidecarWorkbench.svelte')}
+      <p role="status" class="p-4 text-sm">Loading Quarto Unit Report...</p>
+    {:then { default: RSidecarWorkbenchModule }}
+      {@const RSidecarWorkbench = RSidecarWorkbenchModule as unknown as import('svelte').Component<{
+        contextId: string;
+        activeProject: string;
+        activeSu?: string;
+        initialTab?: 'runtime' | 'edatopic' | 'clustering' | 'quarto';
+        operationHeld?: boolean;
+        onBusyChange?: (busy: boolean) => void;
+        oncontextswitched?: (state: unknown) => void;
+      }>}
+      <RSidecarWorkbench
+        contextId={$projectState.contextId ?? ''}
+        activeProject={$projectState.activeProject}
+        activeSu={$projectState.activeSU}
+        initialTab="quarto"
+        operationHeld={panelHold}
+        onBusyChange={(value) => {
+          localEditorBusy = value;
+        }}
+        oncontextswitched={async () => {
+          await refresh();
+        }}
+      />
+    {/await}
+  {/key}
 {:else if view === 'geospatial-map' && $projectState}
   {#key $projectState.contextId}
     {#await import('../spatial/GeospatialWorkbench.svelte')}
-      <p role="status" class="p-4 text-sm">Loading 3D Map...</p>
+      <p role="status" class="p-4 text-sm">Loading Map...</p>
     {:then { default: GeospatialWorkbench }}
       <GeospatialWorkbench
         contextId={$projectState.contextId ?? ''}

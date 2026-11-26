@@ -191,7 +191,7 @@ test('compiled normal User log menu is unconditionally enabled in Navigation', a
   });
   const { render } = await import(pathToFileURL(require.resolve('svelte/server')).href);
   const body = render(component, { props: { view: 'home', onnavigate: () => {} } }).body;
-  const button = [...body.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)].find(match => match[2].includes('User log'));
+  const button = [...body.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)].find(match => match[2].includes('User Log'));
   assert.ok(button, 'planned selector must resolve');
   assert.equal(/\bdisabled(?:=|\s|$)/.test(button[1]), false);
 });

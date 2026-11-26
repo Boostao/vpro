@@ -135,7 +135,6 @@
     reloadPlotsAndHierarchyAfterReset: async (nextState) => {
       cancelAllReads();
       projectState.set(nextState);
-      ui.plotProfilePanel?.clearCachedSources();
       resetMainCaches();
       view = 'plots';
       await loadPlots(0);
@@ -350,7 +349,6 @@
   {editorLabel}
   {editorBusy}
   {companionPanelBusy}
-  operationHeld={operationGuard.isBusy()}
   {transitionWorking}
   {pendingTransition}
   {closeRequest}
@@ -373,11 +371,13 @@
   {loadPlots}
   {refresh}
   {switchContext}
-  {cancelAllReads}
   onAccessActivated={async () => {
     resetMainCaches();
-    ui.plotProfilePanel?.resetAllReviews();
-    view = 'plots';
     await loadPlots(0);
+    try {
+      await loadHierarchy();
+    } catch {
+      // Non-fatal if newly attached project has no active hierarchy yet.
+    }
   }}
 />

@@ -570,7 +570,6 @@ export async function runSwitchContextOp(
     projectState.set(state);
     const s = getRt();
     s.nextPlotRequest();
-    s.ui?.plotProfilePanel?.clearCachedSources();
     s.resetMainCaches();
     s.patch({ view: next });
     await s.loadPlots(0);
@@ -625,10 +624,9 @@ export function runGlobalHelpKeydownOp(getRt: () => ShellRuntimeSnap, event: Key
       s.ui.helpDrawerOpen = false;
       return;
     }
-    if (s.ui.isNarrowViewport && (s.ui.contextExpanded || s.ui.showInspectorRail)) {
+    if (s.ui.isNarrowViewport && s.ui.contextExpanded) {
       event.preventDefault();
       s.ui.contextExpanded = false;
-      s.ui.inspectorExpanded = false;
     }
   }
 }
