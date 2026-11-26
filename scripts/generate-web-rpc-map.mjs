@@ -65,6 +65,15 @@ const ALLOWED_SELECT_READ_EXCEPTIONS = new Set(['SpatialService.SelectPlotsInPol
 
 const ALLOWED_GET_PICTURE_OPTIONS_EXCEPTION = 'PictureService.GetPictureOptions';
 
+const ALLOWED_QUICKRUN_DOWNLOAD_EXCEPTIONS = new Set([
+  'VegetationReportService.QuickRunSummaryVegetationWorkbook',
+  'VegetationReportService.QuickRunLongVegetationWorkbook',
+  'VegetationReportService.QuickRunLifeformWorkbook',
+  'EnvironmentReportService.QuickRunLongEnvironmentWorkbook',
+  'EnvironmentReportService.QuickRunSummaryEnvironmentWorkbook',
+  'EnvironmentReportService.QuickRunSubzoneMatrixWorkbook',
+]);
+
 /**
  * Returns a non-empty denial reason string if (service, method, kind) violates
  * the fail-closed read-only policy, or null if permitted.
@@ -76,7 +85,10 @@ export function checkDenylist(service, method, kind) {
     return `${qualified}: invalid kind "${kind}" (must be rpc | prefs | download)`;
   }
 
-  if (FORBIDDEN_METHOD_PREFIX_RE.test(method)) {
+  const isAllowedQuickRunDownload =
+    kind === 'download' && ALLOWED_QUICKRUN_DOWNLOAD_EXCEPTIONS.has(qualified);
+
+  if (!isAllowedQuickRunDownload && FORBIDDEN_METHOD_PREFIX_RE.test(method)) {
     return `${qualified}: matches forbidden mutating/admin/cloud/dialog prefix`;
   }
 
@@ -112,8 +124,13 @@ export function checkDenylist(service, method, kind) {
     return `${qualified}: Acknowledge* is forbidden except ephemeral HelpService.AcknowledgeWhatsNew`;
   }
 
-  if (kind === 'download' && !method.startsWith('Export') && method !== 'RenderQuartoGuide') {
-    return `${qualified}: download kind is restricted to read-only Export* / RenderQuartoGuide methods`;
+  if (
+    kind === 'download' &&
+    !method.startsWith('Export') &&
+    method !== 'RenderQuartoGuide' &&
+    !isAllowedQuickRunDownload
+  ) {
+    return `${qualified}: download kind is restricted to read-only Export* / RenderQuartoGuide / approved QuickRun*Workbook methods`;
   }
 
   return null;

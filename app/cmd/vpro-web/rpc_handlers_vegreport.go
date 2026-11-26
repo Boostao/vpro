@@ -1558,6 +1558,175 @@ func (r *RPCRouter) registerVegReportHandlers() {
 		return vegreport.PreviewLongVegetationWithExclusions(c.ctx, lease.Context, contextID, req)
 	})
 
+	// --- Read-Only QuickRun Workbook Downloads ---
+
+	r.register(svc, "QuickRunSummaryVegetationWorkbook", "download", false, func(c *rpcCall) (any, error) {
+		if err := c.requireArgCount(2); err != nil {
+			return nil, err
+		}
+		contextID, err := decodeArg[string](c, 0)
+		if err != nil {
+			return nil, err
+		}
+		req, err := decodeArg[vegreport.QuickSummaryVegetationRequest](c, 1)
+		if err != nil {
+			return nil, err
+		}
+		return c.withExportSlot(func(ctx context.Context) (*downloadResult, error) {
+			lease, err := c.server.pool.AcquireByContextID(ctx, contextID, c.session.Prefs)
+			if err != nil {
+				return nil, err
+			}
+			defer lease.Release()
+
+			wb, err := buildSummaryWorkbook(lease.Context)
+			if err != nil {
+				return nil, err
+			}
+			filename := sanitizeDownloadFilename(lease.Dataset.Project + "-summary-vegetation.xlsx")
+			filePath, dirPath, cleanup, err := c.server.downloads.MintTempPath(filename)
+			if err != nil {
+				return nil, err
+			}
+			savePrefs := false
+			req.SavePreferences = &savePrefs
+			req.OpenInSpreadsheet = false
+			req.DestinationPath = filePath
+
+			outcome, err := wb.QuickExportWorkbook(ctx, contextID, req)
+			if err != nil {
+				cleanup()
+				return nil, err
+			}
+			if outcome == nil || outcome.Path == "" {
+				cleanup()
+				return nil, errors.New("summary vegetation quick workbook export did not produce a file")
+			}
+			_, dlURL, safeName, err := c.server.downloads.Register(outcome.Path, dirPath, filename)
+			if err != nil {
+				cleanup()
+				return nil, err
+			}
+			outcome.Path = safeName
+			outcome.PreferencesSaved = false
+			outcome.OpenedInSpreadsheet = false
+			outcome.SpreadsheetNotice = ""
+			return &downloadResult{
+				Outcome:     outcome,
+				DownloadURL: dlURL,
+				Filename:    safeName,
+			}, nil
+		})
+	})
+
+	r.register(svc, "QuickRunLongVegetationWorkbook", "download", false, func(c *rpcCall) (any, error) {
+		if err := c.requireArgCount(2); err != nil {
+			return nil, err
+		}
+		contextID, err := decodeArg[string](c, 0)
+		if err != nil {
+			return nil, err
+		}
+		req, err := decodeArg[vegreport.QuickLongVegetationRequest](c, 1)
+		if err != nil {
+			return nil, err
+		}
+		return c.withExportSlot(func(ctx context.Context) (*downloadResult, error) {
+			lease, err := c.server.pool.AcquireByContextID(ctx, contextID, c.session.Prefs)
+			if err != nil {
+				return nil, err
+			}
+			defer lease.Release()
+
+			filename := sanitizeDownloadFilename(lease.Dataset.Project + "-long-vegetation.xlsx")
+			filePath, dirPath, cleanup, err := c.server.downloads.MintTempPath(filename)
+			if err != nil {
+				return nil, err
+			}
+			savePrefs := false
+			req.SavePreferences = &savePrefs
+			req.OpenInSpreadsheet = false
+			req.DestinationPath = filePath
+
+			outcome, err := vegreport.QuickExportLongVegetationWorkbook(lease.Context, ctx, contextID, req)
+			if err != nil {
+				cleanup()
+				return nil, err
+			}
+			if outcome == nil || outcome.Path == "" {
+				cleanup()
+				return nil, errors.New("long vegetation quick workbook export did not produce a file")
+			}
+			_, dlURL, safeName, err := c.server.downloads.Register(outcome.Path, dirPath, filename)
+			if err != nil {
+				cleanup()
+				return nil, err
+			}
+			outcome.Path = safeName
+			outcome.PreferencesSaved = false
+			outcome.OpenedInSpreadsheet = false
+			outcome.SpreadsheetNotice = ""
+			return &downloadResult{
+				Outcome:     outcome,
+				DownloadURL: dlURL,
+				Filename:    safeName,
+			}, nil
+		})
+	})
+
+	r.register(svc, "QuickRunLifeformWorkbook", "download", false, func(c *rpcCall) (any, error) {
+		if err := c.requireArgCount(2); err != nil {
+			return nil, err
+		}
+		contextID, err := decodeArg[string](c, 0)
+		if err != nil {
+			return nil, err
+		}
+		req, err := decodeArg[vegreport.QuickLifeformReportRequest](c, 1)
+		if err != nil {
+			return nil, err
+		}
+		return c.withExportSlot(func(ctx context.Context) (*downloadResult, error) {
+			lease, err := c.server.pool.AcquireByContextID(ctx, contextID, c.session.Prefs)
+			if err != nil {
+				return nil, err
+			}
+			defer lease.Release()
+
+			filename := sanitizeDownloadFilename(lease.Dataset.Project + "-lifeform-summary.xlsx")
+			filePath, dirPath, cleanup, err := c.server.downloads.MintTempPath(filename)
+			if err != nil {
+				return nil, err
+			}
+			req.OpenInSpreadsheet = false
+			req.DestinationPath = filePath
+
+			outcome, err := vegreport.QuickExportLifeformWorkbook(lease.Context, ctx, contextID, req)
+			if err != nil {
+				cleanup()
+				return nil, err
+			}
+			if outcome == nil || outcome.Path == "" {
+				cleanup()
+				return nil, errors.New("lifeform quick workbook export did not produce a file")
+			}
+			_, dlURL, safeName, err := c.server.downloads.Register(outcome.Path, dirPath, filename)
+			if err != nil {
+				cleanup()
+				return nil, err
+			}
+			outcome.Path = safeName
+			outcome.PreferencesSaved = false
+			outcome.OpenedInSpreadsheet = false
+			outcome.SpreadsheetNotice = ""
+			return &downloadResult{
+				Outcome:     outcome,
+				DownloadURL: dlURL,
+				Filename:    safeName,
+			}, nil
+		})
+	})
+
 	// --- Read-Only Quarto-Style HTML Reports ---
 
 	r.register(svc, "RenderSummaryVegetationHTMLReport", "rpc", false, func(c *rpcCall) (any, error) {

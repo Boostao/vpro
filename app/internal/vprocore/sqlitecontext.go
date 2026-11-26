@@ -239,6 +239,9 @@ func (c *SqliteContext) projectDatabaseLocked(ctx context.Context) (*sql.DB, err
 	if c.conn == nil {
 		return nil, errors.New("project context is closed")
 	}
+	if err := c.checkEditLockLocked(); err != nil {
+		return nil, err
+	}
 	if c.ProjectDB != nil {
 		return c.ProjectDB, nil
 	}

@@ -97,6 +97,9 @@ func WithContextPlotRequest[T any](ctx context.Context, s *ContextService, expec
 
 func (s *ContextService) Edit(expectedID string, operation func(*PlotService) error) error {
 	_, err := WithContextPlot(s, expectedID, func(plots *PlotService) (struct{}, error) {
+		if err := plots.CheckEditLock(); err != nil {
+			return struct{}{}, err
+		}
 		return struct{}{}, operation(plots)
 	})
 	return err
@@ -104,6 +107,9 @@ func (s *ContextService) Edit(expectedID string, operation func(*PlotService) er
 
 func EditContext(ctx context.Context, s *ContextService, expectedID string, operation func(*PlotService) error) error {
 	_, err := WithContextPlotRequest(ctx, s, expectedID, func(plots *PlotService) (struct{}, error) {
+		if err := plots.CheckEditLock(); err != nil {
+			return struct{}{}, err
+		}
 		return struct{}{}, operation(plots)
 	})
 	return err

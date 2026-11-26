@@ -236,8 +236,9 @@ func ComputePlotClimateAndDualEdatopic(
 			}
 		}
 
+		canWriteCache := !owner.ReadOnly && owner.CheckEditLock() == nil
 		var projDB *sql.DB
-		if !owner.ReadOnly && (len(uncachedList) > 0 || cacheMisses > 0) {
+		if canWriteCache && (len(uncachedList) > 0 || cacheMisses > 0) {
 			projDB, err = owner.ProjectDatabase(ctx)
 			if err != nil {
 				return nil, err
@@ -246,7 +247,7 @@ func ComputePlotClimateAndDualEdatopic(
 
 		// Invoke out-of-process R sidecar only when there are uncached coordinate hashes to compute
 		if len(uncachedList) > 0 {
-			if !owner.ReadOnly && projDB != nil {
+			if canWriteCache && projDB != nil {
 				if err := CheckpointProjectWAL(ctx, projDB); err != nil {
 					return nil, err
 				}
@@ -299,8 +300,8 @@ func ComputePlotClimateAndDualEdatopic(
 			}
 		}
 
-		// Persist any missed plot rows atomically inside BEGIN IMMEDIATE (skipped on read-only contexts)
-		if !owner.ReadOnly && cacheMisses > 0 {
+		// Persist any missed plot rows atomically inside BEGIN IMMEDIATE (skipped on read-only or edit-locked contexts)
+		if canWriteCache && projDB != nil && cacheMisses > 0 {
 			if err := upsertPlotClimateRowsAtomic(ctx, projDB, evaluatedSpecs, normByHash, refPeriod); err != nil {
 				return nil, err
 			}

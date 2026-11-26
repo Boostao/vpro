@@ -631,6 +631,9 @@ func ImportUserSpeciesList(s *vprocore.ContextService, ctx context.Context, cont
 	}
 
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (UserSpeciesImportResult, error) {
+		if err := plots.CheckEditLock(); err != nil {
+			return UserSpeciesImportResult{}, err
+		}
 		owner := plots.Projects.Sqlite
 		project := owner.Selection.Project
 		user := plots.CurrentUser

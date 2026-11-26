@@ -316,6 +316,9 @@ func RunMultivariateClustering(
 		owner := plots.Projects.Sqlite
 		var candidateSUName string
 		if req.MaterializeCandidate {
+			if err := plots.CheckEditLock(); err != nil {
+				return nil, err
+			}
 			var cErr error
 			candidateSUName, cErr = resolveCandidateSUName(req.CandidatePrefix, owner.Selection.Project)
 			if cErr != nil {
@@ -561,6 +564,9 @@ func PromoteClusterCandidateToSU(
 	var currentSel vprocore.DesktopSelection
 
 	_, err = vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (struct{}, error) {
+		if err := plots.CheckEditLock(); err != nil {
+			return struct{}{}, err
+		}
 		owner := plots.Projects.Sqlite
 		currentSel = owner.Selection
 		projDB, err := owner.ProjectDatabase(ctx)

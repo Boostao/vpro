@@ -191,12 +191,14 @@ func NewContextIdentity() (string, error) {
 }
 
 func (service *ProjectService) PublishSQLiteSelection(candidate *SqliteContext, id string) {
+	old := service.Sqlite
 	service.Sqlite, service.ContextID = candidate, id
 	service.Active, service.ActiveSU = candidate.Selection.Project, candidate.Selection.SU
 	service.activeHierarchy, service.hierarchyFile = candidate.Selection.Hierarchy, ""
 	if candidate.Selection.Hierarchy != "None" {
 		service.hierarchyFile = filepath.Base(candidate.Selection.HierarchyPath)
 	}
+	propagateEditLockBinding(service.Preferences, old, candidate)
 }
 
 // EnsureActiveProjectWAL initializes the active project database pool in SQLite WAL journal mode

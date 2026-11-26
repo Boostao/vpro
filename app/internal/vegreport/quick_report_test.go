@@ -7,8 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/xuri/excelize/v2"
+	"go.yaml.in/yaml/v3"
 )
 
 func TestQuickVegetationReportsWorkWhenActiveSUIsNone(t *testing.T) {
@@ -120,5 +122,179 @@ func TestQuickVegetationReportsWorkWhenActiveSUIsNone(t *testing.T) {
 	}
 	if lfHTML.TableCount != 1 || !strings.Contains(lfHTML.HTML, "Mean Cover by Lifeform") {
 		t.Fatalf("unexpected Lifeform HTML result: %+v", lfHTML)
+	}
+}
+
+func TestSummaryVegetationQuickRunAndHTMLMissingReportOptionsAndSavedValueLimit(t *testing.T) {
+	ctx := context.Background()
+	service, state := vprotest.ContextServiceFixture(t)
+
+	// Strip only the ReportOptions section from config.yml (keeping Desktop/Current) to simulate a minimal/upgraded config.
+	cfgValues, err := service.Projects.Preferences.Snapshot()
+	if err != nil {
+		t.Fatalf("read config.yml snapshot: %v", err)
+	}
+	delete(cfgValues, "ReportOptions")
+	rawCfg, err := yaml.Marshal(cfgValues)
+	if err != nil {
+		t.Fatalf("marshal config.yml without ReportOptions: %v", err)
+	}
+	if err := os.WriteFile(service.Projects.Preferences.Path, rawCfg, 0o600); err != nil {
+		t.Fatalf("write config.yml without ReportOptions: %v", err)
+	}
+
+	sumSvc, err := NewSummaryVegetationService(service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sumEnvSvc, err := NewSummaryVegetationEnvironmentalService(sumSvc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sumEnvLfSvc, err := NewSummaryVegetationEnvironmentalLifeformService(sumEnvSvc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sumWbSvc, err := NewSummaryVegetationWorkbookService(sumEnvLfSvc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// P1 #2: Both QuickExportWorkbook and RenderHTMLReport must succeed cleanly when ReportOptions is missing.
+	saveFalse := false
+	res, err := sumWbSvc.QuickExportWorkbook(ctx, state.ContextID, QuickSummaryVegetationRequest{
+		SavePreferences: &saveFalse,
+		DestinationPath: filepath.Join(t.TempDir(), "missing_report_opts.xlsx"),
+	})
+	if err != nil {
+		t.Fatalf("QuickExportWorkbook with missing ReportOptions failed: %v", err)
+	}
+	if res.Bytes == 0 || res.UnitCount == 0 {
+		t.Fatalf("unexpected export result with missing ReportOptions: %+v", res)
+	}
+	htmlRes, err := sumSvc.RenderHTMLReport(ctx, state.ContextID, QuickSummaryVegetationRequest{
+		SavePreferences: &saveFalse,
+	})
+	if err != nil {
+		t.Fatalf("RenderHTMLReport with missing ReportOptions failed: %v", err)
+	}
+	if htmlRes.TableCount == 0 {
+		t.Fatalf("expected non-empty HTML report with missing ReportOptions")
+	}
+
+	// P2 #5: RenderHTMLReport with req.ValueLimit == nil must honor saved SVShowValOpt.
+	baselineHTML, err := sumSvc.RenderHTMLReport(ctx, state.ContextID, QuickSummaryVegetationRequest{
+		SavePreferences: &saveFalse,
+	})
+	if err != nil {
+		t.Fatalf("baseline RenderHTMLReport: %v", err)
+	}
+	highLimit := 95.0
+	if _, err := sumSvc.RenderHTMLReport(ctx, state.ContextID, QuickSummaryVegetationRequest{
+		ValueLimit: &highLimit,
+	}); err != nil {
+		t.Fatalf("save ValueLimit via RenderHTMLReport: %v", err)
+	}
+	// Now omit req.ValueLimit and verify saved SVShowValOpt (95) filters out lower-value rows.
+	savedLimitHTML, err := sumSvc.RenderHTMLReport(ctx, state.ContextID, QuickSummaryVegetationRequest{
+		SavePreferences: &saveFalse,
+	})
+	if err != nil {
+		t.Fatalf("RenderHTMLReport with saved SVShowValOpt: %v", err)
+	}
+	if len(savedLimitHTML.HTML) >= len(baselineHTML.HTML) {
+		t.Fatalf("expected saved SVShowValOpt=95 to filter rows (saved len=%d >= baseline len=%d)", len(savedLimitHTML.HTML), len(baselineHTML.HTML))
+	}
+}
+
+func TestQuickVegetationReportsHandleEmptyActiveSUTable(t *testing.T) {
+	ctx := context.Background()
+	service, state := vprotest.ContextServiceFixture(t)
+
+	// Create and activate an empty SU table (0 assigned plots).
+	created, err := service.CreateWorkspaceResource(ctx, state.ContextID, vprocore.CreateWorkspaceResourceRequest{
+		Kind:            vprocore.WorkspaceResourceSU,
+		Name:            "EmptyVegSU",
+		DestinationMode: "active_project",
+		PopulatePlots:   false,
+		Activate:        true,
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkspaceResource(EmptyVegSU): %v", err)
+	}
+	state = created.State
+	if state.ActiveSU != "EmptyVegSU" {
+		t.Fatalf("expected ActiveSU=EmptyVegSU, got %q", state.ActiveSU)
+	}
+
+	sumSvc, err := NewSummaryVegetationService(service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sumEnvSvc, err := NewSummaryVegetationEnvironmentalService(sumSvc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sumEnvLfSvc, err := NewSummaryVegetationEnvironmentalLifeformService(sumEnvSvc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sumWbSvc, err := NewSummaryVegetationWorkbookService(sumEnvLfSvc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	saveFalse := false
+	// Auto mode falls back cleanly with FallbackNotice naming EmptyVegSU.
+	sumRes, err := sumWbSvc.QuickExportWorkbook(ctx, state.ContextID, QuickSummaryVegetationRequest{
+		SavePreferences: &saveFalse,
+		DestinationPath: filepath.Join(t.TempDir(), "empty_su_sum.xlsx"),
+	})
+	if err != nil {
+		t.Fatalf("Summary QuickExportWorkbook on EmptyVegSU (auto): %v", err)
+	}
+	if !strings.Contains(sumRes.FallbackNotice, "EmptyVegSU") || sumRes.PlotCount == 0 {
+		t.Fatalf("expected EmptyVegSU fallback notice and plots, got %+v", sumRes)
+	}
+	lvRes, err := QuickExportLongVegetationWorkbook(service, ctx, state.ContextID, QuickLongVegetationRequest{
+		SavePreferences: &saveFalse,
+		DestinationPath: filepath.Join(t.TempDir(), "empty_su_lv.xlsx"),
+	})
+	if err != nil {
+		t.Fatalf("LongVeg QuickExport on EmptyVegSU (auto): %v", err)
+	}
+	if !strings.Contains(lvRes.FallbackNotice, "EmptyVegSU") || lvRes.PlotCount == 0 {
+		t.Fatalf("expected EmptyVegSU fallback notice and plots for LongVeg, got %+v", lvRes)
+	}
+	lfRes, err := QuickExportLifeformWorkbook(service, ctx, state.ContextID, QuickLifeformReportRequest{
+		DestinationPath: filepath.Join(t.TempDir(), "empty_su_lf.xlsx"),
+	})
+	if err != nil {
+		t.Fatalf("Lifeform QuickExport on EmptyVegSU (auto): %v", err)
+	}
+	if !strings.Contains(lfRes.FallbackNotice, "EmptyVegSU") || lfRes.PlotCount == 0 {
+		t.Fatalf("expected EmptyVegSU fallback notice and plots for Lifeform, got %+v", lfRes)
+	}
+
+	// Explicitly pinned "su" mode returns a clear plain-language error naming EmptyVegSU.
+	if _, err := sumWbSvc.QuickExportWorkbook(ctx, state.ContextID, QuickSummaryVegetationRequest{
+		UnitScope:       "su",
+		SavePreferences: &saveFalse,
+		DestinationPath: filepath.Join(t.TempDir(), "pinned_sum.xlsx"),
+	}); err == nil || !strings.Contains(err.Error(), "EmptyVegSU") || !strings.Contains(err.Error(), "no assigned plots") {
+		t.Fatalf("expected plain-language empty SU error for pinned Summary Veg, got: %v", err)
+	}
+	if _, err := QuickExportLongVegetationWorkbook(service, ctx, state.ContextID, QuickLongVegetationRequest{
+		ScopeMode:       "su",
+		SavePreferences: &saveFalse,
+		DestinationPath: filepath.Join(t.TempDir(), "pinned_lv.xlsx"),
+	}); err == nil || !strings.Contains(err.Error(), "EmptyVegSU") || !strings.Contains(err.Error(), "no assigned plots") {
+		t.Fatalf("expected plain-language empty SU error for pinned Long Veg, got: %v", err)
+	}
+	if _, err := QuickExportLifeformWorkbook(service, ctx, state.ContextID, QuickLifeformReportRequest{
+		ScopeMode:       "su",
+		DestinationPath: filepath.Join(t.TempDir(), "pinned_lf.xlsx"),
+	}); err == nil || !strings.Contains(err.Error(), "EmptyVegSU") || !strings.Contains(err.Error(), "no assigned plots") {
+		t.Fatalf("expected plain-language empty SU error for pinned Lifeform, got: %v", err)
 	}
 }

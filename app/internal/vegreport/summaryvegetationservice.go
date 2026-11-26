@@ -530,7 +530,7 @@ func (s *SummaryVegetationService) readSnapshotConfigured(ctx context.Context, c
 	if err := validateSummarySnapshotMode(mode, groupAndOrder, display, showClass, options); err != nil {
 		return fail(err)
 	}
-	quality, err := ReadSummaryVegetationQualityPreferences(plots.Projects.Preferences, ctx)
+	quality, err := readSummaryVegetationQualityPreferencesOrDefault(plots.Projects.Preferences, ctx)
 	if err != nil {
 		return fail(err)
 	}

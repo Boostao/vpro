@@ -216,6 +216,9 @@ func ReassignSynthesisPlotUnit(
 	}
 
 	return vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (*ReassignSynthesisPlotResult, error) {
+		if err := plots.CheckEditLock(); err != nil {
+			return nil, err
+		}
 		owner := plots.Projects.Sqlite
 		if err := verifyPlotInProjectEnv(ctx, owner, req.PlotNumber); err != nil {
 			return nil, err
@@ -366,6 +369,9 @@ func UndoSynthesisReassignment(
 	}
 
 	return vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (*ReassignSynthesisPlotResult, error) {
+		if err := plots.CheckEditLock(); err != nil {
+			return nil, err
+		}
 		owner := plots.Projects.Sqlite
 		var suName, suTable string
 		validateFiles := func() error {

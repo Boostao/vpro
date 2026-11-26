@@ -184,3 +184,40 @@ func TestExportVPro64DatabaseCleanDeleteJournalAndAccessBooleans(t *testing.T) {
 		t.Fatalf("expected 1 row in subset Sample_Env, got %d", envCount)
 	}
 }
+
+func TestRewriteCreateIndexSQLCaseInsensitiveON(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{
+			name: "lowercase on unquoted",
+			raw:  `CREATE INDEX idx_Sample_Env_Plot on Sample_Env (PlotNumber)`,
+			want: `CREATE INDEX "idx_Target_Env_Plot" ON "Target_Env" (PlotNumber)`,
+		},
+		{
+			name: "mixed-case On double-quoted no space before paren",
+			raw:  `CREATE UNIQUE INDEX "idx_Sample_Env_Plot" On "Sample_Env"(PlotNumber)`,
+			want: `CREATE UNIQUE INDEX "idx_Target_Env_Plot" ON "Target_Env"(PlotNumber)`,
+		},
+		{
+			name: "lowercase on bracketed",
+			raw:  `CREATE INDEX [idx_Sample_Env_Plot] on [Sample_Env] ("PlotNumber")`,
+			want: `CREATE INDEX "idx_Target_Env_Plot" ON "Target_Env" ("PlotNumber")`,
+		},
+		{
+			name: "mixed-case oN backticked",
+			raw:  "CREATE INDEX `idx_Sample_Env_Plot` oN `Sample_Env` (`PlotNumber`)",
+			want: "CREATE INDEX \"idx_Target_Env_Plot\" ON \"Target_Env\" (`PlotNumber`)",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := rewriteCreateIndexSQL(tc.raw, "idx_Sample_Env_Plot", "idx_Target_Env_Plot", "Sample_Env", "Target_Env")
+			if got != tc.want {
+				t.Fatalf("rewriteCreateIndexSQL:\n  got:  %s\n  want: %s", got, tc.want)
+			}
+		})
+	}
+}

@@ -181,6 +181,9 @@ func RestorePictureWithHooks(s *vprocore.ContextService, ctx context.Context, co
 	}
 	var receipt pictureRestorationResult
 	result, err := vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (pictureRestorationResult, error) {
+		if err := plots.CheckEditLock(); err != nil {
+			return pictureRestorationResult{}, err
+		}
 		return vprocore.WithOwnedSIVISnapshot(ctx, plots, func(owner *vprocore.SqliteContext, parent *sql.Tx) (pictureRestorationResult, error) {
 			if err := requirePictureParent(ctx, owner, parent, request.Deletion.PlotNumber); err != nil {
 				return pictureRestorationResult{}, err

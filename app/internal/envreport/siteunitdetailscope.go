@@ -364,7 +364,7 @@ func resolveSiteUnitSummaryScopeTables(ctx context.Context, owner *vprocore.Sqli
 			if readErr != nil {
 				return env, admin, su, master, "", readErr
 			}
-			hasBaseSU = true
+			hasBaseSU = len(baseSU.Rows) > 0
 		}
 		su, err = buildHierarchyBreakpointSUTable(ctx, hier, baseSU, hasBaseSU, env)
 		if err != nil {
@@ -380,7 +380,7 @@ func resolveSiteUnitSummaryScopeTables(ctx context.Context, owner *vprocore.Sqli
 			if readErr != nil {
 				return env, admin, su, master, "", readErr
 			}
-			hasBaseSU = true
+			hasBaseSU = len(baseSU.Rows) > 0
 		}
 		su, err = buildFieldDerivedSUTable(ctx, env, baseSU, hasBaseSU, groupFields)
 		if err != nil {

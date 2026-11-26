@@ -124,6 +124,9 @@ func (c *SqliteContext) WithSelectedFileWriter(ctx context.Context, role string,
 	if c.conn == nil {
 		return errors.New("metadata context is closed")
 	}
+	if err := c.checkEditLockLocked(); err != nil {
+		return err
+	}
 	if err := validate(); err != nil {
 		return err
 	}

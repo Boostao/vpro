@@ -316,8 +316,20 @@ func buildQuickLongEnvironmentReport(
 				if rErr != nil {
 					return struct{}{}, rErr
 				}
-				effectiveSU = owner.Selection.SU
-				scopeLabel = "Site Unit: " + owner.Selection.SU
+				if len(suTable.Rows) == 0 {
+					if mode == "su" {
+						return struct{}{}, fmt.Errorf("Site Unit table %q has no assigned plots. Assign plots to this Site Unit table or switch Scope to Auto, Zone/SubZone, or All Project Plots.", owner.Selection.SU)
+					}
+					var fErr error
+					suTable, effectiveSU, scopeLabel, fallbackNotice, fErr = buildQuickEnvFallbackSU(ctx, env, mode)
+					if fErr != nil {
+						return struct{}{}, fErr
+					}
+					fallbackNotice = formatEnvEmptySUFallbackNotice(owner.Selection.SU, fallbackNotice)
+				} else {
+					effectiveSU = owner.Selection.SU
+					scopeLabel = "Site Unit: " + owner.Selection.SU
+				}
 			} else {
 				var fErr error
 				suTable, effectiveSU, scopeLabel, fallbackNotice, fErr = buildQuickEnvFallbackSU(ctx, env, mode)
@@ -459,6 +471,29 @@ func RenderLongEnvironmentHTMLReport(
 	return &rendered, nil
 }
 
+func activeEnvSUTableRowCount(ctx context.Context, tx *sql.Tx, suName string) (int, error) {
+	if suName == "" || suName == "None" || suName == "USysSuTableDynamic" {
+		return 0, nil
+	}
+	var count int
+	err := tx.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*) FROM su.`+vprocore.QuoteHeaderIdentifier(suName+"_SU"),
+	).Scan(&count)
+	return count, err
+}
+
+func formatEnvEmptySUFallbackNotice(suName, baseNotice string) string {
+	prefix := fmt.Sprintf("Site Unit table %q has no assigned plots;", suName)
+	if strings.HasPrefix(baseNotice, "No Site Unit table is selected;") {
+		return prefix + strings.TrimPrefix(baseNotice, "No Site Unit table is selected;")
+	}
+	if strings.TrimSpace(baseNotice) != "" {
+		return prefix + " " + baseNotice
+	}
+	return prefix + " automatically included all project plots."
+}
+
 func resolveQuickSummaryEnvPrefs(
 	ctx context.Context,
 	prefs *vprocore.DesktopConfig,
@@ -565,6 +600,17 @@ func QuickExportSummaryEnvironmentWorkbook(
 			preview SiteUnitSummaryPreview
 		)
 		_, err := vprocore.WithOwnedPreferenceSnapshot(ctx, plots, vprocore.PublicationReadSnapshotHooks{}, func(owner *vprocore.SqliteContext, tx *sql.Tx) (struct{}, error) {
+			if effectiveUnitType == 1 && owner.Selection.SU != "" && owner.Selection.SU != "None" && owner.Selection.SU != "USysSuTableDynamic" {
+				suRows, countErr := activeEnvSUTableRowCount(ctx, tx, owner.Selection.SU)
+				if countErr == nil && suRows == 0 {
+					if req.SiteUnitType != nil && *req.SiteUnitType == 1 {
+						return struct{}{}, fmt.Errorf("Site Unit table %q has no assigned plots. Assign plots to this Site Unit table or switch Site Unit Type to Field-Derived (Zone / SubZone / SiteSeries).", owner.Selection.SU)
+					}
+					effectiveUnitType = 3
+					scopeLabel = "Field-Derived (Zone / SubZone / SiteSeries)"
+					fallbackNotice = fmt.Sprintf("Site Unit table %q has no assigned plots; automatically grouped project plots by Zone, SubZone, and SiteSeries.", owner.Selection.SU)
+				}
+			}
 			extended := vals.OrderBy == 2 || vals.IncludeSpecies == 1
 			if extended {
 				input, rErr := readSiteUnitQuickVegetationSourceWithScope(ctx, owner, tx, contextID, vals.Method, effectiveUnitType)
@@ -666,7 +712,38 @@ func RenderSummaryEnvironmentHTMLReport(
 			_ = plots.Projects.Preferences.Update("ReportOptions", changes)
 		}
 
+		var speciesPreview *SiteUnitSpeciesListPreview
 		preview, err := vprocore.WithOwnedPreferenceSnapshot(ctx, plots, vprocore.PublicationReadSnapshotHooks{}, func(owner *vprocore.SqliteContext, tx *sql.Tx) (SiteUnitSummaryPreview, error) {
+			if effectiveUnitType == 1 && owner.Selection.SU != "" && owner.Selection.SU != "None" && owner.Selection.SU != "USysSuTableDynamic" {
+				suRows, countErr := activeEnvSUTableRowCount(ctx, tx, owner.Selection.SU)
+				if countErr == nil && suRows == 0 {
+					if req.SiteUnitType != nil && *req.SiteUnitType == 1 {
+						return SiteUnitSummaryPreview{}, fmt.Errorf("Site Unit table %q has no assigned plots. Assign plots to this Site Unit table or switch Site Unit Type to Field-Derived (Zone / SubZone / SiteSeries).", owner.Selection.SU)
+					}
+					effectiveUnitType = 3
+					scopeLabel = "Field-Derived (Zone / SubZone / SiteSeries)"
+					fallbackNotice = fmt.Sprintf("Site Unit table %q has no assigned plots; automatically grouped project plots by Zone, SubZone, and SiteSeries.", owner.Selection.SU)
+				}
+			}
+			if vals.IncludeSpecies == 1 {
+				input, rErr := readSiteUnitQuickVegetationSourceWithScope(ctx, owner, tx, contextID, vals.Method, effectiveUnitType)
+				if rErr != nil {
+					return SiteUnitSummaryPreview{}, rErr
+				}
+				spPrev, sErr := siteUnitSummarySpeciesPreview(ctx, input, SiteUnitSpeciesListRequest{
+					Method:              vals.Method,
+					OrderBy:             vals.OrderBy,
+					CoverCalculation:    vals.CoverCalculation,
+					AndOr:               vals.AndOr,
+					PresenceGreaterThan: vals.PresenceGreaterThan,
+					CoverGreaterThan:    vals.CoverGreaterThan,
+				})
+				if sErr != nil {
+					return SiteUnitSummaryPreview{}, sErr
+				}
+				speciesPreview = &spPrev
+				return spPrev.Environment, nil
+			}
 			input, rErr := readSiteUnitSummaryWorkbookSourceWithScope(ctx, owner, tx, contextID, vals.Method, effectiveUnitType)
 			if rErr != nil {
 				return SiteUnitSummaryPreview{}, rErr
@@ -711,6 +788,56 @@ func RenderSummaryEnvironmentHTMLReport(
 			rows = append(rows, reportcore.HTMLReportRow{Cells: cells})
 		}
 
+		tables := []reportcore.HTMLReportTable{
+			{
+				Title:       "Site Unit Environmental Summary",
+				PlotCount:   totalPlots,
+				Headers:     headers,
+				NumericCols: numCols,
+				Rows:        rows,
+			},
+		}
+		if speciesPreview != nil {
+			for _, spUnit := range speciesPreview.Units {
+				spRows := make([]reportcore.HTMLReportRow, 0)
+				for _, grp := range spUnit.Groups {
+					includedRows := make([]SiteUnitSpeciesListRow, 0, len(grp.Rows))
+					for _, r := range grp.Rows {
+						if r.Included {
+							includedRows = append(includedRows, r)
+						}
+					}
+					if len(includedRows) == 0 {
+						continue
+					}
+					if strings.TrimSpace(grp.Caption) != "" {
+						spRows = append(spRows, reportcore.HTMLReportRow{
+							Cells:     []string{grp.Caption},
+							IsHeading: true,
+						})
+					}
+					for _, r := range includedRows {
+						spRows = append(spRows, reportcore.HTMLReportRow{
+							Cells: []string{
+								r.Species,
+								reportcore.FormatMetadataCellText(r.ScientificName),
+								reportcore.FormatMetadataCellText(r.EnglishName),
+								r.Presence,
+								r.Cover,
+							},
+						})
+					}
+				}
+				tables = append(tables, reportcore.HTMLReportTable{
+					Title:       "Species Summary — " + spUnit.Code,
+					PlotCount:   spUnit.NPlots,
+					Headers:     []string{"Species", "Scientific Name", "English Name", "Presence (%)", "Cover (%)"},
+					NumericCols: []bool{false, false, false, true, true},
+					Rows:        spRows,
+				})
+			}
+		}
+
 		methodLabel := "Mean"
 		if vals.Method == 2 {
 			methodLabel = "Interquartile"
@@ -725,15 +852,7 @@ func RenderSummaryEnvironmentHTMLReport(
 			UnitCount:  len(rep.Units),
 			PlotCount:  totalPlots,
 			Notice:     fallbackNotice,
-			Tables: []reportcore.HTMLReportTable{
-				{
-					Title:       "Site Unit Environmental Summary",
-					PlotCount:   totalPlots,
-					Headers:     headers,
-					NumericCols: numCols,
-					Rows:        rows,
-				},
-			},
+			Tables:     tables,
 		})
 		if err != nil {
 			return nil, err

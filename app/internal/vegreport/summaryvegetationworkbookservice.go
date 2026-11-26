@@ -96,7 +96,7 @@ func (s *SummaryVegetationWorkbookService) authorize(ctx context.Context) error 
 }
 
 func readSummaryWorkbookQualityPolicy(ctx context.Context, config *vprocore.DesktopConfig) (summaryVegetationQualityPreferenceValues, error) {
-	return ReadSummaryVegetationQualityPreferences(config, ctx)
+	return readSummaryVegetationQualityPreferencesOrDefault(config, ctx)
 }
 
 func (s *SummaryVegetationWorkbookService) readSourceAt(ctx context.Context, plots *vprocore.PlotService, owner *vprocore.SqliteContext,

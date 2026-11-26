@@ -251,6 +251,9 @@ func (c *SqliteContext) WithImmediateWriteTx(ctx context.Context, fn func(wtx *W
 	if c.conn == nil {
 		return errors.New("project context is closed")
 	}
+	if err := c.checkEditLockLocked(); err != nil {
+		return err
+	}
 	db, err := c.projectDatabaseLocked(ctx)
 	if err != nil {
 		return err

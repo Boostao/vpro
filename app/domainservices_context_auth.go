@@ -181,11 +181,20 @@ func (s *ContextService) SignOut(ctx context.Context) (authpkg.SessionSummary, e
 	}
 	s, release := s.acquire()
 	defer release()
-	mgr, _, err := s.authManager()
+	mgr, core, err := s.authManager()
 	if err != nil {
 		return authpkg.SessionSummary{}, err
 	}
-	return mgr.SignOut(ctx)
+	summary, err := mgr.SignOut(ctx)
+	if err != nil {
+		return authpkg.SessionSummary{}, err
+	}
+	if core != nil && core.Plots != nil {
+		core.Plots.Mu.Lock()
+		core.Plots.CurrentUser = ""
+		core.Plots.Mu.Unlock()
+	}
+	return summary, nil
 }
 
 // RecordAppActivity records a non-blocking, offline-tolerant app download/enrollment or dataset upload event.

@@ -87,6 +87,9 @@ func ValidatePersonalSpeciesFiles(c *vprocore.SqliteContext) error {
 }
 
 func WithPersonalSpeciesWriter(c *vprocore.SqliteContext, ctx context.Context, operation func(*sql.Conn) error) (resultErr error) {
+	if err := c.CheckEditLock(); err != nil {
+		return err
+	}
 	unlock, err := c.AcquireMutex(ctx)
 	if err != nil {
 		return err

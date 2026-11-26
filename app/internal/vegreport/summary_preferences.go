@@ -271,6 +271,88 @@ func ReadSummaryVegetationQualityPreferences(s *vprocore.DesktopConfig, ctx cont
 	return result, nil
 }
 
+// readSummaryVegetationQualityPreferencesOrDefault reads saved Summary Vegetation quality filter
+// settings, falling back to default disabled thresholds when the ReportOptions section or
+// individual DataQualityFilter* keys are absent in minimal/upgraded config.yml files. Malformed
+// stored values and context cancellation still return errors.
+func readSummaryVegetationQualityPreferencesOrDefault(s *vprocore.DesktopConfig, ctx context.Context) (summaryVegetationQualityPreferenceValues, error) {
+	if ctx == nil {
+		return summaryVegetationQualityPreferenceValues{}, errors.New("Summary Vegetation quality preferences require a context")
+	}
+	if err := ctx.Err(); err != nil {
+		return summaryVegetationQualityPreferenceValues{}, err
+	}
+	if s == nil {
+		return summaryVegetationQualityPreferenceValues{}, nil
+	}
+	if err := sqlutil.AcquireMutexLease(ctx, &s.Mu); err != nil {
+		return summaryVegetationQualityPreferenceValues{}, err
+	}
+	defer s.Mu.Unlock()
+	values, err := s.ReadLocked()
+	if err != nil {
+		return summaryVegetationQualityPreferenceValues{}, err
+	}
+	rawSec, hasSec := values["ReportOptions"]
+	if !hasSec || rawSec == nil {
+		return summaryVegetationQualityPreferenceValues{}, nil
+	}
+	fields, ok := rawSec.(map[string]any)
+	if !ok {
+		return summaryVegetationQualityPreferenceValues{}, errors.New("configuration section ReportOptions must be a mapping")
+	}
+	var result summaryVegetationQualityPreferenceValues
+	for _, field := range []struct {
+		key    string
+		target *string
+	}{
+		{"DataQualityFilterSite", &result.SiteMinimum},
+		{"DataQualityFilterVeg", &result.VegMinimum},
+		{"DataQualityFilterSoil", &result.SoilMinimum},
+		{"DataQualityFilterBECUseLV", &result.BECMinimum},
+	} {
+		if _, present := fields[field.key]; !present {
+			continue
+		}
+		value, err := summaryVegetationQualityPreferenceOption(values, field.key)
+		if err != nil {
+			return summaryVegetationQualityPreferenceValues{}, err
+		}
+		text, ok := value.(string)
+		if !ok {
+			return summaryVegetationQualityPreferenceValues{}, fmt.Errorf("Summary Vegetation %s lost text storage", field.key)
+		}
+		*field.target = text
+	}
+	for _, field := range []struct {
+		key    string
+		target *bool
+	}{
+		{"DataQualityFilterEnforce", &result.Enforce},
+		{"DataQualityFilterSiteNull", &result.SiteIncludeNulls},
+		{"DataQualityFilterVegNull", &result.VegIncludeNulls},
+		{"DataQualityFilterSoilNull", &result.SoilIncludeNulls},
+		{"DataQualityFilterBECUse", &result.BECIncludeNulls},
+	} {
+		if _, present := fields[field.key]; !present {
+			continue
+		}
+		value, err := summaryVegetationQualityPreferenceOption(values, field.key)
+		if err != nil {
+			return summaryVegetationQualityPreferenceValues{}, err
+		}
+		flag, ok := value.(bool)
+		if !ok {
+			return summaryVegetationQualityPreferenceValues{}, fmt.Errorf("Summary Vegetation %s lost boolean storage", field.key)
+		}
+		*field.target = flag
+	}
+	if err := ctx.Err(); err != nil {
+		return summaryVegetationQualityPreferenceValues{}, err
+	}
+	return result, nil
+}
+
 func CompareAndSetSummaryVegetationQualityPreferences(s *vprocore.DesktopConfig, ctx context.Context,
 	expected, proposed summaryVegetationQualityPreferenceValues) (vprocore.ReportPreferenceUpdate, error) {
 	if expected.BECMinimum != proposed.BECMinimum && isLegacyBECUseBooleanPlaceholder(proposed.BECMinimum) {

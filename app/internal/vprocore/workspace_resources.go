@@ -934,6 +934,14 @@ func (s *ContextService) CreateWorkspaceResource(ctx context.Context, contextID 
 		if plots.Projects.Sqlite.ReadOnly {
 			return struct{}{}, ErrReadOnlyContext
 		}
+		if err := plots.CheckEditLock(); err != nil {
+			return struct{}{}, err
+		}
+		if kind == WorkspaceResourceProject {
+			if err := plots.CheckEditLockForProject(name); err != nil {
+				return struct{}{}, err
+			}
+		}
 		root = plots.Projects.Root
 		prefs = plots.Projects.Preferences
 		curSel = plots.Projects.Sqlite.Selection

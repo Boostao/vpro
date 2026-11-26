@@ -46,7 +46,7 @@ func buildSpreadsheetLaunchCommand(goos, absFilePath, configuredApp string) (str
 
 	switch goos {
 	case "windows":
-		return "rundll32.exe", []string{"url.dll,FileProtocolHandler", cleanPath}, nil
+		return "cmd", []string{"/c", "start", "", cleanPath}, nil
 	case "darwin":
 		return "open", []string{cleanPath}, nil
 	default:

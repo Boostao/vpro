@@ -427,6 +427,10 @@ func (s *PlotService) openActiveDB(readOnly bool) (*sql.DB, string, func(), erro
 	if readOnly {
 		db, err = sqlutil.OpenReadOnlyBusySQLite(dbPath)
 	} else {
+		if lockErr := s.CheckEditLock(); lockErr != nil {
+			release()
+			return nil, "", nil, lockErr
+		}
 		db, err = sqlutil.OpenImmediateWriteSQLite(dbPath)
 	}
 	if err != nil {

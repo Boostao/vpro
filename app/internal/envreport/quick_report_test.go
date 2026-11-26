@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/xuri/excelize/v2"
 )
@@ -82,12 +83,29 @@ func TestQuickEnvironmentReportsWorkWhenActiveSUIsNone(t *testing.T) {
 		t.Fatalf("expected non-empty extended workbook bytes, got %+v", seExtRes)
 	}
 
-	seHTML, err := RenderSummaryEnvironmentHTMLReport(service, ctx, state.ContextID, QuickSummaryEnvironmentRequest{})
+	// Verify Summary Environment HTML without species renders strictly the 1 environmental table.
+	noSpp := 0
+	saveFalse := false
+	seHTMLNoSpp, err := RenderSummaryEnvironmentHTMLReport(service, ctx, state.ContextID, QuickSummaryEnvironmentRequest{
+		IncludeSpecies:  &noSpp,
+		SavePreferences: &saveFalse,
+	})
 	if err != nil {
-		t.Fatalf("RenderSummaryEnvironmentHTMLReport: %v", err)
+		t.Fatalf("RenderSummaryEnvironmentHTMLReport(IncludeSpecies=0): %v", err)
 	}
-	if seHTML.TableCount != 1 || !strings.Contains(seHTML.HTML, "Site Unit Environmental Summary") {
-		t.Fatalf("unexpected Summary Environment HTML: tables=%d", seHTML.TableCount)
+	if seHTMLNoSpp.TableCount != 1 || !strings.Contains(seHTMLNoSpp.HTML, "Site Unit Environmental Summary") {
+		t.Fatalf("unexpected Summary Environment HTML without species: tables=%d", seHTMLNoSpp.TableCount)
+	}
+
+	// P2 #6: Verify Summary Environment HTML with saved/requested IncludeSpecies=1 appends species summary tables!
+	seHTMLWithSpp, err := RenderSummaryEnvironmentHTMLReport(service, ctx, state.ContextID, QuickSummaryEnvironmentRequest{
+		SavePreferences: &saveFalse,
+	})
+	if err != nil {
+		t.Fatalf("RenderSummaryEnvironmentHTMLReport(IncludeSpecies=1): %v", err)
+	}
+	if seHTMLWithSpp.TableCount <= 1 || !strings.Contains(seHTMLWithSpp.HTML, "Species Summary") {
+		t.Fatalf("expected species summary tables in HTML when IncludeSpecies=1, got tables=%d", seHTMLWithSpp.TableCount)
 	}
 
 	// 3. Subzone Matrix Quick Export & HTML Render (uses Sample default ActiveHierarchy="Sample").
@@ -109,5 +127,65 @@ func TestQuickEnvironmentReportsWorkWhenActiveSUIsNone(t *testing.T) {
 		if smHTML.TableCount != 1 || !strings.Contains(smHTML.HTML, "Biogeoclimatic Subzone Matrix") {
 			t.Fatalf("unexpected Subzone Matrix HTML: tables=%d", smHTML.TableCount)
 		}
+	}
+}
+
+func TestQuickEnvironmentReportsHandleEmptyActiveSUTable(t *testing.T) {
+	ctx := context.Background()
+	service, state := vprotest.ContextServiceFixture(t)
+
+	created, err := service.CreateWorkspaceResource(ctx, state.ContextID, vprocore.CreateWorkspaceResourceRequest{
+		Kind:            vprocore.WorkspaceResourceSU,
+		Name:            "EmptyEnvSU",
+		DestinationMode: "active_project",
+		PopulatePlots:   false,
+		Activate:        true,
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkspaceResource(EmptyEnvSU): %v", err)
+	}
+	state = created.State
+	if state.ActiveSU != "EmptyEnvSU" {
+		t.Fatalf("expected ActiveSU=EmptyEnvSU, got %q", state.ActiveSU)
+	}
+
+	saveFalse := false
+	// Auto mode falls back cleanly with FallbackNotice naming EmptyEnvSU.
+	leRes, err := QuickExportLongEnvironmentWorkbook(service, ctx, state.ContextID, QuickLongEnvironmentRequest{
+		SavePreferences: &saveFalse,
+		DestinationPath: filepath.Join(t.TempDir(), "empty_su_long_env.xlsx"),
+	})
+	if err != nil {
+		t.Fatalf("LongEnv QuickExport on EmptyEnvSU (auto): %v", err)
+	}
+	if !strings.Contains(leRes.FallbackNotice, "EmptyEnvSU") || leRes.PlotCount == 0 {
+		t.Fatalf("expected EmptyEnvSU fallback notice and plots for LongEnv, got %+v", leRes)
+	}
+	seRes, err := QuickExportSummaryEnvironmentWorkbook(service, ctx, state.ContextID, QuickSummaryEnvironmentRequest{
+		SavePreferences: &saveFalse,
+		DestinationPath: filepath.Join(t.TempDir(), "empty_su_sum_env.xlsx"),
+	})
+	if err != nil {
+		t.Fatalf("SummaryEnv QuickExport on EmptyEnvSU (auto): %v", err)
+	}
+	if !strings.Contains(seRes.FallbackNotice, "EmptyEnvSU") || seRes.PlotCount == 0 {
+		t.Fatalf("expected EmptyEnvSU fallback notice and plots for SummaryEnv, got %+v", seRes)
+	}
+
+	// Explicitly pinned SU mode returns a clear plain-language error naming EmptyEnvSU.
+	if _, err := QuickExportLongEnvironmentWorkbook(service, ctx, state.ContextID, QuickLongEnvironmentRequest{
+		ScopeMode:       "su",
+		SavePreferences: &saveFalse,
+		DestinationPath: filepath.Join(t.TempDir(), "pinned_long_env.xlsx"),
+	}); err == nil || !strings.Contains(err.Error(), "EmptyEnvSU") || !strings.Contains(err.Error(), "no assigned plots") {
+		t.Fatalf("expected plain-language empty SU error for pinned LongEnv, got: %v", err)
+	}
+	normalSU := 1
+	if _, err := QuickExportSummaryEnvironmentWorkbook(service, ctx, state.ContextID, QuickSummaryEnvironmentRequest{
+		SiteUnitType:    &normalSU,
+		SavePreferences: &saveFalse,
+		DestinationPath: filepath.Join(t.TempDir(), "pinned_sum_env.xlsx"),
+	}); err == nil || !strings.Contains(err.Error(), "EmptyEnvSU") || !strings.Contains(err.Error(), "no assigned plots") {
+		t.Fatalf("expected plain-language empty SU error for pinned SummaryEnv, got: %v", err)
 	}
 }

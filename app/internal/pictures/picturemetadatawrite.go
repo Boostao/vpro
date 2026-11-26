@@ -423,6 +423,9 @@ func EditPictureMetadata(s *vprocore.ContextService, ctx context.Context, contex
 	}
 	var receipt pictureMetadataWriteResult
 	result, err := vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (pictureMetadataWriteResult, error) {
+		if err := plots.CheckEditLock(); err != nil {
+			return pictureMetadataWriteResult{}, err
+		}
 		return vprocore.WithOwnedSIVISnapshot(ctx, plots, func(owner *vprocore.SqliteContext, parent *sql.Tx) (pictureMetadataWriteResult, error) {
 			if err := requirePictureParent(ctx, owner, parent, plot); err != nil {
 				return pictureMetadataWriteResult{}, err

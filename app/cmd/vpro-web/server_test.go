@@ -199,13 +199,13 @@ func TestAllowlist100PercentCoverageAnd403Rejection(t *testing.T) {
 			}
 		}
 	}
-	if total != 300 {
-		t.Fatalf("expected 300 allowlisted methods, got %d", total)
+	if total != 306 {
+		t.Fatalf("expected 306 allowlisted methods, got %d", total)
 	}
 	if srv.router.RegisteredCount() != total {
 		t.Fatalf("registered count %d != allowlist total %d", srv.router.RegisteredCount(), total)
 	}
-	if counts["rpc"] != 229 || counts["prefs"] != 50 || counts["download"] != 21 {
+	if counts["rpc"] != 229 || counts["prefs"] != 50 || counts["download"] != 27 {
 		t.Fatalf("unexpected kind breakdown: %+v", counts)
 	}
 
@@ -273,14 +273,8 @@ func TestAllowlist100PercentCoverageAnd403Rejection(t *testing.T) {
 		{"SpatialService", "SyncLatestBGCMap"},
 		{"VegetationReportService", "SetSpreadsheetAppPreference"},
 		{"VegetationReportService", "OpenReportInSpreadsheet"},
-		{"VegetationReportService", "QuickRunSummaryVegetationWorkbook"},
-		{"VegetationReportService", "QuickRunLongVegetationWorkbook"},
-		{"VegetationReportService", "QuickRunLifeformWorkbook"},
 		{"EnvironmentReportService", "SetSpreadsheetAppPreference"},
 		{"EnvironmentReportService", "OpenReportInSpreadsheet"},
-		{"EnvironmentReportService", "QuickRunLongEnvironmentWorkbook"},
-		{"EnvironmentReportService", "QuickRunSummaryEnvironmentWorkbook"},
-		{"EnvironmentReportService", "QuickRunSubzoneMatrixWorkbook"},
 	}
 
 	for _, pair := range forbiddenRPCs {
@@ -648,6 +642,164 @@ func TestSemaphoreBackpressureReturns503WithRetryAfter(t *testing.T) {
 	}
 	if ra := rRec.Header().Get("Retry-After"); ra != "5" {
 		t.Fatalf("expected Retry-After: 5 on R backpressure, got %q", ra)
+	}
+}
+
+func TestQuickRunWorkbookDownloadEndpointsUnderActiveSUNone(t *testing.T) {
+	srv := newTestDevSampleServer(t, nil)
+	pub := srv.PublicHandler()
+
+	stateRec := doRPC(t, pub, "quickrun-sess", "ContextService", "GetState")
+	state := decodeRPCResult[struct {
+		ContextID       string `json:"contextId"`
+		ActiveProject   string `json:"activeProject"`
+		ActiveSU        string `json:"activeSU"`
+		ActiveHierarchy string `json:"activeHierarchy"`
+		ProjectPath     string `json:"projectPath"`
+		Hierarchies     []struct {
+			Name string `json:"name"`
+			Path string `json:"path"`
+		} `json:"hierarchies"`
+	}](t, stateRec)
+	if state.ContextID == "" {
+		t.Fatal("expected non-empty contextId")
+	}
+	if state.ActiveSU != "None" {
+		t.Fatalf("expected default ActiveSU=None, got %q", state.ActiveSU)
+	}
+
+	// Ensure a physical hierarchy is selected while ActiveSU remains "None" so all 6 QuickRun*Workbook RPCs execute.
+	activeContextID := state.ContextID
+	if state.ActiveHierarchy == "None" && len(state.Hierarchies) > 0 {
+		switchRec := doRPC(t, pub, "quickrun-sess", "ContextService", "SwitchContext", state.ContextID, map[string]any{
+			"project":       state.ActiveProject,
+			"projectPath":   state.ProjectPath,
+			"su":            "None",
+			"suPath":        "",
+			"hierarchy":     state.Hierarchies[0].Name,
+			"hierarchyPath": state.Hierarchies[0].Path,
+		})
+		if switchRec.Code != http.StatusOK {
+			t.Fatalf("SwitchContext to attach hierarchy failed: %d %s", switchRec.Code, switchRec.Body.String())
+		}
+		switched := decodeRPCResult[struct {
+			ContextID string `json:"contextId"`
+		}](t, switchRec)
+		activeContextID = switched.ContextID
+	}
+
+	escapeDir := t.TempDir()
+	cases := []struct {
+		service string
+		method  string
+		req     map[string]any
+	}{
+		{
+			service: "VegetationReportService",
+			method:  "QuickRunSummaryVegetationWorkbook",
+			req: map[string]any{
+				"destinationPath":   filepath.Join(escapeDir, "escape_sum_veg.xlsx"),
+				"savePreferences":   true,
+				"openInSpreadsheet": true,
+			},
+		},
+		{
+			service: "VegetationReportService",
+			method:  "QuickRunLongVegetationWorkbook",
+			req: map[string]any{
+				"destinationPath":   filepath.Join(escapeDir, "escape_long_veg.xlsx"),
+				"savePreferences":   true,
+				"openInSpreadsheet": true,
+			},
+		},
+		{
+			service: "VegetationReportService",
+			method:  "QuickRunLifeformWorkbook",
+			req: map[string]any{
+				"destinationPath":   filepath.Join(escapeDir, "escape_lifeform.xlsx"),
+				"openInSpreadsheet": true,
+			},
+		},
+		{
+			service: "EnvironmentReportService",
+			method:  "QuickRunLongEnvironmentWorkbook",
+			req: map[string]any{
+				"destinationPath":   filepath.Join(escapeDir, "escape_long_env.xlsx"),
+				"savePreferences":   true,
+				"openInSpreadsheet": true,
+			},
+		},
+		{
+			service: "EnvironmentReportService",
+			method:  "QuickRunSummaryEnvironmentWorkbook",
+			req: map[string]any{
+				"destinationPath":   filepath.Join(escapeDir, "escape_sum_env.xlsx"),
+				"savePreferences":   true,
+				"openInSpreadsheet": true,
+			},
+		},
+		{
+			service: "EnvironmentReportService",
+			method:  "QuickRunSubzoneMatrixWorkbook",
+			req: map[string]any{
+				"destinationPath":   filepath.Join(escapeDir, "escape_subzone.xlsx"),
+				"openInSpreadsheet": true,
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.service+"."+tc.method, func(t *testing.T) {
+			rec := doRPC(t, pub, "quickrun-sess", tc.service, tc.method, activeContextID, tc.req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("%s.%s expected 200, got %d: %s", tc.service, tc.method, rec.Code, rec.Body.String())
+			}
+			rawOutcome, dlURL, filename := decodeDownloadResponse(t, rec)
+			var outcome struct {
+				Path                string `json:"path"`
+				PreferencesSaved    bool   `json:"preferencesSaved"`
+				OpenedInSpreadsheet bool   `json:"openedInSpreadsheet"`
+				SpreadsheetNotice   string `json:"spreadsheetNotice"`
+				Bytes               int    `json:"bytes"`
+			}
+			if err := json.Unmarshal(rawOutcome, &outcome); err != nil {
+				t.Fatalf("decode outcome: %v (%s)", err, string(rawOutcome))
+			}
+			if dlURL == "" || !strings.HasSuffix(filename, ".xlsx") {
+				t.Fatalf("expected .xlsx downloadUrl/filename, got url=%q filename=%q", dlURL, filename)
+			}
+			if outcome.PreferencesSaved {
+				t.Fatalf("expected SavePreferences forced false, got PreferencesSaved=true")
+			}
+			if outcome.OpenedInSpreadsheet || outcome.SpreadsheetNotice != "" {
+				t.Fatalf("expected OpenInSpreadsheet forced false, got opened=%v notice=%q",
+					outcome.OpenedInSpreadsheet, outcome.SpreadsheetNotice)
+			}
+			if strings.Contains(outcome.Path, string(filepath.Separator)) || strings.Contains(outcome.Path, escapeDir) {
+				t.Fatalf("expected scrubbed basename outcome.Path, got %q", outcome.Path)
+			}
+			if outcome.Bytes == 0 {
+				t.Fatalf("expected non-zero workbook bytes")
+			}
+
+			// Verify client-supplied escape destination was strictly ignored.
+			if dest, ok := tc.req["destinationPath"].(string); ok {
+				if _, err := os.Stat(dest); !os.IsNotExist(err) {
+					t.Fatalf("server wrote to client-supplied path %q!", dest)
+				}
+			}
+
+			// Download the artifact and verify ZIP/XLSX magic header (PK\x03\x04).
+			dlRec := httptest.NewRecorder()
+			pub.ServeHTTP(dlRec, httptest.NewRequest(http.MethodGet, dlURL, nil))
+			if dlRec.Code != http.StatusOK {
+				t.Fatalf("GET %s expected 200, got %d", dlURL, dlRec.Code)
+			}
+			body := dlRec.Body.Bytes()
+			if len(body) < 4 || body[0] != 'P' || body[1] != 'K' || body[2] != 0x03 || body[3] != 0x04 {
+				t.Fatalf("downloaded %s is not a valid XLSX/ZIP archive (len=%d)", filename, len(body))
+			}
+		})
 	}
 }
 

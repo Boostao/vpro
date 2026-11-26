@@ -20,6 +20,9 @@ func RestoreSIVIHeights(s *vprocore.ContextService, ctx context.Context, context
 
 func RestoreSIVIVegetationCells(s *vprocore.ContextService, ctx context.Context, contextID, plot, historyID string, action vprocore.AuditRestoreAction, policy SiviVegetationWritePolicy) (*vprocore.AuditRestoreResult, error) {
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (*vprocore.AuditRestoreResult, error) {
+		if err := plots.CheckEditLock(); err != nil {
+			return nil, err
+		}
 		if action != vprocore.AuditRestoreCancel && action != vprocore.AuditRestoreRetain && action != vprocore.AuditRestorePrune {
 			return nil, errors.New("SIVI restoration requires cancel, retain or prune")
 		}

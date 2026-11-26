@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -145,6 +146,7 @@ func rewriteCreateTableSQL(rawSQL, sourceTable, targetTable string) string {
 	}
 	quotedSrc := vprocore.QuoteHeaderIdentifier(sourceTable)
 	quotedDst := vprocore.QuoteHeaderIdentifier(targetTable)
+	out := ""
 	for _, prefix := range []string{
 		"CREATE TABLE " + quotedSrc,
 		"CREATE TABLE [" + sourceTable + "]",
@@ -152,10 +154,29 @@ func rewriteCreateTableSQL(rawSQL, sourceTable, targetTable string) string {
 		"CREATE TABLE " + sourceTable,
 	} {
 		if strings.HasPrefix(rawSQL, prefix) {
-			return "CREATE TABLE " + quotedDst + rawSQL[len(prefix):]
+			out = "CREATE TABLE " + quotedDst + rawSQL[len(prefix):]
+			break
 		}
 	}
-	return strings.Replace(rawSQL, sourceTable, targetTable, 1)
+	if out == "" {
+		out = strings.Replace(rawSQL, sourceTable, targetTable, 1)
+	}
+	// Also rewrite foreign-key REFERENCES "<SourceProject>_Env" -> "<TargetProject>_Env" when renamed.
+	if srcIdx, dstIdx := strings.LastIndex(sourceTable, "_"), strings.LastIndex(targetTable, "_"); srcIdx > 0 && dstIdx > 0 {
+		srcPrefix, srcSuffix := sourceTable[:srcIdx], sourceTable[srcIdx+1:]
+		dstPrefix, dstSuffix := targetTable[:dstIdx], targetTable[dstIdx+1:]
+		if srcSuffix == dstSuffix && srcPrefix != dstPrefix {
+			srcEnv := srcPrefix + "_Env"
+			dstEnv := dstPrefix + "_Env"
+			escapedEnv := regexp.QuoteMeta(srcEnv)
+			quotedEnv := regexp.QuoteMeta(vprocore.QuoteHeaderIdentifier(srcEnv))
+			refPattern := regexp.MustCompile(
+				`(?i)\bREFERENCES\s+(?:` + quotedEnv + `|\[` + escapedEnv + `\]|` + "`" + escapedEnv + "`" + `|` + escapedEnv + `)(\s*\()`,
+			)
+			out = refPattern.ReplaceAllString(out, "REFERENCES "+vprocore.QuoteHeaderIdentifier(dstEnv)+"$1")
+		}
+	}
+	return out
 }
 
 func rewriteCreateIndexSQL(rawSQL, sourceIdx, targetIdx, sourceTable, targetTable string) string {
@@ -175,16 +196,13 @@ func rewriteCreateIndexSQL(rawSQL, sourceIdx, targetIdx, sourceTable, targetTabl
 			break
 		}
 	}
-	for _, oldTbl := range []string{
-		" ON " + vprocore.QuoteHeaderIdentifier(sourceTable),
-		" ON [" + sourceTable + "]",
-		" ON `" + sourceTable + "`",
-		" ON " + sourceTable,
-	} {
-		if idx := strings.Index(out, oldTbl); idx >= 0 {
-			out = out[:idx] + " ON " + vprocore.QuoteHeaderIdentifier(targetTable) + out[idx+len(oldTbl):]
-			break
-		}
+	escapedTable := regexp.QuoteMeta(sourceTable)
+	quotedTable := regexp.QuoteMeta(vprocore.QuoteHeaderIdentifier(sourceTable))
+	onPattern := regexp.MustCompile(
+		`(?i)\s+ON\s+(?:` + quotedTable + `|\[` + escapedTable + `\]|` + "`" + escapedTable + "`" + `|` + escapedTable + `)(\s*\()`,
+	)
+	if loc := onPattern.FindStringSubmatchIndex(out); loc != nil {
+		out = out[:loc[0]] + " ON " + vprocore.QuoteHeaderIdentifier(targetTable) + out[loc[2]:loc[3]] + out[loc[1]:]
 	}
 	return out
 }

@@ -180,6 +180,22 @@ func readSummarySavedPresentationState(
 		if v, err := readSummaryConfigBoolOptional(section, "SVConstancyFormat", false); err == nil {
 			out.Constancy = v
 		}
+		if rawLimit, ok := section["SVShowValOpt"]; ok && rawLimit != nil {
+			switch v := rawLimit.(type) {
+			case int:
+				if v >= 0 {
+					out.ValueLimit = float64(v)
+				}
+			case int64:
+				if v >= 0 {
+					out.ValueLimit = float64(v)
+				}
+			case float64:
+				if v >= 0 {
+					out.ValueLimit = v
+				}
+			}
+		}
 	}
 
 	if section, err := vprocore.ConfigSection(values, "ReportOptions"); err == nil {

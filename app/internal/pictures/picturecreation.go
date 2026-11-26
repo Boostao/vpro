@@ -301,6 +301,9 @@ func CreatePictureWithHooks(s *vprocore.ContextService, ctx context.Context, con
 	}
 	var receipt pictureCreationResult
 	result, err := vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (pictureCreationResult, error) {
+		if err := plots.CheckEditLock(); err != nil {
+			return pictureCreationResult{}, err
+		}
 		return vprocore.WithOwnedSIVISnapshot(ctx, plots, func(owner *vprocore.SqliteContext, parent *sql.Tx) (pictureCreationResult, error) {
 			if err := requirePictureParent(ctx, owner, parent, request.PlotNumber); err != nil {
 				return pictureCreationResult{}, err

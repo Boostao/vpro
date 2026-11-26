@@ -290,13 +290,36 @@ func buildQuickEnvFallbackSUTable(ctx context.Context, env vprocore.ProjectMetad
 		"No Site Unit table is selected; automatically included all project plots as one group.", nil
 }
 
+func activeSUTableRowCount(ctx context.Context, tx *sql.Tx, suName string) (int, error) {
+	if suName == "" || suName == "None" || suName == "USysSuTableDynamic" {
+		return 0, nil
+	}
+	var count int
+	err := tx.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*) FROM su.`+vprocore.QuoteHeaderIdentifier(suName+"_SU"),
+	).Scan(&count)
+	return count, err
+}
+
+func formatEmptySUFallbackNotice(suName, baseNotice string) string {
+	prefix := fmt.Sprintf("Site Unit table %q has no assigned plots;", suName)
+	if strings.HasPrefix(baseNotice, "No Site Unit table is selected;") {
+		return prefix + strings.TrimPrefix(baseNotice, "No Site Unit table is selected;")
+	}
+	if strings.TrimSpace(baseNotice) != "" {
+		return prefix + " " + baseNotice
+	}
+	return prefix + " automatically included all project plots."
+}
+
 // resolveQuickSummaryOptions merges saved preferences, request overrides, and ActiveSU=="None" fallback.
 func resolveQuickSummaryOptions(
 	ctx context.Context,
 	prefs *vprocore.DesktopConfig,
 	sel vprocore.DesktopSelection,
 	req QuickSummaryVegetationRequest,
-) (opts SummaryVegetationWorkbookOptions, scopeLabel, fallbackNotice string, prefsToSave map[string]any, err error) {
+) (opts SummaryVegetationWorkbookOptions, valueLimit float64, scopeLabel, fallbackNotice string, prefsToSave map[string]any, err error) {
 	saved, err := readSummarySavedPresentationState(ctx, prefs, sel.SU)
 	if err != nil {
 		saved = SummaryVegetationAppliedPreferences{
@@ -498,7 +521,7 @@ func resolveQuickSummaryOptions(
 	if saved.LumpTable != "" {
 		opts.LumpTable = saved.LumpTable
 	}
-	return opts, scopeLabel, fallbackNotice, changes, nil
+	return opts, saved.ValueLimit, scopeLabel, fallbackNotice, changes, nil
 }
 
 func boolToAccessInt(v bool) int {
@@ -522,7 +545,7 @@ func (s *SummaryVegetationWorkbookService) QuickExportWorkbook(
 	contexts := s.source.environment.report.contexts
 	return vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (*QuickVegReportExportResult, error) {
 		owner := plots.Projects.Sqlite
-		opts, scopeLabel, fallbackNotice, prefChanges, err := resolveQuickSummaryOptions(ctx, plots.Projects.Preferences, owner.Selection, req)
+		opts, _, scopeLabel, fallbackNotice, prefChanges, err := resolveQuickSummaryOptions(ctx, plots.Projects.Preferences, owner.Selection, req)
 		if err != nil {
 			return nil, err
 		}
@@ -539,6 +562,23 @@ func (s *SummaryVegetationWorkbookService) QuickExportWorkbook(
 		)
 		err = func() error {
 			_, snapErr := vprocore.WithOwnedPreferenceSnapshot(ctx, plots, vprocore.PublicationReadSnapshotHooks{}, func(owner *vprocore.SqliteContext, tx *sql.Tx) (struct{}, error) {
+				if opts.UnitScope == "su" && owner.Selection.SU != "" && owner.Selection.SU != "None" {
+					suRows, countErr := activeSUTableRowCount(ctx, tx, owner.Selection.SU)
+					if countErr == nil && suRows == 0 {
+						if strings.EqualFold(strings.TrimSpace(req.UnitScope), "su") {
+							return struct{}{}, fmt.Errorf("Site Unit table %q has no assigned plots. Assign plots to this Site Unit table or switch Unit Scope to Auto, Field-Derived, or All Project Plots.", owner.Selection.SU)
+						}
+						if opts.UnitField != "" {
+							opts.UnitScope = "field"
+							scopeLabel = "Field-Derived: " + opts.UnitField
+							fallbackNotice = fmt.Sprintf("Site Unit table %q has no assigned plots; automatically grouped project plots by %s.", owner.Selection.SU, opts.UnitField)
+						} else {
+							opts.UnitScope = "none"
+							scopeLabel = "All Project Plots"
+							fallbackNotice = fmt.Sprintf("Site Unit table %q has no assigned plots; automatically summarized all project plots.", owner.Selection.SU)
+						}
+					}
+				}
 				createdAt := ""
 				if opts.Ancillary != nil {
 					createdAt = time.Now().UTC().Format(time.RFC3339)
@@ -602,7 +642,7 @@ func (s *SummaryVegetationService) RenderHTMLReport(
 	}
 	return vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (*reportcore.HTMLReportResult, error) {
 		owner := plots.Projects.Sqlite
-		opts, scopeLabel, fallbackNotice, prefChanges, err := resolveQuickSummaryOptions(ctx, plots.Projects.Preferences, owner.Selection, req)
+		opts, valueLimit, scopeLabel, fallbackNotice, prefChanges, err := resolveQuickSummaryOptions(ctx, plots.Projects.Preferences, owner.Selection, req)
 		if err != nil {
 			return nil, err
 		}
@@ -630,12 +670,25 @@ func (s *SummaryVegetationService) RenderHTMLReport(
 			lt := opts.LumpTable
 			cfgReq.LumpTable = &lt
 		}
-		var valueLimit float64
-		if req.ValueLimit != nil {
-			valueLimit = *req.ValueLimit
-		}
 
 		preview, err := vprocore.WithOwnedPreferenceSnapshot(ctx, plots, s.snapshot, func(owner *vprocore.SqliteContext, tx *sql.Tx) (SummaryVegetationPreview, error) {
+			if cfgReq.UnitScope == "su" && owner.Selection.SU != "" && owner.Selection.SU != "None" {
+				suRows, countErr := activeSUTableRowCount(ctx, tx, owner.Selection.SU)
+				if countErr == nil && suRows == 0 {
+					if strings.EqualFold(strings.TrimSpace(req.UnitScope), "su") {
+						return SummaryVegetationPreview{}, fmt.Errorf("Site Unit table %q has no assigned plots. Assign plots to this Site Unit table or switch Unit Scope to Auto, Field-Derived, or All Project Plots.", owner.Selection.SU)
+					}
+					if cfgReq.UnitField != "" {
+						cfgReq.UnitScope = "field"
+						scopeLabel = "Field-Derived: " + cfgReq.UnitField
+						fallbackNotice = fmt.Sprintf("Site Unit table %q has no assigned plots; automatically grouped project plots by %s.", owner.Selection.SU, cfgReq.UnitField)
+					} else {
+						cfgReq.UnitScope = "none"
+						scopeLabel = "All Project Plots"
+						fallbackNotice = fmt.Sprintf("Site Unit table %q has no assigned plots; automatically summarized all project plots.", owner.Selection.SU)
+					}
+				}
+			}
 			snap, rErr := s.readSnapshotConfigured(ctx, contextID, plots, owner, tx,
 				opts.Average, opts.Display, opts.ShowClass, groupAndOrder, opts.References, mode, cfgReq, nil, valueLimit)
 			if rErr != nil {
@@ -848,6 +901,17 @@ func buildQuickLongVegetationPreview(
 				scopeMode := strings.ToLower(strings.TrimSpace(req.ScopeMode))
 				useActiveSU := owner.Selection.SU != "" && owner.Selection.SU != "None" &&
 					(scopeMode == "" || scopeMode == "auto" || scopeMode == "su")
+				emptyActiveSUName := ""
+				if useActiveSU {
+					suRows, countErr := activeSUTableRowCount(ctx, tx, owner.Selection.SU)
+					if countErr == nil && suRows == 0 {
+						if scopeMode == "su" {
+							return struct{}{}, fmt.Errorf("Site Unit table %q has no assigned plots. Assign plots to this Site Unit table or switch Scope to Auto, Zone/SubZone, or All Project Plots.", owner.Selection.SU)
+						}
+						emptyActiveSUName = owner.Selection.SU
+						useActiveSU = false
+					}
+				}
 
 				if useActiveSU {
 					source, rErr := readLongVegetationReportSource(ctx, owner, tx, options)
@@ -903,7 +967,11 @@ func buildQuickLongVegetationPreview(
 					return struct{}{}, fErr
 				}
 				scopeLabel = sLabel
-				fallbackNotice = notice
+				if emptyActiveSUName != "" {
+					fallbackNotice = formatEmptySUFallbackNotice(emptyActiveSUName, notice)
+				} else {
+					fallbackNotice = notice
+				}
 
 				prepared, pErr := prepareLongVegetation(ctx, owner.Selection.Project, syntheticSU, veg, suTable, layers)
 				if pErr != nil {
@@ -1114,6 +1182,17 @@ func buildQuickLifeformInput(
 			mode := strings.ToLower(strings.TrimSpace(scopeMode))
 			useActiveSU := owner.Selection.SU != "" && owner.Selection.SU != "None" &&
 				(mode == "" || mode == "auto" || mode == "su")
+			emptyActiveSUName := ""
+			if useActiveSU {
+				suRows, countErr := activeSUTableRowCount(ctx, tx, owner.Selection.SU)
+				if countErr == nil && suRows == 0 {
+					if mode == "su" {
+						return struct{}{}, fmt.Errorf("Site Unit table %q has no assigned plots. Assign plots to this Site Unit table or switch Scope to Auto, Zone/SubZone, or All Project Plots.", owner.Selection.SU)
+					}
+					emptyActiveSUName = owner.Selection.SU
+					useActiveSU = false
+				}
+			}
 			if useActiveSU {
 				loaded, lErr := readLifeformWorkbookSource(ctx, owner, tx, contextID)
 				if lErr != nil {
@@ -1130,6 +1209,9 @@ func buildQuickLifeformInput(
 			suTable, syntheticSU, sLabel, notice, fErr := buildQuickEnvFallbackSUTable(ctx, env, mode)
 			if fErr != nil {
 				return struct{}{}, fErr
+			}
+			if emptyActiveSUName != "" {
+				notice = formatEmptySUFallbackNotice(emptyActiveSUName, notice)
 			}
 			veg, rErr := summaryReadRequiredTable(ctx, tx, "project", owner.Selection.Project+"_Veg")
 			if rErr != nil {

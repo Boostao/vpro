@@ -2,6 +2,7 @@ package vprocore_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"sync"
 	"testing"
@@ -191,5 +192,39 @@ func TestContextServiceAuthEditLockEnforcementAndRoleTransitions(t *testing.T) {
 	setSnap(vprocore.EditLockSnapshot{SignedIn: false})
 	if err := svc.CreatePlot(state.ContextID, vprocore.FS882Header{PlotNumber: "LOCK03"}); !errors.Is(err, vprocore.ErrEditingLockedSignInRequired) {
 		t.Fatalf("post-signout CreatePlot = %v, want ErrEditingLockedSignInRequired", err)
+	}
+
+	// 8. Central SQLite write gates fail closed even after SwitchContext creates a new SqliteContext.
+	switched, err := svc.SwitchContext(state.ContextID, vprocore.ContextSelection{
+		Project:       state.ActiveProject,
+		ProjectPath:   state.ProjectPath,
+		SU:            "None",
+		Hierarchy:     "None",
+	})
+	if err != nil {
+		t.Fatalf("SwitchContext while locked must remain allowed for reading: %v", err)
+	}
+	owner := svc.Projects.Sqlite
+	if _, err := owner.ProjectDatabase(ctx); !errors.Is(err, vprocore.ErrEditingLockedSignInRequired) {
+		t.Fatalf("post-switch ProjectDatabase = %v, want ErrEditingLockedSignInRequired", err)
+	}
+	if err := owner.WithImmediateWriteTx(ctx, func(_ *vprocore.WriteTx) error { return nil }); !errors.Is(err, vprocore.ErrEditingLockedSignInRequired) {
+		t.Fatalf("post-switch WithImmediateWriteTx = %v, want ErrEditingLockedSignInRequired", err)
+	}
+	if err := owner.WithSelectedFileWriter(ctx, "project", func() error { return nil }, func(_ *sql.Conn) error { return nil }); !errors.Is(err, vprocore.ErrEditingLockedSignInRequired) {
+		t.Fatalf("post-switch WithSelectedFileWriter = %v, want ErrEditingLockedSignInRequired", err)
+	}
+	if err := svc.Edit(switched.ContextID, func(_ *vprocore.PlotService) error { return nil }); !errors.Is(err, vprocore.ErrEditingLockedSignInRequired) {
+		t.Fatalf("post-switch ContextService.Edit = %v, want ErrEditingLockedSignInRequired", err)
+	}
+	if err := vprocore.EditContext(ctx, svc, switched.ContextID, func(_ *vprocore.PlotService) error { return nil }); !errors.Is(err, vprocore.ErrEditingLockedSignInRequired) {
+		t.Fatalf("post-switch EditContext = %v, want ErrEditingLockedSignInRequired", err)
+	}
+	if _, err := svc.CreateWorkspaceResource(ctx, switched.ContextID, vprocore.CreateWorkspaceResourceRequest{
+		Kind:            vprocore.WorkspaceResourceSU,
+		Name:            "BlockedSU",
+		DestinationMode: "active_project",
+	}); !errors.Is(err, vprocore.ErrEditingLockedSignInRequired) {
+		t.Fatalf("post-switch CreateWorkspaceResource = %v, want ErrEditingLockedSignInRequired", err)
 	}
 }

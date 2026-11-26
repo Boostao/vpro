@@ -60,6 +60,20 @@ func ExecuteThreeWayMerge(s *vprocore.ContextService, ctx context.Context, conte
 		return runThreeWayMergeOnConn(ctx, conn, req, srcPath, srcProj, tgtPath, tgtProj, basePath, baseProj, actor, resolveDecision)
 	}
 
+	if s != nil {
+		if contextID != "" {
+			if _, lockErr := vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (struct{}, error) {
+				return struct{}{}, plots.CheckEditLockForProject(tgtProj)
+			}); lockErr != nil {
+				return ThreeWayMergeResult{}, lockErr
+			}
+		} else if s.Plots != nil {
+			if lockErr := s.Plots.CheckEditLockForProject(tgtProj); lockErr != nil {
+				return ThreeWayMergeResult{}, lockErr
+			}
+		}
+	}
+
 	// If merging into the active context's project database, acquire the ContextService writer lease!
 	if s != nil && contextID != "" {
 		snap, sErr := inspectContextSnapshot(ctx, s, contextID)

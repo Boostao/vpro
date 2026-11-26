@@ -335,6 +335,9 @@ func ApplySpatialAttributes(ctx context.Context, contexts *vprocore.ContextServi
 	}
 
 	return vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (*ApplySpatialAttributesResult, error) {
+		if err := plots.CheckEditLock(); err != nil {
+			return nil, err
+		}
 		owner := plots.Projects.Sqlite
 		project := owner.Selection.Project
 		plots.Mu.RLock()

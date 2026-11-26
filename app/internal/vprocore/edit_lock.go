@@ -298,9 +298,66 @@ func (s *PlotService) EditLockStatus() EditLockState {
 	return EvaluateEditLock(s.activeProjectName(), snap)
 }
 
-// CheckEditLock enforces the default data edit lock when EnforceAuthLock is active.
-// Direct PlotService unit tests with EnforceAuthLock=false remain unaffected.
-func (s *PlotService) CheckEditLock() error {
+func checkEditLockForProject(projectName string, snap EditLockSnapshot) error {
+	state := EvaluateEditLock(projectName, snap)
+	if !state.Locked && state.CanEditCurrentProject {
+		return nil
+	}
+	if !state.SignedIn {
+		return ErrEditingLockedSignInRequired
+	}
+	return fmt.Errorf("%w: %s", ErrBECMasterPermissionRequired, state.Reason)
+}
+
+func propagateEditLockBinding(prefs *DesktopConfig, oldSQL, newSQL *SqliteContext) {
+	if newSQL == nil {
+		return
+	}
+	if b, ok := contextEditLocks.lookup(prefs, oldSQL); ok {
+		contextEditLocks.bindSQLite(newSQL, b)
+	}
+}
+
+// checkEditLockLocked enforces the bound auth edit lock when c.mu is already held.
+func (c *SqliteContext) checkEditLockLocked() error {
+	if c == nil {
+		return nil
+	}
+	b, ok := contextEditLocks.lookup(nil, c)
+	if !ok || !b.enforce {
+		return nil
+	}
+	var snap EditLockSnapshot
+	if b.provider != nil {
+		snap = b.provider()
+	}
+	return checkEditLockForProject(c.Selection.Project, snap)
+}
+
+// CheckEditLock enforces the bound auth edit lock for this SqliteContext.
+// Unbound contexts (direct unit tests with EnforceAuthLock=false) remain unaffected.
+func (c *SqliteContext) CheckEditLock() error {
+	if c == nil {
+		return nil
+	}
+	b, ok := contextEditLocks.lookup(nil, c)
+	if !ok || !b.enforce {
+		return nil
+	}
+	var snap EditLockSnapshot
+	if b.provider != nil {
+		snap = b.provider()
+	}
+	c.mu.Lock()
+	proj := c.Selection.Project
+	c.mu.Unlock()
+	return checkEditLockForProject(proj, snap)
+}
+
+// CheckEditLockForProject enforces the default data edit lock against an explicit target
+// project name when EnforceAuthLock is active. When targetProject is empty, the active
+// project name is evaluated.
+func (s *PlotService) CheckEditLockForProject(targetProject string) error {
 	enforced, provider := s.resolveEditLockPolicy()
 	if !enforced {
 		return nil
@@ -309,14 +366,17 @@ func (s *PlotService) CheckEditLock() error {
 	if provider != nil {
 		snap = provider()
 	}
-	state := EvaluateEditLock(s.activeProjectName(), snap)
-	if !state.Locked && state.CanEditCurrentProject {
-		return nil
+	project := strings.TrimSpace(targetProject)
+	if project == "" {
+		project = s.activeProjectName()
 	}
-	if !state.SignedIn {
-		return ErrEditingLockedSignInRequired
-	}
-	return fmt.Errorf("%w: %s", ErrBECMasterPermissionRequired, state.Reason)
+	return checkEditLockForProject(project, snap)
+}
+
+// CheckEditLock enforces the default data edit lock when EnforceAuthLock is active.
+// Direct PlotService unit tests with EnforceAuthLock=false remain unaffected.
+func (s *PlotService) CheckEditLock() error {
+	return s.CheckEditLockForProject("")
 }
 
 // GetContextEditLockStatus evaluates EditLockState for a ContextService, validating contextID when provided.
