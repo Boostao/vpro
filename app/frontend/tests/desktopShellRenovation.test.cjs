@@ -446,3 +446,70 @@ test('AuthSignInModal renders locked/signed-in states, BC Gov OIDC sign-in, gate
   assert.equal(eventsDispatched.length, 3);
   assert.equal(statusUpdates.length, 3);
 });
+
+test('mountShellWindowLifecycle listens for desktop vpro:open-signin events to open AuthSignInModal and cleans up on destroy', async () => {
+  const listeners = new Map();
+  const fakeWindow = {
+    addEventListener(type, fn) {
+      listeners.set(type, fn);
+    },
+    removeEventListener(type, fn) {
+      if (listeners.get(type) === fn) listeners.delete(type);
+    },
+  };
+  const lifecycleMod = loadTypeScript(
+    'shell/shellLifecycleOps.ts',
+    {
+      '@wailsio/runtime': { Events: { On: () => () => {} } },
+      '../../bindings/events': { VproCloseRequest: 'vpro:close-request' },
+      '../../bindings/github.com/boostao/vpro/app': { ContextService: {}, LifecycleService: {} },
+      '../classification/projectPlotProfileReview': {},
+      '../help/helpSystem': {},
+      '../shared/contextSessionRegistry': {},
+      '../shared/dialogA11y': { installGlobalAriaModalTabTrap: () => {} },
+      '../shared/readRequests': { formatError: (e) => String(e) },
+      'svelte/store': require('svelte/store'),
+      '../shared/state': { projectState: writable(null), webMeta: writable(null), webShellRuntime: writable(null) },
+      '../web/runtimeMode': { IS_WEB_READONLY: false },
+      '../web/webMeta': { loadWebMeta: async () => null, bootstrapWebShellRuntime: async () => null },
+      './closeLifecycle': {},
+      './notificationService.svelte': { notifications: {} },
+      './operationGuard.svelte': {},
+      './shellUiController.svelte': {},
+    },
+    { window: fakeWindow }
+  );
+
+  // Desktop mode registers vpro:open-signin, sets ui.authSignInOpen = true, and removes listener on cleanup
+  const desktopUi = { authSignInOpen: false, installViewportAndWhatsNew: () => () => {} };
+  const stopDesktop = lifecycleMod.mountShellWindowLifecycle(
+    desktopUi,
+    { GetPendingCloseRequest: () => Promise.resolve('') },
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    false
+  );
+  assert.equal(typeof listeners.get('vpro:open-signin'), 'function');
+  listeners.get('vpro:open-signin')();
+  assert.equal(desktopUi.authSignInOpen, true);
+  stopDesktop();
+  assert.equal(listeners.has('vpro:open-signin'), false);
+
+  // Web read-only mode never registers vpro:open-signin
+  const webUi = { authSignInOpen: false, installViewportAndWhatsNew: () => () => {} };
+  const stopWeb = lifecycleMod.mountShellWindowLifecycle(
+    webUi,
+    { GetPendingCloseRequest: () => Promise.resolve('') },
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    true
+  );
+  assert.equal(listeners.has('vpro:open-signin'), false);
+  stopWeb();
+  await new Promise((resolve) => setImmediate(resolve));
+});
+

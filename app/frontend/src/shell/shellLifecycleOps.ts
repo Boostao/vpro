@@ -129,12 +129,22 @@ export function mountShellWindowLifecycle(
   void import('../shared/dialogA11y').then(({ installGlobalAriaModalTabTrap }) => installGlobalAriaModalTabTrap());
   const stopViewport = ui.installViewportAndWhatsNew();
   let stopCloseEvents = () => {};
+  let stopOpenSignIn = () => {};
   if (webReadOnly) {
     void import('../web/webMeta').then((mod) => {
       void mod.loadWebMeta();
       void mod.bootstrapWebShellRuntime();
     });
   } else {
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      const handleOpenSignIn = () => {
+        ui.authSignInOpen = true;
+      };
+      window.addEventListener('vpro:open-signin', handleOpenSignIn);
+      stopOpenSignIn = () => {
+        window.removeEventListener('vpro:open-signin', handleOpenSignIn);
+      };
+    }
     stopCloseEvents = Events.On(VproCloseRequest, (event) => {
       const requestId: unknown = event.data;
       if (typeof requestId !== 'string' || !requestId) {
@@ -153,6 +163,7 @@ export function mountShellWindowLifecycle(
   onRefresh();
   return () => {
     onCleanup();
+    stopOpenSignIn();
     stopCloseEvents();
     stopViewport();
   };
