@@ -135,11 +135,7 @@
     [quickExporting, quickError] = [true, ''];
     const snap = $state.snapshot(quickDraft);
     quick.persistQuickDraft('lifeform', snap);
-    const req = quick.buildLifeformQuickRequest(snap, project, true);
-    const out = await quick.runQuickSpreadsheetExport({
-      source: 'Lifeform Summary', project, kind: 'veg',
-      invoke: () => VegetationReportService.QuickRunLifeformWorkbook(contextId, req),
-    });
+    const out = await quick.exportLifeformSpreadsheet(contextId, snap, project, su);
     [quickExportResult, quickError, quickExporting] = [out.summary, out.error, false];
   }
   async function quickDisplayReport() {

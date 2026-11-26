@@ -405,11 +405,7 @@
     [quickExporting, quickError] = [true, ''];
     const snap = $state.snapshot(quickDraft);
     quick.persistQuickDraft('long_veg', snap);
-    const req = quick.buildLongVegQuickRequest(snap, project, true);
-    const out = await quick.runQuickSpreadsheetExport({
-      source: 'Long Vegetation', project, kind: 'veg',
-      invoke: () => VegetationReportService.QuickRunLongVegetationWorkbook(contextId, req),
-    });
+    const out = await quick.exportLongVegSpreadsheet(contextId, snap, project, su);
     [quickExportResult, quickError, quickExporting] = [out.summary, out.error, false];
   }
   async function quickDisplayReport() {

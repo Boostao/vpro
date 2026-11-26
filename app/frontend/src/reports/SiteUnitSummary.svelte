@@ -409,11 +409,7 @@
     [quickExporting, quickError] = [true, ''];
     const snap = $state.snapshot(quickDraft);
     quick.persistQuickDraft('summary_env', snap);
-    const req = quick.buildSummaryEnvQuickRequest(snap, project, true);
-    const out = await quick.runQuickSpreadsheetExport({
-      source: 'Summary Environment', project, kind: 'env',
-      invoke: () => EnvironmentReportService.QuickRunSummaryEnvironmentWorkbook(contextId, req),
-    });
+    const out = await quick.exportSummaryEnvSpreadsheet(contextId, snap, project, su);
     [quickExportResult, quickError, quickExporting] = [out.summary, out.error, false];
   }
   async function quickDisplayReport() {

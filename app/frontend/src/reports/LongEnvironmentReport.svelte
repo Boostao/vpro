@@ -322,11 +322,7 @@
     [quickExporting, quickError] = [true, ''];
     const snap = $state.snapshot(quickDraft);
     quick.persistQuickDraft('long_env', snap);
-    const req = quick.buildLongEnvQuickRequest(snap, project, true);
-    const out = await quick.runQuickSpreadsheetExport({
-      source: 'Long Environment', project, kind: 'env',
-      invoke: () => EnvironmentReportService.QuickRunLongEnvironmentWorkbook(contextId, req),
-    });
+    const out = await quick.exportLongEnvSpreadsheet(contextId, snap, project, su);
     [quickExportResult, quickError, quickExporting] = [out.summary, out.error, false];
   }
   async function quickDisplayReport() {

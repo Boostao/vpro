@@ -240,11 +240,7 @@
   async function quickExportSpreadsheet() {
     if (!contextId || !available || quickExporting || quickRendering) return;
     [quickExporting, quickError] = [true, ''];
-    const req = quick.buildSubzoneMatrixQuickRequest(hierarchy);
-    const out = await quick.runQuickSpreadsheetExport({
-      source: 'Subzone Matrix', project: hierarchy, kind: 'env',
-      invoke: () => EnvironmentReportService.QuickRunSubzoneMatrixWorkbook(contextId, req),
-    });
+    const out = await quick.exportSubzoneMatrixSpreadsheet(contextId, hierarchy);
     [quickExportResult, quickError, quickExporting] = [out.summary, out.error, false];
   }
 

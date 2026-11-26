@@ -115,6 +115,7 @@ function report(value, { presentation = null, preferences = null, quality = null
       persistQuickDraft: () => {},
       hydrateSummaryVegQuickDraft: async (_c, d) => d,
       buildSummaryVegQuickRequest: () => ({}),
+      exportSummaryVegSpreadsheet: async () => ({ summary: null, error: '' }),
       runQuickSpreadsheetExport: async () => ({ summary: null, error: '' }),
       runQuickHTMLDisplay: async () => ({ report: null, error: '' }),
     },

@@ -115,10 +115,374 @@ export const DEFAULT_SUMMARY_ENV_QUICK: SummaryEnvQuickDraft = {
   coverGreaterThan: 0,
 };
 
-function webDownloadTarget(prefix: string, project: string): string | undefined {
-  if (typeof IS_WEB_READONLY === 'undefined' || !IS_WEB_READONLY) return undefined;
+function webDownloadTarget(prefix: string, project: string): string {
   const stem = `${project || 'vpro'}_${prefix}`;
   return typeof defaultWebExportFilename === 'function' ? defaultWebExportFilename(stem, '.xlsx') : `${stem}.xlsx`;
+}
+
+function webReviewedExportSummary(params: {
+  reportKind: string;
+  title: string;
+  project: string;
+  su: string;
+  destination: string;
+  bytes: number;
+  unitCount: number;
+  plotCount: number;
+}): QuickExportSummary {
+  return {
+    reportKind: params.reportKind,
+    title: params.title,
+    project: params.project,
+    su: params.su,
+    scopeLabel: params.su && params.su !== 'None' ? `Active SU: ${params.su}` : 'Reviewed Workbook',
+    fallbackNotice: '',
+    unitCount: params.unitCount,
+    plotCount: params.plotCount,
+    path: params.destination,
+    bytes: params.bytes,
+    preferencesSaved: false,
+    openedInSpreadsheet: false,
+    spreadsheetNotice: '',
+  };
+}
+
+export async function exportSummaryVegSpreadsheet(
+  contextId: string,
+  draft: SummaryVegQuickDraft,
+  project: string,
+  su: string
+): Promise<{ summary: QuickExportSummary | null; error: string }> {
+  const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+  if (!webReadOnly) {
+    const req = buildSummaryVegQuickRequest(draft, project, true);
+    return runQuickSpreadsheetExport({
+      source: 'Summary Vegetation',
+      project,
+      kind: 'veg',
+      invoke: () => VegetationReportService.QuickRunSummaryVegetationWorkbook(contextId, req),
+    });
+  }
+  return runReviewedWebDownload({
+    source: 'Summary Vegetation',
+    project,
+    invoke: async () => {
+      const review = await VegetationReportService.GetSummaryVegetationWorkbookReviewFromPreferences(contextId);
+      if (!review?.approvalHash) throw new Error('Summary Vegetation workbook review returned no approval snapshot.');
+      const destination = webDownloadTarget('summary_veg', project);
+      const outcome = await VegetationReportService.ExportReviewedSummaryVegetationWorkbook(
+        contextId,
+        JSON.stringify({
+          options: review.options,
+          approvalHash: review.approvalHash,
+          destination,
+          ...(review.ancillary ? { createdAt: review.ancillary.createdAt } : {}),
+        })
+      );
+      if (outcome && outcome.status !== 'published') throw new Error(outcome.errorMessage || 'Download failed.');
+      return webReviewedExportSummary({
+        reportKind: 'summary_vegetation',
+        title: draft.title.trim() || 'Summary Vegetation Report',
+        project,
+        su,
+        destination,
+        bytes: Number(review.bytes ?? 0),
+        unitCount: review.preview?.units?.length ?? 0,
+        plotCount: review.preview?.memberships?.length ?? 0,
+      });
+    },
+  });
+}
+
+export async function exportLongVegSpreadsheet(
+  contextId: string,
+  draft: LongVegQuickDraft,
+  project: string,
+  su: string
+): Promise<{ summary: QuickExportSummary | null; error: string }> {
+  const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+  if (!webReadOnly) {
+    const req = buildLongVegQuickRequest(draft, project, true);
+    return runQuickSpreadsheetExport({
+      source: 'Long Vegetation',
+      project,
+      kind: 'veg',
+      invoke: () => VegetationReportService.QuickRunLongVegetationWorkbook(contextId, req),
+    });
+  }
+  return runReviewedWebDownload({
+    source: 'Long Vegetation',
+    project,
+    invoke: async () => {
+      const scope = draft.lumpTable.trim() ? `lump:${draft.lumpTable.trim()}` : 'unlumped';
+      const review = await VegetationReportService.GetVegetationWorkbookReview(contextId, JSON.stringify({ scope }));
+      if (!review?.approvalHash) throw new Error('Long Vegetation workbook review returned no approval snapshot.');
+      const destination = webDownloadTarget('long_veg', project);
+      const outcome = await VegetationReportService.ExportReviewedVegetationWorkbook(
+        contextId,
+        JSON.stringify({
+          scope: review.scope || scope,
+          createdDate: review.createdDate,
+          approvalHash: review.approvalHash,
+          destination,
+        })
+      );
+      if (outcome && outcome.status !== 'published') throw new Error(outcome.errorMessage || 'Download failed.');
+      const units = review.preview?.report?.units ?? [];
+      const plotCount = units.reduce((acc, u) => acc + Number(u.numPlots ?? 0), 0);
+      return webReviewedExportSummary({
+        reportKind: 'long_vegetation',
+        title: draft.title.trim() || 'Long Vegetation Report',
+        project,
+        su,
+        destination,
+        bytes: Number(review.bytes ?? 0),
+        unitCount: units.length,
+        plotCount,
+      });
+    },
+  });
+}
+
+export async function exportLifeformSpreadsheet(
+  contextId: string,
+  draft: LifeformQuickDraft,
+  project: string,
+  su: string
+): Promise<{ summary: QuickExportSummary | null; error: string }> {
+  const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+  if (!webReadOnly) {
+    const req = buildLifeformQuickRequest(draft, project, true);
+    return runQuickSpreadsheetExport({
+      source: 'Lifeform Summary',
+      project,
+      kind: 'veg',
+      invoke: () => VegetationReportService.QuickRunLifeformWorkbook(contextId, req),
+    });
+  }
+  return runReviewedWebDownload({
+    source: 'Lifeform Summary',
+    project,
+    invoke: async () => {
+      const details = buildLifeformQuickRequest(draft, project, false).details ?? [true, true, true, true, true, true];
+      const review = await VegetationReportService.GetLifeformWorkbookReview(contextId, JSON.stringify({ details }));
+      if (!review?.approvalHash) throw new Error('Lifeform workbook review returned no approval snapshot.');
+      const destination = webDownloadTarget('lifeform', project);
+      const outcome = await VegetationReportService.ExportReviewedLifeformWorkbook(
+        contextId,
+        JSON.stringify({ details: review.details ?? details, approvalHash: review.approvalHash, destination })
+      );
+      if (outcome && outcome.status !== 'published') throw new Error(outcome.errorMessage || 'Download failed.');
+      const units = review.lifeform?.report?.units ?? [];
+      const plotCount = units.reduce((acc, u) => acc + Number(u.nPlots ?? 0), 0);
+      return webReviewedExportSummary({
+        reportKind: 'lifeform_summary',
+        title: 'Lifeform Summary',
+        project,
+        su,
+        destination,
+        bytes: Number(review.bytes ?? 0),
+        unitCount: units.length,
+        plotCount,
+      });
+    },
+  });
+}
+
+export async function exportLongEnvSpreadsheet(
+  contextId: string,
+  draft: LongEnvQuickDraft,
+  project: string,
+  su: string
+): Promise<{ summary: QuickExportSummary | null; error: string }> {
+  const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+  if (!webReadOnly) {
+    const req = buildLongEnvQuickRequest(draft, project, true);
+    return runQuickSpreadsheetExport({
+      source: 'Long Environment',
+      project,
+      kind: 'env',
+      invoke: () => EnvironmentReportService.QuickRunLongEnvironmentWorkbook(contextId, req),
+    });
+  }
+  return runReviewedWebDownload({
+    source: 'Long Environment',
+    project,
+    invoke: async () => {
+      const requestedTitle = draft.title.trim() || 'Long Environment Report';
+      const review = await EnvironmentReportService.GetEnvironmentWorkbookReview(
+        contextId,
+        JSON.stringify({ title: requestedTitle })
+      );
+      if (!review?.approvalHash) throw new Error('Long Environment workbook review returned no approval snapshot.');
+      const destination = webDownloadTarget('long_env', project);
+      const title = review.preview?.report?.title ?? requestedTitle;
+      const outcome = await EnvironmentReportService.ExportReviewedEnvironmentWorkbook(
+        contextId,
+        JSON.stringify({ title, approvalHash: review.approvalHash, destination })
+      );
+      if (outcome && outcome.status !== 'published') throw new Error(outcome.errorMessage || 'Download failed.');
+      const units = review.preview?.report?.units ?? [];
+      const plotCount = units.reduce((acc, u) => acc + (u.plots?.length ?? 0), 0);
+      return webReviewedExportSummary({
+        reportKind: 'long_environment',
+        title,
+        project,
+        su,
+        destination,
+        bytes: Number(review.bytes ?? 0),
+        unitCount: units.length,
+        plotCount,
+      });
+    },
+  });
+}
+
+export async function exportSummaryEnvSpreadsheet(
+  contextId: string,
+  draft: SummaryEnvQuickDraft,
+  project: string,
+  su: string
+): Promise<{ summary: QuickExportSummary | null; error: string }> {
+  const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+  if (!webReadOnly) {
+    const req = buildSummaryEnvQuickRequest(draft, project, true);
+    return runQuickSpreadsheetExport({
+      source: 'Summary Environment',
+      project,
+      kind: 'env',
+      invoke: () => EnvironmentReportService.QuickRunSummaryEnvironmentWorkbook(contextId, req),
+    });
+  }
+  return runReviewedWebDownload({
+    source: 'Summary Environment',
+    project,
+    invoke: async () => {
+      const method = Number(draft.method) === 2 ? 2 : 1;
+      const orderBy = Number(draft.orderBy) === 2 ? 2 : 1;
+      const includeSpecies = Boolean(draft.includeSpecies);
+      const destination = webDownloadTarget('summary_env', project);
+      if (orderBy === 2 || includeSpecies) {
+        const extOpts = {
+          method,
+          orderBy,
+          includeSpecies,
+          coverCalculation: 1,
+          andOr: 1,
+          presenceGreaterThan: Number(draft.presenceGreaterThan) || 0,
+          coverGreaterThan: Number(draft.coverGreaterThan) || 0,
+        };
+        const review = await EnvironmentReportService.GetSiteUnitSummaryExtendedWorkbookReview(
+          contextId,
+          JSON.stringify(extOpts)
+        );
+        if (!review?.approvalHash) throw new Error('Summary Environment workbook review returned no approval snapshot.');
+        const outcome = await EnvironmentReportService.ExportReviewedSiteUnitSummaryExtendedWorkbook(
+          contextId,
+          JSON.stringify({ ...(review.options ?? extOpts), approvalHash: review.approvalHash, destination })
+        );
+        if (outcome && outcome.status !== 'published') throw new Error(outcome.errorMessage || 'Download failed.');
+        const units = review.environment?.report?.units ?? [];
+        const plotCount = units.reduce((acc, u) => acc + (u.plots?.length ?? 0), 0);
+        return webReviewedExportSummary({
+          reportKind: 'summary_environment',
+          title: 'Summary Environment',
+          project,
+          su,
+          destination,
+          bytes: Number(review.bytes ?? 0),
+          unitCount: units.length,
+          plotCount,
+        });
+      }
+      const review = await EnvironmentReportService.GetSiteUnitSummaryWorkbookReview(
+        contextId,
+        JSON.stringify({ method })
+      );
+      if (!review?.approvalHash) throw new Error('Summary Environment workbook review returned no approval snapshot.');
+      const outcome = await EnvironmentReportService.ExportReviewedSiteUnitSummaryWorkbook(
+        contextId,
+        JSON.stringify({ method, approvalHash: review.approvalHash, destination })
+      );
+      if (outcome && outcome.status !== 'published') throw new Error(outcome.errorMessage || 'Download failed.');
+      const units = review.preview?.report?.units ?? [];
+      const plotCount = units.reduce((acc, u) => acc + (u.plots?.length ?? 0), 0);
+      return webReviewedExportSummary({
+        reportKind: 'summary_environment',
+        title: 'Summary Environment',
+        project,
+        su,
+        destination,
+        bytes: Number(review.bytes ?? 0),
+        unitCount: units.length,
+        plotCount,
+      });
+    },
+  });
+}
+
+export async function exportSubzoneMatrixSpreadsheet(
+  contextId: string,
+  hierarchy: string
+): Promise<{ summary: QuickExportSummary | null; error: string }> {
+  const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
+  if (!webReadOnly) {
+    const req = buildSubzoneMatrixQuickRequest(hierarchy);
+    return runQuickSpreadsheetExport({
+      source: 'Subzone Matrix',
+      project: hierarchy,
+      kind: 'env',
+      invoke: () => EnvironmentReportService.QuickRunSubzoneMatrixWorkbook(contextId, req),
+    });
+  }
+  return runReviewedWebDownload({
+    source: 'Subzone Matrix',
+    project: hierarchy,
+    invoke: async () => {
+      const review = await EnvironmentReportService.GetSubzoneMatrixReview(contextId);
+      if (!review?.approvalHash) throw new Error('Subzone Matrix workbook review returned no approval snapshot.');
+      const destination = webDownloadTarget('subzone_matrix', hierarchy || 'subzone');
+      const outcome = await EnvironmentReportService.ExportReviewedSubzoneMatrix(
+        contextId,
+        JSON.stringify({ approvalHash: review.approvalHash, destination })
+      );
+      if (outcome && outcome.status !== 'published') throw new Error(outcome.errorMessage || 'Download failed.');
+      return webReviewedExportSummary({
+        reportKind: 'subzone_matrix',
+        title: 'Subzone Matrix of Units',
+        project: hierarchy,
+        su: hierarchy,
+        destination,
+        bytes: Number(review.bytes ?? 0),
+        unitCount: review.preview?.columns?.length ?? 0,
+        plotCount: Number(review.preview?.total ?? 0),
+      });
+    },
+  });
+}
+
+async function runReviewedWebDownload(params: {
+  source: string;
+  project?: string;
+  invoke: () => Promise<QuickExportSummary>;
+}): Promise<{ summary: QuickExportSummary | null; error: string }> {
+  try {
+    const summary = await params.invoke();
+    notifications.success(
+      `${params.source} spreadsheet downloaded`,
+      `${summary.unitCount} units · ${summary.plotCount} plots`,
+      { category: 'reports', source: params.source, contextTag: params.project || undefined }
+    );
+    return { summary, error: '' };
+  } catch (cause) {
+    const error = formatCompactReportError(cause, `${params.source} spreadsheet download`);
+    notifications.error(`${params.source} download failed`, error, {
+      category: 'reports',
+      source: params.source,
+      contextTag: params.project || undefined,
+    });
+    return { summary: null, error };
+  }
 }
 
 export function buildSummaryVegQuickRequest(
@@ -140,7 +504,9 @@ export function buildSummaryVegQuickRequest(
     combineVariants: Boolean(draft.combineVariants),
     lumpTable: draft.lumpTable.trim(),
     savePreferences: !webReadOnly,
-    ...(forExport ? { openInSpreadsheet: !webReadOnly, destinationPath: webDownloadTarget('summary_veg', project) } : {}),
+    ...(forExport
+      ? { openInSpreadsheet: !webReadOnly, destinationPath: webReadOnly ? webDownloadTarget('summary_veg', project) : undefined }
+      : {}),
   };
 }
 
@@ -162,7 +528,9 @@ export function buildLongVegQuickRequest(
     combineVariants: Boolean(draft.combineVariants),
     lumpTable: draft.lumpTable.trim(),
     savePreferences: !webReadOnly,
-    ...(forExport ? { openInSpreadsheet: !webReadOnly, destinationPath: webDownloadTarget('long_veg', project) } : {}),
+    ...(forExport
+      ? { openInSpreadsheet: !webReadOnly, destinationPath: webReadOnly ? webDownloadTarget('long_veg', project) : undefined }
+      : {}),
   };
 }
 
@@ -183,7 +551,9 @@ export function buildLifeformQuickRequest(
   return {
     scopeMode: draft.scopeMode,
     details,
-    ...(forExport ? { openInSpreadsheet: !webReadOnly, destinationPath: webDownloadTarget('lifeform', project) } : {}),
+    ...(forExport
+      ? { openInSpreadsheet: !webReadOnly, destinationPath: webReadOnly ? webDownloadTarget('lifeform', project) : undefined }
+      : {}),
   };
 }
 
@@ -197,7 +567,9 @@ export function buildLongEnvQuickRequest(
     title: draft.title.trim() || 'Long Environment Report',
     scopeMode: draft.scopeMode,
     savePreferences: !webReadOnly,
-    ...(forExport ? { openInSpreadsheet: !webReadOnly, destinationPath: webDownloadTarget('long_env', project) } : {}),
+    ...(forExport
+      ? { openInSpreadsheet: !webReadOnly, destinationPath: webReadOnly ? webDownloadTarget('long_env', project) : undefined }
+      : {}),
   };
 }
 
@@ -215,15 +587,17 @@ export function buildSummaryEnvQuickRequest(
     presenceGreaterThan: Number(draft.presenceGreaterThan) || 0,
     coverGreaterThan: Number(draft.coverGreaterThan) || 0,
     savePreferences: !webReadOnly,
-    ...(forExport ? { openInSpreadsheet: !webReadOnly, destinationPath: webDownloadTarget('summary_env', project) } : {}),
+    ...(forExport
+      ? { openInSpreadsheet: !webReadOnly, destinationPath: webReadOnly ? webDownloadTarget('summary_env', project) : undefined }
+      : {}),
   };
 }
 
-export function buildSubzoneMatrixQuickRequest(hierarchy: string): QuickSubzoneMatrixRequest {
+function buildSubzoneMatrixQuickRequest(hierarchy: string): QuickSubzoneMatrixRequest {
   const webReadOnly = typeof IS_WEB_READONLY !== 'undefined' && IS_WEB_READONLY;
   return {
     openInSpreadsheet: !webReadOnly,
-    destinationPath: webDownloadTarget('subzone_matrix', hierarchy || 'subzone'),
+    destinationPath: webReadOnly ? webDownloadTarget('subzone_matrix', hierarchy || 'subzone') : undefined,
   };
 }
 
