@@ -76,7 +76,7 @@ RUN apt-get update \
         curl \
         gnupg \
     && install -d -m 0755 /etc/apt/keyrings \
-    && curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x95c0faf38db3ccad0c080a7bdc78b2ddeabc47b7" \
+    && curl -fsSL --retry 3 --retry-delay 2 "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xBA4EE5DE858FFFA7CFD8563908FC7B745769E9E4" \
         | gpg --dearmor -o /etc/apt/keyrings/cran-debian.gpg \
     && echo "deb [signed-by=/etc/apt/keyrings/cran-debian.gpg] https://cloud.r-project.org/bin/linux/debian bookworm-cran40/" \
         > /etc/apt/sources.list.d/cran-debian.list \
@@ -168,7 +168,7 @@ RUN apt-get update \
         curl \
         gnupg \
     && install -d -m 0755 /etc/apt/keyrings \
-    && curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x95c0faf38db3ccad0c080a7bdc78b2ddeabc47b7" \
+    && curl -fsSL --retry 3 --retry-delay 2 "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xBA4EE5DE858FFFA7CFD8563908FC7B745769E9E4" \
         | gpg --dearmor -o /etc/apt/keyrings/cran-debian.gpg \
     && echo "deb [signed-by=/etc/apt/keyrings/cran-debian.gpg] https://cloud.r-project.org/bin/linux/debian bookworm-cran40/" \
         > /etc/apt/sources.list.d/cran-debian.list \
