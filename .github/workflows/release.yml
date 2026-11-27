@@ -32,7 +32,6 @@ concurrency:
 
 jobs:
   validate:
-    environment: actions-approval
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -429,6 +428,7 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: read
+      actions: read
       pages: write
       id-token: write
     environment:
@@ -484,9 +484,14 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v6
       - name: Upload Pages artifact
+        id: upload-pages
         uses: actions/upload-pages-artifact@v5
         with:
           path: 'site/dist'
+      - name: Wait for github-pages artifact visibility
+        env:
+          PAGES_ARTIFACT_ID: ${{ steps.upload-pages.outputs.artifact_id }}
+        run: python3 scripts/release.py wait-pages-artifact --artifact-id "$PAGES_ARTIFACT_ID"
       - name: Deploy updated release portal to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5

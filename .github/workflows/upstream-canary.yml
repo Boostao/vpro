@@ -15,7 +15,6 @@ concurrency:
 jobs:
   security-audit:
     name: Dependency Lockstep & Vulnerability Audit
-    environment: actions-approval
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -52,7 +51,6 @@ jobs:
 
   r-upstream-suggests-canary:
     name: R SDK Upstream Suggests Canary (climr / CRAN)
-    environment: actions-approval
     runs-on: ubuntu-24.04
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
@@ -77,7 +75,6 @@ jobs:
 
   cross-os-desktop-compile-smoke:
     name: Cross-OS Desktop Compile Smoke (${{ matrix.name }})
-    environment: actions-approval
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false

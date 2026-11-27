@@ -14,6 +14,7 @@ import struct
 import subprocess
 import tarfile
 import tempfile
+import time
 import zipfile
 
 
@@ -1638,6 +1639,62 @@ def prune_dev_releases(*, keep=DEV_MAX_BUILDS, releases_json=None,
     return {"kept": kept, "deleted": to_delete}
 
 
+def wait_pages_artifact(
+    *,
+    artifact_id,
+    artifact_name="github-pages",
+    run_id=None,
+    repository=None,
+    attempts=20,
+    interval_seconds=2.0,
+    settle_seconds=3.0,
+    fetcher=None,
+    sleeper=time.sleep,
+):
+    raw_id = str(artifact_id or "").strip()
+    require(raw_id.isdigit() and int(raw_id) > 0,
+            f"Expected positive integer Pages artifact ID, got {artifact_id!r}")
+    expected_id = int(raw_id)
+    require(isinstance(artifact_name, str) and artifact_name.strip() == artifact_name and len(artifact_name) > 0,
+            f"Invalid Pages artifact name: {artifact_name!r}")
+    resolved_run_id = str(run_id if run_id is not None else os.environ.get("GITHUB_RUN_ID", "")).strip()
+    require(resolved_run_id.isdigit() and int(resolved_run_id) > 0,
+            f"Expected positive integer GITHUB_RUN_ID, got {resolved_run_id!r}")
+    resolved_repo = repository or os.environ.get("GITHUB_REPOSITORY") or REPOSITORY
+    require(type(attempts) is int and 1 <= attempts <= 60, "attempts must be between 1 and 60")
+    require(interval_seconds >= 0 and settle_seconds >= 0, "sleep durations must be non-negative")
+
+    endpoint = f"repos/{resolved_repo}/actions/runs/{resolved_run_id}/artifacts?name={artifact_name}&per_page=10"
+    for attempt in range(1, attempts + 1):
+        if fetcher is not None:
+            payload = fetcher(endpoint)
+        else:
+            result = subprocess.run(
+                ["gh", "api", endpoint],
+                check=True, capture_output=True, text=True,
+            )
+            payload = json.loads(result.stdout)
+        require(isinstance(payload, dict), "Malformed GitHub Actions artifacts payload")
+        artifacts = payload.get("artifacts")
+        require(isinstance(artifacts, list), "Malformed artifacts list in GitHub API response")
+        for item in artifacts:
+            if (
+                isinstance(item, dict)
+                and item.get("id") == expected_id
+                and item.get("name") == artifact_name
+                and item.get("expired") is False
+            ):
+                if settle_seconds > 0:
+                    sleeper(settle_seconds)
+                return item
+        if attempt < attempts and interval_seconds > 0:
+            sleeper(interval_seconds)
+    raise ValueError(
+        f"Timed out waiting for {artifact_name!r} artifact {expected_id} "
+        f"in workflow run {resolved_run_id} after {attempts} attempt(s)"
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -1698,6 +1755,13 @@ def main():
     prune_dev_cmd.add_argument("--keep", type=int, default=DEV_MAX_BUILDS)
     prune_dev_cmd.add_argument("--releases-json", type=Path)
     prune_dev_cmd.add_argument("--dry-run", action="store_true")
+    wait_pages_cmd = commands.add_parser("wait-pages-artifact")
+    wait_pages_cmd.add_argument("--artifact-id", required=True)
+    wait_pages_cmd.add_argument("--artifact-name", default="github-pages")
+    wait_pages_cmd.add_argument("--run-id")
+    wait_pages_cmd.add_argument("--attempts", type=int, default=20)
+    wait_pages_cmd.add_argument("--interval", type=float, default=2.0)
+    wait_pages_cmd.add_argument("--settle", type=float, default=3.0)
     for command in ("manifest", "remote", "verify"):
         subparser = commands.add_parser(command)
         subparser.add_argument("path", type=Path)
@@ -1789,6 +1853,16 @@ def main():
             dry_run=args.dry_run,
         )
         print(f"Kept {len(summary['kept'])} dev release(s); deleted {len(summary['deleted'])}.")
+    elif args.command == "wait-pages-artifact":
+        found = wait_pages_artifact(
+            artifact_id=args.artifact_id,
+            artifact_name=args.artifact_name,
+            run_id=args.run_id,
+            attempts=args.attempts,
+            interval_seconds=args.interval,
+            settle_seconds=args.settle,
+        )
+        print(f"Pages artifact {found['name']} (id={found['id']}) is visible.")
     elif args.command == "remote":
         remote(args.path, require_release_manifest=args.require_release_manifest, scope=args.scope)
     else:

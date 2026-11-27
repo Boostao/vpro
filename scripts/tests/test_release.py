@@ -1174,7 +1174,11 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("test -s site/dist/dev/index.html", ci)
         self.assertIn("python scripts/release.py sync-dev-manifest --output site/dev-manifest.json --keep 5", pages)
         self.assertIn("test -s site/dist/dev/index.html", pages)
+        self.assertIn("actions: read", pages)
+        self.assertIn('python3 scripts/release.py wait-pages-artifact --artifact-id "$PAGES_ARTIFACT_ID"', pages)
         self.assertIn("python scripts/release.py sync-dev-manifest --output site/dev-manifest.json --keep 5", deploy_pages_job)
+        self.assertIn("actions: read", deploy_pages_job)
+        self.assertIn('python3 scripts/release.py wait-pages-artifact --artifact-id "$PAGES_ARTIFACT_ID"', deploy_pages_job)
 
     def test_dev_plan_ci_gate_app_change_filter_and_force_override(self):
         from datetime import datetime, timezone
@@ -1520,8 +1524,64 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("python3 scripts/release.py dev-verify dev-downloaded", dev_wf)
         self.assertIn("python3 scripts/release.py prune-dev --keep 5", dev_wf)
         self.assertIn("python3 scripts/release.py sync-dev-manifest --output site/dev-manifest.json --keep 5", dev_wf)
+        self.assertIn("actions: read", dev_wf)
+        self.assertIn('python3 scripts/release.py wait-pages-artifact --artifact-id "$PAGES_ARTIFACT_ID"', dev_wf)
         self.assertIn("--prerelease", dev_wf)
         self.assertEqual(dev_wf.count("contents: write"), 1)
+
+    def test_wait_pages_artifact_retries_and_validates_id(self):
+        responses = iter([
+            {"total_count": 0, "artifacts": []},
+            {"total_count": 2, "artifacts": [
+                {"id": 999, "name": "github-pages", "expired": False},
+                {"id": 15205887446, "name": "github-pages", "expired": True},
+            ]},
+            {"total_count": 1, "artifacts": [
+                {"id": 15205887446, "name": "github-pages", "expired": False},
+            ]},
+        ])
+        endpoints = []
+        sleeps = []
+
+        def fake_fetch(endpoint):
+            endpoints.append(endpoint)
+            return next(responses)
+
+        found = release.wait_pages_artifact(
+            artifact_id="15205887446",
+            run_id="46013989471",
+            repository="Boostao/vpro",
+            attempts=5,
+            interval_seconds=2.0,
+            settle_seconds=3.0,
+            fetcher=fake_fetch,
+            sleeper=sleeps.append,
+        )
+        self.assertEqual(found["id"], 15205887446)
+        self.assertEqual(len(endpoints), 3)
+        self.assertEqual(
+            endpoints[0],
+            "repos/Boostao/vpro/actions/runs/46013989471/artifacts?name=github-pages&per_page=10",
+        )
+        self.assertEqual(sleeps, [2.0, 2.0, 3.0])
+
+        timeout_sleeps = []
+        with self.assertRaisesRegex(ValueError, "Timed out waiting"):
+            release.wait_pages_artifact(
+                artifact_id="42",
+                run_id="100",
+                attempts=2,
+                interval_seconds=1.0,
+                settle_seconds=0.0,
+                fetcher=lambda _ep: {"total_count": 0, "artifacts": []},
+                sleeper=timeout_sleeps.append,
+            )
+        self.assertEqual(timeout_sleeps, [1.0])
+
+        with self.assertRaisesRegex(ValueError, "positive integer Pages artifact ID"):
+            release.wait_pages_artifact(artifact_id="", run_id="100", fetcher=lambda _ep: {})
+        with self.assertRaisesRegex(ValueError, "positive integer GITHUB_RUN_ID"):
+            release.wait_pages_artifact(artifact_id="42", run_id="abc", fetcher=lambda _ep: {})
 
     def test_package_vpro64_bridge_deterministic_and_parity_enforced(self):
         with tempfile.TemporaryDirectory() as tmp:

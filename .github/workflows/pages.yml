@@ -16,6 +16,7 @@ on:
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -94,9 +95,16 @@ jobs:
         uses: actions/configure-pages@v6
 
       - name: Upload artifact
+        id: upload-pages
         uses: actions/upload-pages-artifact@v5
         with:
           path: 'site/dist'
+
+      - name: Wait for github-pages artifact visibility
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PAGES_ARTIFACT_ID: ${{ steps.upload-pages.outputs.artifact_id }}
+        run: python3 scripts/release.py wait-pages-artifact --artifact-id "$PAGES_ARTIFACT_ID"
 
       - name: Deploy to GitHub Pages
         id: deployment

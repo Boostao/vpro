@@ -1,39 +1,15 @@
-# `Boostao/vpro` GitHub Actions, CODEOWNERS & Approval Gates
+# `Boostao/vpro` GitHub Actions & CODEOWNERS
 
-This directory holds the continuous integration, GitHub Pages deployment, cross-platform release packaging, upstream security/CRAN canary checks, Dependabot configuration, and repository ownership rules for **`Boostao/vpro` (`VPro` 2.0)**.
+This directory holds the continuous integration, GitHub Pages deployment, nightly dev builds, cross-platform release packaging, upstream security/CRAN canary checks, Dependabot configuration, and repository ownership rules for **`Boostao/vpro` (`VPro` 2.0)**.
 
 ---
 
-## 1. CODEOWNERS & Runner-Gating Approval Policy
-
-To prevent unapproved workflow runs from consuming GitHub Actions runner minutes on pushes, PRs, manual dispatches, or scheduled crons:
+## 1. CODEOWNERS & Execution Policy
 
 - **[`CODEOWNERS`](./CODEOWNERS)** assigns global ownership (`*`) to **`@Boostao/boostao-dev`**, **`@meztez`**, **`@FrankBornais`**, and **`@nic-gauthier`**.
-- **Protected GitHub Environments (`actions-approval` & `github-pages`)** require reviewer approval from `@Boostao/boostao-dev` (or any Boostao org member listed above) **before a runner VM is provisioned**. Pending jobs stay in `Waiting` state with **0 runner minutes billed** until approved.
-- **Fork PR Contributor Approval Policy** is set to `all_external_contributors` so external fork pull requests require maintainer approval prior to running workflows.
-
-### How Each Workflow Is Gated
-
-| Workflow | Gated Entry Job(s) | Protected Environment | Effect Before Approval |
-|---|---|---|---|
-| [`workflows/ci.yml`](./workflows/ci.yml) | `changes` (root fan-out job) | `actions-approval` | Entire CI pipeline waits before spinning up any runner. One approval releases only the path-filtered jobs. |
-| [`workflows/pages.yml`](./workflows/pages.yml) | `deploy` | `github-pages` | Pages build and deploy wait before provisioning `ubuntu-24.04`. |
-| [`workflows/release.yml`](./workflows/release.yml) | `validate` (root job) + `deploy-pages` | `actions-approval` (start) / `github-pages` (deploy) | Manual releases pause before Windows/macOS/Linux/R build matrices spin up. |
-| [`workflows/upstream-canary.yml`](./workflows/upstream-canary.yml) | `security-audit`, `r-upstream-suggests-canary`, `cross-os-desktop-compile-smoke` | `actions-approval` | Weekly Monday canary runs pause until approved (approve all 3 environments at once in "Review deployments"). |
-
-### How to Approve (or Un-Gate Later)
-
-1. **In GitHub Web UI**: Open the waiting workflow run under the **Actions** tab $\rightarrow$ click **Review deployments** $\rightarrow$ check the environment(s) $\rightarrow$ click **Approve and deploy**.
-2. **Via `gh` CLI**:
-   ```bash
-   # List pending deployments for a waiting run
-   gh api repos/Boostao/vpro/actions/runs/<RUN_ID>/pending_deployments
-
-   # Approve pending deployments
-   gh api --method POST repos/Boostao/vpro/actions/runs/<RUN_ID>/pending_deployments \
-     -F "environment_ids[]=<ENV_ID>" -f state=approved -f comment="Approved by CODEOWNER"
-   ```
-3. **To un-gate later**: Remove `environment: actions-approval` from the workflow YAML files (and optionally clear required reviewers on the `actions-approval` / `github-pages` environments in **Settings $\rightarrow$ Environments**).
+- **Automatic Workflow Execution**: Manual reviewer approval gates (`actions-approval` and required reviewers on `github-pages`) have been removed so pushes to `main`, scheduled nightly dev builds, manual dispatches, and GitHub Pages deployments run automatically without manual approval.
+- **`github-pages` Environment**: Retained with `main`-branch deployment policy only (required by `actions/deploy-pages@v5`), with no required reviewers.
+- **Fork PR Contributor Approval Policy** remains set to `all_external_contributors` so external fork pull requests require maintainer approval prior to running workflows.
 
 ---
 
@@ -63,9 +39,8 @@ flowchart TD
         DEP["Dependabot (Monthly Mon 08:00 PT)"]
     end
 
-    subgraph Gate["CODEOWNER Approval Gate (0 runner minutes until approved)"]
-        AA["Environment: actions-approval<br/>Reviewers: @Boostao/boostao-dev, @meztez, @FrankBornais, @nic-gauthier"]
-        GP["Environment: github-pages<br/>Reviewers: @Boostao/boostao-dev, @meztez, @FrankBornais, @nic-gauthier"]
+    subgraph Gate["Deployment Environment (main branch policy, no manual reviewer gate)"]
+        GP["Environment: github-pages<br/>Branch policy: main"]
     end
 
     subgraph CI_WF["1. CI (.github/workflows/ci.yml) — cancel-in-progress: true"]
@@ -100,22 +75,19 @@ flowchart TD
     end
 
     DEP -->|"Opens grouped PR (external PRs gated)"| PR
-    PR --> AA
-    PUSH --> AA
-    AA -->|"Approved"| CHANGES
+    PR --> CHANGES
+    PUSH --> CHANGES
     CHANGES --> PORTAL & FE & BE & RLINUX & RCROSS & RSIDECAR
     CHANGES -->|"PR only"| WEBDRY
 
     PUSH -->|"Paths: site/docs-src/scripts/r"| GP
     MANUAL -->|"pages.yml"| GP
-    GP -->|"Approved"| PDEPLOY
+    GP --> PDEPLOY
 
-    CRON --> AA
-    MANUAL -->|"canary"| AA
-    AA -->|"Approved"| SECAUDIT & RCANARY & OSCANARY
+    CRON --> SECAUDIT & RCANARY & OSCANARY
+    MANUAL -->|"canary"| SECAUDIT & RCANARY & OSCANARY
 
-    MANUAL -->|"release.yml"| AA
-    AA -->|"Approved"| RVAL
+    MANUAL -->|"release.yml"| RVAL
     RVAL -->|"scope == full"| BWIN & BMAC & BLIN
     RVAL --> BRSDK
     BWIN & BMAC & BLIN & BRSDK --> RPUB -->|"if !draft"| GP --> RPAGES
@@ -125,39 +97,39 @@ flowchart TD
 
 ```text
 ========================================================================================================
-EVENT / TRIGGER             APPROVAL GATE       WORKFLOW & JOBS                             DURATION
+EVENT / TRIGGER                 WORKFLOW & JOBS                                             DURATION
 ========================================================================================================
-[1] pull_request -> main -> [actions-approval] -> ci.yml (cancel-in-progress: true)
-[2] push -> main         -> [actions-approval] ->   changes (dorny/paths-filter@v4)          ~10s
-                                                      |-- (if portal)   portal-and-scripts   ~20s
-                                                      |-- (if app)      app-frontend         ~3m
-                                                      |-- (if app)      app-backend (PG16)   ~17m
-                                                      |-- (if r)        r-cmd-check-linux    ~6m (x2)
-                                                      |-- (if r)        r-cmd-check-cross-os ~7m (W+M)
-                                                      |-- (if rsidecar) rsidecar-integration ~4.5m
-                                                      +-- (PR + site)   website-dry-run      ~5m
+[1] pull_request -> main     -> ci.yml (cancel-in-progress: true)
+[2] push -> main             ->   changes (dorny/paths-filter@v4)                            ~10s
+                                    |-- (if portal)   portal-and-scripts                     ~20s
+                                    |-- (if app)      app-frontend                           ~3m
+                                    |-- (if app)      app-backend (PG16)                     ~17m
+                                    |-- (if r)        r-cmd-check-linux                      ~6m (x2)
+                                    |-- (if r)        r-cmd-check-cross-os                   ~7m (W+M)
+                                    |-- (if rsidecar) rsidecar-integration                   ~4.5m
+                                    +-- (PR + site)   website-dry-run                        ~5m
 
-[3] push -> main (site/docs/r) -> [github-pages] -> pages.yml -> deploy (Portal + pkgdown)  ~5m
+[3] push -> main (site/docs/r) -> pages.yml -> deploy [github-pages] (Portal + pkgdown)      ~5m
     (or workflow_dispatch)
 
-[4] Cron: Mon 09:17 UTC  -> [actions-approval] -> upstream-canary.yml
-    (or workflow_dispatch)                          |-- security-audit (govulncheck + npm)   ~4m
-                                                    |-- r-upstream-suggests-canary           ~6m
-                                                    +-- cross-os-desktop-compile (Win + Mac) ~6m
+[4] Cron: Mon 09:17 UTC      -> upstream-canary.yml
+    (or workflow_dispatch)        |-- security-audit (govulncheck + npm)                     ~4m
+                                  |-- r-upstream-suggests-canary                             ~6m
+                                  +-- cross-os-desktop-compile (Win + Mac)                   ~6m
 
-[5] workflow_dispatch    -> [actions-approval] -> release.yml -> validate
-                                                    |-- build-windows (amd64, arm64)         \
-                                                    |-- build-macos   (universal)             |~10m
-                                                    |-- build-linux   (amd64, arm64)         /
-                                                    +-- build-r       (vpro-r-sdk.tar.gz)
-                                                          |
-                                                          v
-                                                    release (PE/ELF/Mach-O + GH Release)
-                                                          |
-                                                          v
-                                                    [github-pages] -> deploy-pages           ~5m
+[5] workflow_dispatch        -> release.yml -> validate
+                                  |-- build-windows (amd64, arm64)                           \
+                                  |-- build-macos   (universal)                               |~10m
+                                  |-- build-linux   (amd64, arm64)                           /
+                                  +-- build-r       (vpro-r-sdk.tar.gz)
+                                        |
+                                        v
+                                  release (PE/ELF/Mach-O + GH Release)
+                                        |
+                                        v
+                                  deploy-pages [github-pages]                                ~5m
 
-[6] Monthly Mon 08:00 PT -> Dependabot opens grouped PRs -> enters [1]
+[6] Monthly Mon 08:00 PT     -> Dependabot opens grouped PRs -> enters [1]
 ========================================================================================================
 ```
 
