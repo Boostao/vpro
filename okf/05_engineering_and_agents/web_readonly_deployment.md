@@ -108,9 +108,14 @@ sudo install -d -m 0700 -o deploy -g deploy /home/deploy/.ssh
 # sudo chmod 0600 /home/deploy/.ssh/authorized_keys && sudo chown deploy:deploy /home/deploy/.ssh/authorized_keys
 
 # 3. Create the canonical /srv/vpro host directory layout
-sudo mkdir -p /srv/vpro/deploy /srv/vpro/data/releases /srv/vpro/pmtiles /srv/vpro/pictures
-sudo chown -R 10001:10001 /srv/vpro/data /srv/vpro/pmtiles /srv/vpro/pictures
-sudo chown -R deploy:deploy /srv/vpro/deploy
+#    Owned deploy:10001 (0755) on /srv/vpro/{data,data/releases,pmtiles,pictures}
+#    so `deploy` runs sync-snapshot.sh and PMTiles uploads without root while
+#    container UID 10001:10001 reads immutable 0444/0555 snapshot bundles.
+sudo mkdir -p /srv/vpro/deploy /srv/vpro/data/releases /srv/vpro/pmtiles /srv/vpro/pictures /etc/vpro
+sudo chown deploy:deploy /srv/vpro/deploy && sudo chmod 0755 /srv/vpro/deploy
+sudo chown deploy:10001 /srv/vpro/data /srv/vpro/data/releases /srv/vpro/pmtiles /srv/vpro/pictures
+sudo chmod 0755 /srv/vpro/data /srv/vpro/data/releases /srv/vpro/pmtiles /srv/vpro/pictures
+sudo chown root:root /etc/vpro && sudo chmod 0700 /etc/vpro
 ```
 
 > [!NOTE]
@@ -128,18 +133,96 @@ chmod 0640 /srv/vpro/deploy/.env
 
 ---
 
-## 3. GitHub Environments & Secrets Checklist
+## 3. Software-as-Code Provisioning (`deploy/vpro-web/infra/`)
+
+All DigitalOcean, Cloudflare, Droplet bootstrap, GitHub Environment, and initial snapshot seeding steps are codified as idempotent, reusable Bash scripts under `deploy/vpro-web/infra/` so `devl` and `prod` stay reproducible without manual console drift.
+
+### 3.1 Topology, Naming & Locality
+
+| Resource | `devl` (`--env devl`) | `prod` (`--env prod`) | Notes |
+|---|---|---|---|
+| **DigitalOcean Team / Context** | `BECtools_developers` (`doctl --context vpro`) | `BECtools_developers` (`doctl --context vpro`) | Both projects live in the same DO team |
+| **DigitalOcean Project** | `vpro-devl` (`Development`) | `vpro-prod` (`Production`) | `provision-do.sh` ensures both projects exist on every run |
+| **Region & VPC Locality** | `tor1` · `default-tor1` VPC (`22f458d9-5654-4aee-95e0-4401bd4a2c8f`) | `tor1` · `default-tor1` VPC (`22f458d9-5654-4aee-95e0-4401bd4a2c8f`) | Canadian data residency + shared VPC locality with regional BEC services |
+| **Droplet & Size** | `vpro-web-devl` (`s-2vcpu-4gb`, Ubuntu 24.04 x64) | `vpro-web-prod` (`s-2vcpu-4gb`, Ubuntu 24.04 x64) | `VPRO_MEM_LIMIT=2g` / `1.5` CPU (`devl`); `3g` / `1.75` CPU (`prod`) |
+| **Cloud Firewall** | `vpro-web-devl-fw` | `vpro-web-prod-fw` | Inbound: TCP `22` (configurable `--ssh-cidr`), TCP `80`, TCP+UDP `443` only; loopback `:9090` never exposed |
+| **Cloudflare Zone & FQDN** | `boostao.ca` $\rightarrow$ `vpro.devl.boostao.ca` | `boostao.ca` $\rightarrow$ `vpro.boostao.ca` | **DNS-only (`proxied: false`)** so Caddy handles Let's Encrypt ACME, HTTP/3 QUIC, and `PMTiles` HTTP `Range` cleanly |
+| **GitHub Environment** | `dev` (`Boostao/vpro`) | `prod` (`Boostao/vpro`) | Stores all 6 SSH/healthcheck deployment secrets |
+| **Host Data Ownership** | `/srv/vpro/{data,data/releases,pmtiles,pictures}` owned `deploy:10001` (`0755`) | Same | Lets `deploy` run `sync-snapshot.sh` and `PMTiles` uploads without root while container UID `10001:10001` reads `0444`/`0555` bundles |
+
+### 3.2 Script Inventory
+
+| Script | Responsibility |
+|---|---|
+| [`deploy/vpro-web/infra/env.defaults.sh`](../../deploy/vpro-web/infra/env.defaults.sh) | Shared defaults (`DO_CONTEXT`, `DO_REGION`, `DO_VPC_UUID`, `CF_ZONE`, `GH_REPO`, `/srv/vpro/deploy`) and `resolve_vpro_env_defaults <devl\|prod>` helper |
+| [`deploy/vpro-web/infra/provision-do.sh`](../../deploy/vpro-web/infra/provision-do.sh) | Idempotently ensures both `vpro-devl` & `vpro-prod` DO Projects, target Droplet, project resource assignment, and Cloud Firewall (supports `--projects-only`, `--ssh-cidr`, `--json`) |
+| [`deploy/vpro-web/infra/configure-dns.sh`](../../deploy/vpro-web/infra/configure-dns.sh) | Idempotently creates or updates the Cloudflare `A` record in `boostao.ca` via `cf` CLI (DNS-only `proxied=false`, `ttl=300` by default) |
+| [`deploy/vpro-web/infra/bootstrap-droplet.sh`](../../deploy/vpro-web/infra/bootstrap-droplet.sh) | Waits for SSH readiness, installs Docker Engine + Compose v2 & `unattended-upgrades`, hardens `sshd` (`99-vpro-hardening.conf`), creates password-locked `deploy` user in `docker` group, provisions `/srv/vpro/*` (`deploy:10001`, `0755`) and `/etc/vpro` (`root:root`, `0700`), uploads compose/Caddy/`sync-snapshot.sh`, and writes `0600` `.env` (preserving existing `.env` unless `--overwrite-env`) |
+| [`deploy/vpro-web/infra/configure-github-env.sh`](../../deploy/vpro-web/infra/configure-github-env.sh) | Ensures GitHub Environment (`dev` or `prod`), pins ED25519 host key via `ssh-keyscan`, and sets `DO_HOST`, `DO_USER`, `DO_SSH_KEY`, `DO_SSH_KNOWN_HOSTS`, `DO_DEPLOY_DIR`, and `VPRO_HEALTHCHECK_URL` without echoing private keys |
+| [`deploy/vpro-web/infra/seed-initial-snapshot.sh`](../../deploy/vpro-web/infra/seed-initial-snapshot.sh) | Runs fail-closed local `vpro-snapshot verify` first, then either triggers zero-downtime `sync-snapshot.sh` if `vpro-web` is running or cold-seeds `/srv/vpro/data/releases/<snapshotId>` (`0444`/`0555`) + atomic `/srv/vpro/data/current` symlink before first deploy |
+| [`deploy/vpro-web/infra/provision-all.sh`](../../deploy/vpro-web/infra/provision-all.sh) | End-to-end orchestrator running all steps with an ephemeral Ed25519 deploy keypair (shredded on exit), optional `--pmtiles-dir` rsync, optional `--snapshot-bundle` seed, and optional `--trigger-deploy` dispatch |
+
+### 3.3 Secrets Management Posture
+
+- **No DigitalOcean Droplet Secrets Manager:** DigitalOcean does not provide a standalone Droplet Secrets Manager service. Secrets are never baked into Git, container images, or Droplet user-data.
+- **Zero PostgreSQL Credentials on `vpro-web`:** The public `vpro-web` container operates strictly on pre-built, immutable SQLite snapshot bundles and holds **zero** `BECMaster` PostgreSQL credentials, API tokens, or write privileges.
+- **CI/CD Deployment Secrets in GitHub Environments (`dev` / `prod`):** `provision-all.sh` generates an ephemeral Ed25519 keypair in a temporary `0700` directory, authorizes only the public key on `deploy`, uploads the private key directly to GitHub Environment secret `DO_SSH_KEY` via stdin, and shreds/deletes the local private key on exit.
+- **Future Scheduled `BECMaster` Snapshot Extraction:** When automated PostgreSQL $\rightarrow$ `vpro-snapshot` builds are added later, store read-only PG extraction credentials either in a dedicated GitHub Actions Environment (for off-box runner builds) or in a root-only host file (`/etc/vpro/snapshot-pg.env`, `root:root`, `0600`, inside `/etc/vpro` `0700`) that is **never** bind-mounted into the `vpro-web` container.
+
+### 3.4 Replicating `vpro-prod` (`vpro.boostao.ca`)
+
+Once `vpro-devl` (`vpro.devl.boostao.ca`) is validated and `D-14` redaction policy sign-off is confirmed, provision `vpro-prod` end-to-end with one command (requires authenticated `doctl --context vpro`, `cf`, and `gh` CLIs):
+
+```bash
+# One-command idempotent prod provisioning + PMTiles + initial verified snapshot + CI deploy
+deploy/vpro-web/infra/provision-all.sh \
+  --env prod \
+  --pmtiles-dir /path/to/local/pmtiles \
+  --snapshot-bundle /path/to/verified-becmaster-snapshot \
+  --vpro-snapshot-bin ./vpro-snapshot \
+  --trigger-deploy
+```
+
+Or run the discrete steps individually when auditing or re-running a single stage:
+
+```bash
+# 1. DigitalOcean projects (vpro-devl + vpro-prod), Droplet (vpro-web-prod) & firewall
+DO_OUT="$(deploy/vpro-web/infra/provision-do.sh --env prod --json)"
+PROD_IP="$(printf '%s' "${DO_OUT}" | jq -er '.DROPLET_IP')"
+
+# 2. Cloudflare DNS A record (vpro.boostao.ca -> PROD_IP, DNS-only)
+deploy/vpro-web/infra/configure-dns.sh --env prod --ip "${PROD_IP}"
+
+# 3. Bootstrap Droplet with a dedicated Ed25519 deploy keypair
+deploy/vpro-web/infra/bootstrap-droplet.sh \
+  --env prod --host "${PROD_IP}" --deploy-pubkey /tmp/prod_deploy.pub
+
+# 4. Configure GitHub Environment 'prod' secrets (6 secrets incl. pinned host key)
+deploy/vpro-web/infra/configure-github-env.sh \
+  --env prod --host "${PROD_IP}" --ssh-key-file /tmp/prod_deploy
+
+# 5. Verify locally & cold-seed initial snapshot before first web-deploy.yml run
+deploy/vpro-web/infra/seed-initial-snapshot.sh \
+  --host "${PROD_IP}" --bundle /path/to/verified-becmaster-snapshot --ssh-key /tmp/prod_deploy
+
+# 6. Enable required reviewer protection on GitHub Environment 'prod', then tag web-v* or dispatch:
+gh workflow run web-deploy.yml --repo Boostao/vpro -f environment=prod
+```
+
+---
+
+## 4. GitHub Environments & Secrets Checklist
 
 [`.github/workflows/web-deploy.yml`](../../.github/workflows/web-deploy.yml) builds `linux/amd64` container images to `ghcr.io/<owner>/<repo>/vpro-web` and deploys over SSH with automatic `/readyz` rollback.
 
-### 3.1 Trigger & Environment Routing
+### 4.1 Trigger & Environment Routing
 - **Push to `main`** (changing `app/**`, `r/**`, `deploy/vpro-web/**`, or `.github/workflows/web-deploy.yml`): builds & pushes `:dev-<short_sha>` + `:dev`, then deploys to GitHub Environment **`dev`**.
 - **Git tag `web-v*`** (e.g., `web-v1.0.0`): builds & pushes `:web-v*` + `:latest`, then deploys to GitHub Environment **`prod`**.
 - **Manual `workflow_dispatch`:** Choose `environment` (`dev` | `prod`), optional existing GHCR `image_tag` (skips rebuild), and `include_r` (`true` default | `false` for ~55 MB Go-only image).
 - **Graceful Skip Gate:** If `DO_HOST`, `DO_USER`, or `DO_SSH_KEY` is not yet set on the target environment, the build/push still succeeds and the SSH deploy step skips cleanly with a reminder in the job summary.
 - **Recommended GitHub Environment Protection (`prod`):** Require at least 1 reviewer approval on the `prod` GitHub Environment and restrict deployments to `web-v*` tags / protected branches.
 
-### 3.2 Exact Secrets Per Environment (`dev` and `prod`)
+### 4.2 Exact Secrets Per Environment (`dev` and `prod`)
 
 | Secret Name | Required | Example Value / Notes |
 |---|---|---|
@@ -150,17 +233,17 @@ chmod 0640 /srv/vpro/deploy/.env
 | **`VPRO_HEALTHCHECK_URL`** | Optional | External readiness URL verified after deploy (e.g., `https://becmaster-dev.example.com/readyz` or `https://becmaster.example.com/readyz`). If omitted, CI probes `http://127.0.0.1:8080/readyz` inside `vpro-web`. |
 | **`DO_SSH_KNOWN_HOSTS`** | Optional *(recommended)* | Output of `ssh-keyscan -t ed25519 <DO_HOST>` to enforce `StrictHostKeyChecking=yes` instead of `accept-new` |
 
-### 3.3 GHCR Pull Authentication (Private Repository Note)
+### 4.3 GHCR Pull Authentication (Private Repository Note)
 - **During CI Deploys:** `web-deploy.yml` authenticates the Droplet to `ghcr.io` using `${{ github.actor }}` + `${{ secrets.GITHUB_TOKEN }}` (`packages: read`).
 - **Standalone Droplet Pulls (`sync-snapshot.sh` Cold Bootstrap / Manual Maintenance):** If the `Boostao/vpro` repository or its GHCR package is **private**, run `docker login ghcr.io` once on the Droplet as `deploy` with a fine-grained/classic GitHub PAT scoped strictly to **`read:packages`** so standalone `docker run` (used by `sync-snapshot.sh` when `vpro-web` is not yet running) and manual `docker compose pull` can pull images without CI.
 
 ---
 
-## 4. Periodic Snapshot Publishing & Zero-Downtime Refresh Runbook
+## 5. Periodic Snapshot Publishing & Zero-Downtime Refresh Runbook
 
 Snapshots are built **offline** on a custodian workstation or build host from a canonical `VP08` SQLite database (never mutating source `.db` files), verified cryptographically, transferred to the Droplet, and activated with zero downtime.
 
-### 4.1 Build & Verify Immutable Snapshot (Off-Box)
+### 5.1 Build & Verify Immutable Snapshot (Off-Box)
 ```bash
 # Build headless vpro-snapshot CLI from repo root (or run from container image)
 (cd app && CGO_ENABLED=1 GOTOOLCHAIN=go1.27.4+auto go build -tags vpro_headless -o ../vpro-snapshot ./cmd/vpro-snapshot)
@@ -189,7 +272,7 @@ What `vpro-snapshot build` guarantees (`app/cmd/vpro-snapshot/publish.go`, `mani
 4. Finalizes every `.db` file: `PRAGMA wal_checkpoint(TRUNCATE)` $\rightarrow$ `PRAGMA journal_mode = DELETE` $\rightarrow$ `ANALYZE` & `VACUUM` $\rightarrow$ removes any `-wal`/`-shm`/`-journal` sidecars $\rightarrow$ verifies `mode=ro&immutable=1` openability and `PRAGMA quick_check`.
 5. Writes deterministic `manifest.json` (`schemaVersion: 1`, `snapshotId`, `publishedAt`, `redacted`, `redactedPlotCount`, `standards`, `supportFiles`, `auxiliaryFiles`, `datasets`) and normalizes permissions to world-readable `0644` files / `0755` directories (`sync-snapshot.sh` then locks staged Droplet releases down to `0444`/`0555` before calling `vpro-snapshot verify`).
 
-### 4.2 Transfer & Zero-Downtime Activation on the Droplet
+### 5.2 Transfer & Zero-Downtime Activation on the Droplet
 ```bash
 # Transfer tarball to the Droplet
 scp /tmp/becmaster-2026-11.tar.gz deploy@<DO_HOST>:/tmp/
@@ -208,7 +291,7 @@ What [`deploy/vpro-web/sync-snapshot.sh`](../../deploy/vpro-web/sync-snapshot.sh
 6. **Automatic Rollback on Reload Failure:** If `/internal/reload` or `/readyz` fails, `sync-snapshot.sh` flips `/srv/vpro/data/current` back to the previous release and re-triggers `/internal/reload`.
 7. Prunes inactive releases beyond `--keep 3` (always preserving the active release).
 
-### 4.3 Instant Manual Rollback
+### 5.3 Instant Manual Rollback
 Because `--keep 3` retains the last three verified bundles in `/srv/vpro/data/releases/`, rolling back to a previous snapshot takes under 2 seconds without restarting containers:
 
 ```bash
@@ -224,7 +307,7 @@ curl -fsS http://127.0.0.1:9090/readyz
 
 ---
 
-## 5. Client Sign-Off Gate: Fail-Closed `RedBlueList` Coordinate Redaction
+## 6. Client Sign-Off Gate: Fail-Closed `RedBlueList` Coordinate Redaction
 
 Consistent with `app/internal/cloudsync` and [`D-12` / `D-14`](../04_evidence_and_sources/decisions_and_gaps.md), **`vpro-snapshot build` enforces BC Conservation Data Centre (CDC) rare-plant coordinate redaction fail-closed by default (`--redact=true`)**:
 
@@ -241,9 +324,9 @@ Consistent with `app/internal/cloudsync` and [`D-12` / `D-14`](../04_evidence_an
 
 ---
 
-## 6. Runtime Configuration & Operational Diagnostics
+## 7. Runtime Configuration & Operational Diagnostics
 
-### 6.1 Core `VPRO_WEB_*` Knobs ([`app/cmd/vpro-web/config.go`](../../app/cmd/vpro-web/config.go) & [`deploy/vpro-web/env.example`](../../deploy/vpro-web/env.example))
+### 7.1 Core `VPRO_WEB_*` Knobs ([`app/cmd/vpro-web/config.go`](../../app/cmd/vpro-web/config.go) & [`deploy/vpro-web/env.example`](../../deploy/vpro-web/env.example))
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -256,14 +339,14 @@ Consistent with `app/internal/cloudsync` and [`D-12` / `D-14`](../04_evidence_an
 | `VPRO_WEB_PMTILES_DIR` / `VPRO_WEB_PMTILES_CDN_BASE_URL` | `/pmtiles` / *(empty)* | Local read-only `PMTiles` directory or external CDN/Spaces base URL |
 | `VPRO_WEB_EXTERNAL_LINKS_JSON` | `BECweb` + `byBEC` | Optional JSON array `[{"label","url","description"}]` overriding curated external BEC links returned in `GET /api/meta` (strict `http`/`https` validation, unknown fields rejected) |
 
-### 6.2 Placeholder Handoff Summary (Values to Replace at Provisioning)
+### 7.2 Placeholder Handoff Summary (Values to Replace at Provisioning)
 All checked-in deployment files use safe placeholder values so no real IP, domain, or secret is committed to Git. Before going live on DigitalOcean, replace:
 1. **Droplet `.env` (from [`deploy/vpro-web/env.example`](../../deploy/vpro-web/env.example)):** `VPRO_ENV` (`dev` | `prod`), `VPRO_DOMAIN` (`becmaster-dev.<domain>` / `becmaster.<domain>`), `VPRO_IMAGE` (pin immutable `web-v*` tag in `prod`), `VPRO_MEM_LIMIT` / `VPRO_CPUS`, and optional `VPRO_WEB_PMTILES_CDN_BASE_URL` / `VPRO_WEB_EXTERNAL_LINKS_JSON`.
 2. **DNS Records:** `A` (and optional `AAAA`) pointing `VPRO_DOMAIN` to the Droplet public IP before first Caddy start.
 3. **GitHub Environment Secrets (`dev` and `prod`):** `DO_HOST`, `DO_USER`, `DO_SSH_KEY`, plus optional `DO_DEPLOY_DIR` (`/srv/vpro/deploy`), `VPRO_HEALTHCHECK_URL`, and `DO_SSH_KNOWN_HOSTS`.
 4. **Initial Snapshot:** Build, verify (`vpro-snapshot verify`), transfer, and activate at least one bundle via `sync-snapshot.sh` so `/srv/vpro/data/current` exists before first `docker compose up -d`.
 
-### 6.3 Health, Readiness & Loopback Inspection Commands
+### 7.3 Health, Readiness & Loopback Inspection Commands
 ```bash
 # Public liveness, readiness, snapshot/standards/external-links metadata & BECMaster filter options
 curl -fsS https://<VPRO_DOMAIN>/healthz
