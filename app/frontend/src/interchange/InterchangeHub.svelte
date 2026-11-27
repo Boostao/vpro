@@ -53,6 +53,7 @@
   let vpro64IncludeHierarchy = $state(true);
   let vpro64IncludeMensuration = $state(true);
   let vpro64IncludeCompanions = $state(true);
+  let vpro64IncludeVBABridge = $state(true);
   let vpro64Outcome = $state.raw<hubOps.VPro64ExportOutcome | null>(null);
 
   let tvExportFormat = $state<'xml' | 'sqlite'>('sqlite');
@@ -284,7 +285,8 @@
         vpro64IncludeActiveSU,
         vpro64IncludeHierarchy,
         vpro64IncludeMensuration,
-        vpro64IncludeCompanions
+        vpro64IncludeCompanions,
+        !webReadOnly && vpro64IncludeVBABridge
       )
     );
     const r = typeof rpcRequests !== 'undefined' ? rpcRequests : undefined;
@@ -508,6 +510,7 @@
       bind:vpro64IncludeHierarchy
       bind:vpro64IncludeMensuration
       bind:vpro64IncludeCompanions
+      bind:vpro64IncludeVBABridge
       {vpro64Outcome}
       onChooseVPro64Dest={chooseVPro64Dest}
       onRunVPro64Export={runVPro64Export}

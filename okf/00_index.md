@@ -98,7 +98,8 @@ okf/
 └── 05_engineering_and_agents/
     ├── desktop_app_engineering.md      # Deep Go/Wails v3/Svelte 5/CGO/COM/SQLite WAL/cloudsync engineering playbook (app/)
     ├── r_sdk_engineering.md            # Deep headless R SDK/SQLite WAL/Access calibration/BECMaster cloud playbook (r/)
-    └── web_readonly_deployment.md      # Read-only vpro-web & vpro-snapshot DigitalOcean, Caddy & GitHub Actions runbook
+    ├── web_readonly_deployment.md      # Read-only vpro-web & vpro-snapshot DigitalOcean, Caddy & GitHub Actions runbook
+    └── vpro64_sqlite_import.md         # Legacy VPro64 Access VBA SQLite-ODBC importer (V7mdlImportSQLite.bas) & bridge bundle
 ```
 
 | Module | Document Link | Core Contents & Key Takeaways |
@@ -124,6 +125,7 @@ okf/
 | **`05.1`** | **[Desktop App Engineering Playbook](./05_engineering_and_agents/desktop_app_engineering.md)** | Complete Go `github.com/boostao/vpro/app` 4-layer DAG, 12 Wails services, CGO/GTK/COM/chunked IPC/Excelize/Svelte 5 `$state.snapshot` & `cloudsync` invariants. |
 | **`05.2`** | **[Headless R SDK Engineering Playbook](./05_engineering_and_agents/r_sdk_engineering.md)** | Complete `r/` zero-Shiny boundary, SQLite WAL RO/write-back guards, Access/BEC oracle calibration, Wave 6 Cloud `BECMaster`, `air`, and tarball `R CMD check` gates. |
 | **`05.3`** | **[Web Read-Only Deployment Runbook](./05_engineering_and_agents/web_readonly_deployment.md)** | Operator runbook for `vpro-web` + `vpro-snapshot` (`-tags vpro_headless`, Caddy + Docker Compose, DigitalOcean provisioning, GitHub Environments/Secrets, zero-downtime symlink reload, and `RedBlueList` redaction sign-off gate). |
+| **`05.4`** | **[VPro64 SQLite Importer (`V7mdlImportSQLite.bas`)](./05_engineering_and_agents/vpro64_sqlite_import.md)** | Legacy 64-bit Access VBA SQLite-ODBC importer (`scripts/vpro64/V7mdlImportSQLite.bas`), `Install-VPro64Bridge.ps1`, `vpro64-sqlite-bridge.zip` release packaging, and VPro 2.0 Desktop sidecar export. |
 
 ---
 

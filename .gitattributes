@@ -11,3 +11,4 @@ app/frontend/bindings/** text eol=lf
 r/DESCRIPTION text eol=lf
 r/NAMESPACE text eol=lf
 r/NEWS.md text eol=lf
+*.bas text eol=crlf

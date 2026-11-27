@@ -572,6 +572,27 @@ export function renderPortalHtml({
           </div>
         </div>
 
+        <div id="card-vpro64-bridge" class="card" style="margin-top: 1.25rem;">
+          <div>
+            <h3>
+              ${ICONS.windows}
+              <span>Legacy VPro64 (Microsoft Access) Bridge</span>
+              <span class="os-tag">Windows 64-bit Access · Companion</span>
+            </h3>
+            <p>Import projects exported from VPro 2.0 (<strong>Interchange &rarr; VPro64</strong> or <strong>Work Space &rarr; Export to VPro64</strong>) directly into your existing 64-bit <code>VPro64.accdb</code> without downloading a separate full VPro64 package. VPro 2.0 Desktop can also save <code>V7mdlImportSQLite.bas</code> beside any exported project offline.</p>
+            <div class="arch-heading">Bridge Package (VBA Module, Windows Setup Helper &amp; Guide)</div>
+            <div class="asset-list">
+              ${renderAssetRow('dl-vpro64-bridge', 'VPro64 SQLite Import Bridge (vpro64-sqlite-bridge.zip)')}
+            </div>
+            <div class="arch-heading">3-Step One-Time Setup on Windows</div>
+            <ol class="rules-list">
+              <li>Install Christian Werner's 64-bit SQLite3 ODBC Driver (<a href="http://www.ch-werner.de/sqliteodbc/sqliteodbc_w64.exe" target="_blank" rel="noopener noreferrer"><code>sqliteodbc_w64.exe</code></a>) and restart Microsoft Access.</li>
+              <li>Right-click <code>vpro64-sqlite-bridge.zip</code> &rarr; <strong>Properties</strong> &rarr; check <strong>Unblock</strong> &rarr; <strong>OK</strong>, then extract to a folder.</li>
+              <li>Run <code>Install-VPro64Bridge.ps1</code> (or press <code>Alt+F11</code> in <code>VPro64.accdb</code> &rarr; <strong>File</strong> &rarr; <strong>Import File...</strong> &rarr; <code>V7mdlImportSQLite.bas</code>), then run <code>ImportSQLiteProject</code> from the Immediate Window (<code>Ctrl+G</code>).</li>
+            </ol>
+          </div>
+        </div>
+
         <div class="checksum-bar">
           <div class="checksum-bar-info">
             ${ICONS.shield}
@@ -820,6 +841,7 @@ export function renderDevPortalHtml({
       renderDevDownloadPill(build.links.rpm, 'RPM', build.metadata.rpm),
       renderDevDownloadPill(build.links.deb, 'DEB', build.metadata.deb),
       renderDevDownloadPill(build.links.mac, 'macOS (.dmg)', build.metadata.mac),
+      renderDevDownloadPill(build.links.vpro64, 'VPro64 Bridge (.zip)', build.metadata.vpro64),
       renderDevDownloadPill(build.links.checksums, 'SHA-256', build.metadata.checksums, true),
     ].filter(Boolean).join('\n                  ');
 

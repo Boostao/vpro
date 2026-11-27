@@ -687,6 +687,7 @@ func (r *RPCRouter) registerImportExportHandlers() {
 			}
 			// Strictly ignore client-supplied destinationPath and write inside VPRO_WEB_EXPORT_DIR/downloads.
 			req.DestinationPath = filePath
+			req.IncludeVBABridge = false
 
 			outcome, err := interchange.ExportVPro64Database(lease.Context, ctx, contextID, req)
 			if err != nil {

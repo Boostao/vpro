@@ -103,6 +103,12 @@ var LiberationSansRegularTTF []byte
 //go:embed fonts/LiberationSans-Bold.ttf
 var LiberationSansBoldTTF []byte
 
+//go:embed vpro64/V7mdlImportSQLite.bas
+var VPro64ImportBridgeBAS []byte
+
+//go:embed vpro64/README.txt
+var VPro64ImportBridgeREADME []byte
+
 // PrefixedFS wraps an embed.FS embedded inside resources/ so callers passing
 // either "resources/foo" or "foo" resolve identically.
 type PrefixedFS struct {

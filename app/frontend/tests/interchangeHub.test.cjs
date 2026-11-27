@@ -201,6 +201,7 @@ test('InterchangeHub routes all validation and RPC error paths to background not
       vpro64IncludeHierarchy: true,
       vpro64IncludeMensuration: true,
       vpro64IncludeCompanions: true,
+      vpro64IncludeVBABridge: true,
       vpro64Outcome: null,
       tvExportFormat: 'sqlite',
       tvExportPath: '',

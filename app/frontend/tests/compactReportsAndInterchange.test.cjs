@@ -508,7 +508,8 @@ test('InterchangeVPro64Tab replaces VENUS 5 with VPro64 Export checkboxes, ODBC 
   assert.match(desktopHtml, /data-vpro64-include-hierarchy/);
   assert.match(desktopHtml, /data-vpro64-include-mensuration/);
   assert.match(desktopHtml, /data-vpro64-include-companions/);
-  assert.match(desktopHtml, /SQLite ODBC module/i);
+  assert.match(desktopHtml, /data-vpro64-include-bridge/);
+  assert.match(desktopHtml, /V7mdlImportSQLite\.bas/);
   assert.match(desktopHtml, /data-browse-vpro64-dest/);
   assert.match(desktopHtml, /Export VPro64 Database \(\.db\)/);
 
@@ -528,6 +529,8 @@ test('InterchangeVPro64Tab replaces VENUS 5 with VPro64 Export checkboxes, ODBC 
     },
   }).body;
   assert.doesNotMatch(webHtml, /data-browse-vpro64-dest/);
+  assert.doesNotMatch(webHtml, /data-vpro64-include-bridge/);
+  assert.match(webHtml, /vpro64-sqlite-bridge\.zip/);
   assert.match(webHtml, /Download VPro64 Database \(\.db\)/);
 
   // Verify Intercom choose + export flow on InterchangeHub
@@ -544,6 +547,7 @@ test('InterchangeVPro64Tab replaces VENUS 5 with VPro64 Export checkboxes, ODBC 
     vpro64IncludeHierarchy: true,
     vpro64IncludeMensuration: true,
     vpro64IncludeCompanions: true,
+    vpro64IncludeVBABridge: true,
     vpro64Outcome: null,
     validateTargetProjectName: hub.validateTargetProjectName,
     defaultInterchangeHubPort: hub.defaultInterchangeHubPort,
@@ -557,5 +561,6 @@ test('InterchangeVPro64Tab replaces VENUS 5 with VPro64 Export checkboxes, ODBC 
   await host.actions.runVPro64Export();
   assert.equal(calls.length, 1);
   assert.equal(calls[0][1].includeMensuration, true);
+  assert.equal(calls[0][1].includeVBABridge, true);
   assert.equal(host.vpro64Outcome.plotCount, 14);
 });

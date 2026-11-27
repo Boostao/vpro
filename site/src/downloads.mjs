@@ -18,6 +18,7 @@ export const assetLinks = Object.freeze({
   'dl-linux-arm64-rpm': 'vpro-linux-arm64.rpm',
   'dl-linux-arm64-tar': 'vpro-linux-arm64.tar.gz',
   'dl-r-sdk': 'vpro-r-sdk.tar.gz',
+  'dl-vpro64-bridge': 'vpro64-sqlite-bridge.zip',
   'dl-checksums': 'SHA256SUMS.txt',
 });
 
@@ -331,6 +332,7 @@ export const devAssetLinks = Object.freeze({
   deb: 'vpro-linux-amd64.deb',
   rpm: 'vpro-linux-amd64.rpm',
   mac: 'vpro-macos-universal.dmg',
+  vpro64: 'vpro64-sqlite-bridge.zip',
   checksums: 'SHA256SUMS.txt',
 });
 

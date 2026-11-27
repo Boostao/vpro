@@ -22,9 +22,16 @@ LEGACY_REPOSITORIES = frozenset({"Boostao/vpro_wails", "boostao/vpro_wails"})
 ARCHES = ("amd64", "arm64")
 R_SDK_GROUP = "r-sdk"
 R_SDK_ASSET = "vpro-r-sdk.tar.gz"
+VPRO64_BRIDGE_GROUP = "vpro64-bridge"
+VPRO64_BRIDGE_ASSET = "vpro64-sqlite-bridge.zip"
+VPRO64_BRIDGE_ENTRIES = (
+    "Install-VPro64Bridge.ps1",
+    "README.txt",
+    "V7mdlImportSQLite.bas",
+)
 DESKTOP_GROUPS = ("windows-amd64", "windows-arm64", "macos-universal",
                   "linux-amd64", "linux-arm64")
-GROUPS = (*DESKTOP_GROUPS, R_SDK_GROUP)
+GROUPS = (*DESKTOP_GROUPS, R_SDK_GROUP, VPRO64_BRIDGE_GROUP)
 DESKTOP_ASSETS = {
     **{f"windows-{arch}": tuple(f"vpro-windows-{arch}{suffix}"
                               for suffix in (".exe", ".zip", "-installer.exe"))
@@ -37,9 +44,10 @@ DESKTOP_ASSETS = {
 ASSETS = {
     **DESKTOP_ASSETS,
     R_SDK_GROUP: (R_SDK_ASSET,),
+    VPRO64_BRIDGE_GROUP: (VPRO64_BRIDGE_ASSET,),
 }
 DESKTOP_REQUIRED = frozenset(name for names in DESKTOP_ASSETS.values() for name in names)
-REQUIRED = DESKTOP_REQUIRED | {R_SDK_ASSET}
+REQUIRED = DESKTOP_REQUIRED | {R_SDK_ASSET, VPRO64_BRIDGE_ASSET}
 SCOPES = ("full", "r-only")
 MANIFEST = "SHA256SUMS.txt"
 RELEASE_MANIFEST = "release-manifest.json"
@@ -47,15 +55,21 @@ DEV_TAG_PREFIX = "dev-"
 DEV_MAX_BUILDS = 5
 DEV_BUILD_METADATA = "dev-build.json"
 DEV_MANIFEST = "dev-manifest.json"
-DEV_GROUPS = ("windows-amd64", "linux-amd64")
+DEV_GROUPS = ("windows-amd64", "linux-amd64", VPRO64_BRIDGE_GROUP)
 DEV_ASSETS = {
     "windows-amd64": ("vpro-windows-amd64-installer.exe",),
     "linux-amd64": ("vpro-linux-amd64.deb", "vpro-linux-amd64.rpm"),
+    VPRO64_BRIDGE_GROUP: (VPRO64_BRIDGE_ASSET,),
 }
 DEV_OPTIONAL_ASSETS = ("vpro-macos-universal.dmg",)
+DEV_CORE_REQUIRED = frozenset({
+    "vpro-windows-amd64-installer.exe",
+    "vpro-linux-amd64.deb",
+    "vpro-linux-amd64.rpm",
+})
 DEV_REQUIRED = frozenset(name for names in DEV_ASSETS.values() for name in names)
 DEV_ALLOWED_ASSETS = DEV_REQUIRED | frozenset(DEV_OPTIONAL_ASSETS) | {MANIFEST}
-DEV_APP_TRIGGER_PREFIXES = ("app/", "docs-src/")
+DEV_APP_TRIGGER_PREFIXES = ("app/", "docs-src/", "scripts/vpro64/")
 DEV_APP_TRIGGER_FILES = frozenset({
     "scripts/release.py",
     "scripts/release-windows.ps1",
@@ -570,6 +584,46 @@ def validate_r_sdk(path, full):
             f"R SDK tarball DESCRIPTION Version does not match {numeric}")
 
 
+def validate_vpro64_bridge(path):
+    require(path.is_file() and not path.is_symlink() and path.stat().st_size > 0,
+            f"Missing or empty VPro64 bridge archive: {path}")
+    with zipfile.ZipFile(path) as archive:
+        names = archive.namelist()
+        require(sorted(names) == list(VPRO64_BRIDGE_ENTRIES) and len(names) == len(VPRO64_BRIDGE_ENTRIES),
+                f"Unexpected VPro64 bridge ZIP entries: {names!r}")
+        bas_bytes = archive.read("V7mdlImportSQLite.bas")
+        ps1_bytes = archive.read("Install-VPro64Bridge.ps1")
+        readme_bytes = archive.read("README.txt")
+    require(len(bas_bytes) > 0 and b"\r\n" in bas_bytes and b"ImportSQLiteProject" in bas_bytes,
+            "VPro64 bridge archive V7mdlImportSQLite.bas must be CRLF-formatted and expose ImportSQLiteProject")
+    require(len(ps1_bytes) > 0 and b"V7mdlImportSQLite.bas" in ps1_bytes,
+            "VPro64 bridge archive Install-VPro64Bridge.ps1 is invalid")
+    require(len(readme_bytes) > 0 and b"V7mdlImportSQLite.bas" in readme_bytes,
+            "VPro64 bridge archive README.txt is invalid")
+
+
+def build_vpro64_bridge_zip(root, dest_zip):
+    src_dir = root / "scripts/vpro64"
+    for entry in VPRO64_BRIDGE_ENTRIES:
+        src_file = src_dir / entry
+        require(src_file.is_file() and not src_file.is_symlink() and src_file.stat().st_size > 0,
+                f"Missing required VPro64 bridge source file: {src_file}")
+    # Enforce byte-for-byte parity with Desktop embedded resources when present.
+    embedded_dir = root / "app/resources/vpro64"
+    for mirrored in ("V7mdlImportSQLite.bas", "README.txt"):
+        embedded_file = embedded_dir / mirrored
+        if embedded_file.is_file():
+            require(embedded_file.read_bytes() == (src_dir / mirrored).read_bytes(),
+                    f"Embedded {embedded_file} drifted from {src_dir / mirrored}")
+    with zipfile.ZipFile(dest_zip, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry in VPRO64_BRIDGE_ENTRIES:
+            info = zipfile.ZipInfo(entry, date_time=(2026, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            archive.writestr(info, (src_dir / entry).read_bytes())
+    validate_vpro64_bridge(dest_zip)
+
+
 def unique_output(app_root, suffix):
     paths = list((app_root / "bin").glob(f"*{suffix}"))
     require(len(paths) == 1 and paths[0].is_file() and not paths[0].is_symlink(),
@@ -580,6 +634,8 @@ def unique_output(app_root, suffix):
 def expected_architectures(group):
     if group == R_SDK_GROUP:
         return ["source"]
+    if group == VPRO64_BRIDGE_GROUP:
+        return ["windows"]
     if group == "macos-universal":
         return list(ARCHES)
     return [group.split("-")[1]]
@@ -594,6 +650,21 @@ def active_release_set(scope=None):
 
 def package(root, platform, *, scope=None):
     full, numeric = release_version(scope)
+    if platform == "vpro64":
+        group = VPRO64_BRIDGE_GROUP
+        destination = root / "scripts/vpro64/dist-artifacts"
+        destination.mkdir(parents=True)
+        build_vpro64_bridge_zip(root, destination / VPRO64_BRIDGE_ASSET)
+        exact_files(destination, ASSETS[group])
+        validate_portable(destination, group, full)
+        witness = {
+            "schema": 1, "group": group, "version": full, "commit": os.environ["GITHUB_SHA"],
+            "architectures": expected_architectures(group),
+            "sha256": {VPRO64_BRIDGE_ASSET: sha256(destination / VPRO64_BRIDGE_ASSET)},
+        }
+        (destination / f"release-witness-{group}.json").write_text(
+            json.dumps(witness, sort_keys=True) + "\n", encoding="utf-8")
+        return
     if platform == "r":
         group = R_SDK_GROUP
         r_root = root / "r"
@@ -685,6 +756,8 @@ def package(root, platform, *, scope=None):
 def validate_portable(directory, group, full):
     if group == R_SDK_GROUP:
         validate_r_sdk(directory / R_SDK_ASSET, full)
+    elif group == VPRO64_BRIDGE_GROUP:
+        validate_vpro64_bridge(directory / VPRO64_BRIDGE_ASSET)
     elif group.startswith("windows-"):
         arch = group.removeprefix("windows-")
         binary = (directory / ASSETS[group][0]).read_bytes()
@@ -1259,6 +1332,24 @@ def dev_plan(root, *, commit_sha=None, commit_subject=None, run_number=None,
 
 def dev_package(root, platform):
     full, _ = release_version("full")
+    if platform == "vpro64":
+        group = VPRO64_BRIDGE_GROUP
+        destination = root / "scripts/vpro64/dist-artifacts"
+        destination.mkdir(parents=True)
+        build_vpro64_bridge_zip(root, destination / VPRO64_BRIDGE_ASSET)
+        exact_files(destination, DEV_ASSETS[group])
+        witness = {
+            "schema": 1,
+            "mode": "dev",
+            "group": group,
+            "version": full,
+            "commit": os.environ["GITHUB_SHA"],
+            "architectures": expected_architectures(group),
+            "sha256": {VPRO64_BRIDGE_ASSET: sha256(destination / VPRO64_BRIDGE_ASSET)},
+        }
+        (destination / f"release-witness-{group}.json").write_text(
+            json.dumps(witness, sort_keys=True) + "\n", encoding="utf-8")
+        return
     arch = os.environ["RELEASE_ARCH"]
     group = f"{platform}-{arch}"
     require(group in DEV_ASSETS, f"Unsupported dev release target: {group}")
@@ -1355,7 +1446,7 @@ def validate_dev_build(entry, *, repository=REPOSITORY):
         size_bytes = asset.get("sizeBytes")
         require(type(size_bytes) is int and size_bytes > 0,
                 f"Dev build asset {name} has invalid sizeBytes")
-    require(DEV_REQUIRED.issubset(seen), "Dev build is missing required x64 packages")
+    require(DEV_CORE_REQUIRED.issubset(seen), "Dev build is missing required x64 packages")
     return entry
 
 
@@ -1403,6 +1494,7 @@ def dev_manifest(directory, *, tag=None, commit_subject=None, published_at=None,
         require(witness == expected, f"Invalid dev provenance/CPU witness: {group}")
     validate_deb(directory / "vpro-linux-amd64.deb", "amd64", full)
     validate_rpm(directory / "vpro-linux-amd64.rpm", "amd64", full)
+    validate_vpro64_bridge(directory / VPRO64_BRIDGE_ASSET)
 
     checksum_lines = "".join(f"{sha256(directory / name)}  {name}\n" for name in sorted(DEV_REQUIRED))
     (directory / MANIFEST).write_text(checksum_lines, encoding="ascii", newline="\n")
@@ -1562,7 +1654,7 @@ def main():
     toolchain = commands.add_parser("toolchain")
     toolchain.add_argument("--arch", choices=ARCHES, required=True)
     packaging = commands.add_parser("package")
-    packaging.add_argument("platform", choices=("windows", "macos", "linux", "r"))
+    packaging.add_argument("platform", choices=("windows", "macos", "linux", "r", "vpro64"))
     packaging.add_argument("--scope", choices=SCOPES)
     architecture = commands.add_parser("cpu")
     architecture.add_argument("path", type=Path)
@@ -1586,7 +1678,7 @@ def main():
     dev_plan_cmd.add_argument("--ci-runs-json", type=Path)
     dev_plan_cmd.add_argument("--releases-json", type=Path)
     dev_pkg_cmd = commands.add_parser("dev-package")
-    dev_pkg_cmd.add_argument("platform", choices=("windows", "linux"))
+    dev_pkg_cmd.add_argument("platform", choices=("windows", "linux", "vpro64"))
     dev_manifest_cmd = commands.add_parser("dev-manifest")
     dev_manifest_cmd.add_argument("path", type=Path)
     dev_manifest_cmd.add_argument("--tag")

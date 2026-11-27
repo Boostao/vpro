@@ -376,6 +376,8 @@ export interface VPro64ExportOutcome {
     "includedSU"?: string;
     "includedHierarchy"?: string;
     "includedMensuration": boolean;
+    "bridgeModulePath"?: string;
+    "bridgeReadmePath"?: string;
     "tables": VPro64ExportTableSummary[] | null;
 }
 
@@ -390,6 +392,7 @@ export interface VPro64ExportRequest {
     "includeHierarchy": boolean;
     "includeMensuration": boolean;
     "includeCompanions": boolean;
+    "includeVBABridge"?: boolean;
     "plotNumbers"?: string[] | null;
 }
 

@@ -1,6 +1,7 @@
 package interchange
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func TestExportVPro64DatabaseCleanDeleteJournalAndAccessBooleans(t *testing.T) {
@@ -219,5 +221,72 @@ func TestRewriteCreateIndexSQLCaseInsensitiveON(t *testing.T) {
 				t.Fatalf("rewriteCreateIndexSQL:\n  got:  %s\n  want: %s", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestExportVPro64DatabaseIncludeVBABridgeSidecar(t *testing.T) {
+	ctx := context.Background()
+	service, state := vprotest.ContextServiceFixture(t)
+
+	// Without IncludeVBABridge, no bridge sidecar files should be written.
+	dirOff := t.TempDir()
+	offOutcome, err := ExportVPro64Database(service, ctx, state.ContextID, VPro64ExportRequest{
+		DestinationPath:  filepath.Join(dirOff, "NoBridge.db"),
+		IncludeVBABridge: false,
+	})
+	if err != nil {
+		t.Fatalf("ExportVPro64Database(bridge=false): %v", err)
+	}
+	if offOutcome.BridgeModulePath != "" || offOutcome.BridgeReadmePath != "" {
+		t.Fatalf("expected empty bridge paths when IncludeVBABridge=false, got %+v", offOutcome)
+	}
+	if _, err := os.Stat(filepath.Join(dirOff, "V7mdlImportSQLite.bas")); !os.IsNotExist(err) {
+		t.Fatalf("did not expect V7mdlImportSQLite.bas when IncludeVBABridge=false")
+	}
+
+	// With IncludeVBABridge=true, exact CRLF .bas module and README are written alongside the .db file.
+	dirOn := t.TempDir()
+	onOutcome, err := ExportVPro64Database(service, ctx, state.ContextID, VPro64ExportRequest{
+		DestinationPath:  filepath.Join(dirOn, "WithBridge.db"),
+		IncludeVBABridge: true,
+	})
+	if err != nil {
+		t.Fatalf("ExportVPro64Database(bridge=true): %v", err)
+	}
+	wantBas := filepath.Join(dirOn, "V7mdlImportSQLite.bas")
+	wantReadme := filepath.Join(dirOn, "VPro64-Import-README.txt")
+	if onOutcome.BridgeModulePath != wantBas || onOutcome.BridgeReadmePath != wantReadme {
+		t.Fatalf("unexpected bridge paths: got module=%q readme=%q", onOutcome.BridgeModulePath, onOutcome.BridgeReadmePath)
+	}
+	gotBas, err := os.ReadFile(wantBas)
+	if err != nil {
+		t.Fatalf("read written .bas: %v", err)
+	}
+	if !bytes.Equal(gotBas, resources.VPro64ImportBridgeBAS) {
+		t.Fatalf("written V7mdlImportSQLite.bas bytes differ from embedded resource")
+	}
+	if !bytes.Contains(gotBas, []byte("\r\n")) || !bytes.Contains(gotBas, []byte("ImportSQLiteProject")) {
+		t.Fatalf("expected CRLF-formatted V7mdlImportSQLite.bas containing ImportSQLiteProject")
+	}
+	gotReadme, err := os.ReadFile(wantReadme)
+	if err != nil {
+		t.Fatalf("read written README: %v", err)
+	}
+	if !bytes.Equal(gotReadme, resources.VPro64ImportBridgeREADME) {
+		t.Fatalf("written VPro64-Import-README.txt bytes differ from embedded resource")
+	}
+
+	// Enforce byte-for-byte parity between app/resources/vpro64/* and canonical scripts/vpro64/* when in monorepo.
+	canonicalBasPath := filepath.Clean(filepath.Join(resources.RepoRoot(), "..", "scripts", "vpro64", "V7mdlImportSQLite.bas"))
+	if canonicalBas, err := os.ReadFile(canonicalBasPath); err == nil {
+		if !bytes.Equal(canonicalBas, resources.VPro64ImportBridgeBAS) {
+			t.Fatalf("app/resources/vpro64/V7mdlImportSQLite.bas drifted from %s", canonicalBasPath)
+		}
+	}
+	canonicalReadmePath := filepath.Clean(filepath.Join(resources.RepoRoot(), "..", "scripts", "vpro64", "README.txt"))
+	if canonicalReadme, err := os.ReadFile(canonicalReadmePath); err == nil {
+		if !bytes.Equal(canonicalReadme, resources.VPro64ImportBridgeREADME) {
+			t.Fatalf("app/resources/vpro64/README.txt drifted from %s", canonicalReadmePath)
+		}
 	}
 }

@@ -332,9 +332,30 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  build-vpro64-bridge:
+    needs: validate
+    if: needs.validate.outputs.scope == 'full'
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+      RELEASE_SCOPE: ${{ needs.validate.outputs.scope }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Package legacy VPro64 SQLite import bridge
+        run: python scripts/release.py package vpro64 --scope "$RELEASE_SCOPE"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vpro64-bridge
+          path: scripts/vpro64/dist-artifacts/*
+          retention-days: 7
+          if-no-files-found: error
+
   release:
-    needs: [validate, build-windows, build-macos, build-linux, build-r]
-    if: ${{ !failure() && !cancelled() && needs.validate.result == 'success' && needs.build-r.result == 'success' && (needs.validate.outputs.scope == 'r-only' || (needs.build-windows.result == 'success' && needs.build-macos.result == 'success' && needs.build-linux.result == 'success')) }}
+    needs: [validate, build-windows, build-macos, build-linux, build-r, build-vpro64-bridge]
+    if: ${{ !failure() && !cancelled() && needs.validate.result == 'success' && needs.build-r.result == 'success' && (needs.validate.outputs.scope == 'r-only' || (needs.build-windows.result == 'success' && needs.build-macos.result == 'success' && needs.build-linux.result == 'success' && needs.build-vpro64-bridge.result == 'success')) }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -376,7 +397,7 @@ jobs:
           if [ "$RELEASE_SCOPE" = "r-only" ]; then
             gh release create "$RELEASE_TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "vpro R SDK $RELEASE_TAG" --notes "Checked R companion SDK source package (vpro-r-sdk.tar.gz) and SHA256SUMS.txt." "${flags[@]}"
           else
-            gh release create "$RELEASE_TAG" "${assets[@]}" release-assets/release-manifest.json --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "VPro $RELEASE_TAG" --notes "Windows amd64/arm64 EXE, ZIP and NSIS; macOS universal DMG and ZIP; Linux amd64/arm64 rpm, deb and tar.gz; R Companion SDK source tarball (vpro-r-sdk.tar.gz). Verify downloads against SHA256SUMS.txt and release-manifest.json. macOS VPro.app is ad-hoc signed, not notarized." "${flags[@]}"
+            gh release create "$RELEASE_TAG" "${assets[@]}" release-assets/release-manifest.json --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "VPro $RELEASE_TAG" --notes "Windows amd64/arm64 EXE, ZIP and NSIS; macOS universal DMG and ZIP; Linux amd64/arm64 rpm, deb and tar.gz; R Companion SDK source tarball (vpro-r-sdk.tar.gz); Legacy VPro64 Microsoft Access SQLite import bridge (vpro64-sqlite-bridge.zip). Verify downloads against SHA256SUMS.txt and release-manifest.json. macOS VPro.app is ad-hoc signed, not notarized." "${flags[@]}"
           fi
       - name: Verify remotely attached names and bytes
         run: |

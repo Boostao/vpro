@@ -203,10 +203,31 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  build-vpro64-bridge:
+    name: Dev Package VPro64 SQLite Bridge (.zip)
+    needs: plan
+    if: needs.plan.outputs.should_build == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Package legacy VPro64 SQLite import bridge
+        run: python3 scripts/release.py dev-package vpro64
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dev-vpro64-bridge
+          path: scripts/vpro64/dist-artifacts/*
+          retention-days: 1
+          if-no-files-found: error
+
   publish-dev:
     name: Publish Dev Pre-Release & Prune Old Builds
-    needs: [plan, build-windows, build-linux]
-    if: ${{ !failure() && !cancelled() && needs.plan.outputs.should_build == 'true' && needs.build-windows.result == 'success' && needs.build-linux.result == 'success' }}
+    needs: [plan, build-windows, build-linux, build-vpro64-bridge]
+    if: ${{ !failure() && !cancelled() && needs.plan.outputs.should_build == 'true' && needs.build-windows.result == 'success' && needs.build-linux.result == 'success' && needs.build-vpro64-bridge.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -234,7 +255,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "VPro Dev $DEV_TAG" \
-            --notes "Nightly x64 development build for commit $GITHUB_SHA ($DEV_COMMIT_SUBJECT). Includes Windows x64 per-user installer (.exe) and Linux x64 .deb / .rpm. Unsigned pre-release for test-driving only; verify against SHA256SUMS.txt." \
+            --notes "Nightly x64 development build for commit $GITHUB_SHA ($DEV_COMMIT_SUBJECT). Includes Windows x64 per-user installer (.exe), Linux x64 .deb / .rpm, and the legacy VPro64 SQLite import bridge (vpro64-sqlite-bridge.zip). Unsigned pre-release for test-driving only; verify against SHA256SUMS.txt." \
             --prerelease
       - name: Verify remotely attached dev assets and checksums
         run: |

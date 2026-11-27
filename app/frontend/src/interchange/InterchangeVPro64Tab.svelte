@@ -12,6 +12,7 @@
     vpro64IncludeHierarchy = $bindable(true),
     vpro64IncludeMensuration = $bindable(true),
     vpro64IncludeCompanions = $bindable(true),
+    vpro64IncludeVBABridge = $bindable(true),
     vpro64Outcome,
     onChooseVPro64Dest,
     onRunVPro64Export,
@@ -25,6 +26,7 @@
     vpro64IncludeHierarchy?: boolean;
     vpro64IncludeMensuration?: boolean;
     vpro64IncludeCompanions?: boolean;
+    vpro64IncludeVBABridge?: boolean;
     vpro64Outcome: VPro64ExportOutcome | null;
     onChooseVPro64Dest: () => Promise<void>;
     onRunVPro64Export: () => Promise<void>;
@@ -113,6 +115,17 @@
       />
       <span>Include Companions</span>
     </label>
+    {#if !IS_WEB_READONLY}
+      <label class="check-inline">
+        <input
+          type="checkbox"
+          data-vpro64-include-bridge
+          bind:checked={vpro64IncludeVBABridge}
+          disabled={busy || operationHeld}
+        />
+        <span>Include VPro64 VBA importer (<code>V7mdlImportSQLite.bas</code>) &amp; setup guide</span>
+      </label>
+    {/if}
   </div>
 
   <div class="action-row">
@@ -132,8 +145,16 @@
   </div>
 
   <p class="odbc-note" data-vpro64-odbc-note>
-    The exported <code>.db</code> file uses standard single-file formatting with Access-compatible checkboxes and exact
-    plot numbers, so it can be imported directly into VPro64 Access using the SQLite ODBC module.
+    {#if IS_WEB_READONLY}
+      The downloaded <code>.db</code> file uses standard single-file formatting with Access-compatible checkboxes and
+      exact plot numbers. To import it into legacy VPro64 Microsoft Access, download
+      <code>vpro64-sqlite-bridge.zip</code> from the VPro downloads page and install the 64-bit SQLite3 ODBC Driver.
+    {:else}
+      The exported <code>.db</code> file uses standard single-file formatting with Access-compatible checkboxes and
+      exact plot numbers. When the VBA importer option is checked, VPro also saves <code>V7mdlImportSQLite.bas</code>
+      and <code>VPro64-Import-README.txt</code> beside your export so you can import directly into VPro64 Microsoft
+      Access offline.
+    {/if}
   </p>
 
   {#if vpro64Outcome}
@@ -152,6 +173,14 @@
           Saved to: <code>{vpro64Outcome.destinationPath}</code> | SHA-256:
           <code>{vpro64Outcome.sha256.slice(0, 16)}...</code>
         </span>
+        {#if vpro64Outcome.bridgeModulePath}
+          <span data-vpro64-bridge-receipt>
+            VPro64 VBA bridge saved: <code>{vpro64Outcome.bridgeModulePath}</code>
+            {#if vpro64Outcome.bridgeReadmePath}
+              &amp; <code>{vpro64Outcome.bridgeReadmePath}</code>
+            {/if}
+          </span>
+        {/if}
       {/if}
       {#if vpro64Outcome.tables && vpro64Outcome.tables.length > 0}
         <div class="table-summary">

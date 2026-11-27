@@ -18,6 +18,7 @@ import (
 
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 // VPro64ExportRequest configures a clean SQLite export targeting VPro64's
@@ -29,6 +30,7 @@ type VPro64ExportRequest struct {
 	IncludeHierarchy   bool     `json:"includeHierarchy"`
 	IncludeMensuration bool     `json:"includeMensuration"`
 	IncludeCompanions  bool     `json:"includeCompanions"`
+	IncludeVBABridge   bool     `json:"includeVBABridge,omitempty"`
 	PlotNumbers        []string `json:"plotNumbers,omitempty"`
 }
 
@@ -54,6 +56,8 @@ type VPro64ExportOutcome struct {
 	IncludedSU          string                     `json:"includedSU,omitempty"`
 	IncludedHierarchy   string                     `json:"includedHierarchy,omitempty"`
 	IncludedMensuration bool                       `json:"includedMensuration"`
+	BridgeModulePath    string                     `json:"bridgeModulePath,omitempty"`
+	BridgeReadmePath    string                     `json:"bridgeReadmePath,omitempty"`
 	Tables              []VPro64ExportTableSummary `json:"tables"`
 }
 
@@ -581,6 +585,19 @@ func ExportVPro64Database(s *vprocore.ContextService, ctx context.Context, conte
 		}
 		published = true
 
+		var bridgeModulePath, bridgeReadmePath string
+		if req.IncludeVBABridge {
+			outDir := filepath.Dir(resolvedDest)
+			bridgeModulePath = filepath.Join(outDir, "V7mdlImportSQLite.bas")
+			bridgeReadmePath = filepath.Join(outDir, "VPro64-Import-README.txt")
+			if err := writeAtomicFile(bridgeModulePath, resources.VPro64ImportBridgeBAS); err != nil {
+				return VPro64ExportOutcome{}, fmt.Errorf("write VPro64 VBA importer %q: %w", bridgeModulePath, err)
+			}
+			if err := writeAtomicFile(bridgeReadmePath, resources.VPro64ImportBridgeREADME); err != nil {
+				return VPro64ExportOutcome{}, fmt.Errorf("write VPro64 setup guide %q: %w", bridgeReadmePath, err)
+			}
+		}
+
 		return VPro64ExportOutcome{
 			SourceProject:       srcProject,
 			TargetProject:       targetProject,
@@ -592,9 +609,41 @@ func ExportVPro64Database(s *vprocore.ContextService, ctx context.Context, conte
 			IncludedSU:          includedSU,
 			IncludedHierarchy:   includedHierarchy,
 			IncludedMensuration: includedMensuration,
+			BridgeModulePath:    bridgeModulePath,
+			BridgeReadmePath:    bridgeReadmePath,
 			Tables:              tableSummaries,
 		}, nil
 	})
+}
+
+func writeAtomicFile(destPath string, data []byte) error {
+	f, err := os.CreateTemp(filepath.Dir(destPath), ".vpro64-bridge-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	success := false
+	defer func() {
+		if !success {
+			_ = os.Remove(tmp)
+		}
+	}()
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Chmod(0o644); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, destPath); err != nil {
+		return err
+	}
+	success = true
+	return nil
 }
 
 func copyTableForVPro64(ctx context.Context, srcTx, dstTx *sql.Tx, sp vpro64TableSpec, plotFilter map[string]bool) (int, error) {

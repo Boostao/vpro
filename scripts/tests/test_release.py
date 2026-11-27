@@ -30,7 +30,7 @@ DESKTOP_EXPECTED = (
     "vpro-windows-amd64-installer.exe", "vpro-windows-amd64.exe", "vpro-windows-amd64.zip",
     "vpro-windows-arm64-installer.exe", "vpro-windows-arm64.exe", "vpro-windows-arm64.zip",
 )
-EXPECTED = tuple(sorted((*DESKTOP_EXPECTED, "vpro-r-sdk.tar.gz")))
+EXPECTED = tuple(sorted((*DESKTOP_EXPECTED, "vpro-r-sdk.tar.gz", "vpro64-sqlite-bridge.zip")))
 
 
 def pe(arch, imports=("KERNEL32.dll", "api-ms-win-crt-runtime-l1-1-0.dll"), delay_imports=()):
@@ -206,6 +206,10 @@ def asset_fixture(directory, full_version="2.3.4"):
         archive.writestr("VPro.app/Contents/MacOS/VPro", universal())
         archive.writestr("VPro.app/Contents/Info.plist", bundle_info(numeric))
     (directory / "vpro-r-sdk.tar.gz").write_bytes(r_tarball(numeric))
+    with zipfile.ZipFile(directory / "vpro64-sqlite-bridge.zip", "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("Install-VPro64Bridge.ps1", b"# V7mdlImportSQLite.bas installer\r\n")
+        archive.writestr("README.txt", b"Import V7mdlImportSQLite.bas into VPro64.accdb\n")
+        archive.writestr("V7mdlImportSQLite.bas", b"Attribute VB_Name = \"V7mdlImportSQLite\"\r\nPublic Sub ImportSQLiteProject()\r\nEnd Sub\r\n")
     for group in ("windows-amd64", "windows-arm64", "macos-universal", "linux-amd64", "linux-arm64"):
         names = [name for name in DESKTOP_EXPECTED if name.startswith("vpro-" + group)]
         witness = {"schema": 1, "group": group, "version": full_version, "commit": "abc123",
@@ -221,6 +225,15 @@ def asset_fixture(directory, full_version="2.3.4"):
         "sha256": {"vpro-r-sdk.tar.gz": hashlib.sha256((directory / "vpro-r-sdk.tar.gz").read_bytes()).hexdigest()},
     }
     (directory / "release-witness-r-sdk.json").write_text(json.dumps(r_witness), encoding="utf-8")
+    vpro64_witness = {
+        "schema": 1,
+        "group": "vpro64-bridge",
+        "version": full_version,
+        "commit": "abc123",
+        "architectures": ["windows"],
+        "sha256": {"vpro64-sqlite-bridge.zip": hashlib.sha256((directory / "vpro64-sqlite-bridge.zip").read_bytes()).hexdigest()},
+    }
+    (directory / "release-witness-vpro64-bridge.json").write_text(json.dumps(vpro64_witness), encoding="utf-8")
 
 
 @contextlib.contextmanager
@@ -1295,9 +1308,23 @@ class ReleaseTests(unittest.TestCase):
                     "vpro-linux-amd64.rpm",
                 ])
 
+                bridge_root = tmp_path / "bridge"
+                shutil.copytree(ROOT / "scripts/vpro64", bridge_root / "scripts/vpro64")
+                shutil.copytree(ROOT / "app/resources/vpro64", bridge_root / "app/resources/vpro64")
+                release.dev_package(bridge_root, "vpro64")
+                bridge_out = sorted(p.name for p in (bridge_root / "scripts/vpro64/dist-artifacts").iterdir())
+                self.assertEqual(bridge_out, [
+                    "release-witness-vpro64-bridge.json",
+                    "vpro64-sqlite-bridge.zip",
+                ])
+
                 merged = tmp_path / "merged"
                 merged.mkdir()
-                for src_dir in (win_root / "app/dist-artifacts", lin_root / "app/dist-artifacts"):
+                for src_dir in (
+                    win_root / "app/dist-artifacts",
+                    lin_root / "app/dist-artifacts",
+                    bridge_root / "scripts/vpro64/dist-artifacts",
+                ):
                     for item in src_dir.iterdir():
                         shutil.copyfile(item, merged / item.name)
 
@@ -1316,7 +1343,7 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual(meta["tag"], dev_tag)
                 self.assertEqual(meta["shortCommit"], "0123456")
                 attach_lines = (tmp_path / "dev-assets.txt").read_text(encoding="utf-8").splitlines()
-                self.assertEqual(len(attach_lines), 5)
+                self.assertEqual(len(attach_lines), 6)
 
                 remote_json = tmp_path / "remote.json"
                 remote_json.write_text(json.dumps({
@@ -1482,11 +1509,12 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("cancel-in-progress: true", dev_wf)
         self.assertEqual(dev_wf.count("go-version: '1.27.4'"), 2)
         self.assertEqual(dev_wf.count("wails3@v3.1.0"), 2)
-        self.assertEqual(dev_wf.count("retention-days: 1"), 2)
+        self.assertEqual(dev_wf.count("retention-days: 1"), 3)
         self.assertIn("INSTALL_SCOPE=user", dev_wf)
         self.assertIn("python3 scripts/release.py dev-plan", dev_wf)
         self.assertIn("python scripts/release.py dev-package windows", dev_wf)
         self.assertIn("python scripts/release.py dev-package linux", dev_wf)
+        self.assertIn("python3 scripts/release.py dev-package vpro64", dev_wf)
         self.assertIn("python3 scripts/release.py dev-manifest dev-assets", dev_wf)
         self.assertIn("python3 scripts/release.py dev-remote dev-remote.json", dev_wf)
         self.assertIn("python3 scripts/release.py dev-verify dev-downloaded", dev_wf)
@@ -1494,6 +1522,25 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("python3 scripts/release.py sync-dev-manifest --output site/dev-manifest.json --keep 5", dev_wf)
         self.assertIn("--prerelease", dev_wf)
         self.assertEqual(dev_wf.count("contents: write"), 1)
+
+    def test_package_vpro64_bridge_deterministic_and_parity_enforced(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "repo"
+            shutil.copytree(ROOT / "scripts/vpro64", work / "scripts/vpro64")
+            shutil.copytree(ROOT / "app/resources/vpro64", work / "app/resources/vpro64")
+            release.package(work, "vpro64")
+            out_dir = work / "scripts/vpro64/dist-artifacts"
+            self.assertEqual(
+                sorted(p.name for p in out_dir.iterdir()),
+                ["release-witness-vpro64-bridge.json", "vpro64-sqlite-bridge.zip"],
+            )
+            release.validate_vpro64_bridge(out_dir / "vpro64-sqlite-bridge.zip")
+
+            # Verify drift between scripts/vpro64 and app/resources/vpro64 fails closed.
+            (work / "app/resources/vpro64/README.txt").write_text("drifted\n", encoding="utf-8")
+            shutil.rmtree(out_dir)
+            with self.assertRaisesRegex(ValueError, "drifted"):
+                release.package(work, "vpro64")
 
 
 if __name__ == "__main__":

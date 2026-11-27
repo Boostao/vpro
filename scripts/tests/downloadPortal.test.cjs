@@ -222,7 +222,7 @@ test('architecture hints override emulated Windows UA; redacted/blocked hints pr
 
 test('exact asset names prevent AMD64/ARM64 and executable/installer confusion in either response order', async () => {
   const { assetLinks, reviewManifest, reviewRelease } = await portal;
-  assert.equal(Object.keys(assetLinks).length, 16);
+  assert.equal(Object.keys(assetLinks).length, 17);
   for (const reversed of [false, true]) {
     const legacy = releaseFixture(assetLinks);
     if (reversed) legacy.assets.reverse();
@@ -239,10 +239,13 @@ test('exact asset names prevent AMD64/ARM64 and executable/installer confusion i
     assert.notEqual(reviewed.channels.stable.links['dl-win-x64-installer'], reviewed.channels.stable.links['dl-win-arm64-installer']);
   }
 
-  // Desktop-only release without vpro-r-sdk.tar.gz (e.g. an earlier build) leaves dl-r-sdk gracefully null.
-  const desktopOnlyLinks = Object.fromEntries(Object.entries(assetLinks).filter(([id]) => id !== 'dl-r-sdk'));
+  // Desktop-only release without vpro-r-sdk.tar.gz or vpro64-sqlite-bridge.zip (e.g. an earlier build) leaves companion links gracefully null.
+  const desktopOnlyLinks = Object.fromEntries(
+    Object.entries(assetLinks).filter(([id]) => id !== 'dl-r-sdk' && id !== 'dl-vpro64-bridge')
+  );
   const desktopOnlyReviewed = reviewManifest(manifestFixture(desktopOnlyLinks));
   assert.equal(desktopOnlyReviewed.channels.stable.links['dl-r-sdk'], null);
+  assert.equal(desktopOnlyReviewed.channels.stable.links['dl-vpro64-bridge'], null);
   assert.equal(desktopOnlyReviewed.channels.stable.links['dl-win-x64-installer'], url('vpro-windows-amd64-installer.exe', 'v2.0.0'));
 });
 
@@ -610,7 +613,7 @@ test('Dev Builds manifest validation refuses malformed entries and renders per-l
   const { reviewDevManifest } = await portal;
   const { buildSite, renderDevPortalHtml } = await siteBuilder;
 
-  function makeDevBuild(index, { includeMac = false } = {}) {
+  function makeDevBuild(index, { includeMac = false, includeVPro64 = false } = {}) {
     const tag = `dev-202611${15 + index}-r${index}-g000000${index}`;
     const commit = `${String(index).padStart(7, '0')}${'a'.repeat(33)}`;
     const names = [
@@ -620,6 +623,7 @@ test('Dev Builds manifest validation refuses malformed entries and renders per-l
       'SHA256SUMS.txt',
     ];
     if (includeMac) names.push('vpro-macos-universal.dmg');
+    if (includeVPro64) names.push('vpro64-sqlite-bridge.zip');
     return {
       schemaVersion: 1,
       repository: 'Boostao/vpro',
@@ -640,13 +644,13 @@ test('Dev Builds manifest validation refuses malformed entries and renders per-l
     };
   }
 
-  // Valid 5-build manifest (first 4 x64-only, 5th optionally carrying macOS DMG)
+  // Valid 5-build manifest (latest includes VPro64 bridge, older builds remain valid without it, 5th optionally carrying macOS DMG)
   const validManifest = {
     schemaVersion: 1,
     repository: 'Boostao/vpro',
     maxBuilds: 5,
     builds: [
-      makeDevBuild(5),
+      makeDevBuild(5, { includeVPro64: true }),
       makeDevBuild(4),
       makeDevBuild(3),
       makeDevBuild(2),
@@ -656,6 +660,8 @@ test('Dev Builds manifest validation refuses malformed entries and renders per-l
   const reviewed = reviewDevManifest(validManifest);
   assert.equal(reviewed.builds.length, 5);
   assert.equal(reviewed.builds[0].links.mac, null);
+  assert.ok(reviewed.builds[0].links.vpro64.endsWith('/vpro64-sqlite-bridge.zip'));
+  assert.equal(reviewed.builds[1].links.vpro64, null);
   assert.ok(reviewed.builds[4].links.mac.endsWith('/vpro-macos-universal.dmg'));
 
   // Refuse malformed / unsafe manifests closed
@@ -692,6 +698,7 @@ test('Dev Builds manifest validation refuses malformed entries and renders per-l
   assert.equal((devHtml.match(/class="dev-dl-pill"[^>]*>DEB/g) || []).length, 5);
   assert.equal((devHtml.match(/class="dev-dl-pill dev-dl-pill-muted"[^>]*>SHA-256/g) || []).length, 5);
   assert.equal((devHtml.match(/class="dev-dl-pill"[^>]*>macOS \(\.dmg\)/g) || []).length, 1);
+  assert.equal((devHtml.match(/class="dev-dl-pill"[^>]*>VPro64 Bridge \(\.zip\)/g) || []).length, 1);
   assert.equal(/\p{Extended_Pictographic}/u.test(devHtml), false, 'Dev builds page must contain zero emojis');
   assert.equal(/api\.github\.com/i.test(devHtml), false, 'Dev builds page must never call api.github.com');
 
@@ -701,6 +708,8 @@ test('Dev Builds manifest validation refuses malformed entries and renders per-l
   const indexHtml = readFileSync(path.join(distDir, 'index.html'), 'utf8');
   const builtDevHtml = readFileSync(path.join(distDir, 'dev', 'index.html'), 'utf8');
   assert.ok(indexHtml.includes('href="./dev/"'), 'Main portal nav must link to ./dev/');
+  assert.ok(indexHtml.includes('id="card-vpro64-bridge"'), 'Main portal must include Legacy VPro64 Bridge card');
+  assert.ok(indexHtml.includes('id="dl-vpro64-bridge"'), 'Main portal must include dl-vpro64-bridge download row');
   assert.ok(existsSync(path.join(distDir, 'dev-manifest.json')), 'Missing site/dist/dev-manifest.json');
   assert.match(builtDevHtml, /id="dev-builds-empty"/);
   assert.match(builtDevHtml, /data-vpro-crest="topbar"/);

@@ -46,6 +46,7 @@ export interface VPro64ExportRequest {
   includeHierarchy: boolean;
   includeMensuration: boolean;
   includeCompanions: boolean;
+  includeVBABridge?: boolean;
   plotNumbers?: string[] | null;
 }
 
@@ -60,6 +61,8 @@ export interface VPro64ExportOutcome {
   includedSU?: string;
   includedHierarchy?: string;
   includedMensuration: boolean;
+  bridgeModulePath?: string;
+  bridgeReadmePath?: string;
   tables: VPro64ExportTableSummary[] | null;
 }
 
@@ -638,7 +641,8 @@ export function buildVPro64ExportPayload(
   includeActiveSU: boolean,
   includeHierarchy: boolean,
   includeMensuration: boolean,
-  includeCompanions: boolean
+  includeCompanions: boolean,
+  includeVBABridge = false
 ): VPro64ExportRequest {
   const target = (targetProjectName ?? '').trim();
   return {
@@ -648,6 +652,7 @@ export function buildVPro64ExportPayload(
     includeHierarchy: Boolean(includeHierarchy),
     includeMensuration: Boolean(includeMensuration),
     includeCompanions: Boolean(includeCompanions),
+    ...(includeVBABridge ? { includeVBABridge: true } : {}),
   };
 }
 
