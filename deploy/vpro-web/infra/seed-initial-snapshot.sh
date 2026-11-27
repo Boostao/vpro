@@ -89,7 +89,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-vpro_infra_require_cmd ssh tar jq
+vpro_infra_require_cmd ssh scp tar jq
 
 [ -n "${HOST}" ] || vpro_infra_die "--host is required"
 [ -n "${BUNDLE_DIR}" ] || vpro_infra_die "--bundle is required"
@@ -134,10 +134,22 @@ then
   VPRO_RUNNING="true"
 fi
 
+LOCAL_TARBALL="$(mktemp /tmp/vpro-seed-XXXXXX.tar.gz)"
+cleanup_local() {
+  rm -f "${LOCAL_TARBALL}" || true
+}
+trap cleanup_local EXIT
+
+vpro_infra_log "Packaging verified snapshot '${SNAPSHOT_ID}'..."
+tar -C "${BUNDLE_DIR}" -czf "${LOCAL_TARBALL}" .
+
+REMOTE_TARBALL="/tmp/vpro-seed-${SNAPSHOT_ID}-$$.tar.gz"
+vpro_infra_log "Uploading snapshot archive to ${REMOTE}:${REMOTE_TARBALL}..."
+scp "${SSH_OPTS[@]}" "${LOCAL_TARBALL}" "${REMOTE}:${REMOTE_TARBALL}"
+
 if [ "${VPRO_RUNNING}" = "true" ]; then
-  REMOTE_TARBALL="/tmp/vpro-seed-${SNAPSHOT_ID}.tar.gz"
-  vpro_infra_log "vpro-web is running on ${HOST}; streaming verified snapshot '${SNAPSHOT_ID}' for live reload via sync-snapshot.sh..."
-  tar -C "${BUNDLE_DIR}" -czf - . | ssh "${SSH_OPTS[@]}" "${REMOTE}" \
+  vpro_infra_log "vpro-web is running on ${HOST}; activating verified snapshot '${SNAPSHOT_ID}' via sync-snapshot.sh..."
+  ssh "${SSH_OPTS[@]}" "${REMOTE}" \
     bash -s -- "${REMOTE_TARBALL}" "${DEPLOY_DIR}" "${DATA_ROOT}" <<'REMOTE_LIVE_SYNC'
 set -euo pipefail
 REMOTE_TARBALL="$1"
@@ -149,7 +161,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cat > "${REMOTE_TARBALL}"
 "${DEPLOY_DIR}/sync-snapshot.sh" "${REMOTE_TARBALL}" \
   --compose-dir "${DEPLOY_DIR}" \
   --data-root "${DATA_ROOT}"
@@ -157,11 +168,12 @@ REMOTE_LIVE_SYNC
   vpro_infra_log "Live snapshot reload complete for '${SNAPSHOT_ID}' on ${HOST}."
 else
   vpro_infra_log "vpro-web is not running yet on ${HOST}; cold-seeding verified snapshot '${SNAPSHOT_ID}' into ${DATA_ROOT}..."
-  tar -C "${BUNDLE_DIR}" -czf - . | ssh "${SSH_OPTS[@]}" "${REMOTE}" \
-    bash -s -- "${DATA_ROOT}" "${SNAPSHOT_ID}" <<'REMOTE_COLD_SEED'
+  ssh "${SSH_OPTS[@]}" "${REMOTE}" \
+    bash -s -- "${REMOTE_TARBALL}" "${DATA_ROOT}" "${SNAPSHOT_ID}" <<'REMOTE_COLD_SEED'
 set -euo pipefail
-DATA_ROOT="$1"
-SNAPSHOT_ID="$2"
+REMOTE_TARBALL="$1"
+DATA_ROOT="$2"
+SNAPSHOT_ID="$3"
 RELEASES_DIR="${DATA_ROOT}/releases"
 CURRENT_LINK="${DATA_ROOT}/current"
 TARGET_DIR="${RELEASES_DIR}/${SNAPSHOT_ID}"
@@ -171,6 +183,7 @@ STAGE_DIR="$(mktemp -d "${RELEASES_DIR}/.seed-${SNAPSHOT_ID}-XXXXXX")"
 TMP_LINK=""
 
 cleanup() {
+  rm -f "${REMOTE_TARBALL}" || true
   if [ -n "${TMP_LINK}" ] && [ -L "${TMP_LINK}" ]; then
     rm -f "${TMP_LINK}" || true
   fi
@@ -181,7 +194,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-tar -xzf - -C "${STAGE_DIR}"
+tar -xzf "${REMOTE_TARBALL}" -C "${STAGE_DIR}"
 [ -f "${STAGE_DIR}/manifest.json" ] || { echo "ERROR: extracted bundle missing manifest.json" >&2; exit 1; }
 
 find "${STAGE_DIR}" -type f -exec chmod 0444 {} +

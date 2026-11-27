@@ -112,6 +112,7 @@ resolve_vpro_env_defaults "${ENV_ARG}"
 
 DEPLOY_PUBKEY="$(tr -d '\r\n' < "${DEPLOY_PUBKEY_FILE}")"
 [ -n "${DEPLOY_PUBKEY}" ] || vpro_infra_die "deploy public key file is empty: ${DEPLOY_PUBKEY_FILE}"
+DEPLOY_PUBKEY_B64="$(printf '%s' "${DEPLOY_PUBKEY}" | base64 | tr -d '\r\n')"
 
 for req_file in docker-compose.yml Caddyfile sync-snapshot.sh; do
   [ -r "${VPRO_WEB_DIR}/${req_file}" ] || vpro_infra_die "missing deployment artifact: ${VPRO_WEB_DIR}/${req_file}"
@@ -140,12 +141,14 @@ vpro_infra_log "SSH is reachable on ${REMOTE}."
 
 vpro_infra_log "Running idempotent host bootstrap on ${HOST} (env=${TARGET_ENV}, deploy_user=${VPRO_DEPLOY_USER})..."
 ssh "${SSH_OPTS[@]}" "${REMOTE}" \
-  bash -s -- "${VPRO_DEPLOY_USER}" "${VPRO_DEPLOY_DIR}" "${DEPLOY_PUBKEY}" <<'REMOTE_BOOTSTRAP'
+  bash -s -- "${VPRO_DEPLOY_USER}" "${VPRO_DEPLOY_DIR}" "${DEPLOY_PUBKEY_B64}" <<'REMOTE_BOOTSTRAP'
 set -euo pipefail
 
 DEPLOY_USER="$1"
 DEPLOY_DIR="$2"
-DEPLOY_PUBKEY="$3"
+DEPLOY_PUBKEY_B64="$3"
+DEPLOY_PUBKEY="$(printf '%s' "${DEPLOY_PUBKEY_B64}" | base64 -d | tr -d '\r\n')"
+[ -n "${DEPLOY_PUBKEY}" ] || { echo "ERROR: decoded deploy public key is empty" >&2; exit 1; }
 
 SUDO=""
 if [ "$(id -u)" -ne 0 ]; then
@@ -154,22 +157,42 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
+# On freshly provisioned Ubuntu 24.04 Droplets, cloud-init / unattended-upgrades
+# may briefly hold the apt/dpkg lock right after SSH becomes reachable.
+if command -v cloud-init >/dev/null 2>&1; then
+  ${SUDO} cloud-init status --wait >/dev/null 2>&1 || true
+fi
+
+wait_for_apt_lock() {
+  local waited=0
+  while ${SUDO} fuser /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock /var/cache/apt/archives/lock >/dev/null 2>&1; do
+    if [ "${waited}" -ge 180 ]; then
+      echo "ERROR: timed out waiting for apt/dpkg lock" >&2
+      exit 1
+    fi
+    sleep 3
+    waited=$((waited + 3))
+  done
+}
+
 # Install base operational packages
-${SUDO} apt-get update -qq
-${SUDO} apt-get install -y -qq ca-certificates curl jq rsync unattended-upgrades
+wait_for_apt_lock
+${SUDO} apt-get -o DPkg::Lock::Timeout=120 update -qq
+${SUDO} apt-get -o DPkg::Lock::Timeout=120 install -y -qq ca-certificates curl jq rsync unattended-upgrades
 
 # Install Docker Engine + Compose v2 plugin if not already present
 if ! command -v docker >/dev/null 2>&1; then
+  wait_for_apt_lock
   curl -fsSL https://get.docker.com | ${SUDO} sh
 fi
 ${SUDO} systemctl enable --now docker
 docker compose version >/dev/null
 
-# Ensure non-root deploy user exists, password locked, in docker group
+# Ensure non-root deploy user exists, password disabled for key-only auth, in docker group
 if ! id -u "${DEPLOY_USER}" >/dev/null 2>&1; then
   ${SUDO} useradd --create-home --shell /bin/bash "${DEPLOY_USER}"
 fi
-${SUDO} passwd -l "${DEPLOY_USER}" >/dev/null 2>&1 || true
+${SUDO} usermod -p '*' "${DEPLOY_USER}" >/dev/null 2>&1 || true
 ${SUDO} usermod -aG docker "${DEPLOY_USER}"
 
 DEPLOY_HOME="$(getent passwd "${DEPLOY_USER}" | cut -d: -f6)"
